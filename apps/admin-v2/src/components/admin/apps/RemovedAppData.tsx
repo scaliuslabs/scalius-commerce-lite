@@ -1,10 +1,13 @@
-// Data from removed apps (docs/platform/PLUGINS.md, "Uninstalling"): an app
+// Data from removed apps (packages/plugin-sdk/docs/apps.md, "Uninstalling"): an app
 // that is no longer installed (uninstalled keeping its data, or a bundled app
 // taken out of the deployment) leaves its object types, custom fields and
 // settings in the store. Wherever that data appears it reads "From a removed
 // app: <name>" instead of "Managed by", and each app's group has one "Delete
 // data" (Super Admin, confirmed, under the revision the page listed).
-// Reinstalling the app takes its data back. Staff who cannot see Apps get the
+// Reinstalling the app with the key the data belongs to takes it back. A
+// release of the same app from another key or source (the store's own
+// bundled code after a signed upload) waits here until a Super Admin hands
+// the data over to it or deletes it. Staff who cannot see Apps get the
 // app's id and no group card, as with "Managed by".
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,7 +21,9 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { getLocale, useMessages } from "~/i18n";
 import { removedAppDataMessages } from "~/i18n/removed-app-data";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
-import { deleteRemovedAppData, removedAppDataQueryOptions, type RemovedAppData } from "~/lib/api-query-options/apps";
+import { deleteRemovedAppData, handOverRemovedAppData, removedAppDataQueryOptions, type RemovedAppData } from "~/lib/api-query-options/apps";
+import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { customFieldKeys } from "~/lib/api-query-options/custom-fields";
 import { objectKeys } from "~/lib/api-query-options/objects";
 import { queryKeys } from "~/lib/query-keys";
@@ -72,7 +77,27 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
       ]);
     },
   });
+  const [handing, setHanding] = useState<RemovedAppData | null>(null);
+  const [handOpen, setHandOpen] = useState(false);
+  const handOver = useMutation({
+    // A waiting release is the store's own bundled code: it takes the data with no key.
+    mutationFn: (group: RemovedAppData) => handOverRemovedAppData(group, null),
+    onSuccess: (_result, group) => {
+      toast.success(t("handedOver", { app: group.name }));
+    },
+    onError: (error) => {
+      toast.error(error instanceof AdminApiResponseError && error.status === 409 ? t("changed") : t("handOverFailed"));
+    },
+    onSettled: async () => {
+      setHandOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.apps.removedData() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.apps.list() }),
+      ]);
+    },
+  });
   const groups = (data ?? []).filter((group) => (show ? show(group) : true));
+  const busy = remove.isPending || handOver.isPending;
 
   return (
     <>
@@ -93,21 +118,45 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
                   <p className="break-words text-body text-muted-foreground">
                     <code>{group.id}</code> · {summary(group, t)}
                   </p>
+                  <p className="break-words text-body text-muted-foreground">
+                    {group.signerKeyId ? t("ownerKey", { fingerprint: pluginKeyFingerprint(group.signerKeyId) }) : t("ownerNoKey")}
+                  </p>
+                  {group.waitingRelease ? (
+                    <Alert variant="warning" className="mt-2">
+                      <AlertDescription>{t("waiting", { version: group.waitingRelease.version })}</AlertDescription>
+                    </Alert>
+                  ) : null}
                   {isSuperAdmin ? null : <p className="text-body text-muted-foreground">{t("superAdminOnly")}</p>}
                 </div>
                 {isSuperAdmin ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={remove.isPending}
-                    onClick={() => {
-                      setConfirming(group);
-                      setOpen(true);
-                    }}
-                  >
-                    {t("deleteData")}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {group.waitingRelease ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => {
+                          setHanding(group);
+                          setHandOpen(true);
+                        }}
+                      >
+                        {t("handOver")}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => {
+                        setConfirming(group);
+                        setOpen(true);
+                      }}
+                    >
+                      {t("deleteData")}
+                    </Button>
+                  </div>
                 ) : null}
               </li>
             ))}
@@ -120,10 +169,23 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
         title={t("deleteTitle", { app: confirming?.name ?? "" })}
         description={confirming ? t("deleteBody", { what: summary(confirming, t) }) : ""}
         confirmLabel={t("deleteData")}
+        confirmPhrase={confirming?.name ?? ""}
         loadingLabel={t("deleting")}
         isLoading={remove.isPending}
         onConfirm={() => {
           if (confirming) remove.mutate(confirming);
+        }}
+      />
+      <ConfirmDialog
+        open={handOpen}
+        onOpenChange={(next) => (handOver.isPending ? undefined : setHandOpen(next))}
+        title={t("handOverTitle", { app: handing?.name ?? "", version: handing?.waitingRelease?.version ?? "" })}
+        description={handing ? t("handOverBody", { version: handing.waitingRelease?.version ?? "", what: summary(handing, t) }) : ""}
+        confirmLabel={t("handOver")}
+        loadingLabel={t("handingOver")}
+        isLoading={handOver.isPending}
+        onConfirm={() => {
+          if (handing) handOver.mutate(handing);
         }}
       />
     </>

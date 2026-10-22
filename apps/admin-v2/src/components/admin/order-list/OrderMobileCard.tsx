@@ -20,6 +20,7 @@ import { codToCollect, deliveryMethod, deliveryStatus, orderAttention, TONE_TEXT
 import { ListDate, listDateLabel } from "~/components/admin/data-table/ListDate";
 import { dataTableMessages } from "~/i18n/data-table";
 import { unixToDate } from "@scalius/shared/timestamps";
+import { shownText } from "~/lib/erased-text";
 
 export { codToCollect } from "./order-row-facts";
 
@@ -48,6 +49,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);
+  const customerName = shownText(order.customerName, to("erasedCustomer"));
   const closed = !orderBadgeVisibility(order).payment;
   const collect = codToCollect(order);
   const sh = useMessages(shipmentStatusMessages);
@@ -87,7 +89,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
         </span>
         {/* The name keeps its room; the phone takes what is left and is cut first (T14). */}
         <span className="flex items-center justify-between gap-3 text-body">
-          <span title={order.customerName} className="max-w-full shrink-0 truncate">{order.customerName}</span>
+          <span title={customerName} className="max-w-full shrink-0 truncate">{customerName}</span>
           {order.customerPhone ? (
             <span title={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="min-w-0 truncate font-mono text-muted-foreground">
               {formatPhoneForDisplay(order.customerPhone, getStoreRegion())}

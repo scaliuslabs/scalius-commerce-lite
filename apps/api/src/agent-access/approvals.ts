@@ -11,10 +11,19 @@
 // a fresh 5-minute window to redeem it) or declined (`expired`). Redeeming
 // deletes the row, so a replay finds nothing.
 import { nanoid } from "nanoid";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
-import { agentBrowserHandoffs } from "@scalius/database/schema";
+import {
+  agentBrowserHandoffs,
+  agentDeviceAuthorizations,
+  agentGrants,
+  customers,
+  orders,
+  products,
+  productVariants,
+} from "@scalius/database/schema";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import {
   decryptCredentials,
   encodeEncryptedCredential,
@@ -27,6 +36,7 @@ import {
   requireEncryptionKey,
 } from "./browser-handoffs";
 import { AgentDispatchError } from "./dispatch-error";
+import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
 import type { AgentPrincipal } from "./types";
 
 /** The REST lane's retry header: `Scalius-Approval: abh_...`. */
@@ -40,6 +50,29 @@ interface ApprovalPayload {
   binding: string;
   summary: string;
   operationIds: string[];
+  /** The records the bound input names (ids only; names are read when the owner looks). */
+  targets?: ConfirmTarget[];
+}
+
+const TARGET_KINDS: readonly ConfirmTargetKind[] = ["product", "variant", "order", "customer"];
+
+/** Ids kept for names across every kind, so the encrypted row stays well inside its 8 KiB. */
+const TARGET_IDS_BUDGET = 30;
+
+function storedTargets(value: unknown): ConfirmTarget[] {
+  if (!Array.isArray(value)) return [];
+  let budget = TARGET_IDS_BUDGET;
+  return value.flatMap((item): ConfirmTarget[] => {
+    const target = item as Partial<ConfirmTarget> | null;
+    if (
+      !target || !TARGET_KINDS.includes(target.kind as ConfirmTargetKind) ||
+      !Array.isArray(target.ids) || !target.ids.every((id) => typeof id === "string" && id.length <= 64) ||
+      typeof target.total !== "number" || !Number.isSafeInteger(target.total) || target.total < 0
+    ) return [];
+    const ids = target.ids.slice(0, Math.min(20, budget));
+    budget -= ids.length;
+    return [{ kind: target.kind!, ids, total: target.total, matching: target.matching === true }];
+  });
 }
 
 export interface AgentApprovalLink {
@@ -77,7 +110,7 @@ export async function requestAgentApproval(
   db: Database,
   env: Env,
   principal: AgentPrincipal,
-  input: { binding: string; summary: string; operationIds: readonly string[] },
+  input: { binding: string; summary: string; operationIds: readonly string[]; targets?: readonly ConfirmTarget[] },
 ): Promise<AgentApprovalLink> {
   const now = Math.floor(Date.now() / 1000);
   const approvalId = `abh_${nanoid(20)}`;
@@ -86,6 +119,7 @@ export async function requestAgentApproval(
     binding: input.binding,
     summary: input.summary,
     operationIds: [...input.operationIds].slice(0, 20),
+    ...(input.targets && input.targets.length > 0 ? { targets: storedTargets(input.targets) } : {}),
   };
   const encryptedAction = encodeEncryptedCredential(await encryptCredentials(JSON.stringify(payload), requireEncryptionKey(env)));
   const url = approvalUrlFor(env, approvalId);
@@ -116,12 +150,72 @@ export async function requestAgentApproval(
   return { approvalId, approvalUrl: url, expiresAt: new Date((now + APPROVAL_TTL_SECONDS) * 1000).toISOString() };
 }
 
+/** Who asks: the connection's name and the client it runs in, from the grant record. */
+export interface AgentApprovalRequester {
+  name: string;
+  /** The OAuth client or the paired CLI's client ("Claude Code"); null for an access key. */
+  client: string | null;
+  kind: "oauth" | "pat" | "cli";
+}
+
+/** A kind of record the change acts on: its readable names, how many in all, or a filter. */
+export interface AgentApprovalTarget {
+  kind: ConfirmTargetKind;
+  total: number;
+  names: string[];
+  matching: boolean;
+}
+
 export interface AgentApprovalView {
   approvalId: string;
   status: "pending" | "approved";
   summary: string;
   operationIds: string[];
   expiresAt: string;
+  requester: AgentApprovalRequester | null;
+  targets: AgentApprovalTarget[];
+}
+
+async function readRequester(db: Database, grantId: string): Promise<AgentApprovalRequester | null> {
+  const grant = await db.select({
+    label: agentGrants.label,
+    kind: agentGrants.kind,
+    clientName: agentGrants.oauthClientName,
+    // A paired CLI keeps its client's name on the pairing that created the grant.
+    deviceClientName: sql<string | null>`(
+      SELECT ${agentDeviceAuthorizations.clientName} FROM ${agentDeviceAuthorizations}
+      WHERE ${agentDeviceAuthorizations.grantId} = ${agentGrants.id} LIMIT 1
+    )`,
+  }).from(agentGrants).where(eq(agentGrants.id, grantId)).get();
+  if (!grant) return null;
+  const client = (grant.kind === "oauth" ? grant.clientName : grant.kind === "cli" ? grant.deviceClientName : null)?.trim() || null;
+  return { name: grant.label.trim().slice(0, 120), client: client?.slice(0, 120) ?? null, kind: grant.kind };
+}
+
+/** Readable names for the ids an approval binds: one bounded read per kind (at most 20 ids each). */
+async function readTargetNames(db: Database, target: ConfirmTarget): Promise<string[]> {
+  if (target.ids.length === 0) return [];
+  let rows: Array<{ id: string; name: string }>;
+  switch (target.kind) {
+    case "product":
+      rows = await db.select({ id: products.id, name: products.name }).from(products).where(inArray(products.id, target.ids));
+      break;
+    case "variant":
+      rows = (await db.select({ id: productVariants.id, sku: productVariants.sku, productName: products.name })
+        .from(productVariants).innerJoin(products, eq(products.id, productVariants.productId))
+        .where(inArray(productVariants.id, target.ids)))
+        .map((row) => ({ id: row.id, name: `${row.productName} (${row.sku})` }));
+      break;
+    case "order":
+      rows = (await db.select({ id: orders.id, orderNumber: orders.orderNumber }).from(orders).where(inArray(orders.id, target.ids)))
+        .map((row) => ({ id: row.id, name: formatOrderNumber(row.orderNumber, row.id) }));
+      break;
+    case "customer":
+      rows = await db.select({ id: customers.id, name: customers.name }).from(customers).where(inArray(customers.id, target.ids));
+      break;
+  }
+  const names = new Map(rows.map((row) => [row.id, row.name.trim().slice(0, 160)]));
+  return target.ids.flatMap((id) => names.get(id) || []);
 }
 
 /** What the owner approves: the summary of a live pending or approved request, for its owner only. */
@@ -136,6 +230,7 @@ export async function readAgentApproval(
     status: agentBrowserHandoffs.status,
     expiresAt: agentBrowserHandoffs.expiresAt,
     encryptedAction: agentBrowserHandoffs.encryptedAction,
+    grantId: agentBrowserHandoffs.grantId,
   }).from(agentBrowserHandoffs).where(and(
     eq(agentBrowserHandoffs.id, approvalId),
     eq(agentBrowserHandoffs.ownerUserId, ownerUserId),
@@ -145,12 +240,20 @@ export async function readAgentApproval(
   if (!row || (row.status !== "active" && row.status !== "consumed")) return null;
   const payload = await readPayload(row.encryptedAction, env);
   if (!payload) return null;
+  const requester = await readRequester(db, row.grantId);
+  const targets: AgentApprovalTarget[] = [];
+  // Sequential and bounded: at most four reads of at most 20 ids.
+  for (const target of storedTargets(payload.targets)) {
+    targets.push({ kind: target.kind, total: target.total, names: await readTargetNames(db, target), matching: target.matching });
+  }
   return {
     approvalId,
     status: row.status === "active" ? "pending" : "approved",
     summary: payload.summary,
     operationIds: payload.operationIds,
     expiresAt: row.expiresAt.toISOString(),
+    requester,
+    targets,
   };
 }
 

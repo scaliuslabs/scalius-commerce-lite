@@ -5,16 +5,20 @@
 //
 // Stock is not set here (`write_products` never changes stock): new SKUs start
 // at 0 on hand, and quantities move through the inventory ledger
-// (`dashboard.resources.variants.bulk_set_stock`, `write_inventory`). SKU
-// prices change with `dashboard.resources.variants.bulk_set_prices`.
+// (`dashboard.resources.variants.bulk_set_stock`, `write_inventory`). SKUs
+// change one at a time (`variants.create`, `variants.update`,
+// `variants.restore`, below) or many prices at once
+// (`dashboard.resources.variants.bulk_set_prices`).
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
-import { fromMinor } from "@scalius/shared/money";
+import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { createProduct, createProductSchema, updateProductSemanticSection } from "@scalius/core/modules/product-admin";
+import { addProductSku, createProduct, createProductSchema, restoreProductSku, updateProductResourceSections, updateProductSku } from "@scalius/core/modules/product-admin";
+import type { Context } from "hono";
+import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "@scalius/core/modules/products";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { created, ok } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
@@ -40,9 +44,10 @@ const ProductResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.product, 
 const productEnvelope = successEnvelope(z.object({ product: ProductResource }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
-const priceMinor = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const priceMinor = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
 const barcodeTypes = ["ean13", "upc", "isbn", "gtin", "code128", "custom"] as const;
 const slug = z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
+const idParamSchema = z.object({ id: z.string().min(1).max(128) });
 
 const variantInput = z.object({
   sku: z.string().trim().min(3).max(100).openapi({ description: "Unique in the store, any case." }),
@@ -286,7 +291,11 @@ const updateBody = z.object({
   brandId: z.string().min(1).max(128).nullable().optional(),
   metaTitle: z.string().max(200).nullable().optional(),
   metaDescription: z.string().max(500).nullable().optional(),
-  priceMinor: priceMinor.optional().openapi({ description: "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`)." }),
+  priceMinor: priceMinor.optional().openapi({ description: "A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`)." }),
+  mediaIds: z.array(z.string().trim().min(8).max(160)).max(MAX_PRODUCT_MEDIA_ASSOCIATIONS).optional()
+    .openapi({ description: "The whole gallery: ready media library files in order, the first featured; [] removes them all. Files it already shows keep their alt text; a SKU that showed a removed image shows the featured one." }),
+  salesChannelIds: z.array(z.string().min(1).max(160)).max(50).optional()
+    .openapi({ description: "Exactly the sales channels to publish it to (as `products.set_publications`); [] unpublishes it everywhere." }),
 }).strict().refine((value) => Object.keys(value).length > 1, "Send at least one field to change.");
 
 app.openapi(createRoute({
@@ -295,7 +304,7 @@ app.openapi(createRoute({
   path: "/products/{id}",
   tags: ["App API - Products"],
   summary: "Change a product's fields under the revision you read",
-  description: "Patch semantics: fields left out keep their value, null clears. One write that advances the revision once. Options, SKUs and stock are not changed here.",
+  description: "Patch semantics: fields left out keep their value, null clears. Base fields, the gallery (`mediaIds`) and the sales channels change in one write that advances the revision once. SKUs change with `variants.create`, `variants.update`, `variants.retire` and `variants.restore`; stock never changes here.",
   request: {
     params: z.object({ id: z.string().min(1).max(128) }),
     headers: idempotencyKeyHeaderSchema,
@@ -329,13 +338,132 @@ app.openapi(createRoute({
     ...(body.metaDescription !== undefined ? { metaDescription: body.metaDescription } : {}),
     ...(body.priceMinor !== undefined ? { price: fromMinor(body.priceMinor, places) } : {}),
   };
-  const result = await updateProductSemanticSection(db, id, { section: "base", expectedAggregateRevision: body.expectedRevision, patch });
+  const result = await updateProductResourceSections(db, id, body.expectedRevision, {
+    base: patch,
+    ...(body.mediaIds ? { mediaIds: body.mediaIds } : {}),
+    ...(body.salesChannelIds ? { salesChannelIds: body.salesChannelIds } : {}),
+  });
   if (!result) throw new NotFoundError("Product not found");
   await refreshRecommendationsAfterWrite(c, db, [id]);
   const [product] = await readProductRepresentations(db, [id]);
   if (!product) throw new NotFoundError("Product not found");
   return ok(c, { product });
 });
+
+// ─── SKUs ────────────────────────────────────────────────────────────────────
+// One SKU at a time under the product's revision (product-admin sku-writes.ts):
+// options by name and value, prices in minor units, stock never changed.
+// Each write answers the product, whose `revision` the next write sends.
+
+const optionValuesInput = z.record(z.string().trim().min(1).max(40), z.string().trim().min(1).max(100))
+  .openapi({ description: "One value of every option, by option name (`{ \"Size\": \"XL\", \"Color\": \"Red\" }`), any case. A value the option does not have yet is added to it." });
+const productRevision = z.number().int().positive()
+  .openapi({ description: "The product's `revision` you read; a product changed since is refused with 409 and nothing is saved." });
+const variantParams = z.object({ id: z.string().min(1).max(128), variantId: z.string().min(1).max(128) });
+const skuMediaId = z.string().trim().min(8).max(160).nullable().optional();
+
+const createVariantBody = z.object({
+  expectedRevision: productRevision,
+  sku: variantInput.shape.sku,
+  priceMinor: variantInput.shape.priceMinor,
+  optionValues: optionValuesInput,
+  barcode: variantInput.shape.barcode,
+  barcodeType: variantInput.shape.barcodeType,
+  trackInventory: variantInput.shape.trackInventory,
+  weightGrams: variantInput.shape.weightGrams,
+  mediaId: skuMediaId.openapi({ description: "Its own image: a file in the product's gallery. Omit or null to show the featured image." }),
+}).strict();
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.variants.create",
+  method: "post",
+  path: "/products/{id}/variants",
+  tags: ["App API - Products"],
+  summary: "Add a SKU to a product with options",
+  description: "Adds one SKU for a new combination of the product's options, named by value; a value an option lacks is added to it. A combination a retired SKU had brings that SKU back (its stock and history) under this code and price; otherwise it starts with 0 on hand (set stock through inventory). A product sold as one SKU takes no other. Answers the product with its new revision.",
+  request: {
+    params: idParamSchema,
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: createVariantBody } } },
+  },
+  responses: {
+    201: { description: "The product with the new SKU", content: { "application/json": { schema: productEnvelope } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  const db = c.get("db");
+  const { id } = c.req.valid("param");
+  const { expectedRevision, ...input } = c.req.valid("json");
+  await addProductSku(db, id, expectedRevision, input);
+  return created(c, { product: await readProductAfterWrite(c, db, id) });
+});
+
+const updateVariantBody = z.object({
+  expectedRevision: productRevision,
+  sku: variantInput.shape.sku.optional(),
+  priceMinor: priceMinor.optional().openapi({ description: "Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price." }),
+  optionValues: optionValuesInput.optional(),
+  barcode: z.string().trim().min(1).max(50).nullable().optional().openapi({ description: "Null clears it." }),
+  barcodeType: z.enum(barcodeTypes).optional().openapi({ description: "Omit to keep the current type." }),
+  trackInventory: z.boolean().optional(),
+  weightGrams: variantInput.shape.weightGrams,
+  mediaId: skuMediaId.openapi({ description: "Its own image, a file in the product's gallery; null shows the featured image." }),
+}).strict().refine((value) => Object.keys(value).length > 1, "Send at least one field to change.");
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.variants.update",
+  method: "patch",
+  path: "/products/{id}/variants/{variantId}",
+  tags: ["App API - Products"],
+  summary: "Change a SKU under the product's revision",
+  description: "Patch semantics: fields left out keep their value. Changes a live SKU's code, price, barcode, weight, tracking, image or option values (another combination; a value an option lacks is added). SKU codes and barcodes are unique in the store, any case. Stock never changes here. Answers the product with its new revision.",
+  request: {
+    params: variantParams,
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: updateVariantBody } } },
+  },
+  responses: {
+    200: { description: "The product", content: { "application/json": { schema: productEnvelope } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  const db = c.get("db");
+  const { id, variantId } = c.req.valid("param");
+  const { expectedRevision, ...input } = c.req.valid("json");
+  await updateProductSku(db, id, variantId, expectedRevision, input);
+  return ok(c, { product: await readProductAfterWrite(c, db, id) });
+});
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.variants.restore",
+  method: "post",
+  path: "/products/{id}/variants/{variantId}/restore",
+  tags: ["App API - Products"],
+  summary: "Bring a retired SKU back",
+  description: "The inverse of `variants.retire`: the same SKU (id, code, barcode, stock and history) sells again under its old combination. Refused when the product's options no longer have that combination's options, or a live SKU already sells it. Answers the product with its new revision.",
+  request: {
+    params: variantParams,
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: z.object({ expectedRevision: productRevision }).strict() } } },
+  },
+  responses: {
+    200: { description: "The product with the SKU back", content: { "application/json": { schema: productEnvelope } } },
+    ...writeResponses,
+  },
+}), async (c) => {
+  const db = c.get("db");
+  const { id, variantId } = c.req.valid("param");
+  await restoreProductSku(db, id, variantId, c.req.valid("json").expectedRevision);
+  return ok(c, { product: await readProductAfterWrite(c, db, id) });
+});
+
+/** The product as a write left it, its recommendations refresh queued. */
+async function readProductAfterWrite(c: Context<{ Bindings: Env }>, db: Database, id: string) {
+  await refreshRecommendationsAfterWrite(c, db, [id]);
+  const [product] = await readProductRepresentations(db, [id]);
+  if (!product) throw new NotFoundError("Product not found");
+  return product;
+}
 
 registerAppContentRoutes(app);
 

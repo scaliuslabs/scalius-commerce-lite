@@ -240,7 +240,7 @@ export interface LayoutData {
     /** Default og:image: "" or an absolute https URL. */
     socialImage?: string;
   };
-  /** Public origins of this deployment (Settings -> System -> Platform). */
+  /** Public origins of this deployment (Settings > Store details > Web addresses). */
   platform?: {
     storefrontUrl?: string;
     apiUrl?: string;

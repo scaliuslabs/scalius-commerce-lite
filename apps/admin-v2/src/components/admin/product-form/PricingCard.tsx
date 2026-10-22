@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
@@ -7,7 +7,7 @@ import { formatMargin } from "@/components/admin/inventory/cost-fields";
 import { useCurrency } from "@/hooks/use-currency";
 import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pairFromStored, storedFromPair, type PricePair } from "./compare-at";
 import { useProductKindRules } from "./product-kind-rules";
@@ -16,16 +16,14 @@ import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
 import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 
-// A product-level discount is only edited on a product with options that already has one.
-const ProductDiscountFields = lazy(() => import("./ProductDiscountFields"));
 
 /**
  * Shopify's pricing card. A product without options has a Price (what
  * customers pay) and an optional Compare-at price (what it cost before, shown
  * crossed out); the store keeps them as a base price and a discount
- * (`compare-at.ts`). With options each variant has its own price, so the card
- * shows their range instead of a price nobody pays; a discount saved on the
- * product itself still applies to variants without one, and stays editable.
+ * (`compare-at.ts`). With options each variant has its own price and
+ * compare-at price, so the card shows the range customers pay; the product
+ * itself keeps no discount.
  */
 export function PricingCard({ form, variantPrices, readOnly = false }: {
   form: UseFormReturn<ProductFormValues>;
@@ -53,26 +51,14 @@ export function PricingCard({ form, variantPrices, readOnly = false }: {
       </CardHeader>
       <CardContent className="space-y-4">
         {variantPrices ? (
-          <>
-            <ReadOnlyValue
-              numeric
-              label={t("priceLabel")}
-              help={readOnly ? undefined : t("variantPricesHint")}
-              value={variantPrices.min === variantPrices.max
-                ? fmt(variantPrices.min)
-                : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
-            />
-            {showDiscount && sale !== null ? (readOnly ? (
-              <FieldRow>
-                <ReadOnlyValue label={t("discountType")} value={t(discountType === "flat" ? "discountFixed" : "discountPercentage")} />
-                <ReadOnlyValue
-                  numeric
-                  label={t("discount")}
-                  value={discountType === "flat" ? fmt(discountAmount ?? 0) : formatNumber((discountPercentage ?? 0) / 100, { style: "percent", maximumFractionDigits: 2 })}
-                />
-              </FieldRow>
-            ) : <Suspense fallback={null}><ProductDiscountFields form={form} /></Suspense>) : null}
-          </>
+          <ReadOnlyValue
+            numeric
+            label={t("priceLabel")}
+            help={readOnly ? undefined : t("variantPricesHint")}
+            value={variantPrices.min === variantPrices.max
+              ? fmt(variantPrices.min)
+              : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
+          />
         ) : readOnly ? (
           <FieldRow>
             <ReadOnlyValue numeric label={t("priceLabel")} value={pair.price === null ? null : fmt(pair.price)} />

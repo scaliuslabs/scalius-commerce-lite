@@ -17,6 +17,7 @@ import {
   announcementLinkInvalid,
   homeProductMissing,
   invalidAppSkins,
+  sectionSkinInvalid,
   productAppBlocksInvalid,
   themeContrastProblems,
   allThemeColorsValid,
@@ -170,7 +171,9 @@ function checkedParts(theme: Theme, apps: DraftApps): DraftPart[] {
     ...Object.entries(theme.pages.templates).map(([kind, template]) => [`template:${kind}`, template.sections] as [string, StorefrontSection[]]),
   ];
   for (const [list, sections] of lists) {
-    for (const section of sections) if (appSectionInvalid(section, apps.sections)) parts.push(`section:${list}:${section.id}`);
+    for (const section of sections) {
+      if (appSectionInvalid(section, apps.sections) || sectionSkinInvalid(section, apps.skins)) parts.push(`section:${list}:${section.id}`);
+    }
   }
   return parts;
 }

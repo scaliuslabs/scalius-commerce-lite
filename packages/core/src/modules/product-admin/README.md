@@ -11,13 +11,14 @@ The product model and its rules live in [`products`](../products/README.md). Sto
 - `write.ts` (create, update, duplicate), `variants.ts` (single-SKU writes, SKU and barcode identity checks), `lifecycle.ts` (trash, restore, permanent delete, bulk calls), `read.ts`.
 - `option-matrix.ts`: `saveProductOptionMatrix` and `planProductOptionMatrix`, the atomic replace of options and SKUs.
 - `aggregate-revision.ts`: the revision guard and bump, `ProductRevisionConflictError`.
-- `semantic-sections.ts`: bounded named sections (`base`, `text`, `media`, `attributes`, `additional_info`, `options`, `variants`, `content_blocks`, `template`, `bundles`) for API and agent clients.
+- `semantic-sections.ts`: bounded named sections (`base`, `text`, `media`, `attributes`, `additional_info`, `options`, `variants`, `content_blocks`, `template`, `bundles`) for API and agent clients. `updateProductResourceSections` is the stable `products.update`: base fields, the whole gallery by media ids and the sales channels in one guarded batch.
+- `sku-writes.ts`: one SKU at a time for the stable app API (`addProductSku`, `updateProductSku`, `restoreProductSku`), options named by value. A new or changed combination and a restore go through the option matrix (it adds a missing value, revives a retired combination's SKU row, prunes values no SKU uses); other SKU edits are `planVariantUpdate`. Stock never changes.
 - `tax-classification.ts`: the tax class of a product or SKU. Classes and rates belong to `tax`.
 
 ## Layer and imports
 
 - Layer L5. Imports `attributes`, `inventory`, `markets`, `products`, `settings` and `tax`.
-- Imported by `store-transfer` and by the admin routes `products.ts`, `taxes.ts` and `orders/list.ts` (`apps/api/src/routes/admin/`).
+- Imported by `store-transfer` and by the admin routes `products.ts`, `resources-products.ts`, `taxes.ts` and `orders/list.ts` (`apps/api/src/routes/admin/`).
 
 ## Aggregate revision
 

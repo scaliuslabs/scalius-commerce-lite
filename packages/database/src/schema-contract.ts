@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 185,
-  name: "0185_url_redirects",
+  version: 181,
+  name: "0181_url_redirects",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -668,8 +668,23 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "2ebd2d7e7f51054207bd4a8b15587dd625d0e744dabeae69823f340dfb479172",
   },
   {
-    version: 185,
-    name: "0185_url_redirects",
+    version: 178,
+    name: "0178_tax_exempt_customers",
+    sourceSha256: "d88cec1c207953eb4c6a8ea9b11ede2cad0dd173481d66ed21d5aadd98e8175d",
+  },
+  {
+    version: 179,
+    name: "0179_customer_erasure",
+    sourceSha256: "bd9b9dd1c075e34a20a3b89f2aa72e5a3a013d0d1739a3e23b62d523145c332a",
+  },
+  {
+    version: 180,
+    name: "0180_variant_own_compare_at",
+    sourceSha256: "2438cdbdd6d5223523c0e720e68be252f3fb35469916e8aff9357d2a6d49569d",
+  },
+  {
+    version: 181,
+    name: "0181_url_redirects",
     sourceSha256: "13670fb5240828ba6920b7341b8a9ec78294cf1ee48698749e3338b750ecb327",
   },
 ] as const;

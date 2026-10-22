@@ -91,7 +91,7 @@ import {
   getBuyerVariantPricePresentation,
   getVariantDiscountedPrice,
 } from "@/components/product/lib/pricing-engine";
-import { initialVariantPresentation } from "@/components/product/lib/variant-state-machine";
+import { initialVariantPresentation, resolveVariantImageForSelection } from "@/components/product/lib/variant-state-machine";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import {
   normalizeSavedProductCondition,
@@ -211,10 +211,18 @@ const buyerStockSummary = getBuyerStockSummary(buyerVariants);
 // One page per product: a `?variant=` link is this page from the edge cache
 // (the query never reaches the render), and the buy box's pre-paint script
 // picks that SKU in the browser. The server states the opening choice.
-const buyerPricingVariants = initialVariantPresentation(
+const buyerInitialPresentation = initialVariantPresentation(
   product.options ?? [],
   buyerVariants,
-).pricingVariants;
+);
+const buyerPricingVariants = buyerInitialPresentation.pricingVariants;
+// The opening choice's own photo is the gallery's first paint (Dawn's
+// "selected or first available variant" featured media), so the selected
+// swatch and the photo agree before any script runs.
+const initialVariantMediaId = resolveVariantImageForSelection(
+  buyerVariants,
+  buyerInitialPresentation.selection,
+);
 const buyerPricePresentation = getBuyerVariantPricePresentation(
   {
     basePrice: product.price,
@@ -298,8 +306,8 @@ const primaryImageUrl = productImageCandidates[0] ?? null;
 // preload names exactly the file the first paint shows, with the srcset and
 // sizes of its slot. A video first paints its poster (in the photo's slot),
 // never the video.
-const galleryItems = productGalleryItems(product, media);
-const initialGalleryMedia = featuredGalleryItem(galleryItems, null);
+const galleryItems = productGalleryItems(product, media, buyerVariants);
+const initialGalleryMedia = featuredGalleryItem(galleryItems, initialVariantMediaId);
 // The photo box adapts to the photo the page paints first (its stored size,
 // within bounds), so a square photo never sits in a tall box with bands.
 const galleryLayout = {
@@ -475,7 +483,7 @@ const fulfilmentBadge =
 // Digital items and gift cards are paid online, never in cash: on a store
 // whose checkout takes only cash on delivery the page says so instead of
 // starting a purchase checkout must refuse. A product with a physical or
-// service SKU stays buyable, since such a cart can be paid in cash.
+// service SKU stays buyable; a cart that also holds a digital item is refused cash at checkout.
 const onlinePaymentUnavailable =
   productFulfilment(product, buyerVariants) === "digital" && !takesOnlinePayment(checkoutConfig);
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
@@ -575,6 +583,8 @@ const buyBox = {
 const productGalleryProps = {
   product,
   media,
+  initialProductMediaId: initialVariantMediaId,
+  variants: buyerVariants,
   layout: galleryLayout,
   playVideoLabel: productPageCopy.productPlayVideoText,
   zoomLabel: shop.product.zoomPhoto,

@@ -37,6 +37,7 @@ import {
 import {
   confirmBinding,
   confirmSummary,
+  confirmTargets,
   consumeConfirmToken,
   isConfirmGated,
   mintConfirmToken,
@@ -52,7 +53,7 @@ import {
   errorFromUnknown,
   type AgentToolError,
 } from "./errors";
-import { getAuthorizedOperation } from "./operations";
+import { describeAuthorizedWorkflow, getAuthorizedOperation } from "./operations";
 import { registerAgentPrompts } from "./prompts";
 import {
   AGENT_STEP_ID_PATTERN,
@@ -61,7 +62,7 @@ import {
   resolveStepReferences,
 } from "./references";
 import { registerAgentResources } from "./resources";
-import { searchCapabilities } from "./search";
+import { answersQuestion, searchCapabilities, SEARCH_MAX_LIMIT } from "./search";
 import {
   AGENT_MAX_SELECT_POINTERS,
   AGENT_READ_BUDGET_BYTES,
@@ -606,6 +607,38 @@ async function singleResult(
 
 // ─── Confirmation ────────────────────────────────────────────────────────────
 
+/**
+ * Asks each route whether it would take its step's input, before anyone is
+ * asked to approve the change (black-box M7): a step the route refuses (its
+ * schema, an undeclared body property, its content type) answers with that
+ * refusal and no approval is requested. Nothing runs, and the check is not a
+ * call (no rate charge, no audit row). A step whose input reads an earlier
+ * step's result is validated when it runs.
+ */
+async function validateBeforeApproval(
+  deps: McpServerDependencies,
+  principal: AgentPrincipal,
+  prepared: readonly PreparedStep[],
+  options: ShapeOptions,
+): Promise<ReturnType<typeof agentErrorResult> | null> {
+  if (deps.surface !== "dashboard") return null;
+  for (const step of prepared) {
+    const { operation } = step;
+    if (containsStepReference(step.input) || operation.requiredClientAction) continue;
+    if (operation.transport !== "json" && operation.transport !== "continuation") continue;
+    try {
+      const input = await withIdempotencyKey(operation, step.input, `validate:${step.id}`);
+      const result = await dispatchAgentOperation({
+        operation, input, principal, env: deps.env, ctx: deps.ctx, validateOnly: true,
+      });
+      if (!result.ok) return agentErrorResult(shapeOperationResult(operation, result, options).error!);
+    } catch (error) {
+      return agentErrorResult(errorFromUnknown(error, operation.operationId));
+    }
+  }
+  return null;
+}
+
 const confirmAnswerSchema = z.object({ confirm: z.boolean() });
 
 interface ToolContextLike {
@@ -737,6 +770,7 @@ async function resolveConfirmation(
     binding,
     summary,
     operationIds: steps.filter((step) => isConfirmGated(step.operation)).map((step) => step.operation.operationId),
+    targets: confirmTargets(steps),
   });
   return {
     kind: "respond",
@@ -922,6 +956,8 @@ async function runWrite(deps: McpServerDependencies, args: WriteArgs, ctx: ToolC
 
   let confirmation: { by: AgentConfirmation; token: string } | null = null;
   if (gated && policy !== "none") {
+    const invalid = await validateBeforeApproval(deps, principal, prepared, options);
+    if (invalid) return invalid;
     const outcome = await resolveConfirmation(deps, principal, confirmSteps, args.approvalId, ctx);
     if (outcome.kind === "respond") return outcome.result;
     confirmation = { by: outcome.by, token: outcome.token };
@@ -985,7 +1021,7 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
   });
 
   server.registerTool("scalius_describe", {
-    description: "How to call up to 5 operations: purpose, inputs (! = required), write rules, one example input, response fields. detail full gives the exact schemas.",
+    description: "How to call up to 5 operations: purpose, inputs (! = required), write rules, one example input, response fields. detail full gives the exact schemas. A workflow id from scalius_search answers its steps and rules.",
     inputSchema: listed(z.object({
       ids: z.array(z.string().max(240)).min(1).max(5),
       detail: z.enum(["compact", "full", "examples"]).optional(),
@@ -1007,6 +1043,12 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
       for (const id of [...new Set(ids)]) {
         const operation = await getAuthorizedOperation(id, deps.surface, principal);
         if (!operation) {
+          // A workflow scalius_search returned opens here too: its steps and rules.
+          const workflow = await describeAuthorizedWorkflow(id, deps.surface, principal);
+          if (workflow) {
+            operations.push(workflow);
+            continue;
+          }
           operations.push({ operationId: id, error: buildAgentToolError({ code: "operation_not_found", status: 404, message: "Operation is unavailable or not authorized" }) });
           continue;
         }
@@ -1042,8 +1084,18 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
         ctx: deps.ctx,
       });
       if (answer.kind === "result") return toolResult({ ok: true, ...answer });
-      const search = await searchCapabilities({ query: question, limit: 3, surface: deps.surface, principal });
-      return toolResult({ ok: true, kind: "unavailable", hits: search.hits });
+      // A question is answered by reads: the closest reads (and any control to
+      // honour), never a change that happens to share its words.
+      const search = await searchCapabilities({ query: question, limit: SEARCH_MAX_LIMIT, surface: deps.surface, principal });
+      const hits = search.hits.filter(answersQuestion).slice(0, 3);
+      return toolResult({
+        ok: true,
+        kind: "unavailable",
+        message: hits.length > 0
+          ? "No reviewed answer covers this question. These reads can answer it: scalius_describe one, then scalius_read it."
+          : "No reviewed answer covers this question, and no read matched it. Try scalius_search with other words.",
+        hits,
+      });
     } catch (error) {
       return errorResult(error);
     }

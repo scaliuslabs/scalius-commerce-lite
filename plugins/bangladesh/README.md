@@ -2,7 +2,7 @@
 
 A first-party app with what a store in Bangladesh needs and a store elsewhere does not. It is for merchants who set it up and for contributors who change it. The app uses only the public plugin contract (`packages/plugin-sdk/README.md`). Core has no Bangladesh payment gateway, courier, SMS gateway, fraud checker or place list of its own.
 
-Every service is a **feature** (`manifest.features`, `docs/platform/PLUGINS.md`). Each starts off. A merchant turns on only the services the store uses, and each one asks for its own access when it is turned on.
+Every service is a **feature** (`manifest.features`, `packages/plugin-sdk/docs/apps.md`). Each starts off. A merchant turns on only the services the store uses, and each one asks for its own access when it is turned on.
 
 | Part | What it gives | Features | Code |
 |------|---------------|----------|------|

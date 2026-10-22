@@ -1,4 +1,4 @@
-// Sends one plugin event delivery (docs/platform/PLUGINS.md, "Extension
+// Sends one plugin event delivery (packages/plugin-sdk/docs/apps.md, "Extension
 // points" 1): claims it, hands the event envelope to the plugin through the
 // host, and records the outcome. Retries, the dead-letter state and the
 // in-flight cap live in the delivery row (@scalius/core/modules/plugins,

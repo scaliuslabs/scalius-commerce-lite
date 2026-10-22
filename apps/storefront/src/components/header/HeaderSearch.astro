@@ -2,9 +2,9 @@
 // The header's search, in the shape a header layout asks for. Fields are a
 // real GET form to /search, so searching works before hydration and without
 // JavaScript; with it, a pointer press on the field opens the typeahead
-// palette instead (keyboard users type in place and press Enter). Scoped
-// fields keep native input focus so pointer users can use the selected
-// department. The select scopes search to a category page (?q= there) with
+// palette instead, and typing in any whole-store field opens it with the
+// typed letters (predictive search, scripts/storefront-actions.ts). A field
+// scoped to a department stays a plain form. The select scopes search to a category page (?q= there) with
 // JavaScript; without it, the whole store is searched.
 // - icon: a 44px button that opens the palette (a link to /search before
 //   hydration).

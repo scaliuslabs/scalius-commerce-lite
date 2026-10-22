@@ -1,4 +1,4 @@
-// Plugin routes (docs/platform/PLUGINS.md, "Extension points" 4): every HTTP
+// Plugin routes (packages/plugin-sdk/docs/apps.md, "Extension points" 4): every HTTP
 // request a plugin answers enters here and goes through `PluginHost.invokeRoute`.
 //
 //   /api/v1/plugins/<id>/admin/<route>[/<sub path>]     dashboard session, apps.view (+ apps.use to change)

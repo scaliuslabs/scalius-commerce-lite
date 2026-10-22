@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // `pnpm plugin <command>`: the operator's tool for bundled plugins
-// (docs/platform/PLUGINS.md). Plugins compiled into the API Worker are listed
+// (packages/plugin-sdk/docs/apps.md). Plugins compiled into the API Worker are listed
 // in scalius.plugins.json; this keeps that lockfile, the generated
 // apps/api/src/plugins/bundled.gen.ts, the plugins' listing images
 // (assets.gen.ts), the catalog of first-party plugins not bundled
@@ -37,6 +37,7 @@ import {
   isPathSource,
   packForGenerated,
   packPlugin,
+  pluginSandboxEnabled,
   readLockfile,
   renderAssetsGen,
   renderBundledGen,
@@ -51,9 +52,11 @@ import {
   buildRegistry,
   generateSigningKey,
   installFromRegistry,
+  loadRegistryContract,
   packSigned,
   parseCommandArgs,
   trustedKeysWith,
+  shownPath,
   userPath,
 } from "./plugin-registry.mjs";
 import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
@@ -70,15 +73,10 @@ import { devPlugin, previewPlugin, readPreviewFixture } from "./plugin-dev.mjs";
 import { stripJsonc } from "./check-worker-env.mjs";
 import { resolvePlan, withPlanProfile } from "./plan.mjs";
 
-export { scaffoldFiles };
+export { pluginSandboxEnabled, scaffoldFiles };
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const API_DIR = join(root, "apps/api");
-
-/** The sandbox is on when the lockfile says so or the operator asks for it for one run. */
-export function pluginSandboxEnabled(lockfile, env = process.env, args = []) {
-  return args.includes("--plugin-sandbox") || env.SCALIUS_PLUGIN_SANDBOX === "1" || lockfile.sandbox === true;
-}
 
 /**
  * A Wrangler config with the Worker Loader binding added. The committed
@@ -234,7 +232,7 @@ function create(id, args) {
   const name = id.split(".")[1];
   const dir = flags.get("--dir");
   const directory = typeof dir === "string" ? userPath(dir) : join(root, "plugins", name);
-  const shown = relative(process.env.INIT_CWD || process.cwd(), directory) || ".";
+  const shown = shownPath(directory);
   if (existsSync(directory)) throw new Error(`${shown} already exists.`);
   const standalone = !isWorkspacePackageDir(directory);
   const version = sdkVersion();
@@ -281,11 +279,12 @@ async function pack(target, flags) {
     key: typeof key === "string" ? userPath(key) : null,
     developer: typeof flags.get("--developer") === "string" ? flags.get("--developer") : null,
   });
-  console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${relative(process.cwd(), packed.dist) || "dist"}`);
+  console.log(`Packed ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}) in ${shownPath(packed.dist)}`);
+  const { pluginKeyFingerprint } = await loadRegistryContract();
   console.log(packed.signature
-    ? `Signed by key ${packed.signature.keyId} (${packed.signature.developer}).`
+    ? `Signed with key ${pluginKeyFingerprint(packed.signature.keyId)} (labelled "${packed.signature.developer}"). A store trusts the key, not the label: give merchants this fingerprint so they can check it before they trust your key.`
     : "Not signed: a store needs a Super Admin to accept it as unsigned. Sign it with --key <folder> (make a key with: pnpm plugin keygen <folder>).");
-  console.log(`Upload package: ${relative(process.cwd(), packed.zipPath)}`);
+  console.log(`Upload package: ${shownPath(packed.zipPath)}`);
 }
 
 async function keygen(outDir) {
@@ -294,7 +293,9 @@ async function keygen(outDir) {
   const key = await generateSigningKey(directory);
   console.log(`Private key: ${key.keyFile}`);
   console.log(`Public key:  ${key.publicKey}`);
-  console.log(`Key id:      ${key.keyId}`);
+  const { pluginKeyFingerprint } = await loadRegistryContract();
+  console.log(`Key fingerprint: ${pluginKeyFingerprint(key.keyId)}`);
+  console.log("Give merchants this fingerprint: the dashboard shows it before a store trusts your key.");
   console.log("\nKeep the private key out of this repository and out of version control: anyone who has it can publish apps as you.");
   if (!relative(root, directory).startsWith("..")) {
     console.log("! This folder is inside the repository. Move signing-key.pem somewhere private before you commit anything.");

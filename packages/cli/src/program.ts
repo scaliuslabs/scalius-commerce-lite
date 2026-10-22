@@ -268,13 +268,13 @@ export function createProgram(runtime: Runtime): Command {
   program.command("bulk")
     .description(`change many records at once: ${Object.keys(BULK_KINDS).join(", ")}`)
     .addArgument(new Argument("<kind>", "what to change").choices(Object.keys(BULK_KINDS)))
-    .option("--ids <ids>", "comma-separated ids: SKUs (prices, stock), customers (tags) or products (status, publish)")
+    .option("--ids <ids>", "comma-separated: SKU codes or ids (prices, stock), customer ids (tags) or product ids (status, publish)")
     .option("--filter <filter>", "instead of ids: key=value,key=value or JSON. Products: search, category, status, salesChannel. Customers: tag, minOrders, maxOrders")
     .option("--set <amount>", "prices: set every price to this amount in the store currency (1500 is 1,500.00 BDT in a taka store)")
     .option("--percent <n>", "prices: change every price by this percent (5 raises 5%, -10 lowers 10%)")
     .option("--amount <amount>", "prices: add (negative: take off) this amount in the store currency")
     .option("--minor", "prices: --set and --amount are minor units (150000 is 1,500.00 BDT), not the store currency", false)
-    .option("--items <pairs>", "stock: variantId=quantity,... the counted units on hand")
+    .option("--items <pairs>", "stock: sku=quantity,... the counted units on hand (a SKU code such as TS-RED-M, or its id)")
     .option("--quantity <n>", "stock: the count for every --ids SKU")
     .option("--location <id>", "stock: the location counted (the default one when omitted)")
     .option("--reason <text>", "stock: shown on each stock movement")
@@ -460,7 +460,7 @@ export function createProgram(runtime: Runtime): Command {
       const result = await readWorkflow(runtime, profileValue, document, { prompt: request, surface: options.surface });
       const human = result.kind === "result"
         ? `${result.workflowId}\n${JSON.stringify(result.outputs, null, 2)}`
-        : `${result.classification.reason} Use scalius search for ranked options.`;
+        : `${result.classification.reason} workflow read answers reviewed data questions in words; open a workflow id from scalius search with scalius describe <id>.`;
       writeResult(runtime, mode(command), result, human);
     });
 

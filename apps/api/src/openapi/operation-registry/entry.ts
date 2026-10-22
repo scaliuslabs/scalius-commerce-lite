@@ -64,7 +64,7 @@ export type OperationRegistryEntry = {
   /** Required when `exposure` is `"excluded"`, forbidden otherwise. */
   reason?: string;
   /**
-   * The app-API tier (`x-scalius-agent.stability`, docs/platform/PLUGINS.md
+   * The app-API tier (`x-scalius-agent.stability`, packages/plugin-sdk/docs/apps.md
    * "Stable operations"). An operation is `"stable"` exactly when the sealed
    * app-name table lists it (`STABLE_APP_OPERATIONS` in
    * `@scalius/shared/plugins/app-operations`): its request and response

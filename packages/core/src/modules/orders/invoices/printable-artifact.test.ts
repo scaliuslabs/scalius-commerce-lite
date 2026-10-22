@@ -53,6 +53,15 @@ describe("printable invoice artifact", () => {
     expect(new TextEncoder().encode(artifact).byteLength).toBeLessThanOrEqual(65_536);
   });
 
+  it("shows a tax-exempt buyer's exemption and number, escaped, and nothing for others", () => {
+    const document = invoice();
+    expect(renderPrintableInvoice(document, "Asia/Dhaka")).not.toContain("Tax exempt");
+    document.order.taxExemption = { exemptionId: "VAT <BD> 123" };
+    expect(renderPrintableInvoice(document, "Asia/Dhaka")).toContain("<strong>Tax exempt</strong> · VAT &lt;BD&gt; 123");
+    document.order.taxExemption = { exemptionId: null };
+    expect(renderPrintableInvoice(document, "Asia/Dhaka")).toContain("<p><strong>Tax exempt</strong></p>");
+  });
+
   it("keeps the historical shipping label when no method snapshot exists", () => {
     const document = invoice();
     document.order.shippingMethodId = null;

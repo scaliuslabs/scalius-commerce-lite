@@ -2,7 +2,7 @@ import { collectObjectBindingRequests, resolvePluginSettingBindings, type Bindin
 import { planStorefrontObjects, type PublicObjectBindings, type StorefrontObjectLoader } from "../objects";
 import { objectTypeId, parseObjectTypeHandle } from "@scalius/shared/plugins/objects";
 import type { PluginManifest } from "@scalius/shared/plugins/manifest";
-// The data of app component sections (docs/STOREFRONT-COMPONENTS.md): a
+// The data of app component sections (packages/plugin-sdk/docs/storefront.md): a
 // section an app's storefront module draws at the edge gets its settings
 // resolved there, from the images, product lists and picked products read
 // here in one batch. It runs after the apps' read (beside the page's second

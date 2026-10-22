@@ -1158,8 +1158,11 @@ export function summarizeStorefrontCartFulfilment(
         requiresDeliveryMethod,
         deliveryMethodKind,
         requiresShipping: lineTypes.includes("ship"),
-        // Physical and service lines are handed over in person: cash fits.
-        allowsCashOnDelivery: result.items.some((item) =>
+        // Physical and service lines are handed over in person: cash fits. A
+        // digital item or gift card is paid online only, so one such line
+        // refuses cash for the whole order (buyer QA M1: an e-book beside a
+        // vase was ordered by cash on delivery and could never be delivered).
+        allowsCashOnDelivery: result.items.length > 0 && result.items.every((item) =>
             !item.isGiftCard && item.fulfillmentKind !== "digital"),
     };
 }

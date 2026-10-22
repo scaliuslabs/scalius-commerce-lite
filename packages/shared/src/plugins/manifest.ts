@@ -1,4 +1,4 @@
-// Plugin manifest (docs/platform/PLUGINS.md). One strict document says
+// Plugin manifest (packages/plugin-sdk/docs/apps.md). One strict document says
 // everything a plugin may do; the platform derives the consent screen, the
 // runtime grants and the dashboard/storefront surfaces from it, so nothing a
 // plugin does is undeclared. Validated at every parse site (pack, install,

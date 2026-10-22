@@ -1,4 +1,4 @@
--- URL redirects (see ../0185_url_redirects.sql).
+-- URL redirects (see ../0181_url_redirects.sql).
 CREATE TABLE "url_redirects" (
 	"id" text COLLATE "C" PRIMARY KEY NOT NULL,
 	"from_path" text COLLATE "C" NOT NULL,
@@ -58,4 +58,4 @@ FOR EACH ROW
 WHEN ((OLD."id" IS DISTINCT FROM NEW."id" OR OLD."from_path" IS DISTINCT FROM NEW."from_path" OR OLD."to_path" IS DISTINCT FROM NEW."to_path"))
 EXECUTE FUNCTION scalius_compat."cdep_url_redirects_upd_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (185, '0185_url_redirects', '13670fb5240828ba6920b7341b8a9ec78294cf1ee48698749e3338b750ecb327');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (181, '0181_url_redirects', '13670fb5240828ba6920b7341b8a9ec78294cf1ee48698749e3338b750ecb327');

@@ -90,6 +90,10 @@ export interface AccountCopy {
     /** The reason that needs a note; the last of both lists. */
     other: string;
     chooseReason: string;
+    /** The return form: which delivered items come back. */
+    returnItems: string;
+    chooseReturnItems: string;
+    returnQuantityFor: string;
     tellStore: string;
     requestFailed: string;
     title: (number: string) => string;
@@ -301,6 +305,9 @@ const EN: AccountCopy = {
     returnReasons: ["Damaged or defective", "Wrong item received", "Not as described", "Changed my mind", "Other"],
     other: "Other",
     chooseReason: "Choose a reason.",
+    returnItems: "Items to return",
+    chooseReturnItems: "Choose at least one item to return.",
+    returnQuantityFor: "How many {name} to return",
     tellStore: "Tell the store what you need.",
     requestFailed: "Request could not be sent. Try again.",
     title: (number) => `Order ${number}`,
@@ -514,6 +521,9 @@ const BN: AccountCopy = {
     returnReasons: ["পণ্য নষ্ট বা ত্রুটিপূর্ণ", "ভুল পণ্য পেয়েছি", "বর্ণনার সাথে মেলে না", "মত বদলেছি", "অন্য কারণ"],
     other: "অন্য কারণ",
     chooseReason: "একটি কারণ বেছে নিন।",
+    returnItems: "যে পণ্য ফেরত দেবেন",
+    chooseReturnItems: "ফেরত দিতে অন্তত একটি পণ্য বেছে নিন।",
+    returnQuantityFor: "কতগুলো {name} ফেরত দেবেন",
     tellStore: "আপনার কী দরকার, স্টোরকে লিখে জানান।",
     requestFailed: "অনুরোধ পাঠানো যায়নি। আবার চেষ্টা করুন।",
     title: (number) => `অর্ডার ${number}`,

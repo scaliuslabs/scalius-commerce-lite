@@ -53,12 +53,14 @@ export function sdkRefreshCommand({ repo, app }) {
  * app is a package of this workspace (`plugins/<name>`).
  */
 export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0", sdkDependency = `^${sdkVersion}` } = {}) {
-  const title = name.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-  const vendor = id.split(".")[0];
+  // The app's own name comes from its id, never the folder it was made in
+  // (`--dir ./acme-engrave` for acme.engrave is still "acme-engrave", not "acme-acme-engrave").
+  const [vendor, appName] = id.split(".");
+  const title = appName.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   const project = standalone
     ? {
       "package.json": `${JSON.stringify({
-        name: `${vendor}-${name}`,
+        name: `${vendor}-${appName}`,
         version: "0.1.0",
         private: true,
         type: "module",

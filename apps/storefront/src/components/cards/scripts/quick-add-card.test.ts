@@ -32,6 +32,8 @@ describe("card quick add", () => {
     expect(quickAddCartLine({ ...simple, product: { ...simple.product, hasVariants: true } }, "BDT")).toBeNull();
     expect(quickAddCartLine({ ...simple, variants: [{ ...simple.variants[0]!, stock: 0 }] }, "BDT")).toBeNull();
     expect(quickAddCartLine({ ...simple, variants: [...simple.variants, { ...simple.variants[0]!, id: "sku_other" }] }, "BDT")).toBeNull();
+    // Buyer QA M1: an e-book is paid online only; its page says whether this store can take that.
+    expect(quickAddCartLine({ ...simple, variants: [{ ...simple.variants[0]!, fulfillmentKind: "digital", trackInventory: false }] } as unknown as ProductPageData, "BDT")).toBeNull();
   });
 
   it("keeps a simple product on the shelf and opens the cart after adding", async () => {

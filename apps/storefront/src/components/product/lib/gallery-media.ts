@@ -8,7 +8,7 @@
  * - A video's poster stands in for it until the buyer presses play: the
  *   poster is what paints first, never the video.
  */
-import type { Product, ProductMedia } from "@/lib/api";
+import type { Product, ProductMedia, ProductVariant } from "@/lib/api";
 import { hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 
 export interface PageGalleryItem {
@@ -42,9 +42,30 @@ export function formatVideoDuration(durationMs: number | null): string | null {
   return `${minutes}:${seconds}`;
 }
 
+/**
+ * A SKU photo's words when the merchant wrote none: the product and the
+ * option values every SKU showing it shares ("Echo Mini Speaker, Black"), so
+ * each thumbnail says which choice it shows instead of repeating the name.
+ */
+function variantPhotoAlt(
+  productName: string,
+  mediaId: string,
+  variants: ReadonlyArray<Pick<ProductVariant, "imageId" | "selectedOptions">>,
+): string | null {
+  const users = variants.filter((variant) => variant.imageId === mediaId);
+  if (users.length === 0) return null;
+  const shared = users[0]!.selectedOptions.filter((option) =>
+    users.every((variant) => variant.selectedOptions.some((other) =>
+      other.optionDefinitionId === option.optionDefinitionId && other.optionValueId === option.optionValueId)),
+  );
+  const values = shared.map((option) => option.value?.trim()).filter(Boolean);
+  return values.length > 0 ? `${productName}, ${values.join(" / ")}` : null;
+}
+
 export function productGalleryItems(
   product: Pick<Product, "name" | "imageAlt">,
   media: readonly ProductMedia[],
+  variants: ReadonlyArray<Pick<ProductVariant, "imageId" | "selectedOptions">> = [],
 ): PageGalleryItem[] {
   const fallbackAlt = product.imageAlt?.trim() || product.name;
   return media
@@ -56,7 +77,7 @@ export function productGalleryItems(
       kind: item.kind,
       url: item.kind === "video" ? item.url : resolveProductImageUrl(item.url),
       posterUrl: item.kind === "video" && item.posterUrl ? resolveProductImageUrl(item.posterUrl) : null,
-      altText: item.altText?.trim() || fallbackAlt,
+      altText: item.altText?.trim() || (item.kind === "image" ? variantPhotoAlt(product.name, item.id, variants) : null) || fallbackAlt,
       duration: item.kind === "video" ? formatVideoDuration(item.durationMs) : null,
       isPrimary: item.isPrimary,
       aspectRatio: mediaAspectRatio(item),

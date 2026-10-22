@@ -1,4 +1,4 @@
-// Plugin settings (docs/platform/PLUGINS.md): the merchant-facing settings a
+// Plugin settings (packages/plugin-sdk/docs/apps.md): the merchant-facing settings a
 // plugin declares in its manifest. The dashboard renders the form from this
 // schema (no plugin JavaScript), the API validates every write with it, and
 // `secret` values are encrypted at rest and decrypted only inside the plugin

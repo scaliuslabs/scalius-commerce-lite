@@ -189,11 +189,20 @@ describe("UCP storefront routes", () => {
     mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("");
 
     const response = await getProfile({} as never);
-    const body = await response.text();
+    const body = await response.json() as { messages: Array<Record<string, unknown>> };
 
-    expect(response.status).toBe(503);
+    // Permanent until the merchant sets an https Store URL: 404, no retry, and the real cause.
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Retry-After")).toBeNull();
     expect(response.headers.get("Cache-Control")).toContain("no-store");
-    expect(body).toContain("UCP profile is temporarily unavailable");
+    expect(body.messages[0]).toMatchObject({
+      type: "error",
+      code: "not_configured",
+      severity: "unrecoverable",
+      content: expect.stringContaining("Settings, Store details, Web addresses"),
+    });
+    expect(JSON.stringify(body)).not.toContain("temporarily");
+    expect(body).not.toHaveProperty("ucp.capabilities");
   });
 
   it("fails closed instead of publishing a non-HTTPS UCP profile", async () => {
@@ -201,8 +210,10 @@ describe("UCP storefront routes", () => {
 
     const response = await getProfile({} as never);
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Retry-After")).toBeNull();
     expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(await response.text()).toContain("https web address");
   });
 
   it("requires UCP-Agent on catalog operations", async () => {

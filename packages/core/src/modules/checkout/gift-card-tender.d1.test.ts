@@ -168,13 +168,21 @@ describe("gift cards as a checkout tender", () => {
 
     it("a gift card never pays for gift cards", async () => {
         const card = await store.issueCard(100_000);
-        const mixed = await store.checkout({
+        // A gift card in the cart is paid online only, never in cash (buyer QA M1).
+        await expect(store.prepare({
             ...DELIVERY,
             items: [line("p_mug", "v_mug", 1, 300), line("p_gc", "v_gc", 1, 500)],
             paymentMethod: "cod",
             giftCards: [{ handle: card.handle }],
             expectedAmountDueMinor: 50_000,
-        });
+        })).rejects.toThrow(/Cash on delivery isn't available/);
+        const mixed = await store.checkout({
+            ...DELIVERY,
+            items: [line("p_mug", "v_mug", 1, 300), line("p_gc", "v_gc", 1, 500)],
+            paymentMethod: PACK_SSLCOMMERZ_ID,
+            giftCards: [{ handle: card.handle }],
+            expectedAmountDueMinor: 50_000,
+        }, { paymentProviders: createSslcommerzPackProviders().providers });
         expect(order(mixed.orderId)).toMatchObject({
             total_amount_minor: MUG_ORDER_TOTAL + 50_000,
             paid_amount_minor: MUG_ORDER_TOTAL,
@@ -371,7 +379,8 @@ describe("gift-card lines are tax-exempt at sale", () => {
         const result = await store.checkout({
             ...DELIVERY,
             items: [line("p_mug", "v_mug", 1, 300), line("p_gc", "v_gc", 1, 500)],
-        });
+            paymentMethod: PACK_SSLCOMMERZ_ID,
+        }, { paymentProviders: createSslcommerzPackProviders().providers });
         const rows = store.all<{ product_id: string; tax_amount_minor: number; taxable_amount_minor: number }>(
             "SELECT product_id, tax_amount_minor, taxable_amount_minor FROM order_items WHERE order_id = ? ORDER BY product_id",
             result.orderId,

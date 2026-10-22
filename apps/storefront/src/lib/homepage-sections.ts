@@ -414,6 +414,24 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
 }
 
 /**
+ * What a homepage on which no section shows anything says instead of a blank
+ * band: null while any section shows something; "no-products" when the
+ * product lists its sections read all came back empty (a new store); else
+ * "browse" (sections hidden or empty while the catalog may hold products).
+ */
+export function homepageEmptyState(
+  sections: readonly StorefrontSection[],
+  content: HomepageContent,
+): "no-products" | "browse" | null {
+  if (sections.some((section) => homepageSectionRenders(section, content))) return null;
+  const lists = [...content.lists.values()];
+  const anyProduct = content.homeProduct !== null
+    || lists.some((list) => list.products.length > 0)
+    || [...content.collections.values()].some((collection) => (collection.products?.length ?? 0) > 0);
+  return lists.length > 0 && !anyProduct ? "no-products" : "browse";
+}
+
+/**
  * Whether the section opens with a large photo that can be the page's
  * largest paint. Text strips, category thumbnails and the FAQ sit above
  * such a photo without pushing it below the fold, so they never lead.

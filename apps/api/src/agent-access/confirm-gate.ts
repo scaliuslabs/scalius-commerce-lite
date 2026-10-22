@@ -17,12 +17,19 @@
 // Otherwise nothing runs: the answer is 428 `confirmation_required` with the
 // summary and an approval link for the owner. The agent never receives
 // anything it could redeem by itself.
+//
+// A request the route itself would refuse (its path, query, headers, content
+// type or body schema, or a body property the operation does not declare) is
+// refused first, with the route's own answer, and nobody is asked (black-box
+// M7): an approval is only ever given for a request that would run, and the
+// replay, which must carry the same bytes, passes the same validation.
 import type { Context } from "hono";
 import { AppError } from "@scalius/core/errors";
 import { getDb } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
 import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import type { OperationDispatchClearance } from "./dispatch-context";
+import type { ValidatedRequest } from "./route-validation";
 import { AgentDispatchError, type AgentOperationInput } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
@@ -48,6 +55,8 @@ interface RequestFacts {
   input: AgentOperationInput;
   /** What runs, byte for byte: the raw query string, the content type and the body's SHA-256. */
   raw: { search: string; contentType: string; bodySha256: string | null; bodyBytes: number };
+  /** The same request, for the route's own validators (route-validation.ts). */
+  request: ValidatedRequest;
 }
 
 /**
@@ -63,8 +72,9 @@ async function requestFacts(c: Context, operation: AgentOperationPolicy, pathnam
   let body: unknown;
   let bodySha256: string | null = null;
   let bodyBytes = 0;
+  let buffer: ArrayBuffer | null = null;
   if (c.req.raw.body !== null) {
-    const buffer = await c.req.raw.clone().arrayBuffer();
+    buffer = await c.req.raw.clone().arrayBuffer();
     const bytes = new Uint8Array(buffer);
     bodyBytes = bytes.byteLength;
     if (bytes.byteLength > 0) {
@@ -85,7 +95,30 @@ async function requestFacts(c: Context, operation: AgentOperationPolicy, pathnam
       ...(body !== undefined ? { body } : {}),
     } as AgentOperationInput,
     raw: { search: url.search, contentType, bodySha256, bodyBytes },
+    request: {
+      url: new URL(`${pathname}${url.search}`, url.origin).href,
+      method: c.req.method,
+      headers: new Headers(c.req.raw.headers),
+      body: buffer,
+      json: body,
+    },
   };
+}
+
+/**
+ * The route's own refusal of this request (its validation error, or 415 for
+ * a content type it does not take), or null when the route would accept it.
+ * The MCP lane asks through a validate-only dispatch, which the admin
+ * boundary answers with this before any approval is requested.
+ */
+export async function agentRequestValidationRefusal(
+  c: Context,
+  operation: AgentOperationPolicy,
+  pathname: string,
+): Promise<Response | null> {
+  const { request } = await requestFacts(c, operation, pathname);
+  const { routeValidationRefusal } = await import("./route-validation");
+  return routeValidationRefusal(c, operation, request);
 }
 
 /**
@@ -106,7 +139,9 @@ function isNativeDryRun(operation: AgentOperationPolicy, method: string, input: 
 
 /**
  * Refuses a confirmation-gated agent request that nobody approved. `clearance`
- * is the in-process dispatcher's (MCP); null on the direct REST lane.
+ * is the in-process dispatcher's (MCP); null on the direct REST lane. Returns
+ * the route's own refusal when the request would not pass its validation
+ * (nothing is asked, redeemed or run); null lets the request through.
  */
 export async function enforceAgentConfirmation(
   c: Context,
@@ -114,19 +149,23 @@ export async function enforceAgentConfirmation(
   operation: AgentOperationPolicy,
   pathname: string,
   clearance: OperationDispatchClearance | null,
-): Promise<void> {
+): Promise<Response | null> {
   const confirm = await import("./mcp/confirm");
-  if (!confirm.isConfirmGated(operation)) return;
-  if (clearance?.confirmed) return;
-  if (clearance?.dryRun && operation.dryRun === "native") return;
+  if (!confirm.isConfirmGated(operation)) return null;
+  if (clearance?.confirmed) return null;
+  if (clearance?.dryRun && operation.dryRun === "native") return null;
   const env = c.env as Env;
-  if (await confirm.readAgentConfirmPolicy(env, principal) === "none") return;
+  if (await confirm.readAgentConfirmPolicy(env, principal) === "none") return null;
+  const { input, raw, request } = await requestFacts(c, operation, pathname);
+  // Validate first: a request the route refuses is refused before anyone is asked.
+  const { routeValidationRefusal } = await import("./route-validation");
+  const refusal = await routeValidationRefusal(c, operation, request);
+  if (refusal) return refusal;
   if (clearance) {
     // The dispatcher sent a gated write it did not settle: refuse, never guess.
     throw new AppError(428, "confirmation_required", "This change needs the merchant's approval before it runs.");
   }
-  const { input, raw } = await requestFacts(c, operation, pathname);
-  if (isNativeDryRun(operation, c.req.method, input)) return;
+  if (isNativeDryRun(operation, c.req.method, input)) return null;
   const approvals = await import("./approvals");
   const steps = [{ operation, input }];
   const binding = await sha256Hex(JSON.stringify([
@@ -150,7 +189,7 @@ export async function enforceAgentConfirmation(
       const code = (error as { code?: string }).code ?? "approval_invalid";
       throw new AppError(status === 409 ? 409 : 400, code, error instanceof Error ? error.message : "The approval is not valid");
     }
-    return;
+    return null;
   }
   // A body the dashboard cannot show is still bound; the owner is told it is there.
   const summary = raw.bodySha256 && input.body === undefined
@@ -162,6 +201,7 @@ export async function enforceAgentConfirmation(
       binding,
       summary,
       operationIds: [operation.operationId],
+      targets: confirm.confirmTargets(steps),
     });
   } catch (error) {
     if (error instanceof AgentDispatchError) throw new AppError(error.status, error.code, error.message);

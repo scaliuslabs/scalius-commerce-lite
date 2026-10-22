@@ -115,7 +115,11 @@ function placeholder(name: string, schema: Record<string, unknown>): string {
     case "uri":
     case "url": return "https://example.com";
     case "uuid": return "00000000-0000-4000-8000-000000000000";
-    default: return `<${name}>`;
+    default: {
+      // An id whose pattern fixes its prefix (^pmed_...) shows that prefix: pmed_<id>.
+      const prefix = typeof schema.pattern === "string" ? /^\^([a-z]{2,12}_)/u.exec(schema.pattern)?.[1] : undefined;
+      return `${prefix ?? ""}<${name}>`;
+    }
   }
 }
 

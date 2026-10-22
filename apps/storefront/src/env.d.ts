@@ -143,6 +143,8 @@ interface Window {
   __scaliusAuthModalOpenPending?: boolean;
   __scaliusAuthModalDetailPending?: import("@/components/AuthModal").AuthModalOpenDetail;
   __scaliusSearchPaletteOpenPending?: boolean;
+  /** What the buyer typed in the header field before the palette loaded. */
+  __scaliusSearchPaletteQuery?: string;
   __scaliusCartPendingEvents?: Array<
     | {
         type: "open";
@@ -179,6 +181,8 @@ interface Window {
   lastShippingEventDetail?: import("./lib/checkout/shipping-methods").ShippingMethodDetail;
   handleAbandonedCheckout?: () => void;
   validateCartSnapshot?: () => Promise<boolean>;
+  /** Resolves once the cart totals in flight have their quote. */
+  cartTotalsSettled?: () => Promise<void>;
   hasCartValidationIssues?: () => boolean;
   /** A store app's rule blocks the order (said on its line or above the checkout action). */
   hasCartRuleErrors?: () => boolean;

@@ -1,4 +1,4 @@
-// Plugin principals (docs/platform/PLUGINS.md, "Execution boundary"): a plugin
+// Plugin principals (packages/plugin-sdk/docs/apps.md, "Execution boundary"): a plugin
 // calls `/api/v1` operations through the same dispatcher and admin
 // authorization as agents (agent-access/dispatch.ts), as itself.
 //

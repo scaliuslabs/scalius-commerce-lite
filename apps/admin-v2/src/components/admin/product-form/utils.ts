@@ -1,5 +1,5 @@
 import type { ProductFormValues } from "./types";
-import type { CreateProductInput } from "@/lib/api-query-options/products";
+import type { CreateProductInput, UpdateProductInput } from "@/lib/api-query-options/products";
 import { customizationInput } from "./buyer-inputs";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
@@ -74,7 +74,8 @@ export function formatFormValuesForSubmission(
   values: ProductFormValues,
   /** Fields the merchant changed; an edit sends these only then ("omit to keep"). Omit for a new product. */
   changed?: ProductSubmitChanges,
-): Omit<CreateProductInput, "optionMatrix" | "defaultSku"> & { slug: string } {
+): Omit<CreateProductInput, "optionMatrix" | "defaultSku" | "media"> & { slug: string; media: UpdateProductInput["media"] } {
+  // The form always names every attachment in full, as an edit must (a new product may send files alone).
   // Buyer inputs fence checkouts in flight: only a real change is sent ("omit to keep").
   const sendInputs = changed ? changed.customizationSchema === true : values.customizationSchema.length > 0;
   // One kind for every SKU; "set per variant" leaves the kinds to the variant table.
@@ -95,10 +96,11 @@ export function formatFormValuesForSubmission(
     price: values.price ?? 0,
     categoryId: values.categoryId || null,
     isActive: values.isActive,
-    discountType: values.discountType,
+    // With options each variant carries its own compare-at price: the product keeps no discount.
+    discountType: values.variantPriced ? "percentage" : values.discountType,
     discountPercentage:
-      values.discountType === "percentage" ? values.discountPercentage : 0,
-    discountAmount: values.discountType === "flat" ? values.discountAmount : 0,
+      !values.variantPriced && values.discountType === "percentage" ? values.discountPercentage : 0,
+    discountAmount: !values.variantPriced && values.discountType === "flat" ? values.discountAmount : 0,
     freeDelivery: values.freeDelivery,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription?.trim() || null,

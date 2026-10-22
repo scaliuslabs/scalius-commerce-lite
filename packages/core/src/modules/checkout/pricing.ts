@@ -19,6 +19,7 @@ import {
   taxAddressSource,
   type StorefrontTaxAuthoritySnapshot,
   type TaxDiscountAllocationInput,
+  type TaxExemption,
   type TaxQuote,
 } from "../tax";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
@@ -82,6 +83,11 @@ export interface StorefrontCheckoutPricingInput {
   customerId?: string | null;
   /** The signed-in account whose segments may unlock segment-limited promotions (never a guest). */
   segmentCustomerId?: string | null;
+  /**
+   * The signed-in account's tax exemption (`segmentCustomerId`'s, read with
+   * its session): its order pays no tax. Ignored without that account.
+   */
+  taxExemption?: TaxExemption | null;
   customerPhone?: string | null;
   /**
    * The shop currency at the store's price increment. A cart priced in a
@@ -422,6 +428,8 @@ export async function priceStorefrontCheckout(
     // Tax follows every discount: the platform's and the apps'.
     promotionDiscountAllocation: combineDiscountAllocations(platform.allocation, appDiscounts),
     currency,
+    // The signed-in buyer (and their tax exemption); a guest is never exempt.
+    customer: input.segmentCustomerId ? { id: input.segmentCustomerId, exemption: input.taxExemption ?? null } : null,
   };
   const taxQuote = await calculateStorefrontTaxQuote(db, taxQuoteInput, input.taxAuthority, { apps: input.appProviders });
 

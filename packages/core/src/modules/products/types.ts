@@ -13,25 +13,29 @@ import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { ProductMediaProjection } from "./media";
 import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import {
-    MAX_PRODUCT_PRICE,
     MAX_SKU_STOCK,
     MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
 import { editableFulfillmentKindSchema } from "./customization-schema";
 import type { CustomizationView } from "./customization";
 import { formatUnit } from "@scalius/shared/locale-words";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
 // ─────────────────────────────────────────
 
-export { MAX_PRODUCT_PRICE, MAX_SKU_STOCK, MAX_SKU_WEIGHT_GRAMS };
+export { MAX_SKU_STOCK, MAX_SKU_WEIGHT_GRAMS };
 
-/** A catalog price or amount in major units, inside the supported range. */
+/**
+ * A catalog price or amount in major units. The schema states the bound of any
+ * currency (`MAX_MAJOR_AMOUNT`); the store currency's exact one
+ * (`MAX_MINOR_AMOUNT` minor units) applies when it is converted (`toStoreMinor`).
+ */
 export const catalogMoneySchema = z
     .number()
     .min(0, "Enter 0 or more.")
-    .max(MAX_PRODUCT_PRICE, `Enter ${MAX_PRODUCT_PRICE} or less.`);
+    .max(MAX_MAJOR_AMOUNT, `Enter ${MAX_MAJOR_AMOUNT} or less.`);
 
 /** An on-hand quantity. */
 export const skuStockSchema = z.number()

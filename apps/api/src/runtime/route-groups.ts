@@ -4,6 +4,7 @@
 // differently.
 import type { Hono, MiddlewareHandler } from "hono";
 import { createRuntimeApiApp } from "./base-app";
+import { registerMountedRouter } from "../agent-access/route-validation";
 import {
   isMountStep,
   routeStepsOf,
@@ -38,6 +39,8 @@ export function applyRouteSteps(
       const router = routers[step.router];
       if (!router) throw new Error(`Route table: no router ${step.router} for ${step.mount}`);
       app.route(step.mount, router);
+      // The agent confirmation gate validates a gated change with its route's own schemas.
+      registerMountedRouter(router, step.mount);
       continue;
     }
     for (const id of step.middleware) {

@@ -41,7 +41,7 @@ import { customers } from "@scalius/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { isWholeUnitIncrement } from "@scalius/shared/currency-policy";
-import { isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
+import { isIncrementMultipleMinor, MAX_MINOR_AMOUNT, priceIncrementMessage } from "@scalius/shared/money";
 import { created, ok } from "../../utils/api-response";
 import { ForbiddenError, ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -251,7 +251,7 @@ app.openapi(createRoute({
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
-        amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).openapi({ description: "Its value, in minor units of the store currency." }),
+        amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "Its value, in minor units of the store currency." }),
         expiresAt: z.string().datetime({ offset: true }).nullable().optional()
           .openapi({ description: "Omit for the store's default expiry; null for none." }),
         customerId: z.string().min(1).max(80).nullable().optional(),
@@ -336,7 +336,7 @@ app.openapi(createRoute({
       required: true,
       content: { "application/json": { schema: z.object({
         expectedRevision,
-        amountMinor: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Enter an amount to add or remove."),
+        amountMinor: z.number().int().min(-MAX_MINOR_AMOUNT).max(MAX_MINOR_AMOUNT).refine((value) => value !== 0, "Enter an amount to add or remove."),
         reason: z.string().trim().min(1).max(500),
       }).strict() } },
     },

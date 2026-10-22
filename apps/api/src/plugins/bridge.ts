@@ -1,4 +1,4 @@
-// The plugin bridge (docs/platform/PLUGINS.md, "Execution boundary"): one host
+// The plugin bridge (packages/plugin-sdk/docs/apps.md, "Execution boundary"): one host
 // class implementing every capability a plugin's `ctx` reaches. A sandboxed
 // plugin calls it over RPC through the `PluginBridge` WorkerEntrypoint
 // (bridge-entrypoint.ts); a bundled plugin calls the same class in-process
@@ -51,7 +51,7 @@ export interface PluginBridgeProps {
   /** Private host metadata, never accepted from plugin input. */
   operator?: { userId: string };
   /**
-   * The plan's quotas for this run (docs/platform/PLUGINS.md, "Quotas"):
+   * The plan's quotas for this run (packages/plugin-sdk/docs/apps.md, "Quotas"):
    * calls per run (counted here for bundled apps; the sandbox counts its
    * own), and whether the app's measured storage is at its size limit, when
    * writes that add data are refused and recorded as a breach.
@@ -105,6 +105,8 @@ export interface PluginBridgeApi {
   timelineAdd(input: { orderId: string; kind: string; message: string; fields?: Record<string, string | number | boolean>; idempotencyKey?: string }): Promise<{ id: string }>;
   /** Holds an order for staff review (`orders.edit`): one per order and app. */
   ordersHold(input: { orderId: string; reason: string }): Promise<void>;
+  /** Releases the hold the app placed (`orders.change_status`), under the order revision. */
+  ordersRelease(input: { orderId: string; expectedRevision: number }): Promise<{ revision: number; replayed: boolean }>;
   /** Risk advice on an order (`orders.edit`): one per order and app. */
   ordersAssessRisk(input: { orderId: string; level: "low" | "medium" | "high"; reasons: string[] }): Promise<void>;
   /** The buyer's earlier orders, counts only (`orders.view`). */
@@ -537,6 +539,44 @@ export class PluginBridgeHost implements PluginBridgeApi {
       const order = await this.orderOwners(isRecord(input) ? input.orderId : undefined);
       const { placeAppOrderHolds } = await import("@scalius/core/modules/orders");
       await placeAppOrderHolds(this.runtime.db(), order.id, [{ pluginId: this.pluginId, appName: this.props.authority.appName ?? this.pluginId, reasons: [input.reason.trim()] }]);
+    });
+  }
+
+  /** The app's own hold, released as the stable `orders.release_hold` releases it (core `releaseAppOrderHold`). */
+  async ordersRelease(input: { orderId: string; expectedRevision: number }): Promise<{ revision: number; replayed: boolean }> {
+    return this.guard("ordersRelease", async () => {
+      if (!this.props.authority.permissions.includes("orders.change_status")) fail("orders_not_allowed", "Releasing holds needs the write_orders scope.");
+      if (!isRecord(input) || typeof input.expectedRevision !== "number" || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
+        fail("orders_invalid", "expectedRevision is the order revision you read.");
+      }
+      const order = await this.orderOwners(input.orderId);
+      const [{ releaseAppOrderHold }, { ConflictError, NotFoundError }] = await Promise.all([
+        import("@scalius/core/modules/orders"),
+        import("@scalius/core/errors"),
+      ]);
+      const db = this.runtime.db();
+      let result;
+      try {
+        result = await releaseAppOrderHold(db, { orderId: order.id, pluginId: this.pluginId, expectedVersion: input.expectedRevision });
+      } catch (error) {
+        if (error instanceof NotFoundError) fail("orders_hold_not_found", "This app placed no hold on the order.");
+        if (error instanceof ConflictError) fail("orders_conflict", "The order changed since its revision was read: read it again.");
+        throw error;
+      }
+      const { orders } = await import("@scalius/database/schema");
+      const { eq } = await import("drizzle-orm");
+      const row = await db.select({ version: orders.version }).from(orders).where(eq(orders.id, order.id)).get();
+      if (!result.replayed) {
+        // The last open hold gone: a settled order's gift cards and downloads go out now, not at the next sweep.
+        const runtime = { env: await this.runtime.composedEnv(), ctx: this.runtime.ctx };
+        const work = async () => {
+          const { runOrderAutoFulfil } = await import("../background/auto-fulfil");
+          await runOrderAutoFulfil(db, runtime.env, runtime.ctx, order.id).catch(() => undefined);
+        };
+        if (this.runtime.afterResponse) this.runtime.afterResponse(work);
+        else this.runtime.ctx.waitUntil(work());
+      }
+      return { revision: row?.version ?? input.expectedRevision + 1, replayed: result.replayed };
     });
   }
 

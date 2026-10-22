@@ -1,5 +1,5 @@
 import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
-import { cartStore, hydrateCartFromStorage } from "@/store/cart";
+import { cartStore, hydrateCartFromStorage, removeOrderedLines } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
@@ -163,6 +163,8 @@ let giftCopy: GiftCardCheckoutCopy = giftCardCheckoutCopy();
 /** Applied gift cards (apply handles, never codes), in the order the buyer added them. */
 let appliedGiftCards: StoredGiftCard[] = [];
 let giftCardBusy = false;
+/** Apply was pressed before the total was ready. */
+let giftCardApplyQueued = false;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1361,6 +1363,17 @@ async function processPayment(): Promise<void> {
         submittedCheckoutData,
         processingMethod,
       );
+      // An order placed here (cash, gift cards, an invoice): its lines leave the
+      // cart now, so back or reload never shows the cart just ordered (buyer QA m9).
+      // A gateway's page still has the payment to take: the receipt settles that cart.
+      const target = new URL(redirectUrl, window.location.origin);
+      if (target.pathname.endsWith("/order-success") && !target.searchParams.has("payment") && typeof submittedCheckoutData.cartItems === "string") {
+        try {
+          removeOrderedLines(JSON.parse(submittedCheckoutData.cartItems) as Record<string, { variantId?: unknown; quantity?: unknown }>);
+        } catch {
+          // A malformed snapshot leaves the cart to the receipt.
+        }
+      }
       navigationCommitted = true;
       window.location.replace(redirectUrl);
       return;
@@ -1674,12 +1687,19 @@ const GIFT_CARD_FAILURE_COPY = {
   unavailable: "giftCardUnavailableText",
 } as const satisfies Record<string, keyof GiftCardCheckoutCopy>;
 
-async function applyGiftCardFromForm(event: SubmitEvent): Promise<void> {
+async function applyGiftCardFromForm(event?: SubmitEvent): Promise<void> {
   // The code never becomes a navigation: the form's own POST is the no-script path.
-  event.preventDefault();
-  if (giftCardBusy || isProcessing || !checkoutData || !authoritativeTaxQuote) return;
+  event?.preventDefault();
+  if (giftCardBusy || isProcessing) return;
   const input = document.getElementById("giftCardCode") as HTMLInputElement | null;
   const button = document.getElementById("giftCardApply") as HTMLButtonElement | null;
+  if (!checkoutData || !authoritativeTaxQuote) {
+    // Pressed while the total is still loading: applied as soon as it is
+    // ready (`applyQueuedGiftCard`), never dropped (buyer QA M4).
+    giftCardApplyQueued = true;
+    if (button) button.textContent = giftCopy.giftCardApplyingText;
+    return;
+  }
   if (!input) return;
   if (appliedGiftCards.length >= MAX_GIFT_CARDS_PER_ORDER) {
     showGiftCardMessage(giftCopy.giftCardLimitText);
@@ -1727,6 +1747,22 @@ function installGiftCardForm(): void {
   form.addEventListener("submit", (event) => void applyGiftCardFromForm(event as SubmitEvent));
 }
 
+/** Apply pressed before the total was ready (or before this script loaded): apply it now. */
+function applyQueuedGiftCard(ready: boolean): void {
+  const form = document.getElementById("giftCardForm") as HTMLFormElement | null;
+  const queued = giftCardApplyQueued || form?.dataset.pending === "true";
+  giftCardApplyQueued = false;
+  if (form) delete form.dataset.pending;
+  if (!queued) return;
+  if (ready) {
+    void applyGiftCardFromForm();
+    return;
+  }
+  // No total to apply it to: the page says why; the code stays in the field.
+  const button = document.getElementById("giftCardApply");
+  if (button) button.textContent = giftCopy.giftCardApplyText;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export async function initCheckoutPage(): Promise<void> {
@@ -1770,6 +1806,7 @@ export async function initCheckoutPage(): Promise<void> {
     showGiftCardMessage(notice);
   } catch (error) {
     if (redirectForCartRefusal(error)) return;
+    applyQueuedGiftCard(false);
     clearCheckoutPresentation();
     showReturnToCartAction();
     showError(
@@ -1783,6 +1820,8 @@ export async function initCheckoutPage(): Promise<void> {
 
   renderSummary();
   await renderGateways();
+  if (currentInitVersion !== initVersion) return;
+  applyQueuedGiftCard(true);
 
   const payBtn = document.getElementById("payButton");
   if (payBtn && payBtn.dataset.checkoutBound !== "true") {

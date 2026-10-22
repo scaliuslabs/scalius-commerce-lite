@@ -97,6 +97,25 @@ describe("shared storefront actions", () => {
     expect(submit.defaultPrevented).toBe(false);
   });
 
+  it("opens the typeahead palette with what a buyer types in the header field, unless a department scopes it", () => {
+    uninstall = installStorefrontActions();
+    document.body.innerHTML = `<form data-header-search action="/search"><select data-search-scope><option value="">All</option>
+      <option value="/categories/kitchen">Kitchen</option></select><input name="q"></form>`;
+    const input = document.querySelector("input")!;
+    const events = listen(document, "open-search-palette");
+    input.value = "sp";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(events).toHaveBeenCalledWith(expect.objectContaining({ detail: { query: "sp" } }));
+    expect(window.__scaliusSearchPaletteQuery).toBe("sp");
+    expect(input.value).toBe("");
+    delete window.__scaliusSearchPaletteQuery;
+    document.querySelector("select")!.value = "/categories/kitchen";
+    input.value = "knife";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(events).toHaveBeenCalledTimes(1);
+    expect(input.value).toBe("knife");
+  });
+
   it.each([
     ["data-search-open", "open-search-palette", "document"],
     ["data-account-link", "open-auth-modal", "window"],

@@ -1,4 +1,4 @@
-// Plugin handler inventory (docs/platform/PLUGINS.md): the handlers a plugin
+// Plugin handler inventory (packages/plugin-sdk/docs/apps.md): the handlers a plugin
 // module must export, derived from its manifest, and the check that a module
 // exports exactly those. It runs when a plugin is packed (`pnpm plugin
 // build`), when the host loads a bundled plugin and inside a sandboxed

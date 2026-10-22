@@ -18,10 +18,11 @@ import { isoTimestampSchema } from "../../schemas/timestamps";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
-import { fromMinor } from "@scalius/shared/money";
+import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
+import { AppError } from "@scalius/core/errors";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { placeManualOrder } from "./orders/create";
@@ -251,7 +252,7 @@ const orderCreateBody = z.object({
     productId: z.string().min(1).max(180),
     variantId: z.string().min(1).max(180),
     quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
-    unitPriceMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({
+    unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({
       description: "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.",
     }),
     properties: z.array(z.object({ key: z.string().min(1).max(40), value: z.string().max(1000) })).max(20).optional(),
@@ -261,8 +262,8 @@ const orderCreateBody = z.object({
   shippingAddress: addressInputSchema.nullable().optional().openapi({ description: "Where it ships; none for pickup, digital and service orders." }),
   billingAddress: addressInputSchema.extend({ name: optionalText(100), line1: z.string().trim().max(500).nullable().optional() })
     .nullable().optional().openapi({ description: "Omit or null when the shipping address bills." }),
-  shippingMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "The delivery charge, in minor units of the store currency." }),
-  discountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
+  shippingMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description: "The delivery charge, in minor units of the store currency." }),
+  discountMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({ description: "An order discount set by hand, in minor units of the store currency." }),
   paymentMethod: manualOrderPaymentMethodSchema.default("cod").openapi({
     description: "How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create).",
   }),
@@ -383,6 +384,51 @@ app.openapi(createRoute({
   return created(c, { order });
 });
 
+// ─── An app's own hold ───────────────────────────────────────────────────────
+
+const releaseHoldBody = z.object({
+  expectedRevision: z.number().int().min(1).openapi({
+    description: "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.",
+  }),
+}).strict();
+
+app.openapi(createRoute({
+  operationId: "dashboard.resources.orders.release_hold",
+  method: "post",
+  path: "/orders/{id}/release-hold",
+  tags: ["App API - Orders"],
+  summary: "Release the hold your app placed on an order",
+  description: "Releases the hold the calling app placed with `ctx.orders.hold` (a company approver said yes in the app's portal), under the order's revision, which advances. Only that hold: another app's, staff's and the platform's review holds stay with staff. Once no hold is open the order is shipped, handed over and moved on again, and its gift cards and downloads go out when it is paid. Only an app calls it.",
+  request: {
+    params: idParam,
+    headers: idempotencyKeyHeaderSchema,
+    body: { required: true, content: { "application/json": { schema: releaseHoldBody } } },
+  },
+  responses: {
+    200: {
+      description: "The order, with whether the hold was already released",
+      content: { "application/json": { schema: successEnvelope(z.object({ order: OrderResource, replayed: z.boolean() })) } },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+}), async (c) => {
+  const appPrincipal = c.get("pluginPrincipal");
+  if (!appPrincipal) throw new AppError(403, "app_principal_required", "Only an app releases its own hold here; staff release holds on the order page.");
+  const db = c.get("db");
+  const orderId = c.req.valid("param").id;
+  const result = await releaseAppOrderHold(db, {
+    orderId,
+    pluginId: appPrincipal.pluginId,
+    expectedVersion: c.req.valid("json").expectedRevision,
+  });
+  // The last open hold gone: a settled order's gift cards and downloads go out now.
+  if (!result.replayed) await autoFulfilAfterResponse(c, db, orderId, "app-hold-released");
+  const [order] = await readOrderRepresentations(db, [orderId]);
+  if (!order) throw new NotFoundError("Order not found");
+  return ok(c, { order, replayed: result.replayed });
+});
+
 const recordPaymentHeaders = z.object({
   "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].unwrap().openapi({
     description: "Required: one key records one payment; a repeat returns the first result.",
@@ -390,7 +436,7 @@ const recordPaymentHeaders = z.object({
 });
 
 const recordPaymentBody = z.object({
-  amountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).openapi({
+  amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT).openapi({
     description: "What was received, in minor units of the order's `currency`; at most its `balanceDueMinor`.",
   }),
   via: z.enum(RECORDED_PAYMENT_VIAS).openapi({ description: "How it was received." }),
@@ -508,7 +554,7 @@ app.openapi(createRoute({
   return ok(c, { fulfillments: page.items, nextCursor: page.nextCursor });
 });
 
-const minorAmount = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const minorAmount = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
 
 const fulfillmentCreateBody = z.object({
   kind: z.enum(MANUAL_FULFILLMENT_TYPES).openapi({
@@ -873,24 +919,34 @@ app.openapi(createRoute({
 /** SKUs one lookup reads: one bound list within D1's 100 parameters. */
 const VARIANT_LOOKUP_MAX = 90;
 
+const variantLookupBody = z.object({
+  skus: z.array(z.string().trim().min(1).max(100)).min(1).max(VARIANT_LOOKUP_MAX).optional()
+    .openapi({ description: "SKU codes, any case. Send skus or barcodes." }),
+  barcodes: z.array(z.string().trim().min(1).max(50)).min(1).max(VARIANT_LOOKUP_MAX).optional()
+    .openapi({ description: "Barcodes (EAN, UPC, GTIN or the store's own), any case. Send skus or barcodes." }),
+}).strict().refine((body) => (body.skus === undefined) !== (body.barcodes === undefined), "Send skus or barcodes, not both.");
+
 app.openapi(createRoute({
   operationId: "dashboard.resources.variants.lookup",
   method: "post",
   path: "/variants/lookup",
   tags: ["App API - Products"],
-  summary: "Find SKUs by their codes",
-  description: "Up to 90 SKU codes (any case) in one read: each found SKU's stock in total and per location with its stockVersion, in the order asked; codes that match nothing are left out. A read: nothing changes.",
+  summary: "Find SKUs by their codes or barcodes",
+  description: "Up to 90 SKU codes or barcodes (any case) in one read: each found SKU's stock in total and per location with its stockVersion, in the order asked; codes that match nothing are left out. A retired SKU is found too (`retiredAt`). A read: nothing changes.",
   request: {
     body: {
       required: true,
-      content: { "application/json": { schema: z.object({ skus: z.array(z.string().trim().min(1).max(100)).min(1).max(VARIANT_LOOKUP_MAX) }).strict() } },
+      content: { "application/json": { schema: variantLookupBody } },
     },
   },
   responses: {
     200: { description: "The SKUs found", content: { "application/json": { schema: successEnvelope(z.object({ variants: z.array(VariantResource) })) } } },
     ...readResponses,
   },
-}), async (c) => ok(c, { variants: await readVariantRepresentations(c.get("db"), { skus: c.req.valid("json").skus }) }));
+}), async (c) => {
+  const { skus, barcodes } = c.req.valid("json");
+  return ok(c, { variants: await readVariantRepresentations(c.get("db"), skus ? { skus } : { barcodes: barcodes! }) });
+});
 
 // ─── Customers ───────────────────────────────────────────────────────────────
 
@@ -1184,8 +1240,8 @@ app.openapi(createRoute({
 const PRICE_LIST_CURSOR: ListCursorShape = { sort: "productName", direction: "asc", kinds: ["text"] };
 
 const priceTierMinor = z.object({
-  amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),
-  compareAtMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
+  amountMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).openapi({ description: "The price of one unit, in minor units of the list's currency, at its price increment." }),
+  compareAtMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).nullable().optional().openapi({ description: "The struck-through price, above the amount; null for none." }),
   minQuantity: z.number().int().min(1).max(PRICE_LIST_MIN_QUANTITY_MAX).default(1).openapi({ description: "1 is the list's price; a larger value is a quantity break from that many units." }),
 });
 

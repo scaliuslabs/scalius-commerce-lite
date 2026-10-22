@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     getOrderReturn: vi.fn(),
 
     sendOrderNotificationsForStatus: vi.fn(),
+    sendOrderNotification: vi.fn(async () => ({ status: "sent" })),
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
@@ -27,6 +28,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
 
 vi.mock("../../utils/order-notifications", () => ({
     sendOrderNotificationsForStatus: mocks.sendOrderNotificationsForStatus,
+    sendOrderNotification: mocks.sendOrderNotification,
 }));
 
 import { adminOrdersReturnRoutes } from "./orders-returns";

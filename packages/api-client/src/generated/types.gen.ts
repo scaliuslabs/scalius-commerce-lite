@@ -3056,6 +3056,7 @@ export type OrderResource = {
         variantId: string | null;
         title: string | null;
         variantLabel: string | null;
+        sku: string | null;
         quantity: number;
         fulfilledQuantity: number;
         unitPriceMinor: number;
@@ -3203,10 +3204,35 @@ export type ProductResource = {
         trackInventory: boolean;
         fulfillmentKind: string;
         isDefault: boolean;
+        barcodeType: string | null;
+        weightGrams: number | null;
+        optionValues: {
+            [key: string]: string;
+        };
+        mediaId: string | null;
     }>;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
+    description: string | null;
+    condition: string | null;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    salesChannelIds: Array<string>;
+    media: Array<{
+        id: string;
+        mediaId: string;
+        kind: string;
+        url: string;
+        altText: string | null;
+        featured: boolean;
+    }>;
+    options: Array<{
+        id: string;
+        name: string;
+        standardMapping: string;
+        values: Array<string>;
+    }>;
 };
 
 export type VariantResource = {
@@ -3221,6 +3247,8 @@ export type VariantResource = {
     }>;
     stockVersion: number;
     updatedAt: string;
+    barcode: string | null;
+    retiredAt: string | null;
 };
 
 export type CustomerResource = {
@@ -3239,9 +3267,12 @@ export type CustomerResource = {
         contact: string | null;
         updatedAt: string;
     }>;
+    taxExempt: boolean;
+    taxExemptionId: string | null;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
+    erasedAt: string | null;
 };
 
 export type PriceListResource = {
@@ -3847,6 +3878,26 @@ export type CustomerSegmentDefinition = {
         op: 'equals' | 'is_set' | 'is_not_set';
         value?: string;
     }>;
+};
+
+export type CustomerErasureResult = {
+    customerId: string;
+    /**
+     * False when the customer was already erased: nothing changed.
+     */
+    erased: boolean;
+    /**
+     * Guest records merged into this customer, erased with it.
+     */
+    mergedRecords: number;
+    /**
+     * Orders whose contact and addresses were scrubbed. Their money, lines and region stay.
+     */
+    orders: number;
+    /**
+     * The buyer's conversation images deleted from storage.
+     */
+    files: number;
 };
 
 export type StaffSavedPaymentMethod = CustomerSavedPaymentMethod & {
@@ -5177,6 +5228,16 @@ export type AppProviderEntry = {
     icon: string | null;
 };
 
+export type AppStorefrontProblem = {
+    id: string;
+    message: string;
+    kind: 'section' | 'component' | 'skin' | null;
+    type: string | null;
+    target: string | null;
+    reason: 'unavailable' | 'late' | 'error' | 'refused' | 'missing' | null;
+    at: string;
+};
+
 export type RegistryState = {
     id: string;
     name: string;
@@ -5285,6 +5346,28 @@ export type AppDetail = AppSummary & {
     } | null;
     runtime: 'bundled' | 'sandbox';
     runtimeAvailable: boolean;
+    /**
+     * Checkout functions that failed recently (circuit breaker); empty when every function answers.
+     */
+    functionCircuits: Array<{
+        point: string;
+        /**
+         * Failed answers counted in the current window.
+         */
+        failures: number;
+        /**
+         * Checkout is not calling the function now: it applies its failure policy (refuses checkout when the function is approved as blocking, else goes on without it).
+         */
+        open: boolean;
+        /**
+         * When checkout tries the function again (ISO 8601); null when closed.
+         */
+        openUntil: string | null;
+        /**
+         * Approved as blocking: while open, checkout refuses orders.
+         */
+        blocking: boolean;
+    }>;
     settings: {
         fields: Array<AppSettingField>;
         values: {
@@ -5379,6 +5462,11 @@ export type AppDetail = AppSummary & {
             type: string;
             name: string;
             targets: Array<'header.actions' | 'product.buy_box.before' | 'product.buy_box.after' | 'product.below' | 'footer.columns' | 'product_card.badges' | 'product_card.meta' | 'page'>;
+        }>;
+        skins: Array<{
+            id: string;
+            name: string;
+            target: string;
         }>;
         scripts: Array<{
             src: string;
@@ -5637,9 +5725,21 @@ export type RemovedAppData = {
      */
     removedAt: string | null;
     /**
-     * Send it back as expectedRevision to delete this data (0: the store kept no record of the removal).
+     * Send it back as expectedRevision to delete or hand over this data (0: the store kept no record of the removal).
      */
     revision: number;
+    /**
+     * The key the data belongs to: the signer of the release that kept it (its fingerprint is this id in groups of four). null: unsigned or bundled code, or no record. Only a release signed with this key reclaims the data on its own.
+     */
+    signerKeyId: string | null;
+    /**
+     * A release of this app in this deployment's own code that cannot install while the data belongs to another key. It installs once the data is deleted or handed over to it (signerKeyId null).
+     */
+    waitingRelease: {
+        source: 'bundled';
+        version: string;
+        signerKeyId: unknown;
+    } | null;
     objectTypes: number;
     /**
      * Entries of its object types.
@@ -8680,7 +8780,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pages: Array<'all' | 'home' | 'product' | 'listing'>;
             }>;
             /**
-             * Active apps with storefront components (docs/STOREFRONT-COMPONENTS.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
+             * Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
              */
             appExtensions: Array<{
                 pluginId: string;
@@ -13238,6 +13338,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 description: string;
                 eligible: boolean;
                 disabledReason: string | null;
+                returnableItems?: Array<{
+                    orderItemId: string;
+                    productName: string;
+                    variantLabel: string | null;
+                    quantity: number;
+                }>;
             }>;
             /**
              * The store's own words over the order's requests; null: the storefront shows its default in the page language.
@@ -13334,6 +13440,10 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsData = {
         type: 'cancel_pre_shipment' | 'return' | 'refund';
         reason: string;
         message?: string | null;
+        items?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
     };
     path: {
         id: string;
@@ -13424,6 +13534,12 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 description: string;
                 eligible: boolean;
                 disabledReason: string | null;
+                returnableItems?: Array<{
+                    orderItemId: string;
+                    productName: string;
+                    variantLabel: string | null;
+                    quantity: number;
+                }>;
             }>;
             supportRequestIntro: string;
             conversationId: string;
@@ -20195,6 +20311,7 @@ export type PostApiV1OrdersLookupStatusResponses = {
                 firstName: string | null;
                 status: string;
                 paymentStatus: string;
+                paymentMethod: string | null;
                 createdAt: string | null;
                 requiresShipping: boolean;
                 shippingMethodKind: string | null;
@@ -21173,6 +21290,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     description: string;
                     eligible: boolean;
                     disabledReason: string | null;
+                    returnableItems?: Array<{
+                        orderItemId: string;
+                        productName: string;
+                        variantLabel: string | null;
+                        quantity: number;
+                    }>;
                 }>;
                 supportRequestIntro: string;
             };
@@ -21245,6 +21368,10 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsData = {
         type: 'cancel_pre_shipment' | 'return' | 'refund';
         reason: string;
         message?: string | null;
+        items?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
     };
     path: {
         id: string;
@@ -21335,6 +21462,12 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
                 description: string;
                 eligible: boolean;
                 disabledReason: string | null;
+                returnableItems?: Array<{
+                    orderItemId: string;
+                    productName: string;
+                    variantLabel: string | null;
+                    quantity: number;
+                }>;
             }>;
             supportRequestIntro: string;
             conversationId: string;
@@ -25207,6 +25340,74 @@ export type GetApiV1AdminResourcesOrdersByIdResponses = {
 
 export type GetApiV1AdminResourcesOrdersByIdResponse = GetApiV1AdminResourcesOrdersByIdResponses[keyof GetApiV1AdminResourcesOrdersByIdResponses];
 
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldData = {
+    body: {
+        /**
+         * The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/release-hold';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldError = PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors[keyof PostApiV1AdminResourcesOrdersByIdReleaseHoldErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses = {
+    /**
+     * The order, with whether the hold was already released
+     */
+    200: {
+        success: true;
+        data: {
+            order: OrderResource;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReleaseHoldResponse = PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses[keyof PostApiV1AdminResourcesOrdersByIdReleaseHoldResponses];
+
 export type GetApiV1AdminResourcesOrdersByIdPaymentsData = {
     body?: never;
     path: {
@@ -26167,9 +26368,17 @@ export type PatchApiV1AdminResourcesProductsByIdData = {
         metaTitle?: string | null;
         metaDescription?: string | null;
         /**
-         * A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`).
+         * A product without options: its price, in minor units of the store currency. A product with options prices each SKU (`variants.bulk_set_prices`, `variants.update`).
          */
         priceMinor?: number;
+        /**
+         * The whole gallery: ready media library files in order, the first featured; [] removes them all. Files it already shows keep their alt text; a SKU that showed a removed image shows the featured one.
+         */
+        mediaIds?: Array<string>;
+        /**
+         * Exactly the sales channels to publish it to (as `products.set_publications`); [] unpublishes it everywhere.
+         */
+        salesChannelIds?: Array<string>;
     };
     headers?: {
         /**
@@ -26285,7 +26494,14 @@ export type GetApiV1AdminResourcesVariantsByIdResponse = GetApiV1AdminResourcesV
 
 export type PostApiV1AdminResourcesVariantsLookupData = {
     body: {
-        skus: Array<string>;
+        /**
+         * SKU codes, any case. Send skus or barcodes.
+         */
+        skus?: Array<string>;
+        /**
+         * Barcodes (EAN, UPC, GTIN or the store's own), any case. Send skus or barcodes.
+         */
+        barcodes?: Array<string>;
     };
     path?: never;
     query?: never;
@@ -28091,6 +28307,268 @@ export type PostApiV1AdminResourcesProductsBatchResponses = {
 
 export type PostApiV1AdminResourcesProductsBatchResponse = PostApiV1AdminResourcesProductsBatchResponses[keyof PostApiV1AdminResourcesProductsBatchResponses];
 
+export type PostApiV1AdminResourcesProductsByIdVariantsData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+        /**
+         * Unique in the store, any case.
+         */
+        sku: string;
+        /**
+         * Its price, in minor units of the store currency at its price increment.
+         */
+        priceMinor: number;
+        /**
+         * One value of every option, by option name (`{ "Size": "XL", "Color": "Red" }`), any case. A value the option does not have yet is added to it.
+         */
+        optionValues: {
+            [key: string]: string;
+        };
+        /**
+         * Omit or null to generate an internal barcode.
+         */
+        barcode?: string | null;
+        /**
+         * Required with `barcode`.
+         */
+        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+        /**
+         * Count its stock. It starts at 0: set quantities through inventory.
+         */
+        trackInventory?: boolean;
+        weightGrams?: number | null;
+        /**
+         * Its own image: a file in the product's gallery. Omit or null to show the featured image.
+         */
+        mediaId?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}/variants';
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsError = PostApiV1AdminResourcesProductsByIdVariantsErrors[keyof PostApiV1AdminResourcesProductsByIdVariantsErrors];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsResponses = {
+    /**
+     * The product with the new SKU
+     */
+    201: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsResponse = PostApiV1AdminResourcesProductsByIdVariantsResponses[keyof PostApiV1AdminResourcesProductsByIdVariantsResponses];
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+        /**
+         * Unique in the store, any case.
+         */
+        sku?: string;
+        /**
+         * Its price, in minor units of the store currency. On a product sold as one SKU this is the product's price.
+         */
+        priceMinor?: number;
+        /**
+         * One value of every option, by option name (`{ "Size": "XL", "Color": "Red" }`), any case. A value the option does not have yet is added to it.
+         */
+        optionValues?: {
+            [key: string]: string;
+        };
+        /**
+         * Null clears it.
+         */
+        barcode?: string | null;
+        /**
+         * Omit to keep the current type.
+         */
+        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom';
+        trackInventory?: boolean;
+        weightGrams?: number | null;
+        /**
+         * Its own image, a file in the product's gallery; null shows the featured image.
+         */
+        mediaId?: string | null;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+        variantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}/variants/{variantId}';
+};
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdError = PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors[keyof PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdErrors];
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponses = {
+    /**
+     * The product
+     */
+    200: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponse = PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponses[keyof PatchApiV1AdminResourcesProductsByIdVariantsByVariantIdResponses];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreData = {
+    body: {
+        /**
+         * The product's `revision` you read; a product changed since is refused with 409 and nothing is saved.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+        variantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/products/{id}/variants/{variantId}/restore';
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreError = PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors[keyof PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreErrors];
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponses = {
+    /**
+     * The product with the SKU back
+     */
+    200: {
+        success: true;
+        data: {
+            product: ProductResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponse = PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponses[keyof PostApiV1AdminResourcesProductsByIdVariantsByVariantIdRestoreResponses];
+
 export type PostApiV1AdminResourcesAppContentDeleteData = {
     body: {
         items: Array<{
@@ -28804,7 +29282,7 @@ export type PostApiV1AdminResourcesWebhookSubscriptionsData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -28945,7 +29423,7 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -34722,6 +35200,7 @@ export type GetApiV1AdminCustomersByIdResponses = {
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: NullableTimestamp;
+            erasedAt?: NullableTimestamp;
             mergedInto: {
                 id: string;
                 name: string;
@@ -34758,6 +35237,8 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 createdAt: string;
                 updatedAt: string;
             }>;
+            taxExempt: boolean;
+            taxExemptionId: string | null;
             relatedObjects: Array<{
                 typeId: string;
                 typeHandle: string;
@@ -34776,6 +35257,8 @@ export type PutApiV1AdminCustomersByIdData = {
         name?: string;
         email?: string | null;
         phone?: string;
+        taxExempt?: boolean;
+        taxExemptionId?: string | null;
     };
     headers?: {
         /**
@@ -34868,6 +35351,56 @@ export type PostApiV1AdminCustomersByIdRestoreResponses = {
 };
 
 export type PostApiV1AdminCustomersByIdRestoreResponse = PostApiV1AdminCustomersByIdRestoreResponses[keyof PostApiV1AdminCustomersByIdRestoreResponses];
+
+export type PostApiV1AdminCustomersByIdEraseData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/erase';
+};
+
+export type PostApiV1AdminCustomersByIdEraseErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdEraseError = PostApiV1AdminCustomersByIdEraseErrors[keyof PostApiV1AdminCustomersByIdEraseErrors];
+
+export type PostApiV1AdminCustomersByIdEraseResponses = {
+    /**
+     * Erased
+     */
+    200: {
+        success: true;
+        data: CustomerErasureResult;
+    };
+};
+
+export type PostApiV1AdminCustomersByIdEraseResponse = PostApiV1AdminCustomersByIdEraseResponses[keyof PostApiV1AdminCustomersByIdEraseResponses];
 
 export type GetApiV1AdminCustomersByIdAddressesData = {
     body?: never;
@@ -35500,6 +36033,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt?: NullableTimestamp;
+                erasedAt?: NullableTimestamp;
                 mergedInto: {
                     id: string;
                     name: string;
@@ -35517,7 +36051,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 email: string | null;
                 phone: string | null;
                 /**
-                 * created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)
+                 * created, updated, deleted, restored, signed_up, order_linked, order_moved_in / order_moved_out, or erased (see `order`, `relatedCustomer` and `verifiedContact`)
                  */
                 changeType: string;
                 verifiedContact: 'email' | 'phone' | null;
@@ -43627,6 +44161,156 @@ export type GetApiV1AdminResourcesCollectionsResponses = {
 
 export type GetApiV1AdminResourcesCollectionsResponse = GetApiV1AdminResourcesCollectionsResponses[keyof GetApiV1AdminResourcesCollectionsResponses];
 
+export type GetApiV1AdminResourcesBrandsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only brands in this status; `published` brands are public.
+         */
+        status?: 'draft' | 'published';
+        /**
+         * true lists trashed brands instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/brands';
+};
+
+export type GetApiV1AdminResourcesBrandsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesBrandsError = GetApiV1AdminResourcesBrandsErrors[keyof GetApiV1AdminResourcesBrandsErrors];
+
+export type GetApiV1AdminResourcesBrandsResponses = {
+    /**
+     * A page of brands
+     */
+    200: {
+        success: true;
+        data: {
+            brands: Array<BrandResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesBrandsResponse = GetApiV1AdminResourcesBrandsResponses[keyof GetApiV1AdminResourcesBrandsResponses];
+
+export type GetApiV1AdminResourcesPagesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * `page` (About Us, policies) or `article` (blog posts); omit for both.
+         */
+        contentType?: 'page' | 'article';
+        /**
+         * true lists trashed pages instead.
+         */
+        trashed?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/pages';
+};
+
+export type GetApiV1AdminResourcesPagesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPagesError = GetApiV1AdminResourcesPagesErrors[keyof GetApiV1AdminResourcesPagesErrors];
+
+export type GetApiV1AdminResourcesPagesResponses = {
+    /**
+     * A page of content pages
+     */
+    200: {
+        success: true;
+        data: {
+            pages: Array<PageResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPagesResponse = GetApiV1AdminResourcesPagesResponses[keyof GetApiV1AdminResourcesPagesResponses];
+
 export type GetApiV1AdminTranslationsResourcesData = {
     body?: never;
     path?: never;
@@ -50658,6 +51342,10 @@ export type PutApiV1AdminSettingsShippingMethodsPickupResponse = PutApiV1AdminSe
 export type PutApiV1AdminSettingsShippingMethodsTemplateData = {
     body: {
         template: 'dhaka_two_zone' | 'dhaka_three_zone';
+        /**
+         * The language of the zone names and delivery promises; default English.
+         */
+        language?: 'en' | 'bn';
     };
     path?: never;
     query?: never;
@@ -55576,6 +56264,12 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                      */
                     dueAt: string;
                 } | null;
+                /**
+                 * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
+                 */
+                taxExemption?: {
+                    exemptionId: string | null;
+                } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -55772,6 +56466,12 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                      * ISO 8601 due date: placement plus the net days.
                      */
                     dueAt: string;
+                } | null;
+                /**
+                 * The buyer was tax-exempt when the order was priced (no tax charged), with their certificate or registration number; null when not, absent on invoices issued before exemptions were printed.
+                 */
+                taxExemption?: {
+                    exemptionId: string | null;
                 } | null;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -57607,6 +58307,7 @@ export type PostApiV1AdminOrdersQuoteData = {
         shippingCharge: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'cod' | 'net_terms';
+        customerId?: string | null;
     };
     path?: never;
     query?: never;
@@ -61900,11 +62601,20 @@ export type PostApiV1AdminProductsData = {
          * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
          */
         slug?: string;
-        media: Array<{
-            id: string;
+        media?: Array<{
+            /**
+             * Optional pmed_ id of your choosing, for a SKU's imageId to name this attachment. Omit it and one is made.
+             */
+            id?: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
-            altText: string | null;
-            isPrimary: boolean;
+            altText?: string | null;
+            /**
+             * The featured image. Omit on every item and the first is featured.
+             */
+            isPrimary?: boolean;
         }>;
         attributes?: Array<{
             attributeId: string;
@@ -63188,6 +63898,9 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
         expectedAggregateRevision: number;
         media: Array<{
             id: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
             altText: string | null;
             isPrimary: boolean;
@@ -63577,6 +64290,9 @@ export type PutApiV1AdminProductsByIdData = {
         slug: string;
         media: Array<{
             id: string;
+            /**
+             * The media file's id: the id a media upload or URL import returns.
+             */
             mediaId: string;
             altText: string | null;
             isPrimary: boolean;
@@ -69925,6 +70641,17 @@ export type GetApiV1AdminAgentAccessApprovalsByApprovalIdResponses = {
             summary: string;
             operationIds: Array<string>;
             expiresAt: string;
+            requester: {
+                name: string;
+                client: string | null;
+                kind: 'oauth' | 'pat' | 'cli';
+            } | null;
+            targets: Array<{
+                kind: 'product' | 'variant' | 'order' | 'customer';
+                total: number;
+                names: Array<string>;
+                matching: boolean;
+            }>;
         };
     };
 };
@@ -70028,7 +70755,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -70184,7 +70911,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -70458,7 +71185,7 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased';
         resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object';
         resourceId?: string;
         /**
@@ -70621,6 +71348,40 @@ export type GetApiV1AdminAppsSurfacesResponses = {
 };
 
 export type GetApiV1AdminAppsSurfacesResponse = GetApiV1AdminAppsSurfacesResponses[keyof GetApiV1AdminAppsSurfacesResponses];
+
+export type GetApiV1AdminAppsStorefrontProblemsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/storefront-problems';
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsError = GetApiV1AdminAppsStorefrontProblemsErrors[keyof GetApiV1AdminAppsStorefrontProblemsErrors];
+
+export type GetApiV1AdminAppsStorefrontProblemsResponses = {
+    /**
+     * Recent storefront problems, newest first
+     */
+    200: {
+        success: true;
+        data: {
+            problems: Array<AppStorefrontProblem>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsStorefrontProblemsResponse = GetApiV1AdminAppsStorefrontProblemsResponses[keyof GetApiV1AdminAppsStorefrontProblemsResponses];
 
 export type GetApiV1AdminAppsRegistryData = {
     body?: never;
@@ -71168,6 +71929,70 @@ export type PostApiV1AdminAppsRemovedDataByIdDeleteResponses = {
 };
 
 export type PostApiV1AdminAppsRemovedDataByIdDeleteResponse = PostApiV1AdminAppsRemovedDataByIdDeleteResponses[keyof PostApiV1AdminAppsRemovedDataByIdDeleteResponses];
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverData = {
+    body: {
+        /**
+         * The group's revision from dashboard.apps.removed_data_list.
+         */
+        expectedRevision: number;
+        /**
+         * The key that may take the data: the waiting release's signer (the key id an upload refusal names as releaseSigner), or null for bundled or unsigned code.
+         */
+        signerKeyId: string | null;
+    };
+    path: {
+        /**
+         * The removed app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/removed-data/{id}/hand-over';
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverError = PostApiV1AdminAppsRemovedDataByIdHandOverErrors[keyof PostApiV1AdminAppsRemovedDataByIdHandOverErrors];
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverResponses = {
+    /**
+     * Handed over
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            /**
+             * The group's new revision (0: the store kept no record, so any release reclaims it already).
+             */
+            revision: number;
+            /**
+             * Whether a bundled release of this app was waiting and is now installed with the data.
+             */
+            installed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsRemovedDataByIdHandOverResponse = PostApiV1AdminAppsRemovedDataByIdHandOverResponses[keyof PostApiV1AdminAppsRemovedDataByIdHandOverResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;

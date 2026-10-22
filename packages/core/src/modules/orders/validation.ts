@@ -229,6 +229,8 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
     /** Cash on delivery (the default) must collect the total exactly; an invoice need not. */
     paymentMethod: manualOrderPaymentMethodSchema.optional(),
+    /** The customer the order is for: a tax-exempt customer's order pays no tax. */
+    customerId: z.string().trim().min(1).max(128).nullable().optional(),
 });
 
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;

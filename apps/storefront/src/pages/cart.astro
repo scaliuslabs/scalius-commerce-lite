@@ -1084,9 +1084,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       </div>
     </div>
     {/* Before first paint: the cart column sits where it shows (after the form
-        on wide screens), and a phone buyer who came to check out (the drawer's
-        Check out, Buy now) sees the summary folded; one who came to view the
-        cart sees it open. */}
+        on wide screens). On a phone the summary starts folded behind its
+        "Show order summary" bar (Dawn's checkout), so the first screen is the
+        form; the bar states the total and opens the lines. */}
     <script is:inline>
       (function () {
         var root = document.getElementById("cartPageRoot");
@@ -1105,13 +1105,9 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         };
         place();
         if (wide.addEventListener) wide.addEventListener("change", place);
-        var checkingOut = location.hash === "#checkoutFormCard";
-        try {
-          checkingOut = checkingOut || !!sessionStorage.getItem("quickBuyData");
-        } catch (error) {}
-        root.dataset.summary = checkingOut ? "closed" : "open";
+        root.dataset.summary = "closed";
         var toggle = document.getElementById("orderSummaryToggle");
-        if (toggle) toggle.setAttribute("aria-expanded", checkingOut ? "false" : "true");
+        if (toggle) toggle.setAttribute("aria-expanded", "false");
       })();
     </script>
     {/* Below lg the folded summary hides the cart (never an empty cart's message). */}
@@ -2159,14 +2155,23 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         const expectedQuoteFingerprintInput = document.getElementById(
           "expectedQuoteFingerprint",
         ) as HTMLInputElement | null;
-        if (
-          codOnly &&
-          !/^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprintInput?.value ?? "")
-        ) {
+        const quoted = () => /^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprintInput?.value ?? "");
+        if (codOnly && !quoted()) {
+          // A thana chosen a moment ago: its options and total are on their
+          // way. Wait for them and place the order the buyer sees (buyer QA M6).
           e.preventDefault();
+          submitButton.disabled = true;
+          setSubmitButtonText(checkoutCopy.calculatingText);
+          await shippingMethods?.settled();
+          await window.cartTotalsSettled?.();
           restoreSubmitButton();
+          if (quoted()) {
+            form.requestSubmit();
+            return;
+          }
+          // Still no total: said here, on the page the buyer is on.
           showCheckoutFormError(
-            checkoutCopy.totalVerificationFailedText,
+            checkoutCopy.taxVerificationFailedText,
             submitButton,
           );
           return;

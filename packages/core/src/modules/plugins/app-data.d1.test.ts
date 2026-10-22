@@ -18,6 +18,7 @@ import { writeObjectRecords } from "../objects";
 import {
   PluginError,
   deleteRemovedAppData,
+  handOverRemovedAppData,
   describePluginSettings,
   installPlugin,
   listRemovedAppData,
@@ -146,6 +147,47 @@ describe("app data lifecycle", () => {
     const back = await installPlugin(db, { manifest: manifest(), source: "registry", bundleSha256: SHA, signerKeyId: "key_acme" });
     expect(back.signerKeyId).toBe("key_acme");
     expect(count("SELECT count(*) AS n FROM plugin_kv WHERE plugin_id = 'acme.bazaar'")).toBe(1);
+  });
+
+  it("holds a release from another source while data is kept, until a Super Admin hands the data over", async () => {
+    // A signed upload keeps data, then the merchant moves the app into the store's own (bundled, unsigned) code.
+    await installPlugin(db, { manifest: manifest(), source: "upload", bundleSha256: SHA, signerKeyId: "1a2b3c4d5e6f7a8b" });
+    await setPluginKv(db, "acme.bazaar", "refresh_token", "partner-token");
+    const installed = await requirePluginInstallation(db, "acme.bazaar");
+    await uninstallPlugin(db, "acme.bazaar", { keepData: true, expectedRevision: installed.revision });
+
+    const held = await installPlugin(db, { manifest: manifest(), source: "bundled", bundleSha256: SHA }).catch((error: unknown) => error);
+    expect(held).toMatchObject({ pluginCode: "retained_data_other_developer", details: { pluginId: "acme.bazaar", retainedSigner: "1a2b3c4d5e6f7a8b", releaseSigner: null, retainedRevision: 1 } });
+    // The kept data is listed with the key it belongs to.
+    const kept = (await listRemovedAppData(db))[0]!;
+    expect(kept).toMatchObject({ pluginId: "acme.bazaar", keyValues: 1, signerKeyId: "1a2b3c4d5e6f7a8b", revision: 1 });
+
+    await expect(handOverRemovedAppData(db, "acme.bazaar", { expectedRevision: 0, signerKeyId: null }))
+      .rejects.toMatchObject({ pluginCode: "installation_revision_conflict" });
+    expect(await handOverRemovedAppData(db, "acme.bazaar", { expectedRevision: 1, signerKeyId: null })).toEqual({ revision: 2 });
+    expect((await listRemovedAppData(db))[0]).toMatchObject({ signerKeyId: null, revision: 2, keyValues: 1 });
+
+    // The bundled release now reclaims everything; the old key no longer could.
+    const moved = await installPlugin(db, { manifest: manifest(), source: "bundled", bundleSha256: SHA });
+    expect(moved).toMatchObject({ source: "bundled", signerKeyId: null });
+    expect(count("SELECT count(*) AS n FROM plugin_kv WHERE plugin_id = 'acme.bazaar'")).toBe(1);
+    expect(await listRemovedAppData(db)).toEqual([]);
+    await expect(handOverRemovedAppData(db, "acme.bazaar", { expectedRevision: 2, signerKeyId: null }))
+      .rejects.toMatchObject({ pluginCode: "installation_exists" });
+  });
+
+  it("installs another key's release clean when the removed app kept nothing it could read", async () => {
+    // Default settings and no records: the record names an owner of nothing.
+    await installPlugin(db, { manifest: manifest("acme.plain", { objects: {} }), source: "upload", bundleSha256: SHA, signerKeyId: "1a2b3c4d5e6f7a8b" });
+    const installed = await requirePluginInstallation(db, "acme.plain");
+    await uninstallPlugin(db, "acme.plain", { keepData: true, expectedRevision: installed.revision });
+    expect(count("SELECT count(*) AS n FROM system_kv WHERE key = 'plugin-retained:acme.plain'")).toBe(1);
+    expect(await listRemovedAppData(db)).toEqual([]);
+
+    const bundled = await installPlugin(db, { manifest: manifest("acme.plain", { objects: {} }), source: "bundled", bundleSha256: SHA });
+    expect(bundled).toMatchObject({ source: "bundled", signerKeyId: null });
+    expect(describePluginSettings(bundled)).toMatchObject({ values: { commission: 5 } });
+    expect(count("SELECT count(*) AS n FROM system_kv WHERE key = 'plugin-retained:acme.plain'")).toBe(0);
   });
 
   it("deletes every kind of data the app owns on an uninstall that does not keep it, and no one else's", async () => {

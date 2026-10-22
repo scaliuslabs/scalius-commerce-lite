@@ -162,6 +162,44 @@ describe("product validation", () => {
         }
     });
 
+    it("a new product's media takes files by mediaId alone: the attachment id is made and the first is featured", () => {
+        const parsed = createProductSchema.parse({
+            ...productInput,
+            media: [{ mediaId: "media_front_1" }, { mediaId: "media_back_1", altText: "Back" }],
+        });
+        expect(parsed.media).toEqual([
+            { id: expect.stringMatching(/^pmed_[A-Za-z0-9_-]+$/u), mediaId: "media_front_1", altText: null, isPrimary: true },
+            { id: expect.stringMatching(/^pmed_[A-Za-z0-9_-]+$/u), mediaId: "media_back_1", altText: "Back", isPrimary: false },
+        ]);
+        expect(parsed.media[0]!.id).not.toBe(parsed.media[1]!.id);
+        const { media: _none, ...withoutMedia } = productInput;
+        expect(createProductSchema.parse(withoutMedia).media).toEqual([]);
+
+        // A caller's own id (for a SKU's imageId) and featured choice are kept.
+        const chosen = createProductSchema.parse({
+            ...productInput,
+            media: [{ mediaId: "media_front_1" }, { id: "pmed_back_1", mediaId: "media_back_1", isPrimary: true }],
+        });
+        expect(chosen.media.map((item) => [item.id.startsWith("pmed_"), item.isPrimary])).toEqual([[true, false], [true, true]]);
+        expect(chosen.media[1]!.id).toBe("pmed_back_1");
+
+        // Every item saying "not featured" still has no featured image.
+        expect(createProductSchema.safeParse({
+            ...productInput,
+            media: [{ mediaId: "media_front_1", isPrimary: false }],
+        }).success).toBe(false);
+
+        // A media file id where the attachment id goes says what is expected.
+        const wrong = createProductSchema.safeParse({ ...productInput, media: [{ id: "media_front_1", mediaId: "media_front_1" }] });
+        expect(wrong.success).toBe(false);
+        expect(wrong.error?.issues[0]).toMatchObject({ path: ["media", 0, "id"], message: expect.stringContaining("pmed_") });
+    });
+
+    it("an edit's media still names every attachment by id", () => {
+        const media = [{ mediaId: "media_front_1", altText: null, isPrimary: true }];
+        expect(updateProductSchema.safeParse({ ...productInput, media }).success).toBe(false);
+    });
+
     it("canonicalizes and bounds product attribute assignments", () => {
         const parsed = createProductSchema.parse({
             ...productInput,

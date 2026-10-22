@@ -46,7 +46,7 @@ export async function resolveReviewRequestContent(
   if (!content) return null;
   const origin = storefrontOrigin(env);
   // Without a Store URL the message would carry a relative link: retry until
-  // the merchant fills Settings -> System -> Platform (then dead-letter).
+  // the merchant fills Settings > Store details > Web addresses (then dead-letter).
   if (!origin) throw new Error("Store URL is not configured; review request links need it.");
   const path = content.accountOwned
     ? `/account/orders/${encodeURIComponent(input.orderId)}#reviews`

@@ -987,10 +987,10 @@ describe("agent workflow catalog", () => {
       }, /unknown destination item property/],
       ["materialization missing required destination", (card) => {
         workflowStep(card, "create", "product").input.materializations![0]!.keys = [
-          "mediaId",
+          "altText",
           "isPrimary",
         ];
-      }, /omits required destination item property altText/],
+      }, /omits required destination item property mediaId/],
       ["materialization non-array target", (card) => {
         workflowStep(card, "create", "product").input.materializations![0]!
           .templatePointer = "/body/optionMatrix";

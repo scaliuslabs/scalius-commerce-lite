@@ -20,6 +20,7 @@ import {
   EMPTY_HOMEPAGE_SECTION_DATA,
   homepageCategoryTiles,
   homepageContent,
+  homepageEmptyState,
   homepageHero,
   homepageLeadSection,
   homepageLead,
@@ -36,6 +37,8 @@ import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
 import { applyRequestThemeBindings, resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { catalogCopy } from "@/lib/catalog-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
 
 // One batch: layout, homepage (with every section's products, images,
 // categories and collections), and the delivery facts a delivery-facts strip
@@ -149,6 +152,11 @@ const phoneCategorySizes = phoneCategoryStyle ? {
   quad: "45vw",
 }[phoneCategoryStyle] : "";
 
+// A homepage on which no section shows anything (a new store) says so, never
+// a blank band; the theme editor's preview keeps the empty regions it edits.
+const emptyState = requestTheme.preview ? null : homepageEmptyState(homeSections, content);
+const copy = catalogCopy(pageLanguage());
+
 // --- SEO: canonical URL for homepage ---
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
 ---
@@ -207,4 +215,11 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
     previewMarks={requestTheme.preview !== null}
     languageCode={layoutData.storefrontCopy?.languageCode}
   />
+  {emptyState && (
+    <section class="mx-auto max-w-xl px-4 py-16 text-center" data-home-empty={emptyState}>
+      {emptyState === "no-products"
+        ? <p class="text-base text-muted-foreground">{copy.search.emptyStore}</p>
+        : <a href="/search" class="sf-section-link">{copy.search.browseAll}</a>}
+    </section>
+  )}
 </Layout>

@@ -64,11 +64,13 @@ describe("listing presentation", () => {
     expect(catalogListingPresentation(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TREE), null).layout).toBe("grid");
   });
 
-  it("shows filters only with eight results and a facet that narrows (the small-catalogue rule)", () => {
+  it("shows filters on any listing a facet narrows once the store passes the small-catalogue rule", () => {
     const facets = { refinementCount: 0, facetValueCounts: [3, 2] };
     expect(catalogListingControls({ ...facets, total: 0 })).toEqual({ sort: false, filters: false });
-    expect(catalogListingControls({ ...facets, total: 2 })).toEqual({ sort: true, filters: false });
-    expect(catalogListingControls({ ...facets, total: 7 })).toEqual({ sort: true, filters: false });
+    expect(catalogListingControls({ ...facets, total: 1 })).toEqual({ sort: false, filters: false });
+    expect(catalogListingControls({ ...facets, total: 3 })).toEqual({ sort: true, filters: false });
+    // A five-product category filters like Dawn's collection page.
+    expect(catalogListingControls({ ...facets, total: 5 })).toEqual({ sort: true, filters: true });
     expect(catalogListingControls({ ...facets, total: 8 })).toEqual({ sort: true, filters: true });
     // Every facet with one value: nothing to narrow.
     expect(catalogListingControls({ total: 40, refinementCount: 0, facetValueCounts: [1, 1] }))

@@ -939,6 +939,30 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 9,
         postgresStatements: 9,
       },
+      {
+        version: 178,
+        name: "0178_tax_exempt_customers",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
+        version: 179,
+        name: "0179_customer_erasure",
+        sqliteStatements: 16,
+        postgresStatements: 16,
+      },
+      {
+        version: 180,
+        name: "0180_variant_own_compare_at",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
+      {
+        version: 181,
+        name: "0181_url_redirects",
+        sqliteStatements: 7,
+        postgresStatements: 7,
+      },
     ]);
   });
 
@@ -1207,6 +1231,10 @@ describe("provider-neutral schema upgrades", () => {
           { version: 175, name: "0175_promotions_automatic_live" },
           { version: 176, name: "0176_event_demand_approved_apps" },
           { version: 177, name: "0177_saved_method_owner" },
+          { version: 178, name: "0178_tax_exempt_customers" },
+          { version: 179, name: "0179_customer_erasure" },
+          { version: 180, name: "0180_variant_own_compare_at" },
+          { version: 181, name: "0181_url_redirects" },
         ],
       });
     } finally {

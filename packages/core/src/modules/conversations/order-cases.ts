@@ -28,6 +28,7 @@ import {
   supportRequestSelectFields,
   type CreateCustomerOrderSupportRequestInput,
   type CustomerOrderSupportRequestAction,
+  type ReturnableOrderLine,
   type OrderSupportRequestView,
   type SupportRequestRow,
   type UpdateAdminOrderSupportRequestStatusInput,
@@ -102,6 +103,33 @@ export async function createReceiptOrderSupportRequest(
   });
 }
 
+/**
+ * The lines a return asks for, checked against the lines that reached the
+ * buyer: each once, at least one unit and no more than was handed over.
+ * Only a return names lines; a return from an older client names none.
+ */
+function requestedReturnLines(
+  input: CreateCustomerOrderSupportRequestInput,
+  returnable: readonly ReturnableOrderLine[],
+): Array<ReturnableOrderLine & { quantity: number }> {
+  const items = input.items ?? [];
+  if (items.length === 0) return [];
+  if (input.type !== "return") throw new ValidationError("Only a return names items.");
+  const byId = new Map(returnable.map((line) => [line.orderItemId, line]));
+  const seen = new Set<string>();
+  return items.map((item) => {
+    const line = byId.get(item.orderItemId);
+    if (!line || seen.has(item.orderItemId)) {
+      throw new ValidationError("Choose items that were delivered to you.", { orderItemId: item.orderItemId });
+    }
+    seen.add(item.orderItemId);
+    if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > line.quantity) {
+      throw new ValidationError(`You can return up to ${line.quantity} of ${line.productName}.`, { orderItemId: item.orderItemId });
+    }
+    return { ...line, quantity: item.quantity };
+  });
+}
+
 async function createVerifiedOrderSupportRequest(
   db: Database,
   orderId: string,
@@ -133,6 +161,10 @@ async function createVerifiedOrderSupportRequest(
     throw new ValidationError(reasonText);
   }
 
+  const items = requestedReturnLines(input, state.returnableItems);
+  const itemsText = items.length > 0
+    ? items.map((item) => `${item.productName}${item.variantLabel ? ` (${item.variantLabel})` : ""} × ${item.quantity}`).join("\n")
+    : null;
   const requestId = `osr_${nanoid(16)}`;
   const requestCustomerId = actor.actorType === "customer" ? actor.customerId : order.customerId ?? null;
   const authorType = actor.actorType;
@@ -142,7 +174,7 @@ async function createVerifiedOrderSupportRequest(
       visibility: "public",
       authorType: "system",
       eventKind: "support_request_submitted",
-      eventData: { requestId, type: input.type, status: "submitted" },
+      eventData: { requestId, type: input.type, status: "submitted", ...(items.length > 0 ? { items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })) } : {}) },
       readBy: ["customer"],
     },
     {
@@ -150,7 +182,7 @@ async function createVerifiedOrderSupportRequest(
       visibility: "public",
       authorType,
       authorCustomerId: actor.actorType === "customer" ? actor.customerId : null,
-      body: details ? `${reason}\n\n${details}` : reason,
+      body: [reason, itemsText, details].filter(Boolean).join("\n\n"),
       readBy: ["customer"],
     },
   ];
@@ -197,7 +229,7 @@ async function createVerifiedOrderSupportRequest(
     kind: "request_submitted",
     requestKey: requestId,
     body: reason,
-    data: { type: input.type, reason },
+    data: { type: input.type, reason, ...(items.length > 0 ? { items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })) } : {}) },
   });
 
   const updatedSupportRequests = await listOrderSupportRequests(db, orderId);
@@ -215,6 +247,7 @@ async function createVerifiedOrderSupportRequest(
         hasShipment: state.hasShipment,
         hasActiveRefundOperation: state.hasActiveRefundOperation,
         activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
+        returnableItems: state.returnableItems,
       }),
       { order },
     ),

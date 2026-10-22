@@ -1,4 +1,4 @@
-// Web Push (docs/platform/PLUGINS.md, "Push"): browsers that asked for
+// Web Push (packages/plugin-sdk/docs/apps.md, "Push"): browsers that asked for
 // notifications, for staff (the dashboard) and signed-in buyers (the
 // storefront), and the delivery to them. The platform signs with VAPID
 // (RFC 8292) using a key pair derived from SCALIUS_SECRET (no push service

@@ -1,4 +1,4 @@
-// Plugin cron schedules (docs/platform/PLUGINS.md, "Cron"): standard
+// Plugin cron schedules (packages/plugin-sdk/docs/apps.md, "Cron"): standard
 // five-field schedules (minute hour day-of-month month day-of-week), evaluated
 // in the store's time zone. The API's scheduled handler asks, once per tick,
 // for the latest slot at or before now; a slot runs at most once (claimed in

@@ -1,5 +1,5 @@
 import { validateCheckoutAttributes } from "./attributes";
-// Cart transform (`cart.transform`, docs/platform/PLUGINS.md): Shopify's
+// Cart transform (`cart.transform`, packages/plugin-sdk/docs/apps.md): Shopify's
 // cartTransform. An app says what the buyer's lines are, never what they
 // cost:
 //

@@ -272,7 +272,9 @@ export function selectLiveAttributeFacetRows(db: Database, productScope: SQL) {
 
 /**
  * Live option rows of the scoped products' live SKUs: one per SKU and axis,
- * keyed `option.<axis key>` like the storefront's option filters.
+ * keyed `option.<axis key>` like the storefront's option filters. A gift
+ * card's denominations are not a catalogue property, so they never become a
+ * store-wide filter ("Amount: 500, 1000, 2500" beside Colour and Size).
  */
 export function selectLiveOptionFacetRows(db: Database, productScope: SQL) {
     const axisKey = sql<string>`${OPTION_FACET_KEY_PREFIX} || replace(${productOptionDefinitions.normalizedName}, ' ', '-')`;
@@ -303,6 +305,7 @@ export function selectLiveOptionFacetRows(db: Database, productScope: SQL) {
             productScope,
             isNull(productVariants.deletedAt),
             sql`${productVariants.id} <> 'default'`,
+            sql`NOT EXISTS (SELECT 1 FROM ${products} AS gift_card_product WHERE gift_card_product.id = ${productVariants.productId} AND gift_card_product.is_gift_card = 1)`,
             sql`length(${axisKey}) BETWEEN 1 AND 120`,
             sql`length(${productOptionValues.normalizedValue}) >= 1`,
         ));

@@ -15314,6 +15314,14 @@
    "status": 404,
    "meaning": "The order does not exist."
   },
+  "orders_hold_not_found": {
+   "status": 404,
+   "meaning": "The app placed no hold on the order."
+  },
+  "orders_conflict": {
+   "status": 409,
+   "meaning": "The order changed since its revision was read; read it again."
+  },
   "customers_not_allowed": {
    "status": 403,
    "meaning": "The grant does not allow the customer action."
@@ -15411,7 +15419,8 @@
    "object.updated": "object",
    "object.deleted": "object",
    "customer.redact_requested": "customer",
-   "customer.data_requested": "customer"
+   "customer.data_requested": "customer",
+   "customer.erased": "customer"
   },
   "facts": {
    "order.created": {
@@ -16861,6 +16870,21 @@
     "additionalProperties": false
    },
    "customer.data_requested": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "customerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     }
+    },
+    "required": [
+     "customerId"
+    ],
+    "additionalProperties": false
+   },
+   "customer.erased": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {

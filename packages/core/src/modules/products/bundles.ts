@@ -24,7 +24,7 @@ import {
 } from "@scalius/shared/product-bundles";
 import { toStoreMinor } from "../settings";
 import { readStoreCurrency } from "../markets";
-import { MAX_PRODUCT_PRICE } from "./types";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 
 export const PRODUCT_BUNDLE_ID_PREFIX = "pbd_";
 
@@ -130,7 +130,7 @@ export const productBundleTierInputSchema = z.discriminatedUnion("discountType",
         quantity: z.number().int().min(PRODUCT_BUNDLE_MIN_QUANTITY).max(PRODUCT_BUNDLE_MAX_QUANTITY),
         discountType: z.literal("fixed_price"),
         /** The price of the whole set of `quantity` units. */
-        price: z.number().positive().max(MAX_PRODUCT_PRICE),
+        price: z.number().positive().max(MAX_MAJOR_AMOUNT),
         label: bundleLabelSchema,
         isActive: z.boolean(),
     }).strict(),

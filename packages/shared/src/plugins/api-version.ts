@@ -1,4 +1,4 @@
-// The plugin API version (docs/platform/PLUGINS.md). Date-versioned and equal
+// The plugin API version (packages/plugin-sdk/docs/apps.md). Date-versioned and equal
 // to the event catalog's `EVENTS_API_VERSION` (manifest.test.ts proves it).
 // Kept import-free: plugins import it at runtime, and a plugin bundle must not
 // carry the manifest's schema code.

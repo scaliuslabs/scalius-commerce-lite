@@ -36,7 +36,7 @@ export const ORDER_EVENT_KINDS = [
     "fulfillment_location_changed",
     /** Staff or an app set line prices by hand when placing the order; `data.lines` counts them. */
     "prices_set",
-    /** An app's typed entry (docs/platform/PLUGINS.md, "Order timeline"): `data` names the app and its kind. */
+    /** An app's typed entry (packages/plugin-sdk/docs/apps.md, "Order timeline"): `data` names the app and its kind. */
     "app_event",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];

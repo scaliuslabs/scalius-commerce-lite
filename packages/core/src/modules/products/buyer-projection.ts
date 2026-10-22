@@ -123,39 +123,25 @@ export function buildBuyerCatalogPricingProjection(
         discountAmountMinor: sql`${pricingProduct.discountAmountMinor}`,
     });
 
-    const rankedSkus = db
+    // Each SKU's own facts first, as plain columns: the window aggregates
+    // below then read columns, never a subquery (the stock and price
+    // increment expressions hold scalar subqueries, which the Turso engine
+    // does not prepare inside a window function's argument).
+    const skuFacts = db
         .select({
             productId: pricingSku.productId,
             skuId: pricingSku.id,
             basePriceMinor: pricingSku.priceMinor,
-            effectivePriceMinor: effectivePrice.as("buyer_effective_price"),
-            discountType: resolvedDiscountType.as("buyer_discount_type"),
-            discountBps: resolvedDiscountBps.as("buyer_discount_bps"),
-            discountAmountMinor: resolvedDiscountAmountMinor.as("buyer_discount_amount"),
-            availableForSale: sql<number>`MAX(${skuAvailable}) OVER (
-                PARTITION BY ${pricingSku.productId}
-            )`.as("buyer_available_for_sale"),
-            hasCustomerOptions: sql<number>`MAX(CASE
+            effectivePriceMinor: effectivePrice.as("buyer_sku_effective_price"),
+            available: skuAvailable.as("buyer_sku_available"),
+            customerOption: sql<number>`CASE
                 WHEN ${pricingSku.isDefault} = 0
                   AND trim(coalesce(${pricingSku.optionCombinationKey}, '')) <> ''
                 THEN 1 ELSE 0
-            END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_customer_options"),
-            hasAnyDiscount: sql<number>`MAX(CASE
-                WHEN ${effectivePrice} < ${pricingSku.priceMinor} THEN 1 ELSE 0
-            END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_any_discount"),
-            hasAvailableDiscount: sql<number>`MAX(CASE
-                WHEN ${skuAvailable} = 1 AND ${effectivePrice} < ${pricingSku.priceMinor} THEN 1 ELSE 0
-            END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_available_discount"),
-            maxAvailableEffectivePrice: sql<number | null>`MAX(CASE
-                WHEN ${skuAvailable} = 1 THEN ${effectivePrice} ELSE NULL
-            END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_max_available_effective_price"),
-            maxEffectivePrice: sql<number>`MAX(${effectivePrice}) OVER (
-                PARTITION BY ${pricingSku.productId}
-            )`.as("buyer_max_effective_price"),
-            buyerRank: sql<number>`ROW_NUMBER() OVER (
-                PARTITION BY ${pricingSku.productId}
-                ORDER BY ${skuAvailable} DESC, ${effectivePrice} ASC, ${pricingSku.id} ASC
-            )`.as("buyer_rank"),
+            END`.as("buyer_sku_customer_option"),
+            discountType: resolvedDiscountType.as("buyer_sku_discount_type"),
+            discountBps: resolvedDiscountBps.as("buyer_sku_discount_bps"),
+            discountAmountMinor: resolvedDiscountAmountMinor.as("buyer_sku_discount_amount"),
         })
         .from(pricingSku)
         .innerJoin(pricingProduct, eq(pricingProduct.id, pricingSku.productId))
@@ -178,6 +164,46 @@ export function buildBuyerCatalogPricingProjection(
                 )
             )`,
         ))
+        .as("buyer_sku_facts");
+
+    const facts = {
+        productId: sql`${skuFacts.productId}`,
+        skuId: sql`${skuFacts.skuId}`,
+        basePriceMinor: sql`${skuFacts.basePriceMinor}`,
+        effectivePrice: sql`${skuFacts.effectivePriceMinor}`,
+        available: sql`${skuFacts.available}`,
+    };
+    const rankedSkus = db
+        .select({
+            productId: skuFacts.productId,
+            skuId: skuFacts.skuId,
+            basePriceMinor: skuFacts.basePriceMinor,
+            effectivePriceMinor: sql<number>`${facts.effectivePrice}`.as("buyer_effective_price"),
+            discountType: sql<string | null>`${skuFacts.discountType}`.as("buyer_discount_type"),
+            discountBps: sql<number>`${skuFacts.discountBps}`.as("buyer_discount_bps"),
+            discountAmountMinor: sql<number>`${skuFacts.discountAmountMinor}`.as("buyer_discount_amount"),
+            availableForSale: sql<number>`MAX(${facts.available}) OVER (
+                PARTITION BY ${facts.productId}
+            )`.as("buyer_available_for_sale"),
+            hasCustomerOptions: sql<number>`MAX(${skuFacts.customerOption}) OVER (PARTITION BY ${facts.productId})`.as("buyer_has_customer_options"),
+            hasAnyDiscount: sql<number>`MAX(CASE
+                WHEN ${facts.effectivePrice} < ${facts.basePriceMinor} THEN 1 ELSE 0
+            END) OVER (PARTITION BY ${facts.productId})`.as("buyer_has_any_discount"),
+            hasAvailableDiscount: sql<number>`MAX(CASE
+                WHEN ${facts.available} = 1 AND ${facts.effectivePrice} < ${facts.basePriceMinor} THEN 1 ELSE 0
+            END) OVER (PARTITION BY ${facts.productId})`.as("buyer_has_available_discount"),
+            maxAvailableEffectivePrice: sql<number | null>`MAX(CASE
+                WHEN ${facts.available} = 1 THEN ${facts.effectivePrice} ELSE NULL
+            END) OVER (PARTITION BY ${facts.productId})`.as("buyer_max_available_effective_price"),
+            maxEffectivePrice: sql<number>`MAX(${facts.effectivePrice}) OVER (
+                PARTITION BY ${facts.productId}
+            )`.as("buyer_max_effective_price"),
+            buyerRank: sql<number>`ROW_NUMBER() OVER (
+                PARTITION BY ${facts.productId}
+                ORDER BY ${facts.available} DESC, ${facts.effectivePrice} ASC, ${facts.skuId} ASC
+            )`.as("buyer_rank"),
+        })
+        .from(skuFacts)
         .as("buyer_ranked_skus");
 
     return db

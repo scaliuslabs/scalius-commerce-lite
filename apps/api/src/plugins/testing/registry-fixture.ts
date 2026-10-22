@@ -1,4 +1,4 @@
-// A test app registry (docs/platform/PLUGINS.md, "Registry"), for tests only:
+// A test app registry (packages/plugin-sdk/docs/apps.md, "Registry"), for tests only:
 // its own Ed25519 keypair made at run time (no key material in the
 // repository), an index and release files served by a `fetch` stub at
 // https://registry.test/, and package ZIPs for upload tests.

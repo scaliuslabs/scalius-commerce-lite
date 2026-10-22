@@ -1,6 +1,6 @@
 // The one sanitizer for HTML an app gives the storefront: an allowlist for
 // what its storefront module draws (sections, components, skins and app
-// pages; docs/STOREFRONT-COMPONENTS.md, "Security"). Content, table, list and
+// pages; packages/plugin-sdk/docs/storefront.md, "Security"). Content, table, list and
 // form tags, `h1`, `video`, an SVG drawing subset, inline style that loads
 // nothing (no `url()` or other loading function, no escapes, no comments),
 // `id`s under the app's own prefix (`<app name>-…`, so markup never

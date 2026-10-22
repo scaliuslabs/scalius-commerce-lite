@@ -72,6 +72,12 @@ export interface DispatchAgentOperationOptions {
    * native dry-run support.
    */
   dryRun?: "native";
+  /**
+   * Only ask the route whether it would take this input (its own validation,
+   * answered by the admin boundary); nothing runs, and the check is neither
+   * rate-limited nor audited (the call it precedes is). Dashboard operations only.
+   */
+  validateOnly?: true;
 }
 
 function manifestAuthorizationInput(operation: AgentOperationManifestEntry) {
@@ -238,7 +244,8 @@ function declaredJsonBodyProperties(operation: AgentOperationManifestEntry): Set
   return declared.size > 0 ? declared : undefined;
 }
 
-function validateAgentJsonBodyProperties(
+/** The agent lanes' body rule: a JSON body names only properties the operation declares. */
+export function validateAgentJsonBodyProperties(
   operation: AgentOperationManifestEntry,
   body: unknown,
 ): void {
@@ -583,6 +590,7 @@ export interface DispatchOperationOptions<P extends OperationPrincipal> {
   ctx: ExecutionContext;
   confirmedBy?: AgentConfirmation;
   dryRun?: "native";
+  validateOnly?: true;
 }
 
 /** The input a native dry run sends: `dryRun: true` in the JSON body, or the query for GET/DELETE-style calls. */
@@ -679,7 +687,12 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
     if (!(await authority.authorize(principal, operation, env))) {
       throw new AgentDispatchError("operation_forbidden", "Operation is not authorized", 403);
     }
-    if (!(await authority.withinRateLimit(principal, env))) {
+    if (options.validateOnly) {
+      // Only the admin boundary answers a validate-only request without running the route.
+      if (principal.kind !== "agent" || operation.surface !== "dashboard") {
+        throw new AgentDispatchError("validate_only_unsupported", "Only dashboard operations validate before they run", 500);
+      }
+    } else if (!(await authority.withinRateLimit(principal, env))) {
       throw new AgentDispatchError("rate_limited", "Operation rate limit exceeded", 429);
     }
 
@@ -695,6 +708,7 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
         withOperationDispatchPrincipal(env, principal, {
           confirmed: options.confirmedBy !== undefined,
           dryRun: options.dryRun === "native",
+          validateOnly: options.validateOnly === true,
         }),
         ctx,
       );
@@ -704,6 +718,13 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
         "Operation dispatch is temporarily unavailable",
         502,
       );
+    }
+    if (options.validateOnly && response.ok) {
+      // 204 is the boundary's "valid"; any other success would mean the route ran.
+      if (response.status !== 204) {
+        throw new AgentDispatchError("validate_only_unsupported", "The operation ran instead of validating", 500);
+      }
+      return { operationId: operation.operationId, status: 204, ok: true, requestId, contentType: null, data: null };
     }
     auditStatus = response.status;
     auditOutcome = response.ok ? "success" : response.status === 401 || response.status === 403
@@ -771,7 +792,8 @@ export async function dispatchOperationAs<P extends OperationPrincipal>(
     throw dispatchError;
   } finally {
     try {
-      await authority.writeAudit({
+      // A validation check is not a call: the call it precedes is audited.
+      if (!options.validateOnly) await authority.writeAudit({
         ...authority.auditActor(principal),
         operationId: operation.operationId,
         risk: operation.risk,

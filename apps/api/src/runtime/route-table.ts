@@ -168,7 +168,7 @@ export const ROUTE_TABLE = [
   // /admin/resources, served with the theme, navigation and other content.
   { mount: "/admin/resources", router: "adminResourceThemeRoutes", group: "admin-content", prefixes: ["/admin/resources/theme"] },
   { mount: "/admin/resources", router: "adminResourceMenuRoutes", group: "admin-content", prefixes: ["/admin/resources/menus"] },
-  { mount: "/admin/resources", router: "adminResourceCatalogContentRoutes", group: "admin-content", prefixes: ["/admin/resources/categories", "/admin/resources/collections"] },
+  { mount: "/admin/resources", router: "adminResourceCatalogContentRoutes", group: "admin-content", prefixes: ["/admin/resources/categories", "/admin/resources/collections", "/admin/resources/brands", "/admin/resources/pages"] },
   { mount: "/admin/translations", router: "adminTranslationRoutes", group: "admin-content" },
   { mount: "/admin/search", router: "adminSearchRoutes", group: "admin-dashboard" },
   { mount: "/admin/analytics", router: "adminAnalyticsRoutes", group: "admin-dashboard" },

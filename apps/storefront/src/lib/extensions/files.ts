@@ -9,6 +9,7 @@
 import { INTERNAL_SERVICE_ORIGIN } from "@scalius/shared/platform-config";
 import { parseStorefrontExtensionPath, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
 import { BUNDLED_STOREFRONT_EXTENSIONS } from "@/extensions/bundled.gen";
+import { backendFetch } from "./backend";
 
 export interface ExtensionFile {
   bytes: Uint8Array;
@@ -53,10 +54,8 @@ export async function readExtensionFile(
   const key = extensionFileCacheKey(store, pluginId, release, path);
   const cached = await cache?.match(key).catch(() => undefined);
   if (cached?.ok) return { bytes: new Uint8Array(await cached.arrayBuffer()), contentType };
-  if (!env.BACKEND_API) return null;
-  const url = `${INTERNAL_SERVICE_ORIGIN}/api/v1/storefront/extensions/${encodeURIComponent(pluginId)}/${release}?path=${encodeURIComponent(path)}`;
-  const response = await env.BACKEND_API.fetch(new Request(url));
-  if (!response.ok) return null;
+  const response = await backendFetch(env, `/api/v1/storefront/extensions/${encodeURIComponent(pluginId)}/${release}?path=${encodeURIComponent(path)}`);
+  if (!response?.ok) return null;
   const bytes = new Uint8Array(await response.arrayBuffer());
   await cache?.put(key, new Response(bytes, { headers: { "Content-Type": contentType, "Cache-Control": IMMUTABLE } })).catch(() => undefined);
   return { bytes, contentType };

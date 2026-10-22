@@ -48,6 +48,7 @@ import {
     reconcileVariantLowStockAlerts,
     assertSkusFree,
 } from "./variants";
+import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
 import {
     executeProductAggregateMutationBatch,
     isProductAggregateRevisionConflict,
@@ -77,7 +78,7 @@ const matrixVariantInputSchema = z.object({
         .min(1)
         .max(MAX_PRODUCT_OPTION_AXES),
     imageId: z.string().trim().min(10).max(80)
-        .regex(/^pmed_[A-Za-z0-9_-]+$/u)
+        .regex(/^pmed_[A-Za-z0-9_-]+$/u, "Expected the pmed_ id of one of this product's media items (media[].id), or null for the featured image.")
         .nullable(),
     sku: z.string().trim().min(3).max(100),
     price: catalogMoneySchema,
@@ -720,11 +721,19 @@ export async function planProductOptionMatrix(
         }
     }
 
+    // A product getting its first option hands its one SKU's barcode to a new
+    // row (printed labels keep scanning); the retiring SKU lets go of it below.
+    const simpleSku = existingVariants.length > 0 && existingVariants.every((variant) => variant.isDefault)
+        ? existingVariants[0]!
+        : undefined;
+    const simpleBarcodeKey = getBarcodeIdentityKey(simpleSku?.barcode ?? null);
+    const handsBarcode = simpleBarcodeKey !== null && normalizedVariants.some((variant) =>
+        !variantById.has(variant.id) && getBarcodeIdentityKey(variant.barcode) === simpleBarcodeKey);
     await assertUniqueVariantBarcodes(db, normalizedVariants.map((variant) => ({
         id: variantById.has(variant.id) ? variant.id : undefined,
         barcode: variant.barcode,
         barcodeType: variant.barcodeType,
-    })));
+    })), handsBarcode ? new Set([simpleSku!.id]) : undefined);
 
     const finalSkuOwner = new Map(
         normalizedVariants.map((variant) => [
@@ -827,6 +836,12 @@ export async function planProductOptionMatrix(
                     ? isNull(productVariants.deletedAt)
                     : not(isNull(productVariants.deletedAt)),
             )));
+    }
+
+    if (handsBarcode) {
+        statements.push(db.update(productVariants)
+            .set({ barcode: null, barcodeType: null, updatedAt: sql`unixepoch()` })
+            .where(and(eq(productVariants.id, simpleSku!.id), eq(productVariants.isDefault, true))));
     }
 
     // Release partial unique indexes before reordering. Definition positions
@@ -1146,14 +1161,33 @@ export async function saveProductOptionMatrix(
         .get();
     if (!product) throw new NotFoundError("Product not found");
     const plan = await planProductOptionMatrix(db, productId, input, { isActive: product.isActive, adminUserId });
+    const { aggregateRevision } = await commitProductOptionMatrixPlan(db, productId, expectedAggregateRevision, plan);
+    return { aggregateRevision };
+}
 
+/**
+ * Writes a planned matrix save in one guarded aggregate batch (the revision
+ * advances once) and reconciles the low-stock alerts of the SKUs it touched.
+ */
+export async function commitProductOptionMatrixPlan(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    plan: ProductOptionMatrixPlan,
+): Promise<{ aggregateRevision: number }> {
     let result;
     try {
         result = await executeProductAggregateMutationBatch(
             db,
             productId,
             expectedAggregateRevision,
-            plan.statements,
+            [
+                ...plan.statements,
+                // The rows carry every price: a product discount would reprice the variants without their own.
+                db.update(products)
+                    .set({ discountType: "percentage", discountBps: 0, discountAmountMinor: 0 })
+                    .where(and(eq(products.id, productId), sql`(${products.discountBps} <> 0 OR ${products.discountAmountMinor} <> 0)`)),
+            ],
         );
     } catch (error) {
         const conflict = optionMatrixBatchConflict(error);

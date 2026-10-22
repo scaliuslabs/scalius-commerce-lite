@@ -219,8 +219,8 @@ interface Env {
   FRONT_PROXY_SECRET?: string;
   IDENTITY_HANDOFF_SECRET?: string;
 
-  // Resolved at Worker entry from Platform settings (dashboard -> Settings ->
-  // System -> Platform). Never Wrangler vars.
+  // Resolved at Worker entry from Platform settings (dashboard -> Settings >
+  // Store details > Web addresses). Never Wrangler vars.
   PLATFORM_CONFIG?: import("@scalius/shared/platform-config").PlatformConfig;
   STOREFRONT_URL?: string;
   PUBLIC_API_BASE_URL?: string;

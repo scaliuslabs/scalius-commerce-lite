@@ -60,7 +60,7 @@ type Listing = StorefrontThemeBlocks["listing"];
 /** What most templates' listings share; each template states only where it departs. */
 const LISTING_DEFAULTS = {
   searchLayout: "same",
-  descriptionPlacement: "below",
+  descriptionPlacement: "above",
   surface: "muted",
   band: "standard",
   phoneBar: "standard",

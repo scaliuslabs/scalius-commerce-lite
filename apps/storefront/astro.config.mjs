@@ -10,15 +10,23 @@ import { partytownConfig } from "./src/lib/partytown-config.ts";
 import { isAbsolute } from "node:path";
 import cloudflare from "@astrojs/cloudflare";
 import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
-import { devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
+import { devApiWorkerName, devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
 import { writeDevWranglerConfig } from "../../scripts/dev-secrets.mjs";
+import { pluginSandboxEnabled, readLockfile } from "../../scripts/plugin-build.mjs";
 
 const persistStatePath = devStatePath(process.env.SCALIUS_WRANGLER_STATE);
 // `astro dev` runs a dev copy of wrangler.jsonc that declares the one
 // installed secret, so Wrangler binds SCALIUS_SECRET from .dev.vars or, when
 // that file is absent, from the process env, and nothing else from either.
+// With the plugin sandbox on (`pnpm plugin sandbox on` or
+// SCALIUS_PLUGIN_SANDBOX=1) it also gets the Worker Loader, like the API, so
+// uploaded apps' storefront parts draw locally as they do on a Paid deploy.
 const devWranglerConfig = process.argv.includes("dev")
-  ? writeDevWranglerConfig(new URL("./wrangler.jsonc", import.meta.url), ["SCALIUS_SECRET"])
+  ? writeDevWranglerConfig(new URL("./wrangler.jsonc", import.meta.url), ["SCALIUS_SECRET"], {
+      // The SSR service binding (media, API reads) reaches this stack's API worker.
+      services: { BACKEND_API: devApiWorkerName() },
+      workerLoader: pluginSandboxEnabled(readLockfile()),
+    })
   : undefined;
 
 /** The shared Wrangler state; scripts/dev.sh exports it absolute. */

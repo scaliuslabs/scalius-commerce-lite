@@ -1,4 +1,4 @@
-// Reads an uploaded app package (docs/platform/PLUGINS.md, "Upload"): a ZIP
+// Reads an uploaded app package (packages/plugin-sdk/docs/apps.md, "Upload"): a ZIP
 // file holding what `pnpm plugin pack` writes, `manifest.json`, `plugin.js`,
 // `assets/*` and, when signed, `signature.json`. Only the ZIP features an
 // archiver writes for such a folder are read: stored or deflated entries,

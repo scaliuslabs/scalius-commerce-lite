@@ -7,7 +7,7 @@
  * On a phone the list opens as a full-height sheet with the search box on
  * top. Choosing closes the list and fires `change` on the select.
  */
-import { rankPlaces } from "./location-search";
+import { placeDisplayName, rankPlaces } from "./location-search";
 
 export interface LocationComboboxCopy {
   /** "No match for {query}". */
@@ -154,7 +154,7 @@ export function enhanceLocationCombobox(
       item.setAttribute("aria-selected", String(selected));
       item.dataset.value = choice.id;
       item.className = `flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 text-base text-foreground sm:min-h-10 sm:px-3 sm:text-sm sm:hover:bg-muted/60 ${selected ? "font-semibold" : ""}`;
-      item.textContent = choice.name;
+      item.textContent = placeDisplayName(choice.name);
       if (selected) {
         const check = doc.createElement("span");
         check.setAttribute("aria-hidden", "true");
@@ -210,7 +210,7 @@ export function enhanceLocationCombobox(
     const changed = choice.id !== select.value;
     select.value = choice.id;
     closeList();
-    input.value = choice.name;
+    input.value = placeDisplayName(choice.name);
     if (changed) select.dispatchEvent(new Event("change", { bubbles: true }));
   };
 

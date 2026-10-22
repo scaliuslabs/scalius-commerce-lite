@@ -282,6 +282,8 @@ export async function assertUniqueVariantBarcodes(
         barcode: string | null;
         barcodeType: BarcodeType | null;
     }>,
+    /** SKUs the same batch takes the barcode from (a simple SKU handing it to its first variant). */
+    releasing?: ReadonlySet<string>,
 ): Promise<void> {
     const keyedCandidates = candidates.flatMap((candidate, index) => {
         const key = getBarcodeIdentityKey(candidate.barcode);
@@ -307,7 +309,7 @@ export async function assertUniqueVariantBarcodes(
         .where(productVariantBarcodeIdentityIn([...ownerByKey.keys()]));
     for (const row of rows) {
         const rowKey = getBarcodeIdentityKey(row.barcode);
-        if (!rowKey) continue;
+        if (!rowKey || releasing?.has(row.id)) continue;
         const plannedRow = candidateById.get(row.id);
         if (plannedRow && plannedRow.key !== rowKey) continue;
         if (ownerByKey.get(rowKey) !== row.id) {

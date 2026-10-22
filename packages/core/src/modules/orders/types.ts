@@ -516,6 +516,8 @@ export interface CreateStorefrontOrderIdentity {
 export interface CreateStorefrontOrderCustomerIdentity {
     customerId: string;
     source: "authenticated";
+    /** The account is tax-exempt (read with the session); absent or null: it pays tax. */
+    taxExemption?: { exemptionId: string | null } | null;
 }
 
 export interface CreateStorefrontOrderResult {

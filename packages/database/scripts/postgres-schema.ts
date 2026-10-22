@@ -339,7 +339,98 @@ export function compileSqliteDdlForPostgres(sql: string): string {
   if (state !== "normal" && state !== "line") {
     throw new Error("Unterminated SQLite DDL literal or comment.");
   }
-  return conversationSearchPostgresCollation(output.replace(/\),\s*0\)\s*\)/g, "), false))"));
+  return conversationSearchPostgresCollation(aliasDerivedTables(output.replace(/\),\s*0\)\s*\)/g, "), false))")));
+}
+
+/** Words that may follow a derived table without being its alias. */
+const DERIVED_TABLE_FOLLOWERS = new Set([
+  "where", "group", "order", "limit", "offset", "union", "except", "intersect", "join", "inner", "left",
+  "right", "full", "cross", "natural", "on", "using", "having", "window", "returning", "for", "then",
+  "else", "end", "when", "and", "or",
+]);
+
+/** The index just past the quoted run that starts at `start` (a doubled quote is part of it). */
+function quotedRunEnd(sql: string, start: number): number {
+  const quote = sql[start];
+  let cursor = start + 1;
+  while (cursor < sql.length) {
+    if (sql[cursor] === quote) {
+      if (sql[cursor + 1] === quote) cursor += 2;
+      else return cursor + 1;
+    } else cursor += 1;
+  }
+  return sql.length;
+}
+
+/**
+ * Names every unnamed derived table (`FROM (SELECT ...)`, `JOIN (SELECT ...)`)
+ * of compiled PostgreSQL SQL. SQLite and PostgreSQL 16+ accept one without an
+ * alias; PostgreSQL 15 and older reject it ("subquery in FROM must have an
+ * alias"), at parse time for DDL and at first execution inside a trigger
+ * function, so one compiled form must carry the name to run on every
+ * supported server.
+ */
+export function aliasDerivedTables(sql: string): string {
+  const open: boolean[] = [];
+  let output = "";
+  let cursor = 0;
+  // The last two tokens: `IS [NOT] DISTINCT FROM (SELECT ...)` compares, it reads no table.
+  let previous = "";
+  let earlier = "";
+  const remember = (token: string) => {
+    earlier = previous;
+    previous = token;
+  };
+  let aliases = 0;
+  while (cursor < sql.length) {
+    const character = sql[cursor]!;
+    if (character === "'" || character === '"') {
+      const end = quotedRunEnd(sql, cursor);
+      output += sql.slice(cursor, end);
+      cursor = end;
+      remember(character);
+      continue;
+    }
+    if ((character === "-" && sql[cursor + 1] === "-") || (character === "/" && sql[cursor + 1] === "*")) {
+      const close = character === "-" ? sql.indexOf("\n", cursor) : sql.indexOf("*/", cursor + 2);
+      const end = close === -1 ? sql.length : character === "-" ? close : close + 2;
+      output += sql.slice(cursor, end);
+      cursor = end;
+      continue;
+    }
+    if (/[A-Za-z_]/.test(character)) {
+      let end = cursor + 1;
+      while (end < sql.length && /[A-Za-z0-9_$]/.test(sql[end]!)) end += 1;
+      remember(sql.slice(cursor, end).toLowerCase());
+      output += sql.slice(cursor, end);
+      cursor = end;
+      continue;
+    }
+    if (character === "(") {
+      const first = /^\s*([A-Za-z_]+)/.exec(sql.slice(cursor + 1))?.[1]?.toLowerCase();
+      const tableClause = previous === "join" || (previous === "from" && earlier !== "distinct");
+      open.push(tableClause && (first === "select" || first === "with" || first === "values"));
+      output += character;
+      cursor += 1;
+      remember(character);
+      continue;
+    }
+    if (character === ")") {
+      output += character;
+      cursor += 1;
+      remember(character);
+      if (open.pop()) {
+        const next = /^\s*("|[A-Za-z_][A-Za-z0-9_$]*)?/.exec(sql.slice(cursor))?.[1];
+        const named = next === '"' || (next !== undefined && !DERIVED_TABLE_FOLLOWERS.has(next.toLowerCase()));
+        if (!named) output += ` AS "derived_${(aliases += 1)}"`;
+      }
+      continue;
+    }
+    if (!/\s/.test(character)) remember(character);
+    output += character;
+    cursor += 1;
+  }
+  return output;
 }
 
 function splitTriggerStatements(body: string): readonly string[] {

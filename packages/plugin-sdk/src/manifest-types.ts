@@ -79,7 +79,7 @@ type FeatureGroups<M> = M extends { features?: infer F } ? (Values<NonNullable<F
 /** A setting is always there when it has a default and no feature can switch it off. */
 type Always<F, M> = F extends { default: unknown } ? (F extends { group: FeatureGroups<M> } ? false : true) : false;
 
-/** Settings by key from a settings array (`manifest.settings`, a section's or block's `settings`). */
+/** Settings by key from a settings array (`manifest.settings`, a section's, component's or skin's `settings`). */
 export type SettingsOf<Fields, M = unknown> =
   IsLiteral<Values<Fields> extends { key: infer K } ? K : string> extends true
     ? {

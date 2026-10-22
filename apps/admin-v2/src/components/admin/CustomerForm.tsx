@@ -43,6 +43,9 @@ import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
 import { CustomerPaymentMethodsCard } from "./customers/CustomerPaymentMethodsCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
+import { CustomerEraseCard } from "./customers/CustomerEraseCard";
+import { shownText } from "~/lib/erased-text";
+import { CustomerTaxExemptionCard } from "./customers/CustomerTaxExemptionCard";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
 
@@ -57,6 +60,8 @@ interface CustomerFormProps {
     relatedObjects?: RelatedObjectRecord[];
     deletedAt: unknown;
     tags?: readonly string[];
+    taxExempt?: boolean;
+    taxExemptionId?: string | null;
     addresses?: CustomerDto["addresses"];
   };
 }
@@ -117,10 +122,14 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
   const t = useMessages(customerPageMessages);
   const ta = useMessages(customerAddressesMessages);
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isSuperAdmin } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
   // A deleted record (in Trash, or merged into an account) opens read-only.
   const trashed = isEdit && Boolean(record?.deletedAt);
+  // Erased personal data: read-only for good. A Super Admin may erase any other record
+  // except one merged into an account (it is erased through that account).
+  const erased = isEdit && Boolean(record?.erasedAt);
+  const canErase = isEdit && isSuperAdmin && !erased && !record?.mergedInto;
   const canSave = !trashed && (isEdit ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT) : canCreate);
   const canViewHistory = isEdit && hasPermission(PERMISSIONS.CUSTOMERS_VIEW_HISTORY);
   const [phoneConflict, setPhoneConflict] = useState<CustomerPhoneConflict | null>(null);
@@ -192,7 +201,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                 <Input required autoComplete="off" {...field} />
               </Field>
             ) : (
-              <ReadOnlyValue label={t("name")} value={defaultValues?.name} help={record?.kind === "guest" ? t("guestNameHint") : undefined} />
+              <ReadOnlyValue label={t("name")} value={shownText(defaultValues?.name, t("erasedValue"))} help={record?.kind === "guest" && !erased ? t("guestNameHint") : undefined} />
             )}
           />
           <FormField
@@ -266,6 +275,12 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />
           <CustomerPaymentMethodsCard customerId={defaultValues.id} canEdit={canSave} />
           <CustomerTagsCard customerId={defaultValues.id} tags={record?.tags ?? []} canEdit={canSave} />
+          <CustomerTaxExemptionCard
+            customerId={defaultValues.id}
+            taxExempt={record?.taxExempt ?? false}
+            taxExemptionId={record?.taxExemptionId ?? null}
+            canEdit={canSave}
+          />
           <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
           <RelatedObjectsCard records={record?.relatedObjects} />
         </>
@@ -273,6 +288,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       {isEdit && defaultValues?.id && !trashed ? (
         <fieldset disabled={!canSave} className="min-w-0 empty:hidden"><AppResourceCards target="customer" id={defaultValues.id} /></fieldset>
       ) : null}
+      {canErase && defaultValues?.id && record ? <CustomerEraseCard customerId={defaultValues.id} name={customerTitle(record, t).title} /> : null}
     </>
   );
 

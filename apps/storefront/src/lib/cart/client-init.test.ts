@@ -299,6 +299,10 @@ describe("initCartFunctionality", () => {
       requestedQuantity: 3,
       availableQuantity: 1,
     };
+    // The line asks for 3 of the 1 left (an answer the line already follows is not shown).
+    const threeInCart = { ...cartState, items: { [CART_LINE_KEY]: { ...CART_ITEM, quantity: 3 } }, totalItems: 3, totalAmount: 300 };
+    localStorage.setItem("cart:v3", JSON.stringify(threeInCart));
+    cartStore.set(threeInCart);
     await initCartFunctionality();
     const line = () => document.querySelector("#cartItems li")!;
     const controls = line().querySelector(".mt-2")!;

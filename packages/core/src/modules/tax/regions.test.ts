@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AppProviders, BoundProvider } from "../../integrations/provider-port";
 import { calculateTaxQuote, TAX_UNAVAILABLE_REASON } from "./calculator";
 import { quoteTax, SYSTEM_TAX_PROVIDER } from "./provider";
-import { matchTaxRegions, ratesForTaxClass, taxAddressSource, taxProviderIdFor } from "./region-match";
+import { matchTaxRegions, ratesForTaxClass, taxAddressSource, taxExemptionApplies, taxProviderIdFor } from "./region-match";
 import { marketTaxInclusionFromSql, pricesIncludeTaxFor } from "./tax.service";
 import { orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "./snapshot";
 import type { CalculateTaxQuoteInput, TaxRateDefinition, TaxRegionDefinition } from "./types";
@@ -239,6 +239,56 @@ describe("the taxed address (Shopify's rule, migration 0119)", () => {
         expect(orderTaxSnapshotColumns(billed).addressSource).toMatchObject({ queryChunks: [expect.objectContaining({ value: ["'billing'"] })] });
         const origin = calculateTaxQuote(input({ destination: { city: null, zone: null, area: null } }));
         expect(origin.jurisdiction.addressSource).toBe("origin");
+    });
+});
+
+describe("tax-exempt buyers (audit I9)", () => {
+    const exempt = { id: "cust_b2b", exemption: { exemptionId: "VAT-GB-123" } };
+    const gb = { city: null, zone: null, area: null, countryCode: "GB", postalCode: "SW1A 1AA" };
+
+    it("is one rule in region-match: no rates for an exempt buyer, the usual ones otherwise", () => {
+        const chain = matchTaxRegions({ country: "US", adminArea: "CA" }, REGIONS);
+        expect(ratesForTaxClass(chain, input().rates, "std", { exempt: true })).toEqual({ rates: [], regionId: null });
+        expect(ratesForTaxClass(chain, input().rates, "std", { exempt: false }).rates.map((entry) => entry.id)).toEqual(["ca_state"]);
+        expect(taxExemptionApplies(null)).toBe(false);
+    });
+
+    it("charges an exempt buyer no tax by the system provider, on lines and shipping, and records the exemption", () => {
+        const taxed = calculateTaxQuote(input({ customer: { id: "cust_retail", exemption: null } }));
+        expect(taxed.taxMinor).toBeGreaterThan(0);
+        expect(taxed.exemption).toBeNull();
+        const quote = calculateTaxQuote(input({ customer: exempt }));
+        expect(quote).toMatchObject({ taxMinor: 0, totalMinor: 11_000, shippingTaxed: false, exemption: { exemptionId: "VAT-GB-123" } });
+        expect(quote.lines[0]!.components).toEqual([]);
+        // Prices that include tax stay as listed: nothing is taken off them.
+        expect(calculateTaxQuote(input({ customer: exempt, pricesIncludeTax: true }))).toMatchObject({ taxMinor: 0, totalMinor: 11_000 });
+        // A guest never is.
+        expect(calculateTaxQuote(input()).exemption).toBeNull();
+        // The order snapshot keeps it.
+        expect(orderTaxSnapshotColumns(quote)).toMatchObject({ taxExemptionId: "VAT-GB-123" });
+        expect(orderTaxSnapshotColumns(taxed)).toMatchObject({ taxExemptionId: null });
+    });
+
+    it("tells an app provider and refuses an answer that still charges an exempt buyer", async () => {
+        const answer = (taxMinor: number) => vi.fn(async (_input: unknown) => ({
+            calculationId: "calc_x",
+            lines: [{ lineId: "l1", taxes: taxMinor ? [{ taxMinor, rateBps: 2_000, jurisdiction: "GB" }] : [] }],
+            shipping: [],
+        }));
+        const appsOf = (calculate: ReturnType<typeof answer>): AppProviders => ({
+            resolve: async () => ({ provider: { id: "acme.tax:avalara", label: "Avalara", calculate }, issue: null }) as never,
+        });
+        const honoured = answer(0);
+        const quote = await quoteTax(input({ currencyCode: "GBP", priceIncrementMinor: 100, destination: gb, customer: exempt }), { apps: appsOf(honoured) });
+        expect((honoured.mock.calls[0]![0] as { customer: unknown }).customer).toEqual({ id: "cust_b2b", exempt: true, exemptionId: "VAT-GB-123" });
+        expect(quote).toMatchObject({ taxMinor: 0, exemption: { exemptionId: "VAT-GB-123" }, jurisdiction: { calculationId: "calc_x" } });
+        await expect(quoteTax(input({ currencyCode: "GBP", priceIncrementMinor: 100, destination: gb, customer: exempt }), { apps: appsOf(answer(2_000)) }))
+            .rejects.toMatchObject({ details: { reason: TAX_UNAVAILABLE_REASON } });
+        // A buyer who pays tax is named, not exempt; the app's tax stands.
+        const retail = answer(2_000);
+        const charged = await quoteTax(input({ currencyCode: "GBP", priceIncrementMinor: 100, destination: gb, customer: { id: "cust_retail", exemption: null } }), { apps: appsOf(retail) });
+        expect((retail.mock.calls[0]![0] as { customer: unknown }).customer).toEqual({ id: "cust_retail", exempt: false });
+        expect(charged.taxMinor).toBe(2_000);
     });
 });
 

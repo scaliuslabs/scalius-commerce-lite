@@ -874,7 +874,12 @@ describe("reviewed agent workflow resolver", () => {
     ["daily rolling day", "Give me the daily operations snapshot for the last 1 day with orders and checkout readiness.", "dashboard.daily-operations-snapshot"],
   ])("asks instead of coercing the %s window", (_window, prompt, routeId) => {
     const resolution = resolveWorkflow({ prompt, surface: "dashboard" });
-    // A vague "report" may also be offered the analytics reports, which take any range.
+    // A vague "report" may also be offered the analytics reports, which take any range,
+    // or read them outright: a read-only plan over any range coerces nothing.
+    if (_window === "vague cooperative" && resolution.kind === "plan") {
+      expect(resolution.plan).toMatchObject({ kind: "read", routeIds: ["dashboard.sales-analytics"], requiresConfirmation: false });
+      return;
+    }
     expect(resolution).toMatchObject({
       kind: "choices",
       disposition: "ask",

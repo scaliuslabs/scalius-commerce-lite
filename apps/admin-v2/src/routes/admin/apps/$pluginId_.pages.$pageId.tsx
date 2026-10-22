@@ -52,7 +52,8 @@ export const Route = createFileRoute("/admin/apps/$pluginId_/pages/$pageId")({
   component: AppPageRoute,
 });
 
-function Unavailable() {
+/** An app page of an inactive app or feature: its own page is where it is turned on. */
+function Unavailable({ pluginId }: { pluginId: string }) {
   const t = useMessages(appUiMessages);
   return (
     <>
@@ -62,7 +63,7 @@ function Unavailable() {
           <p className="text-body text-muted-foreground">{t("pageUnavailableBody")}</p>
           <div className="pt-3">
             <Button variant="outline" asChild>
-              <Link to="/admin/apps">{t("backToApps")}</Link>
+              <Link to="/admin/apps/$pluginId" params={{ pluginId }}>{t("goToApp")}</Link>
             </Button>
           </div>
         </div>
@@ -130,7 +131,7 @@ function AppPageRoute() {
   const app = found ? localizedSurfaces(found, locale) : undefined;
   const raw = found?.pages.find((entry) => entry.id === pageId);
   const page = found && raw ? localizedAppPage(found, raw, locale) : undefined;
-  if (!app || !page) return <Unavailable />;
+  if (!app || !page) return <Unavailable pluginId={pluginId} />;
   if (page.tabs) return <TabbedAppPage app={app} page={page} tabs={page.tabs} search={search} />;
   return (
     <PluginSurface

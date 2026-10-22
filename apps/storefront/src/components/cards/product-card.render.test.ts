@@ -451,6 +451,9 @@ describe("the one product card", () => {
     expect(text(fact(used, "details"))).toBe("400 gm · Used");
     const unknown = await renderOne(themeWith({}), { ...PRODUCTS.allFacts, productCondition: null });
     expect(text(fact(unknown, "details"))).toBe("400 gm");
+    // "New" is the default, and on a card it would read as a new-arrival badge.
+    const fresh = await renderOne(themeWith({}), { ...PRODUCTS.allFacts, productCondition: "new" });
+    expect(text(fact(fresh, "details"))).toBe("400 gm");
     const bare = await renderOne(themeWith({}), { productCondition: "used" });
     expect(text(fact(bare, "details"))).toBe("Used");
   });

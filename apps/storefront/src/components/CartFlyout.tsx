@@ -32,7 +32,7 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
@@ -46,6 +46,7 @@ import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/quot
 import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
 import { groupCartRuleErrors } from "@/lib/cart/rule-errors";
+import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
@@ -208,7 +209,15 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
     };
   }, [cart.items, cart.discountCodes, isOpen, revision]);
   const hasItems = Object.keys(cart.items).length > 0;
-  return { discounts: hasItems ? discounts : null, issues, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, recheck };
+  // An "only N left" the line already follows (capped after the add) is not shown again.
+  const current = useMemo(() => {
+    const byVariant = quantitiesByVariant(cart.items);
+    return Object.fromEntries(Object.entries(issues).filter(([key, issue]) => {
+      const line = cart.items[key];
+      return !line || !isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity);
+    }));
+  }, [issues, cart.items]);
+  return { discounts: hasItems ? discounts : null, issues: current, ruleErrors, buyerUi: hasItems ? buyerUi : NO_BLOCKS, recheck };
 }
 
 /**
@@ -800,7 +809,7 @@ export default function CartFlyout({ onReady }: Props) {
 
         {/* Savings and offers the cart already qualifies for */}
         {cart.totalItems > 0 && discounts && (discounts.discounts.length > 0 || discounts.offers.length > 0) && (
-          <div className="shrink-0 space-y-1 border-t border-border bg-card px-4 py-2 text-sm">
+          <div className="shrink-0 space-y-1 border-t border-border bg-card px-3 py-2 text-sm sm:px-5">
             {discounts.discounts.map((line, position) => ({ line, key: discountLineKey(line, position) })).filter(({ line }) => line.amount > 0).map(({ line, key }) => (
               <div key={key} className="flex justify-between gap-3 text-primary">
                 <span className="min-w-0">{formatDiscountLineLabel(copy.discount, line)}</span>

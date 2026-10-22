@@ -8,7 +8,7 @@ import {
   PRODUCT_CONDITION_VALUES,
   type ProductCondition,
 } from "@scalius/shared/product-condition";
-import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import { formatNumber, translate } from "~/i18n";
 import type { BuyerInputDraft } from "./buyer-inputs";
@@ -50,7 +50,7 @@ export const productFormSchema = z.object({
   /** Empty until the merchant types one; a draft may be saved without it. */
   price: z.number(msg("issueNotANumber"))
     .min(0, msg("priceNegative"))
-    .max(MAX_PRODUCT_PRICE, { error: () => translate(productMessages, "issueTooLarge", { max: formatNumber(MAX_PRODUCT_PRICE) }) })
+    .max(MAX_MAJOR_AMOUNT, { error: () => translate(productMessages, "issueTooLarge", { max: formatNumber(MAX_MAJOR_AMOUNT) }) })
     .nullable(),
   /** Optional, as in Shopify: "" saves the product without one. */
   categoryId: z.string(),

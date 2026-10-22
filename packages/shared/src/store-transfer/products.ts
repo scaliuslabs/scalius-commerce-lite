@@ -11,10 +11,10 @@
 import { z } from "zod";
 import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "../handle";
 import { PRODUCT_CONDITION_VALUES } from "../product-condition";
+import { MAX_MAJOR_AMOUNT } from "../money";
 import {
   MAX_PRODUCT_OPTION_AXES,
   MAX_PRODUCT_OPTION_COMBINATIONS,
-  MAX_PRODUCT_PRICE,
   MAX_SKU_STOCK,
   MAX_SKU_WEIGHT_GRAMS,
   normalizeProductOptionIdentity,
@@ -43,7 +43,7 @@ export const CATEGORY_PATH_MAX = 4;
 export const SKU_MIN = 3;
 export const SKU_MAX = 100;
 
-const money = z.number().finite().min(0).max(MAX_PRODUCT_PRICE);
+const money = z.number().finite().min(0).max(MAX_MAJOR_AMOUNT);
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 const nullableText = (max: number) => z.string().trim().max(max).nullable()
   .transform((value) => (value ? value : null));

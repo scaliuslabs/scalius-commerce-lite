@@ -12,6 +12,7 @@ import {
   storefrontSettingAt,
   type ResolvedStorefrontTheme,
   type StorefrontPlatformSection,
+  type StorefrontSkinRef,
 } from "@scalius/shared/storefront-theme";
 import { useMessages } from "~/i18n";
 import { themeSettingMessages } from "~/i18n/theme-settings";
@@ -29,7 +30,7 @@ import { CartContent, CmsPageContent, HomePageSettings, LandingPageSettings } fr
 import { ProductAppBlocksSettings } from "./ProductAppBlocks";
 import { ProductMainSettings, ProductModuleSettings } from "./ProductPanels";
 import { AnnouncementSettings, FooterSettings, HeaderSettings } from "./ThemeSettingsPanel";
-import { AppSkinSettings } from "./AppSkinSettings";
+import { AppSkinSettings, SectionSkinSettings } from "./AppSkinSettings";
 
 export { AppSectionSettings } from "./AppSectionSettings";
 export { ThemeSettingsPanel } from "./ThemeSettingsPanel";
@@ -57,24 +58,33 @@ function useShownErrors(section: StorefrontPlatformSection, reveal: boolean) {
   return { errors, onBlur };
 }
 
-/** A platform section's own settings, with its blocks listed to open (they are rows of the tree too); a hero adds slides from Files here. */
-export function SectionPane({ section, media, canEdit, reveal, onSelectBlock, onChange }: {
+/**
+ * A platform section's own settings, with its blocks listed to open (they
+ * are rows of the tree too); a hero adds slides from Files here. Where an
+ * active app offers a design (skin) of the section type, the choice of
+ * design comes first.
+ */
+export function SectionPane({ section, media, apps, canEdit, reveal, onSelectBlock, onChange, onSkinChange }: {
   section: StorefrontPlatformSection;
   media: MediaPreviews;
+  apps: readonly ThemeApp[];
   canEdit: boolean;
   /** Show every error at once (the merchant asked where the problem is). */
   reveal: boolean;
   onSelectBlock: (id: string) => void;
   onChange: (settings: Settings) => void;
+  onSkinChange: (update: (current: StorefrontSkinRef | null) => StorefrontSkinRef | null) => void;
 }) {
   const { errors, onBlur } = useShownErrors(section, reveal);
   return (
     <div className="space-y-4" onBlurCapture={onBlur}>
-      <SectionSettingsForm key={section.id} section={section} media={media} errors={errors} onChange={onChange} />
-      <BlockLinks section={section} onSelectBlock={onSelectBlock} />
-      {section.type === "hero" && canEdit ? (
-        <HeroAddSlides slides={section.settings.slides} media={media} onChange={(slides) => onChange({ ...section.settings, slides })} />
-      ) : null}
+      <SectionSkinSettings section={section} apps={apps} media={media} onChange={onSkinChange}>
+        <SectionSettingsForm key={section.id} section={section} media={media} errors={errors} onChange={onChange} />
+        <BlockLinks section={section} onSelectBlock={onSelectBlock} />
+        {section.type === "hero" && canEdit ? (
+          <HeroAddSlides slides={section.settings.slides} media={media} onChange={(slides) => onChange({ ...section.settings, slides })} />
+        ) : null}
+      </SectionSkinSettings>
     </div>
   );
 }

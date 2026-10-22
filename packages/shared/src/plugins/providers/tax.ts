@@ -51,7 +51,17 @@ export const taxCalculateInputSchema = z.object({
   shippingMinor: providerMinorSchema,
   /** The shipping charge's tax class (the store's id); null: the store default. */
   shippingTaxCode: z.string().max(64).nullable().optional(),
-  customer: z.object({ id: providerRefSchema, exempt: z.boolean() }).strict().nullable(),
+  /**
+   * The buyer (a verified identity; null for a guest). `exempt`: the merchant
+   * marked them tax-exempt, so the answer must charge no tax (the platform
+   * refuses one that does); `exemptionId` is their certificate or
+   * registration number when one was given, to record the exempt sale.
+   */
+  customer: z.object({
+    id: providerRefSchema,
+    exempt: z.boolean(),
+    exemptionId: z.string().min(1).max(64).optional(),
+  }).strict().nullable(),
 }).strict();
 
 const taxLine = z.object({

@@ -39,6 +39,8 @@ export interface LocalApi {
     bulkDryRuns: Array<{ operationId: string; input: Value }>;
     /** Times bulk_runs.get was read; the second read finds the run done. */
     bulkRunReads: number;
+    /** The SKU codes each variants.lookup read asked for. */
+    skuLookups: string[][];
     batchWrites: number;
     /** The `scalius://store` resource body (currency and, when the store reports them, its decimal places). */
     store: { name: string; currency: string; decimals?: number; timeZone: string };
@@ -100,6 +102,10 @@ export function localSpec(): Record<string, unknown> {
         requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
         "x-scalius-agent": { idempotency: "supported" },
       }),
+      "/api/v1/admin/resources/variants/lookup": operation("dashboard.resources.variants.lookup", "post", "read", {
+        summary: "Find SKUs by their codes",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
+      }),
       "/api/v1/admin/resources/customers/bulk-tag": operation("dashboard.resources.customers.bulk_tag", "post", "write", {
         summary: "Add or remove tags on many customers",
         requestBody: { required: true, content: { "application/json": { schema: { type: "object" } } } },
@@ -119,6 +125,17 @@ export function localSpec(): Record<string, unknown> {
 }
 
 export const DEFAULT_STORE = { name: "Demo Store", currency: "BDT", decimals: 2, timeZone: "Asia/Dhaka" };
+
+/** The SKUs this store has: code (lower case) to id. */
+const SKU_IDS: Record<string, string> = { "ts-red-m": "var_1", "ts-red-l": "var_2" };
+const KNOWN_SKU_IDS = new Set(Object.values(SKU_IDS));
+
+/** A stock run over the body's items: an id this store has changes, any other is not_found. */
+function stockRun(body: Value, dryRun: boolean): Value {
+  const items = Array.isArray(body.items) ? body.items as Array<{ variantId?: unknown }> : [];
+  const failures = items.filter((item) => !KNOWN_SKU_IDS.has(String(item.variantId))).map((item) => ({ id: String(item.variantId), code: "not_found" }));
+  return { id: dryRun ? null : "bulk_bbbb", kind: "variants.set_stock", status: dryRun ? "preview" : "done", dryRun, total: items.length, processed: items.length, changed: items.length - failures.length, unchanged: 0, failed: failures.length, sample: [], failures };
+}
 
 const ORDERS = Array.from({ length: 7 }, (_, index) => ({ id: `ord_${index + 1}`, number: 1040 + index }));
 
@@ -155,7 +172,10 @@ function buildMcpServer(api: LocalApi): McpServer {
   }));
   server.registerTool("scalius_describe", { description: "describe", inputSchema: anyObject }, async (args) => result({
     ok: true,
-    operations: (args.ids as string[]).map((id) => ({ operationId: id, purpose: id, risk: id.endsWith("refund") ? "financial" : "read", inputs: {}, example: {} })),
+    // A workflow id (as scalius_search returns it) answers its steps; an operation id its contract.
+    operations: (args.ids as string[]).map((id) => id === "dashboard.order-refund"
+      ? { id, kind: "workflow", title: "Refund an order", purpose: "Refund an order", steps: ["dashboard.orders.payments", "dashboard.orders.refund"], rules: ["Read the payments first."], next: "Describe the steps for their inputs" }
+      : { operationId: id, purpose: id, risk: id.endsWith("refund") ? "financial" : "read", inputs: {}, example: {} }),
   }));
   server.registerTool("scalius_answer", { description: "answer", inputSchema: anyObject }, async () => result({
     ok: true,
@@ -173,6 +193,15 @@ function buildMcpServer(api: LocalApi): McpServer {
         data: { run: { id, kind: "variants.set_prices", status: done ? "done" : "running", dryRun: false, total: 300, processed: done ? 300 : 90, changed: done ? 298 : 90, unchanged: 0, failed: done ? 2 : 0, sample: [], failures: [] } },
         meta: { operationId: args.operationId, status: 200 },
       });
+    }
+    if (args.operationId === "dashboard.resources.variants.lookup") {
+      const skus = (((args.input as Value | undefined)?.body as Value | undefined)?.skus ?? []) as string[];
+      api.state.skuLookups.push(skus);
+      const variants = skus.flatMap((sku) => {
+        const id = SKU_IDS[sku.trim().toLowerCase()];
+        return id ? [{ id, productId: "prod_1", sku: sku.trim().toUpperCase(), trackInventory: true, onHand: 3, levels: [], stockVersion: 1, updatedAt: "2026-10-22T00:00:00.000Z" }] : [];
+      });
+      return result({ ok: true, data: { variants }, meta: { operationId: args.operationId, status: 200 } });
     }
     if (args.operationId !== "dashboard.orders.list") {
       return failure({ code: "operation_not_found", status: 404, message: "Operation is unavailable or not authorized", retryable: false, hint: "scalius_search" });
@@ -228,6 +257,10 @@ function buildMcpServer(api: LocalApi): McpServer {
       if (typeof args.operationId === "string" && bulkRuns.has(args.operationId)) {
         const body = (args.input as Value | undefined)?.body as Value | undefined;
         api.state.bulkDryRuns.push({ operationId: args.operationId, input: body ?? {} });
+        if (args.operationId === "dashboard.resources.variants.bulk_set_stock") {
+          // The server's native preview, shaped as scalius_write's dry run carries it.
+          return result({ ok: true, dryRun: true, written: false, operationId: args.operationId, support: "native", preview: { data: { run: stockRun(body ?? {}, true) } } });
+        }
         return result({ ok: true, dryRun: true, written: false, id: null, status: "preview", total: 2, changed: 2, ...(gated ? { confirmation: { ...confirmation, approvalRequired: true } } : {}) });
       }
       return result({ ok: true, dryRun: true, written: false, operationId: args.operationId, support: "none", validated: true, ...(gated ? { confirmation: { ...confirmation, approvalRequired: true } } : {}) });
@@ -257,6 +290,9 @@ function buildMcpServer(api: LocalApi): McpServer {
       }
       // A filter selects an unknown number of SKUs: this store's run is over 250, so it runs on after the response (202).
       const large = body.filter !== undefined;
+      if (args.operationId === "dashboard.resources.variants.bulk_set_stock") {
+        return result({ ok: true, data: { run: stockRun(body, false) }, meta: { operationId: args.operationId, requestId: "req_bulk", status: 200 } });
+      }
       return result({
         ok: true,
         data: { run: { id: large ? "bulk_aaaa" : "bulk_bbbb", kind: "variants.set_prices", status: large ? "running" : "done", dryRun: false, total: large ? 300 : 2, processed: large ? 90 : 2, changed: large ? 90 : 2, unchanged: 0, failed: 0, sample: [], failures: [] } },
@@ -297,7 +333,7 @@ export async function startLocalApi(): Promise<LocalApi> {
     origin: "",
     token: LOCAL_TOKEN,
     requests: [] as RecordedRequest[],
-    state: { refunds: [], products: [], approvals: new Map(), dialogs: 0, approvalOff: false, failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, batchWrites: 0, store: { ...DEFAULT_STORE } },
+    state: { refunds: [], products: [], approvals: new Map(), dialogs: 0, approvalOff: false, failNextProductCreate: 0, orders: ORDERS, bulkWrites: [], bulkDryRuns: [], bulkRunReads: 0, skuLookups: [], batchWrites: 0, store: { ...DEFAULT_STORE } },
     close: async () => undefined,
   } as LocalApi;
   const handler = createMcpHandler(() => buildMcpServer(api));

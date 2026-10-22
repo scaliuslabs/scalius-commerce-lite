@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 describe("enhanceLocationSelects", () => {
-  it("lists thanas by name for people: case and creation order don't matter", async () => {
+  it("lists thanas by name for people: case and creation order don't matter, and a courier's lower-case name reads capitalised", async () => {
     const root = renderFields();
     const load = vi.fn(async () => [
       { id: "z_banani", name: "R3 Banani" },
@@ -66,7 +66,7 @@ describe("enhanceLocationSelects", () => {
     choose("city", "city_dhaka");
     await vi.waitFor(() => expect(select("zone").disabled).toBe(false));
     expect(Array.from(select("zone").options).slice(1).map((option) => option.text))
-      .toEqual(["azampur (Uttara)", "Mirpur", "R3 Banani", "shampur"]);
+      .toEqual(["Azampur (Uttara)", "Mirpur", "R3 Banani", "Shampur"]);
   });
 
   it("forgets a thana the merchant removed: clears it, lists the rest, and reports the cleared address", async () => {

@@ -1,4 +1,4 @@
-// Plugin platform runtime state (docs/platform/PLUGINS.md, P1).
+// Plugin platform runtime state (packages/plugin-sdk/docs/apps.md, P1).
 //
 // `plugin_installations` is the authority for what may run: one row per
 // plugin with its validated manifest, the grant a Super Admin approved, its
@@ -116,6 +116,24 @@ export const pluginRegistrations = sqliteTable("plugin_registrations", {
         .references(() => pluginInstallations.pluginId, { onDelete: "cascade" }),
     /** Lower runs first among plugins at the same function point. */
     priority: integer("priority").notNull().default(100),
+    /**
+     * A function's circuit (migration 0179, `@scalius/shared/plugins/function-circuit`):
+     * failed answers (a throw, timeout, invalid answer or failed read) in the
+     * window that began at `circuit_window_at`; at the threshold the circuit
+     * opens until `circuit_open_until` and checkout applies the function's
+     * failure policy without calling the app. A good answer closes it. A
+     * re-registration (update, reactivation) starts closed.
+     */
+    circuitFailures: integer("circuit_failures").notNull().default(0),
+    circuitWindowAt: integer("circuit_window_at"),
+    circuitOpenUntil: integer("circuit_open_until"),
+    /**
+     * Set just before a sandboxed function runs and cleared when it answers
+     * (or fails): one still set long after the wall limit means the run never
+     * returned (it held its thread), and the next checkout stops the app
+     * instead of running it again.
+     */
+    circuitInflightAt: integer("circuit_inflight_at"),
 }, (table) => [
     primaryKey({ columns: [table.kind, table.name, table.pluginId] }),
     index("plugin_registrations_plugin_idx").on(table.pluginId),

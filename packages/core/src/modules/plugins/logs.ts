@@ -7,7 +7,7 @@
 import type { Database } from "@scalius/database/client";
 import { chunkRowsForD1, safeBatch } from "@scalius/database/client";
 import { pluginLogEntries, type PluginLogLevel } from "@scalius/database/schema";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 export const PLUGIN_LOG_RING_SIZE = 500;
 export const PLUGIN_LOG_MESSAGE_MAX = 500;
@@ -148,4 +148,64 @@ export async function listPluginLogs(
     fields: JSON.parse(row.fieldsJson) as Record<string, unknown>,
     createdAt: row.createdAt,
   }));
+}
+
+/** The id every log line written at or after `atMs` sorts from (ids are `plg_` + epoch milliseconds). */
+function logIdFloor(atMs: number): string {
+  return `plg_${String(Math.max(0, Math.floor(atMs))).padStart(13, "0")}`;
+}
+
+/** Whether the plugin's log holds this exact line (source and message) written at or after `sinceMs`. */
+export async function hasRecentPluginLogLine(
+  db: Database,
+  pluginId: string,
+  line: { source: string; message: string },
+  sinceMs: number,
+): Promise<boolean> {
+  const row = await db.select({ id: pluginLogEntries.id }).from(pluginLogEntries)
+    .where(and(
+      eq(pluginLogEntries.pluginId, pluginId),
+      gte(pluginLogEntries.id, logIdFloor(sinceMs)),
+      eq(pluginLogEntries.source, line.source),
+      eq(pluginLogEntries.message, line.message),
+    ))
+    .limit(1)
+    .get();
+  return row !== undefined;
+}
+
+/**
+ * Each plugin's newest line from a source family (`storefront:` incidents)
+ * written at or after `sinceMs`, newest first: one bounded index range per
+ * plugin (`plugin_id, id`), read one plugin after another.
+ */
+export async function newestPluginLogLines(
+  db: Database,
+  pluginIds: readonly string[],
+  sourcePrefix: string,
+  sinceMs: number,
+): Promise<Array<PluginLogLine & { pluginId: string }>> {
+  const found: Array<PluginLogLine & { pluginId: string }> = [];
+  for (const pluginId of pluginIds.slice(0, 90)) {
+    const row = await db.select().from(pluginLogEntries)
+      .where(and(
+        eq(pluginLogEntries.pluginId, pluginId),
+        gte(pluginLogEntries.id, logIdFloor(sinceMs)),
+        sql`substr(${pluginLogEntries.source}, 1, ${sourcePrefix.length}) = ${sourcePrefix}`,
+      ))
+      .orderBy(desc(pluginLogEntries.id))
+      .limit(1)
+      .get();
+    if (!row) continue;
+    found.push({
+      pluginId,
+      id: row.id,
+      level: row.level,
+      source: row.source,
+      message: row.message,
+      fields: JSON.parse(row.fieldsJson) as Record<string, unknown>,
+      createdAt: row.createdAt,
+    });
+  }
+  return found.sort((left, right) => (left.id < right.id ? 1 : -1));
 }

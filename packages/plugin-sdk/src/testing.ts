@@ -185,7 +185,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
   const emailKeys = new Set<string>();
-  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], risks: [] as unknown[] };
+  const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], releases: [] as unknown[], risks: [] as unknown[] };
   /** Customer roles the app granted, by customer id then role (the platform keeps them per app). */
   const roles = new Map<string, Map<string, { ref: string | null; grantedAt: string }>>();
   const liveCustomers = options.customers ? new Set(options.customers) : null;
@@ -486,6 +486,21 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (typeof hold.reason !== "string" || !hold.reason.trim() || hold.reason.length > 500) refuse("orders_invalid", "reason is text of 1 to 500 characters.");
       if (!sent.holds.some((entry) => (entry as { orderId: string }).orderId === hold.orderId)) sent.holds.push(hold);
     },
+    // Only the app's own hold; the first release advances the revision, a repeat changes nothing.
+    ordersRelease: async (input) => {
+      const release = copy(input) as { orderId?: unknown; expectedRevision?: unknown };
+      if (!permissions.has("orders.change_status")) refuse("orders_not_allowed", "Releasing holds needs the write_orders scope.");
+      if (typeof release.orderId !== "string" || release.orderId.length < 1 || release.orderId.length > 128) refuse("orders_invalid", "orderId is an order id.");
+      if (typeof release.expectedRevision !== "number" || !Number.isSafeInteger(release.expectedRevision) || release.expectedRevision < 1) {
+        refuse("orders_invalid", "expectedRevision is the order revision you read.");
+      }
+      if (!sent.holds.some((entry) => (entry as { orderId: string }).orderId === release.orderId)) refuse("orders_hold_not_found", "This app placed no hold on the order.");
+      const earlier = sent.releases.find((entry) => (entry as { orderId: string }).orderId === release.orderId) as { revision: number } | undefined;
+      if (earlier) return { revision: earlier.revision, replayed: true };
+      const revision = release.expectedRevision + 1;
+      sent.releases.push({ orderId: release.orderId, revision });
+      return { revision, replayed: false };
+    },
     ordersAssessRisk: async (input) => {
       const risk = copy(input) as { orderId?: unknown; level?: unknown; reasons?: unknown };
       if (!permissions.has("orders.edit")) refuse("orders_not_allowed", "Assessing orders needs the write_orders scope.");
@@ -599,10 +614,19 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   };
 
   /** A function input's signed-in buyer gets the roles the app granted, as the platform fills them per app. */
+  // As the host sends it: the cart's customer carries this app's roles, and
+  // `cart.attributes` only this app's own answers (`<app id>.<key>`).
   const withRoles = <T,>(input: T): T => {
-    const cart = (input as { cart?: { customer?: { id?: unknown; roles?: unknown } | null } | null } | null)?.cart;
-    if (!cart?.customer || cart.customer.roles !== undefined || typeof cart.customer.id !== "string") return input;
-    return { ...input, cart: { ...cart, customer: { ...cart.customer, roles: rolesOf(cart.customer.id) } } } as T;
+    const cart = (input as { cart?: { customer?: { id?: unknown; roles?: unknown } | null; attributes?: unknown } | null } | null)?.cart;
+    if (!cart) return input;
+    const prefix = `${manifest.id}.`;
+    const attributes = cart.attributes && typeof cart.attributes === "object"
+      ? Object.fromEntries(Object.entries(cart.attributes as Record<string, unknown>).filter(([key]) => key.startsWith(prefix)))
+      : cart.attributes;
+    const customer = cart.customer && cart.customer.roles === undefined && typeof cart.customer.id === "string"
+      ? { ...cart.customer, roles: rolesOf(cart.customer.id) }
+      : cart.customer;
+    return { ...input, cart: { ...cart, ...(attributes !== undefined ? { attributes } : {}), ...(customer !== undefined ? { customer } : {}) } } as T;
   };
 
   /** Runs one step of a running job, as the platform's drain does (attempts, validation, done). */

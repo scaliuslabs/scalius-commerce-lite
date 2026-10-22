@@ -44,7 +44,10 @@ describe("product page metadata price", () => {
   // buy box opened on another one at a different price.
   it("reads the buy box's own opening choice", () => {
     const page = read("../../pages/products/[slug].astro");
-    expect(page).toMatch(/const buyerPricingVariants = initialVariantPresentation\(/);
+    expect(page).toMatch(/const buyerInitialPresentation = initialVariantPresentation\(/);
+    expect(page).toContain("const buyerPricingVariants = buyerInitialPresentation.pricingVariants;");
+    // The gallery's first paint is the same opening choice's own photo.
+    expect(page).toContain("featuredGalleryItem(galleryItems, initialVariantMediaId)");
     expect(summary).toMatch(/\} = initialVariantPresentation\(options, variants\);/);
   });
 });

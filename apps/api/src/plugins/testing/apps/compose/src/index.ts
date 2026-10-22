@@ -1,4 +1,4 @@
-// acme.compose: the composition test app (docs/STOREFRONT-COMPONENTS.md). It
+// acme.compose: the composition test app (packages/plugin-sdk/docs/storefront.md). It
 // uses every extension point a second app needs without core edits or
 // reading another app's fields: badges and a line on every product card
 // (whoever draws the card), a header skin that draws from the header's

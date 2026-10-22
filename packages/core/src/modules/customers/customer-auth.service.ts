@@ -87,6 +87,8 @@ export interface CustomerSession {
     profileComplete: boolean;
     createdAt: number;
     expiresAt: number;
+    /** The account is tax-exempt (checkout prices it so); null: it pays tax. Never shown to the buyer. */
+    taxExemption?: { exemptionId: string | null } | null;
 }
 
 export interface SendOtpInput {
@@ -1092,7 +1094,8 @@ function liveCustomerSession(tokenHash: string) {
  */
 export function selectSessionCustomer(db: Database, tokenHash: string) {
     return db
-        .select({ customerId: customers.id })
+        // The account's tax exemption rides the session row (audit I9).
+        .select({ customerId: customers.id, taxExempt: customers.taxExempt, taxExemptionId: customers.taxExemptionId })
         .from(customerSessions)
         .innerJoin(customers, eq(customerSessions.customerId, customers.id))
         .where(liveCustomerSession(tokenHash));
@@ -1126,6 +1129,7 @@ export async function getCustomerBySession(
         ...buildCustomerAuthProfile(row.customer, row.address),
         createdAt: row.session.createdAt * 1000,
         expiresAt: row.session.expiresAt * 1000,
+        taxExemption: row.customer.taxExempt ? { exemptionId: row.customer.taxExemptionId ?? null } : null,
     };
 }
 

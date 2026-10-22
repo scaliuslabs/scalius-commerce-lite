@@ -202,11 +202,11 @@ describe("listing pages", () => {
     expect(chips.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("places category, collection and brand descriptions above the products", () => {
+  it("places category, collection and brand descriptions above the products by default, or below", () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.listingToolbar);
-    expect(field("theme-listing-description-placement").textContent).toContain("Below products");
-    chooseOption(field<HTMLButtonElement>("theme-listing-description-placement"), "Above products");
-    expect(latest.blocks.listing.descriptionPlacement).toBe("above");
+    expect(field("theme-listing-description-placement").textContent).toContain("Above products");
+    chooseOption(field<HTMLButtonElement>("theme-listing-description-placement"), "Below products");
+    expect(latest.blocks.listing.descriptionPlacement).toBe("below");
   });
 
   it("replaces the filter drawer with a compact sidebar, which opens its groups", () => {
@@ -466,7 +466,7 @@ describe("product page app blocks", () => {
   const card = () => container.querySelector<HTMLElement>("[data-product-app-blocks]");
   const items = () => [...container.querySelectorAll<HTMLElement>("[data-app-block]")].map((item) => item.dataset.appBlock);
   const addBlock = async (label: string) => {
-    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.click());
+    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app component']")!.click());
     click([...document.querySelectorAll<HTMLButtonElement>("[role=option]")].find((each) => each.textContent?.startsWith(label))!);
   };
   const named = (name: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!;
@@ -477,7 +477,7 @@ describe("product page app blocks", () => {
 
   it("adds, edits, orders and removes app blocks in the theme document", async () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.productApps, { kind: "product" }, APPS);
-    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.click());
+    await act(async () => card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app component']")!.click());
     expect([...document.querySelectorAll("[role=option]")].map((each) => each.textContent)).toEqual([
       "Star rating · Acme Reviews · In the buy box",
       "Review list · Acme Reviews · Below the product",
@@ -513,7 +513,7 @@ describe("product page app blocks", () => {
     const badge = container.querySelector("[data-app-block='badge']")!;
     expect(badge.textContent).toContain("acme.gone/badge");
     expect(badge.textContent).toContain("App not active. Hidden on your store.");
-    expect(card()!.querySelector("button[aria-label='Add app block']")).toBeNull();
+    expect(card()!.querySelector("button[aria-label='Add app component']")).toBeNull();
     click(named("Remove acme.gone/badge"));
     expect("apps" in latest.blocks.product).toBe(false);
     expect(storefrontThemeDocumentSchema.safeParse(latest).success).toBe(true);
@@ -522,8 +522,8 @@ describe("product page app blocks", () => {
   it("stops adding at the product page's block limit", () => {
     const ten = Array.from({ length: 10 }, (_, index) => ({ id: `stars-${index}`, app: "acme.reviews/stars", values: {} }));
     renderPart(withBlocks(ten), EDITOR_PARTS.productApps, { kind: "product" }, APPS);
-    expect(card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app block']")!.disabled).toBe(true);
-    expect(card()!.textContent).toContain("A product page shows up to 10 app blocks.");
+    expect(card()!.querySelector<HTMLButtonElement>("button[aria-label='Add app component']")!.disabled).toBe(true);
+    expect(card()!.textContent).toContain("A product page shows up to 10 app components.");
   });
 });
 
@@ -576,7 +576,7 @@ describe("app skins of the theme's units", () => {
     // The built-in settings stay, folded, as what the store shows without the app.
     expect(headerGroups()).toEqual([]);
     const toggle = fallback()!.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
-    expect(toggle.textContent).toBe("Fallback (when the app is unavailable)");
+    expect(toggle.textContent).toBe("Your theme's design settings");
     click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(headerGroups(fallback()!)[0]).toBe("Layout");
@@ -591,7 +591,8 @@ describe("app skins of the theme's units", () => {
     const gone = { ...DEFAULT_STOREFRONT_THEME, apps: { skins: { footer: { app: "acme.gone/footer", values: { note: "kept" } } } } };
     renderPart(gone, EDITOR_PARTS.footer, { kind: "home" }, [STUDIO]);
     expect(radioIn(skinChoice(), "acme.gone/footer").getAttribute("aria-checked")).toBe("true");
-    expect(skinChoice().textContent).toContain("acme.gone/footer isn't active, so your store shows the built-in one.");
+    expect(skinChoice().textContent).toContain("The app for this design isn't active, so your store shows your theme's own design.");
+    expect(skinChoice().textContent).not.toContain("acme.gone/footer");
     click(radioIn(skinChoice(), "acme.studio/footer"));
     expect(latest.apps).toEqual({ skins: { footer: { app: "acme.studio/footer", values: {} } } });
     expect(skinChoice().textContent).toContain("The app has no settings for this.");

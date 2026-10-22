@@ -44,3 +44,17 @@ describe("no-JavaScript checkout quote with store app functions", () => {
     await expect(fetchQuickCheckoutQuote(input, null)).resolves.toEqual({ ok: false, reason: "rate", shippingRates: null });
   });
 });
+
+describe("no-JavaScript checkout quote request", () => {
+  // Buyer QA B2: the server's quote said "application/json, application/json",
+  // which the API could not read (500 on every Continue).
+  it("sends one JSON content type, the client's locale headers and the buyer's session", async () => {
+    mocks.apiFetch.mockResolvedValue(refusal({ reason: "delivery_rate_unavailable" }));
+    await fetchQuickCheckoutQuote(input, "session_1");
+    const headers = new Headers(mocks.apiFetch.mock.calls[0]![1].headers);
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("accept")).toBe("application/json");
+    expect(headers.get("x-customer-session")).toBe("session_1");
+    expect(headers.get("x-storefront-language")).toBeTruthy();
+  });
+});

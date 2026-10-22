@@ -211,14 +211,15 @@ describe("product page structure from the theme's product blocks", () => {
     expect(marks(second.document)).toEqual([]);
   });
 
-  it("renders one page whatever ?variant= names, with the primary image, every SKU in JSON-LD, and noIndex", async () => {
+  it("renders one page whatever ?variant= names, with the opening choice's photo, every SKU in JSON-LD, and noIndex", async () => {
     const theme = productTheme(["reviews", "description"]);
     // A variant link is the product's one cached page: the render never reads
     // the query; the buy box selects the SKU (and its exact image) in the browser.
     const blue = await render("product", theme, { variant: "sku_blue" });
     const plain = await render("product", theme);
     expect(blue.html).toBe(plain.html);
-    expect(plain.document.querySelector('[data-product-gallery] img[fetchpriority="high"]')?.getAttribute("src")).toContain("primary.jpg");
+    // The first paint is the opening choice's own photo (the first available SKU, blue here), never another colour's.
+    expect(plain.document.querySelector('[data-product-gallery] img[fetchpriority="high"]')?.getAttribute("src")).toContain("blue.jpg");
     const group = resourceSchema(plain.document).find((schema) => schema["@type"] === "ProductGroup");
     expect(group).toBeDefined();
     // Each SKU keeps its exact image (else the primary) under its own `?variant=` URL.

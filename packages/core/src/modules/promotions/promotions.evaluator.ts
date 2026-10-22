@@ -7,7 +7,8 @@ export const PROMOTION_EVALUATOR_VERSION = 2;
 const MAX_LINES = 250;
 const MAX_CANDIDATES = 100;
 const MAX_SUBMITTED_CODES = 10;
-const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
+/** The range cart totals are computed in (a cart of many lines at the money ceiling stays exact); inputs are bounded by `MAX_MINOR_AMOUNT` (@scalius/shared/money). */
+const MAX_COMPUTED_MINOR = Number.MAX_SAFE_INTEGER;
 /** Buy X get Y repetitions evaluated per order (bounds the work per checkout). */
 const MAX_BUY_GET_APPLICATIONS = 10_000;
 /** Products + collections one rule may target (keeps config JSON small). */
@@ -25,8 +26,8 @@ export const DISCOUNT_CLASSES = ["product", "order", "shipping"] as const;
 export type DiscountClass = (typeof DISCOUNT_CLASSES)[number];
 
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/u);
-const minorAmountSchema = z.number().int().min(0).max(MAX_MINOR_AMOUNT);
-const positiveMinorSchema = z.number().int().positive().max(MAX_MINOR_AMOUNT);
+const minorAmountSchema = z.number().int().min(0).max(MAX_COMPUTED_MINOR);
+const positiveMinorSchema = z.number().int().positive().max(MAX_COMPUTED_MINOR);
 const scopeIdsSchema = z.array(z.string().trim().min(1).max(160)).max(PROMOTION_SCOPE_LIMIT);
 /**
  * Optional product/collection scope. Empty or absent means every line;
@@ -73,11 +74,11 @@ const cartSchema = z.object({
         seenLineIds.add(line.id);
         const lineBase = BigInt(line.unitPriceMinor) * BigInt(line.quantity);
         merchandiseSubtotal += lineBase;
-        if (lineBase > BigInt(MAX_MINOR_AMOUNT)) {
+        if (lineBase > BigInt(MAX_COMPUTED_MINOR)) {
             context.addIssue({ code: "custom", path: ["lines", index], message: "Cart line total exceeds the supported range." });
         }
     });
-    if (merchandiseSubtotal + BigInt(cart.shippingAmountMinor) > BigInt(MAX_MINOR_AMOUNT)) {
+    if (merchandiseSubtotal + BigInt(cart.shippingAmountMinor) > BigInt(MAX_COMPUTED_MINOR)) {
         context.addIssue({ code: "custom", path: ["lines"], message: "Cart total exceeds the supported range." });
     }
 });

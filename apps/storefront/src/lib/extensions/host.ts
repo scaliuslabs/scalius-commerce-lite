@@ -1,4 +1,4 @@
-// The storefront's render host for app components (docs/STOREFRONT-COMPONENTS.md).
+// The storefront's render host for app components (packages/plugin-sdk/docs/storefront.md).
 //
 // A page asks for each component as Astro reaches it (the header, every card
 // of a grid, each section, skin and slot component). The host joins every ask made in the same task
@@ -14,7 +14,9 @@
 //   or component draws nothing, a skin leaves its unit to core. This timeout cannot
 //   preempt synchronous bundled code or detect incorrect layout/interaction.
 //   A page drawn without an answer (late, failed, refused, or a release the
-//   isolate cannot load) calls `degraded`, so the page cache never keeps it.
+//   isolate cannot load) calls `degraded`, so the page cache never keeps it,
+//   and `report`s the part and why (at most once per isolate): the API writes
+//   it in the app's log, where the merchant and the theme editor see it.
 
 import {
   STOREFRONT_COMPONENT_ABI,
@@ -25,7 +27,8 @@ import {
   storefrontExtensionBase,
 } from "@scalius/shared/plugins/storefront-components";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
-import { runStorefrontModule, type ExtensionRuntime } from "./loaders";
+import type { StorefrontIncident, StorefrontIncidentReason } from "@scalius/shared/plugins/storefront-incidents";
+import { ExtensionUnavailableError, runStorefrontModule, type ExtensionRuntime } from "./loaders";
 
 /** A job as a component asks for it (the host names it). */
 export type ExtensionJob = StorefrontRenderJob extends infer Job ? Job extends unknown ? Omit<Job, "id"> : never : never;
@@ -75,10 +78,12 @@ export function clearExtensionMemo(): void {
 // ── Logging (bounded: a broken component must not flood the logs) ─────────
 
 const warned = new Set<string>();
-function warnOnce(key: string, message: string): void {
-  if (warned.has(key) || warned.size > 200) return;
+/** Whether this is the first time this isolate meets the problem (it then logs it). */
+function warnOnce(key: string, message: string): boolean {
+  if (warned.has(key) || warned.size > 200) return false;
   warned.add(key);
   console.warn(`[Storefront components] ${message}`);
+  return true;
 }
 
 // ── The host ──────────────────────────────────────────────────────────────
@@ -94,6 +99,8 @@ export interface ExtensionHostOptions {
   jsonLd?: () => boolean;
   /** Called when a component the page asked for draws its fallback instead (the page must not be stored). */
   degraded?: () => void;
+  /** Hears each problem once per isolate: the app's part, and why the page drew without it. */
+  report?: (incident: StorefrontIncident) => void;
 }
 
 export class ExtensionHost {
@@ -153,8 +160,11 @@ export class ExtensionHost {
   async #runBatch(extension: StorefrontExtension, pending: Pending[]): Promise<void> {
     const run = this.#options.run ?? runStorefrontModule;
     const wallMs = this.#options.wallMs ?? STOREFRONT_COMPONENT_LIMITS.renderWallMs;
-    const fallBack = (entry: Pending, key: string, message: string) => {
-      warnOnce(key, message);
+    const fallBack = (entry: Pending, reason: StorefrontIncidentReason, message: string, detail?: string) => {
+      const part = describe(entry.job);
+      if (warnOnce(`${extension.pluginId}:${extension.release}:${reason}:${part}`, `${extension.pluginId} ${part}: ${message}; the page draws without it.`)) {
+        this.#options.report?.({ pluginId: extension.pluginId, release: extension.release, ...partOf(entry.job), reason, ...(detail ? { detail: detail.slice(0, 200) } : {}) });
+      }
       this.#options.degraded?.();
       entry.resolve(null);
     };
@@ -163,33 +173,47 @@ export class ExtensionHost {
       const reply = await Promise.race([
         run(this.#options.runtime, extension, { abi: STOREFRONT_COMPONENT_ABI, context: this.contextOf(extension), jobs: pending.map((entry) => entry.job) }),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`no answer within ${wallMs} ms`)), wallMs);
+          timer = setTimeout(() => reject(new LateError(`no answer within ${wallMs} ms`)), wallMs);
         }),
       ]);
       const results = new Map(reply.results.map((result) => [result.id, result]));
       for (const entry of pending) {
         const result = results.get(entry.job.id);
-        if (!result || "error" in result) {
-          fallBack(entry, `${extension.pluginId}:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)}: ${result && "error" in result ? result.error : "no result"}`);
+        if (!result) {
+          fallBack(entry, "missing", "no result");
+          continue;
+        }
+        if ("error" in result) {
+          fallBack(entry, "error", String(result.error), String(result.error));
           continue;
         }
         // An app page's forms post only to the app's own routes.
         const page = entry.job.kind === "component" && entry.job.target === "page";
         const checked = sanitizePluginHtml(result.html, { pluginId: extension.pluginId, jsonLd: entry.jsonLd, ...(page ? { formsTo: `/apps/${extension.pluginId}/` } : {}) });
         if (!checked.ok) {
-          fallBack(entry, `${extension.pluginId}:size:${describe(entry.job)}`, `${extension.pluginId} ${describe(entry.job)} drew markup over its bounds (${checked.reason}).`);
+          fallBack(entry, "refused", `drew markup over its bounds (${checked.reason})`, checked.reason);
           continue;
         }
         remember(entry.key, checked.html);
         entry.resolve(checked.html);
       }
     } catch (error) {
-      const message = `${extension.pluginId}: ${error instanceof Error ? error.message : String(error)}; the page draws without it.`;
-      for (const entry of pending) fallBack(entry, `${extension.pluginId}:batch`, message);
+      const message = (error instanceof Error ? error.message : String(error)).replace(/\.$/, "");
+      const reason: StorefrontIncidentReason = error instanceof ExtensionUnavailableError ? "unavailable" : error instanceof LateError ? "late" : "error";
+      for (const entry of pending) fallBack(entry, reason, message, reason === "late" ? undefined : message);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }
   }
+}
+
+class LateError extends Error {}
+
+/** The part an incident names (never its settings or data). */
+function partOf(job: StorefrontRenderJob): Pick<StorefrontIncident, "kind" | "type" | "target"> {
+  if (job.kind === "section") return { kind: "section", type: job.type };
+  if (job.kind === "component") return { kind: "component", type: job.type, target: job.target };
+  return { kind: "skin", type: job.component, target: job.target };
 }
 
 function describe(job: StorefrontRenderJob): string {

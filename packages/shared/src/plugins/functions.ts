@@ -1,4 +1,4 @@
-// Plugin functions (docs/platform/PLUGINS.md): synchronous decision points in
+// Plugin functions (packages/plugin-sdk/docs/apps.md): synchronous decision points in
 // checkout (Shopify Functions). Buyer UI is not a function: an app declares it
 // as storefront extensions (manifest `storefront.extensions`, one per UI slot)
 // and the host renders it through the same pipeline (PLUGIN_EXTENSION_SCHEMAS). A function is pure: it receives the input
@@ -126,7 +126,9 @@ export const functionCartSchema = z.object({
     country: z.string().length(2).nullable(),
   }).strict(),
   /**
-   * Validated checkout attributes the buyer entered, by `<app id>.<key>`.
+   * Validated checkout attributes the buyer entered, by `<app id>.<key>`:
+   * only the receiving app's own (the host drops every other app's answers
+   * before a function or extension runs).
    */
   attributes: checkoutAttributesSchema,
 }).strict();

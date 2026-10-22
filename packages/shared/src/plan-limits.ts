@@ -133,7 +133,7 @@ export interface PlanLimits {
     readonly brands: number;
   };
   /**
-   * Per-app ceilings (docs/platform/PLUGINS.md, "Quotas"). An app's manifest
+   * Per-app ceilings (packages/plugin-sdk/docs/apps.md, "Quotas"). An app's manifest
    * `limits` apply within them; the platform takes the lower value.
    */
   readonly plugins: {

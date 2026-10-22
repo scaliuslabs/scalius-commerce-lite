@@ -25,6 +25,15 @@ describe("customerTitle", () => {
     expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: null }, translator("bn")).detail).toBe("অতিথি অর্ডার");
   });
 
+  it("titles an erased customer \"Erased customer\" with nothing under it, in each language", () => {
+    expect(customerTitle({ kind: "account", name: "[erased]", phone: null, email: null }, en))
+      .toEqual({ title: "Erased customer", detail: null, detailIsPhone: false });
+    expect(customerTitle({ kind: "guest", name: "[erased]", phone: null, latestOrderName: "[erased]" }, translator("bn")).title)
+      .toBe("মুছে ফেলা কাস্টমার");
+    // An erased order name is never a guest record's title: its contact is.
+    expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: "[erased]" }, en).title).toBe("01712-345678");
+  });
+
   it("never uses the stored name of a guest record", () => {
     expect(customerTitle({ kind: "guest", name: "Someone", phone, latestOrderName: null }, en).title).not.toContain("Someone");
   });

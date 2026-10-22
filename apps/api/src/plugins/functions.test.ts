@@ -106,6 +106,26 @@ describe("runPluginFunctions", () => {
     ]));
   });
 
+  it("hands each app only its own checkout answers, never another app's", async () => {
+    await activate("acme.engrave", 1);
+    await activate("acme.perks", 2);
+    const seen = new Map<string, unknown>();
+    const loader: PluginLoader = {
+      kind: "bundled",
+      async invoke({ installation, invocation }) {
+        seen.set(installation.pluginId, (invocation as { input: { cart: { attributes: unknown; subtotalMinor: number } } }).input.cart);
+        return ok(discount(installation.pluginId));
+      },
+    };
+    const cart = { ...testCart(150_000), attributes: { "acme.engrave.gift_message": "PRIVATE note", "acme.perks.tier": "gold", "acme.perksx.other": "x" } };
+    await runPluginFunctions("checkout.discounts", { cart }, env, pluginTestCtx(), { db, loaderFor: () => loader });
+    expect(seen.get("acme.engrave")).toMatchObject({ attributes: { "acme.engrave.gift_message": "PRIVATE note" }, subtotalMinor: 150_000 });
+    // A prefix that only starts with the app's id is another app.
+    expect(seen.get("acme.perks")).toMatchObject({ attributes: { "acme.perks.tier": "gold" }, subtotalMinor: 150_000 });
+    expect(JSON.stringify(seen.get("acme.perks"))).not.toContain("PRIVATE");
+    expect(Object.keys((seen.get("acme.perks") as { attributes: object }).attributes)).toEqual(["acme.perks.tier"]);
+  });
+
   it("rejects an input that does not match the point's schema (a platform bug)", async () => {
     await activate("first.good", 1);
     await expect(runPluginFunctions("checkout.discounts", { cart: { ...testCart(10), currency: "TAKA" } }, env, pluginTestCtx(), { db, loaderFor: vi.fn() }))

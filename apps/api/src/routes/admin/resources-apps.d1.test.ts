@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { giftCardsDocument } from "@scalius/core/modules/settings";
 import { errorResponseFromError } from "../../utils/api-response";
 import { idempotentReplay } from "./idempotency";
@@ -203,6 +204,18 @@ describe("product writes in the app API", () => {
     expect(product.variants.map((variant: { sku: string; priceMinor: number }) => [variant.sku, variant.priceMinor]).sort())
       .toEqual([["LIN-L", 270_000], ["LIN-M", 250_000]]);
     expect((await call("POST", "/resources/products", { body: { name: "Bad shirt", condition: "new", options: [{ name: "Size", values: ["M"] }], variants: [{ sku: "BAD-1", priceMinor: 100 }] } })).status).toBe(400);
+  });
+
+  it("prices up to the one money ceiling, exactly, and refuses one unit more (audit I7)", async () => {
+    // 9,000,000,000,000 paisa: 90 billion taka, on the whole-taka increment.
+    const top = await call("POST", "/resources/products", { body: { name: "Cargo ship", condition: "new", variants: [{ sku: "SHIP-1", priceMinor: MAX_MINOR_AMOUNT }] } });
+    expect(top.status).toBe(201);
+    expect(top.body.data.product.variants[0].priceMinor).toBe(MAX_MINOR_AMOUNT);
+    expect(top.body.data.product.priceMinor).toBe(MAX_MINOR_AMOUNT);
+    const over = await call("POST", "/resources/products", { body: { name: "Two ships", condition: "new", variants: [{ sku: "SHIP-2", priceMinor: MAX_MINOR_AMOUNT + 100 }] } });
+    expect(over.status).toBe(400);
+    const patched = await call("PATCH", `/resources/products/${top.body.data.product.id}`, { body: { expectedRevision: 1, priceMinor: MAX_MINOR_AMOUNT + 100 } });
+    expect(patched.status).toBe(400);
   });
 
   it("patches fields under the revision once, and refuses a stale revision or a product price on an optioned product", async () => {

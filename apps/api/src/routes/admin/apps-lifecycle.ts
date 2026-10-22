@@ -1,5 +1,5 @@
 // Admin routes for the app lifecycle beyond the installed list
-// (docs/platform/PLUGINS.md, "Registry", "Quotas and kill switch"): browse the
+// (packages/plugin-sdk/docs/apps.md, "Registry", "Quotas and kill switch"): browse the
 // configured registries, install or update from one (Workers Paid), upload a
 // package (Workers Paid), the emergency stop of one app or of every
 // third-party app, and the registries and developer keys the store trusts.

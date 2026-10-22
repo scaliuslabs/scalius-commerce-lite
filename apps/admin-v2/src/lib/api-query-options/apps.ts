@@ -1,4 +1,4 @@
-// Apps (installed plugins, docs/platform/PLUGINS.md): the Apps list and one
+// Apps (installed plugins, packages/plugin-sdk/docs/apps.md): the Apps list and one
 // app's page. Every write is guarded by the revision the page showed; an
 // activation also sends back the grant key, so a Super Admin approves exactly
 // the access the page listed. Secret settings are write-only: reads say only
@@ -10,6 +10,7 @@ import {
   getApiV1AdminAppsByIdDeliveries,
   getApiV1AdminAppsByIdLogs,
   getApiV1AdminAppsRemovedData,
+  getApiV1AdminAppsStorefrontProblems,
   getApiV1AdminAppsSurfaces,
   postApiV1AdminAppsByIdActivate,
   postApiV1AdminAppsByIdDeactivate,
@@ -18,6 +19,7 @@ import {
   postApiV1AdminAppsByIdFeaturesByFeatureIdEnable,
   postApiV1AdminAppsByIdUninstall,
   postApiV1AdminAppsRemovedDataByIdDelete,
+  postApiV1AdminAppsRemovedDataByIdHandOver,
   putApiV1AdminAppsByIdSettings,
 } from "@scalius/api-client/sdk";
 import type {
@@ -29,6 +31,7 @@ import type {
   AppListing,
   AppLogLine,
   AppSettingField,
+  AppStorefrontProblem,
   AppSummary,
   RemovedAppData,
 } from "@scalius/api-client/types";
@@ -36,7 +39,7 @@ import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary, RemovedAppData };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppStorefrontProblem, AppSummary, RemovedAppData };
 
 /** The categories an app lists itself under (the manifest's enum). */
 export type AppCategory = AppSummary["categories"][number];
@@ -69,6 +72,19 @@ export const appsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.apps.list(),
     queryFn: () => apiData(getApiV1AdminApps()),
+  });
+
+/**
+ * Apps whose storefront section, block or design the store drew without in
+ * the last day, newest first (one per app). The theme editor and an app's
+ * page show it; a quick refresh keeps a fix visible soon after it lands.
+ */
+export const appStorefrontProblemsQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.apps.storefrontProblems(),
+    queryFn: async (): Promise<AppStorefrontProblem[]> => (await apiData(getApiV1AdminAppsStorefrontProblems())).problems,
+    staleTime: 30_000,
+    retry: false,
   });
 
 export const appQueryOptions = (id: string) =>
@@ -169,6 +185,15 @@ export const removedAppDataQueryOptions = () =>
 /** Permanently deletes one removed app's group, if it is still the one the page listed. */
 export function deleteRemovedAppData(group: Pick<RemovedAppData, "id" | "revision">) {
   return apiData(postApiV1AdminAppsRemovedDataByIdDelete({ path: { id: group.id }, body: { expectedRevision: group.revision } }));
+}
+
+/**
+ * Lets the release signed with `signerKeyId` (null: the store's own bundled
+ * code or an unsigned upload) take a removed app's kept data, if the group is
+ * still the one the page listed. A waiting bundled release installs at once.
+ */
+export function handOverRemovedAppData(group: Pick<RemovedAppData, "id" | "revision">, signerKeyId: string | null) {
+  return apiData(postApiV1AdminAppsRemovedDataByIdHandOver({ path: { id: group.id }, body: { expectedRevision: group.revision, signerKeyId } }));
 }
 
 export async function retryAppDelivery(id: string, deliveryId: string) {

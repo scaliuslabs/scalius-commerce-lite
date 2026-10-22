@@ -48,6 +48,8 @@ import {
 } from "./product-form/TitleDescriptionSection";
 import { ProductImagesSection } from "./product-form/ProductImagesSection";
 import { PricingCard } from "./product-form/PricingCard";
+import { pairFromStored } from "./product-form/compare-at";
+import { useCurrency } from "@/hooks/use-currency";
 import { LazyAttributesSection, LazyDigitalDeliveryCard, LazyGiftCardProductCard, LazyProductSearchListing } from "./product-form/LazyProductCards";
 import { ShippingCard } from "./product-form/ShippingCard";
 import { CollapsibleCard } from "./product-form/CollapsibleCard";
@@ -115,7 +117,9 @@ interface ProductFormProps {
     readOnly: boolean;
     skuImages: ProductSkuImageChoice[];
     productName: string;
+    /** What customers pay for the product, and its compare-at price: new variants start from the pair. */
     productPrice: number;
+    productCompareAt: number | null;
     isActive: boolean;
     /** The variant editor reports its price range here; with options, variants carry the prices. */
     onPricesChange: (range: VariantPriceRange | null) => void;
@@ -325,7 +329,13 @@ function ProductEditor({
   const slots = React.useMemo<ProductEditorSlots>(() => ({ inventory: inventorySlot, shipping: shippingSlot }), [inventorySlot, shippingSlot]);
   React.useEffect(() => {
     form.resetField("variantPriced", { defaultValue: variantPrices !== null });
-    if (variantPrices) form.resetField("price", { defaultValue: variantPrices.min });
+    if (!variantPrices) return;
+    form.resetField("price", { defaultValue: variantPrices.min });
+    // Each variant carries its own compare-at price; the product keeps no discount
+    // that would reach variants priced on their own (the server refuses one).
+    form.resetField("discountType", { defaultValue: "percentage" });
+    form.resetField("discountPercentage", { defaultValue: 0 });
+    form.resetField("discountAmount", { defaultValue: 0 });
   }, [form, variantPrices]);
 
   /** One line per field that failed the page's own checks, for the save banner; a fixed field's line comes off. */
@@ -675,10 +685,11 @@ function ProductVariants({ form, optionManager, onPricesChange, readOnly }: {
   optionManager: ProductFormProps["optionManager"];
   onPricesChange: (range: VariantPriceRange | null) => void;
 }) {
-  const [media, name, price, isActive, fulfilmentMode] = useWatch({
+  const [media, name, price, isActive, fulfilmentMode, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
-    name: ["media", "name", "price", "isActive", "fulfillmentKind"],
+    name: ["media", "name", "price", "isActive", "fulfillmentKind", "discountType", "discountPercentage", "discountAmount"],
   });
+  const { salePrice } = useCurrency();
   const skuImages = React.useMemo(() => (media ?? [])
     .filter((item) => item.kind === "image")
     .map((item) => ({
@@ -692,11 +703,15 @@ function ProductVariants({ form, optionManager, onPricesChange, readOnly }: {
   // The title and price only seed unsaved variants' SKUs and prices: the
   // variant table catches up after the keystroke has painted.
   const productName = React.useDeferredValue(name ?? "");
-  const productPrice = React.useDeferredValue(Number.isFinite(price) ? price ?? 0 : 0);
+  // New variants start from the product's own pair: what customers pay and the compare-at price.
+  const base = Number.isFinite(price) ? price ?? 0 : 0;
+  const pair = pairFromStored(base, salePrice(base, { discountType, discountPercentage, discountAmount }));
+  const productPrice = React.useDeferredValue(pair.price ?? 0);
+  const productCompareAt = React.useDeferredValue(pair.compareAt);
   const mode = fulfilmentMode ?? "physical";
   return React.useMemo(
-    () => optionManager({ readOnly, skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange, fulfilmentMode: mode }),
-    [readOnly, optionManager, skuImages, productName, productPrice, isActive, onPricesChange, mode],
+    () => optionManager({ readOnly, skuImages, productName, productPrice, productCompareAt, isActive: Boolean(isActive), onPricesChange, fulfilmentMode: mode }),
+    [readOnly, optionManager, skuImages, productName, productPrice, productCompareAt, isActive, onPricesChange, mode],
   );
 }
 

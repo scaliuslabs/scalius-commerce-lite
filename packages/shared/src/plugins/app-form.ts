@@ -1,4 +1,4 @@
-// The platform's form token for app pages (docs/platform/PLUGINS.md,
+// The platform's form token for app pages (packages/plugin-sdk/docs/apps.md,
 // "Storefront proxy"): what makes a signed-in buyer's form post to an app's
 // proxy (`/apps/<plugin id>/...`) provably come from this store's own page.
 //

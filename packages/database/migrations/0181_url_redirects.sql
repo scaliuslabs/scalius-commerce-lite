@@ -45,4 +45,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (185, '0185_url_redirects', '13670fb5240828ba6920b7341b8a9ec78294cf1ee48698749e3338b750ecb327');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (181, '0181_url_redirects', '13670fb5240828ba6920b7341b8a9ec78294cf1ee48698749e3338b750ecb327');

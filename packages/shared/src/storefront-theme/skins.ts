@@ -1,4 +1,4 @@
-// Skins (docs/STOREFRONT-COMPONENTS.md "Skins"): app markup for a core-owned
+// Skins (packages/plugin-sdk/docs/storefront.md "Skins"): app markup for a core-owned
 // unit. The theme names the skin (`apps.skins.<unit>`, or `skin` on a core
 // section placement); the app draws the unit from its public projection, and
 // core draws it whenever the skin is missing, fails or draws nothing.

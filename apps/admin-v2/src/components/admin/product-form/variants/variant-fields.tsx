@@ -5,7 +5,7 @@ import React from "react";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput, PercentInput } from "@/components/ui/number-input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -206,58 +206,6 @@ export function VariantImagePicker({ readOnly = false, value, images, onChange, 
   );
 }
 
-function DiscountInput({ variant, name, onChange }: {
-  variant: DraftVariant;
-  name: string;
-  onChange: (patch: Partial<DraftVariant>) => void;
-}) {
-  const t = useMessages(productVariantMessages);
-  const { code: currencyCode } = useCurrency();
-  const amount = variant.discountType === "flat" ? variant.discountAmount ?? 0 : variant.discountPercentage ?? 0;
-  const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
-    amount > 0 ? variant.discountType : "none",
-  );
-  // The select is the field's control; the amount beside it has its own id.
-  const amountId = React.useId();
-  return (
-    <div className="flex min-w-0 gap-2">
-      <SearchableSelect
-        value={mode}
-        onValueChange={(next) => {
-          setMode(next as "none" | "percentage" | "flat");
-          if (next === "none") {
-            onChange({ discountType: "percentage", discountPercentage: null, discountAmount: null });
-          } else if (next === "percentage") {
-            onChange({ discountType: "percentage", discountPercentage: 0, discountAmount: null });
-          } else {
-            onChange({ discountType: "flat", discountAmount: 0, discountPercentage: null });
-          }
-        }}
-        ariaLabel={t("discountTypeFor", { name })}
-        triggerClassName="min-w-24 flex-1"
-        options={[{ value: "none", label: t("noDiscount") }, { value: "percentage", label: t("discountPercentage") }, { value: "flat", label: t("discountFixed") }]}
-      />
-      {mode === "flat" ? (
-        <MoneyInput
-          id={amountId}
-          currencyCode={currencyCode}
-          value={amount}
-          aria-label={t("discountValueFor", { name })}
-          onValueChange={(next) => onChange({ discountAmount: next ?? 0 })}
-          className="w-28"
-        />
-      ) : mode === "percentage" ? (
-        <PercentInput
-          id={amountId}
-          value={amount}
-          aria-label={t("discountValueFor", { name })}
-          onValueChange={(next) => onChange({ discountPercentage: next ?? 0 })}
-          className="w-28"
-        />
-      ) : null}
-    </div>
-  );
-}
 
 /** A variant's cost per item (kept by the page's cost store, not the variant draft). */
 export interface SkuCostField {
@@ -301,7 +249,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
 }) {
   const t = useMessages(productVariantMessages);
   const weightUnit = useWeightUnit();
-  const { fmt } = useCurrency();
+  const { fmt, code } = useCurrency();
   const isUnsavedSku = variant.id.startsWith("draft_");
   const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
@@ -314,9 +262,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
         <FieldRow inset>
           <ReadOnlyValue mono label={t("sku")} value={variant.sku} />
           {cost && !giftCard ? <CostField cost={cost} name={name} readOnly /> : null}
-          {showDiscount ? <ReadOnlyValue numeric label={t("discount")} value={variant.discountType === "flat"
-            ? variant.discountAmount ? fmt(variant.discountAmount) : t("noDiscount")
-            : variant.discountPercentage ? formatNumber(variant.discountPercentage / 100, { style: "percent", maximumFractionDigits: 2 }) : t("noDiscount")} /> : null}
+          {showDiscount ? <ReadOnlyValue numeric label={t("compareAtLabel")} value={variant.compareAt === null ? null : fmt(variant.compareAt)} /> : null}
           <ReadOnlyValue mono label={t("barcode")} value={variant.barcode} />
           <ReadOnlyValue label={t("barcodeType")} value={variant.barcodeType ? barcodeNames[variant.barcodeType] : t("noBarcode")} />
           {showWeight ? <ReadOnlyValue label={t("weightGrams")} value={variant.weight === null ? null : formatWeight(variant.weight, weightUnit)} /> : null}
@@ -333,8 +279,14 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
       </Field>
       {cost && !giftCard ? <CostField cost={cost} name={name} /> : null}
       {showDiscount ? (
-        <Field label={t("discount")} error={errorOf("discount")}>
-          <DiscountInput variant={variant} name={name} onChange={onChange} />
+        <Field label={t("compareAtLabel")} help={t("compareAtHelp")} error={errorOf("discount")}>
+          <MoneyInput
+            currencyCode={code}
+            placeholder="0.00"
+            value={variant.compareAt}
+            aria-label={t("compareAtFor", { name })}
+            onValueChange={(next) => onChange({ compareAt: next ?? null })}
+          />
         </Field>
       ) : null}
       {/* Scan or type: the type is picked from the code, and can still be changed. */}

@@ -15,8 +15,8 @@ import {
   type UpdatePromotionDraftInput,
 } from "@scalius/core/modules/promotions";
 import { ValidationError } from "../../utils/api-error";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 
-const MAX_MINOR_AMOUNT = Number.MAX_SAFE_INTEGER;
 const currencySchema = z.string().regex(/^[A-Z]{3}$/u).openapi({ description: "ISO 4217, the store currency." });
 const positiveMinorSchema = z.number().int().positive().max(MAX_MINOR_AMOUNT);
 const scopeIdsSchema = z.array(z.string().trim().min(1).max(160)).max(PROMOTION_SCOPE_LIMIT);

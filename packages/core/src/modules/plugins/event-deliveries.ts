@@ -1,4 +1,4 @@
-// Plugin event deliveries (docs/platform/PLUGINS.md, "Extension points" 1):
+// Plugin event deliveries (packages/plugin-sdk/docs/apps.md, "Extension points" 1):
 // the plugin subscriber target of the event outbox. One
 // `plugin_event_deliveries` row per (plugin, event) is the delivery's durable
 // state, mirroring webhook deliveries:

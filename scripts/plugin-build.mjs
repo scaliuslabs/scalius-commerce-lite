@@ -1,4 +1,4 @@
-// Build steps of the plugin platform (docs/platform/PLUGINS.md), shared by
+// Build steps of the plugin platform (packages/plugin-sdk/docs/apps.md), shared by
 // `pnpm plugin` (scripts/plugins.mjs) and the tests that prove generated
 // files are fresh:
 //
@@ -44,6 +44,8 @@ export function componentJobs(contract, components, instanceId) {
     id: `component:${component.type}@${target}`, kind: "component", type: component.type, target,
     settings: smokeSettings(contract, component.settings),
     ...(target.startsWith("product.") ? { instanceId, data: contract.fixtureProductPage() } : {}),
+    // A card slot draws over the card it sits on.
+    ...(target.startsWith("product_card.") ? { data: contract.fixtureSkinData("product_card") } : {}),
   })));
 }
 
@@ -67,6 +69,16 @@ export function readLockfile(path = LOCKFILE) {
     if (error?.code === "ENOENT") return { version: 1, sandbox: false, plugins: [], trustedKeys: [] };
     throw error;
   }
+}
+
+/**
+ * The sandbox (the Worker Loader that runs uploaded apps) is on when the
+ * lockfile says so or the operator asks for it for one run. `pnpm dev` then
+ * gives both local Workers the loader, as a Paid deploy does: the API for
+ * uploaded apps' server code, the storefront for their storefront parts.
+ */
+export function pluginSandboxEnabled(lockfile, env = process.env, args = []) {
+  return args.includes("--plugin-sandbox") || env.SCALIUS_PLUGIN_SANDBOX === "1" || lockfile.sandbox === true;
 }
 
 /** Developer keys the operator trusts for `pnpm plugin add --registry` (`{ id, name, publicKey }`); malformed entries are dropped. */

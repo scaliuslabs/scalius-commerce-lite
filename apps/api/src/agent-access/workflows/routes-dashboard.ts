@@ -133,7 +133,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     kind: "read",
     title: "Product status counts",
     summary: "Read active, draft, and trashed product counts.",
-    examples: ["How many active, draft, and trashed products do I have?"],
+    examples: ["How many active, draft, and trashed products do I have?", "How many products do we have?"],
     tags: ["catalog", "products", "counts"],
     operationIds: ["dashboard.products.stats"],
     requiresFacts: false,
@@ -1384,6 +1384,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     operationIds: [
       "dashboard.apps.list",
       "dashboard.apps.surfaces",
+      "dashboard.apps.storefront_problems_list",
       "dashboard.apps.get",
       "dashboard.apps.features_list",
       "dashboard.apps.feature_disable",

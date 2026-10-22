@@ -15,15 +15,19 @@ const registration = {
   } },
 } as unknown as RegisteredPlugin;
 const input = { target, language: "bn", locale: "bn-BD", currency: "BDT", cart: null, order: null, customer: { id: "cus_1" }, attributes: { "test.notes.gift": "hello", "other.app.secret": "private" } };
+
+// A sandboxed run is marked in flight and cleared around each call (function-circuit.ts).
+const inflightDb = { update: () => ({ set: () => ({ where: async () => undefined }) }) } as unknown as Database;
+
 describe("buyer UI runtime", () => {
   it("runs only declared targets and exposes only the app's attributes", async () => {
     const invokeFunction = vi.fn().mockResolvedValue({ ok: true, value: { ui: { version: 1, root: { type: "text", text: "Hello" } } } });
-    const options = { db: {} as Database, registered: [registration], host: { invokeFunction } as unknown as PluginHost };
-    const results = await runPluginFunctions("buyer.ui", input, {} as Env, {} as ExecutionContext, options);
+    const options = { db: inflightDb, registered: [registration], host: { invokeFunction } as unknown as PluginHost };
+    const results = await runPluginFunctions("buyer.ui", input, {} as Env, { waitUntil: () => undefined } as unknown as ExecutionContext, options);
     expect(results).toHaveLength(1);
     expect(invokeFunction.mock.calls[0]![2]).toMatchObject({ attributes: { gift: "hello" }, customer: { id: "cus_1" } });
     expect(JSON.stringify(invokeFunction.mock.calls[0]![2])).not.toContain("private");
-    expect(await runPluginFunctions("buyer.ui", { ...input, target: "account.profile" }, {} as Env, {} as ExecutionContext, options)).toEqual([]);
+    expect(await runPluginFunctions("buyer.ui", { ...input, target: "account.profile" }, {} as Env, { waitUntil: () => undefined } as unknown as ExecutionContext, options)).toEqual([]);
     expect(invokeFunction).toHaveBeenCalledTimes(1);
   });
   it("passes an extension only the reads its own slot declares", async () => {
@@ -41,9 +45,9 @@ describe("buyer UI runtime", () => {
       remember: vi.fn(),
       get: vi.fn(async () => ({ ok: true, reads: { note: { revision: 1, data: {} }, tier: { revision: 1, data: {} } }, targets: {} })),
     };
-    const options = { db: {} as Database, registered: [app], host: { invokeFunction } as unknown as PluginHost, reads: cache as unknown as AppReadsCache };
-    await runPluginFunctions("buyer.ui", input, {} as Env, {} as ExecutionContext, options);
-    await runPluginFunctions("buyer.ui", { ...input, target: "account.overview" }, {} as Env, {} as ExecutionContext, options);
+    const options = { db: inflightDb, registered: [app], host: { invokeFunction } as unknown as PluginHost, reads: cache as unknown as AppReadsCache };
+    await runPluginFunctions("buyer.ui", input, {} as Env, { waitUntil: () => undefined } as unknown as ExecutionContext, options);
+    await runPluginFunctions("buyer.ui", { ...input, target: "account.overview" }, {} as Env, { waitUntil: () => undefined } as unknown as ExecutionContext, options);
     expect(Object.keys(invokeFunction.mock.calls[0]![2].reads)).toEqual(["note"]);
     expect(Object.keys(invokeFunction.mock.calls[1]![2].reads)).toEqual(["note", "tier"]);
   });
@@ -62,12 +66,12 @@ describe("buyer UI runtime", () => {
         : { ok: false, reason: "Read note needs 120 records, more than its max of 100." })),
     };
     const cart: FunctionCart = { currency: "BDT", decimalPlaces: 2, channel: "online_store", salesChannelId: "sc_online_store", lines: [], subtotalMinor: 0, customer: null, destination: null, discountCodes: [], market: { id: "mkt_backup", country: null }, attributes: {} };
-    const options = { db: {} as Database, host: { invokeFunction, incident } as unknown as PluginHost, reads: cache as unknown as AppReadsCache };
-    expect(await runPluginFunctions("cart.validate", { cart }, {} as Env, {} as ExecutionContext, { ...options, registered: [withReads("test.ok", "skip"), withReads("test.over", "skip")] })).toHaveLength(1);
+    const options = { db: inflightDb, host: { invokeFunction, incident } as unknown as PluginHost, reads: cache as unknown as AppReadsCache };
+    expect(await runPluginFunctions("cart.validate", { cart }, {} as Env, { waitUntil: () => undefined } as unknown as ExecutionContext, { ...options, registered: [withReads("test.ok", "skip"), withReads("test.over", "skip")] })).toHaveLength(1);
     expect(invokeFunction).toHaveBeenCalledTimes(1);
     expect(invokeFunction.mock.calls[0]![2]).toMatchObject({ reads: { note: { revision: 2, data: { text: "hi" } } } });
     expect(incident).toHaveBeenCalledWith(expect.objectContaining({ pluginId: "test.over" }), "function:cart.validate", "Read note needs 120 records, more than its max of 100. The function did not run.");
-    await expect(runPluginFunctions("cart.validate", { cart }, {} as Env, {} as ExecutionContext, { ...options, registered: [withReads("test.over", "block")] }))
+    await expect(runPluginFunctions("cart.validate", { cart }, {} as Env, { waitUntil: () => undefined } as unknown as ExecutionContext, { ...options, registered: [withReads("test.over", "block")] }))
       .rejects.toThrow("could not answer cart.validate");
   });
   it("rejects undeclared field/action references without reading media", async () => {

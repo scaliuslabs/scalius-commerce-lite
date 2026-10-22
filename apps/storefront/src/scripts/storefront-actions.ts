@@ -56,6 +56,23 @@ export function installStorefrontActions(): () => void {
     // ordinary GET search form without JavaScript taking their field away.
     if (targetOf(event)?.closest("[data-search-inline]")) openSearch(event);
   };
+  // Predictive search (Dawn's): the first letters typed in the header's
+  // field open the typeahead palette with them, for keyboard users too. A
+  // search scoped to a department stays a plain form (the palette searches
+  // the whole store).
+  const input = (event: Event) => {
+    const field = event.target;
+    if (!(field instanceof HTMLInputElement) || field.name !== "q") return;
+    const form = field.closest<HTMLFormElement>("[data-header-search]");
+    if (!form || (form.querySelector<HTMLSelectElement>("[data-search-scope]")?.value ?? "") !== "") return;
+    const query = field.value;
+    if (!query.trim()) return;
+    field.value = "";
+    handOffPopover(field);
+    // Kept for a palette still loading (lazy-global-ui.ts mounts it on this event).
+    window.__scaliusSearchPaletteQuery = query;
+    document.dispatchEvent(new CustomEvent("open-search-palette", { detail: { query } }));
+  };
   const submit = (event: SubmitEvent) => {
     if (event.defaultPrevented) return;
     const form = event.target;
@@ -71,11 +88,13 @@ export function installStorefrontActions(): () => void {
   document.addEventListener("click", click);
   document.addEventListener("pointerdown", pointerdown);
   document.addEventListener("submit", submit);
+  document.addEventListener("input", input);
   const remove = () => {
     if (uninstall !== remove) return;
     document.removeEventListener("click", click);
     document.removeEventListener("pointerdown", pointerdown);
     document.removeEventListener("submit", submit);
+    document.removeEventListener("input", input);
     uninstall = undefined;
   };
   uninstall = remove;

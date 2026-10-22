@@ -16,7 +16,7 @@ export const appFeaturesMessages = defineMessages({
     recommended: "Recommended",
     toggleLabel: "Turn {name} on or off",
     activateFirst: "Activate the app first. Then turn on the features you use.",
-    superAdminTurnsOn: "Only a Super Admin can turn a feature on, because it approves new access. You can turn features off.",
+    superAdminTurnsOn: "Only the store owner can turn a feature on, because it approves new access. You can turn features off.",
 
     status_ready: "Ready",
     status_setup: "Needs setup",
@@ -55,6 +55,7 @@ export const appFeaturesMessages = defineMessages({
     setupTitle: "Setup",
     setupWhenOn: "Turn on {name} to set it up. Its settings then appear here.",
     accessTitle: "What it can reach",
+    accessHelp: "What this service may do in your store while it is on.",
     servicesTitle: "Services",
     servicesCount: "{on} of {total} on",
     servicesNoneOn: "Each service is turned on by itself, on its own page.",
@@ -112,7 +113,7 @@ export const appFeaturesMessages = defineMessages({
     recommended: "প্রস্তাবিত",
     toggleLabel: "{name} চালু বা বন্ধ করুন",
     activateFirst: "আগে অ্যাপটি চালু করুন। তারপর যে ফিচারগুলো ব্যবহার করেন সেগুলো চালু করুন।",
-    superAdminTurnsOn: "শুধু একজন সুপার অ্যাডমিন ফিচার চালু করতে পারেন, কারণ এতে নতুন অনুমতি দেওয়া হয়। আপনি ফিচার বন্ধ করতে পারেন।",
+    superAdminTurnsOn: "শুধু স্টোরের মালিক ফিচার চালু করতে পারেন, কারণ এতে নতুন অনুমতি দেওয়া হয়। আপনি ফিচার বন্ধ করতে পারেন।",
 
     status_ready: "প্রস্তুত",
     status_setup: "সেট আপ বাকি",
@@ -151,6 +152,7 @@ export const appFeaturesMessages = defineMessages({
     setupTitle: "সেটআপ",
     setupWhenOn: "সেট আপ করতে {name} চালু করুন। তারপর এর সেটিংস এখানে আসবে।",
     accessTitle: "যা ব্যবহার করতে পারে",
+    accessHelp: "এই সার্ভিস চালু থাকলে আপনার স্টোরে যা করতে পারে।",
     servicesTitle: "সার্ভিস",
     servicesCount: "{total}টির মধ্যে {on}টি চালু",
     servicesNoneOn: "প্রতিটি সার্ভিস আলাদাভাবে, নিজের পেজে চালু হয়।",

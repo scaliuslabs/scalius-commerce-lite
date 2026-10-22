@@ -15,8 +15,41 @@
 import currency from "currency.js";
 import { currencyExponent, isWholeUnitIncrement } from "./currency-policy";
 
-/** The largest amount (minor units) money is stored and computed in. */
+/**
+ * The one money ceiling (audit I7): the largest amount, in minor units of its
+ * currency, that money is stored, computed and accepted in. Every price,
+ * charge, discount, payment, refund and gift card value is at most this,
+ * whatever its currency (90 billion taka; 9 trillion of a zero-decimal
+ * currency such as VND). It keeps every derived amount a safe integer with
+ * room to spare: a line is at most this (`isLineAmountInRange`), and an
+ * order of 99 such lines plus shipping and tax stays below
+ * `Number.MAX_SAFE_INTEGER` (about 9.007 × 10^15) a thousandfold. Every
+ * stable `*Minor` input advertises it as its `maximum`; the database columns
+ * are 64-bit integers on every provider.
+ */
 export const MAX_MINOR_AMOUNT = 9_000_000_000_000;
+
+/** The largest amount in major units of a currency with `decimalPlaces` (`MAX_MINOR_AMOUNT` of it). */
+export function maxMajorAmount(decimalPlaces: number): number {
+  assertDecimalPlaces(decimalPlaces);
+  return MAX_MINOR_AMOUNT / 10 ** decimalPlaces;
+}
+
+/**
+ * The largest major-unit amount of any currency (a zero-decimal one's): the
+ * bound a major-unit input schema can state before it knows the currency.
+ * The exact bound applies when the amount is converted (`toMinor` refuses
+ * more than `MAX_MINOR_AMOUNT` with a `MoneyRangeError`).
+ */
+export const MAX_MAJOR_AMOUNT = MAX_MINOR_AMOUNT;
+
+/** An amount above `MAX_MINOR_AMOUNT` (or not a safe integer of minor units). */
+export class MoneyRangeError extends RangeError {
+  constructor(message = "Money amount exceeds the supported range.") {
+    super(message);
+    this.name = "MoneyRangeError";
+  }
+}
 
 function assertDecimalPlaces(decimalPlaces: number): void {
   if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 3) {
@@ -32,7 +65,7 @@ export function toMinor(amount: number, decimalPlaces: number): number {
   assertDecimalPlaces(decimalPlaces);
   const minor = currency(amount, { precision: decimalPlaces }).intValue;
   if (!Number.isSafeInteger(minor) || minor > MAX_MINOR_AMOUNT) {
-    throw new RangeError("Money amount exceeds the supported range.");
+    throw new MoneyRangeError();
   }
   return minor;
 }
@@ -54,6 +87,17 @@ export function percentToBps(percent: number | null | undefined): number {
 
 export function bpsToPercent(bps: number): number {
   return bps / 100;
+}
+
+/**
+ * A sale badge's whole percentage ("-13%"), the one rule every theme and
+ * surface shows: rounded down so a badge never promises more than the
+ * saving, and at least 1 while there is a saving. Null when the price is
+ * not lower (or the original is not positive).
+ */
+export function discountPercentOff(original: number, current: number): number | null {
+  if (!(original > 0) || !Number.isFinite(current) || !(current < original)) return null;
+  return Math.max(1, Math.floor(((original - Math.max(current, 0)) / original) * 100 + 1e-9));
 }
 
 // ---------------------------------------------------------------------------

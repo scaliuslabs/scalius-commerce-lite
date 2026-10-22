@@ -1,10 +1,10 @@
 import {
   MAX_PRODUCT_OPTION_AXES,
   MAX_PRODUCT_OPTION_COMBINATIONS,
-  MAX_PRODUCT_PRICE,
   MAX_SKU_STOCK,
   MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 import { toHandle } from "@scalius/shared/handle";
 import type {
@@ -23,6 +23,7 @@ import { productVariantMessages, type ProductVariantMessageKey } from "../../../
 import type { WeightUnit } from "@scalius/shared/store-defaults";
 import { formatWeight } from "./weight-format";
 import type { ProductFulfilmentMode } from "../fulfilment-mode";
+import { pairFromStored, storedFromPair } from "../compare-at";
 
 /** Merchant-facing reason the draft can't be saved yet; limits read in the dashboard's digits. */
 const issue = (key: ProductVariantMessageKey, vars?: Record<string, string | number>) =>
@@ -36,7 +37,67 @@ export type DraftOption = {
 };
 
 /** Editor rows always carry a quantity; the save payload omits it for untouched rows. */
-export type DraftVariant = Omit<ProductOptionMatrixInput["variants"][number], "stock"> & { stock: number };
+type MatrixVariantInput = ProductOptionMatrixInput["variants"][number];
+
+/**
+ * A variant row as the merchant edits it: Shopify's pair, `price` (what
+ * customers pay) and `compareAt` (what it cost before, crossed out; null for
+ * none). The API keeps the pair as the SKU's own base price and flat discount
+ * (`compare-at.ts`), converted only where rows are read and sent
+ * (`initialVariants`, `variantInput`). A product with options has no
+ * product-level discount, so nothing else changes what a variant sells for.
+ */
+export type DraftVariant = Omit<MatrixVariantInput, "stock" | "discountType" | "discountPercentage" | "discountAmount"> & {
+  stock: number;
+  compareAt: number | null;
+};
+
+/** The price a stored SKU sells at after its own discount, or null when it has none. */
+export type SaleOf = (price: number, discount: { discountType?: string | null; discountPercentage?: number | null; discountAmount?: number | null }) => number | null;
+
+/** Without the store's increment (tests): the discount taken exactly. */
+const exactSale: SaleOf = (price, discount) => {
+  const sale = discount.discountType === "flat"
+    ? price - (discount.discountAmount ?? 0)
+    : Math.round(price * (100 - (discount.discountPercentage ?? 0))) / 100;
+  return sale < price ? sale : null;
+};
+
+/** The merchant's pair for a stored SKU price and its own discount. */
+export function variantPair(
+  stored: { price?: number | null; discountType?: string | null; discountPercentage?: number | null; discountAmount?: number | null },
+  saleOf: SaleOf = exactSale,
+): { price: number; compareAt: number | null } {
+  const base = stored.price ?? 0;
+  const pair = pairFromStored(base, Number.isFinite(base) ? saleOf(base, stored) : null);
+  return { price: pair.price ?? base, compareAt: pair.compareAt };
+}
+
+/** A row as the API takes it: the pair stored as base price and flat discount, exact in minor units. */
+export function variantInput<T extends Pick<DraftVariant, "price" | "compareAt">>(row: T, decimalPlaces: number):
+  Omit<T, "compareAt"> & Pick<MatrixVariantInput, "price" | "discountType" | "discountPercentage" | "discountAmount"> {
+  const { compareAt, ...rest } = row;
+  const out = storedFromPair({ price: row.price, compareAt }, decimalPlaces);
+  return out.discounted && !out.problem
+    ? { ...rest, price: out.price ?? row.price, discountType: "flat", discountPercentage: null, discountAmount: out.discountAmount }
+    : { ...rest, price: row.price, discountType: "percentage", discountPercentage: null, discountAmount: null };
+}
+
+/**
+ * What new rows start from: the product's price and compare-at price. A
+ * product getting its first option also hands its one SKU's barcode to the
+ * first row (the labels already printed keep scanning).
+ */
+export type VariantSeed = {
+  price: number;
+  compareAt: number | null;
+  barcode?: string | null;
+  barcodeType?: DraftVariant["barcodeType"];
+  /** Whether new rows count stock (a service starts untracked). */
+  trackInventory?: boolean;
+};
+
+const seedOf = (seed: number | VariantSeed): VariantSeed => (typeof seed === "number" ? { price: seed, compareAt: null } : seed);
 
 export { fulfilmentModeOf, type ProductFulfilmentMode } from "../fulfilment-mode";
 
@@ -80,8 +141,8 @@ function checkNumber(value: number | null, max: number, integer: boolean): Produ
 /** Problems with one SKU's own numbers and barcode, in the order its fields appear. */
 function skuFieldIssue(sku: SimpleSkuDraft & Partial<DraftVariant>, requirePositivePrice: boolean, weightUnit: WeightUnit = "g"): DraftIssue | null {
   if (sku.price !== undefined) {
-    const priceProblem = checkNumber(sku.price, MAX_PRODUCT_PRICE, false);
-    if (priceProblem) return { message: issue(priceProblem, { max: MAX_PRODUCT_PRICE }), field: "price" };
+    const priceProblem = checkNumber(sku.price, MAX_MAJOR_AMOUNT, false);
+    if (priceProblem) return { message: issue(priceProblem, { max: MAX_MAJOR_AMOUNT }), field: "price" };
     if (requirePositivePrice && sku.price <= 0) return { message: issue("issueVariantNeedsPrice"), field: "price" };
   }
   const stockProblem = checkNumber(sku.stock, MAX_SKU_STOCK, true);
@@ -203,10 +264,11 @@ export function optionCombinations(options: DraftOption[]): string[][] {
 }
 
 /** The hidden SKU's draft as saved; a new product tracks quantity by default. */
-export function initialSimpleSku(defaultSku: ProductVariant | undefined): SimpleSkuDraft {
+export function initialSimpleSku(defaultSku: ProductVariant | undefined, mode: ProductFulfilmentMode = "physical"): SimpleSkuDraft {
   return {
     sku: defaultSku?.sku ?? "",
-    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
+    // A new service is rarely counted: it starts untracked, not "0 in stock" (buyer QA m1).
+    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : mode !== "service",
     stock: defaultSku?.stock ?? 0,
     barcode: defaultSku?.barcode ?? null,
     barcodeType: (defaultSku?.barcodeType as SimpleSkuDraft["barcodeType"]) ?? null,
@@ -232,25 +294,22 @@ export function draftSignature(
   });
 }
 
-export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
+export function initialVariants(variants: ProductVariant[], saleOf: SaleOf = exactSale): DraftVariant[] {
   return variants
     .filter((variant) => !variant.deletedAt && !variant.isDefault)
     .map((variant) => ({
+      ...variantPair(variant, saleOf),
       id: variant.id,
       selectedOptionValueIds: [...variant.selectedOptions]
         .sort((a, b) => a.position - b.position)
         .map((option) => option.optionValueId),
       imageId: variant.imageId,
       sku: variant.sku ?? "",
-      price: variant.price ?? 0,
       stock: variant.stock,
       trackInventory: variant.trackInventory ?? true,
       weight: variant.weight,
       barcode: variant.barcode ?? null,
       barcodeType: (variant.barcodeType as DraftVariant["barcodeType"]) ?? null,
-      discountType: variant.discountType === "flat" ? "flat" : "percentage",
-      discountPercentage: variant.discountPercentage ?? null,
-      discountAmount: variant.discountAmount ?? null,
       ...(variant.fulfillmentKind ? { fulfillmentKind: variant.fulfillmentKind } : {}),
     }));
 }
@@ -264,9 +323,11 @@ export function matrixSaveVariants(
   variants: DraftVariant[],
   savedVariants: ProductVariant[],
   mode: ProductFulfilmentMode = "mixed",
+  decimalPlaces = 2,
 ): ProductOptionMatrixInput["variants"] {
   const savedById = new Map(savedVariants.map((variant) => [variant.id, variant]));
-  return withFulfilmentMode(variants, mode).map(({ stock, ...variant }) => {
+  return withFulfilmentMode(variants, mode).map(({ stock, ...row }) => {
+    const variant = variantInput(row, decimalPlaces);
     const saved = savedById.get(variant.id);
     if (!saved) return { ...variant, stock };
     return saved.stock === stock ? variant : { ...variant, stock, expectedStockVersion: saved.stockVersion };
@@ -296,9 +357,10 @@ export function materializeVariants(
   options: DraftOption[],
   previous: DraftVariant[],
   productName: string,
-  productPrice: number,
+  productPrice: number | VariantSeed,
   simpleStock: number,
 ): DraftVariant[] {
+  const seed = seedOf(productPrice);
   const previousByKey = new Map(previous.map((variant) => [combinationKey(variant.selectedOptionValueIds), variant]));
   const valueLabel = optionValueLabels(options);
   const projectedUseCount = new Map<string, number>();
@@ -322,24 +384,28 @@ export function materializeVariants(
       const value = sourceRows[0]![field];
       return sourceRows.every((row) => row[field] === value) ? value : undefined;
     };
+    // The pair moves together: a shared price with its shared compare-at price, else the product's.
+    const sharedPrice = shared("price");
+    const pair = sharedPrice !== undefined
+      ? { price: sharedPrice, compareAt: shared("compareAt") ?? null }
+      : { price: seed.price, compareAt: seed.compareAt };
+    // The product's own SKU becomes the first row: its barcode goes with it.
+    const keepsSimpleBarcode = !sourceRows.length && index === 0 && Boolean(seed.barcode);
     return {
       id: draftId(`sku_${index}`),
       selectedOptionValueIds,
       imageId: shared("imageId") ?? null,
       sku: generatedSku(productName, valueLabel, selectedOptionValueIds, index),
-      price: shared("price") ?? productPrice,
+      ...pair,
       stock: expandingFrom.length === 1
         ? (firstProjection ? inherited?.stock ?? 0 : 0)
         : mergingFrom.length > 0
           ? mergingFrom.reduce((total, row) => total + row.stock, 0)
           : firstProjection ? simpleStock : 0,
-      trackInventory: shared("trackInventory") ?? true,
+      trackInventory: shared("trackInventory") ?? seed.trackInventory ?? true,
       weight: shared("weight") ?? null,
-      barcode: null,
-      barcodeType: null,
-      discountType: shared("discountType") ?? "percentage",
-      discountPercentage: shared("discountPercentage") ?? null,
-      discountAmount: shared("discountAmount") ?? null,
+      barcode: keepsSimpleBarcode ? seed.barcode! : null,
+      barcodeType: keepsSimpleBarcode ? seed.barcodeType ?? null : null,
       ...(shared("fulfillmentKind") ? { fulfillmentKind: shared("fulfillmentKind") } : {}),
     };
   });
@@ -387,7 +453,7 @@ export function materializeVariantsExcluding(
   options: DraftOption[],
   previous: DraftVariant[],
   productName: string,
-  productPrice: number,
+  productPrice: number | VariantSeed,
   simpleStock: number,
   excludedCombinationKeys: ReadonlySet<string>,
 ): DraftVariant[] {
@@ -404,7 +470,7 @@ export function materializeCombination(
   previous: DraftVariant[],
   selectedOptionValueIds: readonly string[],
   productName: string,
-  productPrice: number,
+  productPrice: number | VariantSeed,
 ): DraftVariant {
   const wanted = combinationKey(selectedOptionValueIds);
   const existing = previous.find((variant) => combinationKey(variant.selectedOptionValueIds) === wanted);
@@ -532,11 +598,9 @@ export function getOptionMatrixIssue(
     if (variant.imageId && !imageIds.has(variant.imageId) && !context.allowSavedImageRemovalConfirmation) {
       return at("issuePhotoRemoved", undefined, variant.id, "photo");
     }
-    if (variant.discountType === "percentage" && ((variant.discountPercentage ?? 0) < 0 || (variant.discountPercentage ?? 0) > 100)) {
-      return at("issuePercentRange", undefined, variant.id, "discount");
-    }
-    if (variant.discountType === "flat" && ((variant.discountAmount ?? 0) < 0 || (variant.discountAmount ?? 0) > variant.price)) {
-      return at("issueDiscountOverPrice", undefined, variant.id, "discount");
+    // A compare-at price is the higher, crossed-out price (Shopify's rule).
+    if (variant.compareAt !== null && (!Number.isFinite(variant.compareAt) || variant.compareAt <= variant.price)) {
+      return at("compareAtNotHigher", undefined, variant.id, "discount");
     }
   }
   if ((context.blockedCommittedStock ?? 0) > 0) return at("issueOptionsCommitted");

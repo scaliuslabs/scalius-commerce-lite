@@ -55,6 +55,14 @@ describe("deleted customer notice", () => {
     expect(restoreButton()).toBeUndefined();
   });
 
+  it("says when an erased record's personal data was erased, never In trash or Restore", () => {
+    show({ id: "cust_1", mergedInto: null, erasedAt: 1_760_000_000 });
+    expect(container.textContent).toContain("Personal data erased on");
+    expect(container.textContent).toContain("can't be edited or restored");
+    expect(container.textContent).not.toContain("In trash");
+    expect(restoreButton()).toBeUndefined();
+  });
+
   it("only names the account for a merged record, with no Restore", () => {
     show({ id: "cust_guest", mergedInto: { id: "cust_owner", name: "Owner Rahman" } });
     expect(container.textContent).toBe("Merged into Owner Rahman");

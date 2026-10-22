@@ -3,6 +3,8 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { Database } from "@scalius/database/client";
+import { customerAddresses, customers } from "@scalius/database/schema";
+import { getTableColumns, getTableName } from "drizzle-orm";
 import { buildCustomerAuthOtpStorageKey, persistCustomerAuthOtpChallenge } from "./customer-auth-otp-challenges";
 import { deriveCustomerAuthOtpDeliveryCode, verifyOtp } from "./customer-auth.service";
 
@@ -17,6 +19,15 @@ let queries: ExecutedQuery[];
 
 beforeEach(() => {
   sqlite = createMigratedSqlite({ beforeMigration: "0144_" });
+  // Today's code reads today's customer columns; a later migration's columns are
+  // added bare so this file isolates 0144's query plan, not the schema since.
+  for (const table of [customers, customerAddresses]) {
+    const name = getTableName(table);
+    const present = new Set((sqlite.prepare(`PRAGMA table_info("${name}")`).all() as Array<{ name: string }>).map((column) => column.name));
+    for (const column of Object.values(getTableColumns(table))) {
+      if (!present.has(column.name)) sqlite.exec(`ALTER TABLE "${name}" ADD COLUMN "${column.name}"`);
+    }
+  }
   queries = [];
   db = createSqliteD1Database({ sqlite, onQuery: (sql, params) => queries.push({ sql, params }) }).db;
   sqlite.exec(`INSERT INTO settings (id, key, value, type, category)

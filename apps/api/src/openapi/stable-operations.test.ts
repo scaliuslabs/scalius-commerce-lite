@@ -22,6 +22,7 @@
 // exact change and the committed snapshot's fingerprint.
 
 import { readFileSync } from "node:fs";
+import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { describe, expect, it } from "vitest";
 import { effectivePluginPermissions } from "@scalius/core/modules/plugins";
 import { PLUGIN_SCOPE_NAMES, PROTECTED_FIELD_KEYWORD, isProtectedDataScope, type PluginScope } from "@scalius/shared/plugins";
@@ -165,8 +166,10 @@ type SchemaNode = Record<string, unknown>;
 
 /**
  * Every place a stable schema carries money in a way the app API does not
- * allow: a decimal or non-integer amount anywhere, or a returned `*Minor`
- * amount with no currency on its object or an enclosing one.
+ * allow: a decimal or non-integer amount anywhere, a returned `*Minor`
+ * amount with no currency on its object or an enclosing one, or a `*Minor`
+ * input not bounded by the one money ceiling (`MAX_MINOR_AMOUNT`, audit I7:
+ * `maximum` exactly it, and `minimum` at least its negative).
  */
 function moneyProblems(operations: readonly AgentOperationManifestEntry[], components: Record<string, unknown> = AGENT_COMPONENT_SCHEMAS as Record<string, unknown>): string[] {
   const problems = new Set<string>();
@@ -187,6 +190,9 @@ function moneyProblems(operations: readonly AgentOperationManifestEntry[], compo
     if (key && (schema.type === "number" || schema.type === "integer") && MONEY_KEY.test(key) && !NOT_MONEY_KEY.test(key)) {
       if (!key.endsWith("Minor") || schema.type !== "integer") problems.add(`${label} ${path.join(".")}: money is an integer *Minor field.`);
       else if (output && !currencyInReach) problems.add(`${label} ${path.join(".")}: no currency beside this amount.`);
+      else if (!output && (schema.maximum !== MAX_MINOR_AMOUNT || typeof schema.minimum !== "number" || schema.minimum < -MAX_MINOR_AMOUNT)) {
+        problems.add(`${label} ${path.join(".")}: bound it by MAX_MINOR_AMOUNT (${MAX_MINOR_AMOUNT}).`);
+      }
     }
     const properties = (schema.properties ?? {}) as Record<string, unknown>;
     const reach = currencyInReach || Object.keys(properties).some((name) => CURRENCY_KEY.test(name));
@@ -751,7 +757,20 @@ describe("the money check", () => {
   it("accepts minor units beside a currency on the object or an enclosing one", () => {
     expect(moneyProblems([operation(
       object({ currency: { type: "string" }, totalMinor: { type: "integer" }, lines: { type: "array", items: object({ unitPriceMinor: { type: "integer" } }) } }),
-      object({ cashReceivedMinor: { type: "integer" } }),
+      object({ cashReceivedMinor: { type: "integer", minimum: 0, maximum: MAX_MINOR_AMOUNT } }),
     )], {})).toEqual([]);
+  });
+
+  it("bounds every minor-unit input by the one money ceiling (audit I7)", () => {
+    expect(moneyProblems([operation(object({}), object({
+      priceMinor: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+      amountMinor: { type: "integer", minimum: -Number.MAX_SAFE_INTEGER, maximum: MAX_MINOR_AMOUNT },
+      shippingMinor: { type: "integer", minimum: 0 },
+      deltaMinor: { type: "integer", minimum: -MAX_MINOR_AMOUNT, maximum: MAX_MINOR_AMOUNT },
+    }))], {})).toEqual([
+      `dashboard.things.get input priceMinor: bound it by MAX_MINOR_AMOUNT (${MAX_MINOR_AMOUNT}).`,
+      `dashboard.things.get input amountMinor: bound it by MAX_MINOR_AMOUNT (${MAX_MINOR_AMOUNT}).`,
+      `dashboard.things.get input shippingMinor: bound it by MAX_MINOR_AMOUNT (${MAX_MINOR_AMOUNT}).`,
+    ]);
   });
 });

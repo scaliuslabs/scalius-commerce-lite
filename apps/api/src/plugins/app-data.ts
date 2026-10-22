@@ -1,4 +1,4 @@
-// Deleting an app's data (docs/platform/PLUGINS.md, "Uninstalling"): one path
+// Deleting an app's data (packages/plugin-sdk/docs/apps.md, "Uninstalling"): one path
 // for an uninstall that does not keep data and for "Delete data" on a removed
 // app's group. The relational delete is core's (`appDataDeleteStatements`, in
 // the uninstall's batch or `deleteRemovedAppData`'s); it commits first. Then

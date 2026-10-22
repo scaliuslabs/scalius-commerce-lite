@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { TypedConfirmField, typedConfirmMatches } from "./TypedConfirmField";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +30,8 @@ interface ConfirmDialogProps {
   loadingLabel?: string;
   onConfirm: () => void;
   className?: string;
+  /** For what cannot be undone: the confirm button enables once this is typed. */
+  confirmPhrase?: string;
 }
 
 export function ConfirmDialog({
@@ -42,19 +46,23 @@ export function ConfirmDialog({
   loadingLabel,
   onConfirm,
   className,
+  confirmPhrase,
 }: ConfirmDialogProps) {
   const t = useMessages(resourceMessages);
   const confirm = confirmLabel ?? t("confirm");
+  const [typed, setTyped] = useState("");
+  const confirmed = confirmPhrase === undefined || typedConfirmMatches(confirmPhrase, typed);
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next) setTyped(""); onOpenChange(next); }}>
       <AlertDialogContent className={className}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {confirmPhrase !== undefined ? <TypedConfirmField phrase={confirmPhrase} value={typed} onChange={setTyped} disabled={isLoading} /> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>{cancelLabel ?? t("cancel")}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} variant={variant} disabled={isLoading}>
+          <AlertDialogAction onClick={onConfirm} variant={variant} disabled={isLoading || !confirmed}>
             {isLoading ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
             {isLoading ? (loadingLabel ?? confirm) : confirm}
           </AlertDialogAction>

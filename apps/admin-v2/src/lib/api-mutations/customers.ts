@@ -11,6 +11,7 @@ import {
   putApiV1AdminCustomersByIdAddressesByAddressId,
   postApiV1AdminCustomersSegments,
   postApiV1AdminCustomersTagsBulk,
+  putApiV1AdminCustomersById,
   putApiV1AdminCustomersByIdMarketing,
   putApiV1AdminCustomersByIdTags,
   putApiV1AdminCustomersSegmentsBySegmentId,
@@ -34,6 +35,15 @@ export const saveCustomerTags = async (id: string, tags: string[]) => {
 /** Records consent a customer gave (or withdrew) outside the store; resolves with the new consent payload. */
 export const setCustomerConsent = (id: string, body: CustomerConsentBody) =>
   apiData(putApiV1AdminCustomersByIdMarketing({ path: { id }, body }));
+
+/**
+ * Marks a customer tax exempt (or not). The number is kept only while exempt;
+ * resolves with the exemption as stored.
+ */
+export const saveCustomerTaxExemption = async (id: string, body: { taxExempt: boolean; taxExemptionId: string | null }) => {
+  const { customer } = await apiData(putApiV1AdminCustomersById({ path: { id }, body }));
+  return { taxExempt: customer.taxExempt, taxExemptionId: customer.taxExemptionId };
+};
 
 /** Detaches a saved payment method at its provider and removes it; resolves with the customer's remaining methods. */
 export const removeCustomerPaymentMethod = (id: string, methodId: string) =>

@@ -1,5 +1,5 @@
 // The SMS, email, courier-history, tax, translation, AI, messaging, push, search,
-// address, FX and identity ports as core calls them (docs/platform/PLUGINS.md,
+// address, FX and identity ports as core calls them (packages/plugin-sdk/docs/apps.md,
 // "Providers"). Every provider a merchant can choose, built in (an adapter in
 // this package bound to its saved settings) or an app's
 // (`<plugin id>:<provider id>`), is one `BoundProvider` of its port: callers

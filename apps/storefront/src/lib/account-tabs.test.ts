@@ -23,6 +23,13 @@ describe("account navigation", () => {
     expect(keys(accountNavTabs("warranties", readAccountSummary({})))).toEqual(["orders", "profile", "inbox", "warranties"]);
   });
 
+  it("keeps Reviews and Downloads on every page of a store that offers them, so the strip never changes", () => {
+    const store = { hasReviews: true, hasDigitalLines: true };
+    for (const page of ["orders", "profile", "downloads", "reviews"] as const) {
+      expect(keys(accountNavTabs(page, readAccountSummary({}), store))).toEqual(["orders", "profile", "inbox", "reviews", "downloads"]);
+    }
+  });
+
   it("reads malformed counts as zero", () => {
     expect(readAccountSummary({ unreadInbox: "3", reviewsToWrite: -1, downloads: Number.NaN, giftCards: 2.7 })).toEqual({
       unreadInbox: 0, reviewsToWrite: 0, reviewsWritten: 0, downloads: 0, giftCards: 2, activeWarranties: 0,

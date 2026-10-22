@@ -80,6 +80,15 @@ At 50,000 products and 156,244 SKUs with 1,000,000 orders (SCALE.md, 2026-10-21)
 
 ## Rules by area
 
+### Apps are trusted code on Free
+
+Free has no Worker Loader, so every app runs bundled: compiled into the store's own API and storefront Workers from `scalius.plugins.json`. A bundled app is trusted deployment code, not a sandbox. It runs with the Worker's access (the `fetch` guard covers honest apps only), its CPU and wall time come out of the request or cron run it is in, and a crash or a long synchronous loop affects that invocation. The storefront host's timeout cannot preempt synchronous bundled code.
+
+- First-party apps (`scalius.*`, built and reviewed with Scalius) are bundled on both plans.
+- An app from another developer is safe to bundle only when you trust that developer as you trust your own code, like a plugin. The activation dialog of a bundled app that is not first-party says so in one line. Free has no isolation mechanism, by design.
+- Workers Paid runs registry and uploaded apps sandboxed (`pnpm run deploy --plugin-sandbox`). Each runs in its own Dynamic Worker, with no network beyond its approved hosts and its own CPU limit. The plugin SDK README ("Two loaders") says which guarantees hold in production and which hold in local development.
+- On either plan, a checkout function that keeps failing trips its circuit (`packages/core/src/modules/plugins/function-circuit.ts`). Checkout stops calling it for five minutes, applies its failure policy at once and tells the staff. A sandboxed run that never returns stops its app at the next checkout.
+
 ### Password hashing
 
 Better Auth's scrypt costs about 80 ms of CPU in workerd, so a staff sign-in cannot fit 10 ms. `packages/core/src/auth/password-hash.ts` writes self-describing, versioned hashes:

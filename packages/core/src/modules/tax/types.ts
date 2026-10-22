@@ -102,6 +102,23 @@ export interface TaxQuoteLineInput {
     taxExempt?: boolean;
 }
 
+/**
+ * A buyer the merchant marked tax-exempt (a VAT-registered company, a
+ * reseller): `exemptionId` is the certificate or registration number when
+ * one was given. Read only from a verified identity: a signed-in account at
+ * checkout, the customer staff or an app named on their order.
+ */
+export interface TaxExemption {
+    exemptionId: string | null;
+}
+
+/** The buyer a quote is for; null: a guest (never exempt). */
+export interface TaxQuoteCustomer {
+    id: string;
+    /** Null: the buyer pays tax as usual. */
+    exemption: TaxExemption | null;
+}
+
 export interface TaxDiscountAllocationInput {
     lines: Array<{ lineId: string; amountMinor: number }>;
     shippingMinor: number;
@@ -182,6 +199,11 @@ export interface TaxQuote {
     totalMinor: number;
     destination: TaxDestinationSnapshot;
     jurisdiction: TaxJurisdiction;
+    /**
+     * The buyer's tax exemption the quote honoured (no tax charged); null or
+     * absent (a quote priced before 0178): none. The order snapshot keeps it.
+     */
+    exemption?: TaxExemption | null;
     lines: TaxQuoteLine[];
     shipping: TaxQuoteShipping;
 }
@@ -210,6 +232,8 @@ export interface CalculateTaxQuoteInput {
     shippingMinor: number;
     discountMinor: number;
     discountAllocation?: TaxDiscountAllocationInput;
+    /** The buyer (`taxExemptionApplies`); absent or null: a guest. */
+    customer?: TaxQuoteCustomer | null;
     /** Stable per priced cart (the provider's idempotency key); absent: derived from the input. */
     idempotencyKey?: string;
 }

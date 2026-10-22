@@ -1,4 +1,4 @@
-// URL redirects (0185): an old storefront address that leads to another. A
+// URL redirects (0181): an old storefront address that leads to another. A
 // product's URL handle change writes one in the same batch as the new handle
 // (on unless the merchant unticks "Redirect the old address"), and merchants
 // add or remove them under Online store -> Navigation -> URL redirects.

@@ -1,4 +1,4 @@
-// Storefront reads of the plugin tables (docs/platform/PLUGINS.md,
+// Storefront reads of the plugin tables (packages/plugin-sdk/docs/apps.md,
 // "Storefront surfaces"): the active installations a public render needs (to
 // draw app sections and blocks, and to load the scripts of active apps), as
 // batch statements, each declaring the keys the generated triggers on the

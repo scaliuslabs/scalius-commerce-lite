@@ -1,4 +1,4 @@
-// Checkout app functions (docs/platform/PLUGINS.md, "Functions"): the cart an
+// Checkout app functions (packages/plugin-sdk/docs/apps.md, "Functions"): the cart an
 // app sees and the rules that merge what apps return into checkout. The API
 // runs the apps (apps/api/src/plugins/checkout-functions.ts); everything here
 // is either one bounded read or pure.

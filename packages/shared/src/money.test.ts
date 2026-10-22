@@ -8,6 +8,7 @@ import {
   percentOfMinor,
   fromMinor,
   percentToBps,
+  discountPercentOff,
   priceIncrementMessage,
   PriceIncrementError,
   roundToIncrementMinor,
@@ -47,6 +48,12 @@ describe("toMinor / fromMinor", () => {
 describe("percentage discounts", () => {
   it("stores percentages as basis points", () => {
     expect(percentToBps(12.5)).toBe(1_250);
+    // One badge rule for every theme: 3,800 of 4,400 is 13.6% off, shown as 13%.
+    expect(discountPercentOff(4400, 3800)).toBe(13);
+    expect(discountPercentOff(100, 80)).toBe(20);
+    expect(discountPercentOff(1000, 999)).toBe(1);
+    expect(discountPercentOff(100, 100)).toBeNull();
+    expect(discountPercentOff(0, 0)).toBeNull();
     expect(percentToBps(null)).toBe(0);
     expect(percentToBps(150)).toBe(10_000);
     expect(bpsToPercent(1_250)).toBe(12.5);
@@ -104,5 +111,22 @@ describe("price increment amounts", () => {
     expect(isIncrementMultipleMinor(6_050, WHOLE_TAKA)).toBe(false);
     expect(isIncrementMultipleMinor(6_050, MINOR)).toBe(true);
     expect(() => roundToIncrementMinor(1, 0)).toThrow(RangeError);
+  });
+});
+
+describe("the one money ceiling (audit I7)", () => {
+  it("is MAX_MINOR_AMOUNT minor units of any currency, said in its major units", async () => {
+    const { MAX_MAJOR_AMOUNT, MAX_MINOR_AMOUNT, MoneyRangeError, maxMajorAmount, toMinor } = await import("./money");
+    expect(MAX_MINOR_AMOUNT).toBe(9_000_000_000_000);
+    expect(maxMajorAmount(0)).toBe(MAX_MAJOR_AMOUNT);
+    expect(maxMajorAmount(2)).toBe(90_000_000_000);
+    expect(maxMajorAmount(3)).toBe(9_000_000_000);
+    // At the bound, exactly; one minor unit more is a MoneyRangeError (a RangeError).
+    expect(toMinor(maxMajorAmount(2), 2)).toBe(MAX_MINOR_AMOUNT);
+    expect(toMinor(MAX_MAJOR_AMOUNT, 0)).toBe(MAX_MINOR_AMOUNT);
+    expect(() => toMinor(maxMajorAmount(2) + 0.01, 2)).toThrow(MoneyRangeError);
+    expect(() => toMinor(MAX_MAJOR_AMOUNT + 1, 0)).toThrow(RangeError);
+    // 99 lines at the ceiling, plus as much again for shipping and tax, stay exact integers.
+    expect(Number.isSafeInteger(99 * MAX_MINOR_AMOUNT * 2)).toBe(true);
   });
 });

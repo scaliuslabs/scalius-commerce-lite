@@ -280,5 +280,17 @@
   "from": "e6a54bd9176794ef",
   "change": "functions.checkout.discounts output discounts[].combinesWith.shippingDiscounts: the field is no longer accepted.",
   "reason": "Pre-lock (audit L6): one spelling per concept. A discount's combination classes are `combinesWith: { product, order, shipping }` everywhere, as the stable discounts.create/get carry them; the checkout.discounts function's `productDiscounts`/`orderDiscounts`/`shippingDiscounts` keys are now `product`/`order`/`shipping` (each still optional, default true)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "35541b1d37eaeb23",
+  "change": "functions.*.input cart.attributes and extensions.input cart.attributes: hold only the receiving app's own <app id>.<key> answers, never another app's (same schema, narrower contents).",
+  "reason": "Pre-lock (black-box platform M1): buyer answers are free text one app asked for; another app's function could carry them into a discount title and onto the order. Opening this later is additive (a declared, consented read); closing it after the seal would not be."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "30133e20c46aac41",
+  "change": "storefront/testing fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): type is now a StorefrontSkinnableSection and settings a Partial of its sealed projection; the result is the full projection, typed by it.",
+  "reason": "Pre-lock (black-box platform M4): the fixture returned settings {} for every section, contradicting the sealed StorefrontSectionSkinSettings the host fills completely, so correctly typed skins failed validate."
  }
 ]

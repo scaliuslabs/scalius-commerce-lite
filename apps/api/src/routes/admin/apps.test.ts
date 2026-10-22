@@ -227,6 +227,36 @@ describe("admin app routes", () => {
     expect((await call("GET", "/apps/removed-data")).json.data.apps).toEqual([]);
   });
 
+  it("holds a bundled release over data a signed upload kept, and lists it until a Super Admin hands the data over", async () => {
+    await call("GET", "/apps");
+    // acme.hello was a signed upload before the merchant moved it into the store's code.
+    sqlite.prepare("UPDATE plugin_installations SET source = 'upload', signer_key_id = '1a2b3c4d5e6f7a8b' WHERE plugin_id = 'acme.hello'").run();
+    const hello = await requirePluginInstallation(db, "acme.hello");
+    await putObjectRecord(db, "acme.hello", "greetings", hello.manifest.objects.greetings!, "g1", { order_id: "g1", kind: "paid", created_at: 1 });
+    expect((await call("POST", "/apps/acme.hello/uninstall", { expectedRevision: hello.revision, keepData: true })).status).toBe(200);
+
+    // The bundled release cannot take another key's data: it is not installed, and the data says why.
+    expect((await call("GET", "/apps")).json.data.apps.some((entry: Json) => entry.id === "acme.hello")).toBe(false);
+    const listed = (await call("GET", "/apps/removed-data")).json.data.apps;
+    expect(listed).toEqual([expect.objectContaining({
+      id: "acme.hello", revision: 1, records: 1, signerKeyId: "1a2b3c4d5e6f7a8b",
+      waitingRelease: { source: "bundled", version: BUNDLED_PLUGINS["acme.hello"]!.version, signerKeyId: null },
+    })]);
+
+    actor = { id: "manager", isSuperAdmin: false };
+    expect((await call("POST", "/apps/removed-data/acme.hello/hand-over", { expectedRevision: 1, signerKeyId: null })).status).toBe(403);
+    actor = { id: "owner", isSuperAdmin: true };
+    expect((await call("POST", "/apps/removed-data/acme.hello/hand-over", { expectedRevision: 1, signerKeyId: "not-a-key" })).status).toBe(400);
+    expect((await call("POST", "/apps/removed-data/acme.hello/hand-over", { expectedRevision: 7, signerKeyId: null })).status).toBe(409);
+    const handed = await call("POST", "/apps/removed-data/acme.hello/hand-over", { expectedRevision: 1, signerKeyId: null });
+    expect(handed.json.data).toEqual({ id: "acme.hello", revision: 2, installed: true });
+
+    // Installed from the bundled code, with the data the upload kept.
+    expect(await requirePluginInstallation(db, "acme.hello")).toMatchObject({ source: "bundled", signerKeyId: null, status: "installed" });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM object_records WHERE type_id = 'oty_acme.hello.greetings'").get()).toEqual({ n: 1 });
+    expect((await call("GET", "/apps/removed-data")).json.data.apps).toEqual([]);
+  });
+
   it("holds an updated bundled app whose access grows until a Super Admin approves it", async () => {
     await call("GET", "/apps");
     const tagger = (await call("GET", "/apps/acme.order-tagger")).json.data.app;

@@ -1,4 +1,4 @@
-// Plugin cron (docs/platform/PLUGINS.md, "Extension points" 5), run from the
+// Plugin cron (packages/plugin-sdk/docs/apps.md, "Extension points" 5), run from the
 // API's sweep rotation (every 15 minutes on Paid, every 23 minutes on Free;
 // scheduled/slices.ts). Each tick, for every job of every active plugin, the latest
 // slot of its schedule at or before now (store wall clock, 24 hour lookback)

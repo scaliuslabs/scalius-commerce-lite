@@ -249,9 +249,10 @@ function optionAriaLabel(
   value: string,
   availability: VariantOptionAvailability,
 ) {
-  if (availability === "sold_out") return `${option.name}: ${value}. Out of stock.`;
-  if (availability === "incompatible") return `${option.name}: ${value}. Not available with the current selection.`;
-  return `${option.name}: ${value}`;
+  const label = availability === "sold_out"
+    ? catalogWords.optionSoldOut
+    : availability === "incompatible" ? catalogWords.optionUnavailable : catalogWords.optionValue;
+  return label(option.name, value);
 }
 ---
 
@@ -275,6 +276,10 @@ function optionAriaLabel(
       data-cart-add-failed-text={pageCopy.quickBuyFailedText}
       data-stock-in-text={stockWords.inStock}
       data-stock-low-text={stockWords.lowStock}
+      data-option-value-text={catalogWords.optionValue("{option}", "{value}")}
+      data-option-sold-out-text={catalogWords.optionSoldOut("{option}", "{value}")}
+      data-option-unavailable-text={catalogWords.optionUnavailable("{option}", "{value}")}
+      data-option-selected-text={catalogWords.optionSelected("{value}")}
     >
     <div class="buy-box-main">
     <div class="mb-2 border-b border-border pb-2">
@@ -379,11 +384,12 @@ function optionAriaLabel(
                         class:list={[
                           "variant-option-btn cursor-pointer",
                           {
-                            "border-primary bg-primary text-primary-foreground": selected && status !== "sold_out",
+                            "border-primary bg-primary text-primary-foreground": selected,
                             "border-input bg-background text-foreground": !selected && status === "available",
                             "border-dashed border-muted-foreground bg-muted text-foreground": !selected && status === "incompatible",
-                            "cursor-not-allowed border-input bg-background text-muted-foreground line-through": status === "sold_out",
-                            "ring-2 ring-destructive": selected && status === "sold_out",
+                            "border-input bg-background text-muted-foreground": !selected && status === "sold_out",
+                            // Dawn: a sold-out value stays choosable, crossed out, so its photo and "Sold out" show.
+                            "line-through": status === "sold_out",
                           },
                         ]}
                         data-option-definition-id={option.id}
@@ -392,7 +398,6 @@ function optionAriaLabel(
                         data-option-availability={status}
                         aria-pressed={selected ? "true" : "false"}
                         aria-label={`${optionAriaLabel(option, value.value, status)}${optionPrice ? ` ${optionPrice}.` : ""}`}
-                        aria-disabled={status === "sold_out" ? "true" : undefined}
                       >
                         <span>{value.value}</span>
                         {factsColumn && <span data-option-price hidden={!optionPrice}>{optionPrice ?? ""}</span>}

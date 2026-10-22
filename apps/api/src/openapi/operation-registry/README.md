@@ -58,7 +58,21 @@ mirror a dashboard screen, an editor section or a summary card.
   `dashboard.resources.products.create` makes a product with its options and
   SKUs (prices in minor units, stock at 0: quantities move through
   `variants.bulk_set_stock` under `write_inventory`); `products.update`
-  patches its fields under `expectedRevision` in one write. Gift cards
+  patches its fields, its whole gallery (`mediaIds`, the first featured) and
+  its sales channels under `expectedRevision` in one write. A PIM or ERP
+  sync changes SKUs one at a time under the product's revision
+  (`routes/admin/resources-products.ts`, `product-admin/sku-writes.ts`):
+  `variants.create` adds one by option values (`{ "Size": "XL" }`; a value
+  an option lacks is added, a retired combination's SKU comes back with its
+  stock), `variants.update` changes its code, price, barcode, weight, image
+  or values, `variants.retire` and `variants.restore` take it off sale and
+  back. Each answers `{ product }` with the new `revision`; stock never moves
+  through them. `ProductResource` carries what a sync diffs: description,
+  condition, SEO text, the gallery, the sales channels, the options and
+  every SKU's `optionValues`, barcode type, weight and image.
+  `variants.lookup` finds SKUs by code or barcode (a retired one too, with
+  `retiredAt`). Products, categories, collections, brands and content pages
+  list by cursor with `updatedSince`. Gift cards
   (`gift_cards.*`, `read_gift_cards` / the Sensitive `write_gift_cards`, within the
   merchant's daily app limit; an app never re-owns a funded card)
   issue, adjust under `expectedRevision` and disable; the code never reaches

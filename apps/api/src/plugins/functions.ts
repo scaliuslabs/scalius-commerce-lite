@@ -1,4 +1,4 @@
-// Function points (docs/platform/PLUGINS.md, "Extension points" 2): checkout
+// Function points (packages/plugin-sdk/docs/apps.md, "Extension points" 2): checkout
 // asks every active plugin that implements a point, in priority order, and
 // merges what comes back (core checkout/app-functions.ts). This is the runner
 // it calls. With no active implementation the cost is one indexed read that
@@ -9,7 +9,10 @@
 // leaves the app out (`skip`, the default), or, for an app registered with
 // `block` at cart.validate or checkout.payment_methods, stops the run with
 // `PluginFunctionsBlockedError` (checkout then refuses with the store's
-// buyer-safe message).
+// buyer-safe message). Each failed answer counts toward the app's circuit at
+// that point (core plugins/function-circuit.ts): after repeated failures the
+// circuit opens, checkout applies the same policy without calling the app,
+// and the staff are told; a good answer closes it.
 //
 // Declared reads (manifest `reads`, core checkout/app-reads.ts): each app
 // gets its own as `input.reads`, from the request's reads cache (filled by
@@ -35,8 +38,17 @@
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
 import {
+  clearFunctionInflight,
+  FUNCTION_CIRCUIT,
+  functionCircuitDirty,
+  functionCircuitOpen,
+  functionHung,
   listActiveFunctionPlugins,
+  markFunctionInflight,
   PluginError,
+  recordFunctionFailure,
+  recordFunctionSuccess,
+  stopPlugin,
   type RegisteredPlugin,
 } from "@scalius/core/modules/plugins";
 import { prepareAppObjectCommit, ObjectError } from "@scalius/core/modules/objects";
@@ -92,6 +104,24 @@ function withCustomerRoles(input: Record<string, unknown>, roles: readonly Plugi
   const cart = input.cart as { customer?: Record<string, unknown> | null } | null | undefined;
   if (!cart?.customer) return input;
   return { ...input, cart: { ...cart, customer: { ...cart.customer, roles: roles.map((entry) => ({ role: entry.role, ref: entry.ref })) } } };
+}
+
+/** One app's accepted checkout attributes (`<app id>.<key>`), out of every active app's. */
+function ownAttributes(attributes: Readonly<Record<string, string>>, pluginId: string): Record<string, string> {
+  const prefix = `${pluginId}.`;
+  return Object.fromEntries(Object.entries(attributes).filter(([key]) => key.startsWith(prefix)));
+}
+
+/**
+ * The input with `cart.attributes` narrowed to one app's own answers. Buyer
+ * answers are free text the buyer gave one app (a gift message), so another
+ * app's function never reads them: reading them would be a declared,
+ * consented read, which the platform does not offer. Core cart facts stay.
+ */
+function withOwnCartAttributes(input: Record<string, unknown>, pluginId: string): Record<string, unknown> {
+  const cart = input.cart as { attributes?: Record<string, string> } | null | undefined;
+  if (!cart?.attributes) return input;
+  return { ...input, cart: { ...cart, attributes: ownAttributes(cart.attributes, pluginId) } };
 }
 
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
@@ -179,18 +209,36 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
   };
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  // Circuit bookkeeping runs after the answer (function-circuit.ts): it never delays checkout.
+  const settle = (work: Promise<unknown>) => ctx.waitUntil(work.catch(() => console.warn(`[plugins] function circuit write failed`)));
   let next = 0;
   const worker = async () => {
     while (next < registered.length) {
       const index = next;
       next += 1;
-      const { installation, priority } = registered[index]!;
+      const registration = registered[index]!;
+      const { installation, priority } = registration;
       const declaration = installation.manifest.functions.find((fn) => fn.point === point);
+      // Only an approved grant lets an app pause checkout.
+      const blocking = declaration?.onError === "block" && Boolean(installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point));
       const fail = () => {
-        // Only an approved grant lets an app pause checkout.
-        if (declaration?.onError === "block" && installation.grant?.blockingFunctions.some((blockingPoint) => blockingPoint === point)) blocked.push(installation.pluginId);
+        if (blocking) blocked.push(installation.pluginId);
       };
-      let scopedInput = checked.data as Record<string, unknown>;
+      // One more failed answer toward the circuit.
+      const count = () => {
+        settle(recordFunctionFailure(db, { pluginId: installation.pluginId, point }).then((state) => (
+          state.opened ? noticeOpenCircuit(db, env, host, installation, point, state, blocking) : undefined
+        )));
+      };
+      // A failed answer: the failure policy now, and a count toward the circuit.
+      const failed = () => {
+        fail();
+        count();
+      };
+      // An app sees only its own buyer answers: `cart.attributes` keeps the
+      // `<app id>.<key>` entries of this app, never another app's.
+      let scopedInput = withOwnCartAttributes(checked.data as Record<string, unknown>, installation.pluginId);
       // An extension sees only the reads its own slot declares.
       let readNames: ReadonlySet<string> | null = null;
       if (point === PLUGIN_EXTENSION_RUN) {
@@ -199,8 +247,19 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         if (!extension || !installation.grant?.extensions.includes(buyer.target)) continue;
         readNames = new Set(extension.reads.map((read) => read.as));
         const prefix = `${installation.pluginId}.`;
-        const own = Object.fromEntries(Object.entries(buyer.attributes).filter(([key]) => key.startsWith(prefix)));
-        scopedInput = { ...buyer, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])), cart: buyer.cart ? { ...buyer.cart, attributes: own } : null };
+        const own = ownAttributes(buyer.attributes, installation.pluginId);
+        scopedInput = { ...scopedInput, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])) };
+      }
+      // A run that never returned (it held its thread): stop the app rather than freeze the store again.
+      // A stopped app neither answers nor blocks, so it is left out here too.
+      if (functionHung(registration.circuit, nowSeconds)) {
+        await stopHungApp(db, env, host, installation, point);
+        continue;
+      }
+      // An open circuit: the failure policy at once, without calling the app (or logging again).
+      if (functionCircuitOpen(registration.circuit, nowSeconds)) {
+        fail();
+        continue;
       }
       // Each app sees only the roles it granted.
       const roles = await rolesOf(installation.pluginId);
@@ -211,20 +270,30 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         : NO_APP_FUNCTION_READS;
       if (!read.ok) {
         await host.incident(installation, pluginRunSource(point, scopedInput), `${read.reason} The function did not run.`);
-        fail();
+        failed();
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
+      // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows.
+      const sandboxed = installation.source !== "bundled";
+      if (sandboxed) await markFunctionInflight(db, { pluginId: installation.pluginId, point });
       const outcome = await host.invokeFunction(installation, point, { ...scopedInput, reads });
+      if (sandboxed) await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
       if (!outcome.ok || !outcome.value) {
-        fail();
+        // A run the platform cut short for its own reasons (the app was just updated or stopped) is no failure of the app's.
+        if (!outcome.ok && (outcome.failure === "outdated" || outcome.failure === "inactive")) fail();
+        else failed();
         continue;
       }
+      if (functionCircuitDirty(registration.circuit)) settle(recordFunctionSuccess(db, { pluginId: installation.pluginId, point }));
       const result: PluginFunctionResult<P> = { pluginId: installation.pluginId, priority, output: outcome.value };
       const commit = (outcome.value as { commit?: Array<{ as: string; record: unknown }> }).commit;
       if (commit?.length) {
         const prepared = await prepareCommits(host, installation, point, read, commit);
-        if (!prepared) continue;
+        if (!prepared) {
+          count();
+          continue;
+        }
         result.commits = prepared;
       }
       results[index] = result;
@@ -272,4 +341,70 @@ async function prepareCommits(
     }
   }
   return prepared;
+}
+
+/**
+ * A function's circuit just opened (function-circuit.ts): the app's log says
+ * so and the staff are told, once per opening. A blocking function keeps
+ * checkout refusing meanwhile, so the notice names the way out.
+ */
+async function noticeOpenCircuit(
+  db: Database,
+  env: Env,
+  host: PluginHost,
+  installation: RegisteredPlugin["installation"],
+  point: PluginRunPoint,
+  state: { failures: number; openUntil: number | null },
+  blocking: boolean,
+): Promise<void> {
+  const name = installation.manifest.name;
+  const minutes = Math.round(FUNCTION_CIRCUIT.openSeconds / 60);
+  const consequence = blocking
+    ? "It is approved as blocking, so checkout refuses orders until it answers again. Fix the app, or stop it on its page (Stop now) and checkout goes on without it."
+    : "Checkout goes on without it meanwhile.";
+  await host.incident(
+    installation,
+    `function:${point}`,
+    `${point} failed ${state.failures} times; checkout stops calling it for ${minutes} minutes, then tries it once. ${consequence}`,
+  );
+  try {
+    const { resolveDashboardLink, sendAdminPushNotice } = await import("@scalius/core/modules/notifications");
+    await sendAdminPushNotice(db, env, {
+      title: blocking ? `${name} is blocking checkout` : `${name} is paused at checkout`,
+      body: `Its ${point} answer kept failing. ${consequence}`,
+      link: resolveDashboardLink(env, `/admin/apps/${installation.pluginId}`),
+      data: { pluginId: installation.pluginId, notificationType: "plugin_function_circuit" },
+    });
+  } catch {
+    console.warn(`[plugins] ${installation.pluginId} circuit notice failed`);
+  }
+}
+
+/**
+ * A sandboxed function run never returned (function-circuit.ts): the app is
+ * stopped with its reason, its log says why, and the staff are told. Starting
+ * it again (after a fix) is the merchant's call.
+ */
+async function stopHungApp(
+  db: Database,
+  env: Env,
+  host: PluginHost,
+  installation: RegisteredPlugin["installation"],
+  point: PluginRunPoint,
+): Promise<void> {
+  const reason = `Its ${point} function started and never returned, holding the store's Worker. It was stopped so it cannot freeze checkout again.`;
+  const stopped = await stopPlugin(db, installation.pluginId, reason).catch(() => false);
+  if (!stopped) return;
+  await host.incident(installation, `function:${point}`, reason);
+  try {
+    const { resolveDashboardLink, sendAdminPushNotice } = await import("@scalius/core/modules/notifications");
+    await sendAdminPushNotice(db, env, {
+      title: `${installation.manifest.name} was stopped`,
+      body: `Its ${point} answer never came back. Fix the app, then start it again.`,
+      link: resolveDashboardLink(env, `/admin/apps/${installation.pluginId}`),
+      data: { pluginId: installation.pluginId, notificationType: "plugin_stopped" },
+    });
+  } catch {
+    console.warn(`[plugins] ${installation.pluginId} stop notice failed`);
+  }
 }

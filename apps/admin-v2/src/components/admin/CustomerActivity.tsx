@@ -17,6 +17,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
+import { shownText } from "~/lib/erased-text";
 
 const PAGE = { orders: 10, history: 10 } as const;
 
@@ -39,9 +40,10 @@ const FIELD_LABEL = {
   email: "fieldEmail",
 } as const;
 
-function snapshot(change: { name: string | null; phone: string | null; email: string | null }): Snapshot {
+/** `erased`: how an erased name reads ("Erased"). */
+function snapshot(change: { name: string | null; phone: string | null; email: string | null }, erased: string): Snapshot {
   return {
-    name: change.name ?? "",
+    name: shownText(change.name, erased) ?? "",
     phone: change.phone ? formatPhoneForDisplay(change.phone, getStoreRegion()) : "",
     email: change.email ?? "",
   };
@@ -59,13 +61,27 @@ const CHANGE_LABEL: Partial<Record<string, CustomerMessage>> = {
   restored: "changeRestored",
 };
 
+/** A Super Admin erased the customer's personal data: one line with who did it. */
+function ErasedEvent({ entry }: { entry: HistoryEntry }) {
+  const t = useMessages(customerPageMessages);
+  const name = entry.author?.kind === "staff" ? entry.author.name : null;
+  return (
+    <li className="text-body">
+      <p>
+        <span className="font-medium">{name ? t("changeErasedBy", { name }) : t("changeErased")}</span>
+        <span className="text-muted-foreground"> · {when(entry.createdAt)}</span>
+      </p>
+    </li>
+  );
+}
+
 /** Order events: filed to an account at checkout, or moved between a guest record and an account. */
 const isOrderEvent = (entry: HistoryEntry) =>
   entry.changeType === "order_linked" || entry.changeType === "order_moved_in" || entry.changeType === "order_moved_out";
 
-/** The next older entry whose contact snapshot an update is compared with (order events aren't edits). */
+/** The next older entry whose contact snapshot an update is compared with (order events and erasure aren't edits). */
 function olderSnapshot(entries: HistoryEntry[], index: number): HistoryEntry | undefined {
-  return entries.slice(index + 1).find((entry) => !isOrderEvent(entry));
+  return entries.slice(index + 1).find((entry) => !isOrderEvent(entry) && entry.changeType !== "erased");
 }
 
 /** The sentence for a linking event, worded by the contact that proved it (or the plain wording without one). */
@@ -223,8 +239,8 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
                   >
                     <span className="min-w-0 flex-1">
                       {/* Each order keeps the name it was placed with: a guest record can hold orders from different people. */}
-                      <span title={`${formatOrderNumber(order.orderNumber, order.id)} · ${order.customerName}`} className="block truncate font-medium">
-                        {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
+                      <span title={`${formatOrderNumber(order.orderNumber, order.id)} · ${shownText(order.customerName, t("erasedCustomer"))}`} className="block truncate font-medium">
+                        {formatOrderNumber(order.orderNumber, order.id)} · {shownText(order.customerName, t("erasedCustomer"))}
                       </span>
                       <span className="block text-muted-foreground">{day(order.createdAt)}</span>
                     </span>
@@ -253,12 +269,13 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
           {history.isSuccess && changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noHistory")}</p> : null}
           <ol className="space-y-3">
             {changes.map((change, index) => {
+              if (change.changeType === "erased") return <ErasedEvent key={change.id} entry={change} />;
               if (change.changeType === "signed_up" || isOrderEvent(change)) return <LinkEvent key={change.id} entry={change} />;
               // Newest first: an update is shown as what it changed against the snapshot below it.
               const older = olderSnapshot(changes, index);
               const fields = change.changeType === "updated" && older
-                ? changedFields(snapshot(change), snapshot(older))
-                : changedFields(snapshot(change), undefined);
+                ? changedFields(snapshot(change, t("erasedValue")), snapshot(older, t("erasedValue")))
+                : changedFields(snapshot(change, t("erasedValue")), undefined);
               if (change.changeType === "updated" && older && fields.length === 0) return null;
               const lifecycle = change.changeType === "deleted" || change.changeType === "restored";
               return (

@@ -2,13 +2,14 @@ import { Buffer } from "node:buffer";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { AGENT_OPERATIONS } from "../../generated/agent-operations.gen";
+import { AGENT_OPERATIONS, AGENT_WORKFLOW_CATALOG } from "../../generated/agent-operations.gen";
 import { AgentDispatchError, type AgentOperationResult } from "../dispatch";
 import type { AgentPrincipal } from "../types";
 
 const mocks = vi.hoisted(() => ({
   authorizeOperation: vi.fn(),
   dispatchAgentOperation: vi.fn(),
+  validateOperation: vi.fn(),
   resolvePrincipal: vi.fn(),
   writeAudit: vi.fn(),
 }));
@@ -35,9 +36,16 @@ vi.mock("../backend", () => ({
   }),
 }));
 
+// A validate-only dispatch (the route's own validation, asked before any
+// approval) is recorded apart from the calls that run: it answers valid
+// unless a test says otherwise.
 vi.mock("../dispatch", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../dispatch")>();
-  return { ...actual, dispatchAgentOperation: mocks.dispatchAgentOperation };
+  return {
+    ...actual,
+    dispatchAgentOperation: (options: { validateOnly?: true; operation: { operationId: string } }) =>
+      options.validateOnly ? mocks.validateOperation(options) : mocks.dispatchAgentOperation(options),
+  };
 });
 
 import { writeAgentConfirmPolicy } from "./confirm";
@@ -103,6 +111,9 @@ describe("MCP surface v2 execution", () => {
     mocks.authorizeOperation.mockReset().mockResolvedValue(true);
     mocks.resolvePrincipal.mockReset().mockResolvedValue(principal);
     mocks.dispatchAgentOperation.mockReset();
+    mocks.validateOperation.mockReset().mockImplementation(async ({ operation }: { operation: { operationId: string } }) => ({
+      operationId: operation.operationId, status: 204, ok: true, requestId: "validate", contentType: null, data: null,
+    }));
     mocks.writeAudit.mockReset().mockResolvedValue(undefined);
     const harness = createSqliteD1Database();
     sqlite = harness.sqlite;
@@ -170,6 +181,54 @@ describe("MCP surface v2 execution", () => {
     const full = await tool("scalius_describe")({ ids: ["dashboard.products.create"], detail: "full" });
     expect(bytes(operations[0])).toBeLessThanOrEqual(bytes((full.structuredContent!.operations as unknown[])[0]));
     expect(bytes(operations[0])).toBeLessThanOrEqual(8 * 1024);
+  });
+
+  it("every workflow search returns opens in scalius_describe with its steps", async () => {
+    const queries = [
+      "Fulfill this paid order with the tracking number",
+      "What are today's booked sales and order count?",
+      "Refund an order",
+      "Set stock counts for many SKUs",
+      "How many products and orders do we have?",
+      "Create a product with sizes",
+    ];
+    let workflows = 0;
+    for (const query of queries) {
+      const search = await tool("scalius_search")({ query, limit: 10 });
+      for (const hit of search.structuredContent!.hits as Array<{ id: string; kind: string; operationIds?: string[] }>) {
+        if (hit.kind !== "workflow") continue;
+        workflows += 1;
+        const described = await tool("scalius_describe")({ ids: [hit.id] });
+        const [entry] = described.structuredContent!.operations as Array<Record<string, unknown>>;
+        expect(entry, `${query} -> ${hit.id}`).toMatchObject({ id: hit.id, kind: "workflow", steps: hit.operationIds });
+        expect(entry!.error).toBeUndefined();
+        expect(String(entry!.next)).toContain("scalius_describe");
+      }
+    }
+    expect(workflows).toBeGreaterThan(0);
+
+    // Every reviewed dashboard route opens, not only the ones these queries rank.
+    for (const route of AGENT_WORKFLOW_CATALOG.routes.filter((candidate) => candidate.surface === "dashboard")) {
+      const described = await tool("scalius_describe")({ ids: [route.id] });
+      expect((described.structuredContent!.operations as Array<Record<string, unknown>>)[0], route.id).toMatchObject({ kind: "workflow", steps: route.operationIds.filter((step) => step.startsWith("dashboard.")) });
+    }
+
+    // A workflow whose step this connection cannot run stays unavailable.
+    mocks.authorizeOperation.mockImplementation(async (_principal, input: { risk: string }) => input.risk === "read");
+    const refused = await tool("scalius_describe")({ ids: ["dashboard.order-fulfill"] });
+    expect((refused.structuredContent!.operations as Array<Record<string, unknown>>)[0]).toMatchObject({ error: { code: "operation_not_found" } });
+  });
+
+  it("a data question without a reviewed answer offers reads, never a change", async () => {
+    const output = await tool("scalius_answer")({ question: "How many products and orders do we have?" });
+    expect(output.structuredContent).toMatchObject({ ok: true, kind: "unavailable", message: expect.stringContaining("No reviewed answer") });
+    const hits = output.structuredContent!.hits as Array<{ id: string; kind: string; operationIds?: string[] }>;
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0]).toMatchObject({ id: "dashboard.product-counts", operationIds: ["dashboard.products.stats"] });
+    for (const hit of hits) {
+      const steps = hit.kind === "operation" ? [hit.id] : hit.operationIds ?? [];
+      for (const step of steps) expect(AGENT_OPERATIONS.find((operation) => operation.operationId === step)?.risk, `${hit.id}: ${step}`).toBe("read");
+    }
   });
 
   it("answers a reviewed daily data workflow in one projected call", async () => {
@@ -460,6 +519,22 @@ describe("MCP surface v2 execution", () => {
       const confirmed = await tool("scalius_write")({ steps, approvalId: confirmation.approvalId });
       expect(confirmed.structuredContent).toMatchObject({ ok: true });
       expect(mocks.dispatchAgentOperation.mock.calls.map(([options]) => options.confirmedBy)).toEqual([undefined, "approval"]);
+      // Both steps were checked against their routes before the owner was asked.
+      expect(mocks.validateOperation.mock.calls.slice(0, 2).map(([options]) => options.operation.operationId))
+        .toEqual([sequentialWrite.operationId, destructive.operationId]);
+    });
+
+    it("answers the route's own refusal and asks nobody when the input would not pass validation", async () => {
+      mocks.validateOperation.mockResolvedValue(result("dashboard.orders.refund", 400, {
+        success: false, error: { code: "unknown_body_property", message: "Unknown body property 'productIds'." },
+      }));
+      const refused = await tool("scalius_write")(refund);
+      expect(refused.isError).toBe(true);
+      expect(refused.structuredContent).toMatchObject({ error: { code: "unknown_body_property", status: 400 } });
+      expect(refused.structuredContent).not.toHaveProperty("confirmation");
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_browser_handoffs").get()).toEqual({ count: 0 });
+      expect(mocks.dispatchAgentOperation).not.toHaveBeenCalled();
+      expect(mocks.writeAudit).not.toHaveBeenCalled();
     });
   });
 

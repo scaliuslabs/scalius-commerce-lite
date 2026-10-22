@@ -14,7 +14,8 @@ const event: OutboxEvent = {
 const customer = (name: string) => buildEventRepresentation("customer", {
   id: "cus_1", name, email: "rahim@buyer.test", phone: "+8801711111111", hasAccount: true, totalOrders: 2, lastOrderAt: null,
   mergedIntoCustomerId: null, tags: [], consents: [{ channel: "sms", state: "subscribed", contact: "+8801711111111", updatedAt: "2026-10-19T00:00:00.000Z" }],
-  createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", deletedAt: null,
+  taxExempt: false, taxExemptionId: null,
+  createdAt: "2026-10-19T00:00:00.000Z", updatedAt: "2026-10-19T00:00:00.000Z", deletedAt: null, erasedAt: null,
 }, allProtectedData());
 
 describe("the webhook body", () => {

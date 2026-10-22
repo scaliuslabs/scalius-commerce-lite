@@ -54,9 +54,19 @@ export const createCustomerSchema = z.object({
     address: addressInputSchema.extend({ skipValidation: z.boolean().optional() }).strict().nullable().optional(),
 });
 
-/** Schema for updating an existing customer (PUT /api/customers/:id): contact only. A phone can be set, never removed. */
+/** The longest tax exemption id (a VAT registration, a resale certificate number). */
+export const TAX_EXEMPTION_ID_MAX_LENGTH = 64;
+
+/**
+ * Schema for updating an existing customer (PUT /api/customers/:id): contact
+ * and tax exemption. A phone can be set, never removed.
+ */
 export const updateCustomerSchema = createCustomerSchema.omit({ address: true, phone: true }).partial().extend({
     phone: phoneNumberSchema.optional(),
+    /** The buyer pays no tax on their orders (a VAT-registered company, a reseller). */
+    taxExempt: z.boolean().optional(),
+    /** The certificate or registration number; kept only while `taxExempt`. Blank or null: none. */
+    taxExemptionId: z.string().trim().max(TAX_EXEMPTION_ID_MAX_LENGTH).nullable().optional(),
 });
 
 export type AddressInputBody = z.infer<typeof addressInputSchema>;

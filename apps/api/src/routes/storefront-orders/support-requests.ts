@@ -10,7 +10,7 @@ import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { created } from "../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { sendOrderSupportRequestNotification } from "../../utils/order-notifications";
-import { receiptSupportRequestSchema, receiptSupportRequestActionSchema } from "./shared";
+import { receiptSupportRequestSchema, receiptSupportRequestActionSchema, supportRequestItemsSchema } from "./shared";
 import { notificationSender } from "../../background/notification-sender";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -42,6 +42,7 @@ const createReceiptSupportRequestRoute = createRoute({
             type: z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES),
             reason: z.string().trim().min(3).max(500),
             message: z.string().trim().max(1000).nullable().optional(),
+            items: supportRequestItemsSchema.optional(),
           }).strict(),
         },
       },
@@ -77,6 +78,7 @@ app.openapi(createReceiptSupportRequestRoute, async (c) => {
     type: body.type,
     reason: body.reason,
     message: body.message,
+    ...(body.items ? { items: body.items } : {}),
   });
   await sendOrderSupportRequestNotification({
     db,

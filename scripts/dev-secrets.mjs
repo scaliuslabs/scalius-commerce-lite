@@ -23,14 +23,23 @@ export const INSTALLED_SECRETS = Object.freeze({
 export const STOREFRONT_DEV_CONFIG = "wrangler.dev.gen.json";
 
 /**
- * Writes a dev copy of a Wrangler config with `secrets.required` set, beside
+ * Writes a dev copy of a Wrangler config with `secrets.required` set (and any
+ * service bindings rebound to local worker names), beside
  * the original so relative paths and .dev.vars resolve the same. Returns its path.
  */
-export function writeDevWranglerConfig(configUrl, required) {
+export function writeDevWranglerConfig(configUrl, required, { services = {}, workerLoader = false } = {}) {
   const source = fileURLToPath(configUrl);
   const config = JSON.parse(stripJsonc(readFileSync(source, "utf8")));
   const out = join(dirname(source), STOREFRONT_DEV_CONFIG);
-  const text = `${JSON.stringify({ ...config, secrets: { required: [...required] } }, null, 2)}\n`;
+  // `services` rebinds a service binding to a local worker name: the deploy
+  // config names the deployed API (`scalius-api`), while the local API runs
+  // as this stack's name (scripts/dev-ports.mjs devApiWorkerName).
+  const rebound = config.services?.map((service) =>
+    services[service.binding] ? { ...service, service: services[service.binding] } : service);
+  // With the plugin sandbox on, the storefront draws uploaded apps' parts in
+  // the Worker Loader, as a Paid deploy's generated config gives it.
+  const loaders = workerLoader ? { worker_loaders: [{ binding: "LOADER" }] } : {};
+  const text = `${JSON.stringify({ ...config, ...(rebound ? { services: rebound } : {}), ...loaders, secrets: { required: [...required] } }, null, 2)}\n`;
   if (!existsSync(out) || readFileSync(out, "utf8") !== text) writeFileSync(out, text);
   return out;
 }

@@ -19,6 +19,7 @@ import {
     products,
     productVariantOptionValues,
     productVariants,
+    salesChannels,
 } from "@scalius/database/schema";
 import { AppError, ValidationError } from "@scalius/core/errors";
 import {
@@ -26,6 +27,7 @@ import {
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import {
   buildProductBundleReplaceStatements,
@@ -33,7 +35,6 @@ import {
   catalogPriceColumns,
   defaultProductSkuValues,
   MAX_PRODUCT_MEDIA_ASSOCIATIONS,
-  MAX_PRODUCT_PRICE,
   presentCatalogPrice,
   PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
   PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
@@ -47,9 +48,11 @@ import {
   publishedChannelIdsSql,
   buildUrlRedirectStatements,
   productPath,
+  setProductChannelsStatements,
 } from "../products";
+import { isSalesChannelId } from "@scalius/shared/sales-channels";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
-import { updateProductMediaSection } from "./write";
+import { planProductMediaSection, productMediaFromMediaIds, updateProductMediaSection } from "./write";
 import {
     PRODUCT_NAME_MAX_LENGTH,
     productBrandIdSchema,
@@ -99,13 +102,13 @@ const canonicalPathPatchSchema = z
 
 const productBasePatchSchema = z.object({
     name: z.string().trim().min(1).max(PRODUCT_NAME_MAX_LENGTH).optional(),
-    price: z.number().min(0).max(MAX_PRODUCT_PRICE).optional(),
+    price: z.number().min(0).max(MAX_MAJOR_AMOUNT).optional(),
     categoryId: z.string().min(1).nullable().optional(),
     brandId: productBrandIdSchema.optional(),
     isActive: z.boolean().optional(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
-    discountAmount: z.number().min(0).max(MAX_PRODUCT_PRICE).nullable().optional(),
+    discountAmount: z.number().min(0).max(MAX_MAJOR_AMOUNT).nullable().optional(),
     freeDelivery: z.boolean().optional(),
     canonicalPath: canonicalPathPatchSchema,
     noIndex: z.boolean().optional(),
@@ -636,6 +639,21 @@ async function updateBaseSection(
     expectedAggregateRevision: number,
     patch: ProductBasePatch,
 ) {
+    const statements = await planProductBaseSection(db, productId, patch);
+    if (!statements) return null;
+    return commitSectionStatements(db, productId, expectedAggregateRevision, statements);
+}
+
+/**
+ * The base section's writes, without the revision guard, so a caller can put
+ * them in one guarded batch with other sections. Null when the product does
+ * not exist.
+ */
+export async function planProductBaseSection(
+    db: Database,
+    productId: string,
+    patch: ProductBasePatch,
+): Promise<SQLiteBatchItem[] | null> {
     const [current, currency] = await Promise.all([db.select({
         name: products.name,
         priceMinor: products.priceMinor,
@@ -664,6 +682,17 @@ async function updateBaseSection(
         ...definedPatch,
         ...catalogPriceColumns({ price, discountPercentage, discountAmount }, currency),
     } as typeof current;
+    // A product with options keeps no product discount: each variant has its own compare-at price (buyer QA B1).
+    if ((discountPercentage ?? 0) > 0 || (discountAmount ?? 0) > 0) {
+        const option = await db.select({ id: productVariants.id }).from(productVariants).where(and(
+            eq(productVariants.productId, productId),
+            eq(productVariants.isDefault, false),
+            isNull(productVariants.deletedAt),
+        )).limit(1).get();
+        if (option) {
+            throw new ValidationError("A product with options has no product discount. Give each variant its own compare-at price instead.", { field: "discountAmount" });
+        }
+    }
     if (next.canonicalPath !== null && next.canonicalPath !== `/products/${next.slug}`) {
         throw new ValidationError("Canonical path must use this product's current slug until URL aliases are supported.");
     }
@@ -740,8 +769,53 @@ async function updateBaseSection(
             )));
         }
     }
-    const result = await executeProductAggregateMutationBatch(db, productId, expectedAggregateRevision, mutationStatements);
-    return { aggregateRevision: result.aggregateRevision };
+    return mutationStatements;
+}
+
+/**
+ * The stable app API's product update (`products.update`): base fields, the
+ * whole gallery (media file ids in order, the first featured) and the sales
+ * channels it is published to, in one guarded batch that advances the
+ * revision once. SKUs that showed a removed gallery image fall back to the
+ * featured image. Null when the product does not exist.
+ */
+export async function updateProductResourceSections(
+    db: Database,
+    productId: string,
+    expectedAggregateRevision: number,
+    sections: {
+        base?: ProductBasePatch;
+        mediaIds?: readonly string[];
+        salesChannelIds?: readonly string[];
+    },
+): Promise<{ aggregateRevision: number } | null> {
+    const statements: SQLiteBatchItem[] = [];
+    if (sections.base && Object.values(sections.base).some((value) => value !== undefined)) {
+        const base = await planProductBaseSection(db, productId, sections.base);
+        if (!base) return null;
+        statements.push(...base);
+    }
+    if (sections.mediaIds) {
+        const media = await planProductMediaSection(db, productId, await productMediaFromMediaIds(db, productId, sections.mediaIds), "all");
+        if (!media) return null;
+        statements.push(...media);
+    }
+    if (sections.salesChannelIds) {
+        const channelIds = [...new Set(sections.salesChannelIds)];
+        if (!channelIds.every(isSalesChannelId)) {
+            throw new ValidationError("Use sales channel ids.", { field: "salesChannelIds" });
+        }
+        const known = channelIds.length === 0 ? [] : await db.select({ id: salesChannels.id }).from(salesChannels)
+            .where(inArray(salesChannels.id, channelIds));
+        if (known.length !== channelIds.length) {
+            throw new ValidationError("A sales channel was not found.", { field: "salesChannelIds" });
+        }
+        const product = await db.select({ id: products.id }).from(products).where(eq(products.id, productId)).get();
+        if (!product) return null;
+        statements.push(...setProductChannelsStatements(db, productId, channelIds));
+    }
+    if (statements.length === 0) throw new ValidationError("Send at least one field to change.");
+    return commitSectionStatements(db, productId, expectedAggregateRevision, statements);
 }
 
 async function updateTextSection(

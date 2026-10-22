@@ -105,11 +105,19 @@ function seededTables(sqlite: DatabaseSync): Array<{ name: string; rows: Array<R
   return ordered.map((name) => ({ name, rows: withRows.get(name)! }));
 }
 
-async function loadMigrationSeed(client: Client): Promise<void> {
+/**
+ * Copies the rows of a migrated SQLite database (by default the pristine
+ * current one: the migration seed) into the tables the PostgreSQL database
+ * has. Load it between a schema bundle's `preDataSql` and `postDataSql`.
+ */
+export async function loadMigrationSeed(
+  client: Client,
+  sqlite: DatabaseSync = createMigratedSqlite({ provider: "turso" }),
+): Promise<void> {
   const present = new Set((await client.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()",
   )).rows.map((row) => row.table_name as string));
-  for (const { name, rows } of seededTables(createMigratedSqlite({ provider: "turso" }))) {
+  for (const { name, rows } of seededTables(sqlite)) {
     if (!present.has(name)) continue;
     for (const row of rows) {
       const columns = Object.keys(row);

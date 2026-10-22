@@ -4,6 +4,7 @@
 // shown again. Deactivate and uninstall are guarded by the revision too, and
 // both list the published theme's parts the app draws, which then show the
 // store's own design.
+import { TypedConfirmField, typedConfirmMatches } from "~/components/admin/shared/TypedConfirmField";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -96,6 +97,12 @@ export function ActivateAppDialog({ app, open, onOpenChange }: DialogProps) {
           <DialogTitle>{t(update ? "approveTitle" : "activateTitle", { name: app.name })}</DialogTitle>
           <DialogDescription>{t(update ? "approveIntro" : "activateIntro", { name: app.name })}</DialogDescription>
         </DialogHeader>
+        {/* A bundled app that isn't first-party runs in the store's own Workers, with no sandbox. */}
+        {app.runtime === "bundled" && app.thirdParty ? (
+          <Alert variant="info">
+            <AlertDescription>{t("trustedCode")}</AlertDescription>
+          </Alert>
+        ) : null}
         <AppAccess app={app} consent={<p className="text-body">{t("consentWarning", { name: app.name })}</p>} />
         {missing.length > 0 ? (
           <Alert variant="warning">
@@ -161,6 +168,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
   const navigate = useNavigate();
   const result = useAppMutationResult(app);
   const [keepData, setKeepData] = useState(true);
+  const [typed, setTyped] = useState("");
   const uninstall = useMutation({
     mutationFn: () => uninstallApp(app, keepData),
     onSuccess: async ({ hookError }) => {
@@ -177,7 +185,10 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
   const changeOpen = (next: boolean) => {
     if (uninstall.isPending) return;
     // Each opening starts on the safe choice.
-    if (!next) setKeepData(true);
+    if (!next) {
+      setKeepData(true);
+      setTyped("");
+    }
     onOpenChange(next);
   };
   const choices = [
@@ -203,7 +214,7 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
           {choices.map((choice) => (
             <label key={choice.value} className="flex min-h-11 items-start gap-2 py-1 text-body">
               <span className="flex h-lh items-center">
-                <RadioGroupItem value={choice.value} />
+                <RadioGroupItem value={choice.value} aria-label={choice.label} />
               </span>
               <span>
                 <span className="block font-medium">{choice.label}</span>
@@ -212,9 +223,11 @@ export function UninstallAppDialog({ app, open, onOpenChange }: DialogProps) {
             </label>
           ))}
         </RadioGroup>
+        {/* Deleting the data cannot be undone: the app's name is typed first. */}
+        {!keepData ? <TypedConfirmField phrase={app.name} value={typed} onChange={setTyped} disabled={uninstall.isPending} /> : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={uninstall.isPending}>{t("cancel")}</AlertDialogCancel>
-          <Button type="button" variant="destructive" loading={uninstall.isPending} onClick={() => uninstall.mutate()}>
+          <Button type="button" variant="destructive" loading={uninstall.isPending} disabled={!keepData && !typedConfirmMatches(app.name, typed)} onClick={() => uninstall.mutate()}>
             {t("uninstall")}
           </Button>
         </AlertDialogFooter>

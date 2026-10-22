@@ -63,12 +63,28 @@ export const receiptSupportRequestSchema = z.object({
   updatedAt: z.string().nullable(),
 });
 
+/** A delivered line a return may name, with the units that reached the buyer. */
+export const returnableOrderLineSchema = z.object({
+  orderItemId: z.string(),
+  productName: z.string(),
+  variantLabel: z.string().nullable(),
+  quantity: z.number().int(),
+});
+
+/** The lines a return asks for: each once, with how many come back. */
+export const supportRequestItemsSchema = z.array(z.object({
+  orderItemId: z.string().min(1).max(64),
+  quantity: z.number().int().min(1).max(100_000),
+}).strict()).min(1).max(100);
+
 export const receiptSupportRequestActionSchema = z.object({
   type: z.enum(CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES),
   label: z.string(),
   description: z.string(),
   eligible: z.boolean(),
   disabledReason: z.string().nullable(),
+  /** A return: the delivered lines to choose from. */
+  returnableItems: z.array(returnableOrderLineSchema).optional(),
 });
 
 export const persistedStorefrontVariantIdSchema = z

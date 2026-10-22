@@ -96,6 +96,7 @@ export interface PluginRuntimeBridge {
   timelineAdd?(input: unknown): Promise<{ id: string }>;
   /** Optional on older hosts (`ctx.orders`): a clear refusal. */
   ordersHold?(input: unknown): Promise<void>;
+  ordersRelease?(input: unknown): Promise<{ revision: number; replayed: boolean }>;
   ordersAssessRisk?(input: unknown): Promise<void>;
   ordersRiskHistory?(orderId: unknown): Promise<{ orders: number; cancelled: number; returnedToSender: number }>;
   /** Optional on older hosts (`ctx.customers.roles`): a clear refusal. */
@@ -299,6 +300,10 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
       hold: (input: unknown) => call(() => {
         if (!bridge.ordersHold) throw new Error("[orders.unavailable] This platform does not take order holds from apps yet.");
         return bridge.ordersHold(input);
+      }),
+      release: (input: unknown) => call(() => {
+        if (!bridge.ordersRelease) throw new Error("[orders.unavailable] This platform does not let apps release their holds yet.");
+        return bridge.ordersRelease(input);
       }),
       assessRisk: (input: unknown) => call(() => {
         if (!bridge.ordersAssessRisk) throw new Error("[orders.unavailable] This platform does not take order risk advice from apps yet.");

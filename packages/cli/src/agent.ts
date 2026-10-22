@@ -85,10 +85,12 @@ export async function ask(runtime: Runtime, output: OutputOptions, question: str
   emit(runtime, output, { ok: true, data: (({ ok: _ok, ...rest }) => rest)(value) }, () => {
     if (value.kind === "unavailable") {
       const hits = Array.isArray(value.hits) ? value.hits.filter(isRecord) : [];
+      const message = typeof value.message === "string" ? value.message : "No reviewed answer covers this question.";
+      if (hits.length === 0) return message;
       return [
-        "No curated answer for that question. Closest capabilities:",
-        renderTable(hits, ["id", "kind", "risk", "title"]),
-        "Next: scalius describe <id>, then scalius read <id>.",
+        `${message}`,
+        renderTable(hits, ["id", "kind", "title"]),
+        "Next: scalius describe <id> (a workflow lists its read steps), then scalius read <operationId>.",
       ].join("\n");
     }
     const outputs = isRecord(value.outputs) ? value.outputs : value;
@@ -119,7 +121,7 @@ export async function search(runtime: Runtime, output: OutputOptions, query: str
     if (control) lines.push("", `Control (${String(control.disposition)}): ${String(control.summary)}`);
     const notes = Array.isArray(result.value.notes) ? result.value.notes : [];
     for (const note of notes) lines.push(`Note: ${String(note)}`);
-    lines.push("", "Next: scalius describe <id> for inputs and an example.");
+    lines.push("", "Next: scalius describe <id>: an operation's inputs and an example, or a workflow's steps.");
     return lines.join("\n");
   });
 }
@@ -138,6 +140,17 @@ export async function describe(
   const result = await tool(runtime, profile, audience, "scalius_describe", { ids, detail }, true);
   const operations = Array.isArray(result.value.operations) ? result.value.operations.filter(isRecord) : [];
   emit(runtime, output, okEnvelope(result), () => operations.map((operation) => {
+    if (operation.kind === "workflow") {
+      const steps = Array.isArray(operation.steps) ? operation.steps.map(String) : [];
+      return [
+        `${String(operation.id)} [workflow]`,
+        ...(operation.purpose ? [`  ${String(operation.purpose)}`] : []),
+        `  Steps: ${steps.join(" -> ")}`,
+        ...(Array.isArray(operation.storefrontVerification) ? [`  Storefront check (storefront connection): ${operation.storefrontVerification.join(", ")}`] : []),
+        ...(Array.isArray(operation.rules) ? operation.rules.map((rule) => `  Rule: ${String(rule)}`) : []),
+        `  Next: scalius describe ${steps.slice(0, 5).join(" ")}`,
+      ].join("\n");
+    }
     const lines = [`${String(operation.operationId)} [${String(operation.risk ?? "")}${operation.dryRun ? `, dry run ${String(operation.dryRun)}` : ""}]`];
     if (isRecord(operation.error)) return `${lines[0]}\n  ${String(operation.error.message)}`;
     if (operation.purpose) lines.push(`  ${String(operation.purpose)}`);
@@ -303,6 +316,8 @@ export interface WriteOptions {
   print?: boolean;
   /** A dry run's extra facts: `note` is printed above the preview, `fields` join the envelope. */
   preview?: { note?: string; fields?: Record<string, unknown> };
+  /** Throws for an answer that applied nothing (a dry run's too), before it is printed as a success. */
+  check?: (envelope: Record<string, unknown>, dryRun: boolean) => void;
 }
 
 export interface WriteOutcome {
@@ -510,6 +525,7 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
   if (options.dryRun) {
     const result = await tool(runtime, profile, audience, "scalius_write", dryRunArgs, true);
     const envelope = dryRunEnvelope(result, options.preview);
+    options.check?.(envelope, true);
     if (options.print !== false) emit(runtime, output, envelope, () => previewText(envelope, options.preview?.note));
     return { code: 11, envelope };
   }
@@ -526,6 +542,7 @@ export async function write(runtime: Runtime, output: OutputOptions, operationId
     localSummary(operation, options.input),
   );
   const envelope = okEnvelope(result);
+  options.check?.(envelope, false);
   if (options.print === false) return { code: 0, envelope };
   emit(runtime, output, envelope, () => {
     const meta = isRecord(envelope.meta) ? envelope.meta : {};

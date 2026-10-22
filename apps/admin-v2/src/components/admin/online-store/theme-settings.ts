@@ -30,6 +30,7 @@ import {
   type StorefrontBlockSlot,
   type StorefrontProductAppBlock,
   type StorefrontProductModule,
+  type StorefrontSection,
   type StorefrontSkinRef,
   type StorefrontTemplateId,
   type StorefrontThemeColorKey,
@@ -507,3 +508,21 @@ export function invalidAppSkins(theme: StorefrontThemeDocument, byKey: ReadonlyM
 
 /** The field ids of a skin's app settings start with this (`theme-app-skin-header`). */
 export const appSkinFieldPrefix = (unit: AppSkinUnit) => `theme-app-skin-${unit}`;
+
+/**
+ * A core section with an app's skin drawing it, or its own design back
+ * (null: no `skin` key, as before any app drew it). An app section has no skin.
+ */
+export function withSectionSkin<S extends StorefrontSection>(section: S, update: (current: StorefrontSkinRef | null) => StorefrontSkinRef | null): S {
+  if (section.type === "app") return section;
+  const { skin, ...rest } = section as S & { skin?: StorefrontSkinRef };
+  const next = update(skin ?? null);
+  return (next ? { ...rest, skin: next } : rest) as S;
+}
+
+/** Whether a core section's skin values break what its app declares (a skin of an inactive app is not judged). */
+export function sectionSkinInvalid(section: StorefrontSection, byKey: ReadonlyMap<string, AppSkinEntry>): boolean {
+  const skin = section.type === "app" ? undefined : (section as { skin?: StorefrontSkinRef }).skin;
+  const entry = skin ? byKey.get(skin.app) : undefined;
+  return entry !== undefined && entry.skin.target === `section:${section.type}` && appValuesInvalid(entry.skin.settings, skin!.values);
+}

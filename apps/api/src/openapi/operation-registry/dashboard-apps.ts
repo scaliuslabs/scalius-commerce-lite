@@ -1,5 +1,5 @@
 // Agent operation registry rows for installed apps (plugins,
-// docs/platform/PLUGINS.md). An app reads and changes store data under its
+// packages/plugin-sdk/docs/apps.md). An app reads and changes store data under its
 // grant, so every change to an installation is a security operation that runs
 // alone; approving an app's access is a Super Admin's decision in the
 // dashboard and is not an agent capability. Plugins can call none of these.
@@ -8,6 +8,7 @@ import type { OperationRegistryEntry } from "./entry";
 export const DASHBOARD_APP_OPERATIONS = {
   "dashboard.apps.list": { limits: { response: 65_536 } },
   "dashboard.apps.surfaces": { limits: { response: 65_536 } },
+  "dashboard.apps.storefront_problems_list": { limits: { response: 65_536 } },
   "dashboard.apps.get": { limits: { response: 65_536 } },
   "dashboard.apps.asset_get": {
     exposure: "excluded",
@@ -67,6 +68,14 @@ export const DASHBOARD_APP_OPERATIONS = {
     revision: "required",
     limits: { request: 4_096, response: 4_096 },
   },
+  "dashboard.apps.removed_data_hand_over": {
+    exposure: "excluded",
+    risk: "security",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 4_096, response: 4_096 },
+    reason: "Letting another release's code read and change an app's kept data is a Super Admin's trust decision in the dashboard, like trusting a developer key.",
+  },
   "dashboard.apps.logs_list": { limits: { response: 65_536 } },
   "dashboard.apps.deliveries_list": { limits: { response: 65_536 } },
   "dashboard.apps.delivery_retry": {
@@ -76,7 +85,7 @@ export const DASHBOARD_APP_OPERATIONS = {
     limits: { request: 16_384, response: 16_384 },
   },
   // Registries, installs, updates and the emergency stop
-  // (docs/platform/PLUGINS.md, "Registry", "Quotas and kill switch").
+  // (packages/plugin-sdk/docs/apps.md, "Registry", "Quotas and kill switch").
   "dashboard.apps.registry_list": { openWorld: true, limits: { response: 65_536 } },
   "dashboard.apps.registry_settings_get": { limits: { response: 65_536 } },
   "dashboard.apps.registry_settings_update": {

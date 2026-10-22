@@ -40,7 +40,7 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
-import { storeRegion } from "@/lib/store-time-zone";
+import { formatCount, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -122,6 +122,7 @@ import {
 } from "./discount-panel";
 import { fetchWithTransientRetry } from "@/lib/transient-fetch";
 import { currentPresence } from "@/lib/presence-url";
+import { isFollowedQuantityIssue, quantitiesByVariant } from "./quantity-issues";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -176,6 +177,7 @@ let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
+let cartTotalsInFlight: Promise<void> = Promise.resolve();
 /**
  * The cart lines a refused quote already sent back to the availability check.
  * That check re-renders the totals, which quote again: without this, a line
@@ -195,7 +197,7 @@ let latestAllowedPaymentMethods: string[] | null = null;
  * The names of the validated lines paid only online (digital items, gift
  * cards), and whether every line is one: the cash-on-delivery refusal names them.
  */
-let latestOnlineOnlyLines: { names: string[]; all: boolean } = { names: [], all: false };
+let latestOnlineOnlyLines: { names: string[] } = { names: [] };
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -274,7 +276,7 @@ function resetCartRuntimeListeners(): AbortSignal {
   pendingDiscountValidation = null;
   latestDiscountFacts = null;
   latestAllowedPaymentMethods = null;
-  latestOnlineOnlyLines = { names: [], all: false };
+  latestOnlineOnlyLines = { names: [] };
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   validationRuleErrors = [];
@@ -841,9 +843,13 @@ function setCartValidationIssues(
   cartValidationGlobalError = "";
   cartValidationSummaryMessage = summaryMessage;
   const grouped: Record<string, CartValidationIssue[]> = {};
+  const byVariant = quantitiesByVariant(items);
   for (const issue of issues) {
     const key = issueKeyForCart(issue, items);
     if (!key) continue;
+    // An "only N left" the line already follows (read for an older cart) holds nothing back.
+    const line = items[key];
+    if (line && isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity)) continue;
     grouped[key] = [...(grouped[key] ?? []), issue];
   }
   // The estimate counts only buyable units: a line that sold out (or came
@@ -902,11 +908,10 @@ function codRefusedForCart(): boolean {
 }
 
 /** The lines nothing but an online payment can pay for (digital items and gift cards). */
-function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[]; all: boolean } {
+function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[] } {
   const online = items.filter((item) => item.fulfillmentType === "digital" || item.fulfillmentType === "gift_card");
   return {
     names: [...new Set(online.map((item) => item.productName.trim()).filter(Boolean))],
-    all: items.length > 0 && online.length === items.length,
   };
 }
 
@@ -918,8 +923,9 @@ function onlineOnlyLines(items: readonly CartValidationItem[]): { names: string[
  */
 function codRefusedMessage(): string {
   const copy = activeCheckoutCopy();
-  const { names, all } = latestOnlineOnlyLines;
-  if (!all || names.length === 0) return copy.noPaymentMethodsText;
+  // One online-only line refuses cash for the whole order: name those lines.
+  const { names } = latestOnlineOnlyLines;
+  if (names.length === 0) return copy.noPaymentMethodsText;
   const language = pageCheckoutLanguage().code;
   return formatCheckoutLanguageText(copy.cartOnlinePaymentRequiredText, {
     items: formatList(names, numberLocale(language || "en", storeRegion())),
@@ -1261,7 +1267,26 @@ function renderEstimateNote(leftOut: readonly string[]): void {
  * destination is chosen, otherwise the discount preview for the chosen
  * delivery method. Applied codes stay applied through every cart edit.
  */
-export async function updateTotals() {
+export function updateTotals(): Promise<void> {
+  const run = refreshTotals();
+  cartTotalsInFlight = run.catch(() => undefined);
+  return run;
+}
+
+/**
+ * Resolves once the totals in flight (and any started meanwhile) have their
+ * quote: placing the order waits for it instead of finding no fingerprint
+ * while the quote for a just-chosen thana is on its way (buyer QA M6).
+ */
+export async function cartTotalsSettled(): Promise<void> {
+  let current: Promise<void>;
+  do {
+    current = cartTotalsInFlight;
+    await current;
+  } while (current !== cartTotalsInFlight);
+}
+
+async function refreshTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
   const { items: cartItems, discountCodes } = cartStore.get();
   // The estimate counts only what can be bought now (the quote refuses the rest).
@@ -1442,7 +1467,7 @@ function renderCartLine(
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
                 <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
-                <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${item.quantity}</span>
+                <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
@@ -1742,6 +1767,7 @@ export async function initCartFunctionality() {
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
   window.validateCartSnapshot = validateCartSnapshot;
+  window.cartTotalsSettled = cartTotalsSettled;
   window.hasCartValidationIssues = () => hasBlockingCartIssues();
   window.hasCartRuleErrors = () => hasCartRuleErrors();
   window.getCartBlockedMessage = () => cartBlockedMessage();

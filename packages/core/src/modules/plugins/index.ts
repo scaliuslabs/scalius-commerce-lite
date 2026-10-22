@@ -1,4 +1,4 @@
-// Plugin platform persistence (docs/platform/PLUGINS.md): installations and
+// Plugin platform persistence (packages/plugin-sdk/docs/apps.md): installations and
 // their grants and settings, extension-point registrations, declared storage
 // collections, the plugin key/value store, the plugin log ring, event
 // deliveries (the event outbox's plugin fan-out target) and cron claims.
@@ -10,6 +10,7 @@ export * from "./app-jobs";
 export * from "./cron-runs";
 export * from "./errors";
 export * from "./event-deliveries";
+export * from "./function-circuit";
 export * from "./grants";
 export * from "./held-deliveries";
 

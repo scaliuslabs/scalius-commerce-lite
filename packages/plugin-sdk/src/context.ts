@@ -1,4 +1,4 @@
-// The context every plugin handler receives (docs/platform/PLUGINS.md). It is
+// The context every plugin handler receives (packages/plugin-sdk/docs/apps.md). It is
 // the whole surface a plugin can reach: each call crosses the host bridge,
 // which checks the plugin's granted manifest before doing anything. The same
 // context is built for a sandboxed plugin (Dynamic Worker, Workers Paid) and a
@@ -242,7 +242,8 @@ export interface PluginTimeline {
 /**
  * Actions on a placed order, for event handlers (a reaction after commit,
  * never a checkout decision): an `order.created` handler that finds the
- * order risky holds it for review. `hold` and `assessRisk` need the
+ * order risky holds it for review, and the app releases that hold when its
+ * own approval comes through. `hold`, `release` and `assessRisk` need the
  * write_orders scope, `riskHistory` read_orders. Each is idempotent per
  * order and app, so a redelivered event changes nothing.
  */
@@ -258,6 +259,19 @@ export interface PluginOrders {
    * the order was placed), so hold from that handler.
    */
   hold(input: { orderId: string; reason: string }): Promise<void>;
+  /**
+   * Releases the hold this app placed with `hold` (a company approver said
+   * yes in the app's portal); needs write_orders. Never another app's hold,
+   * the platform's review of a payment the app recorded, or a staff hold:
+   * those stay with staff. `expectedRevision` is the order `revision` the
+   * approval was based on; a change since is refused (`orders_conflict`)
+   * and the hold stays. The release advances the revision (the new one is
+   * returned). Releasing a released hold (by the app or staff) changes
+   * nothing (`replayed`); no hold of this app on the order is
+   * `orders_hold_not_found`. The same release as the stable operation
+   * `orders.release_hold`.
+   */
+  release(input: { orderId: string; expectedRevision: number }): Promise<{ revision: number; replayed: boolean }>;
   /**
    * Advice staff see on the order's customer card: a level and up to five
    * reasons (200 characters each). One per order and app: the first stands.
@@ -467,7 +481,7 @@ export interface PluginRouteResponse {
   /**
    * JSON for API routes; a UI document (`ui.page(...)`) for admin pages,
    * cards and widgets; an action result (`ui.result(...)`) for buttons and
-   * forms; `{ html, head? }` for sections and product blocks; `{ page }` or
+   * forms; `{ html, head? }` for sections and product-slot components; `{ page }` or
    * `{ redirect }` for a proxied page navigation.
    */
   body?: unknown;

@@ -109,7 +109,7 @@ export const pages = sqliteTable(
 export type Page = InferSelectModel<typeof pages>;
 
 /**
- * Old storefront addresses that lead somewhere else (0185): a product's
+ * Old storefront addresses that lead somewhere else (0181): a product's
  * previous URL handle, or one a merchant added. Looked up only when a path
  * answers 404, so a page that exists never pays for it. Paths are
  * store-relative ("/products/old-handle"); `from_path` is unique.

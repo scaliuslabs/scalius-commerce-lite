@@ -1,4 +1,4 @@
-// Where active apps appear in the dashboard (docs/platform/PLUGINS.md,
+// Where active apps appear in the dashboard (packages/plugin-sdk/docs/apps.md,
 // "Admin surfaces"): their pages in the navigation, cards on resource detail
 // pages, actions on detail pages and bulk bars, and widgets on Home. One
 // cached read (`GET /api/v1/admin/apps/surfaces`) serves them all, and only

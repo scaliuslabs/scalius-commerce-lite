@@ -83,7 +83,7 @@ function getApiBaseUrl(): string {
   if (import.meta.env.DEV) return `${localDevelopmentApiOrigin()}/api/v1`;
 
   throw new Error(
-    "PUBLIC_API_URL is not configured. The storefront does not proxy /api/v1; set the API URL in the dashboard under Settings -> System -> Platform.",
+    "PUBLIC_API_URL is not configured. The storefront does not proxy /api/v1; set the Payment return address in the dashboard under Settings > Store details > Web addresses > Advanced.",
   );
 }
 

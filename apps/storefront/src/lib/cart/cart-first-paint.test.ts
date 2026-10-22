@@ -163,9 +163,9 @@ describe("cart page first paint", () => {
       expect(cartPage).not.toMatch(/\b(lg:)?order-[12]\b/);
     });
 
-    it("folds the summary for a buyer who came to check out and opens it for one who came to view the cart", () => {
+    it("starts the phone summary folded, so the first screen is the form (Dawn's checkout)", () => {
       expect(mount(false, "/cart#checkoutFormCard")).toMatchObject({ summary: "closed", expanded: "false" });
-      expect(mount(false, "/cart")).toMatchObject({ summary: "open", expanded: "true" });
+      expect(mount(false, "/cart")).toMatchObject({ summary: "closed", expanded: "false" });
       sessionStorage.setItem("quickBuyData", "{}");
       expect(mount(false, "/cart")).toMatchObject({ summary: "closed", expanded: "false" });
     });

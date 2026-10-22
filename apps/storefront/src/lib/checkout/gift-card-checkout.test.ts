@@ -196,6 +196,40 @@ describe("checkout summary with gift cards", () => {
 });
 
 describe("checkout payment with gift cards", () => {
+  // Buyer QA M4: Apply pressed while the payment step still loaded posted the
+  // form, and the card was silently dropped (the order paid the full amount).
+  it("applies a code pressed before the page script or the total was ready", async () => {
+    let releaseQuote!: () => void;
+    const firstQuote = new Promise<void>((resolve) => { releaseQuote = resolve; });
+    const { calls } = stubApi({
+      "/api/checkout/tax-quote": [
+        async () => { await firstQuote; return json({ success: true, data: quote() }); },
+        () => json({ success: true, data: quote(partialTender) }),
+      ] as unknown as Route[],
+      "/api/gift-cards/apply": () => json({
+        success: true,
+        data: {
+          handle: handle("a"), handleExpiresAt: new Date(Date.now() + 7_200_000).toISOString(),
+          last4: "7K2Q", balance: 400, balanceMinor: 40_000, currencyCode: "BDT", expiresAt: null,
+        },
+      }),
+    });
+    const input = document.getElementById("giftCardCode") as HTMLInputElement;
+    input.value = "abcd-efgh-jkmn-7k2q";
+    // Before the page script: the page's inline guard keeps the press.
+    const form = document.getElementById("giftCardForm") as HTMLFormElement;
+    form.dataset.pending = "true";
+    const started = initCheckoutPage();
+    // And again while the total is loading.
+    form.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(calls.some(({ url }) => url === "/api/gift-cards/apply")).toBe(false);
+    releaseQuote();
+    await started;
+    await vi.waitFor(() => expect(document.getElementById("giftCardChips")?.textContent).toContain("•••• 7K2Q −৳400"));
+    expect(calls.filter(({ url }) => url === "/api/gift-cards/apply")).toHaveLength(1);
+    expect(form.dataset.pending).toBeUndefined();
+  });
+
   it("applies a code through the proxy, keeps only the handle, and re-prices the order", async () => {
     const { calls } = stubApi({
       "/api/checkout/tax-quote": [
@@ -244,6 +278,11 @@ describe("checkout payment with gift cards", () => {
     });
     const replace = vi.fn();
     vi.stubGlobal("location", { ...window.location, replace, origin: window.location.origin });
+    const { cartStore } = await import("@/store/cart");
+    const orderedKey = "line_1";
+    const cart = { ...cartStore.get(), items: { [orderedKey]: { id: "prod_1", variantId: "var_1", price: 1000, quantity: 1, name: "Panjabi" } } };
+    localStorage.setItem("cart:v3", JSON.stringify(cart));
+    cartStore.set(cart as never);
 
     await initCheckoutPage();
     const methods = document.querySelectorAll(".payment-method-card");
@@ -253,6 +292,9 @@ describe("checkout payment with gift cards", () => {
 
     (document.getElementById("payButton") as HTMLButtonElement).click();
     await vi.waitFor(() => expect(replace).toHaveBeenCalled());
+    // Buyer QA m9: one confirmation URL, and the ordered lines are out of the cart before it opens.
+    expect(replace).toHaveBeenCalledWith("/order-success?orderId=ord_gift");
+    expect(cartStore.get().items[orderedKey]).toBeUndefined();
     const order = calls.find(({ url }) => url === "/api/checkout/create-order")!.body;
     expect(order.paymentMethod).toBe("gift_card");
     expect(order.giftCards).toEqual([{ handle: handle("a") }]);

@@ -1,4 +1,4 @@
-// Route permissions for installed apps (plugins, docs/platform/PLUGINS.md):
+// Route permissions for installed apps (plugins, packages/plugin-sdk/docs/apps.md):
 // the management API under /api/v1/admin/apps and each app's own dashboard
 // routes under /api/v1/plugins/<id>/admin/<route>/<sub path>.
 //
@@ -47,6 +47,9 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // deleting it is also Super Admin only (enforced by the route).
   "/api/v1/admin/apps/removed-data": { GET: view },
   "/api/v1/admin/apps/removed-data/*/delete": { POST: manage },
+  // Which apps' storefront parts the store recently drew without: the app
+  // pages and the theme editor (where those parts are placed) both show it.
+  "/api/v1/admin/apps/storefront-problems": { GET: { anyOf: [PERMISSIONS.APPS_VIEW, PERMISSIONS.SETTINGS_THEME_EDIT] } },
   // An app's own dashboard routes: reading its pages needs apps.view; its
   // mutating actions also need apps.use.
   "/api/v1/plugins/*/admin/**": { GET: view, POST: use, PUT: use, PATCH: use, DELETE: use },

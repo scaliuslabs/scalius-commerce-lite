@@ -7,6 +7,7 @@ import {
   formatOrderSuccessPaymentMethod,
   getOrderPaymentPresentation,
   getOrderSuccessNextSteps,
+  localizedDeliveryEstimate,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
@@ -456,6 +457,14 @@ describe("order success receipt details", () => {
       "order_placed",
       BANGLA_CHECKOUT_LANGUAGE_DATA,
     )[1]).toBe("ডেলিভারিতে সাধারণত ১-২ দিন লাগে।");
+  });
+
+  it("writes an English delivery estimate in the page's language, so a Bangla receipt never mixes languages", () => {
+    expect(localizedDeliveryEstimate("Delivery in 1–2 days", "bn", "BD")).toBe("১–২ দিন");
+    expect(localizedDeliveryEstimate("Same day, 24 hours", "bn", "BD")).toBe("২৪ ঘণ্টা");
+    expect(localizedDeliveryEstimate("Delivery in 1–2 days", "en", "BD")).toBe("1–2 days");
+    expect(localizedDeliveryEstimate("৩-৫ কার্যদিবস", "bn", "BD")).toBe("৩-৫ কার্যদিবস");
+    expect(localizedDeliveryEstimate("Courier", "bn", "BD")).toBeNull();
   });
 
   it("never invents an estimate or next steps for orders the store has moved on", () => {
