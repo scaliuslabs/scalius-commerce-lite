@@ -61,7 +61,8 @@ interface AdjustStockDialogProps {
   open: boolean;
   onClose: () => void;
   onCloseAutoFocus?: (event: Event) => void;
-  onSaved: () => void;
+  /** Refreshes the list; the dialog waits for it, so the row shows the new stock as it closes. */
+  onSaved: () => void | Promise<unknown>;
 }
 
 /**
@@ -200,8 +201,8 @@ export function AdjustStockDialog({
         await saveStock(variant);
         saved.stock = true;
       }
+      await Promise.resolve(onSaved()).catch(() => undefined);
       toast.success(t(saved.stock && saved.alertLevel ? "stockAndAlertSaved" : saved.stock ? "stockUpdated" : "alertLevelSaved"));
-      onSaved();
       onClose();
     } catch (error) {
       if (saved.alertLevel) onSaved();
