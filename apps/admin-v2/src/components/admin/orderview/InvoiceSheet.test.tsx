@@ -41,7 +41,7 @@ describe("InvoiceSheet", () => {
 
   it("prints a plain invoice: local phone, returned lines, refund and net, no draft heading", async () => {
     await act(async () => root.render(<InvoiceSheet document={document_} />));
-    expect(host.textContent).toContain("01712349105");
+    expect(host.textContent).toContain("01712-349105");
     expect(host.textContent).not.toContain("+880");
     expect(host.querySelector("h2")?.textContent).toBe(en["invoice.title"]);
     expect(host.textContent).not.toMatch(/draft|not issued/i);

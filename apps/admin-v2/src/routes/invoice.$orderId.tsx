@@ -20,6 +20,8 @@ import { getAdminRouteContext } from "~/lib/admin-route-context";
 import { pageTitleMessages } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/invoice/$orderId")({
+  // `?slip=1`: the packing slip (no prices) instead of the invoice.
+  validateSearch: (search: Record<string, unknown>): { slip?: "1" } => (search.slip === "1" || search.slip === 1 ? { slip: "1" } : {}),
   // Same sign-in gates as the admin shell; the invoice API enforces RBAC.
   beforeLoad: async () => {
     await getAdminRouteContext();
@@ -43,6 +45,7 @@ export const Route = createFileRoute("/invoice/$orderId")({
 
 function InvoicePage() {
   const [document, setDocument] = useState<InvoiceDocument>(Route.useLoaderData());
+  const packingSlip = Route.useSearch().slip === "1";
 
   return (
     <div className="invoice-page">
@@ -53,8 +56,9 @@ function InvoicePage() {
         businessNameMissing={!invoiceBusinessName(document)}
         expectedOrderVersion={document.orderVersion}
         onIssued={setDocument}
+        packingSlip={packingSlip}
       />
-      <InvoiceSheet document={document} />
+      <InvoiceSheet document={document} packingSlip={packingSlip} />
     </div>
   );
 }

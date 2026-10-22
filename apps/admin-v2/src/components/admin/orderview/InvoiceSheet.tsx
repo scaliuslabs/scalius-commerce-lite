@@ -2,7 +2,8 @@
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -30,13 +31,17 @@ export function invoiceBusinessName(document: Pick<InvoiceDocument, "businessInf
 }
 
 /** The number a courier dials: "01712345678" for a Bangladesh mobile, else as stored. */
+/** The store country's national format ("01712-345678"), as every other dashboard view shows it. */
 function localPhone(phone: string): string {
-  const mobile = normalizeBdMobile(phone);
-  return mobile ? `0${mobile.slice(4)}` : phone;
+  return formatPhoneForDisplay(phone, getStoreRegion());
 }
 
 /** One printable invoice sheet (A4). Several stack with page breaks for bulk printing. */
-export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
+/**
+ * The order's printable document: the invoice, or the packing slip that goes
+ * in the parcel (items, quantities and where it goes; no prices).
+ */
+export function InvoiceSheet({ document, packingSlip = false }: { document: InvoiceDocument; packingSlip?: boolean }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const { order, businessInfo } = document;
@@ -119,8 +124,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
 
       <section className="invoice-meta">
         <div>
-          <h2>{t("invoice.title")}</h2>
-          {document.status === "issued" && document.invoiceNumber ? <p className="strong">{document.invoiceNumber}</p> : null}
+          <h2>{t(packingSlip ? "invoice.packingSlip" : "invoice.title")}</h2>
+          {!packingSlip && document.status === "issued" && document.invoiceNumber ? <p className="strong">{document.invoiceNumber}</p> : null}
           {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
           <p>{o("order", { number: formatOrderNumber(order.orderNumber, order.id) })}</p>
           <p>
@@ -158,8 +163,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
           <tr>
             <th>{t("invoice.item")}</th>
             <th>{t("invoice.qty")}</th>
-            <th>{t("invoice.price")}</th>
-            <th>{t("summary.total")}</th>
+            {packingSlip ? null : <th>{t("invoice.price")}</th>}
+            {packingSlip ? null : <th>{t("summary.total")}</th>}
           </tr>
         </thead>
         <tbody>
@@ -182,15 +187,15 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
                   {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
-                <td>{line ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : money(item.price)}</td>
-                <td>{line ? (free ? <><s>{minor(line.grossSubtotalMinor)}</s> {minor(0)}</> : minor(line.grossSubtotalMinor)) : money(item.price * item.quantity)}</td>
+                {packingSlip ? null : <td>{line ? (free ? <><s>{minor(line.unitPriceMinor)}</s> {minor(0)}</> : minor(line.unitPriceMinor)) : money(item.price)}</td>}
+                {packingSlip ? null : <td>{line ? (free ? <><s>{minor(line.grossSubtotalMinor)}</s> {minor(0)}</> : minor(line.grossSubtotalMinor)) : money(item.price * item.quantity)}</td>}
               </tr>
             );
           })}
         </tbody>
       </table>
 
-      <dl className="invoice-totals">
+      {packingSlip ? null : <dl className="invoice-totals">
         {totals.map(([label, value, detail], index) => (
           <div key={`${label}:${index}`}>
             <dt>{label}{detail ? <small>{detail}</small> : null}</dt>
@@ -220,11 +225,11 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
             <dd>{money(Math.max(0, order.totalAmount - refunded - refundedSinceIssue))}</dd>
           </div>
         ) : null}
-      </dl>
+      </dl>}
 
       <footer>
         {businessInfo.invoiceFooterText ? <p>{businessInfo.invoiceFooterText}</p> : null}
-        <p>{t("invoice.noSignature")}</p>
+        {packingSlip ? null : <p>{t("invoice.noSignature")}</p>}
       </footer>
     </article>
   );

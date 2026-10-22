@@ -7,6 +7,7 @@ export const orderDetailMessages = defineMessages({
     reload: "Reload",
     backToOrders: "Back to orders",
     printInvoice: "Print invoice",
+    printPackingSlip: "Print packing slip",
     cancelOrder: "Cancel order…",
     edit: "Edit",
     refresh: "Refresh",
@@ -248,6 +249,7 @@ export const orderDetailMessages = defineMessages({
 
 
     "invoice.title": "Invoice",
+    "invoice.packingSlip": "Packing slip",
     "invoice.billTo": "Bill to",
     "invoice.shipTo": "Ship to",
     "invoice.item": "Item",
@@ -398,6 +400,7 @@ export const orderDetailMessages = defineMessages({
     reload: "আবার লোড করুন",
     backToOrders: "অর্ডারে ফিরে যান",
     printInvoice: "ইনভয়েস প্রিন্ট",
+    printPackingSlip: "প্যাকিং স্লিপ প্রিন্ট",
     cancelOrder: "অর্ডার বাতিল করুন…",
     edit: "এডিট",
     refresh: "রিফ্রেশ",
@@ -639,6 +642,7 @@ export const orderDetailMessages = defineMessages({
 
 
     "invoice.title": "ইনভয়েস",
+    "invoice.packingSlip": "প্যাকিং স্লিপ",
     "invoice.billTo": "বিল প্রাপক",
     "invoice.shipTo": "যেখানে পাঠানো হবে",
     "invoice.item": "প্রোডাক্ট",
