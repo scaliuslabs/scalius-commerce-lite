@@ -8,6 +8,7 @@ import { defineMessages } from "./index";
 export const orderEditLockMessages = defineMessages({
   en: {
     lockShipped: "This order has shipped, so its items can't be changed.",
+    lockPartSent: "Part of this order was sent, so its items can't be changed. Send or cancel the rest, or create a new order for more items.",
     lockClosed: "This order is cancelled, returned or refunded, so its items can't be changed.",
     lockPaid: "Items can't be changed after payment. Refund or create a new order instead.",
     lockOnlinePayment: "Items can be changed only on unpaid cash-on-delivery orders. Create a new order instead.",
@@ -21,6 +22,7 @@ export const orderEditLockMessages = defineMessages({
   },
   bn: {
     lockShipped: "অর্ডারটি পাঠানো হয়ে গেছে, তাই প্রোডাক্ট বদলানো যাবে না।",
+    lockPartSent: "এই অর্ডারের কিছু অংশ পাঠানো হয়েছে, তাই প্রোডাক্ট বদলানো যাবে না। বাকিটা পাঠান বা বাতিল করুন, অথবা আরও প্রোডাক্টের জন্য নতুন অর্ডার তৈরি করুন।",
     lockClosed: "অর্ডারটি বাতিল, ফেরত বা রিফান্ড হয়েছে, তাই প্রোডাক্ট বদলানো যাবে না।",
     lockPaid: "পেমেন্টের পরে প্রোডাক্ট বদলানো যায় না। রিফান্ড করুন বা নতুন অর্ডার তৈরি করুন।",
     lockOnlinePayment: "শুধু পেমেন্ট না হওয়া ক্যাশ অন ডেলিভারি অর্ডারের প্রোডাক্ট বদলানো যায়। নতুন অর্ডার তৈরি করুন।",
@@ -38,6 +40,7 @@ export type OrderEditLockMessageKey = keyof typeof orderEditLockMessages.en;
 
 const LOCK_MESSAGE: Record<string, OrderEditLockMessageKey> = {
   shipped: "lockShipped",
+  part_sent: "lockPartSent",
   closed: "lockClosed",
   paid: "lockPaid",
   online_payment: "lockOnlinePayment",

@@ -283,6 +283,7 @@ export const orderListActiveRefundOperationSchema = z.object({
 
 export const orderEditLockReasonSchema = z.enum([
   "shipped",
+  "part_sent",
   "closed",
   "paid",
   "online_payment",

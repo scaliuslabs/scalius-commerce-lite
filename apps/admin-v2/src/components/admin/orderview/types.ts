@@ -373,7 +373,7 @@ export interface OrderHold {
 }
 
 export type OrderEditLockReason =
-  | "shipped" | "closed" | "paid" | "online_payment" | "discount"
+  | "shipped" | "part_sent" | "closed" | "paid" | "online_payment" | "discount"
   | "history" | "inventory" | "archived" | "busy" | "unavailable";
 
 export interface OrderEditState {

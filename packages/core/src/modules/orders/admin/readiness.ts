@@ -60,7 +60,8 @@ export function buildOrderEditReadiness(order: OrderEditSource): OrderEditReadin
                 : order.fulfillmentStatus !== FulfillmentStatus.PENDING
                     || Boolean(order.hasShipmentHistory)
                     || Boolean(order.hasHandedOverItem)
-                    ? "shipped"
+                    // Still open with units out: said apart from a sent order, so staff see why Edit waits.
+                    ? "part_sent"
                     : order.shipmentClaimId
                         ? "busy"
                         : null;
@@ -100,6 +101,7 @@ export async function getOrderEditReadiness(
 
 const EDIT_LOCK_MESSAGES: Record<OrderEditLockReason, string> = {
     shipped: "This order has been sent, so it can't be changed.",
+    part_sent: "Part of this order was sent, so it can't be changed. Send or cancel the rest, or create a new order for more items.",
     closed: "This order is closed, so it can't be changed.",
     archived: "Unarchive this order to change it.",
     busy: "A courier booking is in progress. Try again in a minute.",

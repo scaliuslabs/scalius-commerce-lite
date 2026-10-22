@@ -142,6 +142,8 @@ export interface OrderPaymentRecoverySummary {
 /** Why part of an order can no longer be edited; the dashboard words each one. */
 export type OrderEditLockReason =
     | "shipped"
+    /** Some units were handed over and the rest were not: the order is between "confirmed" and "shipped". */
+    | "part_sent"
     | "closed"
     | "paid"
     | "online_payment"
