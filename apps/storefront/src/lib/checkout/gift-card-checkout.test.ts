@@ -278,6 +278,11 @@ describe("checkout payment with gift cards", () => {
     });
     const replace = vi.fn();
     vi.stubGlobal("location", { ...window.location, replace, origin: window.location.origin });
+    const { cartStore } = await import("@/store/cart");
+    const orderedKey = "line_1";
+    const cart = { ...cartStore.get(), items: { [orderedKey]: { id: "prod_1", variantId: "var_1", price: 1000, quantity: 1, name: "Panjabi" } } };
+    localStorage.setItem("cart:v3", JSON.stringify(cart));
+    cartStore.set(cart as never);
 
     await initCheckoutPage();
     const methods = document.querySelectorAll(".payment-method-card");
@@ -287,6 +292,9 @@ describe("checkout payment with gift cards", () => {
 
     (document.getElementById("payButton") as HTMLButtonElement).click();
     await vi.waitFor(() => expect(replace).toHaveBeenCalled());
+    // Buyer QA m9: one confirmation URL, and the ordered lines are out of the cart before it opens.
+    expect(replace).toHaveBeenCalledWith("/order-success?orderId=ord_gift");
+    expect(cartStore.get().items[orderedKey]).toBeUndefined();
     const order = calls.find(({ url }) => url === "/api/checkout/create-order")!.body;
     expect(order.paymentMethod).toBe("gift_card");
     expect(order.giftCards).toEqual([{ handle: handle("a") }]);

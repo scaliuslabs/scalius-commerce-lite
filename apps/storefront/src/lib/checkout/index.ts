@@ -1,5 +1,5 @@
 import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
-import { cartStore, hydrateCartFromStorage } from "@/store/cart";
+import { cartStore, hydrateCartFromStorage, removeOrderedLines } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
@@ -1363,6 +1363,17 @@ async function processPayment(): Promise<void> {
         submittedCheckoutData,
         processingMethod,
       );
+      // An order placed here (cash, gift cards, an invoice): its lines leave the
+      // cart now, so back or reload never shows the cart just ordered (buyer QA m9).
+      // A gateway's page still has the payment to take: the receipt settles that cart.
+      const target = new URL(redirectUrl, window.location.origin);
+      if (target.pathname.endsWith("/order-success") && !target.searchParams.has("payment") && typeof submittedCheckoutData.cartItems === "string") {
+        try {
+          removeOrderedLines(JSON.parse(submittedCheckoutData.cartItems) as Record<string, { variantId?: unknown; quantity?: unknown }>);
+        } catch {
+          // A malformed snapshot leaves the cart to the receipt.
+        }
+      }
       navigationCommitted = true;
       window.location.replace(redirectUrl);
       return;
