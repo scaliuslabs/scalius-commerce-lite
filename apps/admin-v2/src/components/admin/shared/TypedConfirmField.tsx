@@ -4,9 +4,8 @@
  * enables, so one stray click deletes nothing. Case and outer spaces do not
  * matter; the name itself does.
  */
-import { useId } from "react";
+import { Field } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 
@@ -22,18 +21,15 @@ export function TypedConfirmField({ phrase, value, onChange, disabled }: {
   disabled?: boolean;
 }) {
   const t = useMessages(resourceMessages);
-  const id = useId();
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{t("typeToConfirm", { phrase })}</Label>
+    <Field label={t("typeToConfirm", { phrase })}>
       <Input
-        id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         autoComplete="off"
         spellCheck={false}
         disabled={disabled}
       />
-    </div>
+    </Field>
   );
 }
