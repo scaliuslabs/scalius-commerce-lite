@@ -52277,6 +52277,33 @@
                               "disabledReason": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "returnableItems": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "orderItemId": {
+                                      "type": "string"
+                                    },
+                                    "productName": {
+                                      "type": "string"
+                                    },
+                                    "variantLabel": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "quantity": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "orderItemId",
+                                    "productName",
+                                    "variantLabel",
+                                    "quantity"
+                                  ]
+                                }
                               }
                             },
                             "required": [
@@ -52761,6 +52788,31 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 1000
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100000
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
                   }
                 },
                 "required": [
@@ -52967,6 +53019,33 @@
                               "disabledReason": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "returnableItems": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "orderItemId": {
+                                      "type": "string"
+                                    },
+                                    "productName": {
+                                      "type": "string"
+                                    },
+                                    "variantLabel": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "quantity": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "orderItemId",
+                                    "productName",
+                                    "variantLabel",
+                                    "quantity"
+                                  ]
+                                }
                               }
                             },
                             "required": [
@@ -80723,6 +80802,33 @@
                                   "disabledReason": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "returnableItems": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "orderItemId": {
+                                          "type": "string"
+                                        },
+                                        "productName": {
+                                          "type": "string"
+                                        },
+                                        "variantLabel": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "quantity": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "orderItemId",
+                                        "productName",
+                                        "variantLabel",
+                                        "quantity"
+                                      ]
+                                    }
                                   }
                                 },
                                 "required": [
@@ -81056,6 +81162,31 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 1000
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100000
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "quantity"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
                   }
                 },
                 "required": [
@@ -81271,6 +81402,33 @@
                               "disabledReason": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "returnableItems": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "orderItemId": {
+                                      "type": "string"
+                                    },
+                                    "productName": {
+                                      "type": "string"
+                                    },
+                                    "variantLabel": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "quantity": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "orderItemId",
+                                    "productName",
+                                    "variantLabel",
+                                    "quantity"
+                                  ]
+                                }
                               }
                             },
                             "required": [

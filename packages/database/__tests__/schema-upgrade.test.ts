@@ -951,6 +951,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 16,
         postgresStatements: 16,
       },
+      {
+        version: 180,
+        name: "0180_variant_own_compare_at",
+        sqliteStatements: 3,
+        postgresStatements: 3,
+      },
     ]);
   });
 
@@ -1221,6 +1227,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 177, name: "0177_saved_method_owner" },
           { version: 178, name: "0178_tax_exempt_customers" },
           { version: 179, name: "0179_customer_erasure" },
+          { version: 180, name: "0180_variant_own_compare_at" },
         ],
       });
     } finally {

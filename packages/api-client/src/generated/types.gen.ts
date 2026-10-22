@@ -13293,6 +13293,12 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 description: string;
                 eligible: boolean;
                 disabledReason: string | null;
+                returnableItems?: Array<{
+                    orderItemId: string;
+                    productName: string;
+                    variantLabel: string | null;
+                    quantity: number;
+                }>;
             }>;
             /**
              * The store's own words over the order's requests; null: the storefront shows its default in the page language.
@@ -13389,6 +13395,10 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsData = {
         type: 'cancel_pre_shipment' | 'return' | 'refund';
         reason: string;
         message?: string | null;
+        items?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
     };
     path: {
         id: string;
@@ -13479,6 +13489,12 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 description: string;
                 eligible: boolean;
                 disabledReason: string | null;
+                returnableItems?: Array<{
+                    orderItemId: string;
+                    productName: string;
+                    variantLabel: string | null;
+                    quantity: number;
+                }>;
             }>;
             supportRequestIntro: string;
             conversationId: string;
@@ -21229,6 +21245,12 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     description: string;
                     eligible: boolean;
                     disabledReason: string | null;
+                    returnableItems?: Array<{
+                        orderItemId: string;
+                        productName: string;
+                        variantLabel: string | null;
+                        quantity: number;
+                    }>;
                 }>;
                 supportRequestIntro: string;
             };
@@ -21301,6 +21323,10 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsData = {
         type: 'cancel_pre_shipment' | 'return' | 'refund';
         reason: string;
         message?: string | null;
+        items?: Array<{
+            orderItemId: string;
+            quantity: number;
+        }>;
     };
     path: {
         id: string;
@@ -21391,6 +21417,12 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
                 description: string;
                 eligible: boolean;
                 disabledReason: string | null;
+                returnableItems?: Array<{
+                    orderItemId: string;
+                    productName: string;
+                    variantLabel: string | null;
+                    quantity: number;
+                }>;
             }>;
             supportRequestIntro: string;
             conversationId: string;
