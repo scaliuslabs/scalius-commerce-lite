@@ -67,6 +67,7 @@ export const analyticsMessages = defineMessages({
     noBaseline: "No earlier sales to compare",
     changeUp: "Up {change}",
     changeDown: "Down {change}",
+    changeNone: "No change",
     // Overview cards
     salesOverTime: "Sales over time",
     salesBreakdown: "Sales breakdown",
@@ -368,6 +369,7 @@ export const analyticsMessages = defineMessages({
     noBaseline: "তুলনার জন্য আগের বিক্রি নেই",
     changeUp: "{change} বেড়েছে",
     changeDown: "{change} কমেছে",
+    changeNone: "কোনো পরিবর্তন নেই",
     salesOverTime: "সময় অনুযায়ী বিক্রি",
     salesBreakdown: "বিক্রির হিসাব",
     "metric.totalSales": "মোট বিক্রি",
