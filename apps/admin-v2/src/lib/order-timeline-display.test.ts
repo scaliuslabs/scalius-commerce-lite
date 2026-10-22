@@ -28,6 +28,12 @@ describe("order timeline wording", () => {
     expect(describe_("status_changed", { from: "pending", to: "confirmed" }).text).toBe("Status changed to Confirmed");
   });
 
+  it("says a service was done or picked up, not a status that did not change", () => {
+    expect(describe_("status_changed", { fulfilment: "service", quantity: 1, to: "confirmed" }).text).toBe("Service marked done (1 item)");
+    expect(describe_("status_changed", { fulfilment: "pickup", quantity: 2, to: "delivered" }).text)
+      .toBe("Picked up by the customer (2 items). The order is delivered.");
+  });
+
   it("shows money in the order's currency and the courier that took it", () => {
     expect(describe_("cod_collected", { amount: 3570, collectedBy: "Karim" })).toEqual({
       text: "৳3570 cash collected",

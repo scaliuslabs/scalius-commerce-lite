@@ -37,6 +37,14 @@ export function describeTimelineEvent(
     case "status_changed": {
       const to = text(data.to) ?? "";
       const reason = text(data.reason);
+      // A hand-over (service done, picked up) is said as what happened, with
+      // the delivery it completed, never as a status that did not change.
+      const handedOver = text(data.fulfilment);
+      if (handedOver === "service" || handedOver === "pickup") {
+        const quantity = count(data.quantity);
+        const done = t(handedOver === "service" ? "timeline.serviceDone" : "timeline.pickedUp", { count: quantity });
+        return { text: to === "delivered" ? t("timeline.handedOverDelivered", { action: done }) : done, detail: null };
+      }
       return {
         text: to === "cancelled"
           ? t("timeline.cancelled")
