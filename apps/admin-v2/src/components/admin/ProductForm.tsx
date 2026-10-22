@@ -49,6 +49,7 @@ import {
 import { ProductImagesSection } from "./product-form/ProductImagesSection";
 import { PricingCard } from "./product-form/PricingCard";
 import { pairFromStored } from "./product-form/compare-at";
+import { useVariantPricedProduct, type ProductPriceFields } from "./product-form/variant-priced";
 import { useCurrency } from "@/hooks/use-currency";
 import { LazyAttributesSection, LazyDigitalDeliveryCard, LazyGiftCardProductCard, LazyProductSearchListing } from "./product-form/LazyProductCards";
 import { ShippingCard } from "./product-form/ShippingCard";
@@ -327,16 +328,8 @@ function ProductEditor({
   const [inventorySlot, setInventorySlot] = React.useState<HTMLDivElement | null>(null);
   const [shippingSlot, setShippingSlot] = React.useState<HTMLDivElement | null>(null);
   const slots = React.useMemo<ProductEditorSlots>(() => ({ inventory: inventorySlot, shipping: shippingSlot }), [inventorySlot, shippingSlot]);
-  React.useEffect(() => {
-    form.resetField("variantPriced", { defaultValue: variantPrices !== null });
-    if (!variantPrices) return;
-    form.resetField("price", { defaultValue: variantPrices.min });
-    // Each variant carries its own compare-at price; the product keeps no discount
-    // that would reach variants priced on their own (the server refuses one).
-    form.resetField("discountType", { defaultValue: "percentage" });
-    form.resetField("discountPercentage", { defaultValue: 0 });
-    form.resetField("discountAmount", { defaultValue: 0 });
-  }, [form, variantPrices]);
+  // The price the merchant entered before the product had options: new variants start from it.
+  const enteredPrice = useVariantPricedProduct(form, variantPrices);
 
   /** One line per field that failed the page's own checks, for the save banner; a fixed field's line comes off. */
   const invalidLines = useFieldErrorLines(form);
@@ -523,7 +516,7 @@ function ProductEditor({
                     }
                   }}
                 >
-                  <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} readOnly={readOnly} />
+                  <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} enteredPrice={enteredPrice} readOnly={readOnly} />
                 </CardContent>
               </Card>
               <LazyDigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
@@ -679,16 +672,21 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
   );
 }
 
-function ProductVariants({ form, optionManager, onPricesChange, readOnly }: {
+function ProductVariants({ form, optionManager, onPricesChange, enteredPrice, readOnly }: {
   readOnly: boolean;
   form: UseFormReturn<ProductFormValues>;
   optionManager: ProductFormProps["optionManager"];
   onPricesChange: (range: VariantPriceRange | null) => void;
+  /** The product's price as entered before it had options; null while it has none (the form's own fields). */
+  enteredPrice: ProductPriceFields | null;
 }) {
-  const [media, name, price, isActive, fulfilmentMode, discountType, discountPercentage, discountAmount] = useWatch({
+  const [media, name, watchedPrice, isActive, fulfilmentMode, watchedType, watchedPercentage, watchedAmount] = useWatch({
     control: form.control,
     name: ["media", "name", "price", "isActive", "fulfillmentKind", "discountType", "discountPercentage", "discountAmount"],
   });
+  // Under options the form's price follows the cheapest variant and keeps no discount: never seed from that.
+  const { price, discountType, discountPercentage, discountAmount } = enteredPrice
+    ?? { price: watchedPrice, discountType: watchedType, discountPercentage: watchedPercentage, discountAmount: watchedAmount };
   const { salePrice } = useCurrency();
   const skuImages = React.useMemo(() => (media ?? [])
     .filter((item) => item.kind === "image")
