@@ -6,6 +6,7 @@ import {
   getOptionMatrixIssue,
   followProductDefaults,
   getSimpleSkuIssue,
+  initialSimpleSku,
   initialVariants,
   guessOptionType,
   materializeCombination,
@@ -221,6 +222,15 @@ describe("option matrix editor model", () => {
     // A compare-at price must be the higher one.
     whiteFortyTwo.compareAt = 4400;
     expect(getOptionMatrixIssue(options, rows, [], false)).toMatchObject({ message: issue("compareAtNotHigher"), field: "discount" });
+  });
+
+  // Buyer QA m1: a new service defaulted to "Track quantity" at 0 and showed Sold out.
+  it("starts a new service untracked, and its variants too", () => {
+    expect(initialSimpleSku(undefined, "service").trackInventory).toBe(false);
+    expect(initialSimpleSku(undefined, "physical").trackInventory).toBe(true);
+    const options = [option("length", "Length", [["h1", "1 hour"], ["h2", "2 hours"]])];
+    expect(materializeVariants(options, [], "Styling", { price: 1500, compareAt: null, trackInventory: false }, 0)
+      .map((row) => row.trackInventory)).toEqual([false, false]);
   });
 
   it("reads saved SKUs as the merchant's pair", () => {

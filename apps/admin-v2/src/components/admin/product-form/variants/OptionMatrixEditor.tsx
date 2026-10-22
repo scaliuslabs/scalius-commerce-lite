@@ -173,7 +173,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
-  const [simpleSkuDraft, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
+  const [simpleSkuDraft, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku, fulfilmentMode));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
   // Quantities need "Adjust stock" (products.adjust_stock); the rest of the SKU follows products.edit.
   const canAdjustStock = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
@@ -466,7 +466,17 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
     compareAt: productCompareAt,
     barcode: seedBarcode,
     barcodeType: seedBarcodeType,
-  }), [productPrice, productCompareAt, seedBarcode, seedBarcodeType]);
+    trackInventory: fulfilmentMode !== "service",
+  }), [productPrice, productCompareAt, seedBarcode, seedBarcodeType, fulfilmentMode]);
+
+  // A new product's kind sets whether it counts stock until the merchant
+  // chooses: a service starts untracked instead of "Sold out" at 0 (buyer QA m1).
+  const trackingChosen = React.useRef(false);
+  React.useEffect(() => {
+    if (defaultSku || readOnly || trackingChosen.current) return;
+    const tracks = fulfilmentMode !== "service";
+    setSimpleSku((current) => (current.trackInventory === tracks ? current : { ...current, trackInventory: tracks }));
+  }, [defaultSku, fulfilmentMode, readOnly]);
 
   const applyOptions = React.useCallback(() => {
     if (!validShape || combinationCount > MAX_COMBINATIONS) return;
@@ -767,7 +777,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
           <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
             <Checkbox
               checked={simpleSku.trackInventory}
-              onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
+              onCheckedChange={(checked) => { trackingChosen.current = true; updateSimple({ trackInventory: checked === true }); }}
             />
             {t("trackQuantity")}
           </label>

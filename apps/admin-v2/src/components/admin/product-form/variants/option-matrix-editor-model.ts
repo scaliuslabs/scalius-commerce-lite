@@ -93,6 +93,8 @@ export type VariantSeed = {
   compareAt: number | null;
   barcode?: string | null;
   barcodeType?: DraftVariant["barcodeType"];
+  /** Whether new rows count stock (a service starts untracked). */
+  trackInventory?: boolean;
 };
 
 const seedOf = (seed: number | VariantSeed): VariantSeed => (typeof seed === "number" ? { price: seed, compareAt: null } : seed);
@@ -262,10 +264,11 @@ export function optionCombinations(options: DraftOption[]): string[][] {
 }
 
 /** The hidden SKU's draft as saved; a new product tracks quantity by default. */
-export function initialSimpleSku(defaultSku: ProductVariant | undefined): SimpleSkuDraft {
+export function initialSimpleSku(defaultSku: ProductVariant | undefined, mode: ProductFulfilmentMode = "physical"): SimpleSkuDraft {
   return {
     sku: defaultSku?.sku ?? "",
-    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
+    // A new service is rarely counted: it starts untracked, not "0 in stock" (buyer QA m1).
+    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : mode !== "service",
     stock: defaultSku?.stock ?? 0,
     barcode: defaultSku?.barcode ?? null,
     barcodeType: (defaultSku?.barcodeType as SimpleSkuDraft["barcodeType"]) ?? null,
@@ -399,7 +402,7 @@ export function materializeVariants(
         : mergingFrom.length > 0
           ? mergingFrom.reduce((total, row) => total + row.stock, 0)
           : firstProjection ? simpleStock : 0,
-      trackInventory: shared("trackInventory") ?? true,
+      trackInventory: shared("trackInventory") ?? seed.trackInventory ?? true,
       weight: shared("weight") ?? null,
       barcode: keepsSimpleBarcode ? seed.barcode! : null,
       barcodeType: keepsSimpleBarcode ? seed.barcodeType ?? null : null,
