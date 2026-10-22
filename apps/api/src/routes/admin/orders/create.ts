@@ -32,6 +32,8 @@ import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { fromMinor } from "@scalius/shared/money";
 import { eq } from "drizzle-orm";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
+import { notificationSender } from "../../../background/notification-sender";
+import { sendOrderNotification } from "../../../utils/order-notifications";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
@@ -179,7 +181,9 @@ const confirmManualOrderAmendmentRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
         headers: manualOrderIdempotencyHeadersSchema,
-        body: { content: { "application/json": { schema: confirmManualOrderAmendmentObjectSchema.partial({ requestKey: true }).superRefine(refineDeliveryLine) } } },
+        body: { content: { "application/json": { schema: confirmManualOrderAmendmentObjectSchema.partial({ requestKey: true }).extend({
+            notifyCustomer: z.boolean().optional().openapi({ description: "Send the customer the updated order (order_updated). Default false." }),
+        }).superRefine(refineDeliveryLine) } } },
     },
     responses: {
         200: {
@@ -192,7 +196,7 @@ const confirmManualOrderAmendmentRoute = createRoute({
 });
 
 app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
-    const { requestKey: bodyRequestKey, ...payload } = c.req.valid("json");
+    const { requestKey: bodyRequestKey, notifyCustomer, ...payload } = c.req.valid("json");
     const requestKey = resolveCanonicalIdempotencyKey(
         c.req.valid("header")["idempotency-key"],
         bodyRequestKey,
@@ -207,6 +211,17 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         { appProviders: requestAppProviders(c) },
     );
 
+    // The customer gets the updated order when staff chose to tell them (once per amendment).
+    if (notifyCustomer) {
+        await sendOrderNotification({
+            db: c.get("db"),
+            send: notificationSender(c),
+            orderId: result.id,
+            notificationType: "order_updated",
+            dedupeKey: `order_updated:${result.id}:${result.version}`,
+            source: "orders-amendment",
+        });
+    }
     return ok(c, {
         id: result.id,
         version: result.version,

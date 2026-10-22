@@ -35,6 +35,9 @@ const ORDER_EVENT_GROUPS = [
   {
     key: "groupPayments",
     events: [
+      "order_updated",
+      "return_approved",
+      "return_received",
       "order_returned",
       "refund_processing",
       "refund_failed",

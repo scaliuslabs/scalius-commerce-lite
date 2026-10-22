@@ -26644,6 +26644,9 @@
                         "order_completed",
                         "order_cancelled",
                         "order_returned",
+                        "order_updated",
+                        "return_approved",
+                        "return_received",
                         "refund_processing",
                         "refund_failed",
                         "order_refunded",
@@ -187363,6 +187366,57 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -187561,6 +187615,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -187685,6 +187742,42 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -187828,6 +187921,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -188021,6 +188117,9 @@
                       "order_completed",
                       "order_cancelled",
                       "order_returned",
+                      "order_updated",
+                      "return_approved",
+                      "return_received",
                       "refund_processing",
                       "refund_failed",
                       "order_refunded",
@@ -188253,6 +188352,57 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -188451,6 +188601,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -188575,6 +188728,42 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -188718,6 +188907,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -188904,6 +189096,9 @@
                           "order_completed",
                           "order_cancelled",
                           "order_returned",
+                          "order_updated",
+                          "return_approved",
+                          "return_received",
                           "refund_processing",
                           "refund_failed",
                           "order_refunded",
@@ -188955,6 +189150,9 @@
                           "order_completed",
                           "order_cancelled",
                           "order_returned",
+                          "order_updated",
+                          "return_approved",
+                          "return_received",
                           "refund_processing",
                           "refund_failed",
                           "order_refunded",
@@ -189629,6 +189827,42 @@
                           ]
                         }
                       },
+                      "order_updated": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_approved": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_received": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push"
+                          ]
+                        }
+                      },
                       "refund_processing": {
                         "type": "array",
                         "items": {
@@ -189774,6 +190008,9 @@
                       "order_completed",
                       "order_cancelled",
                       "order_returned",
+                      "order_updated",
+                      "return_approved",
+                      "return_received",
                       "refund_processing",
                       "refund_failed",
                       "order_refunded",
@@ -190310,6 +190547,33 @@
                           ]
                         }
                       },
+                      "order_updated": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_approved": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_received": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
                       "refund_processing": {
                         "type": "array",
                         "items": {
@@ -190414,6 +190678,9 @@
                       "order_completed",
                       "order_cancelled",
                       "order_returned",
+                      "order_updated",
+                      "return_approved",
+                      "return_received",
                       "refund_processing",
                       "refund_failed",
                       "order_refunded",
@@ -193580,6 +193847,10 @@
                       "out_of_stock",
                       "other"
                     ]
+                  },
+                  "notifyCustomer": {
+                    "type": "boolean",
+                    "description": "False sends the customer no message about this change (a test or duplicate order). Default true."
                   },
                   "expectedRevision": {
                     "type": "integer",
@@ -205536,6 +205807,10 @@
                   "quoteFingerprint": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "notifyCustomer": {
+                    "type": "boolean",
+                    "description": "Send the customer the updated order (order_updated). Default false."
                   }
                 },
                 "required": [

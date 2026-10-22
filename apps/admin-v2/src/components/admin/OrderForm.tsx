@@ -1,3 +1,4 @@
+import { Checkbox } from "~/components/ui/checkbox";
 import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWatch } from "react-hook-form";
@@ -303,6 +304,8 @@ function OrderEditor({
   const confirmation = React.useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
   // The dialog stays mounted; the last amendment is kept while it animates closed.
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  // Shopify's "Send invoice / notify customer" on an edited order: off by default, staff choose.
+  const [notifyCustomer, setNotifyCustomer] = React.useState(false);
   const [pendingAmendment, setPendingAmendment] = React.useState<{
     input: ManualOrderAmendmentInput;
     quoteFingerprint: string;
@@ -679,6 +682,7 @@ function OrderEditor({
         ...pending.input,
         requestKey: pending.requestKey,
         quoteFingerprint: pending.quoteFingerprint,
+        ...(notifyCustomer ? { notifyCustomer: true } : {}),
       });
       setCompleted(true);
       closeConfirm(true);
@@ -807,6 +811,12 @@ function OrderEditor({
             <Alert variant="destructive">
               <AlertDescription>{amendError}</AlertDescription>
             </Alert>
+          ) : null}
+          {defaultValues?.customerEmail ? (
+            <label className="flex items-start gap-3 text-body">
+              <Checkbox checked={notifyCustomer} onCheckedChange={(checked) => setNotifyCustomer(checked === true)} className="mt-0.5" />
+              <span>{t("notifyUpdated")}</span>
+            </label>
           ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={amendMutation.isPending}>{r("cancel")}</AlertDialogCancel>

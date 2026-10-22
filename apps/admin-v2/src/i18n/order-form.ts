@@ -79,6 +79,7 @@ export const orderFormMessages = defineMessages({
 
     payment: "Payment",
     codNote: "Saved as a confirmed cash on delivery order. Stock is reserved.",
+    notifyUpdated: "Email the customer the updated order",
     invoiceNote: "Saved as a confirmed order with an unpaid invoice. Stock is reserved.",
     paidNote: "Saved as a confirmed, paid order. Downloads and gift cards are sent to the customer at once.",
     itemsRefused: "{count, plural, one {# item can't be added. See the reason on the line.} other {# items can't be added. See the reason on each line.}}",
@@ -240,6 +241,7 @@ export const orderFormMessages = defineMessages({
 
     payment: "পেমেন্ট",
     codNote: "ক্যাশ অন ডেলিভারি অর্ডার হিসেবে কনফার্ম হবে। স্টক রিজার্ভ থাকবে।",
+    notifyUpdated: "কাস্টমারকে আপডেট করা অর্ডার ইমেইল করুন",
     invoiceNote: "অপরিশোধিত ইনভয়েসসহ কনফার্ম করা অর্ডার হিসেবে সেভ হবে। স্টক রিজার্ভ থাকবে।",
     paidNote: "পরিশোধিত, কনফার্ম করা অর্ডার হিসেবে সেভ হবে। ডাউনলোড ও গিফট কার্ড সঙ্গে সঙ্গে কাস্টমারকে পাঠানো হবে।",
     itemsRefused: "{count}টি আইটেম যোগ করা যাচ্ছে না। কারণ আইটেমের পাশে দেখুন।",
