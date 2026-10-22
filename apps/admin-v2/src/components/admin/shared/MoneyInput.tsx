@@ -5,10 +5,11 @@ import {
   isWholeUnitIncrement,
   resolvePriceIncrementMinor,
 } from "@scalius/shared/currency-policy";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { currencySymbol } from "@scalius/shared/money-format";
 import { NumberInput } from "~/components/ui/number-input";
 import { useCurrency } from "~/hooks/use-currency";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { formMessages } from "~/i18n/forms";
 import { useRefusalReporter } from "~/lib/input-refusal-reporter";
 
@@ -32,10 +33,12 @@ const MoneyField = React.forwardRef<HTMLInputElement, MoneyFieldProps>(({ curren
   const symbol = code === store.code && store.symbol ? store.symbol : currencySymbol(code);
   // In a form built with `useFormWithRefusals`, the field `name` (as in the form) gets the fraction's reason as its error.
   const onRefusal = useRefusalReporter(props.name);
+  const digits = getDecimalPlaces(code);
   return (
     <NumberInput
       ref={ref}
       {...props}
+      display={(amount) => formatNumber(amount, { minimumFractionDigits: digits, maximumFractionDigits: digits })}
       prefix={symbol}
       onRefusal={onRefusal}
       wholeUnitsMessage={whole ? t(code === "BDT" ? "wholeTaka" : "wholeUnits") : undefined}

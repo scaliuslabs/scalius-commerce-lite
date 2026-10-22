@@ -43,7 +43,7 @@ async function mount() {
   await act(async () => root.render(<CartFlyout />));
 }
 
-async function dispatchOpenCart(detail?: { addedLineKey?: string }) {
+async function dispatchOpenCart(detail?: { addedLineKey?: string; addedCount?: number }) {
   await act(async () => {
     document.dispatchEvent(new CustomEvent("open-cart", detail ? { detail } : undefined));
     await vi.advanceTimersByTimeAsync(500);
@@ -56,6 +56,15 @@ const link = (label: string) =>
   [...dialog().querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent?.trim() === label);
 
 describe("cart drawer after an add", () => {
+  it("says how many products one action added, not just the first one's name", async () => {
+    await mount();
+    await dispatchOpenCart({ addedLineKey: await cartLineKeyFor(shirt), addedCount: 2 });
+
+    expect(status().some((region) => region.textContent?.includes("2 products added to your cart"))).toBe(true);
+    expect(status().some((region) => region.textContent?.includes("Blue Shirt added"))).toBe(false);
+    expect(document.getElementById(dialog().getAttribute("aria-describedby")!)?.textContent).toContain("2 products were added");
+  });
+
   it("confirms the added line, announces it politely, and links to the cart and checkout", async () => {
     await mount();
     await dispatchOpenCart({ addedLineKey: await cartLineKeyFor(shirt) });

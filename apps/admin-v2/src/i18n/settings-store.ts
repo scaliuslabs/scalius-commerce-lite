@@ -3,6 +3,8 @@ import { defineMessages } from "./index";
 export const storeSettingsMessages = defineMessages({
   en: {
     businessTitle: "Business details",
+    logoMissingForSearch: "Search engines won't see your store name and logo until your theme has a header logo.",
+    logoMissingAction: "Add a logo",
     contactRow: "Store name and contact",
     addressRow: "Business address",
     invoiceRow: "Invoices",
@@ -117,6 +119,8 @@ export const storeSettingsMessages = defineMessages({
   },
   bn: {
     businessTitle: "ব্যবসার তথ্য",
+    logoMissingForSearch: "আপনার থিমে হেডার লোগো না দেওয়া পর্যন্ত সার্চ ইঞ্জিন আপনার স্টোরের নাম ও লোগো দেখতে পাবে না।",
+    logoMissingAction: "লোগো যোগ করুন",
     contactRow: "স্টোরের নাম ও যোগাযোগ",
     addressRow: "ব্যবসার ঠিকানা",
     invoiceRow: "ইনভয়েস",

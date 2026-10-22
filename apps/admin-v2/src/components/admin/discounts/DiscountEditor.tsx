@@ -60,7 +60,7 @@ import {
 } from "~/lib/api-mutations/discounts";
 import { DateInput } from "~/components/ui/date-input";
 
-type NumericField = "value" | "freeShippingMinimum" | "minimumValue" | "buyValue" | "getQuantity" | "getValue" | "usesPerOrder" | "totalUses";
+type NumericField = "value" | "freeShippingMinimum" | "freeShippingMaxRate" | "minimumValue" | "buyValue" | "getQuantity" | "getValue" | "usesPerOrder" | "totalUses";
 
 /** A number field that takes Bangla digits too (typed ১০ becomes 10); the symbol or "%" sits inside it (F3). */
 function NumberInput({ value, whole, prefix, suffix, onValue }: {
@@ -467,6 +467,18 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                   {draft.freeShipping
                     ? numberField("free-shipping-minimum", "freeShippingMinimum", t("freeShippingMinimum"), { money: true, help: t("freeShippingMinimumHelp") })
                     : null}
+                  {draft.freeShipping
+                    ? numberField("free-shipping-max-rate", "freeShippingMaxRate", t("freeShippingMaxRate"), { money: true, help: t("freeShippingMaxRateHelp") })
+                    : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {draft.type === "shipping" ? (
+              <Card>
+                <CardHeader><CardTitle>{t("shippingCard")}</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  {numberField("free-shipping-max-rate", "freeShippingMaxRate", t("freeShippingMaxRate"), { money: true, help: t("freeShippingMaxRateHelp") })}
                 </CardContent>
               </Card>
             ) : null}

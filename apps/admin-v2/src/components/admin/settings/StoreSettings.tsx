@@ -1,8 +1,11 @@
 import { lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { formatBdLandline } from "@scalius/shared/bd-landline";
+import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+import { themeWorkspaceQueryOptions } from "~/lib/api-query-options/online-store";
 import { storeDefaultsQueryOptions } from "~/lib/api-query-options/store-defaults";
 import { timeZoneLabel } from "~/lib/time-zone-options";
 import {
@@ -43,6 +46,9 @@ export function BusinessCard() {
   const t = useMessages(storeSettingsMessages);
   const canEdit = useCanEditStore();
   const { data, isError, refetch } = useQuery(businessQuery);
+  // The store's search details (OnlineStore schema) need the theme's header logo; only a loaded theme without one warns.
+  const { data: workspace } = useQuery({ ...themeWorkspaceQueryOptions(), retry: false });
+  const missingLogo = Boolean(workspace) && !workspace?.published.theme.brand?.logo;
   if (isError) {
     return <SettingsLoadFailure title={t("loadBusiness")} onRetry={refetch} />;
   }
@@ -136,7 +142,14 @@ export function BusinessCard() {
           </SettingsDialog>
         </>
       }
-    />
+    >
+      {missingLogo ? (
+        <Alert variant="warning">
+          {t("logoMissingForSearch")}{" "}
+          <Link to="/admin/online-store/theme" className="underline">{t("logoMissingAction")}</Link>
+        </Alert>
+      ) : null}
+    </SettingsCard>
   );
 }
 

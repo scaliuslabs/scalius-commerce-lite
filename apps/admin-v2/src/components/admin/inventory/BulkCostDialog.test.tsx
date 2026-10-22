@@ -76,7 +76,7 @@ describe("BulkCostDialog", () => {
   it("saves the typed and set-all costs with the costs they replace", async () => {
     mocks.putCosts.mockResolvedValue({ items: [] });
     const handlers = await render();
-    expect(costInput("M").value).toBe("100");
+    expect(costInput("M").value).toBe("100.00");
     expect(costInput("L").value).toBe("");
     expect(save().disabled).toBe(true);
 
@@ -117,7 +117,7 @@ describe("BulkCostDialog", () => {
     await act(async () => button(t("reloadCosts")).click());
     expect(onReload).toHaveBeenCalled();
     expect(dialog().textContent).not.toContain(t("costChanged"));
-    expect(costInput("M").value).toBe("104.4");
+    expect(costInput("M").value).toBe("104.40");
     expect(costInput("L").value).toBe("60");
 
     mocks.putCosts.mockResolvedValueOnce({ items: [] });

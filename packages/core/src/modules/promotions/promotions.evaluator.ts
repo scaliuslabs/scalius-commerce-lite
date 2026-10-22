@@ -148,7 +148,8 @@ const effectSchema = z.discriminatedUnion("kind", [
         kind: z.literal("free"),
         target: z.literal("shipping"),
         allocation: z.literal("once"),
-        config: z.object({}),
+        /** Delivery rates above this amount are not made free. */
+        config: z.object({ maxRateMinor: positiveMinorSchema.optional() }),
     }),
 ]);
 
@@ -583,7 +584,7 @@ function computeOrder(eligible: Eligible, remaining: Map<string, number>, increm
 
 function computeShipping(eligible: Eligible, effect: PromotionEffect, shippingMinor: number, incrementMinor: number): Computed {
     const amount = effect.kind === "free"
-        ? shippingMinor
+        ? (effect.config.maxRateMinor !== undefined && shippingMinor > effect.config.maxRateMinor ? 0 : shippingMinor)
         : effect.kind === "percentage_off"
             ? percentOfMinor(shippingMinor, effect.config.basisPoints, incrementMinor)
             : Math.min(shippingMinor, effect.config.amountMinor);

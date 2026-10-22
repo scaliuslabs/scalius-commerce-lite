@@ -161,7 +161,7 @@ describe("VariantTable", () => {
   it("shows each variant on one line: ৳ price, SKU with copy, the compare-at price as a short note", async () => {
     await render(rows());
     const price = input(label("priceFor", { name: "S / White" }));
-    expect(price.value).toBe("2500");
+    expect(price.value).toBe("2,500.00");
     expect(price.parentElement?.textContent).toContain("৳");
     const row = host.querySelector('[data-variant-row="sw"]')!;
     expect(row.textContent).toContain("PANJABI-SW");

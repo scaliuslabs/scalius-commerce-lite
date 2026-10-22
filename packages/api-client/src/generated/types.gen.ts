@@ -4572,7 +4572,7 @@ export type ThemeVersionSummary = {
         page: string;
     } | {
         kind: 'settings-changed';
-        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
+        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'announcement' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
     }>;
     moreChanges: number;
     note: string | null;
@@ -29634,9 +29634,9 @@ export type GetApiV1AdminCategoriesData = {
          */
         trashed?: 'true' | 'false';
         /**
-         * Sort field
+         * Sort field; tree lists each parent followed by its children
          */
-        sort?: 'name' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'name' | 'status' | 'createdAt' | 'updatedAt' | 'tree';
         /**
          * Sort order
          */
@@ -37245,7 +37245,7 @@ export type PostApiV1AdminDiscountsData = {
             target: 'shipping';
             allocation: 'once';
             config: {
-                [key: string]: never;
+                maxRateMinor?: number;
             };
         }>;
         /**
@@ -37544,7 +37544,7 @@ export type PutApiV1AdminDiscountsByIdData = {
             target: 'shipping';
             allocation: 'once';
             config: {
-                [key: string]: never;
+                maxRateMinor?: number;
             };
         }>;
         /**
@@ -41945,6 +41945,7 @@ export type GetApiV1AdminNavigationResourcesResponses = {
                 type: 'page' | 'category' | 'collection' | 'product';
                 url: string;
                 available: boolean;
+                contentType?: 'page' | 'article';
             }>;
             selected: {
                 id: string;
@@ -41952,6 +41953,7 @@ export type GetApiV1AdminNavigationResourcesResponses = {
                 type: 'page' | 'category' | 'collection' | 'product';
                 url: string;
                 available: boolean;
+                contentType?: 'page' | 'article';
             } | null;
             nextCursor: string | null;
         };

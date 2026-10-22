@@ -21950,6 +21950,7 @@
                         "style",
                         "brand",
                         "header",
+                        "announcement",
                         "navigation",
                         "footer",
                         "productCard",
@@ -110046,13 +110047,14 @@
                 "name",
                 "status",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "tree"
               ],
               "default": "updatedAt",
-              "description": "Sort field"
+              "description": "Sort field; tree lists each parent followed by its children"
             },
             "required": false,
-            "description": "Sort field",
+            "description": "Sort field; tree lists each parent followed by its children",
             "name": "sort",
             "in": "query"
           },
@@ -134381,7 +134383,14 @@
                             },
                             "config": {
                               "type": "object",
-                              "properties": {},
+                              "properties": {
+                                "maxRateMinor": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                }
+                              },
                               "additionalProperties": false
                             }
                           },
@@ -135235,7 +135244,14 @@
                             },
                             "config": {
                               "type": "object",
-                              "properties": {},
+                              "properties": {
+                                "maxRateMinor": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true,
+                                  "maximum": 9007199254740991
+                                }
+                              },
                               "additionalProperties": false
                             }
                           },
@@ -150299,6 +150315,13 @@
                               },
                               "available": {
                                 "type": "boolean"
+                              },
+                              "contentType": {
+                                "type": "string",
+                                "enum": [
+                                  "page",
+                                  "article"
+                                ]
                               }
                             },
                             "required": [
@@ -150334,6 +150357,13 @@
                             },
                             "available": {
                               "type": "boolean"
+                            },
+                            "contentType": {
+                              "type": "string",
+                              "enum": [
+                                "page",
+                                "article"
+                              ]
                             }
                           },
                           "required": [

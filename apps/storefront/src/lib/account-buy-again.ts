@@ -81,7 +81,7 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
   // race the first one's drawer load and reported lines as added that weren't.
   const addedKeys = cartLines.length > 0 ? await addLinesToCart(cartLines) : [];
   if (addedKeys.length > 0) {
-    document.dispatchEvent(new CustomEvent<OpenCartEventDetail>("open-cart", { detail: { addedLineKey: addedKeys[0] } }));
+    document.dispatchEvent(new CustomEvent<OpenCartEventDetail>("open-cart", { detail: { addedLineKey: addedKeys[0], addedCount: addedKeys.length } }));
   }
   const added = addedKeys.length;
   return { added, missing: items.length - added };

@@ -8,7 +8,7 @@ import { STOREFRONT_PAGE_TEMPLATES } from "./pages";
 
 /** Theme-wide settings, grouped the way the editor shows them. */
 export const THEME_CHANGE_AREAS = [
-  "template", "colors", "typography", "style", "brand", "header", "navigation", "footer",
+  "template", "colors", "typography", "style", "brand", "header", "announcement", "navigation", "footer",
   "productCard", "listing", "productPage", "homeMode", "translations",
 ] as const;
 export type ThemeChangeArea = (typeof THEME_CHANGE_AREAS)[number];
@@ -34,7 +34,7 @@ export const THEME_VERSION_CHANGES_MAX = 20;
 
 const TOKEN_AREA: Record<string, ThemeChangeArea> = { colors: "colors", typography: "typography", typeScale: "typography", headingCase: "typography" };
 const BLOCK_AREA: Record<string, ThemeChangeArea> = {
-  topBar: "header", header: "header", navigation: "navigation", desktopNav: "navigation", mobileNav: "navigation",
+  topBar: "announcement", header: "header", navigation: "navigation", desktopNav: "navigation", mobileNav: "navigation",
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",
 };
 

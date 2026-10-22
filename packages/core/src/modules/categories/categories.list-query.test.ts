@@ -28,6 +28,15 @@ describe("category list projections", () => {
     ]);
   });
 
+  it("lists a parent directly before its children in tree order", async () => {
+    const { db, sqlite } = setup();
+    sqlite.exec(`INSERT INTO categories (id, name, slug, status, parent_id) VALUES ('cat_a1', 'Z child', 'a1', 'published', 'cat_a');`);
+
+    const { categories } = await listCategories(db, { page: 1, limit: 10, sort: "tree", order: "asc" });
+    const ids = categories.map(({ id }) => id);
+    expect(ids.indexOf("cat_a1")).toBe(ids.indexOf("cat_a") + 1);
+  });
+
   it("returns compact agent summaries without rich text or image fields", async () => {
     const { db } = setup();
 

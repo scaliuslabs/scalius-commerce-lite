@@ -5972,7 +5972,14 @@
               },
               "config": {
                "type": "object",
-               "properties": {},
+               "properties": {
+                "maxRateMinor": {
+                 "type": "integer",
+                 "minimum": 0,
+                 "exclusiveMinimum": true,
+                 "maximum": 9007199254740991
+                }
+               },
                "additionalProperties": false
               }
              },
@@ -6694,7 +6701,14 @@
               },
               "config": {
                "type": "object",
-               "properties": {},
+               "properties": {
+                "maxRateMinor": {
+                 "type": "integer",
+                 "minimum": 0,
+                 "exclusiveMinimum": true,
+                 "maximum": 9007199254740991
+                }
+               },
                "additionalProperties": false
               }
              },

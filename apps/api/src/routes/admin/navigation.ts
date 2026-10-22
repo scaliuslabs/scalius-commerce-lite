@@ -51,6 +51,7 @@ const navigationResourceOptionSchema = z.object({
     type: navigationResourceTypeSchema,
     url: z.string(),
     available: z.boolean(),
+    contentType: z.enum(["page", "article"]).optional(),
 });
 
 const previewProductsQuerySchema = z

@@ -328,6 +328,7 @@ export function StaffCard() {
             title={t("addStaff")}
             description={t("addStaffHelp")}
             savedMessage={t("inviteSent")}
+            savingLabel={t("sendingInvite")}
             trigger={<Button type="button" variant="outline" size="sm">{t("addStaff")}</Button>}
           >
             <AddStaffForm />

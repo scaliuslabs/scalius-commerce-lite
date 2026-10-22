@@ -22,6 +22,13 @@ describe("theme changes", () => {
     for (const change of changes) expect(themeDocumentChangeSchema.parse(change)).toEqual(change);
   });
 
+  it("names the announcement bar apart from the header", () => {
+    const before = structuredClone(DEFAULT_STOREFRONT_THEME);
+    const after = structuredClone(before);
+    after.blocks.topBar = { variant: "announcement", settings: { text: "Eid sale", link: null } };
+    expect(compareThemeDocuments(before, after)).toEqual([{ kind: "settings-changed", area: "announcement" }]);
+  });
+
   it("reports a template's section changes under template/<kind>", () => {
     const before = structuredClone(DEFAULT_STOREFRONT_THEME);
     const after = structuredClone(before);
