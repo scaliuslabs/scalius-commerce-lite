@@ -73,6 +73,11 @@ function normalizeOrder(items: ProductMediaItem[]): ProductMediaItem[] {
 }
 
 /** View-only staff see the media without any edit controls, as Shopify does. */
+/** The first item is the main one: the badge and the storefront's cover never disagree with the order. */
+function firstIsMain<T extends { isPrimary: boolean }>(items: T[]): T[] {
+  return items.map((candidate, position) => ({ ...candidate, isPrimary: position === 0 }));
+}
+
 export const ProductImagesSection = memo(function ProductImagesSection({
   form,
   readOnly = false,
@@ -129,20 +134,17 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                           if (target < 0 || target >= field.value.length) return;
                           const next = [...field.value];
                           [next[index], next[target]] = [next[target]!, next[index]!];
-                          field.onChange(normalizeOrder(next));
+                          field.onChange(normalizeOrder(firstIsMain(next)));
                         }}
-                        onSetFeatured={() => field.onChange(field.value.map((candidate) => ({
-                          ...candidate,
-                          isPrimary: candidate.id === item.id,
-                        })))}
+                        // The main item is the first one (Shopify's model): making one main moves it first.
+                        onSetFeatured={() => field.onChange(normalizeOrder(firstIsMain([
+                          item,
+                          ...field.value.filter((candidate) => candidate.id !== item.id),
+                        ])))}
                         onEdit={() => setEditingId(item.id)}
                         onRemove={() => {
                           const remaining = field.value.filter((candidate) => candidate.id !== item.id);
-                          const needsPrimary = item.isPrimary && remaining.length > 0;
-                          field.onChange(normalizeOrder(remaining.map((candidate, remainingIndex) => ({
-                            ...candidate,
-                            isPrimary: needsPrimary ? remainingIndex === 0 : candidate.isPrimary,
-                          }))));
+                          field.onChange(normalizeOrder(item.isPrimary || field.value[0]?.isPrimary ? firstIsMain(remaining) : remaining));
                           if (editingId === item.id) setEditingId(null);
                         }}
                       />
@@ -161,6 +163,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     item={field.value.find((candidate) => candidate.id === editingId) ?? null}
                     index={field.value.findIndex((candidate) => candidate.id === editingId)}
                     count={field.value.length}
+                    productName={form.getValues("name") ?? ""}
                     onClose={() => setEditingId(null)}
                     onAltTextChange={(altText) => field.onChange(field.value.map((candidate) =>
                       candidate.id === editingId ? { ...candidate, altText } : candidate,
@@ -316,8 +319,10 @@ function positionLabel(m: MediaText, item: ProductMediaItem, index: number, coun
   return m(item.kind === "video" ? "videoAt" : "photoAt", { position: index + 1, count });
 }
 
-function MediaDetailsEditor({ item, index, count, onAltTextChange, onClose }: {
+function MediaDetailsEditor({ item, index, count, productName, onAltTextChange, onClose }: {
   item: ProductMediaItem | null;
+  /** What buyers' screen readers hear when no description is set: the product's title. */
+  productName: string;
   index: number;
   count: number;
   onAltTextChange: (value: string) => void;
@@ -340,7 +345,8 @@ function MediaDetailsEditor({ item, index, count, onAltTextChange, onClose }: {
           value={item.altText}
           onChange={(event) => onAltTextChange(event.target.value)}
           maxLength={500}
-          placeholder={item.effectiveAltText}
+          // An example of what shows without a description: never the file name (F6).
+          placeholder={(item.effectiveAltText && item.effectiveAltText !== item.filename ? item.effectiveAltText : productName) || undefined}
         />
       </Field>
     </div>

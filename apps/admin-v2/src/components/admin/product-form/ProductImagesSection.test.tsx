@@ -59,12 +59,14 @@ describe("ProductImagesSection", () => {
   });
 
   it("makes a photo the main one and reorders without dragging", () => {
+    // The main photo is the first one: making photo 2 main moves it first.
     act(() => button("Make photo 2 of 3 the main photo")!.click());
-    expect(form.getValues("media").map((item) => item.isPrimary)).toEqual([false, true, false]);
-
-    act(() => button("Move photo 2 of 3 earlier")!.click());
-    expect(form.getValues("media").map((item) => item.filename)).toEqual(["blue.jpg", "red.jpg", "demo.mp4"]);
+    expect(form.getValues("media").map((item) => [item.filename, item.isPrimary])).toEqual([["blue.jpg", true], ["red.jpg", false], ["demo.mp4", false]]);
     expect(host.querySelector('article[aria-label="photo 1 of 3, blue.jpg"]')).not.toBeNull();
+
+    // Moving another photo first makes it the main one.
+    act(() => button("Move photo 2 of 3 earlier")!.click());
+    expect(form.getValues("media").map((item) => [item.filename, item.isPrimary])).toEqual([["red.jpg", true], ["blue.jpg", false], ["demo.mp4", false]]);
   });
 
   it("edits one item's description in a labelled field", () => {
