@@ -118,24 +118,50 @@ interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof Dialo
   variant?: "modal" | "palette";
 }
 
+/**
+ * Where focus goes back when an overlay closes: what was focused when it
+ * opened, or, when that was an item of a menu (More actions → Cancel order),
+ * the button that opened the menu, since the item is gone by then. Radix
+ * would otherwise drop focus on <body> (WCAG 2.4.3).
+ */
+export function overlayOpener(active: Element | null = typeof document === "undefined" ? null : document.activeElement): HTMLElement | null {
+  if (!(active instanceof HTMLElement) || active === document.body) return null;
+  const menu = active.closest<HTMLElement>('[role="menu"]');
+  const triggerId = menu?.getAttribute("aria-labelledby");
+  const trigger = triggerId ? document.getElementById(triggerId) : null;
+  return trigger ?? active;
+}
+
+/** Open/close focus handlers that return focus to `overlayOpener()` (caller handlers run first). */
+export function useReturnFocus(
+  onOpenAutoFocus?: (event: Event) => void,
+  onCloseAutoFocus?: (event: Event) => void,
+): { onOpenAutoFocus: (event: Event) => void; onCloseAutoFocus: (event: Event) => void } {
+  const opener = React.useRef<HTMLElement | null>(null);
+  return {
+    onOpenAutoFocus: (event) => {
+      opener.current = overlayOpener();
+      onOpenAutoFocus?.(event);
+    },
+    onCloseAutoFocus: (event) => {
+      onCloseAutoFocus?.(event);
+      if (!event.defaultPrevented && opener.current?.isConnected) {
+        event.preventDefault();
+        opener.current.focus();
+      }
+    },
+  };
+}
+
 /** Mounted by Radix for each open (the portal keeps nothing while closed), so it anchors once per open. */
 const DialogPanel = React.forwardRef<React.ComponentRef<typeof DialogPrimitive.Content>, DialogContentProps>(
   ({ className, children, showCloseButton = true, variant = "modal", onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
     const panelRef = useModalTopAnchor(ref, variant === "modal");
-    const opener = React.useRef<HTMLElement | null>(null);
+    const focus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
     return (
       <DialogPrimitive.Content ref={panelRef} data-slot="dialog-content" className={cn(variant === "palette" ? paletteClassName : modalClassName, className)} {...props}
-        onOpenAutoFocus={(event) => {
-          opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          onOpenAutoFocus?.(event);
-        }}
-        onCloseAutoFocus={(event) => {
-          onCloseAutoFocus?.(event);
-          if (!event.defaultPrevented && opener.current?.isConnected && opener.current !== document.body) {
-            event.preventDefault();
-            opener.current.focus();
-          }
-        }}
+        onOpenAutoFocus={focus.onOpenAutoFocus}
+        onCloseAutoFocus={focus.onCloseAutoFocus}
       >
         <ModalInertBackground />
         {children}

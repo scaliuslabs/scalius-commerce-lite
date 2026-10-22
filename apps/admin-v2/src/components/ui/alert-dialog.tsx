@@ -4,7 +4,7 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "@scalius/shared/utils";
 import { buttonVariants } from "./button";
-import { dialogFooterClassName, modalClassName, overlayClassName, useModalTopAnchor } from "./dialog";
+import { dialogFooterClassName, modalClassName, overlayClassName, useModalTopAnchor, useReturnFocus } from "./dialog";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -14,9 +14,11 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 const AlertDialogPanel = React.forwardRef<
   React.ComponentRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => {
+>(({ className, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
   const panelRef = useModalTopAnchor(ref);
-  return <AlertDialogPrimitive.Content ref={panelRef} className={cn(modalClassName, className)} {...props} />;
+  // Focus goes back to what opened it, or the menu button an item of was (Escape included).
+  const focus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
+  return <AlertDialogPrimitive.Content ref={panelRef} className={cn(modalClassName, className)} {...props} {...focus} />;
 });
 AlertDialogPanel.displayName = "AlertDialogPanel";
 
