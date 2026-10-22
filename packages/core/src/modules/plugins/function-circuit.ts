@@ -19,7 +19,10 @@
 // before it starts and cleared when it answers; a mark still set well past
 // the wall limit means it hung, and the next checkout stops the app (the
 // emergency stop, with its reason) instead of running it again, so one hang
-// never freezes the store a second time after a restart.
+// never freezes the store a second time after a restart. A request runs its
+// sandboxed runs one at a time (apps/api plugins/functions.ts,
+// `SandboxRunQueue`), so a hung run's mark is the only one it leaves: only
+// the app that never returned is stopped, never another app of that checkout.
 //
 // The state lives on the registration row checkout already reads in its own
 // batch, so a closed circuit costs nothing; only a failure, and the first

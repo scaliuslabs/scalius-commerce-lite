@@ -520,6 +520,38 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
       expect(calls("acme.gate")).toBe(0);
     });
 
+    it("two sandboxed apps in one checkout, one never returns: after the restart only that app is stopped", async () => {
+      await installTestApp("acme.quiet", [{ point: "cart.validate" }]);
+      await installTestApp("acme.spin", [{ point: "checkout.discounts" }]);
+      const marked = () => (sqlite.prepare("SELECT plugin_id AS id FROM plugin_registrations WHERE circuit_inflight_at IS NOT NULL ORDER BY plugin_id").all() as Array<{ id: string }>).map((row) => row.id);
+      // The quiet app answers after a read's worth of time; the spinning one holds the thread:
+      // from the moment it starts nothing else in the Worker runs, so its marks are what the restart finds.
+      let frozen: string[] | null = null;
+      let started: () => void = () => undefined;
+      const spinning = new Promise<void>((resolve) => { started = resolve; });
+      answers["acme.quiet"] = () => new Promise((resolve) => setTimeout(() => resolve(ok({ errors: [] })), 20));
+      answers["acme.spin"] = () => {
+        frozen = marked();
+        started();
+        return new Promise<PluginInvocationResult>(() => undefined);
+      };
+      void quote(data(), await apps()).catch(() => undefined);
+      await spinning;
+      expect(frozen).toEqual(["acme.spin"]);
+
+      // The restart: the hung request is gone, its marks stay, long past the wall limit.
+      sqlite.exec("UPDATE plugin_registrations SET circuit_inflight_at = NULL");
+      for (const id of frozen!) sqlite.prepare(`UPDATE plugin_registrations SET circuit_inflight_at = unixepoch() - ${FUNCTION_CIRCUIT.hangSeconds + 50} WHERE plugin_id = ?`).run(id);
+      answers["acme.spin"] = () => ok({ discounts: [] });
+      const quietCalls = calls("acme.quiet");
+      await expect(quote(data(), await apps())).resolves.toMatchObject({ ruleErrors: [] });
+      expect(one("SELECT status FROM plugin_installations WHERE plugin_id = 'acme.spin'")).toEqual({ status: "disabled" });
+      expect(one("SELECT status FROM plugin_installations WHERE plugin_id = 'acme.quiet'")).toEqual({ status: "active" });
+      expect(calls("acme.quiet")).toBe(quietCalls + 1);
+      expect(await logs("acme.spin")).toContain("never returned");
+      expect(await logs("acme.quiet")).not.toContain("never returned");
+    });
+
     it("failures outside the window start a new count", async () => {
       await installTestApp("acme.flaky", [{ point: "checkout.discounts" }]);
       answers["acme.flaky"] = () => ({ ok: false, value: null, error: { code: null, message: "Error: flaky" }, logs: [], droppedLogs: 0 });

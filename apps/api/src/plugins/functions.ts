@@ -127,6 +127,29 @@ function withOwnCartAttributes(input: Record<string, unknown>, pluginId: string)
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
 const CONCURRENCY = 4;
 
+/**
+ * One request's sandboxed function runs, one at a time. A sandboxed run is
+ * marked in flight before it starts and cleared after (function-circuit.ts);
+ * if two overlapped and one held the thread (a busy loop the isolate's CPU
+ * limit does not end, as local development's Worker Loader enforces none),
+ * the other's clear would never commit and, after the restart, both apps
+ * would look hung. Run one at a time, at most one mark is set per request, so
+ * a stale mark names exactly the app that never returned. Bundled runs are
+ * in-process code, never marked, and stay concurrent; only sandboxed runs
+ * pay the wait. A queue belongs to one request (checkout makes one per
+ * request; a call without one gets its own), never to the module.
+ */
+export type SandboxRunQueue = <T>(run: () => Promise<T>) => Promise<T>;
+
+export function createSandboxRunQueue(): SandboxRunQueue {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(run: () => Promise<T>) => {
+    const result = tail.then(run);
+    tail = result.catch(() => undefined);
+    return result;
+  };
+}
+
 /** An app's declared reads at `point`: its function's, or every read its extensions declare (one `as`, one read). */
 function declaredReads(installation: RegisteredPlugin["installation"], point: PluginRunPoint): FunctionReadDeclaration[] {
   if (point !== PLUGIN_EXTENSION_RUN) return installation.manifest.functions.find((fn) => fn.point === point)?.reads ?? [];
@@ -178,6 +201,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     reads?: AppReadsCache;
     /** The request's customer-roles read (absent: read here, once, for the point's apps). */
     roles?: FunctionCustomerRoles;
+    /** The request's sandboxed-run queue, shared by every point it runs (absent: one for this call). */
+    sandboxRuns?: SandboxRunQueue;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -207,6 +232,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       : import("./customer-roles").then(({ pluginCustomerRolesByApp }) => pluginCustomerRolesByApp(db, customerId, apps));
     return (await rolesByApp).get(pluginId) ?? [];
   };
+  const sandboxRuns = options.sandboxRuns ?? createSandboxRunQueue();
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -274,11 +300,15 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
+      const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads });
       // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows.
-      const sandboxed = installation.source !== "bundled";
-      if (sandboxed) await markFunctionInflight(db, { pluginId: installation.pluginId, point });
-      const outcome = await host.invokeFunction(installation, point, { ...scopedInput, reads });
-      if (sandboxed) await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
+      // The request runs its sandboxed runs one at a time, so the mark is the only one and is cleared before the next starts.
+      const outcome = installation.source === "bundled" ? await invoke() : await sandboxRuns(async () => {
+        await markFunctionInflight(db, { pluginId: installation.pluginId, point });
+        const answer = await invoke();
+        await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
+        return answer;
+      });
       if (!outcome.ok || !outcome.value) {
         // A run the platform cut short for its own reasons (the app was just updated or stopped) is no failure of the app's.
         if (!outcome.ok && (outcome.failure === "outdated" || outcome.failure === "inactive")) fail();
