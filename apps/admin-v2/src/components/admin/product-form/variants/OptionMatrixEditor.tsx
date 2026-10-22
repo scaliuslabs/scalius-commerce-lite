@@ -490,13 +490,15 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
       excludedCombinationKeys,
     );
     setVariants(next);
-    // The product's first option: every variant keeps the one cost per item it had.
-    const simpleCost = variants.length === 0 && costs ? costs.costOf(costs.simpleKey) : null;
-    if (simpleCost !== null) costs!.setCosts(next.filter((row) => costs!.costOf(row.id) === null).map((row) => row.id), simpleCost);
+    // Until the product's options are saved, every new variant starts from the one cost per item
+    // it had, as it starts from its price pair (merchant M4: the second value got none).
+    const simpleCost = savedOptions.length === 0 && costs ? costs.costOf(costs.simpleKey) : null;
+    const known = new Set(variants.map((row) => row.id));
+    if (simpleCost !== null) costs!.setCosts(next.filter((row) => !known.has(row.id) && costs!.costOf(row.id) === null).map((row) => row.id), simpleCost);
     setExcludedCombinationKeys(new Set(missingOptionCombinations(options, next).map(combinationKey)));
     setTopologyChanged(optionTopologySignature(options) !== savedTopology);
     setCombinationsPending(false);
-  }, [combinationCount, costs, defaultSku, excludedCombinationKeys, options, productName, seed, savedTopology, simpleConversion, validShape, variants]);
+  }, [combinationCount, costs, defaultSku, excludedCombinationKeys, options, productName, seed, savedOptions.length, savedTopology, simpleConversion, validShape, variants]);
 
   // Variants follow the options as soon as every option has a name and a value.
   // Existing rows are matched by option values and keep their data; rows that

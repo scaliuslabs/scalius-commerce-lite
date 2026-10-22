@@ -82,6 +82,16 @@ const baseValues = {
   fulfillmentKind: "physical" as const, customizationSchema: [],
 };
 
+/** The saved simple product's one hidden SKU, priced as the product. */
+const defaultSku = (price: number, compareAt: number | null) => ({
+  id: "var_default", sku: "BEAM", stock: 20, stockVersion: 1, reservedStock: 0, trackInventory: true, weight: null,
+  barcode: "4006381333931", barcodeType: "ean13", imageId: null, isDefault: true, deletedAt: null, fulfillmentKind: "physical", cost: 1500,
+  selectedOptions: [],
+  ...(compareAt === null
+    ? { price, discountType: "percentage", discountPercentage: null, discountAmount: null }
+    : { price: compareAt, discountType: "flat", discountPercentage: null, discountAmount: compareAt - price }),
+});
+
 interface Probe {
   form: ReturnType<typeof useFormContext<ProductFormValues>> | null;
   scope: SaveScopeState | null;
@@ -216,5 +226,23 @@ describe("a new product that gets options value by value", () => {
     await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="${p("removeOption")}"]`)!.click());
     await settle();
     expect(probe.form!.getValues(["variantPriced", "price", "discountType", "discountAmount"])).toEqual([false, 4800, "flat", 600]);
+  });
+});
+
+describe("a saved simple product that gets its first option (merchant M4)", () => {
+  it("carries 2,500 / 3,000 and the cost to every new variant and clears the product discount in the same save", async () => {
+    const probe = await mount(true, { ...baseValues, id: "prod_1", name: "Beam light", slug: "beam-light", slugEdited: true, ...stored(2500, 3000) }, [defaultSku(2500, 3000)]);
+    await addOption(1, "Color", ["Black", "White"]);
+    expect(probe.form!.getValues(["variantPriced", "price", "discountAmount"])).toEqual([true, 2500, 0]);
+
+    await act(async () => { await probe.scope!.saveAll(); });
+    const update = sdk.get("putApiV1AdminProductsById");
+    expect(update).toHaveBeenCalledTimes(1);
+    const body = update!.mock.calls[0]![0].body;
+    expect([body.discountAmount, body.discountPercentage]).toEqual([0, 0]);
+    expect(pairs(body.optionMatrix.variants)).toEqual([[2500, 3000], [2500, 3000]]);
+    // Both keep the cost per item the product had; the first keeps its barcode.
+    expect(body.skuCosts).toEqual(body.optionMatrix.variants.map((variant: { id: string }) => ({ variantId: variant.id, cost: 1500, expectedCost: null })));
+    expect(body.optionMatrix.variants.map((variant: { barcode: string | null }) => variant.barcode)).toEqual(["4006381333931", null]);
   });
 });
