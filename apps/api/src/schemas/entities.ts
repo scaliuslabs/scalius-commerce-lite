@@ -56,7 +56,7 @@ export const productSummarySchema = z.object({
   aggregateRevision: z.number().int().min(1),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
-  category: z.object({ name: z.string() }),
+  category: z.object({ name: z.string().openapi({ description: "The category name; empty when the product has none." }) }),
   variantCount: z.number(),
   onHand: z.number().nullable().openapi({ description: "Tracked on-hand units across live SKUs; null when no SKU tracks quantity." }),
   hasVariantDiscount: z.boolean().openapi({ description: "Some SKUs carry their own discount." }),

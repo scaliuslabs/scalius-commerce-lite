@@ -450,7 +450,8 @@ export async function listProducts(db: Database, options: {
         createdAt: requireProductTimestamp(product.createdAt, "created timestamp"),
         updatedAt: requireProductTimestamp(product.updatedAt, "updated timestamp"),
         category: {
-            name: product.categoryName || "Uncategorized",
+            // Empty without a category: the dashboard words it in its own language.
+            name: product.categoryName ?? "",
         },
         variantCount: Number(variantSummaryMap.get(product.id)?.count ?? 0),
         /** Tracked on-hand units across live SKUs; null when no SKU tracks quantity. */
