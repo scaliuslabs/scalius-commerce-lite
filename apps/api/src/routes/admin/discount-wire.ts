@@ -83,7 +83,7 @@ const effectInput = z.discriminatedUnion("kind", [
     kind: z.literal("free"),
     target: z.literal("shipping"),
     allocation: z.literal("once"),
-    config: z.object({}).strict(),
+    config: z.object({ maxRateMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() }).strict(),
   }).strict(),
 ]);
 

@@ -37245,7 +37245,7 @@ export type PostApiV1AdminDiscountsData = {
             target: 'shipping';
             allocation: 'once';
             config: {
-                [key: string]: never;
+                maxRateMinor?: number;
             };
         }>;
         /**
@@ -37544,7 +37544,7 @@ export type PutApiV1AdminDiscountsByIdData = {
             target: 'shipping';
             allocation: 'once';
             config: {
-                [key: string]: never;
+                maxRateMinor?: number;
             };
         }>;
         /**

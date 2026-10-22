@@ -233,6 +233,12 @@ describe("discount evaluator", () => {
         )).toBe(false);
     });
 
+    it("gives no free shipping when the delivery rate is over the discount's rate limit", () => {
+        const capped = (maxRateMinor: number) => candidate("ship", { ...freeShipping, config: { maxRateMinor } } as Effect);
+        expect(lineDiscounts(evaluate({}, [capped(100)])).shipping).toBe(100);
+        expect(lineDiscounts(evaluate({}, [capped(99)])).shipping).toBeUndefined();
+    });
+
     it("bundles free shipping with a product discount, checking its minimum after the discount", () => {
         const bundle = (minimumMinor: number) => candidate("bundle", lineEffect({ basisPoints: 2_000 }), {
             effects: [lineEffect({ basisPoints: 2_000 }), freeShipping],

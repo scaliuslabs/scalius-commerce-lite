@@ -36,6 +36,8 @@ export interface DiscountDraft {
   freeShipping: boolean;
   /** Order subtotal after this discount that free shipping needs; empty = always. */
   freeShippingMinimum: string;
+  /** Free shipping is skipped when the delivery rate is over this; empty = any rate. */
+  freeShippingMaxRate: string;
   minimum: "none" | "amount" | "quantity";
   minimumValue: string;
   buyKind: "quantity" | "amount";
@@ -208,6 +210,7 @@ export function emptyDraft(type: DiscountType, now = Date.now()): DiscountDraft 
     appliesTo: { kind: "collections", ids: [] },
     freeShipping: false,
     freeShippingMinimum: "",
+    freeShippingMaxRate: "",
     minimum: "none",
     minimumValue: "",
     buyKind: "quantity",
@@ -276,6 +279,9 @@ export function draftFromDiscount(record: DiscountRecord, currencyCode: string):
     appliesTo: type === "products" ? scopeOf(config) : draft.appliesTo,
     freeShipping: type !== "shipping" && record.effects[1]?.target === "shipping",
     freeShippingMinimum: shippingMinimum ? money(shippingMinimum.config.amountMinor) : "",
+    freeShippingMaxRate: numberOf(record.effects.find((item) => item.target === "shipping")?.config.maxRateMinor)
+      ? money(record.effects.find((item) => item.target === "shipping")!.config.maxRateMinor)
+      : "",
     minimum: minimum?.kind === "minimum_merchandise_subtotal" ? "amount" : minimum ? "quantity" : "none",
     minimumValue: minimum?.kind === "minimum_merchandise_subtotal"
       ? money(minimum.config.amountMinor)
@@ -334,6 +340,9 @@ export function validateDraft(
   if (bundlesShipping(draft) && draft.freeShippingMinimum.trim()) {
     set("freeShippingMinimum", amountError(draft.freeShippingMinimum, currencyCode, priceIncrementMinor));
   }
+  if ((draft.type === "shipping" || bundlesShipping(draft)) && draft.freeShippingMaxRate.trim()) {
+    set("freeShippingMaxRate", amountError(draft.freeShippingMaxRate, currencyCode, priceIncrementMinor));
+  }
   if (draft.type === "buy_get") {
     set("buyValue", draft.buyKind === "quantity" ? quantityError(draft.buyValue) : amountError(draft.buyValue, currencyCode, priceIncrementMinor));
     if (draft.buyScope.ids.length === 0) errors.buyScope = "errorPickItems";
@@ -365,6 +374,12 @@ export function validateDraft(
   return errors;
 }
 
+/** The free-shipping effect's config: the rate above which delivery stays paid, when set. */
+function shippingConfig(draft: DiscountDraft, currency: string): { maxRateMinor?: number } {
+  const maxRate = draft.freeShippingMaxRate.trim() ? majorToMinor(draft.freeShippingMaxRate, currency) : null;
+  return maxRate ? { maxRateMinor: maxRate } : {};
+}
+
 function bundlesShipping(draft: DiscountDraft): boolean {
   return draft.freeShipping && (draft.type === "products" || draft.type === "order");
 }
@@ -382,7 +397,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
     : { kind: "fixed_amount_off" as const, config: { amountMinor: majorToMinor(draft.value, currency)!, currency } };
   let effect: DiscountInput["effects"][number];
   if (draft.type === "shipping") {
-    effect = { kind: "free", target: "shipping", allocation: "once", config: {} };
+    effect = { kind: "free", target: "shipping", allocation: "once", config: shippingConfig(draft, currency) };
   } else if (draft.type === "order") {
     const { kind, config } = value();
     effect = kind === "percentage_off"
@@ -426,7 +441,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
       : [{ kind: "minimum_item_quantity", config: { quantity: positiveInteger(draft.minimumValue)!, ...minimumScope } }];
   const effects: DiscountInput["effects"] = [effect];
   if (bundlesShipping(draft)) {
-    effects.push({ kind: "free", target: "shipping", allocation: "once", config: {} });
+    effects.push({ kind: "free", target: "shipping", allocation: "once", config: shippingConfig(draft, currency) });
     if (draft.freeShippingMinimum.trim()) {
       conditions.push({
         kind: "minimum_merchandise_subtotal",
@@ -584,6 +599,10 @@ export function summarizeDraft(
     const over = amount(draft.freeShippingMinimum);
     if (!draft.freeShippingMinimum.trim()) lines.push({ key: "summaryPlusFreeShipping" });
     else if (over) lines.push({ key: "summaryPlusFreeShippingOver", vars: { value: over } });
+  }
+  if ((draft.type === "shipping" || bundlesShipping(draft)) && draft.freeShippingMaxRate.trim()) {
+    const cap = amount(draft.freeShippingMaxRate);
+    if (cap) lines.push({ key: "summaryShippingRateCap", vars: { value: cap } });
   }
   if (draft.type === "shipping") {
     lines.push({ key: "summaryFreeShipping" });
