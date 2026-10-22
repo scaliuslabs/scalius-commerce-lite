@@ -242,7 +242,7 @@ export function ResetPasswordForm() {
     <div className="flex flex-col gap-6">
       <AuthHeader title={t(invite ? "inviteTitle" : "resetTitle")} description={t(invite ? "inviteDescription" : "resetDescription")} />
       {invite && inviteDetails ? (
-        <div className="rounded-lg border bg-muted/40 p-3 text-body">
+        <div className="rounded-lg border bg-muted/50 p-3 text-body">
           {inviteDetails.storeName ? (
             <p>{inviteDetails.inviterName
               ? t("inviteBy", { inviter: inviteDetails.inviterName, store: inviteDetails.storeName })

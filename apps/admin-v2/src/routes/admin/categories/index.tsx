@@ -39,7 +39,7 @@ import { catalogMessages } from "~/i18n/catalog";
 import { pageHead } from "~/i18n/page-titles";
 
 /** Children sit under their parent when the list is in tree order. */
-const TREE_INDENT = ["", "ps-6", "ps-12", "ps-[4.5rem]"] as const;
+const TREE_INDENT = ["", "ps-5", "ps-9", "ps-14"] as const;
 const STATUSES = ["published", "draft", "internal"] as const;
 const validateBase = createListSearchValidator(["tree", "name", "status", "createdAt", "updatedAt"] as const, { sort: "tree", order: "asc", list: "categories" });
 
