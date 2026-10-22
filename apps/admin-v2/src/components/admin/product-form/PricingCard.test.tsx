@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Form } from "@/components/ui/form";
-import { formatNumber, translate } from "~/i18n";
+import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
@@ -112,12 +112,11 @@ describe("PricingCard", () => {
       expect(host.querySelectorAll("input")).toHaveLength(0);
     });
 
-    it.each([10, 12.5, 12.55])("shows the option price range and saved %s%% discount as text", async (discount) => {
-      currency.sale = 90;
-      await render(<Harness readOnly variantPrices={{ min: 100, max: 200 }} price={100} discount={discount} />);
+    // With options each variant carries its own compare-at price: no product discount to show (buyer QA B1).
+    it("shows only the option price range customers pay", async () => {
+      await render(<Harness readOnly variantPrices={{ min: 100, max: 200 }} price={100} />);
       expect(host.textContent).toContain("৳100–৳200");
-      expect(host.textContent).toContain(translate(productMessages, "discountPercentage"));
-      expect(host.textContent).toContain(formatNumber(discount / 100, { style: "percent", maximumFractionDigits: 2 }));
+      expect(host.textContent).not.toContain(translate(productMessages, "discountType"));
       expect(host.querySelectorAll("input, [role=combobox]")).toHaveLength(0);
     });
 

@@ -95,10 +95,11 @@ export function formatFormValuesForSubmission(
     price: values.price ?? 0,
     categoryId: values.categoryId || null,
     isActive: values.isActive,
-    discountType: values.discountType,
+    // With options each variant carries its own compare-at price: the product keeps no discount.
+    discountType: values.variantPriced ? "percentage" : values.discountType,
     discountPercentage:
-      values.discountType === "percentage" ? values.discountPercentage : 0,
-    discountAmount: values.discountType === "flat" ? values.discountAmount : 0,
+      !values.variantPriced && values.discountType === "percentage" ? values.discountPercentage : 0,
+    discountAmount: !values.variantPriced && values.discountType === "flat" ? values.discountAmount : 0,
     freeDelivery: values.freeDelivery,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription?.trim() || null,

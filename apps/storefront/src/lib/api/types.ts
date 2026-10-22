@@ -762,12 +762,22 @@ export interface OrderReceiptSupportRequest {
   updatedAt: string | null;
 }
 
+/** A delivered line a return may name, with the units that reached the buyer. */
+export interface ReturnableOrderLine {
+  orderItemId: string;
+  productName: string;
+  variantLabel: string | null;
+  quantity: number;
+}
+
 export interface OrderReceiptSupportRequestAction {
   type: OrderReceiptSupportRequestType;
   label: string;
   description: string;
   eligible: boolean;
   disabledReason: string | null;
+  /** A return: the delivered lines to choose from. */
+  returnableItems?: ReturnableOrderLine[];
 }
 
 export interface OrderReceiptDiscount {

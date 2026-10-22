@@ -146,7 +146,7 @@ const cards = orders.map((order) => {
               <div class="flex shrink-0 flex-col items-end justify-between gap-2 sm:order-3 sm:mt-auto sm:flex-row sm:items-center sm:border-t sm:border-border sm:pt-3">
                 <p class="text-sm font-semibold tabular-nums text-foreground sm:text-base">{card.total}</p>
                 <a
-                  href={card.href}
+                  href={`${card.href}#buy-again`}
                   data-astro-prefetch="false"
                   data-buy-again={card.buyAgain}
                   class="relative z-10 inline-flex min-h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:min-h-10 sm:text-sm"
@@ -180,7 +180,7 @@ const cards = orders.map((order) => {
   enhanceBuyerUi();
 
   // Buy again: the lines still sold go back in the cart at today's price.
-  // Without JavaScript the link opens the order.
+  // Without JavaScript (or before this script) the link opens the order, which adds the lines.
   document.querySelectorAll<HTMLAnchorElement>("a[data-buy-again]").forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();

@@ -93,6 +93,8 @@ export default function OrderSuccessButtons({
   const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
   const [selectedSupportType, setSelectedSupportType] = useState<OrderReceiptSupportRequestType | null>(null);
   const [supportReason, setSupportReason] = useState("");
+  /** A return: the chosen lines and how many of each come back (buyer QA m4). */
+  const [returnSelection, setReturnSelection] = useState<Record<string, number>>({});
   const [supportSubmitState, setSupportSubmitState] = useState<SubmitState>({ status: "idle", message: null });
 
   const claimOrderToAccount = useCallback(async () => {
@@ -217,6 +219,15 @@ export default function OrderSuccessButtons({
       return;
     }
 
+    const returnLines = selectedSupportAction?.type === "return" ? selectedSupportAction.returnableItems ?? [] : [];
+    const items = returnLines
+      .filter((line) => returnSelection[line.orderItemId] !== undefined)
+      .map((line) => ({ orderItemId: line.orderItemId, quantity: returnSelection[line.orderItemId]! }));
+    if (returnLines.length > 0 && items.length === 0) {
+      setSupportSubmitState({ status: "error", message: copy.orderReceiptChooseReturnItemsText });
+      return;
+    }
+
     if (reason.length < 3) {
       setSupportSubmitState({
         status: "error",
@@ -235,6 +246,7 @@ export default function OrderSuccessButtons({
           type: selectedSupportType,
           reason,
           message: null,
+          ...(items.length > 0 ? { items } : {}),
         }),
       });
       const payload = await response.json().catch(() => null) as {
@@ -255,6 +267,7 @@ export default function OrderSuccessButtons({
       setSupportRequestActions(payload.data.supportRequestActions ?? []);
       setSelectedSupportType(null);
       setSupportReason("");
+      setReturnSelection({});
       setSupportSubmitState({
         status: "success",
         message: copy.orderReceiptRequestSentText,
@@ -408,6 +421,50 @@ export default function OrderSuccessButtons({
 
             {selectedSupportAction && (
               <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+                {selectedSupportAction.type === "return" && (selectedSupportAction.returnableItems?.length ?? 0) > 0 ? (
+                  <fieldset>
+                    <legend className="text-xs font-medium text-foreground">{copy.orderReceiptReturnItemsText}</legend>
+                    <div className="mt-1 space-y-1">
+                      {selectedSupportAction.returnableItems!.map((line) => {
+                        const name = line.variantLabel ? `${line.productName} (${line.variantLabel})` : line.productName;
+                        const chosen = returnSelection[line.orderItemId];
+                        return (
+                          <div key={line.orderItemId} className="flex min-h-11 items-center gap-3 text-sm text-foreground">
+                            <input
+                              type="checkbox"
+                              id={`receiptReturn-${line.orderItemId}`}
+                              className="h-4 w-4 accent-primary"
+                              checked={chosen !== undefined}
+                              onChange={(event) => setReturnSelection((current) => {
+                                const next = { ...current };
+                                if (event.target.checked) next[line.orderItemId] = 1;
+                                else delete next[line.orderItemId];
+                                return next;
+                              })}
+                            />
+                            <label htmlFor={`receiptReturn-${line.orderItemId}`} className="min-w-0 flex-1">{name}</label>
+                            {line.quantity > 1 && chosen !== undefined ? (
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={line.quantity}
+                                value={chosen}
+                                aria-label={name}
+                                className="h-11 w-20 rounded-lg border border-input bg-background px-2 text-end tabular-nums"
+                                onChange={(event) => {
+                                  const typed = Math.floor(Number(event.target.value));
+                                  const quantity = Math.min(Math.max(1, Number.isFinite(typed) ? typed : 1), line.quantity);
+                                  setReturnSelection((current) => ({ ...current, [line.orderItemId]: quantity }));
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                ) : null}
                 <div>
                   <label htmlFor="receiptSupportReason" className="text-xs font-medium text-foreground">
                     {copy.orderReceiptReasonText}

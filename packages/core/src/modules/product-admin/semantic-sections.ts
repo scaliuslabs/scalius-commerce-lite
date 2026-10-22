@@ -678,6 +678,17 @@ export async function planProductBaseSection(
         ...definedPatch,
         ...catalogPriceColumns({ price, discountPercentage, discountAmount }, currency),
     } as typeof current;
+    // A product with options keeps no product discount: each variant has its own compare-at price (buyer QA B1).
+    if ((discountPercentage ?? 0) > 0 || (discountAmount ?? 0) > 0) {
+        const option = await db.select({ id: productVariants.id }).from(productVariants).where(and(
+            eq(productVariants.productId, productId),
+            eq(productVariants.isDefault, false),
+            isNull(productVariants.deletedAt),
+        )).limit(1).get();
+        if (option) {
+            throw new ValidationError("A product with options has no product discount. Give each variant its own compare-at price instead.", { field: "discountAmount" });
+        }
+    }
     if (next.canonicalPath !== null && next.canonicalPath !== `/products/${next.slug}`) {
         throw new ValidationError("Canonical path must use this product's current slug until URL aliases are supported.");
     }

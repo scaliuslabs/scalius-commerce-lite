@@ -311,6 +311,8 @@ async function createRandomProduct(rng: Rng, index: number) {
     }));
     return createProduct(db, createProductSchema.parse({
         ...common,
+        // A product with options keeps no product discount: its SKUs carry their own.
+        discountPercentage: 0,
         price: Math.min(...variants.map((variant) => variant.price)),
         optionMatrix: { options, variants },
     }));

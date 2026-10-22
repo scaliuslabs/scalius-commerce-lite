@@ -38,6 +38,7 @@ import {
 import { sendOrderSupportRequestNotification } from "../../utils/order-notifications";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
+import { returnableOrderLineSchema, supportRequestItemsSchema } from "../storefront-orders/shared";
 import {
   composeOrderLineExtras,
   orderGiftCardTenderSchema,
@@ -185,6 +186,8 @@ const customerOrderSupportRequestActionSchema = z.object({
   description: z.string(),
   eligible: z.boolean(),
   disabledReason: z.string().nullable(),
+  /** A return: the delivered lines to choose from. */
+  returnableItems: z.array(returnableOrderLineSchema).optional(),
 });
 
 const customerOrderDetailSchema = z.object({
@@ -427,6 +430,7 @@ const createCustomerOrderSupportRequestRoute = createRoute({
             type: customerOrderSupportRequestTypeSchema,
             reason: z.string().trim().min(3).max(500),
             message: z.string().trim().max(1000).nullable().optional(),
+            items: supportRequestItemsSchema.optional(),
           }).strict(),
         },
       },

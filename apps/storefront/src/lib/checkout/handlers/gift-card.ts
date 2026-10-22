@@ -1,5 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
+import { pagePath } from "@/lib/presence-url";
 
 /** The payment method of an order the buyer's gift cards pay in full. */
 export const GIFT_CARD_PAYMENT_METHOD = "gift_card";
@@ -26,7 +27,7 @@ export const giftCardHandler: GatewayHandler = {
       ctx.onOrderCreated?.(orderId, GIFT_CARD_PAYMENT_METHOD);
       return {
         success: true,
-        redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}`,
+        redirectUrl: pagePath(`/order-success?orderId=${encodeURIComponent(orderId)}`),
       };
     } catch (err: unknown) {
       if (err instanceof CheckoutOrderError) {

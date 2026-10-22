@@ -47,7 +47,7 @@ vi.mock("~/components/admin/ProductForm", () => ({
     });
     return <>
       <button onClick={() => props.onRevisionConflict?.({ expectedRevision: 1, currentRevision: 2 })}>Conflict</button>
-      {props.optionManager({ readOnly: false, skuImages: [], productName: "Product", productPrice: 10, isActive: false, onPricesChange: () => {}, fulfilmentMode: "physical" })}
+      {props.optionManager({ readOnly: false, skuImages: [], productName: "Product", productPrice: 10, productCompareAt: null, isActive: false, onPricesChange: () => {}, fulfilmentMode: "physical" })}
     </>;
   },
 }));

@@ -110,6 +110,27 @@ describe("cart drawer after an add", () => {
     expect(dialog().textContent).not.toContain("Only 40 left");
   });
 
+  // Buyer QA m2: an answer read for the asked 41 (a check still on its way)
+  // must not say "Only 40 left" beside a line that already holds 40.
+  it("never shows an 'only N left' the capped line already follows", async () => {
+    const mug = { id: "mug", slug: "mug", name: "Mug", price: 499, variantId: "var_mug", quantity: 41 };
+    await addToCart(mug);
+    const mugKey = await cartLineKeyFor(mug);
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({
+      data: {
+        issues: [{ index: 0, cartKey: mugKey, productId: "mug", variantId: "var_mug", code: "quantity_unavailable", action: "reduce_quantity",
+          message: "Only 40 left for Mug.", productName: "Mug", variantLabel: null, requestedQuantity: 41, availableQuantity: 40 }],
+      },
+    }), { status: 200 }));
+    await act(async () => root.render(<CartFlyout />));
+    await dispatchOpenCart({ addedLineKey: mugKey });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(dialog().querySelector("[data-cart-added-text]")?.textContent).toBe("Added 40 (all that's left)");
+    expect(dialog().textContent).not.toContain("Only 40 left");
+  });
+
   it("shows the plain cart, with no confirmation, for a bare open-cart", async () => {
     await mount();
     await dispatchOpenCart();

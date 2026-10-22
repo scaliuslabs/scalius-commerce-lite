@@ -181,6 +181,8 @@ interface Window {
   lastShippingEventDetail?: import("./lib/checkout/shipping-methods").ShippingMethodDetail;
   handleAbandonedCheckout?: () => void;
   validateCartSnapshot?: () => Promise<boolean>;
+  /** Resolves once the cart totals in flight have their quote. */
+  cartTotalsSettled?: () => Promise<void>;
   hasCartValidationIssues?: () => boolean;
   /** A store app's rule blocks the order (said on its line or above the checkout action). */
   hasCartRuleErrors?: () => boolean;

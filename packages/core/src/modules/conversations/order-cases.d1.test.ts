@@ -26,6 +26,32 @@ describe("support requests as cases on the order thread", () => {
 
   afterEach(() => sqlite.close());
 
+  // Buyer QA m4: a return names the delivered lines and how many come back.
+  it("records a return for the delivered lines the buyer chose, and refuses the rest", async () => {
+    sqlite.exec(`
+      UPDATE orders SET status = 'delivered', fulfillment_status = 'fulfilled' WHERE id = 'order_1';
+      INSERT INTO products (id, name, slug, price_minor) VALUES ('p_board', 'Board', 'board', 400), ('p_ebook', 'E-book', 'ebook', 200);
+      INSERT INTO order_items (id, order_id, product_id, product_name, variant_label, quantity, unit_price_minor, fulfillment_type, fulfilled_quantity)
+        VALUES ('item_board', 'order_1', 'p_board', 'Board', NULL, 2, 400, 'ship', 2),
+               ('item_ebook', 'order_1', 'p_ebook', 'E-book', NULL, 1, 200, 'digital', 1);
+    `);
+    await expect(createReceiptOrderSupportRequest(db, "order_1", {
+      type: "return", reason: "Arrived damaged", items: [{ orderItemId: "item_ebook", quantity: 1 }],
+    })).rejects.toThrow(/delivered to you/);
+    await expect(createReceiptOrderSupportRequest(db, "order_1", {
+      type: "return", reason: "Arrived damaged", items: [{ orderItemId: "item_board", quantity: 3 }],
+    })).rejects.toThrow(/up to 2 of Board/);
+
+    const result = await createReceiptOrderSupportRequest(db, "order_1", {
+      type: "return", reason: "Arrived damaged", items: [{ orderItemId: "item_board", quantity: 1 }],
+    });
+    expect(result.request.type).toBe("return");
+    const buyerView = await getBuyerThread(db, (await readOrderThread(db, "order_1"))!);
+    expect(buyerView.messages.at(-1)?.body).toBe("Arrived damaged\n\nBoard × 1");
+    const event = sqlite.prepare("SELECT data FROM order_events WHERE kind = 'request_submitted'").get() as { data: string };
+    expect(JSON.parse(event.data)).toMatchObject({ type: "return", items: [{ orderItemId: "item_board", quantity: 1 }] });
+  });
+
   it("records the case, an event and the buyer's words on the order thread in one batch", async () => {
     const result = await createReceiptOrderSupportRequest(db, "order_1", {
       type: "cancel_pre_shipment",

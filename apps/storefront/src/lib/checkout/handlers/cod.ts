@@ -1,5 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
+import { pagePath } from "@/lib/presence-url";
 
 export const codHandler: GatewayHandler = {
   id: "cod",
@@ -19,7 +20,7 @@ export const codHandler: GatewayHandler = {
       ctx.onOrderCreated?.(orderId, "cod");
       return {
         success: true,
-        redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}`,
+        redirectUrl: pagePath(`/order-success?orderId=${encodeURIComponent(orderId)}`),
       };
     } catch (err: unknown) {
       if (err instanceof CheckoutOrderError) {

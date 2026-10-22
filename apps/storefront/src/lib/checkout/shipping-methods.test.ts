@@ -122,6 +122,23 @@ describe("delivery options follow the address", () => {
     expect(document.body.textContent).toContain("Pick up from Shop 12, Dhanmondi");
   });
 
+  // Buyer QA M6: Place order a second after choosing the thana found no total.
+  it("lets the order wait for the options of a thana just chosen", async () => {
+    let arrive!: (rates: DeliveryRate[]) => void;
+    const { methods, events } = setup({
+      loadRates: () => new Promise<DeliveryRate[] | null>((resolve) => { arrive = resolve; }),
+    });
+    void methods.setAddress(DHAKA);
+    let settled = false;
+    const waiting = methods.settled().then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    arrive([standard]);
+    await waiting;
+    // Announced (so the totals started) before the order goes on.
+    expect(events.at(-1)?.id).toBe("standard");
+  });
+
   it("re-reads the rates for each address and replaces a rate that no longer applies", async () => {
     const { methods, events, loadRates, options, note, standIn } = setup({
       byCity: { dhaka: [standard, pickup], ctg: [ctg, pickup] },

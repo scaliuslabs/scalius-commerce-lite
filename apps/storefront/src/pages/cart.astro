@@ -2155,14 +2155,23 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         const expectedQuoteFingerprintInput = document.getElementById(
           "expectedQuoteFingerprint",
         ) as HTMLInputElement | null;
-        if (
-          codOnly &&
-          !/^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprintInput?.value ?? "")
-        ) {
+        const quoted = () => /^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprintInput?.value ?? "");
+        if (codOnly && !quoted()) {
+          // A thana chosen a moment ago: its options and total are on their
+          // way. Wait for them and place the order the buyer sees (buyer QA M6).
           e.preventDefault();
+          submitButton.disabled = true;
+          setSubmitButtonText(checkoutCopy.calculatingText);
+          await shippingMethods?.settled();
+          await window.cartTotalsSettled?.();
           restoreSubmitButton();
+          if (quoted()) {
+            form.requestSubmit();
+            return;
+          }
+          // Still no total: said here, on the page the buyer is on.
           showCheckoutFormError(
-            checkoutCopy.totalVerificationFailedText,
+            checkoutCopy.taxVerificationFailedText,
             submitButton,
           );
           return;

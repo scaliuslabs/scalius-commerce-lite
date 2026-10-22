@@ -9,6 +9,7 @@ import {
   deliveryShipments,
   FulfillmentStatus,
   OrderStatus,
+  orderItems,
   orderSupportRequests,
   orders,
   PaymentStatus,
@@ -61,12 +62,63 @@ export interface CustomerOrderSupportRequestAction {
   description: string;
   eligible: boolean;
   disabledReason: string | null;
+  /** A return: the delivered lines the buyer may choose from, with the units handed over. */
+  returnableItems?: ReturnableOrderLine[];
+}
+
+/** A line that reached the buyer (shipped and delivered, or picked up), so it can come back. */
+export interface ReturnableOrderLine {
+  orderItemId: string;
+  productName: string;
+  variantLabel: string | null;
+  quantity: number;
+}
+
+/** The lines of a return request and how many of each come back. */
+export interface SupportRequestItemInput {
+  orderItemId: string;
+  quantity: number;
 }
 
 export interface CreateCustomerOrderSupportRequestInput {
   type: CustomerOrderSupportRequestType;
   reason: string;
   message?: string | null;
+  /** A return names its lines (buyer QA m4); other requests name none. */
+  items?: SupportRequestItemInput[];
+}
+
+/** The order's lines that reached the buyer: ship and pickup lines with handed-over units. */
+export function returnableOrderLines(items: ReadonlyArray<{
+  id: string;
+  productName: string | null;
+  variantLabel?: string | null;
+  fulfillmentType: string;
+  fulfilledQuantity: number;
+}>): ReturnableOrderLine[] {
+  return items
+    .filter((item) => (item.fulfillmentType === "ship" || item.fulfillmentType === "pickup") && item.fulfilledQuantity > 0)
+    .map((item) => ({
+      orderItemId: item.id,
+      productName: item.productName ?? "",
+      variantLabel: item.variantLabel ?? null,
+      quantity: item.fulfilledQuantity,
+    }));
+}
+
+/** Reads the order's returnable lines (the receipt and the request check them). */
+export async function readReturnableOrderLines(db: Database, orderId: string): Promise<ReturnableOrderLine[]> {
+  return returnableOrderLines(await db
+    .select({
+      id: orderItems.id,
+      productName: orderItems.productName,
+      variantLabel: orderItems.variantLabel,
+      fulfillmentType: orderItems.fulfillmentType,
+      fulfilledQuantity: orderItems.fulfilledQuantity,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .all());
 }
 
 export interface UpdateAdminOrderSupportRequestStatusInput {
@@ -113,7 +165,22 @@ type SupportRequestActionContext = {
   hasShipment: boolean;
   hasActiveRefundOperation: boolean;
   activeRequestTypes: ReadonlySet<string>;
+  /** The lines that reached the buyer; absent: not read (the return names no lines). */
+  returnableItems?: readonly ReturnableOrderLine[];
 };
+
+/** A return, per line: offered once the order is delivered, for the lines that reached the buyer. */
+function returnAction(
+  order: SupportRequestActionOrderState,
+  returnableItems: readonly ReturnableOrderLine[] | undefined,
+): CustomerOrderSupportRequestAction {
+  const delivered = RETURN_REQUEST_STATUSES.has(order.status);
+  const eligible = delivered && (returnableItems === undefined || returnableItems.length > 0);
+  return {
+    ...createAction("return", eligible, eligible ? null : CUSTOMER_REQUEST_STATE_REASONS.returnUnavailable),
+    ...(returnableItems && eligible ? { returnableItems: [...returnableItems] } : {}),
+  };
+}
 
 const ACTIVE_SUPPORT_REQUEST_STATUSES = new Set<string>([
   "submitted",
@@ -167,8 +234,9 @@ const PRE_SHIPMENT_CANCEL_STATUSES = new Set<string>([
   OrderStatus.CONFIRMED,
 ]);
 
+// A return is for goods the buyer received: never while the parcel is on its
+// way (buyer QA m4; the merchant's own return flow refuses it too).
 const RETURN_REQUEST_STATUSES = new Set<string>([
-  OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
   OrderStatus.COMPLETED,
 ]);
@@ -334,13 +402,7 @@ export function getCustomerOrderSupportRequestActions(
       canCancel,
       canCancel ? null : cancellationUnavailableReason(customerRequestDeliveryMode(order)),
     ),
-    createAction(
-      "return",
-      RETURN_REQUEST_STATUSES.has(order.status),
-      RETURN_REQUEST_STATUSES.has(order.status)
-        ? null
-        : CUSTOMER_REQUEST_STATE_REASONS.returnUnavailable,
-    ),
+    returnAction(order, context.returnableItems),
     createAction(
       "refund",
       canRequestRefund,
@@ -363,13 +425,19 @@ export function applyCustomerRequestPolicyToSupportActions(
   return projectCustomerRequestActions(policy, actions, {
     includeHidden: options.includeHidden,
     deliveryMode: options.order ? customerRequestDeliveryMode(options.order) : undefined,
-  }).map((action) => ({
-    type: action.type,
-    label: action.label,
-    description: action.description,
-    eligible: action.eligible,
-    disabledReason: action.disabledReason,
-  }));
+  }).map((action) => {
+    const returnableItems = action.eligible
+      ? actions.find((source) => source.type === action.type)?.returnableItems
+      : undefined;
+    return {
+      type: action.type,
+      label: action.label,
+      description: action.description,
+      eligible: action.eligible,
+      disabledReason: action.disabledReason,
+      ...(returnableItems ? { returnableItems } : {}),
+    };
+  });
 }
 
 export async function listOrderSupportRequests(
@@ -456,6 +524,8 @@ export async function buildOrderSupportRequestState(
   db: Database,
   order: SupportRequestActionOrderState,
 ): Promise<{
+  /** The delivered lines a return may name (none before delivery). */
+  returnableItems: ReturnableOrderLine[];
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
   allSupportRequestActions: CustomerOrderSupportRequestAction[];
@@ -464,7 +534,7 @@ export async function buildOrderSupportRequestState(
   hasActiveRefundOperation: boolean;
   policy: CustomerRequestPolicy;
 }> {
-  const [shipmentRows, supportRequests, refundAttemptViews, policy] = await Promise.all([
+  const [shipmentRows, supportRequests, refundAttemptViews, policy, returnableItems] = await Promise.all([
     db
       .select({ id: deliveryShipments.id })
       .from(deliveryShipments)
@@ -473,6 +543,8 @@ export async function buildOrderSupportRequestState(
     listOrderSupportRequests(db, order.id),
     listOrderRefundAttempts(db, order.id, { audience: "customer" }),
     getCustomerRequestPolicy(db),
+    // Lines are read only once a return can be asked for (a delivered order).
+    RETURN_REQUEST_STATUSES.has(order.status) ? readReturnableOrderLines(db, order.id) : Promise.resolve([]),
   ]);
   const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
   const activeRequestTypes = getActiveSupportRequestTypes(supportRequests);
@@ -480,8 +552,10 @@ export async function buildOrderSupportRequestState(
     hasShipment: shipmentRows.length > 0,
     hasActiveRefundOperation: Boolean(activeRefundOperation),
     activeRequestTypes,
+    returnableItems,
   });
   return {
+    returnableItems,
     supportRequests,
     supportRequestActions: applyCustomerRequestPolicyToSupportActions(policy, baseActions, { order }),
     allSupportRequestActions: applyCustomerRequestPolicyToSupportActions(

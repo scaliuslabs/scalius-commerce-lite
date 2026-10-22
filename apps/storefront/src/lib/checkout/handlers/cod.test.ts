@@ -65,6 +65,18 @@ describe("COD checkout handler", () => {
     });
   });
 
+  // Buyer QA m9: on a market's pages the confirmation is that market's, never the root's.
+  it("lands on the confirmation under the page's market", async () => {
+    mocks.createOrder.mockResolvedValueOnce({ orderId: "order_cod" });
+    vi.stubGlobal("document", { documentElement: { dataset: { marketPresence: "bn" } } });
+    try {
+      const result = await codHandler.processPayment(context);
+      expect(result).toEqual({ success: true, redirectUrl: "/bn/order-success?orderId=order_cod" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("returns backend order failure status before redirect", async () => {
     mocks.createOrder.mockRejectedValueOnce(new CheckoutOrderError(
       "Order creation failed (429)",

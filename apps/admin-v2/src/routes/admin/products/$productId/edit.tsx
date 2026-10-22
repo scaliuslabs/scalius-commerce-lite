@@ -409,7 +409,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
           setMatrixDirty(false);
           setMatrixIssue(null);
         }}
-        optionManager={({ readOnly, skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
+        optionManager={({ readOnly, skuImages, productName, productPrice, productCompareAt, isActive, onPricesChange, fulfilmentMode }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               readOnly={readOnly}
@@ -418,7 +418,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
               key={`matrix-${matrixGeneration}`}
               productId={productId}
               productName={productName}
-              productPrice={productPrice}
+              productPrice={productPrice} productCompareAt={productCompareAt}
               onPricesChange={onPricesChange}
               options={matrixSnapshot.options}
               variants={matrixSnapshot.variants}

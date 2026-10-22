@@ -1,5 +1,6 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
+import { pagePath } from "@/lib/presence-url";
 
 /**
  * Pay later (`flow: "deferred"`: the store's invoice, net terms, or an app's
@@ -21,7 +22,7 @@ export function createDeferredGatewayHandler(gateway: string, label: string): Ga
         ctx.onOrderCreated?.(orderId, gateway);
         return {
           success: true,
-          redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}`,
+          redirectUrl: pagePath(`/order-success?orderId=${encodeURIComponent(orderId)}`),
         };
       } catch (err: unknown) {
         if (err instanceof CheckoutOrderError) {

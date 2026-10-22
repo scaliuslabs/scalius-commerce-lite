@@ -469,6 +469,7 @@ export async function createProduct(
         ? data.optionMatrix.variants.map((variant, index) => ({ sku: variant.sku, field: `optionMatrix.variants.${index}.sku` }))
         : data.defaultSku?.sku ? [{ sku: data.defaultSku.sku, field: "defaultSku.sku" }] : []);
 
+    assertNoProductDiscountWithOptions(data, Boolean(data.optionMatrix));
     const currency = await readStoreCurrency(db);
     const productPrice = catalogPriceColumns(data, currency);
     // With options, the product price is its lowest variant price (productPriceMinorSql).
@@ -854,6 +855,19 @@ async function unchangedProductSaveRevision(
     return current.aggregateRevision;
 }
 
+/**
+ * A product with options keeps no product-level discount: each SKU carries its
+ * own price and compare-at price (its own base price and discount), so a
+ * variant priced on its own sells at exactly that price. A product discount
+ * would reach every variant without one and silently reprice it (buyer QA B1).
+ */
+function assertNoProductDiscountWithOptions(data: { discountPercentage?: number | null; discountAmount?: number | null }, hasOptions: boolean): void {
+    if (!hasOptions) return;
+    if ((data.discountPercentage ?? 0) > 0 || (data.discountAmount ?? 0) > 0) {
+        throw new ValidationError("A product with options has no product discount. Give each variant its own compare-at price instead.", { field: "discountAmount" });
+    }
+}
+
 /** Clear errors for a gift-card save the batch guard would otherwise refuse. */
 function assertGiftCardUpdateAllowed(
     data: UpdateProductInput,
@@ -1120,6 +1134,9 @@ export async function updateProduct(
     // untracked in this batch; discounts and open reservations are refused.
     const isGiftCard = data.isGiftCard ?? existingProduct.isGiftCard === true;
     if (isGiftCard) assertGiftCardUpdateAllowed(data, activeVariants);
+    // Options sent with this save, or kept from before (a save without a simple SKU keeps them).
+    assertNoProductDiscountWithOptions(data, Boolean(data.optionMatrix)
+        || (!data.defaultSku && activeVariants.some((variant) => !variant.isDefault)));
     // The Shipping card's kind: a SKU turns digital only without stock (its
     // stock becomes its licence keys). Gift cards keep their own rules.
     const fulfillmentKind = data.fulfillmentKind;
