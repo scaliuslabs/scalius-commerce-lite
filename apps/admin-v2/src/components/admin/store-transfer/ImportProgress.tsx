@@ -41,6 +41,7 @@ export function ImportDone({
   onRetryImages,
   retrying,
   onDownloadReport,
+  problems = [],
 }: {
   counts: ImportCounts;
   images: { attached: number; failures: readonly ImageFailure[] } | null;
@@ -51,6 +52,8 @@ export function ImportDone({
   onRetryImages?: () => void;
   retrying?: boolean;
   onDownloadReport?: () => void;
+  /** Rows that were not imported, with the reason (the report holds every one). */
+  problems?: readonly { line: number | null; subject?: string | null; message: string }[];
 }) {
   const t = useMessages(storeTransferMessages);
   const rows: Array<[string, number]> = [
@@ -91,6 +94,19 @@ export function ImportDone({
               ) : null}
             </>
           ) : null}
+        </div>
+      ) : null}
+      {problems.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-body font-medium">{t("rowProblems")}</p>
+          <ul className="max-h-48 space-y-1 overflow-y-auto">
+            {problems.slice(0, 50).map((problem, index) => (
+              <li key={`${problem.line ?? "file"}-${index}`} className="text-body">
+                <span className="text-muted-foreground">{problem.line ? t("rowLine", { line: problem.line }) : null}{problem.line && problem.subject ? " · " : null}{problem.subject ? <code>{problem.subject}</code> : null}</span>
+                <span className="block">{problem.message}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
       {onDownloadReport ? (

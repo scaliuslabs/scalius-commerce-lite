@@ -291,6 +291,8 @@ export function mapWooCommerceProducts(table: CsvTable, options: ProductMappingO
         weightGrams: weight.value,
         barcode: barcode.value,
         requiresShipping: !virtual,
+        // Virtual without a download is a service (a consultation); downloadable is digital.
+        ...(virtual ? { nonShippingKind: type.includes("downloadable") ? "digital" as const : "service" as const } : {}),
         imageUrl: null,
       });
       finalizeDraft(context, draft);
@@ -365,6 +367,9 @@ export function mapWooCommerceProducts(table: CsvTable, options: ProductMappingO
         weightGrams: weight.value,
         barcode: barcode.value,
         requiresShipping: !(virtual || variationTypes.includes("virtual") || variationTypes.includes("downloadable")),
+        ...(virtual || variationTypes.includes("virtual") || variationTypes.includes("downloadable")
+          ? { nonShippingKind: type.includes("downloadable") || variationTypes.includes("downloadable") ? "digital" as const : "service" as const }
+          : {}),
         imageUrl: splitImportList(get("Images", variation))[0] ?? null,
       });
     }

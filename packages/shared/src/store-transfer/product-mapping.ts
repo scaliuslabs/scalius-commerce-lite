@@ -83,6 +83,8 @@ export class MappingContext {
   readonly unsupported = new UnsupportedCollector();
   readonly items: ProductImportItem[] = [];
   readonly variantLines = new Map<string, (number | null)[]>();
+  /** SKU (as matched: trimmed, lower case) -> the product of the file that has it. */
+  readonly skuOwners = new Map<string, string>();
   failedProducts = 0;
   productsWithExtraOptions = 0;
 
@@ -303,6 +305,27 @@ export function finalizeDraft(context: MappingContext, draft: DraftProduct): voi
         context.issues.push(...currencyIssues);
         continue;
       }
+    }
+    // A SKU names one variant in the whole store: two products of this file
+    // with the same SKU would fail on import, so the preview says so now.
+    const clash = item.variants.flatMap((variant, index) => {
+      const key = variant.sku?.trim().toLocaleLowerCase("en-US");
+      const owner = key ? context.skuOwners.get(key) : undefined;
+      return owner && owner !== item.ref ? [{ variant, index, owner }] : [];
+    });
+    if (clash.length > 0) {
+      context.failedProducts += 1;
+      for (const { variant, index, owner } of clash) {
+        context.error(variantLines[index] ?? piece.productLine, "sku_duplicate_in_file", `SKU ${variant.sku} is also used by ${owner} in this file. Give each variant its own SKU.`, {
+          subject: variant.sku ?? piece.ref,
+          column: "sku",
+        });
+      }
+      continue;
+    }
+    for (const variant of item.variants) {
+      const key = variant.sku?.trim().toLocaleLowerCase("en-US");
+      if (key) context.skuOwners.set(key, item.ref);
     }
     context.items.push(item);
     context.variantLines.set(item.ref, variantLines);

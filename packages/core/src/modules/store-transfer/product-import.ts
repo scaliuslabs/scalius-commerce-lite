@@ -263,8 +263,14 @@ function resolveItem(
 
 // ── Create ─────────────────────────────────────────────────────────────────
 
-function fulfillmentKindFor(variant: ProductImportVariant): "physical" | "service" {
-  return variant.requiresShipping ? "physical" : "service";
+/**
+ * Shopify's "Requires shipping: FALSE" (and WooCommerce's virtual or
+ * downloadable) is how both mark a digital product, so a row that ships
+ * nothing becomes a digital product (its files are added in the product's
+ * Digital delivery card), unless the file says it is a service.
+ */
+function fulfillmentKindFor(variant: ProductImportVariant): "physical" | "digital" | "service" {
+  return variant.requiresShipping ? "physical" : variant.nonShippingKind ?? "digital";
 }
 
 function barcodeFields(barcode: string | null) {
