@@ -36,6 +36,16 @@ export const POST: APIRoute = async ({ request }) => {
     const type = stringField(payload as Record<string, unknown>, "type");
     const reason = stringField(payload as Record<string, unknown>, "reason");
     const message = stringField(payload as Record<string, unknown>, "message");
+    // A return's lines: ids and counts only (the API checks them against the order).
+    const rawItems = (payload as Record<string, unknown>).items;
+    const items = Array.isArray(rawItems)
+      ? rawItems.slice(0, 100).flatMap((item) => {
+          const line = item as Record<string, unknown> | null;
+          return line && typeof line.orderItemId === "string" && Number.isInteger(line.quantity)
+            ? [{ orderItemId: line.orderItemId.slice(0, 64), quantity: line.quantity as number }]
+            : [];
+        })
+      : [];
     const receiptToken = readOrderReceiptCookie(request.headers.get("cookie"), orderId);
 
     if (!orderId || !SUPPORT_REQUEST_TYPES.has(type)) {
@@ -58,6 +68,7 @@ export const POST: APIRoute = async ({ request }) => {
           type,
           reason,
           message: message || null,
+          ...(items.length > 0 ? { items } : {}),
         }),
       },
       { retries: 0, timeout: RECEIPT_SUPPORT_TIMEOUT_MS, auth: true },

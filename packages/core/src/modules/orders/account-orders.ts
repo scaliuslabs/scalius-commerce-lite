@@ -45,6 +45,7 @@ import {
     getActiveSupportRequestTypes,
     getCustomerOrderSupportRequestActions,
     listOrderSupportRequests,
+    returnableOrderLines,
     type OrderSupportRequestView,
 } from "./order-support-requests";
 
@@ -1137,6 +1138,8 @@ export async function getCustomerOrderDetailForOrder(
             hasShipment: formattedShipments.length > 0,
             hasActiveRefundOperation: Boolean(activeRefundOperation),
             activeRequestTypes: getActiveSupportRequestTypes(supportRequests),
+            // A return names the lines that reached the buyer (buyer QA m4).
+            returnableItems: returnableOrderLines(items),
         }),
         { order },
     );

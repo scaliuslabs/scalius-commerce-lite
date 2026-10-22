@@ -20,6 +20,7 @@ import type {
 } from "./types";
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import type { ReturnableOrderLine } from "./types";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import type { OrderLineExtras } from "../order-line-extras";
 import { reconcileCheckoutAfterSignIn } from "../checkout/session-state";
@@ -619,12 +620,16 @@ export interface CustomerOrderSupportRequestAction {
   description: string;
   eligible: boolean;
   disabledReason: string | null;
+  /** A return: the delivered lines to choose from. */
+  returnableItems?: ReturnableOrderLine[];
 }
 
 export interface CreateCustomerOrderSupportRequestInput {
   type: CustomerOrderSupportRequestType;
   reason: string;
   message?: string | null;
+  /** A return: the lines and how many of each come back. */
+  items?: Array<{ orderItemId: string; quantity: number }>;
 }
 
 interface CustomerOrderSupportRequestData {

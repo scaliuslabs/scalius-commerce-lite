@@ -426,10 +426,42 @@ function openSupportForm(type: CustomerOrderSupportRequestType): void {
         ${escapeHtml(reason)}
       </label>`).join("");
   }
+  // A return names its items: each delivered line, with how many come back (buyer QA m4).
+  const lines = type === "return" ? action.returnableItems ?? [] : [];
+  const itemsField = byId("orderSupportItemsField");
+  const itemsList = byId("orderSupportItems");
+  if (itemsField) itemsField.hidden = lines.length === 0;
+  if (itemsList) {
+    const words = accountCopy().order;
+    itemsList.innerHTML = lines.map((line) => {
+      const name = line.variantLabel ? `${line.productName} (${line.variantLabel})` : line.productName;
+      return `
+      <div class="flex min-h-11 items-center gap-3 text-sm text-foreground">
+        <input type="checkbox" name="orderSupportItem" value="${escapeHtml(line.orderItemId)}" id="returnItem-${escapeHtml(line.orderItemId)}" class="h-4 w-4 accent-primary" />
+        <label for="returnItem-${escapeHtml(line.orderItemId)}" class="min-w-0 flex-1">${escapeHtml(name)}</label>
+        ${line.quantity > 1 ? `<input type="number" inputmode="numeric" min="1" max="${line.quantity}" value="1" data-return-quantity="${escapeHtml(line.orderItemId)}" aria-label="${escapeHtml(words.returnQuantityFor.replace("{name}", name))}" class="${RETURN_QUANTITY_CLASS}" />` : ""}
+      </div>`;
+    }).join("");
+  }
   const message = byId<HTMLTextAreaElement>("orderSupportMessage");
   if (message) message.value = "";
   byId("orderSupportForm")?.classList.remove("hidden");
-  reasons?.querySelector("input")?.focus();
+  (itemsList?.querySelector("input") ?? reasons?.querySelector("input"))?.focus();
+}
+
+const RETURN_QUANTITY_CLASS = "h-11 w-20 rounded-lg border border-input bg-background px-2 text-end tabular-nums";
+
+/** The chosen return lines; null when the form names items but none is chosen. */
+function chosenReturnItems(): Array<{ orderItemId: string; quantity: number }> | null | undefined {
+  const field = byId("orderSupportItemsField");
+  if (!field || field.hidden) return undefined;
+  const chosen = [...document.querySelectorAll<HTMLInputElement>('input[name="orderSupportItem"]:checked')].map((box) => {
+    const quantityInput = document.querySelector<HTMLInputElement>(`input[data-return-quantity="${CSS.escape(box.value)}"]`);
+    const max = Number(quantityInput?.max ?? 1);
+    const typed = Math.floor(Number(quantityInput?.value ?? 1));
+    return { orderItemId: box.value, quantity: Math.min(Math.max(1, Number.isFinite(typed) ? typed : 1), max) };
+  });
+  return chosen.length > 0 ? chosen : null;
 }
 
 function renderSupport(detail: AccountOrderDetail): void {
@@ -469,6 +501,12 @@ async function submitSupportRequest(): Promise<void> {
   const reason = document.querySelector<HTMLInputElement>('input[name="orderSupportReason"]:checked')?.value ?? "";
   const message = byId<HTMLTextAreaElement>("orderSupportMessage")?.value.trim() || null;
   const words = accountCopy().order;
+  const items = chosenReturnItems();
+  if (items === null) {
+    setSupportError(words.chooseReturnItems);
+    document.querySelector<HTMLInputElement>('input[name="orderSupportItem"]')?.focus();
+    return;
+  }
   if (!reason) {
     setSupportError(words.chooseReason);
     return;
@@ -481,7 +519,7 @@ async function submitSupportRequest(): Promise<void> {
   supportLoading = true;
   setSupportError(null);
   setSupportButton(words.submitting, true);
-  const result = await createCustomerOrderSupportRequest(detail.order.id, { type: selectedSupportType, reason, message });
+  const result = await createCustomerOrderSupportRequest(detail.order.id, { type: selectedSupportType, reason, message, ...(items ? { items } : {}) });
   supportLoading = false;
   if (!result.success) {
     setSupportError(writeError(result, words.requestFailed));

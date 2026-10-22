@@ -10,6 +10,7 @@ import {
   applyCustomerRequestPolicyToSupportActions,
   getAdminOrderSupportRequestTransition,
   getCustomerOrderSupportRequestActions,
+  returnableOrderLines,
   customerAccountOwnershipCondition,
   type CustomerOrderSupportRequestType,
 } from "./order-support-requests";
@@ -77,18 +78,34 @@ describe("order support request eligibility", () => {
     ).eligible).toBe(false);
   });
 
-  it("allows returns after shipment or delivery states", () => {
-    for (const status of [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED]) {
+  // Buyer QA m4: offered while the parcel was still on its way, and whole-order only.
+  it("allows returns only once delivered, for the lines that reached the buyer", () => {
+    for (const status of [OrderStatus.DELIVERED, OrderStatus.COMPLETED]) {
       expect(actionByType(
         "return",
         getCustomerOrderSupportRequestActions(actionState({ status }), context()),
       ).eligible).toBe(true);
     }
 
-    expect(actionByType(
-      "return",
-      getCustomerOrderSupportRequestActions(actionState({ status: OrderStatus.CONFIRMED }), context()),
-    ).eligible).toBe(false);
+    for (const status of [OrderStatus.CONFIRMED, OrderStatus.SHIPPED]) {
+      expect(actionByType(
+        "return",
+        getCustomerOrderSupportRequestActions(actionState({ status }), context()),
+      ).eligible).toBe(false);
+    }
+
+    const lines = returnableOrderLines([
+      { id: "item_board", productName: "Board", variantLabel: null, fulfillmentType: "ship", fulfilledQuantity: 2 },
+      { id: "item_ebook", productName: "E-book", variantLabel: null, fulfillmentType: "digital", fulfilledQuantity: 1 },
+      { id: "item_mouse", productName: "Mouse", variantLabel: "Black", fulfillmentType: "ship", fulfilledQuantity: 0 },
+    ]);
+    expect(lines).toEqual([{ orderItemId: "item_board", productName: "Board", variantLabel: null, quantity: 2 }]);
+    const delivered = getCustomerOrderSupportRequestActions(actionState({ status: OrderStatus.DELIVERED }), { ...context(), returnableItems: lines });
+    expect(actionByType("return", delivered).returnableItems).toEqual(lines);
+    // Nothing reached the buyer (a digital-only order): no return to ask for.
+    expect(actionByType("return", getCustomerOrderSupportRequestActions(
+      actionState({ status: OrderStatus.DELIVERED }), { ...context(), returnableItems: [] },
+    )).eligible).toBe(false);
   });
 
   it("allows refund requests only for paid post-shipment states", () => {
