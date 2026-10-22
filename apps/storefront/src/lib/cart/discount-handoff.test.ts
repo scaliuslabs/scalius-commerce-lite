@@ -601,6 +601,31 @@ describe("cart discount checkout handoff", () => {
     expect((document.getElementById("submitButton") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  // Buyer QA M6: Place order a second after choosing the thana said "Return to
+  // your cart" on the cart page, because the new total was still on its way.
+  it("waits for the total of a just-changed delivery choice, then places the order", async () => {
+    document.getElementById("checkout-meta")!.setAttribute("data-cod-only", "true");
+    await startCartPage();
+    await settleCheckout();
+    const form = document.getElementById("checkoutForm") as HTMLFormElement;
+    const submitEvents: boolean[] = [];
+    form.addEventListener("submit", (event) => submitEvents.push(event.defaultPrevented));
+
+    let resolveQuote!: (quote: CheckoutTaxQuote) => void;
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementationOnce(() => new Promise((resolve) => { resolveQuote = resolve; }));
+    const updating = updateTotals();
+    const submit = submitCheckout();
+    await settleCheckout();
+    expect(submit.defaultPrevented).toBe(true);
+    expect(document.getElementById("checkoutFormError")?.textContent ?? "").not.toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.totalVerificationFailedText);
+    resolveQuote(taxQuote());
+    await updating;
+    await settleCheckout();
+    // The held press goes on by itself once the total is known.
+    expect(submitEvents.length).toBeGreaterThan(1);
+    expect(sessionStorage.getItem("scalius_submitted_cart")).toContain(CART_LINE_KEY);
+  });
+
   it("holds COD submit while Apply is pending, then permits the normal submit", async () => {
     document.getElementById("checkout-meta")!.setAttribute("data-cod-only", "true");
     await startCartPage();

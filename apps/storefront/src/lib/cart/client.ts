@@ -176,6 +176,7 @@ let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
+let cartTotalsInFlight: Promise<void> = Promise.resolve();
 /**
  * The cart lines a refused quote already sent back to the availability check.
  * That check re-renders the totals, which quote again: without this, a line
@@ -1261,7 +1262,26 @@ function renderEstimateNote(leftOut: readonly string[]): void {
  * destination is chosen, otherwise the discount preview for the chosen
  * delivery method. Applied codes stay applied through every cart edit.
  */
-export async function updateTotals() {
+export function updateTotals(): Promise<void> {
+  const run = refreshTotals();
+  cartTotalsInFlight = run.catch(() => undefined);
+  return run;
+}
+
+/**
+ * Resolves once the totals in flight (and any started meanwhile) have their
+ * quote: placing the order waits for it instead of finding no fingerprint
+ * while the quote for a just-chosen thana is on its way (buyer QA M6).
+ */
+export async function cartTotalsSettled(): Promise<void> {
+  let current: Promise<void>;
+  do {
+    current = cartTotalsInFlight;
+    await current;
+  } while (current !== cartTotalsInFlight);
+}
+
+async function refreshTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
   const { items: cartItems, discountCodes } = cartStore.get();
   // The estimate counts only what can be bought now (the quote refuses the rest).
@@ -1742,6 +1762,7 @@ export async function initCartFunctionality() {
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
   window.validateCartSnapshot = validateCartSnapshot;
+  window.cartTotalsSettled = cartTotalsSettled;
   window.hasCartValidationIssues = () => hasBlockingCartIssues();
   window.hasCartRuleErrors = () => hasCartRuleErrors();
   window.getCartBlockedMessage = () => cartBlockedMessage();

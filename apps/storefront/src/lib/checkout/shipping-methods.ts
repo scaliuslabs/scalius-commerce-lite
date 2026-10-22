@@ -238,6 +238,8 @@ export function enhanceShippingMethods(
    * buyer reviews the new total before placing the order.
    */
   recheck(): Promise<boolean>;
+  /** Resolves once the address's options in flight have arrived (and been announced). */
+  settled(): Promise<void>;
 } | null {
   const container = root.querySelector<HTMLElement>("[data-shipping-methods]");
   const list = container?.querySelector<HTMLElement>("[data-shipping-options]");
@@ -519,7 +521,15 @@ export function enhanceShippingMethods(
     setNote(shown().some((rate) => rate.kind === "delivery") ? "" : options.readNoDeliveryReason?.() ?? copy.noDeliveryText);
   };
 
-  const load = async (force = false) => {
+  // The read in flight: placing the order waits for it (`settled`), so a
+  // thana chosen a moment before Place order is the one quoted (buyer QA M6).
+  let loading: Promise<void> = Promise.resolve();
+  const load = (force = false): Promise<void> => {
+    const run = loadNow(force);
+    loading = run.catch(() => undefined);
+    return run;
+  };
+  const loadNow = async (force = false) => {
     const hasAddress = hasDeliveryDestination(address);
     const current = ++sequence;
     renderLegend();
@@ -649,6 +659,14 @@ export function enhanceShippingMethods(
         }
       }
       emit();
+    },
+    async settled() {
+      // A read started while waiting (the buyer changed the thana again) is waited for too.
+      let current: Promise<void>;
+      do {
+        current = loading;
+        await current;
+      } while (current !== loading);
     },
     async recheck() {
       // The quote priced the options a store app changed, and placing the
