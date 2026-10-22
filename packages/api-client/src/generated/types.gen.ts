@@ -54532,6 +54532,57 @@ export type PutApiV1AdminOrdersByIdStatusResponses = {
 
 export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
 
+export type PostApiV1AdminOrdersByIdRefundKeptData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/refund-kept';
+};
+
+export type PostApiV1AdminOrdersByIdRefundKeptErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminOrdersByIdRefundKeptError = PostApiV1AdminOrdersByIdRefundKeptErrors[keyof PostApiV1AdminOrdersByIdRefundKeptErrors];
+
+export type PostApiV1AdminOrdersByIdRefundKeptResponses = {
+    /**
+     * What was kept
+     */
+    200: {
+        success: true;
+        data: {
+            keptMinor: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdRefundKeptResponse = PostApiV1AdminOrdersByIdRefundKeptResponses[keyof PostApiV1AdminOrdersByIdRefundKeptResponses];
+
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body: {
         /**
@@ -56527,6 +56578,9 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 category: {
+                    /**
+                     * The category name; empty when the product has none.
+                     */
                     name: string;
                 };
                 variantCount: number;
@@ -58109,7 +58163,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -58178,7 +58232,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -58698,11 +58752,11 @@ export type GetApiV1AdminOrdersByIdResponses = {
             editReadiness: {
                 items: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
                 details: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
             };
             fulfillmentLocationId: string | null;
@@ -59353,11 +59407,11 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
             editReadiness: {
                 items: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
                 details: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
             };
             productsWithVariants: Array<{
@@ -61690,6 +61744,9 @@ export type GetApiV1AdminProductsResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 category: {
+                    /**
+                     * The category name; empty when the product has none.
+                     */
                     name: string;
                 };
                 variantCount: number;
@@ -75482,6 +75539,7 @@ export type PostApiV1AdminImportProductsData = {
                 weightGrams: number | null;
                 barcode: string | null;
                 requiresShipping: boolean;
+                nonShippingKind?: 'digital' | 'service';
                 imageUrl: string | null;
             }>;
             images?: Array<{

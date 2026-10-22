@@ -193715,6 +193715,161 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/refund-kept": {
+      "post": {
+        "operationId": "dashboard.orders.refund_owed_keep",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Keep the refund owed on an order (a restocking fee)",
+        "description": "A return refunded only in part: the rest of the received items' value is kept, recorded on the timeline (`refund_kept`), and the order stops showing a refund owed. Refused when nothing is owed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What was kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "keptMinor": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "keptMinor",
+                        "replayed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant keeps the rest of a partly refunded return (a restocking fee) so no refund stays owed.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.refund"
+        }
+      }
+    },
     "/api/v1/admin/orders/{id}/mark-delivered": {
       "post": {
         "operationId": "dashboard.orders.mark_delivered",
@@ -193873,7 +194028,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when a paid order your own rider delivered should be marked delivered.",
+          "when": "Use when an order your own rider delivered in full should be marked delivered (cash on delivery may be collected later).",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -200825,7 +200980,8 @@
                                 "type": "object",
                                 "properties": {
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "The category name; empty when the product has none."
                                   }
                                 },
                                 "required": [
@@ -206452,6 +206608,7 @@
                                   "cod_returned",
                                   "payment_recorded",
                                   "refund_recorded",
+                                  "refund_kept",
                                   "return_created",
                                   "return_approved",
                                   "return_received",
@@ -206655,6 +206812,7 @@
                             "cod_returned",
                             "payment_recorded",
                             "refund_recorded",
+                            "refund_kept",
                             "return_created",
                             "return_approved",
                             "return_received",
@@ -208631,6 +208789,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -208660,6 +208819,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -211480,6 +211640,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -211509,6 +211670,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -219821,7 +219983,8 @@
                                 "type": "object",
                                 "properties": {
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "The category name; empty when the product has none."
                                   }
                                 },
                                 "required": [
@@ -264739,6 +264902,13 @@
                               "requiresShipping": {
                                 "type": "boolean"
                               },
+                              "nonShippingKind": {
+                                "type": "string",
+                                "enum": [
+                                  "digital",
+                                  "service"
+                                ]
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true,
@@ -283916,6 +284086,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.order-refund"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.refund_owed_keep",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.refund_owed_keep"
           ]
         },
         {

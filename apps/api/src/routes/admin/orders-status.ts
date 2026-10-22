@@ -10,6 +10,7 @@ import {
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
 import {
+    keepOwedRefund,
     recordOrderEvent,
     updateOrderStatus,
     shipmentCreationOptionsSchema,
@@ -213,6 +214,33 @@ app.openapi(updateStatusRoute, async (c) => {
     }
 
     return ok(c, { order: await readOrderResource(db, orderId) });
+});
+
+// ─── POST /:id/refund-kept ───────────────────────────────────────────────────
+
+const keepOwedRefundRoute = createRoute({
+    operationId: "dashboard.orders.refund_owed_keep",
+    method: "post",
+    path: "/{id}/refund-kept",
+    tags: ["Admin - Orders"],
+    summary: "Keep the refund owed on an order (a restocking fee)",
+    description: "A return refunded only in part: the rest of the received items' value is kept, recorded on the timeline (`refund_kept`), and the order stops showing a refund owed. Refused when nothing is owed.",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { required: true, content: { "application/json": { schema: z.object({}).strict() } } },
+    },
+    responses: {
+        200: {
+            description: "What was kept",
+            content: { "application/json": { schema: successEnvelope(z.object({ keptMinor: z.number().int().min(0), replayed: z.boolean() })) } },
+        },
+        ...adminMutationErrorResponses,
+    },
+});
+
+app.openapi(keepOwedRefundRoute, async (c) => {
+    const result = await keepOwedRefund(c.get("db"), c.req.valid("param").id, actorIdOf(c));
+    return ok(c, result);
 });
 
 // ─── POST /:id/mark-delivered ────────────────────────────────────────────────

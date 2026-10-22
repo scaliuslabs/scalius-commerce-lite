@@ -159,6 +159,9 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/*/refund": {
     POST: { permission: PERMISSIONS.ORDERS_REFUND },
   },
+  "/api/v1/admin/orders/*/refund-kept": {
+    POST: { permission: PERMISSIONS.ORDERS_REFUND },
+  },
   "/api/v1/admin/orders/*/refund-attempts/*/reconcile": {
     POST: { permission: PERMISSIONS.ORDERS_REFUND },
   },

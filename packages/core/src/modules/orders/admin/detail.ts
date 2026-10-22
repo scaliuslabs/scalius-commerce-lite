@@ -303,6 +303,7 @@ async function getOrderDetailsOnce(
         codDeliveryAttempts: _codDeliveryAttempts,
         returnedValueMinor: _returnedValueMinor,
         refundedMinor: _refundedMinor,
+        keptMinor: _keptMinor,
         paymentTermsDays: _paymentTermsDays,
         paymentDueAt: _paymentDueAt,
         ...publicOrder

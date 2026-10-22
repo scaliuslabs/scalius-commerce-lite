@@ -91,6 +91,8 @@ export function describeTimelineEvent(
         }),
         detail: text(data.reference) ? t("timeline.paymentReference", { reference: text(data.reference)! }) : null,
       };
+    case "refund_kept":
+      return { text: t("timeline.refundKept", { amount: money(count(data.amount)) }), detail: null };
     case "refund_recorded":
       return {
         text: t("timeline.refunded", { amount: money(count(data.amount)) }),

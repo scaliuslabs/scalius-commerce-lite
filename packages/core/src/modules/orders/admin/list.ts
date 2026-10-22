@@ -818,6 +818,7 @@ export async function listOrders(db: Database, options: {
             codDeliveryAttempts: _codDeliveryAttempts,
             returnedValueMinor: _returnedValueMinor,
             refundedMinor: _refundedMinor,
+            keptMinor: _keptMinor,
             ...publicOrder
         } = order;
         return {

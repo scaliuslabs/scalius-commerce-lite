@@ -232,10 +232,16 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(await getOrderDetails(db, id)).toMatchObject({ refundDue: 1600, refundedAmount: 0 });
         expect((await listOrders(db, {})).orders[0]).toMatchObject({ refundDue: 1600 });
 
-        await processRefund(db, { orderId: id, amount: 1600, reason: "Returned items", manualSettlementConfirmed: true });
+        // A deliberate partial refund (a ৳200 restocking fee), then Keep the rest: nothing stays owed.
+        await processRefund(db, { orderId: id, amount: 1400, reason: "Returned items", manualSettlementConfirmed: true });
+        expect(await getOrderDetails(db, id)).toMatchObject({ refundDue: 200, refundedAmount: 1400 });
+        const { keepOwedRefund } = await import("../admin/refund-kept");
+        expect(await keepOwedRefund(db, id, null)).toEqual({ keptMinor: 20000, replayed: false });
+        expect(await getOrderDetails(db, id)).toMatchObject({ refundDue: 0, refundedAmount: 1400 });
+        expect((await listOrders(db, {})).orders[0]).toMatchObject({ refundDue: 0 });
+        await expect(keepOwedRefund(db, id, null)).rejects.toThrow(/no refund owed/);
         expect(one("SELECT status, payment_status, balance_due_minor, paid_amount_minor FROM orders WHERE id = ?", id))
-            .toEqual({ status: "delivered", payment_status: "partially_refunded", balance_due_minor: 0, paid_amount_minor: 88000 });
-        expect(await getOrderDetails(db, id)).toMatchObject({ refundDue: 0, refundedAmount: 1600 });
+            .toEqual({ status: "delivered", payment_status: "partially_refunded", balance_due_minor: 0, paid_amount_minor: 108000 });
 
         // Nothing is owed on a partly refunded order, so it can be completed.
         const { updateOrderStatus } = await import("./lifecycle");
