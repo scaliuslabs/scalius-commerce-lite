@@ -284,20 +284,26 @@ export const LOCAL_SHARED_SECRETS = Object.freeze([
     key: "SCALIUS_SECRET",
     files: Object.freeze(["apps/api/.dev.vars", "apps/storefront/.dev.vars"]),
     isValid: isUsableMasterSecret,
-    invalidReason: `must be at least ${MASTER_SECRET_MIN_LENGTH} characters`,
+    invalidReason: `must be at least ${MASTER_SECRET_MIN_LENGTH} characters (generate one with \`openssl rand -base64 48\`)`,
   }),
   Object.freeze({
     key: "CREDENTIAL_ENCRYPTION_KEY",
     files: Object.freeze(["apps/api/.dev.vars"]),
     isValid: isUsableCredentialEncryptionKey,
-    invalidReason: `must be base64 of exactly ${CREDENTIAL_ENCRYPTION_KEY_BYTES} bytes`,
+    // A hex key (`openssl rand -hex 32`) is the usual mistake: say the encoding and the command.
+    invalidReason: `must be base64 of exactly ${CREDENTIAL_ENCRYPTION_KEY_BYTES} random bytes (44 characters; a hex key is not accepted). Generate one with \`openssl rand -base64 ${CREDENTIAL_ENCRYPTION_KEY_BYTES}\``,
   }),
 ]);
 
-export function collectLocalSecretSyncIssues({ apiVars, storefrontVars }) {
+/**
+ * What is wrong with the installed secrets, naming where each came from
+ * (`sources`: a Worker's secrets may come from the process environment
+ * instead of its .dev.vars file). Never includes a value.
+ */
+export function collectLocalSecretSyncIssues({ apiVars, storefrontVars, sources = {} }) {
   const files = [
-    { name: "apps/api/.dev.vars", vars: apiVars },
-    { name: "apps/storefront/.dev.vars", vars: storefrontVars },
+    { name: "apps/api/.dev.vars", label: sources.api ?? "apps/api/.dev.vars", vars: apiVars },
+    { name: "apps/storefront/.dev.vars", label: sources.storefront ?? "apps/storefront/.dev.vars", vars: storefrontVars },
   ].filter((file) => file.vars);
 
   const issues = [];
@@ -305,16 +311,16 @@ export function collectLocalSecretSyncIssues({ apiVars, storefrontVars }) {
     const relevantFiles = files.filter((file) => secret.files.includes(file.name));
     const missing = relevantFiles
       .filter((file) => !isUsableSecret(file.vars[secret.key]))
-      .map((file) => file.name);
+      .map((file) => file.label);
     if (missing.length > 0) {
       issues.push(`${secret.key} is missing from ${missing.join(", ")}`);
     }
 
     const invalid = relevantFiles
       .filter((file) => isUsableSecret(file.vars[secret.key]) && !secret.isValid(file.vars[secret.key]))
-      .map((file) => file.name);
+      .map((file) => file.label);
     if (invalid.length > 0) {
-      issues.push(`${secret.key} ${secret.invalidReason} in ${invalid.join(", ")}`);
+      issues.push(`${secret.key} in ${[...new Set(invalid)].join(", ")} ${secret.invalidReason}`);
     }
 
     const valueOwners = new Map();
@@ -322,7 +328,7 @@ export function collectLocalSecretSyncIssues({ apiVars, storefrontVars }) {
       const value = file.vars[secret.key];
       if (!isUsableSecret(value)) continue;
       const owners = valueOwners.get(value.trim()) ?? [];
-      owners.push(file.name);
+      owners.push(file.label);
       valueOwners.set(value.trim(), owners);
     }
     if (valueOwners.size > 1) {

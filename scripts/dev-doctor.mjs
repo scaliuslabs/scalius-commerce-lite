@@ -276,7 +276,9 @@ function checkLocalEnvFiles(checks, env = process.env) {
   // The only installed secrets: SCALIUS_SECRET (>= 32 chars, identical across
   // API/storefront) and CREDENTIAL_ENCRYPTION_KEY (base64 32 bytes, API only).
   // Values are never included in the report.
-  const drift = collectLocalSecretSyncIssues({ apiVars, storefrontVars });
+  const envLabel = "the process environment";
+  const sources = { api: envVars.api ? envLabel : undefined, storefront: envVars.storefront ? envLabel : undefined };
+  const drift = collectLocalSecretSyncIssues({ apiVars, storefrontVars, sources });
   if (drift.length === 0 && missingRuntime.length === 0) {
     pass(
       checks,
@@ -288,7 +290,9 @@ function checkLocalEnvFiles(checks, env = process.env) {
       checks,
       "Installed local secrets",
       drift.join("; "),
-      "Run pnpm dev:setup --env-only to append missing keys, or pnpm dev:setup --force --env-only to regenerate all local .dev.vars files.",
+      envSourced.length > 0
+        ? `Export a corrected value, e.g. CREDENTIAL_ENCRYPTION_KEY="$(openssl rand -base64 32)", then restart. Reuse the same values on every restart: new secrets make the saved admin password and stored credentials unreadable.`
+        : "Run pnpm dev:setup --env-only to append missing keys, or pnpm dev:setup --force --env-only to regenerate all local .dev.vars files.",
     );
   } else {
     skip(checks, "Installed local secrets", "Skipped because runtime env files are missing.", "Run pnpm dev:setup --env-only.");

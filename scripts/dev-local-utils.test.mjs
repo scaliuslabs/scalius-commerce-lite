@@ -158,12 +158,25 @@ describe("local dev script helpers", () => {
     });
 
     expect(issues).toContain(
-      `SCALIUS_SECRET must be at least ${MASTER_SECRET_MIN_LENGTH} characters in apps/api/.dev.vars`,
+      `SCALIUS_SECRET in apps/api/.dev.vars must be at least ${MASTER_SECRET_MIN_LENGTH} characters (generate one with \`openssl rand -base64 48\`)`,
     );
     expect(issues).toContain(
-      `CREDENTIAL_ENCRYPTION_KEY must be base64 of exactly ${CREDENTIAL_ENCRYPTION_KEY_BYTES} bytes in apps/api/.dev.vars`,
+      `CREDENTIAL_ENCRYPTION_KEY in apps/api/.dev.vars must be base64 of exactly ${CREDENTIAL_ENCRYPTION_KEY_BYTES} random bytes (44 characters; a hex key is not accepted). Generate one with \`openssl rand -base64 32\``,
     );
     expect(issues.join("\n")).not.toContain("not-a-key");
+  });
+
+  it("a hex key from the process environment is named by its source and says how to make a base64 one", () => {
+    const hex = Buffer.alloc(CREDENTIAL_ENCRYPTION_KEY_BYTES, 7).toString("hex");
+    const issues = collectLocalSecretSyncIssues({
+      apiVars: { SCALIUS_SECRET: VALID_MASTER_SECRET, CREDENTIAL_ENCRYPTION_KEY: hex },
+      storefrontVars: { SCALIUS_SECRET: VALID_MASTER_SECRET },
+      sources: { api: "the process environment", storefront: "the process environment" },
+    });
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatch(/^CREDENTIAL_ENCRYPTION_KEY in the process environment must be base64 /);
+    expect(issues[0]).toContain("openssl rand -base64 32");
+    expect(issues[0]).not.toContain(hex);
   });
 
   it("does not compare secrets to files that never carry them", () => {
