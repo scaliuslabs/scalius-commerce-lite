@@ -40,7 +40,7 @@ export function useOrderActions(
   const [outcome, setOutcome] = useState<OrderBulkOutcome | null>(null);
 
   const changeStatus = useCallback(
-    (order: OrderListItem, nextStatus: string, options: { confirmed?: boolean; reason?: CancelReason } = {}) => {
+    (order: OrderListItem, nextStatus: string, options: { confirmed?: boolean; reason?: CancelReason; notifyCustomer?: boolean } = {}) => {
       const status = nextStatus.toLowerCase();
       if (!isAdminOrderStatus(status) || !orderActions.canChangeOrderStatus) return;
       // Cancelling asks first, with the same dialog as the order page.
@@ -50,7 +50,12 @@ export function useOrderActions(
       }
       setUpdatingStatusIds((prev) => new Set(prev).add(order.id));
       statusMutation.mutate(
-        { orderId: order.id, status, ...(status === "cancelled" && options.reason ? { reason: options.reason } : {}) },
+        {
+          orderId: order.id,
+          status,
+          ...(status === "cancelled" && options.reason ? { reason: options.reason } : {}),
+          ...(options.notifyCustomer === false ? { notifyCustomer: false } : {}),
+        },
         {
           // The list has no order banner, so a refused change is said here.
           onError: (error) => toast.error(orderErrorMessage(error)),

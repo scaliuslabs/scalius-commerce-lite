@@ -163,7 +163,12 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
             restock={restockedUnits(order)}
             notify={Boolean(order.customerEmail)}
             pending={statusMutation.isPending}
-            onConfirm={(reason) => statusMutation.mutate({ orderId: order.id, status: "cancelled", ...(reason ? { reason } : {}) })}
+            onConfirm={(reason, notifyCustomer) => statusMutation.mutate({
+              orderId: order.id,
+              status: "cancelled",
+              ...(reason ? { reason } : {}),
+              ...(notifyCustomer === false ? { notifyCustomer: false } : {}),
+            })}
           />
         </Suspense>
       ) : null}

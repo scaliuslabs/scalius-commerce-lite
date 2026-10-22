@@ -159,6 +159,9 @@ const updateStatusRoute = createRoute({
                         status: z.enum(ORDER_STATUSES),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
+                        notifyCustomer: z.boolean().optional().openapi({
+                            description: "False sends the customer no message about this change (a test or duplicate order). Default true.",
+                        }),
                         expectedRevision: z.number().int().min(1).optional().openapi({
                             description: "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
                         }),
@@ -199,7 +202,7 @@ app.openapi(updateStatusRoute, async (c) => {
         });
     }
 
-    if (result.notification) {
+    if (result.notification && data.notifyCustomer !== false) {
         await sendOrderNotification({
             db,
             send: notificationSender(c),

@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { SearchableSelect } from "~/components/ui/searchable-select";
+import { Checkbox } from "~/components/ui/checkbox";
 import { CANCEL_REASONS, restockedUnits } from "~/components/admin/orderview/cancel-order";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -42,16 +43,21 @@ export function CancelOrderDialog({
   orderName: string;
   /** Units going back to stock; null while unknown (not said rather than guessed). */
   restock: number | null;
-  /** The customer has an email, so they get a cancellation message. */
+  /** The customer has an email, so they can get a cancellation message. */
   notify: boolean;
   pending: boolean;
-  onConfirm: (reason?: CancelReason) => void;
+  onConfirm: (reason?: CancelReason, notifyCustomer?: boolean) => void;
 }) {
   const t = useMessages(orderDetailMessages);
   const [reason, setReason] = useState<CancelReason | "">("");
+  // Shopify's "Send a notification to the customer": on by default, off for a test or duplicate order.
+  const [sendMessage, setSendMessage] = useState(true);
   const changeOpen = (next: boolean) => {
-    // Each opening starts without a reason.
-    if (!next) setReason("");
+    // Each opening starts without a reason, and with the message on.
+    if (!next) {
+      setReason("");
+      setSendMessage(true);
+    }
     onOpenChange(next);
   };
 
@@ -64,7 +70,6 @@ export function CancelOrderDialog({
             {[
               t("cancel.body"),
               restock ? t("cancel.restock", { count: restock }) : null,
-              notify ? t("cancel.notify") : null,
             ].filter(Boolean).join(" ")}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -78,9 +83,15 @@ export function CancelOrderDialog({
             options={CANCEL_REASONS.map((value) => ({ value, label: t(`cancel.reason.${value}`) }))}
           />
         </Field>
+        {notify ? (
+          <label className="flex items-start gap-3 text-body">
+            <Checkbox checked={sendMessage} onCheckedChange={(checked) => setSendMessage(checked === true)} className="mt-0.5" />
+            <span>{t("cancel.notifyChoice")}</span>
+          </label>
+        ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel>{t("cancel.keep")}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" disabled={pending} onClick={() => onConfirm(reason || undefined)}>
+          <AlertDialogAction variant="destructive" disabled={pending} onClick={() => onConfirm(reason || undefined, notify ? sendMessage : undefined)}>
             {t("cancel.confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -99,7 +110,7 @@ export function OrderRowCancelDialog({
   order: OrderListItem | null;
   pending: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (order: OrderListItem, reason?: CancelReason) => void;
+  onConfirm: (order: OrderListItem, reason?: CancelReason, notifyCustomer?: boolean) => void;
 }) {
   // Kept after closing so the title doesn't blank while the dialog animates out.
   const [shown, setShown] = useState(order);
@@ -118,8 +129,8 @@ export function OrderRowCancelDialog({
       restock={items.data ? restockedUnits({ items: items.data }) : null}
       notify={Boolean(shown?.customerEmail)}
       pending={pending}
-      onConfirm={(reason) => {
-        if (order) onConfirm(order, reason);
+      onConfirm={(reason, notifyCustomer) => {
+        if (order) onConfirm(order, reason, notifyCustomer);
       }}
     />
   );
