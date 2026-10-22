@@ -8,7 +8,12 @@ import { channelAvailableStockSql, skuStockRefs } from "./channel-publications";
 
 type DiscountColumns = { discountType: SQL; discountBps: SQL; discountAmountMinor: SQL };
 
-/** A card can add one unit without asking the buyer to choose an SKU or fill any input. */
+/**
+ * A card can add one unit without asking the buyer to choose an SKU or fill any input.
+ * A gift card or a digital item never adds from a card: a digital item is paid
+ * online only, and its page says whether this store can take that payment (the
+ * card's quick add opens the page, so the card says "View product"; buyer QA N2).
+ */
 export function quickAddEligibleSql(buyer: {
     availableForSale: SQLWrapper;
     hasCustomerOptions: SQLWrapper;
@@ -18,6 +23,12 @@ export function quickAddEligibleSql(buyer: {
         AND ${buyer.hasCustomerOptions} = 0
         AND ${buyer.effectivePriceMinor} > 0
         AND ${products.isGiftCard} = 0
+        AND NOT EXISTS (
+            SELECT 1 FROM product_variants AS quick_add_digital_sku
+            WHERE quick_add_digital_sku.product_id = ${products.id}
+              AND quick_add_digital_sku.deleted_at IS NULL
+              AND quick_add_digital_sku.fulfillment_kind = 'digital'
+        )
         AND (CASE
             WHEN ${products.customizationSchema} IS NULL THEN 1
             WHEN json_valid(${products.customizationSchema}) THEN

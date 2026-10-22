@@ -7,7 +7,7 @@ import type { BundledStorefrontExtension } from "../lib/extensions/loaders";
 
 export const BUNDLED_STOREFRONT_EXTENSIONS: Readonly<Record<string, BundledStorefrontExtension>> = {
   "scalius.noor": {
-    release: "398353a3399118f610fe9530e40f8019896be321ee8afcdccb2c062bad5ca606",
+    release: "7d58865bf6cd251239453829f98c504cc9601883fddfadd2649d6426ee1c8185",
     module: () => import("./bundled/scalius-noor/storefront.gen.js"),
     files: () => import("./bundled/scalius-noor/files.gen"),
   },

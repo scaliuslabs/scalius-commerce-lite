@@ -25,7 +25,7 @@ const image = (name: string): StorefrontImage => ({
   alt: name,
 });
 const cards = (source: string, count = 4) => Array.from({ length: count }, (_, index) => fixtureProductCard({
-  id: `${source}-${index + 1}`, title: `${source} ${index + 1}`, url: `/products/${source}-${index + 1}`, ...(index % 2 ? { quickAdd: false, compareAt: null, percentOff: null } : {}),
+  id: `${source}-${index + 1}`, title: `${source} ${index + 1}`, url: `/products/${source}-${index + 1}`, ...(index % 2 ? { quickAdd: false, needsOptions: true, compareAt: null, percentOff: null } : {}),
 }));
 const list = (source: string, count = 4): StorefrontProductList => ({ title: "", url: `/collections/${source}`, cards: cards(source, count) });
 const tile = (id: string, title: string, name: string, url: string) => ({ id, title, url, image: image(name), cards: [] });

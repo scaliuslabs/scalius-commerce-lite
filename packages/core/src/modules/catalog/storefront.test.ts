@@ -48,7 +48,10 @@ describe("storefront product reads", () => {
                 ('p_unknown', 'Unknown inputs', 1000, 'unknown-inputs', '{}', 0),
                 ('p_gift', 'Gift card', 1000, 'gift-card', NULL, 1),
                 ('p_zero', 'Zero price', 0, 'zero-price', NULL, 0),
-                ('p_sold', 'Sold out', 1000, 'sold-out', NULL, 0);
+                ('p_sold', 'Sold out', 1000, 'sold-out', NULL, 0),
+                ('p_ebook', 'E-book', 1000, 'e-book', NULL, 0);
+            INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory, fulfillment_kind) VALUES
+                ('v_ebook', 'p_ebook', 'EBOOK-1', 1000, 0, 1, 0, 'digital');
             INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES
                 ('v_input', 'p_input', 'INPUT-1', 1000, 0, 1, 0),
                 ('v_empty', 'p_empty', 'EMPTY-1', 1000, 0, 1, 0),
@@ -63,7 +66,9 @@ describe("storefront product reads", () => {
         expect(eligible.get("p_z")).toBe(true);
         expect(eligible.get("p_a")).toBe(true);
         expect(eligible.get("p_empty")).toBe(true);
-        for (const id of ["p_input", "p_unknown", "p_gift", "p_zero", "p_sold"]) {
+        // A digital item's card opens its page (it is paid online only), like a gift card's.
+        expect(products.find((product) => product.id === "p_ebook")?.availableForSale).toBe(true);
+        for (const id of ["p_input", "p_unknown", "p_gift", "p_zero", "p_sold", "p_ebook"]) {
             expect(eligible.get(id), id).toBe(false);
         }
     });

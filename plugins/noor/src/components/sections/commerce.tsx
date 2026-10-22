@@ -18,7 +18,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "../icons";
-import { Button, Products, Rail, Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, text, type Context } from "../ui";
+import { Button, Products, Rail, Section, SectionHead, Stars, cardActionWords, choice, cx, percent, ratingLabel, ratingValue, reviewCount, text, type Context } from "../ui";
 
 // ── Products with tabs ───────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ export function FeaturedProduct({ settings, context }: SectionProps<FeaturedSett
             {product.soldOut
               ? <span class="noor-badge is-muted is-inline">{t(context, { en: "Sold out", bn: "স্টক শেষ" })}</span>
               : <a class="noor-btn is-solid is-large" {...quickAdd(product)}>
-                <span {...editable(context, "button")}>{text(settings.button) ?? (product.quickAdd ? t(context, { en: "Add to cart", bn: "কার্টে যোগ করুন" }) : t(context, { en: "Choose options", bn: "অপশন বাছুন" }))}</span>
+                <span {...editable(context, "button")}>{text(settings.button) ?? cardActionWords(product, context)}</span>
               </a>}
             <a class="noor-more" href={product.url}>{t(context, { en: "View details", bn: "বিস্তারিত দেখুন" })}<Icon name="arrow" size={16} /></a>
           </div>

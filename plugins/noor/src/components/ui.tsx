@@ -177,17 +177,26 @@ export interface CardOptions {
  * badges, the name, the price and the rating. Simple products add to the
  * cart in place; others open their page.
  */
+/** What a card's action says: it adds, or it opens the page to choose options, or just opens the page. */
+export function cardActionWords(product: Pick<StorefrontProductCard, "quickAdd" | "needsOptions">, context: Context): string {
+  if (product.quickAdd) return t(context, { en: "Add to cart", bn: "কার্টে যোগ করুন" });
+  return product.needsOptions
+    ? t(context, { en: "Choose options", bn: "অপশন বাছুন" })
+    : t(context, { en: "View product", bn: "পণ্যটি দেখুন" });
+}
+
 export function ProductCard({ product, context, options = {} }: { product: StorefrontProductCard; context: Context; options?: CardOptions }) {
   const ratio = choice(options.ratio, ["portrait", "tall", "square"] as const, "portrait");
   const action = choice(options.action, ["bar", "icon", "button", "none"] as const, "bar");
   const hover = options.showHover !== false && product.hoverImage;
   const sizes = options.sizes ?? "(min-width: 1280px) 300px, (min-width: 768px) 30vw, 48vw";
-  const addWords = product.quickAdd
-    ? t(context, { en: "Add to cart", bn: "কার্টে যোগ করুন" })
-    : t(context, { en: "Choose options", bn: "অপশন বাছুন" });
+  const addWords = cardActionWords(product, context);
+  // A product the card can't add (options, a gift card, a digital item) names its page as the next step.
   const addLabel = product.quickAdd
     ? t(context, { en: `Add ${product.title} to cart`, bn: `${product.title} কার্টে যোগ করুন` })
-    : t(context, { en: `Choose options for ${product.title}`, bn: `${product.title}: অপশন বাছুন` });
+    : product.needsOptions
+      ? t(context, { en: `Choose options for ${product.title}`, bn: `${product.title}: অপশন বাছুন` })
+      : t(context, { en: `View ${product.title}`, bn: `${product.title} দেখুন` });
   const canAdd = !product.soldOut && action !== "none";
   return (
     <article class={cx("noor-card", `ratio-${ratio}`, options.align === "center" && "is-center", product.soldOut && "is-sold-out", hover && "has-hover")}>

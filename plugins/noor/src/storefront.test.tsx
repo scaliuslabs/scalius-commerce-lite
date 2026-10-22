@@ -341,6 +341,17 @@ describe("Noor chrome", () => {
     expect(bangla).toContain("−২০%");
   });
 
+  it("says what a card that can't add opens: options to choose, or just the product (a gift card, an e-book)", () => {
+    const options = renderProductCard(storefront, "noor_card", slotSettings("noor_card"), { quickAdd: false, needsOptions: true });
+    expect(options).toContain('class="noor-card-bar" href="/products/linen-shirt" aria-label="Choose options for Linen shirt"');
+    expect(options).toContain("<span>Choose options</span>");
+    const page = renderProductCard(storefront, "noor_card", slotSettings("noor_card"), { quickAdd: false, needsOptions: false });
+    expect(page).toContain('class="noor-card-bar" href="/products/linen-shirt" aria-label="View Linen shirt"');
+    expect(page).toContain("<span>View product</span>");
+    expect(page).not.toContain("Add to cart");
+    expect(page).not.toContain("data-card-quick-add");
+  });
+
   it("offers no add button on a sold-out card, and a round one when asked", () => {
     const soldOut = renderProductCard(storefront, "noor_card", slotSettings("noor_card"), { soldOut: true, quickAdd: false });
     expect(soldOut).toContain("Sold out");
