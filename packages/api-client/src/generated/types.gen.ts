@@ -4572,7 +4572,7 @@ export type ThemeVersionSummary = {
         page: string;
     } | {
         kind: 'settings-changed';
-        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
+        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'announcement' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
     }>;
     moreChanges: number;
     note: string | null;
