@@ -8,7 +8,6 @@ import { defineMessages } from "./index";
  */
 export const removedAppDataMessages = defineMessages({
   en: {
-    fromRemovedApp: "From a removed app: {app}",
     title: "Data left by uninstalled apps",
     body: "These apps are no longer installed. Their data stays until you reinstall the app, which takes it back, or delete it.",
     objectTypes: "{count, plural, one {# object type} other {# object types}}",
@@ -39,7 +38,6 @@ export const removedAppDataMessages = defineMessages({
     handOverFailed: "Couldn't hand the data over. Nothing changed. Try again.",
   },
   bn: {
-    fromRemovedApp: "সরিয়ে ফেলা অ্যাপ থেকে: {app}",
     title: "সরিয়ে ফেলা অ্যাপের তথ্য",
     body: "এই অ্যাপগুলো আর ইনস্টল করা নেই। অ্যাপটি আবার ইনস্টল না করা পর্যন্ত, যা তথ্য ফিরিয়ে নেয়, বা আপনি ডিলিট না করা পর্যন্ত এদের তথ্য থেকে যায়।",
     objectTypes: "{count}টি অবজেক্ট টাইপ",

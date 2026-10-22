@@ -6,7 +6,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
-import { removedAppDataMessages } from "~/i18n/removed-app-data";
+import { appOwnerMessages } from "~/i18n/app-owner";
 import { appsQueryOptions, removedAppDataQueryOptions } from "~/lib/api-query-options/apps";
 
 export interface AppOwner {
@@ -29,7 +29,7 @@ export function useAppOwner(namespace: string, enabled = true): AppOwner {
 
 /** What a row of an app's data says about its owner. */
 export function useAppOwnerLabel(namespace: string, managedLabel: (name: string) => string, enabled = true): { label: string; removed: boolean } {
-  const t = useMessages(removedAppDataMessages);
+  const t = useMessages(appOwnerMessages);
   const owner = useAppOwner(namespace, enabled);
   return { label: owner.removed ? t("fromRemovedApp", { app: owner.name }) : managedLabel(owner.name), removed: owner.removed };
 }

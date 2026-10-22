@@ -19,13 +19,8 @@ import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
-import {
-  appSettingErrors,
-  isAppChangedError,
-  saveAppSettings,
-  type AppDetail,
-  type AppSettingField,
-} from "~/lib/api-query-options/apps";
+import { type AppDetail, type AppSettingField } from "~/lib/api-query-options/apps";
+import { appSettingErrors, isAppChangedError, saveAppSettings } from "~/lib/api-mutations/apps";
 import { queryKeys } from "~/lib/query-keys";
 import {
   checkSettings,

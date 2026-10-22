@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
 import { appsLifecycleMessages } from "~/i18n/apps-lifecycle";
-import { appErrorCode } from "~/lib/api-query-options/apps";
+import { appErrorCode } from "~/lib/api-mutations/apps";
 import { installRegistryApp, type RegistryApp } from "~/lib/api-query-options/apps-lifecycle";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";

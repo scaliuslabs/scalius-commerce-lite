@@ -13,7 +13,7 @@ import { useMessages } from "~/i18n";
 import { appsLifecycleMessages, type AppsLifecycleMessageKey } from "~/i18n/apps-lifecycle";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";
-import { appErrorCode, handOverRemovedAppData } from "~/lib/api-query-options/apps";
+import { appErrorCode, handOverRemovedAppData } from "~/lib/api-mutations/apps";
 import { appErrorDetails, appErrorMessage, uploadAppPackage } from "~/lib/api-query-options/apps-lifecycle";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 

@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ChoiceField, FieldSet } from "~/components/ui/field";
 import { useMessages } from "~/i18n";
 import { appFeaturesMessages } from "~/i18n/app-features";
-import { enableAppFeature, type AppDetail } from "~/lib/api-query-options/apps";
+import { type AppDetail } from "~/lib/api-query-options/apps";
+import { enableAppFeature } from "~/lib/api-mutations/apps";
 import { queryKeys } from "~/lib/query-keys";
 import { serviceGroups } from "./app-services";
 import { useAppMutationResult } from "./AppDialogs";

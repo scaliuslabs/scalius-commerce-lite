@@ -1,5 +1,21 @@
 import type { ConversationProductReference, ConversationProductSnapshot } from "@scalius/shared/conversation";
-import { getDashboardBasePath } from "./dashboard-base-path";
+import {
+  cachedInboxDrafts as cached,
+  draftKeyPrefix as prefix,
+  emitInboxDrafts as emit,
+  inboxDraftAccount,
+  inboxDraftGeneration,
+  revokeInboxDraftPreviews as revoke,
+} from "./inbox-draft-session";
+
+export {
+  activateInboxDraftAccount,
+  clearInboxDrafts,
+  getInboxSearch,
+  inboxDraftGeneration,
+  setInboxSearch,
+  subscribeInboxDrafts,
+} from "./inbox-draft-session";
 
 export type DraftMode = "public" | "internal";
 export interface DraftImage {
@@ -33,52 +49,7 @@ const MAX_ENTRIES = 20;
 const TTL = 24 * 60 * 60_000;
 const emptyDraft = (): MessageDraft => ({ body: "", images: [], products: [], uploading: 0, omittedImages: 0, retryImages: false, attempt: null, error: null });
 const emptyDrafts = (): InboxDrafts => ({ public: emptyDraft(), internal: emptyDraft(), storageFailed: false });
-const prefix = () => `scalius:inbox-drafts:v1:${getDashboardBasePath()}:`;
 const scopeKey = (account: string, owner: string) => `${prefix()}${encodeURIComponent(account)}:${encodeURIComponent(owner)}`;
-const cached = new Map<string, InboxDrafts>();
-const listeners = new Set<() => void>();
-let account: string | null = null;
-let generation = 0;
-let search = "";
-const emit = () => listeners.forEach((listener) => listener());
-export const subscribeInboxDrafts = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
-export const inboxDraftGeneration = () => generation;
-export const getInboxSearch = (userId: string | null) => account === userId ? search : "";
-export function setInboxSearch(userId: string | null, value: string) { if (!userId || account !== userId) return; search = value.slice(0, 100); emit(); }
-
-function revoke(drafts: InboxDrafts) {
-  for (const mode of ["public", "internal"] as const) {
-    for (const image of drafts[mode].images) if (image.preview.startsWith("blob:")) URL.revokeObjectURL(image.preview);
-  }
-}
-
-/** Same-tab confirmed sign-out and the existing cross-tab sign-out receiver call this. */
-export function clearInboxDrafts() {
-  generation++;
-  account = null;
-  search = "";
-  cached.forEach(revoke);
-  cached.clear();
-  try {
-    for (let i = sessionStorage.length - 1; i >= 0; i--) {
-      const key = sessionStorage.key(i);
-      if (key?.startsWith(prefix())) sessionStorage.removeItem(key);
-    }
-  } catch { /* In-memory clearing must still happen when storage is unavailable. */ }
-  emit();
-}
-
-/** Called before mounting an account's composer; never keeps the previous account's drafts. */
-export function activateInboxDraftAccount(next: string | null) {
-  if (account === next) return;
-  let previous: string | null = account;
-  try { previous ??= sessionStorage.getItem(`${prefix()}account`); } catch { /* Memory still scopes by account. */ }
-  if (previous && previous !== next) clearInboxDrafts();
-  account = next;
-  try {
-    if (next) sessionStorage.setItem(`${prefix()}account`, next);
-  } catch { /* Each draft reports its own persistence failure. */ }
-}
 
 function attempt(value: unknown, mode: DraftMode): DraftAttempt | null {
   if (!value || typeof value !== "object") return null;
@@ -152,9 +123,9 @@ function persist(key: string, value: InboxDrafts): boolean {
 export function updateInboxDraft(
   userId: string, owner: string, mode: DraftMode,
   update: (draft: MessageDraft) => MessageDraft,
-  expectedGeneration = generation,
+  expectedGeneration = inboxDraftGeneration(),
 ) {
-  if (account !== userId || expectedGeneration !== generation) return;
+  if (inboxDraftAccount() !== userId || expectedGeneration !== inboxDraftGeneration()) return;
   const key = scopeKey(userId, owner);
   const current = getInboxDrafts(userId, owner);
   const next = { ...current, [mode]: update(current[mode]) };

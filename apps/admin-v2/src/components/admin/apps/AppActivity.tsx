@@ -14,13 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
-import {
-  RETRYABLE_APP_DELIVERY_STATUSES,
-  appDeliveriesQueryOptions,
-  appLogsQueryOptions,
-  retryAppDelivery,
-  type AppLogLine,
-} from "~/lib/api-query-options/apps";
+import { RETRYABLE_APP_DELIVERY_STATUSES, appDeliveriesQueryOptions, appLogsQueryOptions, type AppLogLine } from "~/lib/api-query-options/apps";
+import { retryAppDelivery } from "~/lib/api-mutations/apps";
 import { queryKeys } from "~/lib/query-keys";
 import { deliveryStatusVariant, formatDuration, formatWhen, topicLabel } from "../settings/webhooks/webhook-format";
 import { LOG_LEVEL_VARIANT } from "./app-status";

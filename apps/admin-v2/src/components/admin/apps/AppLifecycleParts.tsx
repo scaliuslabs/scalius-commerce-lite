@@ -17,7 +17,8 @@ import {
 import { Button } from "~/components/ui/button";
 import { useMessages, formatNumber } from "~/i18n";
 import { appsLifecycleMessages } from "~/i18n/apps-lifecycle";
-import { appErrorCode, isAppChangedError, type AppDetail } from "~/lib/api-query-options/apps";
+import { type AppDetail } from "~/lib/api-query-options/apps";
+import { appErrorCode, isAppChangedError } from "~/lib/api-mutations/apps";
 import { appRegistryQueryOptions, stopApp, updateRegistryApp } from "~/lib/api-query-options/apps-lifecycle";
 import { queryKeys } from "~/lib/query-keys";
 import { toast } from "~/lib/toast";

@@ -19,9 +19,11 @@ import { Button } from "~/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { getLocale, useMessages } from "~/i18n";
+import { appOwnerMessages } from "~/i18n/app-owner";
 import { removedAppDataMessages } from "~/i18n/removed-app-data";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
-import { deleteRemovedAppData, handOverRemovedAppData, removedAppDataQueryOptions, type RemovedAppData } from "~/lib/api-query-options/apps";
+import { removedAppDataQueryOptions, type RemovedAppData } from "~/lib/api-query-options/apps";
+import { deleteRemovedAppData, handOverRemovedAppData } from "~/lib/api-mutations/apps";
 import { pluginKeyFingerprint } from "@scalius/shared/plugins/registry";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { customFieldKeys } from "~/lib/api-query-options/custom-fields";
@@ -52,6 +54,7 @@ function summary(group: RemovedAppData, t: (key: RemovedAppDataKey, vars?: Recor
  */
 export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) => boolean }) {
   const t = useMessages(removedAppDataMessages);
+  const owner = useMessages(appOwnerMessages);
   const { hasPermission, isSuperAdmin } = usePermissions();
   const canView = hasPermission(PERMISSIONS.APPS_VIEW);
   const queryClient = useQueryClient();
@@ -113,7 +116,7 @@ export function RemovedAppDataCard({ show }: { show?: (group: RemovedAppData) =>
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="flex flex-wrap items-center gap-2">
                     <span className="break-words text-body font-medium">{group.name}</span>
-                    <Badge variant="warning">{t("fromRemovedApp", { app: group.name })}</Badge>
+                    <Badge variant="warning">{owner("fromRemovedApp", { app: group.name })}</Badge>
                   </p>
                   <p className="break-words text-body text-muted-foreground">
                     <code>{group.id}</code> · {summary(group, t)}

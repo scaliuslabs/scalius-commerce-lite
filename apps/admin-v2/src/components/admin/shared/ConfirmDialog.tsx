@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { TypedConfirmField, typedConfirmMatches } from "./TypedConfirmField";
+import { typedConfirmMatches } from "./typed-confirm";
+
+// Only permanent deletes ask for a typed name, so its field loads with them, not with every dialog.
+const TypedConfirmField = lazy(() => import("./TypedConfirmField").then((module) => ({ default: module.TypedConfirmField })));
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,7 +62,11 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        {confirmPhrase !== undefined ? <TypedConfirmField phrase={confirmPhrase} value={typed} onChange={setTyped} disabled={isLoading} /> : null}
+        {confirmPhrase !== undefined ? (
+          <Suspense fallback={null}>
+            <TypedConfirmField phrase={confirmPhrase} value={typed} onChange={setTyped} disabled={isLoading} />
+          </Suspense>
+        ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>{cancelLabel ?? t("cancel")}</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} variant={variant} disabled={isLoading || !confirmed}>

@@ -9,10 +9,7 @@ import { Input } from "~/components/ui/input";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 
-/** Whether what was typed confirms the phrase. */
-export function typedConfirmMatches(phrase: string, typed: string): boolean {
-  return phrase.trim() !== "" && typed.trim().toLocaleLowerCase() === phrase.trim().toLocaleLowerCase();
-}
+export { typedConfirmMatches } from "./typed-confirm";
 
 export function TypedConfirmField({ phrase, value, onChange, disabled }: {
   phrase: string;

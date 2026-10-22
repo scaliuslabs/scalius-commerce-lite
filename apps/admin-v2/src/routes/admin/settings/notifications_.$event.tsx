@@ -14,17 +14,16 @@ import { notificationTemplateMessages } from "~/i18n/settings-notifications";
 
 // One customer message (e.g. "Order shipped", "Gift card received"), opened from Settings → Notifications.
 export const Route = createFileRoute("/admin/settings/notifications_/$event")({
-  loader: ({ context: { queryClient } }) =>
-    Promise.allSettled([
+  // The tab title is the event's name, read in the (lazy) loader so the
+  // always-loaded route tree does not carry every event's name.
+  loader: async ({ context: { queryClient }, params }) => {
+    await Promise.allSettled([
       queryClient.ensureQueryData(templatesQuery),
       queryClient.ensureQueryData(customerRulesQuery),
-    ]),
-  head: ({ params }) =>
-    titleHead(
-      isTemplatedNotificationType(params.event)
-        ? translate(notificationEventMessages, params.event)
-        : translate(settingsNavMessages, "notifications"),
-    ),
+    ]);
+    return { title: isTemplatedNotificationType(params.event) ? translate(notificationEventMessages, params.event) : null };
+  },
+  head: ({ loaderData }) => titleHead(loaderData?.title ?? translate(settingsNavMessages, "notifications")),
   errorComponent: RouteErrorComponent,
   component: NotificationMessagePage,
 });

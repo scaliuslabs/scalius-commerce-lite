@@ -1,5 +1,5 @@
 import { presenceKey } from "~/lib/realtime/store";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,19 +35,23 @@ import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-conflicts";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
-import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { RelatedObjectsCard } from "./objects/RelatedObjectsCard";
 import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
-import { CustomerMarketingCard } from "./customers/CustomerMarketingCard";
-import { CustomerPaymentMethodsCard } from "./customers/CustomerPaymentMethodsCard";
 import { CustomerTagsCard } from "./customers/CustomerTagsCard";
-import { CustomerEraseCard } from "./customers/CustomerEraseCard";
 import { shownText } from "~/lib/erased-text";
-import { CustomerTaxExemptionCard } from "./customers/CustomerTaxExemptionCard";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { Page } from "~/components/admin/resource/Page";
+
+// A saved customer's side cards (marketing consent, saved payment methods, tax
+// exemption, custom data, erase) each load their own data, so they download just
+// after the page: a new customer's form and the history column render without them.
+const CustomerMarketingCard = lazy(() => import("./customers/CustomerMarketingCard").then((module) => ({ default: module.CustomerMarketingCard })));
+const CustomerPaymentMethodsCard = lazy(() => import("./customers/CustomerPaymentMethodsCard").then((module) => ({ default: module.CustomerPaymentMethodsCard })));
+const CustomerTaxExemptionCard = lazy(() => import("./customers/CustomerTaxExemptionCard").then((module) => ({ default: module.CustomerTaxExemptionCard })));
+const CustomerEraseCard = lazy(() => import("./customers/CustomerEraseCard").then((module) => ({ default: module.CustomerEraseCard })));
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -272,23 +276,31 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       ) : null}
       {isEdit && defaultValues?.id && !trashed ? (
         <>
-          <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />
-          <CustomerPaymentMethodsCard customerId={defaultValues.id} canEdit={canSave} />
+          <Suspense fallback={null}>
+            <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <CustomerPaymentMethodsCard customerId={defaultValues.id} canEdit={canSave} />
+          </Suspense>
           <CustomerTagsCard customerId={defaultValues.id} tags={record?.tags ?? []} canEdit={canSave} />
-          <CustomerTaxExemptionCard
-            customerId={defaultValues.id}
-            taxExempt={record?.taxExempt ?? false}
-            taxExemptionId={record?.taxExemptionId ?? null}
-            canEdit={canSave}
-          />
-          <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
+          <Suspense fallback={null}>
+            <CustomerTaxExemptionCard
+              customerId={defaultValues.id}
+              taxExempt={record?.taxExempt ?? false}
+              taxExemptionId={record?.taxExemptionId ?? null}
+              canEdit={canSave}
+            />
+          </Suspense>
+          <LazyCustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
           <RelatedObjectsCard records={record?.relatedObjects} />
         </>
       ) : null}
       {isEdit && defaultValues?.id && !trashed ? (
         <fieldset disabled={!canSave} className="min-w-0 empty:hidden"><AppResourceCards target="customer" id={defaultValues.id} /></fieldset>
       ) : null}
-      {canErase && defaultValues?.id && record ? <CustomerEraseCard customerId={defaultValues.id} name={customerTitle(record, t).title} /> : null}
+      {canErase && defaultValues?.id && record ? (
+        <Suspense fallback={null}><CustomerEraseCard customerId={defaultValues.id} name={customerTitle(record, t).title} /></Suspense>
+      ) : null}
     </>
   );
 

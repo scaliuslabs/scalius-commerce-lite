@@ -36,7 +36,8 @@ import { appFeaturesMessages } from "~/i18n/app-features";
 import { appScopeMessages } from "~/i18n/app-scopes";
 import { installedAppsMessages } from "~/i18n/apps";
 import { settingsNavMessages } from "~/i18n/settings";
-import { APP_FUNCTION_POINTS, disableAppFeature, enableAppFeature, type AppDetail, type AppFeature } from "~/lib/api-query-options/apps";
+import { APP_FUNCTION_POINTS, type AppDetail, type AppFeature } from "~/lib/api-query-options/apps";
+import { disableAppFeature, enableAppFeature } from "~/lib/api-mutations/apps";
 import { topicLabel } from "../settings/webhooks/webhook-format";
 import { PROVIDER_CAPABILITY, isAppProviderKind } from "./app-capabilities";
 import {

@@ -25,6 +25,7 @@ import { apiData, type ApiResult } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
+import { productBulkEditMessages } from "~/i18n/product-bulk-edit";
 import { productMessages } from "~/i18n/products";
 
 type BulkProduct = ApiResult<typeof getApiV1AdminProductsBulkEdit>["products"][number];
@@ -56,7 +57,7 @@ const samePair = (a: PricePair, b: PricePair) => a.price === b.price && a.compar
  * any row that could not be saved; the rest stay saved.
  */
 export function ProductBulkEditor({ ids }: { ids: string[] }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productBulkEditMessages);
   return (
     <SaveBarProvider savedMessage={t("bulkEditSaved")}>
       <BulkEditorGrid ids={ids} />
@@ -65,7 +66,8 @@ export function ProductBulkEditor({ ids }: { ids: string[] }) {
 }
 
 function BulkEditorGrid({ ids }: { ids: string[] }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productBulkEditMessages);
+  const product = useMessages(productMessages);
   const { code, salePrice } = useCurrency();
   const decimalPlaces = getDecimalPlaces(code);
   const queryClient = useQueryClient();
@@ -154,8 +156,8 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
   });
 
   const statusOptions = [
-    { value: "active", label: t("statusActive") },
-    { value: "draft", label: t("statusDraft") },
+    { value: "active", label: product("statusActive") },
+    { value: "draft", label: product("statusDraft") },
   ];
 
   return (

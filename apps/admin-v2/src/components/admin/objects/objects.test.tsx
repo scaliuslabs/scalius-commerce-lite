@@ -270,6 +270,8 @@ describe("objects", () => {
     expect(dialog.textContent).toContain("can't be undone");
     const confirm = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((each) => each.textContent?.trim() === "Delete data")!;
     expect(confirm.disabled).toBe(true);
+    // The typed confirmation loads with the dialog.
+    await vi.waitFor(() => expect(dialog.querySelector("input")).not.toBeNull());
     await act(async () => typeInto(dialog.querySelector("input")!, "Bazaar demo"));
     expect(confirm.disabled).toBe(false);
     await act(async () => confirm.click());
