@@ -17,6 +17,21 @@ type Purpose = "invite" | "reset";
 interface LinkCheck {
   step: "form" | "expired" | "used" | "cancelled";
   purpose: Purpose;
+  invite?: InviteDetails;
+}
+
+/** What an invite page tells the person: the store, who invited them and the email being set up. */
+interface InviteDetails { email: string; storeName: string | null; inviterName: string | null }
+
+function readInviteDetails(value: unknown): InviteDetails | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { email, storeName, inviterName } = value as Record<string, unknown>;
+  if (typeof email !== "string") return undefined;
+  return {
+    email,
+    storeName: typeof storeName === "string" && storeName ? storeName : null,
+    inviterName: typeof inviterName === "string" && inviterName ? inviterName : null,
+  };
 }
 
 /**
@@ -39,7 +54,7 @@ function exchangeLinkProof(): Promise<LinkCheck> {
     body: JSON.stringify({ token }),
   })
     .then(async (response) => {
-      const body = (await response.json().catch(() => null)) as { purpose?: unknown; code?: unknown } | null;
+      const body = (await response.json().catch(() => null)) as { purpose?: unknown; code?: unknown; invite?: unknown } | null;
       // A used link: the person already has a password and only needs to sign in.
       if (!response.ok) {
         if (body?.code === "TOKEN_USED") return { ...fallback, step: "used" as const };
@@ -47,7 +62,7 @@ function exchangeLinkProof(): Promise<LinkCheck> {
         if (body?.code === "TOKEN_CANCELLED") return { step: "cancelled" as const, purpose: "invite" as const };
         return fallback;
       }
-      return { step: "form", purpose: body?.purpose === "invite" ? "invite" : "reset" } satisfies LinkCheck;
+      return { step: "form", purpose: body?.purpose === "invite" ? "invite" : "reset", invite: readInviteDetails(body?.invite) } satisfies LinkCheck;
     })
     .catch(() => fallback);
 }
@@ -63,6 +78,7 @@ export function ResetPasswordForm() {
   const [fieldError, setFieldError] = useState<AuthMessageKey | null>(null);
   const [failure, setFailure] = useState<AuthMessage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [inviteDetails, setInviteDetails] = useState<InviteDetails | undefined>();
 
   // The link's purpose is only known in the browser (it lives in the
   // fragment), so the tab title follows it once the link is checked.
@@ -78,6 +94,7 @@ export function ResetPasswordForm() {
       void exchange.current.then((result) => {
         if (!active) return;
         setPurpose(result.purpose);
+        setInviteDetails(result.invite);
         setStep(result.step);
       });
     };
@@ -224,6 +241,16 @@ export function ResetPasswordForm() {
   return (
     <div className="flex flex-col gap-6">
       <AuthHeader title={t(invite ? "inviteTitle" : "resetTitle")} description={t(invite ? "inviteDescription" : "resetDescription")} />
+      {invite && inviteDetails ? (
+        <div className="rounded-lg border bg-muted/40 p-3 text-body">
+          {inviteDetails.storeName ? (
+            <p>{inviteDetails.inviterName
+              ? t("inviteBy", { inviter: inviteDetails.inviterName, store: inviteDetails.storeName })
+              : t("inviteJoin", { store: inviteDetails.storeName })}</p>
+          ) : null}
+          <p className="text-muted-foreground">{t("inviteAccount", { email: inviteDetails.email })}</p>
+        </div>
+      ) : null}
       <form method="post" action="/auth/reset-password" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
         <AuthAlert message={failure} />
         <Field id="new-password" label={t(invite ? "password" : "newPassword")} error={passwordMessage} help={t("passwordHint")}>

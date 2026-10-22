@@ -265,12 +265,15 @@ export function SettingsDialog({
   description,
   trigger,
   savedMessage,
+  savingLabel,
   layout,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   trigger: ReactElement;
+  /** The Save button's words while it works, e.g. "Sending invite…", for saves that take a few seconds. */
+  savingLabel?: string;
   /** The success toast instead of "Changes saved", e.g. "Invite sent". */
   savedMessage?: string;
   /** Draws the content instead of the centred dialog; the sheet lives in its own module so pages without one never load it. */
@@ -310,7 +313,7 @@ export function SettingsDialog({
           if (await state.saveAll()) setOpen(false);
         }}
       >
-        {t("save")}
+        {state.busy && savingLabel ? savingLabel : t("save")}
       </Button>
     </>
   );

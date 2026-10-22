@@ -9,6 +9,7 @@
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { createAuth, twoFactorMethodsForAccount } from "@scalius/core/auth";
 import { adminPrincipalExists } from "@scalius/core/auth/admin-setup";
+import { readStoreName } from "@scalius/core/modules/notifications";
 import { RESET_TOKEN_MARKER_TTL_MS, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
@@ -247,6 +248,7 @@ async function readResetToken(env: Env, token: string) {
       .select({
         userId: userTable.id,
         email: userTable.email,
+        invitedByUserId: adminInvitations.invitedByUserId,
         invite: sql<number>`${userTable.mustChangePassword} = 1 AND ${adminInvitations.status} = 'pending'`,
       })
       .from(verification)
@@ -258,6 +260,17 @@ async function readResetToken(env: Env, token: string) {
       ))
       .get(),
   );
+}
+
+async function readInviteDetails(env: Env, email: string, invitedByUserId: string | null) {
+  const db = getDb(env);
+  const [storeName, inviter] = await Promise.all([
+    readStoreName(db),
+    invitedByUserId
+      ? retryTransientD1(() => db.select({ name: userTable.name }).from(userTable).where(eq(userTable.id, invitedByUserId)).get()).catch(() => undefined)
+      : undefined,
+  ]);
+  return { email, storeName, inviterName: inviter?.name ?? null };
 }
 
 /**
@@ -274,7 +287,9 @@ async function createResetSession(request: Request, env: Env): Promise<Response>
     if (reason === "cancelled") return json({ code: "TOKEN_CANCELLED", message: "This invite was cancelled." }, 400);
     return json({ code: "INVALID_TOKEN", message: "This link has expired." }, 400);
   }
-  return json({ status: true, purpose: live.invite ? "invite" : "reset" }, 200, {
+  // An invite page names the store, who invited the person and the email being set up.
+  const invite = live.invite ? await readInviteDetails(env, live.email, live.invitedByUserId) : null;
+  return json({ status: true, purpose: live.invite ? "invite" : "reset", ...(invite ? { invite } : {}) }, 200, {
     "Set-Cookie": resetSessionCookie(token as string, RESET_SESSION_MAX_AGE_SECONDS),
   });
 }
