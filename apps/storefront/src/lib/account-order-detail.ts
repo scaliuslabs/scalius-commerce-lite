@@ -532,6 +532,9 @@ async function submitSupportRequest(): Promise<void> {
 
 // ---------- buy again ----------
 
+/** The order list's Buy again link lands here with this hash. */
+export const BUY_AGAIN_HASH = "#buy-again";
+
 async function buyAgain(): Promise<void> {
   const button = byId<HTMLButtonElement>("orderBuyAgain");
   const message = byId("orderBuyAgainMessage");
@@ -850,6 +853,12 @@ export async function loadOrderDetail(): Promise<void> {
   try {
     renderOrderDetail(result.detail as AccountOrderDetail, checkoutConfig);
     showOnly("content");
+    // "Buy again" on the order list that opened this page (before its own
+    // script could add the lines): add them now, once (buyer QA m6).
+    if (window.location.hash === BUY_AGAIN_HASH) {
+      history.replaceState(history.state, "", window.location.pathname + window.location.search);
+      void buyAgain();
+    }
   } catch (error) {
     console.error("[customer-order-detail] render failed", error);
     showError(words.wentWrong, words.couldNotShow);
