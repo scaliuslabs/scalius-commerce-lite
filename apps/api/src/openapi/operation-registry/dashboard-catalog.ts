@@ -116,6 +116,10 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
     exposure: "excluded",
     reason: "Legacy oversized aggregate projection; use dashboard.products.get_section.",
   },
+  "dashboard.products.bulk_edit_read": {},
+  "dashboard.url_redirects.list": {},
+  "dashboard.url_redirects.create": {},
+  "dashboard.url_redirects.delete": { risk: "destructive" },
   "dashboard.products.get_by_ids": {},
   "dashboard.products.get_section": {},
   "dashboard.products.list": {

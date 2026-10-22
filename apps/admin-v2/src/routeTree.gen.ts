@@ -63,6 +63,7 @@ import { Route as AdminPagesNewRouteImport } from './routes/admin/pages/new'
 import { Route as AdminPriceListsIndexRouteImport } from './routes/admin/price-lists/index'
 import { Route as AdminPriceListsPriceListIdRouteImport } from './routes/admin/price-lists/$priceListId'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
+import { Route as AdminProductsBulkEditRouteImport } from './routes/admin/products/bulk-edit'
 import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
 import { Route as AdminReviewsIndexRouteImport } from './routes/admin/reviews/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
@@ -106,6 +107,7 @@ import { Route as AdminObjectsTypeIndexRouteImport } from './routes/admin/object
 import { Route as AdminObjectsTypeSettingsRouteImport } from './routes/admin/objects/$type/settings'
 import { Route as AdminOnlineStoreNavigationIndexRouteImport } from './routes/admin/online-store/navigation/index'
 import { Route as AdminOnlineStoreNavigationMenuIdRouteImport } from './routes/admin/online-store/navigation/$menuId'
+import { Route as AdminOnlineStoreNavigationRedirectsRouteImport } from './routes/admin/online-store/navigation/redirects'
 import { Route as AdminOnlineStoreThemeEditorRouteImport } from './routes/admin/online-store/theme_.editor'
 import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orders/$orderId/index'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
@@ -406,6 +408,11 @@ const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
   path: '/products/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminProductsBulkEditRoute = AdminProductsBulkEditRouteImport.update({
+  id: '/products/bulk-edit',
+  path: '/products/bulk-edit',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProductsNewRoute = AdminProductsNewRouteImport.update({
   id: '/products/new',
   path: '/products/new',
@@ -644,6 +651,12 @@ const AdminOnlineStoreNavigationMenuIdRoute =
     path: '/online-store/navigation/$menuId',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminOnlineStoreNavigationRedirectsRoute =
+  AdminOnlineStoreNavigationRedirectsRouteImport.update({
+    id: '/online-store/navigation/redirects',
+    path: '/online-store/navigation/redirects',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminOnlineStoreThemeEditorRoute =
   AdminOnlineStoreThemeEditorRouteImport.update({
     id: '/online-store/theme_/editor',
@@ -824,6 +837,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/price-lists/$priceListId': typeof AdminPriceListsPriceListIdRoute
+  '/admin/products/bulk-edit': typeof AdminProductsBulkEditRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -876,6 +890,7 @@ export interface FileRoutesByFullPath {
   '/admin/inventory/transfers/new': typeof AdminInventoryTransfersNewRoute
   '/admin/objects/$type/settings': typeof AdminObjectsTypeSettingsRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
+  '/admin/online-store/navigation/redirects': typeof AdminOnlineStoreNavigationRedirectsRoute
   '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
@@ -944,6 +959,7 @@ export interface FileRoutesByTo {
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/price-lists/$priceListId': typeof AdminPriceListsPriceListIdRoute
+  '/admin/products/bulk-edit': typeof AdminProductsBulkEditRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -996,6 +1012,7 @@ export interface FileRoutesByTo {
   '/admin/inventory/transfers/new': typeof AdminInventoryTransfersNewRoute
   '/admin/objects/$type/settings': typeof AdminObjectsTypeSettingsRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
+  '/admin/online-store/navigation/redirects': typeof AdminOnlineStoreNavigationRedirectsRoute
   '/admin/online-store/theme/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
@@ -1068,6 +1085,7 @@ export interface FileRoutesById {
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/price-lists/$priceListId': typeof AdminPriceListsPriceListIdRoute
+  '/admin/products/bulk-edit': typeof AdminProductsBulkEditRoute
   '/admin/products/new': typeof AdminProductsNewRoute
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -1120,6 +1138,7 @@ export interface FileRoutesById {
   '/admin/inventory/transfers/new': typeof AdminInventoryTransfersNewRoute
   '/admin/objects/$type/settings': typeof AdminObjectsTypeSettingsRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
+  '/admin/online-store/navigation/redirects': typeof AdminOnlineStoreNavigationRedirectsRoute
   '/admin/online-store/theme_/editor': typeof AdminOnlineStoreThemeEditorRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/orders/_list/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
@@ -1193,6 +1212,7 @@ export interface FileRouteTypes {
     | '/admin/orders/new'
     | '/admin/pages/new'
     | '/admin/price-lists/$priceListId'
+    | '/admin/products/bulk-edit'
     | '/admin/products/new'
     | '/admin/settings/advanced'
     | '/admin/settings/checkout'
@@ -1245,6 +1265,7 @@ export interface FileRouteTypes {
     | '/admin/inventory/transfers/new'
     | '/admin/objects/$type/settings'
     | '/admin/online-store/navigation/$menuId'
+    | '/admin/online-store/navigation/redirects'
     | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
     | '/admin/orders/abandoned'
@@ -1313,6 +1334,7 @@ export interface FileRouteTypes {
     | '/admin/orders/new'
     | '/admin/pages/new'
     | '/admin/price-lists/$priceListId'
+    | '/admin/products/bulk-edit'
     | '/admin/products/new'
     | '/admin/settings/advanced'
     | '/admin/settings/checkout'
@@ -1365,6 +1387,7 @@ export interface FileRouteTypes {
     | '/admin/inventory/transfers/new'
     | '/admin/objects/$type/settings'
     | '/admin/online-store/navigation/$menuId'
+    | '/admin/online-store/navigation/redirects'
     | '/admin/online-store/theme/editor'
     | '/admin/orders/$orderId/edit'
     | '/admin/orders/abandoned'
@@ -1436,6 +1459,7 @@ export interface FileRouteTypes {
     | '/admin/orders/new'
     | '/admin/pages/new'
     | '/admin/price-lists/$priceListId'
+    | '/admin/products/bulk-edit'
     | '/admin/products/new'
     | '/admin/settings/advanced'
     | '/admin/settings/checkout'
@@ -1488,6 +1512,7 @@ export interface FileRouteTypes {
     | '/admin/inventory/transfers/new'
     | '/admin/objects/$type/settings'
     | '/admin/online-store/navigation/$menuId'
+    | '/admin/online-store/navigation/redirects'
     | '/admin/online-store/theme_/editor'
     | '/admin/orders/$orderId/edit'
     | '/admin/orders/_list/abandoned'
@@ -1911,6 +1936,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/products/bulk-edit': {
+      id: '/admin/products/bulk-edit'
+      path: '/products/bulk-edit'
+      fullPath: '/admin/products/bulk-edit'
+      preLoaderRoute: typeof AdminProductsBulkEditRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/products/new': {
       id: '/admin/products/new'
       path: '/products/new'
@@ -2212,6 +2244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOnlineStoreNavigationMenuIdRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/online-store/navigation/redirects': {
+      id: '/admin/online-store/navigation/redirects'
+      path: '/online-store/navigation/redirects'
+      fullPath: '/admin/online-store/navigation/redirects'
+      preLoaderRoute: typeof AdminOnlineStoreNavigationRedirectsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/online-store/theme_/editor': {
       id: '/admin/online-store/theme_/editor'
       path: '/online-store/theme/editor'
@@ -2508,6 +2547,7 @@ interface AdminRouteChildren {
   AdminOrdersNewRoute: typeof AdminOrdersNewRoute
   AdminPagesNewRoute: typeof AdminPagesNewRoute
   AdminPriceListsPriceListIdRoute: typeof AdminPriceListsPriceListIdRoute
+  AdminProductsBulkEditRoute: typeof AdminProductsBulkEditRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
   AdminAnalyticsIndexRoute: typeof AdminAnalyticsIndexRoute
   AdminAppsIndexRoute: typeof AdminAppsIndexRoute
@@ -2540,6 +2580,7 @@ interface AdminRouteChildren {
   AdminInventoryTransfersNewRoute: typeof AdminInventoryTransfersNewRoute
   AdminObjectsTypeSettingsRoute: typeof AdminObjectsTypeSettingsRoute
   AdminOnlineStoreNavigationMenuIdRoute: typeof AdminOnlineStoreNavigationMenuIdRoute
+  AdminOnlineStoreNavigationRedirectsRoute: typeof AdminOnlineStoreNavigationRedirectsRoute
   AdminOnlineStoreThemeEditorRoute: typeof AdminOnlineStoreThemeEditorRoute
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
@@ -2587,6 +2628,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersNewRoute: AdminOrdersNewRoute,
   AdminPagesNewRoute: AdminPagesNewRoute,
   AdminPriceListsPriceListIdRoute: AdminPriceListsPriceListIdRoute,
+  AdminProductsBulkEditRoute: AdminProductsBulkEditRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
   AdminAnalyticsIndexRoute: AdminAnalyticsIndexRoute,
   AdminAppsIndexRoute: AdminAppsIndexRoute,
@@ -2619,6 +2661,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminInventoryTransfersNewRoute: AdminInventoryTransfersNewRoute,
   AdminObjectsTypeSettingsRoute: AdminObjectsTypeSettingsRoute,
   AdminOnlineStoreNavigationMenuIdRoute: AdminOnlineStoreNavigationMenuIdRoute,
+  AdminOnlineStoreNavigationRedirectsRoute:
+    AdminOnlineStoreNavigationRedirectsRoute,
   AdminOnlineStoreThemeEditorRoute: AdminOnlineStoreThemeEditorRoute,
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,

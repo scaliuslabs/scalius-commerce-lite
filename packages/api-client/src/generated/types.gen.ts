@@ -4161,6 +4161,19 @@ export type InventoryTransfer = {
     }>;
 };
 
+export type UrlRedirect = {
+    id: string;
+    /**
+     * The old address, a path on the store (/products/old-name).
+     */
+    fromPath: string;
+    /**
+     * Where it leads, a path on the store.
+     */
+    toPath: string;
+    createdAt: string;
+};
+
 export type ThemeResource = {
     /**
      * The theme document version section settings follow.
@@ -8771,6 +8784,38 @@ export type GetApiV1StorefrontMarketsResponses = {
 };
 
 export type GetApiV1StorefrontMarketsResponse = GetApiV1StorefrontMarketsResponses[keyof GetApiV1StorefrontMarketsResponses];
+
+export type GetApiV1StorefrontRedirectData = {
+    body?: never;
+    path?: never;
+    query: {
+        path: string;
+    };
+    url: '/api/v1/storefront/redirect';
+};
+
+export type GetApiV1StorefrontRedirectErrors = {
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1StorefrontRedirectError = GetApiV1StorefrontRedirectErrors[keyof GetApiV1StorefrontRedirectErrors];
+
+export type GetApiV1StorefrontRedirectResponses = {
+    /**
+     * The redirect target, or null
+     */
+    200: {
+        success: true;
+        data: {
+            toPath: string | null;
+        };
+    };
+};
+
+export type GetApiV1StorefrontRedirectResponse = GetApiV1StorefrontRedirectResponses[keyof GetApiV1StorefrontRedirectResponses];
 
 export type GetApiV1StorefrontBatchData = {
     body?: never;
@@ -42733,6 +42778,168 @@ export type PutApiV1AdminNavigationPlacementsByPlacementIdResponses = {
 
 export type PutApiV1AdminNavigationPlacementsByPlacementIdResponse = PutApiV1AdminNavigationPlacementsByPlacementIdResponses[keyof PutApiV1AdminNavigationPlacementsByPlacementIdResponses];
 
+export type GetApiV1AdminUrlRedirectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        search?: string;
+    };
+    url: '/api/v1/admin/url-redirects';
+};
+
+export type GetApiV1AdminUrlRedirectsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminUrlRedirectsError = GetApiV1AdminUrlRedirectsErrors[keyof GetApiV1AdminUrlRedirectsErrors];
+
+export type GetApiV1AdminUrlRedirectsResponses = {
+    /**
+     * URL redirects
+     */
+    200: {
+        success: true;
+        data: {
+            redirects: Array<UrlRedirect>;
+            truncated: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminUrlRedirectsResponse = GetApiV1AdminUrlRedirectsResponses[keyof GetApiV1AdminUrlRedirectsResponses];
+
+export type PostApiV1AdminUrlRedirectsData = {
+    body: {
+        fromPath: string;
+        toPath: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/url-redirects';
+};
+
+export type PostApiV1AdminUrlRedirectsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminUrlRedirectsError = PostApiV1AdminUrlRedirectsErrors[keyof PostApiV1AdminUrlRedirectsErrors];
+
+export type PostApiV1AdminUrlRedirectsResponses = {
+    /**
+     * The redirect
+     */
+    201: {
+        success: true;
+        data: {
+            redirect: UrlRedirect;
+        };
+    };
+};
+
+export type PostApiV1AdminUrlRedirectsResponse = PostApiV1AdminUrlRedirectsResponses[keyof PostApiV1AdminUrlRedirectsResponses];
+
+export type DeleteApiV1AdminUrlRedirectsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/url-redirects/{id}';
+};
+
+export type DeleteApiV1AdminUrlRedirectsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminUrlRedirectsByIdError = DeleteApiV1AdminUrlRedirectsByIdErrors[keyof DeleteApiV1AdminUrlRedirectsByIdErrors];
+
+export type DeleteApiV1AdminUrlRedirectsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminUrlRedirectsByIdResponse = DeleteApiV1AdminUrlRedirectsByIdResponses[keyof DeleteApiV1AdminUrlRedirectsByIdResponses];
+
 export type GetApiV1AdminResourcesThemeData = {
     body?: never;
     path?: never;
@@ -61954,6 +62161,81 @@ export type GetApiV1AdminProductsByIdsResponses = {
 
 export type GetApiV1AdminProductsByIdsResponse = GetApiV1AdminProductsByIdsResponses[keyof GetApiV1AdminProductsByIdsResponses];
 
+export type GetApiV1AdminProductsBulkEditData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Comma-separated product IDs (at most 50).
+         */
+        ids: string;
+    };
+    url: '/api/v1/admin/products/bulk-edit';
+};
+
+export type GetApiV1AdminProductsBulkEditErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminProductsBulkEditError = GetApiV1AdminProductsBulkEditErrors[keyof GetApiV1AdminProductsBulkEditErrors];
+
+export type GetApiV1AdminProductsBulkEditResponses = {
+    /**
+     * Products for the bulk editor
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                isActive: boolean;
+                aggregateRevision: number;
+                price: number;
+                discountType: 'percentage' | 'flat';
+                discountPercentage: number;
+                discountAmount: number;
+                hasOptions: boolean;
+                skus: Array<{
+                    id: string;
+                    label: string | null;
+                    sku: string;
+                    trackInventory: boolean;
+                    /**
+                     * On hand at the default location; null when not tracked.
+                     */
+                    onHand: number | null;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsBulkEditResponse = GetApiV1AdminProductsBulkEditResponses[keyof GetApiV1AdminProductsBulkEditResponses];
+
 export type PostApiV1AdminProductsBulkDeleteData = {
     body: {
         products?: Array<{
@@ -62775,6 +63057,7 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             excludeFromSitemap?: boolean;
             productCondition?: 'new' | 'refurbished' | 'used' | null;
             slug?: string;
+            redirectOldUrl?: boolean;
             emiEligible?: boolean;
             description?: string | null;
             metaTitle?: string | null;
@@ -63234,6 +63517,7 @@ export type PutApiV1AdminProductsByIdData = {
         warrantyPolicyId?: string | null;
         id: string;
         expectedAggregateRevision: number;
+        redirectOldUrl?: boolean;
         acknowledgedSkuImageRemovalIds?: Array<string>;
         /**
          * The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs.
@@ -75543,6 +75827,10 @@ export type GetApiV1AdminExportProductsData = {
          * false leaves out the header row (for pages after the first).
          */
         header?: 'true' | 'false';
+        /**
+         * Only these products: comma-separated ids, at most 90 (a selection in the products list).
+         */
+        ids?: string;
     };
     url: '/api/v1/admin/export/products';
 };

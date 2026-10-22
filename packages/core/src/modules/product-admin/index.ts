@@ -12,3 +12,4 @@ export * from "./validation";
 export * from "./semantic-sections";
 export * from "./aggregate-revision";
 export * from "./tax-classification";
+export * from "./bulk-edit";

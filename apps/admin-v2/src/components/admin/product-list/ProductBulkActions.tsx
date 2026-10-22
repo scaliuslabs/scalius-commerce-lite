@@ -38,6 +38,10 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type { ProductListItem } from "./product-columns";
+import { downloadPagedExport } from "~/components/admin/store-transfer/export-download";
+
+/** Products the bulk editor opens at once (its read's limit). */
+const BULK_EDIT_MAX = 50;
 
 // Sales channels (MARKETS-DESIGN D6): the publish dialog loads with its first use.
 const PublicationsDialog = lazy(() => import("./PublicationsDialog").then((module) => ({ default: module.PublicationsDialog })));
@@ -160,6 +164,19 @@ export function ProductBulkActions({ target, filter, done, run }: {
     setPicker(next);
   };
   const busy = setStatus.isPending || change.isPending;
+  // The Shopify product CSV of the ticked products (Settings → Import and export has the whole catalogue).
+  const exporting = useMutation({
+    mutationFn: () => downloadPagedExport("products", undefined, rows.map((row) => row.id)),
+    onSuccess: () => toast.success(t("exported")),
+    onError: () => toast.error(t("exportFailed")),
+  });
+  const openBulkEditor = () => {
+    if (rows.length > BULK_EDIT_MAX) {
+      toast.error(t("bulkEditTooMany", { count: BULK_EDIT_MAX }));
+      return;
+    }
+    void navigate({ to: "/admin/products/bulk-edit", search: { ids: rows.map((row) => row.id).join(",") } });
+  };
 
   return (
     <>
@@ -193,6 +210,11 @@ export function ProductBulkActions({ target, filter, done, run }: {
           onSettled: () => setConfirmDraft(false),
         })}
       />
+      {matching ? null : (
+        <Button variant="outline" disabled={busy} onClick={openBulkEditor}>
+          {t("bulkEdit")}
+        </Button>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" disabled={busy}>
@@ -212,6 +234,9 @@ export function ProductBulkActions({ target, filter, done, run }: {
           <DropdownMenuItem onSelect={() => setPublishing("unpublish")}>{t("makeUnavailable")}</DropdownMenuItem>
           {matching ? null : (
             <DropdownMenuItem disabled={printLabels.isPending} onSelect={() => printLabels.mutate()}>{t("printLabels")}</DropdownMenuItem>
+          )}
+          {matching ? null : (
+            <DropdownMenuItem disabled={exporting.isPending} onSelect={() => exporting.mutate()}>{t("exportSelected")}</DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
