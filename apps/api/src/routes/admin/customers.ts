@@ -464,7 +464,7 @@ app.openapi(eraseCustomerRoute, async (c) => {
     const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
     // An agent acts for its owner: it may erase only when that owner is a Super Admin. Apps never may.
     if (!actor?.id || actor.isSuperAdmin !== true || c.get("pluginPrincipal")) {
-        throw new ForbiddenError("Only a Super Admin can erase a customer's data.");
+        throw new ForbiddenError("Only the store owner can erase a customer's data.");
     }
     const { id } = c.req.valid("param");
     const db = c.get("db");

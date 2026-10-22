@@ -1117,7 +1117,7 @@ app.openapi(activateRoute, async (c) => {
   const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
   // Consent is a person's: a Super Admin in the dashboard, never an agent or a plugin.
   if (!actor?.id || actor.isSuperAdmin !== true || c.get("agentPrincipal") || c.get("pluginPrincipal")) {
-    throw new ForbiddenError("Only a Super Admin can approve an app's access.");
+    throw new ForbiddenError("Only the store owner can approve an app's access.");
   }
   const { id } = c.req.valid("param");
   const body = c.req.valid("json");
@@ -1228,7 +1228,7 @@ app.openapi(featureEnableRoute, async (c) => {
   const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
   // Consent is a person's: a Super Admin in the dashboard, never an agent or a plugin.
   if (!actor?.id || actor.isSuperAdmin !== true || c.get("agentPrincipal") || c.get("pluginPrincipal")) {
-    throw new ForbiddenError("Only a Super Admin can approve a feature's access.");
+    throw new ForbiddenError("Only the store owner can approve a feature's access.");
   }
   const { id, featureId } = c.req.valid("param");
   const body = c.req.valid("json");

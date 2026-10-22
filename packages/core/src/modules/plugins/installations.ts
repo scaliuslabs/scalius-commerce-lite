@@ -823,7 +823,7 @@ async function retainedDataFor(db: Database, pluginId: string, retained: Retaine
   if (!kept) return null;
   throw new PluginError(
     "retained_data_other_developer",
-    `${retained.name} left data in this store that belongs to the key that signed the version that wrote it, and this release is ${signerKeyId ? "signed with another key" : "unsigned or part of the store's own code"}. It installs once a Super Admin decides under Apps, Data from removed apps: hand the data over to this release, or delete it.`,
+    `${retained.name} left data in this store that belongs to the key that signed the version that wrote it, and this release is ${signerKeyId ? "signed with another key" : "unsigned or part of the store's own code"}. It installs once the store owner decides under Apps, Data left by uninstalled apps: hand the data over to this release, or delete it.`,
     { pluginId, retainedSigner: retained.signerKeyId, releaseSigner: signerKeyId, retainedRevision: retained.revision },
   );
 }

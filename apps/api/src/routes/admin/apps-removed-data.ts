@@ -121,7 +121,7 @@ export function registerRemovedAppDataRoutes(app: OpenAPIHono<{ Bindings: Env }>
     const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
     // An agent acts for its owner: it may delete only when that owner is a Super Admin. Apps never may.
     if (!actor?.id || actor.isSuperAdmin !== true || c.get("pluginPrincipal")) {
-      throw new ForbiddenError("Only a Super Admin can delete a removed app's data.");
+      throw new ForbiddenError("Only the store owner can delete data left by an uninstalled app.");
     }
     const { id } = c.req.valid("param");
     const { expectedRevision } = c.req.valid("json");
@@ -176,7 +176,7 @@ export function registerRemovedAppDataRoutes(app: OpenAPIHono<{ Bindings: Env }>
     const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
     // Who may read an app's data is a trust decision, like trusting a developer key: a person's, in the dashboard.
     if (!actor?.id || actor.isSuperAdmin !== true || c.get("agentPrincipal") || c.get("pluginPrincipal")) {
-      throw new ForbiddenError("Only a Super Admin in the dashboard can hand an app's data to another release.");
+      throw new ForbiddenError("Only the store owner, in the dashboard, can hand an app's data to another version.");
     }
     const { id } = c.req.valid("param");
     const { expectedRevision, signerKeyId } = c.req.valid("json");

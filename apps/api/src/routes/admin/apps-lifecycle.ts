@@ -277,7 +277,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     },
   }), async (c) => {
     noStore(c);
-    if (!isSuperAdminPerson(c)) throw new ForbiddenError("Only a Super Admin can change which developers this store trusts.");
+    if (!isSuperAdminPerson(c)) throw new ForbiddenError("Only the store owner can change which developers this store trusts.");
     const body = c.req.valid("json");
     const keys = [];
     for (const entry of body.trustedKeys) {
@@ -421,7 +421,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     const query = c.req.valid("query");
     const trust = { allowUnsigned: query.allowUnsigned === "true", trustDeveloper: query.trustDeveloper === "true" };
     if ((trust.allowUnsigned || trust.trustDeveloper) && !isSuperAdminPerson(c)) {
-      throw new ForbiddenError("Only a Super Admin can install an unsigned app or trust a new developer.");
+      throw new ForbiddenError("Only the store owner can install an unsigned app or trust a new developer.");
     }
     const declared = Number(c.req.header("content-length") ?? "0");
     if (declared > PLUGIN_PACKAGE_MAX_BYTES) throw new PluginError("package_invalid", "The package is larger than 20 MiB.");
