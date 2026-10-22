@@ -20250,6 +20250,7 @@ export type PostApiV1OrdersLookupStatusResponses = {
                 firstName: string | null;
                 status: string;
                 paymentStatus: string;
+                paymentMethod: string | null;
                 createdAt: string | null;
                 requiresShipping: boolean;
                 shippingMethodKind: string | null;
