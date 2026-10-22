@@ -122,6 +122,7 @@ import {
 } from "./discount-panel";
 import { fetchWithTransientRetry } from "@/lib/transient-fetch";
 import { currentPresence } from "@/lib/presence-url";
+import { isFollowedQuantityIssue, quantitiesByVariant } from "./quantity-issues";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -842,9 +843,13 @@ function setCartValidationIssues(
   cartValidationGlobalError = "";
   cartValidationSummaryMessage = summaryMessage;
   const grouped: Record<string, CartValidationIssue[]> = {};
+  const byVariant = quantitiesByVariant(items);
   for (const issue of issues) {
     const key = issueKeyForCart(issue, items);
     if (!key) continue;
+    // An "only N left" the line already follows (read for an older cart) holds nothing back.
+    const line = items[key];
+    if (line && isFollowedQuantityIssue(issue, line.quantity, byVariant.get(line.variantId ?? "") ?? line.quantity)) continue;
     grouped[key] = [...(grouped[key] ?? []), issue];
   }
   // The estimate counts only buyable units: a line that sold out (or came
