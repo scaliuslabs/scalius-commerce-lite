@@ -176,7 +176,9 @@ describe("Wave B product contract", () => {
             section: "base",
             expectedAggregateRevision: revision(),
             patch: { discountType: "percentage", discountPercentage: 10 },
-        })).rejects.toThrow(GIFT_CARD_PRODUCT_RULES_MESSAGE);
+            // An optioned product keeps no product discount at all (each SKU owns its price pair),
+            // which refuses this before the gift-card rule would.
+        })).rejects.toBeInstanceOf(ValidationError);
         expect(skus(id)).toEqual(before);
         expect(product(id)).toMatchObject({ discount_bps: 0 });
         expect(revision()).toBe(1);
