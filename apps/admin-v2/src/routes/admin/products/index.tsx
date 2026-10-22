@@ -162,6 +162,20 @@ function ProductsPage() {
   const channelFilter = search.channel ? `${search.channelState ?? "published"}:${search.channel}` : "all";
   const matchingFilter = productMatchingFilter(search, term, app.filterParam);
 
+  // A store with no products yet is offered only what starts one (no labels to print).
+  const startActions = (
+    <>
+      {can.canCreate || can.canEdit ? (
+        <Button variant="outline" onClick={() => setImporting(true)}>{r("import")}</Button>
+      ) : null}
+      {can.canCreate ? (
+        <Button asChild>
+          <Link to="/admin/products/new">{t("addProduct")}</Link>
+        </Button>
+      ) : null}
+    </>
+  );
+
   return (
     <>
       <ResourceListPage<ProductListItem>
@@ -191,7 +205,7 @@ function ProductsPage() {
         columns={columns}
         invalidate={[queryKeys.products.all, queryKeys.dashboard.all, queryKeys.inventory.list()]}
         what={t("whatProducts")}
-        empty={{ icon: Package, title: t("emptyTitle"), description: t("emptyHint") }}
+        empty={{ icon: Package, title: t("emptyTitle"), description: t("emptyHint"), action: startActions }}
         views={{ param: "status", tabs: [
           { value: "active", label: t("statusActive") },
           { value: "draft", label: t("statusDraft") },

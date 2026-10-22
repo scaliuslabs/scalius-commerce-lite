@@ -138,7 +138,20 @@ function CustomersPage() {
         columns={columns}
         invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
         what={t("whatCustomers")}
-        empty={{ icon: UserRound, title: t("emptyTitle"), description: t("emptyBody") }}
+        // Nothing to export yet: the first-run card offers only adding or importing customers.
+        empty={{
+          icon: UserRound,
+          title: t("emptyTitle"),
+          description: t("emptyBody"),
+          action: (
+            <>
+              {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) || canEdit ? (
+                <Button variant="outline" onClick={() => setImporting(true)}>{r("import")}</Button>
+              ) : null}
+              {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
+            </>
+          ),
+        }}
         views={{ param: "view", tabs: [{ value: "subscribers", label: t("subscribers") }] }}
         searchPlaceholder={t("searchPlaceholder")}
         countLabel={(count) => (count === 1 ? t("customersCountOne") : t("customersCount", { count }))}
