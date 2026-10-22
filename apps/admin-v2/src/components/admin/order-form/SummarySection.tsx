@@ -50,8 +50,12 @@ type DeliveryAddress = {
  */
 export function deliveryRatesForAddress(data: DeliveryZones | undefined, address: DeliveryAddress) {
   if (!data) return [];
+  // "Zone · Rate", unless the rate is named after its zone ("Inside Dhaka" in "Inside Dhaka").
   const named = (zone: DeliveryZones["zones"][number]) =>
-    zone.rates.map((rate) => ({ ...rate, name: `${zone.name} · ${rate.name}` }));
+    zone.rates.map((rate) => ({
+      ...rate,
+      name: rate.name.trim().toLowerCase() === zone.name.trim().toLowerCase() ? rate.name : `${zone.name} · ${rate.name}`,
+    }));
   const pickup = data.pickup.rates;
   const active = (rate: (typeof pickup)[number]) => rate.isActive;
   const country = address.countryCode?.trim().toUpperCase() || "BD";

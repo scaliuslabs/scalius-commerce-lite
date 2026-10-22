@@ -8,9 +8,10 @@ type ProductVariant = Product["variants"][number];
  */
 export function orderItemVariantLabel(variant: ProductVariant | undefined): string {
   if (!variant) return "—";
+  // The values alone ("38 / Cream"), as the order page, invoice and storefront name a variant.
   return variant.selectedOptions
-    .map((option) => `${option.name}: ${option.value}`)
-    .join(", ")
+    .map((option) => option.value)
+    .join(" / ")
     || (variant.isDefault ? "" : variant.sku || "—");
 }
 

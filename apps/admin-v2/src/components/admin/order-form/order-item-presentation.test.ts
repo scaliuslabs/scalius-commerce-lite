@@ -19,7 +19,7 @@ function variant(overrides: Partial<ProductVariant> = {}): ProductVariant {
 
 describe("manual order item variant labels", () => {
   it("shows the merchant option choice from a lazy-loaded SKU projection", () => {
-    expect(orderItemVariantLabel(variant())).toBe("Color: Navy");
+    expect(orderItemVariantLabel(variant())).toBe("Navy");
   });
 
   it("says nothing extra for a simple product's default SKU and falls back to the SKU otherwise", () => {
