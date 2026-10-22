@@ -29634,9 +29634,9 @@ export type GetApiV1AdminCategoriesData = {
          */
         trashed?: 'true' | 'false';
         /**
-         * Sort field
+         * Sort field; tree lists each parent followed by its children
          */
-        sort?: 'name' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'name' | 'status' | 'createdAt' | 'updatedAt' | 'tree';
         /**
          * Sort order
          */

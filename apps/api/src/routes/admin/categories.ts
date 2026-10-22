@@ -176,7 +176,7 @@ const listRoute = createRoute({
             search: z.string().trim().max(100).optional().default("").openapi({ description: "Search term" }),
             status: categoryStatusSchema.optional().openapi({ description: "Publication status" }),
             trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
-            sort: z.enum(["name", "status", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
+            sort: z.enum(["name", "status", "createdAt", "updatedAt", "tree"]).optional().default("updatedAt").openapi({ description: "Sort field; tree lists each parent followed by its children" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
         })
     },

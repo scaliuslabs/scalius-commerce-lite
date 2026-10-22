@@ -110046,13 +110046,14 @@
                 "name",
                 "status",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "tree"
               ],
               "default": "updatedAt",
-              "description": "Sort field"
+              "description": "Sort field; tree lists each parent followed by its children"
             },
             "required": false,
-            "description": "Sort field",
+            "description": "Sort field; tree lists each parent followed by its children",
             "name": "sort",
             "in": "query"
           },

@@ -1,3 +1,4 @@
+import { cn } from "@scalius/shared/utils";
 import { useMemo, useState } from "react";
 import { createDateColumn } from "~/components/admin/data-table/columns/column-factories";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -37,8 +38,10 @@ import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { pageHead } from "~/i18n/page-titles";
 
+/** Children sit under their parent when the list is in tree order. */
+const TREE_INDENT = ["", "ps-6", "ps-12", "ps-[4.5rem]"] as const;
 const STATUSES = ["published", "draft", "internal"] as const;
-const validateBase = createListSearchValidator(["name", "status", "createdAt", "updatedAt"] as const, { sort: "updatedAt", list: "categories" });
+const validateBase = createListSearchValidator(["tree", "name", "status", "createdAt", "updatedAt"] as const, { sort: "tree", order: "asc", list: "categories" });
 
 function validateCategorySearch(search: SearchValidatorInput) {
   return { ...validateBase(search), status: normalizeOptionalEnumSearchParam(search.status, STATUSES) };
@@ -92,7 +95,7 @@ function CategoriesPage() {
       cell: ({ row }) => {
         const parent = row.original.parentId && byId.has(row.original.parentId) ? categoryPathLabel(row.original.parentId, byId) : "";
         return (
-          <div className="flex min-w-0 items-center gap-3">
+          <div className={cn("flex min-w-0 items-center gap-3", search.sort === "tree" && TREE_INDENT[Math.min(row.original.depth ?? 0, 3)])}>
             <Thumb src={row.original.imageUrl ? mediaImageUrl(row.original.imageUrl, 160) : null} icon={FolderTree} />
             <div className="min-w-0">
               <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)} title={[row.original.name, parent].filter(Boolean).join(" · ")}>
@@ -135,7 +138,7 @@ function CategoriesPage() {
     },
     createDateColumn("updatedAt", t("updated")),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, search.trashed, can.canEdit, byId]);
+  ], [t, search.trashed, search.sort, can.canEdit, byId]);
 
   return (
     <>

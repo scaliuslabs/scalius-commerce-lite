@@ -270,7 +270,7 @@ export async function listCategories(
         search?: string;
         status?: "draft" | "published" | "internal";
         showTrashed?: boolean;
-        sort?: "name" | "status" | "createdAt" | "updatedAt";
+        sort?: "name" | "status" | "createdAt" | "updatedAt" | "tree";
         order?: "asc" | "desc";
     } = {},
 ) {
@@ -315,6 +315,8 @@ export async function listCategories(
             case "name": return categories.name;
             case "status": return categories.status;
             case "createdAt": return categories.createdAt;
+            // The stored id path keeps a parent directly before its children.
+            case "tree": return categories.path;
             default: return categories.updatedAt;
         }
     })();
