@@ -10,6 +10,8 @@
  * design draws the same content (its words, items and links), only styled
  * its way. Where no app offers a design for the part, its settings show
  * alone, as before. A design the store recently drew without says so here.
+ * A section with nothing to show is hidden in either design (the storefront
+ * never calls the skin), so a section's chosen design says so.
  */
 import { useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
@@ -67,7 +69,7 @@ function Fallback({ children }: { children: ReactNode }) {
 }
 
 /** The choice between the theme's design and the apps' designs of one part, with the chosen app's settings. */
-function SkinPicker({ target, offered, chosen, update, media, idPrefix, choiceLabel, builtInLabel, children, keepBelow }: {
+function SkinPicker({ target, offered, chosen, update, media, idPrefix, choiceLabel, builtInLabel, children, keepBelow, chosenNote }: {
   /** The skin target: a unit or `section:<type>`. */
   target: string;
   offered: readonly AppSkinEntry[];
@@ -80,6 +82,8 @@ function SkinPicker({ target, offered, chosen, update, media, idPrefix, choiceLa
   children: (place: SkinSettingsPlace) => ReactNode;
   /** The part's own settings stay open below an app's design (a section's content). */
   keepBelow: boolean;
+  /** Said under an active app's design: when the store draws it. */
+  chosenNote?: string;
 }) {
   const t = useMessages(themeEditorFull);
   const labelId = useId();
@@ -121,6 +125,7 @@ function SkinPicker({ target, offered, chosen, update, media, idPrefix, choiceLa
       {chosen ? (
         <>
           {entry ? <StorefrontProblemNotice appId={pluginId} part={{ kind: "skin", type: skinId, target }} /> : null}
+          {entry && chosenNote ? <p className="text-body text-muted-foreground" data-app-skin-note>{chosenNote}</p> : null}
           {!entry ? (
             <p role="status" className="text-body text-muted-foreground">{t("skinAppInactive")}</p>
           ) : themeAppFields(entry.skin.settings).length > 0 ? (
@@ -202,6 +207,7 @@ export function SectionSkinSettings({ section, apps, media, onChange, children }
       choiceLabel={t("skinChoice_section")}
       builtInLabel={t("skinBuiltIn_section")}
       keepBelow
+      chosenNote={t("skinSectionNeedsContent")}
     >
       {() => children}
     </SkinPicker>

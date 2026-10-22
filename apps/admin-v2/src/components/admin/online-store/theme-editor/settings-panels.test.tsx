@@ -23,6 +23,7 @@ import { appBlocksByKey, appSkinsByKey, invalidAppSkins, productAppBlocksInvalid
 import type { SetTheme } from "../theme-fields";
 import { EDITOR_PARTS, moduleId, type EditorPage } from "./editor-pages";
 import { PartSettings } from "./SelectionPanes";
+import { SectionSkinSettings } from "./AppSkinSettings";
 import { ThemeSettingsPanel } from "./ThemeSettingsPanel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -585,6 +586,25 @@ describe("app skins of the theme's units", () => {
     expect("apps" in latest).toBe(false);
     expect(fallback()).toBeNull();
     expect(headerGroups()[0]).toBe("Layout");
+  });
+
+  it("says under a section's app design that an empty section is hidden in either design", () => {
+    const strip = { key: "acme.studio/strip", id: "strip", target: "section:usp_strip", name: "Bold strip", description: null, settings: [] };
+    const apps = [{ ...STUDIO, skins: [strip] }] as unknown as ThemeApp[];
+    const SectionHarness = () => {
+      const [skin, setSkin] = useState<{ app: string; values: Record<string, unknown> } | null>(null);
+      const media = useMediaPreviews([]);
+      const section = { id: "usp-1", type: "usp_strip", hidden: false, settings: {}, skin } as never;
+      return <SectionSkinSettings section={section} apps={apps} media={media} onChange={(change) => setSkin((now) => change(now as never) as never)}><p>Section settings</p></SectionSkinSettings>;
+    };
+    render(DEFAULT_STOREFRONT_THEME, () => <SectionHarness />);
+    const note = () => container.querySelector("[data-app-skin-note]");
+    expect(note()).toBeNull();
+    click(radioIn(skinChoice(), "acme.studio/strip"));
+    expect(note()?.textContent).toBe("This section is hidden until it has content, in either design. Add its content, or the store details it shows, and the app's design appears.");
+    expect(container.textContent).toContain("Section settings");
+    click(radioIn(skinChoice(), "built-in"));
+    expect(note()).toBeNull();
   });
 
   it("says when the chosen app is not active, and keeps the theme valid", () => {
