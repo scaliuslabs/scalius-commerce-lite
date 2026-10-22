@@ -933,7 +933,7 @@ describe("CLI workflow resolver adapter", () => {
         step.input.materializations![0]!.keys = ["missing"];
       }],
       ["materialization missing required item property", (step) => {
-        step.input.materializations![0]!.keys = ["mediaId", "isPrimary"];
+        step.input.materializations![0]!.keys = ["id", "isPrimary"]; // a new product's media item needs only mediaId, so leave it out
       }],
       ["materialization non-array target", (step) => {
         step.input.materializations![0]!.templatePointer = "/body/optionMatrix";

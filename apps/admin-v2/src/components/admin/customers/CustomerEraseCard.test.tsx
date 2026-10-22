@@ -87,7 +87,8 @@ describe("the erase personal data dialog", () => {
     await open();
     await type("ERASE");
     await act(async () => eraseButton().click());
-    expect(dialog()?.textContent).toContain("is still in progress. Deliver, complete or cancel it before erasing.");
+    // The refusal settles a tick after the click.
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("is still in progress. Deliver, complete or cancel it before erasing."));
     expect(dialog()?.querySelector('a[href="/admin/orders/ord_42"]')).not.toBeNull();
     expect(toast.success).not.toHaveBeenCalled();
   });

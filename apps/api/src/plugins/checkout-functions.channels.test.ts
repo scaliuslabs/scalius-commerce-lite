@@ -376,8 +376,14 @@ describe("checkout app functions on the agent and admin channels", () => {
     expect(await adminCreate("66666666-6666-4666-8666-666666666666")).toMatchObject(refusal);
     expect(count("SELECT count(*) AS n FROM orders")).toBe(0);
 
-    // The app answers again: checkout continues; a skip app that fails is only left out.
+    // Repeated failures opened the blocking app's circuit (function-circuit.ts): checkout keeps
+    // refusing without asking it until the cooldown ends, then tries it once.
+    expect(count("SELECT count(*) AS n FROM plugin_registrations WHERE plugin_id = 'acme.verify' AND circuit_open_until > unixepoch()")).toBe(1);
     answers["acme.verify"] = () => ok({ errors: [] });
+    expect(await agentQuote()).toMatchObject(refusal);
+    sqlite.exec("UPDATE plugin_registrations SET circuit_open_until = unixepoch() - 1 WHERE plugin_id = 'acme.verify'");
+
+    // The app answers again after the cooldown: checkout continues; a skip app that fails is only left out.
     expect((await agentQuote()).status).toBe(200);
   });
 

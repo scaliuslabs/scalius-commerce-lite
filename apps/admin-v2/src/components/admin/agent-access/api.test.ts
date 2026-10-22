@@ -32,7 +32,9 @@ beforeEach(() => {
     calls.push({
       method: init.method ?? "GET",
       path: `${url.pathname}${url.search}`,
-      body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
+      // The client forwards bodies as bytes (binary uploads arrive byte-identical).
+      body: init.body instanceof ArrayBuffer ? JSON.parse(new TextDecoder().decode(init.body))
+        : typeof init.body === "string" ? JSON.parse(init.body) : undefined,
     });
     return Response.json({ success: true, data: responses.shift() ?? {} });
   }));
