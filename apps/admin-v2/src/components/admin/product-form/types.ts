@@ -121,6 +121,8 @@ export const productFormSchema = z.object({
     )
     .optional(),
   slugEdited: z.boolean().optional(),
+  /** A changed URL handle: false stops the old address redirecting to the new one (on by default, like Shopify). */
+  keepOldAddress: z.boolean().optional(),
   /** The product has options: its variants carry the prices (and their own checks). */
   variantPriced: z.boolean().optional(),
   /** What the SKUs are: all physical, all digital, all services, or set per variant. */

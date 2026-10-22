@@ -21,6 +21,7 @@ import {
   type AppComponentPlacement,
   type HomepageAppSection,
 } from "@scalius/core/modules/storefront";
+import { resolveUrlRedirect } from "@scalius/core/modules/products";
 import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "@scalius/core/modules/plugins";
 import type { MarketPricing } from "@scalius/core/modules/price-lists";
 import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins";
@@ -734,6 +735,26 @@ const marketsRoute = createRoute({
 });
 
 app.openapi(marketsRoute, async (c) => ok(c, await readMarketMatrix(c.get("db"))));
+
+// GET /storefront/redirect — where an address that answered 404 leads (URL redirects)
+const redirectRoute = createRoute({
+  method: "get",
+  path: "/redirect",
+  operationId: "storefront.redirect.get",
+  tags: ["Storefront"],
+  summary: "Where an old store address leads",
+  description: "The URL redirect of a store path (`/products/old-name`): its target path, or null. The storefront asks only when a page answers 404.",
+  request: { query: z.object({ path: z.string().min(1).max(512) }) },
+  responses: {
+    200: {
+      description: "The redirect target, or null",
+      content: { "application/json": { schema: successEnvelope(z.object({ toPath: z.string().nullable() })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(redirectRoute, async (c) => ok(c, { toPath: await resolveUrlRedirect(c.get("db"), c.req.valid("query").path) }));
 
 // GET /storefront/batch — one storefront page render's public reads
 const batchPartSchema = z.object({

@@ -45,6 +45,8 @@ import {
   readStoreDecimalPlaces,
   parsePublishedChannelIds,
   publishedChannelIdsSql,
+  buildUrlRedirectStatements,
+  productPath,
 } from "../products";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
 import { updateProductMediaSection } from "./write";
@@ -110,6 +112,8 @@ const productBasePatchSchema = z.object({
     excludeFromSitemap: z.boolean().optional(),
     productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable().optional(),
     slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+    /** With a new slug: the old product address leads to the new one (a URL redirect). On unless false. */
+    redirectOldUrl: z.boolean().optional(),
     /** Shows the store's EMI line (when the store has EMI plans). Informational only. */
     emiEligible: z.boolean().optional(),
     /** Whole-field replacements, saved in the same write (the `text` section edits a range). */
@@ -653,7 +657,7 @@ async function updateBaseSection(
         metaDescription: products.metaDescription,
     }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
-    const { price, discountPercentage, discountAmount, ...otherPatch } = patch;
+    const { price, discountPercentage, discountAmount, redirectOldUrl, ...otherPatch } = patch;
     const definedPatch = Object.fromEntries(Object.entries(otherPatch).filter(([, value]) => value !== undefined));
     const next = {
         ...current,
@@ -697,6 +701,10 @@ async function updateBaseSection(
         metaTitle: next.metaTitle,
         metaDescription: next.metaDescription,
     }).where(eq(products.id, productId))];
+    // The old address keeps working: it leads to the new one, in the same batch.
+    if (next.slug !== current.slug && redirectOldUrl !== false) {
+        mutationStatements.push(...buildUrlRedirectStatements(db, productPath(current.slug), productPath(next.slug)));
+    }
 
     if (price !== undefined || patch.isActive !== undefined) {
         const topology = await db.select({

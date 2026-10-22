@@ -353,6 +353,7 @@ describe("DVC directed scenarios", () => {
     ["its name", "/api/v1/checkout/config?presence=en-in", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", INVALID],
     ["its country", "/api/v1/storefront/markets", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
     ["its status", "/api/v1/storefront/markets", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", INVALID],
+    ["a new URL redirect", "/api/v1/storefront/redirect?path=/products/old-linen-panjabi", "INSERT INTO url_redirects (id, from_path, to_path) VALUES ('rdr_dvc', '/products/old-linen-panjabi', '/products/linen-panjabi')", INVALID],
     ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-np', locale = 'bn' WHERE id = 'mkp_dvc_india'", INVALID],
     // The checkout config carries the countries every active market sells to (its accepted phone
     // countries, `mk:selling`): another market's country or status reaches it, its rename does not.

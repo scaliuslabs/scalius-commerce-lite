@@ -10,6 +10,7 @@ export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<P
     control: form.control,
     name: ["id", "name", "description", "metaTitle", "metaDescription", "slug", "slugEdited", "noIndex"],
   });
+  const keepOldAddress = useWatch({ control: form.control, name: "keepOldAddress" });
   const { errors, defaultValues } = form.formState;
   const [id, name, description, metaTitle, metaDescription, slug, slugEdited, noIndex] = disabled
     ? [defaultValues?.id, defaultValues?.name, defaultValues?.description, defaultValues?.metaTitle, defaultValues?.metaDescription, defaultValues?.slug, defaultValues?.slugEdited, defaultValues?.noIndex] as const
@@ -48,6 +49,12 @@ export function ProductSearchListing({ form, disabled }: { form: UseFormReturn<P
         handle: errors.slug?.message,
       }}
       disabled={disabled}
+      // A saved product's new handle: offer to keep the old address working (on by default).
+      redirect={id && defaultValues?.slug && slug && slug !== defaultValues.slug ? {
+        fromHandle: defaultValues.slug,
+        checked: keepOldAddress !== false,
+        onChange: (checked) => form.setValue("keepOldAddress", checked),
+      } : undefined}
     />
   );
 }

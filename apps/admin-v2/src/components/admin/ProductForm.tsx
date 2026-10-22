@@ -313,7 +313,7 @@ function ProductEditor({
         }
       },
       changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>)
-        .filter((key) => key !== "slugEdited" && key !== "variantPriced"),
+        .filter((key) => key !== "slugEdited" && key !== "keepOldAddress" && key !== "variantPriced"),
     });
   }
   // With options the variants carry the prices: the product price follows the cheapest one,

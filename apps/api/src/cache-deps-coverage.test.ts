@@ -95,6 +95,7 @@ const URLS = [
   "/api/v1/storefront/homepage",
   "/api/v1/storefront/layout",
   "/api/v1/storefront/markets",
+  "/api/v1/storefront/redirect?path=/products/old-name",
   "/api/v1/storefront/landing/eid",
   "/api/v1/storefront/template/product",
   "/api/v1/storefront/pages/slug/about",

@@ -92,6 +92,7 @@ function otherParts(): string[] {
     // The one market-keyed read: the India market's subfolder.
     "/api/v1/checkout/config?presence=en-in",
     "/api/v1/storefront/markets",
+    "/api/v1/storefront/redirect?path=/products/old-linen-panjabi",
     "/api/v1/checkout-languages/active",
     "/api/v1/shipping-methods",
     // A destination's zone: a Bangladesh place, and abroad by postal prefix, admin area and country.

@@ -302,6 +302,11 @@ export const updateProductSchema = productBaseSchema
     .extend({
         id: z.string(),
         expectedAggregateRevision: z.number().int().min(1),
+        /**
+         * When the URL handle changes: the old product address leads to the
+         * new one (a URL redirect written with the change). On unless false.
+         */
+        redirectOldUrl: z.boolean().optional(),
         acknowledgedSkuImageRemovalIds: z.array(productMediaAssociationIdSchema)
             .max(MAX_PRODUCT_MEDIA_ASSOCIATIONS)
             .refine((ids) => new Set(ids).size === ids.length, {

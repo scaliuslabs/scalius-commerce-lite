@@ -145,6 +145,14 @@ export const CONTENT_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // =============================================
   // Navigation API
   // =============================================
+  // URL redirects sit with the menus (Online store -> Navigation).
+  "/api/v1/admin/url-redirects": {
+    GET: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+  "/api/v1/admin/url-redirects/*": {
+    DELETE: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
   "/api/v1/admin/navigation": {
     GET: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },

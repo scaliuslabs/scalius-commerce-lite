@@ -107,3 +107,27 @@ export const pages = sqliteTable(
 );
 
 export type Page = InferSelectModel<typeof pages>;
+
+/**
+ * Old storefront addresses that lead somewhere else (0185): a product's
+ * previous URL handle, or one a merchant added. Looked up only when a path
+ * answers 404, so a page that exists never pays for it. Paths are
+ * store-relative ("/products/old-handle"); `from_path` is unique.
+ */
+export const urlRedirects = sqliteTable(
+  "url_redirects",
+  {
+    id: text("id").primaryKey(),
+    fromPath: text("from_path").notNull(),
+    toPath: text("to_path").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+  },
+  (table) => [
+    uniqueIndex("url_redirects_from_path_unique").on(table.fromPath),
+    index("url_redirects_to_path_idx").on(table.toPath),
+    check("url_redirects_paths", sql.raw(`substr("from_path", 1, 1) = '/' AND substr("to_path", 1, 1) = '/' AND "from_path" <> "to_path"`)),
+  ],
+);
+
+export type UrlRedirect = InferSelectModel<typeof urlRedirects>;

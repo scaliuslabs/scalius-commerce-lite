@@ -84,6 +84,7 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   metaobject_entries: "0126_plugin_seams",
   object_types: "0155_v2_beta_contract",
   object_records: "0155_v2_beta_contract",
+  url_redirects: "0185_url_redirects",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's

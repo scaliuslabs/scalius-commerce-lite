@@ -83,6 +83,8 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   // The layout: the whole presence matrix (the same everywhere), and the
   // page's menus, category tree, policies and storefront copy in its language (step 4b).
   { path: "/api/v1/storefront/layout", exact: true, isEligible: presenceOnly, market: { keyed: true } },
+  // Where an address that answered 404 leads (URL redirects): read only on the not-found path.
+  { path: "/api/v1/storefront/redirect", exact: true, isEligible: (url) => url.searchParams.size === 1 && url.searchParams.has("path"), market: { invariant: "Redirects are store paths, the same in every market (a presence page asks with its logical path)." } },
   // The active presence matrix, for the storefront gateway's buyer-choice redirect.
   { path: "/api/v1/storefront/markets", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: "The presence matrix is the same for every market." } },
 ];
