@@ -36,7 +36,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { addressCountriesQueryOptions, addressRulesQueryOptions } from "~/lib/api-query-options/address-rules";
 import { countryName } from "~/lib/country-name";
 import { CountryChecklist } from "~/components/admin/shared/CountryChecklist";
-import { formatNumber, useMessages } from "~/i18n";
+import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { getStoreRegion, useStoreDefaultsVersion } from "~/lib/store-time-zone";
 import { locationMessages } from "~/i18n/location";
 import { settingsMessages } from "~/i18n/settings";
@@ -953,7 +953,8 @@ export function DeliveryZonesCard() {
   const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"] | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const applyTemplate = useMutation({
-    mutationFn: (id: string) => send("put", `${ZONES_URL}/template`, { template: id }),
+    // Written in the dashboard's language: the merchant's own text from then on.
+    mutationFn: (id: string) => send("put", `${ZONES_URL}/template`, { template: id, language: getLocale() }),
     onSuccess: async () => {
       setTemplate(null);
       toast.success(t("templateAdded"));

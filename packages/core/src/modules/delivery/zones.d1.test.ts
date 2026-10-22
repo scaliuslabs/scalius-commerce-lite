@@ -397,7 +397,7 @@ describe("shipping zone editing", () => {
         }))).toEqual([
             { name: "Inside Dhaka", regions: [], locations: ["dhaka"], rate: ["Inside Dhaka", 70] },
             { name: "Near Dhaka", regions: [], locations: ["savar"], rate: ["Near Dhaka", 90] },
-            { name: "Bangladesh", regions: ["BD"], locations: [], rate: ["Outside Dhaka", 120] },
+            { name: "Outside Dhaka", regions: ["BD"], locations: [], rate: ["Outside Dhaka", 120] },
         ]);
         expect(await names(db, { city: "dhaka", zone: "savar" })).toEqual(["Near Dhaka"]);
         expect(await names(db, { city: "ctg", zone: "agrabad" })).toEqual(["Outside Dhaka"]);
@@ -409,7 +409,7 @@ describe("shipping zone editing", () => {
         await applyDeliveryZoneTemplate(db, "dhaka_two_zone", BDT);
         const before = await listDeliveryZones(db, BDT.decimalPlaces);
         const inside = before.zones.find((zone) => zone.name === "Inside Dhaka")!;
-        const outside = before.zones.find((zone) => zone.name === "Bangladesh")!;
+        const outside = before.zones.find((zone) => zone.name === "Outside Dhaka")!;
         const rateId = inside.rates[0]!.id;
 
         await expect(updateDeliveryZoneRate(db, inside.id, rateId, { fee: 65 }, inside.revision, BDT))
