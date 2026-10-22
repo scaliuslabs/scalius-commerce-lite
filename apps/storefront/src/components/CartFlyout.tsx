@@ -123,7 +123,7 @@ export type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
  * cart") and lists it first. A plain `open-cart` (the header cart icon) shows
  * the cart as it is.
  */
-export type OpenCartEventDetail = { addedLineKey?: string };
+export type OpenCartEventDetail = { addedLineKey?: string; addedCount?: number };
 
 /** Where "Checkout" lands: the cart page is also the checkout form. */
 const CHECKOUT_FORM_ID = "checkoutFormCard";
@@ -328,6 +328,8 @@ export default function CartFlyout({ onReady }: Props) {
   const cartTriggerRef = useRef<HTMLElement | null>(null);
   /** The line an add just touched; null for a plain open. */
   const [addedKey, setAddedKey] = useState<string | null>(null);
+  /** How many lines one action added (Buy again adds several); 1 for a single add. */
+  const [addedCount, setAddedCount] = useState(1);
   const addedItem = addedKey ? cart.items[addedKey] : undefined;
   const announced = useDelayedFlag(isOpen && Boolean(addedItem), addedKey);
   /**
@@ -409,9 +411,10 @@ export default function CartFlyout({ onReady }: Props) {
         : null;
     };
 
-    const openCart = (addedLineKey?: string) => {
+    const openCart = (addedLineKey?: string, count = 1) => {
       rememberTrigger();
       setAddedKey(addedLineKey ?? null);
+      setAddedCount(count);
       setAddedOutcome(null);
       setCartOpen(true);
     };
@@ -428,7 +431,8 @@ export default function CartFlyout({ onReady }: Props) {
     };
 
     const handleOpenCartEvent = (event?: Event) => {
-      openCart((event as CustomEvent<OpenCartEventDetail | undefined> | undefined)?.detail?.addedLineKey);
+      const detail = (event as CustomEvent<OpenCartEventDetail | undefined> | undefined)?.detail;
+      openCart(detail?.addedLineKey, detail?.addedCount);
     };
 
     const onAddToCart: EventListener = (event) =>
@@ -446,7 +450,7 @@ export default function CartFlyout({ onReady }: Props) {
           }),
         );
       } else {
-        openCart(pendingEvent.detail?.addedLineKey);
+        openCart(pendingEvent.detail?.addedLineKey, pendingEvent.detail?.addedCount);
       }
     }
     onReady?.();
@@ -490,7 +494,7 @@ export default function CartFlyout({ onReady }: Props) {
         )}
       >
         <SheetDescription className="sr-only">
-          {addedItem ? copy.describeAdded(addedItem.name) : copy.describe}
+          {addedItem ? copy.describeAdded(addedItem.name, addedCount > 1 ? formatCount(addedCount) : undefined) : copy.describe}
         </SheetDescription>
         {/*
           SWIPE ZONE (Mobile Only)
@@ -542,9 +546,11 @@ export default function CartFlyout({ onReady }: Props) {
             <span aria-hidden="true" data-cart-added-text>{addedText}</span>
             <p role="status" className="sr-only">
               {announced
-                ? outcome
-                  ? copy.announceOutcome(addedItem.name, addedText, itemsText)
-                  : copy.announceAdded(addedItem.name, itemsText)
+                ? addedCount > 1
+                  ? copy.announceAddedMany(formatCount(addedCount), itemsText)
+                  : outcome
+                    ? copy.announceOutcome(addedItem.name, addedText, itemsText)
+                    : copy.announceAdded(addedItem.name, itemsText)
                 : ""}
             </p>
           </div>

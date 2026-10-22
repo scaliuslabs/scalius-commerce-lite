@@ -11,13 +11,15 @@ export interface CartDrawerCopy {
   /** The count badge's words for assistive technology: "3 items". */
   itemCount: (count: string, one: boolean) => string;
   close: string;
-  describeAdded: (name: string) => string;
+  describeAdded: (name: string, count?: string) => string;
   describe: string;
   added: string;
   /** The add was capped to what is left: "Added 40 (all that's left)". */
   addedLeft: (count: string) => string;
   soldOut: string;
   announceAdded: (name: string, items: string) => string;
+  /** Several lines went in at once (Buy again): how many, not just the first one's name. */
+  announceAddedMany: (count: string, items: string) => string;
   announceOutcome: (name: string, outcome: string, items: string) => string;
   empty: string;
   startShopping: string;
@@ -48,12 +50,13 @@ const EN: CartDrawerCopy = {
   title: "Cart",
   itemCount: (count, one) => `${count} ${one ? "item" : "items"}`,
   close: "Close cart",
-  describeAdded: (name) => `${name} was added to your cart. View your cart, check out, or continue shopping.`,
+  describeAdded: (name, count) => `${count ? `${count} products were` : `${name} was`} added to your cart. View your cart, check out, or continue shopping.`,
   describe: "Review cart items, change quantities, or continue to checkout.",
   added: "Added to your cart",
   addedLeft: (count) => `Added ${count} (all that's left)`,
   soldOut: "Sold out: nothing more could be added",
   announceAdded: (name, items) => `${name} added to your cart. Cart has ${items}.`,
+  announceAddedMany: (count, items) => `${count} products added to your cart. Cart has ${items}.`,
   announceOutcome: (name, outcome, items) => `${name}: ${outcome}. Cart has ${items}.`,
   empty: "Cart is empty",
   startShopping: "Start shopping",
@@ -83,12 +86,13 @@ const BN: CartDrawerCopy = {
   title: "কার্ট",
   itemCount: (count) => `${count}টি পণ্য`,
   close: "কার্ট বন্ধ করুন",
-  describeAdded: (name) => `${name} আপনার কার্টে যোগ হয়েছে। কার্ট দেখুন, চেকআউট করুন, অথবা কেনাকাটা চালিয়ে যান।`,
+  describeAdded: (name, count) => `${count ? `${count}টি পণ্য` : name} আপনার কার্টে যোগ হয়েছে। কার্ট দেখুন, চেকআউট করুন, অথবা কেনাকাটা চালিয়ে যান।`,
   describe: "কার্টের পণ্য দেখুন, পরিমাণ বদলান, অথবা চেকআউটে যান।",
   added: "আপনার কার্টে যোগ হয়েছে",
   addedLeft: (count) => `${count}টি যোগ হয়েছে (যা বাকি ছিল সব)`,
   soldOut: "স্টক শেষ: আর যোগ করা গেল না",
   announceAdded: (name, items) => `${name} আপনার কার্টে যোগ হয়েছে। কার্টে আছে ${items}।`,
+  announceAddedMany: (count, items) => `${count}টি পণ্য আপনার কার্টে যোগ হয়েছে। কার্টে আছে ${items}।`,
   announceOutcome: (name, outcome, items) => `${name}: ${outcome}। কার্টে আছে ${items}।`,
   empty: "কার্ট খালি",
   startShopping: "কেনাকাটা শুরু করুন",

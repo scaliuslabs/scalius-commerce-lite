@@ -42,7 +42,7 @@ function validated(lines: Line[], issues: Array<{ index: number; code: string }>
   };
 }
 
-const opened: Array<{ addedLineKey?: string } | undefined> = [];
+const opened: Array<{ addedLineKey?: string; addedCount?: number } | undefined> = [];
 const added: unknown[] = [];
 const onOpen = (event: Event) => opened.push((event as CustomEvent).detail);
 const onAdd = (event: Event) => added.push((event as CustomEvent).detail);
@@ -79,7 +79,7 @@ describe("buy again", () => {
     expect(changes).toEqual([2]);
     expect(Object.keys(JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? "{}").items ?? {})).toHaveLength(2);
     expect(added).toEqual([]);
-    expect(opened).toEqual([{ addedLineKey: await cartLineKeyFor({ id: "prod_psn", variantId: "var_25" }) }]);
+    expect(opened).toEqual([{ addedLineKey: await cartLineKeyFor({ id: "prod_psn", variantId: "var_25" }), addedCount: 2 }]);
 
     // Again: each line grows by its ordered quantity.
     await expect(addOrderToCart(lines)).resolves.toEqual({ added: 2, missing: 0 });
