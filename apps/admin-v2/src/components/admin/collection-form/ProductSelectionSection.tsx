@@ -112,7 +112,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
     category.status !== "published" && !selectedCategoryIds.includes(category.id)).length;
   const previewCategoryIds = selectedCategories.filter((category) => category.status === "published").map((category) => category.id);
   const sources = [
-    { value: "manual", label: t("pickProducts"), help: t("pickProductsHelp") },
+    { value: "manual", label: t("pickProducts"), help: t("pickProductsHelp", { max: MAX_MEMBERSHIP_IDS }) },
     { value: "dynamic", label: t("automatic"), help: t("automaticHelp") },
   ] as const;
   const manual = selectedSource === "manual";
