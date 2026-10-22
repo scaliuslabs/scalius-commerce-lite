@@ -56,6 +56,7 @@ import { notificationTemplateMessages, notificationsMessages } from "~/i18n/sett
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { Field } from "~/components/ui/field";
+import { SENDING_DIALOG } from "./sending-dialogs";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -129,10 +130,10 @@ export function SmsCounter({ text }: { text: string }) {
 }
 
 /** Stands in for a test send while its channel isn't set up. */
-function SetUpToTest({ label }: { label: string }) {
+function SetUpToTest({ label, channel }: { label: string; channel: "email" | "sms" }) {
   return (
     <Button asChild variant="outline" size="sm">
-      <Link to="/admin/settings/notifications" hash="sending">{label}</Link>
+      <Link to="/admin/settings/notifications" hash={SENDING_DIALOG[channel]}>{label}</Link>
     </Button>
   );
 }
@@ -397,7 +398,7 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
               {t("sendTestEmail")}
             </Button>
           ) : (
-            <SetUpToTest label={t("setUpEmailToTest")} />
+            <SetUpToTest label={t("setUpEmailToTest")} channel="email" />
           )}
         </div>
         {emailTestError ? (
@@ -468,7 +469,7 @@ export function NotificationTemplateEditor({ event }: { event: TemplatedNotifica
               {t("sendTestSms")}
             </Button>
           ) : (
-            <SetUpToTest label={t("setUpSmsToTest")} />
+            <SetUpToTest label={t("setUpSmsToTest")} channel="sms" />
           )}
         </div>
         {usesStoreName(sms.body) ? <StoreNameNote store={store} /> : null}

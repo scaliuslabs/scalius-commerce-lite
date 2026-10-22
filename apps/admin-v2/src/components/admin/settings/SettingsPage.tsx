@@ -1,5 +1,5 @@
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
-import { cloneElement, createContext, isValidElement, useContext, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
+import { cloneElement, createContext, isValidElement, useContext, useEffect, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -261,6 +261,7 @@ export interface SettingsDialogParts {
  * A failed save keeps it open with the problems listed.
  */
 export function SettingsDialog({
+  id,
   title,
   description,
   trigger,
@@ -269,6 +270,12 @@ export function SettingsDialog({
   layout,
   children,
 }: {
+  /**
+   * A link to the page with this hash opens the dialog: a hint elsewhere that
+   * says what to set up lands on the fields themselves (e.g. `sending-email`).
+   * Leave it out where the trigger is disabled.
+   */
+  id?: string;
   title: ReactNode;
   description?: ReactNode;
   trigger: ReactElement;
@@ -282,7 +289,13 @@ export function SettingsDialog({
 }) {
   const t = useMessages(settingsMessages);
   const bar = useMessages(saveBarMessages);
-  const [open, setOpen] = useState(false);
+  const target = useContext(TargetCardContext);
+  const linked = Boolean(id) && target === id;
+  const [open, setOpen] = useState(linked);
+  // A link followed while the page is already open (the hash changes, the page stays).
+  useEffect(() => {
+    if (linked) setOpen(true);
+  }, [linked]);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const close = (state: SaveScopeState) => {
     state.discardAll();

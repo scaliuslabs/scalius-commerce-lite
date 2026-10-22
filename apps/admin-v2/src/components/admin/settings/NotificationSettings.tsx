@@ -56,6 +56,7 @@ import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { webPushMessages } from "~/i18n/settings-web-push";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { SENDING_DIALOG } from "./sending-dialogs";
 import { FieldRow } from "~/components/ui/field";
 import { appProviderSetupPath } from "~/components/admin/apps/app-sections";
 
@@ -630,6 +631,7 @@ export function SendingCard() {
       rows={
         <>
           <SettingsDialog
+            id={canEditGeneral && email.data ? SENDING_DIALOG.email : undefined}
             title={t("email")}
             trigger={
               <SettingsRow
@@ -645,6 +647,7 @@ export function SendingCard() {
             <EmailFields />
           </SettingsDialog>
           <SettingsDialog
+            id={canEditNotifications && sms.data ? SENDING_DIALOG.sms : undefined}
             title={t("sms")}
             trigger={
               <SettingsRow
@@ -657,6 +660,7 @@ export function SendingCard() {
             <SmsFields />
           </SettingsDialog>
           <SettingsDialog
+            id={canEditGeneral ? SENDING_DIALOG.whatsapp : undefined}
             title={t("whatsapp")}
             trigger={<SettingsRow label={t("whatsapp")} disabled={!canEditGeneral} value={status(isReady(rules.data.whatsapp))} />}
           >

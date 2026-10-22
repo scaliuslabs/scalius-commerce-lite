@@ -87,7 +87,8 @@ describe("customer sign-in", () => {
     await render();
     expect(control("SMS code").disabled).toBe(true);
     const smsHint = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent?.includes("Set up SMS"));
-    expect(smsHint?.getAttribute("href")).toBe("/admin/settings/notifications#sending");
+    // The hint opens SMS sending setup itself, not just the Notifications page.
+    expect(smsHint?.getAttribute("href")).toBe("/admin/settings/notifications#sending-sms");
     // WhatsApp isn't collected yet: that's the first thing to fix.
     expect(control("WhatsApp code").disabled).toBe(true);
     expect(container.textContent).toContain("Ask for a WhatsApp number above to use this.");

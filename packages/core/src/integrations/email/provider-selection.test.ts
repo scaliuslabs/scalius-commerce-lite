@@ -463,6 +463,17 @@ describe("email provider selection", () => {
       issues: [],
     });
 
+    // A fresh local store has no sender yet: Mailpit still captures its mail (buyer QA N3).
+    await expect(getEmailProviderReadiness({
+      db: createEmailSettingsDb([]),
+      env: { LOCAL_MAILPIT_URL: "http://127.0.0.1:8025" },
+    })).resolves.toMatchObject({
+      status: "ready",
+      provider: "mailpit",
+      senderConfigured: false,
+      issues: [],
+    });
+
     await expect(getEmailProviderReadiness({
       db,
       env: { LOCAL_MAILPIT_URL: "https://mail.example.com" },

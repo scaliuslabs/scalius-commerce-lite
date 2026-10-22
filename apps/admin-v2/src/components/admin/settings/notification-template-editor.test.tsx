@@ -190,7 +190,7 @@ describe("notification message editor", () => {
     await renderEditor();
     await vi.waitFor(() => expect(container.textContent).toContain("Set up SMS to send a test"));
     const link = [...container.querySelectorAll("a")].find((element) => element.textContent === "Set up SMS to send a test");
-    expect(link?.getAttribute("href")).toBe("/admin/settings/notifications#sending");
+    expect(link?.getAttribute("href")).toBe("/admin/settings/notifications#sending-sms");
     expect(button("Send test SMS")).toBeUndefined();
     expect(button("Send test email")).toBeDefined();
   });

@@ -25,6 +25,7 @@ import { settingsMessages } from "~/i18n/settings";
 import { notificationsMessages } from "~/i18n/settings-notifications";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading } from "./SettingsPage";
+import { SENDING_DIALOG } from "./sending-dialogs";
 
 const CHANNEL_LABEL = { email: "codeEmail", sms: "codeSms", whatsapp: "codeWhatsapp" } as const;
 const EMAIL_LABEL = { required: "emailRequired", optional: "emailOptional", hidden: "emailNone" } as const;
@@ -188,7 +189,7 @@ export function CustomerSignInCard() {
                 {hint ? (
                   <p role={on ? "alert" : undefined} className={`pb-1 ps-7 text-body ${on ? "text-destructive" : "text-muted-foreground"}`}>
                     {collected ? (
-                      <Link to="/admin/settings/notifications" hash="sending" className="underline underline-offset-2">{hint}</Link>
+                      <Link to="/admin/settings/notifications" hash={SENDING_DIALOG[channel]} className="underline underline-offset-2">{hint}</Link>
                     ) : hint}
                   </p>
                 ) : null}

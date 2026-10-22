@@ -148,7 +148,10 @@ export async function getEmailProviderReadiness(
   const settings = await getEmailRuntimeSettings(context);
   const issues: ReadinessIssue[] = [];
 
-  if (!settings.senderConfigured) {
+  // A local Mailpit captures every message, signed with the default sender when
+  // none is saved (as sending does): a fresh local store can deliver email,
+  // sign-in codes included, before the merchant sets a real sender.
+  if (!settings.senderConfigured && !settings.localMailpitUrl) {
     issues.push(readinessIssue(
       EMAIL_READINESS_CODES.missingSender,
       "Sender email is required before enabling email delivery.",
