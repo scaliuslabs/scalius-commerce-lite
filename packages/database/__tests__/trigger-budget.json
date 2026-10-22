@@ -2,7 +2,7 @@
   "maxBytes": 5700,
   "maxWritesPerTrigger": 1,
   "maxWritesPerEvent": 19,
-  "total": 818,
+  "total": 821,
   "tables": {
     "abandoned_checkouts": 5,
     "admin_fcm_tokens": 3,
@@ -111,6 +111,7 @@
     "tax_settings": 6,
     "theme_settings": 3,
     "translations": 16,
+    "url_redirects": 3,
     "warranty_policies": 4,
     "warranty_policy_revisions": 2,
     "webhook_subscriptions": 6

@@ -458,6 +458,9 @@ function seedSql(): string {
     ('lang_bn', 'Bangla', 'bn', 0, 0, ${q({ pageTitle: "চেকআউট" })}, ${q({})});
   INSERT INTO analytics (id, name, type, is_active, use_partytown, config, location) VALUES
     ('an_gtm', 'Tag Manager', 'custom', 1, 0, ${q({ script: "<script>window.dataLayer=[]</script>" })}, 'head');
+  INSERT INTO url_redirects (id, from_path, to_path, created_at, updated_at) VALUES
+    ('rdr_seed_1', '/products/old-cotton-saree', '/products/cotton-saree', ${T}, ${T}),
+    ('rdr_seed_2', '/old-about', '/about', ${T}, ${T});
 
   -- Custom fields (COMMERCE-HOOKS H4): storefront-visible fields of every public
   -- owner type, a hidden product field and a customer field buyers never see.

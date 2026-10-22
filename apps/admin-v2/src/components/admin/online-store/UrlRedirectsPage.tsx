@@ -148,7 +148,7 @@ function CreateRedirectDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <DialogTitle>{t("redirectCreate")}</DialogTitle>
           <DialogDescription>{t("redirectCreateHelp")}</DialogDescription>
         </DialogHeader>
-        <form id="create-url-redirect" onSubmit={submit}>
+        <form id="create-url-redirect" method="post" onSubmit={submit}>
           <FieldGroup>
             <Field id="redirect-from" label={t("redirectFrom")}>
               <Input id="redirect-from" value={fromPath} required autoComplete="off" autoCapitalize="none" placeholder="/products/old-name" onChange={(event) => setFromPath(event.target.value)} />
