@@ -89,6 +89,17 @@ export function bpsToPercent(bps: number): number {
   return bps / 100;
 }
 
+/**
+ * A sale badge's whole percentage ("-13%"), the one rule every theme and
+ * surface shows: rounded down so a badge never promises more than the
+ * saving, and at least 1 while there is a saving. Null when the price is
+ * not lower (or the original is not positive).
+ */
+export function discountPercentOff(original: number, current: number): number | null {
+  if (!(original > 0) || !Number.isFinite(current) || !(current < original)) return null;
+  return Math.max(1, Math.floor(((original - Math.max(current, 0)) / original) * 100 + 1e-9));
+}
+
 // ---------------------------------------------------------------------------
 // The market's price increment
 // ---------------------------------------------------------------------------

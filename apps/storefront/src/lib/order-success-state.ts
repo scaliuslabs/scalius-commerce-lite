@@ -8,6 +8,9 @@ import {
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { baseLanguage, numberLocale } from "@scalius/shared/locale-format";
+import { formatUnitRange } from "@scalius/shared/locale-words";
+import { pageLanguage, storeRegion } from "./store-time-zone";
 import { isPaymentMethodIdShape } from "./payment-method-id";
 import { orderDeliveryMode, type OrderFulfilmentView } from "./order-line-groups";
 import { giftCardCheckoutCopy } from "./checkout/gift-cards";
@@ -412,7 +415,25 @@ export function isOrderStatusView(
 
 // "2-3 days", "24 hours", "৩-৫ কার্যদিবস": only a duration the merchant wrote.
 const DELIVERY_ESTIMATE =
-  /[0-9০-৯]+(?:\s*[-–]\s*[0-9০-৯]+)?\s*(?:(?:business|working)\s+)?(?:days?|hours?|কার্যদিবস|দিন|ঘণ্টা)/i;
+  /([0-9০-৯]+)(?:\s*[-–]\s*([0-9০-৯]+))?\s*((?:business|working)\s+)?(days?|hours?|কার্যদিবস|দিন|ঘণ্টা)/i;
+
+/**
+ * The merchant's duration in the page's language: an English "1–2 days" on a
+ * Bangla receipt reads "১–২ দিন" (the suggested delivery zones write English),
+ * so the sentence around it never mixes languages. A duration already in the
+ * page's words, or a business-day count (no CLDR unit), stays as written.
+ */
+export function localizedDeliveryEstimate(description: string, language: string, region?: string | null): string | null {
+  const match = DELIVERY_ESTIMATE.exec(description);
+  if (!match) return null;
+  const [text, from, to, business, unitWord] = match;
+  const english = /^(?:days?|hours?)$/i.test(unitWord!);
+  if (!english || business || baseLanguage(language) === "en") return text;
+  const start = Number(from);
+  const end = to === undefined ? start : Number(to);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return text;
+  return formatUnitRange(start, end, /^day/i.test(unitWord!) ? "day" : "hour", numberLocale(language, region), { unitDisplay: "long" });
+}
 
 /**
  * Shopify's "what happens next" for a just-placed order. The delivery estimate
@@ -456,7 +477,7 @@ export function getOrderSuccessNextSteps(
   if (mode === "none") {
     return [paid ? copy.orderReceiptNextStepsServicePaidText : copy.orderReceiptNextStepsServiceCodText];
   }
-  const estimate = DELIVERY_ESTIMATE.exec(order.shippingMethodDescription ?? "")?.[0];
+  const estimate = localizedDeliveryEstimate(order.shippingMethodDescription ?? "", pageLanguage(), storeRegion());
   return [
     paid ? copy.orderReceiptNextStepsPaidText : copy.orderReceiptNextStepsCodText,
     ...(estimate ? [formatCheckoutLanguageText(copy.orderReceiptDeliveryEstimateText, { estimate })] : []),

@@ -41,13 +41,61 @@ function placeWords(name: string): string[] {
 }
 
 /**
+ * Official and everyday spellings of the same place (the 2018 renames and
+ * common romanisations): the courier's list says "Chittagong" while a buyer
+ * types "Chattogram". Search text on both sides.
+ */
+const PLACE_NAME_VARIANTS: ReadonlyArray<readonly [string, string]> = [
+  ["chattogram", "chittagong"],
+  ["barishal", "barisal"],
+  ["bogura", "bogra"],
+  ["jashore", "jessore"],
+  ["cumilla", "comilla"],
+  ["brahmanbaria", "bbaria"],
+  ["narsingdi", "narshingdi"],
+  ["jhenaidah", "jhenidah"],
+  ["gopalganj", "gopalgonj"],
+  ["moulvibazar", "maulvibazar"],
+  ["coxsbazar", "coxbazar"],
+];
+
+/** The typed text and the other spelling of a place it begins (at least 4 letters). */
+function searchSpellings(wanted: string): string[] {
+  const spellings = [wanted];
+  if (wanted.length < 4) return spellings;
+  for (const [first, second] of PLACE_NAME_VARIANTS) {
+    if (first.startsWith(wanted) || wanted.startsWith(first)) spellings.push(second + wanted.slice(first.length));
+    else if (second.startsWith(wanted) || wanted.startsWith(second)) spellings.push(first + wanted.slice(second.length));
+  }
+  return spellings;
+}
+
+/**
+ * A place name as a buyer reads it: a courier's lower-case word starts with
+ * a capital ("Double mooring" reads "Double Mooring"); other letters stay.
+ */
+export function placeDisplayName(name: string): string {
+  return name.replace(/(^|[\s\-(/])([a-z])/g, (_, before: string, letter: string) => before + letter.toUpperCase());
+}
+
+/**
  * How well `name` answers `query`: 0 the name starts with it, 1 a word
  * starts with it, 2 it appears inside the name, 3 a word starts with it
- * spelled differently. `null` when it doesn't match.
+ * spelled differently. `null` when it doesn't match. Another spelling of
+ * the same place ("Chattogram" for "Chittagong") answers as well.
  */
 export function placeRank(name: string, query: string): number | null {
-  const wanted = placeSearchText(query);
-  if (!wanted) return 0;
+  const typed = placeSearchText(query);
+  if (!typed) return 0;
+  let best: number | null = null;
+  for (const wanted of searchSpellings(typed)) {
+    const rank = rankSpelling(name, wanted);
+    if (rank !== null && (best === null || rank < best)) best = rank;
+  }
+  return best;
+}
+
+function rankSpelling(name: string, wanted: string): number | null {
   const words = placeWords(name);
   // From each word to the end of the name, so "mirpur 2" finds "Road, Mirpur-2".
   const tails = words.map((_, index) => words.slice(index).join(""));

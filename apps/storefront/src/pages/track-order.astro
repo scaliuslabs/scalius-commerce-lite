@@ -35,6 +35,7 @@ import {
   type OrderLookupStatus,
 } from "@/lib/order-lookup-api";
 import { formatOrderReceiptDate, formatOrderSuccessLabel } from "@/lib/order-success-localization";
+import { getOrderPaymentPresentation } from "@/lib/order-success-state";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -46,6 +47,7 @@ import { relabelOrderProgress, relabelOrderTimeline } from "@/lib/order-line-gro
 import { formatMoney } from "@/lib/currency";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { formatCount } from "@/lib/store-time-zone";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   checkoutLanguageBaseCode,
@@ -149,6 +151,19 @@ const channelName: Record<OrderCodeChannel, string> = {
   whatsapp: copy.trackOrderChannelWhatsappText,
 };
 const placedAt = status ? formatOrderReceiptDate(status.createdAt, languageCode) : null;
+// The receipt's own words for the payment ("Due on delivery" for cash on delivery, not "Unpaid").
+const paymentStatusLabel = status
+  ? getOrderPaymentPresentation({
+      status: status.status,
+      paymentMethod: status.paymentMethod ?? "",
+      paymentStatus: status.paymentStatus,
+      totalAmount: status.total,
+      paidAmount: status.paid,
+      balanceDue: status.balanceDue,
+      requiresShipping: status.requiresShipping,
+      shippingMethodKind: status.shippingMethodKind,
+    }, copy).statusLabel
+  : "";
 const deliveryLabel = status?.shippingMethodName
   ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: status.shippingMethodName })
   : copy.orderReceiptDeliveryText;
@@ -193,7 +208,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
             </div>
             <div>
               <dt class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</dt>
-              <dd class="font-medium text-foreground">{formatOrderSuccessLabel(status.paymentStatus, copy)}</dd>
+              <dd class="font-medium text-foreground">{paymentStatusLabel}</dd>
             </div>
             <div>
               <dt class="text-muted-foreground">{copy.orderReceiptDeliveryText}</dt>
@@ -227,7 +242,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
                   <span class="min-w-0 flex-1 text-sm">
                     <span class="block font-medium text-foreground">{item.productName}</span>
                     {item.variantLabel && <span class="block text-muted-foreground">{item.variantLabel}</span>}
-                    <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })}</span>
+                    <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })}</span>
                   </span>
                 </li>
               ))}

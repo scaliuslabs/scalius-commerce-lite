@@ -8,6 +8,7 @@ import {
   percentOfMinor,
   fromMinor,
   percentToBps,
+  discountPercentOff,
   priceIncrementMessage,
   PriceIncrementError,
   roundToIncrementMinor,
@@ -47,6 +48,12 @@ describe("toMinor / fromMinor", () => {
 describe("percentage discounts", () => {
   it("stores percentages as basis points", () => {
     expect(percentToBps(12.5)).toBe(1_250);
+    // One badge rule for every theme: 3,800 of 4,400 is 13.6% off, shown as 13%.
+    expect(discountPercentOff(4400, 3800)).toBe(13);
+    expect(discountPercentOff(100, 80)).toBe(20);
+    expect(discountPercentOff(1000, 999)).toBe(1);
+    expect(discountPercentOff(100, 100)).toBeNull();
+    expect(discountPercentOff(0, 0)).toBeNull();
     expect(percentToBps(null)).toBe(0);
     expect(percentToBps(150)).toBe(10_000);
     expect(bpsToPercent(1_250)).toBe(12.5);

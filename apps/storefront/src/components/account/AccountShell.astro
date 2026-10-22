@@ -11,6 +11,7 @@
 import { ACCOUNT_CONTAINER, accountUi as ui } from "@/lib/account-ui";
 import { accountNavTabs, type AccountSection, type AccountSummary } from "@/lib/account-tabs";
 import { getLayoutData } from "@/lib/api";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { continueWithLabel, readSignInApps, signInAppHref, signInErrorMessage, signInLanguage } from "@/lib/sign-in-apps";
 import { accountCopy } from "@/lib/account-copy";
 
@@ -41,7 +42,12 @@ const {
   signedOut = { title: words.signInTitle, body: words.signInBody },
   unavailable = { text: words.unavailable, retryHref: "/account" },
 } = Astro.props;
-const tabs = accountNavTabs(current, summary);
+// What the store offers keeps Reviews and Downloads in the strip on every account page.
+const storeFacts = await currentRequestTheme(Astro.locals).then(({ resolved }) => resolved.facts).catch(() => null);
+const tabs = accountNavTabs(current, summary, {
+  hasReviews: storeFacts?.hasReviews === true,
+  hasDigitalLines: storeFacts?.hasDigitalLines === true,
+});
 const workspace = layout === "workspace" && state === "ok";
 // Signed out: "Continue with <app>" for each sign-in app (plain links, no JavaScript needed),
 // and the fixed message a failed attempt came back with. The layout is read once per request.

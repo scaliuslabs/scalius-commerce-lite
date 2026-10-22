@@ -51,6 +51,14 @@ export function enhanceBillingAddress(
       if (rules && readCountry() === country && options.readMode() === mode) {
         applied = rules;
         applyAddressRules(block, billingRules(rules, mode));
+        // One country whose billing address of this mode asks nothing (a
+        // Bangladesh service order): no empty "Billing address" heading.
+        const section = block.closest<HTMLElement>("[data-billing-section]");
+        if (section) {
+          const asks = block.querySelector("select[data-billing-country]") !== null ||
+            Array.from(block.querySelectorAll<HTMLElement>("[data-address-rule]")).some((wrapper) => !wrapper.hidden);
+          section.hidden = !asks;
+        }
       }
     });
   };

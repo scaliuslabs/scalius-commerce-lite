@@ -6,6 +6,7 @@
  * (a BDT store's default: whole taka).
  */
 
+import { discountPercentOff } from "@scalius/shared/money";
 import {
   DEFAULT_CURRENCY,
   formatMoney,
@@ -139,7 +140,7 @@ export function calculateVariantPrice(
     discountAmount: discount.discountAmount || 0,
     hasDiscount: savingsAmount > 0,
     savingsAmount,
-    savingsPercentage: originalPrice > 0 ? Math.round((savingsAmount / originalPrice) * 100) : 0,
+    savingsPercentage: discountPercentOff(originalPrice, finalPrice) ?? 0,
   };
 }
 
@@ -180,8 +181,8 @@ export function formatPrice(price: number, currencySymbol?: string): string {
  */
 export function formatDiscountBadge(originalPrice: number, finalPrice: number): string | null {
   if (!(originalPrice > 0) || !(finalPrice < originalPrice)) return null;
-  const percent = Math.floor(((originalPrice - Math.max(finalPrice, 0)) / originalPrice) * 100);
-  return `-${formatCount(Math.max(1, percent))}%`;
+  const percent = discountPercentOff(originalPrice, finalPrice);
+  return percent === null ? null : `-${formatCount(percent)}%`;
 }
 
 /** Final price of one SKU; see `calculateVariantPrice`. */

@@ -7,6 +7,7 @@
  * inputs in sync.
  */
 import { enhanceLocationCombobox, type LocationCombobox } from "./location-combobox";
+import { placeDisplayName } from "./location-search";
 
 export interface LocationOption {
   id: string;
@@ -239,7 +240,7 @@ export function enhanceLocationSelects(
     // People look for a place by name: sort without regard to case, in the page's language.
     const collator = new Intl.Collator(select.ownerDocument.documentElement.lang || undefined, { sensitivity: "base", numeric: true });
     result = [...result].sort((left, right) => collator.compare(left.name, right.name));
-    select.append(...result.map((item) => createOption(select, item.name, item.id)));
+    select.append(...result.map((item) => createOption(select, placeDisplayName(item.name), item.id)));
     select.disabled = result.length === 0;
     if (select === area && areaWrapper) areaWrapper.hidden = result.length === 0;
     sync(select);

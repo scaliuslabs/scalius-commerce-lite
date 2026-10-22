@@ -180,16 +180,16 @@ describe("contract matrix: preset x card x filters x navigation source", () => {
 describe("listing filters", () => {
   const filtersOf = (template: StorefrontTemplateId) => storefrontTemplateTheme(template).blocks.listing.filters;
 
-  it("states the description placement and accepts a saved above-products choice", () => {
+  it("states the description placement (above the products, as the editor promises) and accepts a saved below-products choice", () => {
     const theme = storefrontTemplateTheme("marketplace");
-    expect(theme.blocks.listing.descriptionPlacement).toBe("below");
-    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("below");
+    expect(theme.blocks.listing.descriptionPlacement).toBe("above");
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
     // Version 6 states every listing choice: nothing falls back to a template's default.
     const { descriptionPlacement: _placement, ...unstated } = theme.blocks.listing;
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, blocks: { ...theme.blocks, listing: unstated } }).success).toBe(false);
-    theme.blocks.listing.descriptionPlacement = "above";
+    theme.blocks.listing.descriptionPlacement = "below";
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
-    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("below");
   });
 
   it("gives the marketplace phone cards, searches as rows and a shopper view choice", () => {
@@ -247,8 +247,8 @@ describe("listing filters", () => {
   it("applies the small-catalogue rule per listing", () => {
     const shown = (total: number, facetValueCounts: number[], refinementCount = 0) =>
       storefrontListingFiltersShown({ total, refinementCount, facetValueCounts });
-    expect(shown(7, [3, 4])).toBe(false);
-    expect(shown(8, [3, 4])).toBe(true);
+    expect(shown(1, [2])).toBe(false);
+    expect(shown(5, [3, 4])).toBe(true); // a five-product category still filters (Dawn)
     expect(shown(3780, [1, 1, 1])).toBe(false); // every facet has one value
     expect(shown(3780, [])).toBe(false);
     expect(shown(3780, [1, 2])).toBe(true);

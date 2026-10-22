@@ -4,6 +4,7 @@
 // the page's section data. The shapes are the versioned contract
 // (@scalius/shared/plugins/storefront-protocol): additive only.
 
+import { discountPercentOff } from "@scalius/shared/money";
 import type {
   StorefrontFieldValues,
   StorefrontFooterData,
@@ -277,7 +278,8 @@ function fieldValue(value: unknown, page: StorefrontPageMoney): unknown {
 /** A product as an app card gets it, from the core card model (same prices, photo and quick-add rules). */
 export function productCardData(product: ProductCardProduct, model: ProductCardModel, page: StorefrontPageMoney): StorefrontProductCard {
   const discounted = model.price.regular !== null;
-  const percent = discounted && product.price > 0 ? Math.round((1 - product.discountedPrice / product.price) * 100) : 0;
+  // The core card's badge rule, so a skin's "-13%" matches the store's own.
+  const percent = discounted ? (discountPercentOff(product.price, product.discountedPrice) ?? 0) : 0;
   const image = model.image
     ? { url: model.image.src, srcset: model.image.srcset ?? null, width: null, height: null, alt: model.image.alt }
     : null;

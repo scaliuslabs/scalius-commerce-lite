@@ -1,7 +1,7 @@
 // Words around numbers through the formatting layer (./locale-format): lists,
 // plural categories, relative times and measures in CLDR units. Pure,
 // browser-safe.
-import { cachedFormatter, formatNumber } from "./locale-format";
+import { cachedFormatter, formatNumber, numberFormatter } from "./locale-format";
 
 /** "41 minutes ago", "in 3 days" (`numeric: "auto"` gives "yesterday"). */
 export function formatRelativeTime(
@@ -31,4 +31,22 @@ export function formatUnit(
   options: Omit<Intl.NumberFormatOptions, "style" | "unit"> = {},
 ): string {
   return formatNumber(value, locale, { maximumFractionDigits: 2, ...options, style: "unit", unit });
+}
+
+/** A range in a CLDR unit: "1–2 days", "১–২ দিন"; equal ends read as one value. */
+export function formatUnitRange(
+  start: number,
+  end: number,
+  unit: string,
+  locale: string,
+  options: Omit<Intl.NumberFormatOptions, "style" | "unit"> = {},
+): string {
+  if (start === end) return formatUnit(start, unit, locale, options);
+  // ES2023 Intl (every supported runtime); the shared lib types predate it.
+  const formatter = numberFormatter(locale, { maximumFractionDigits: 2, ...options, style: "unit", unit }) as Intl.NumberFormat & {
+    formatRange?: (start: number, end: number) => string;
+  };
+  return formatter.formatRange
+    ? formatter.formatRange(start, end)
+    : `${formatNumber(start, locale)}–${formatUnit(end, unit, locale, options)}`;
 }

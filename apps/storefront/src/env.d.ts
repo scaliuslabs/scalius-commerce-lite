@@ -143,6 +143,8 @@ interface Window {
   __scaliusAuthModalOpenPending?: boolean;
   __scaliusAuthModalDetailPending?: import("@/components/AuthModal").AuthModalOpenDetail;
   __scaliusSearchPaletteOpenPending?: boolean;
+  /** What the buyer typed in the header field before the palette loaded. */
+  __scaliusSearchPaletteQuery?: string;
   __scaliusCartPendingEvents?: Array<
     | {
         type: "open";

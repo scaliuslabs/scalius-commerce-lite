@@ -1,5 +1,5 @@
 ---
-import type { Product, ProductMedia } from "@/lib/api";
+import type { Product, ProductMedia, ProductVariant } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
 import Icon from "@/components/icons/Icon.astro";
 import { productImageSources, resolveProductImageUrl } from "@/lib/product-media";
@@ -22,6 +22,13 @@ import { formatPageNumber } from "@/lib/store-time-zone";
 interface Props {
   product: Product;
   media: ProductMedia[];
+  /**
+   * The photo of the choice the page opens on (the first available SKU's own
+   * image), so the first paint shows the variant the buy box has selected.
+   */
+  initialProductMediaId?: string | null;
+  /** The buyer's SKUs: a SKU photo without its own words is named by its choice. */
+  variants?: ProductVariant[];
   /** Theme -> Layout -> Product page: gallery placement and thumbnails. */
   layout?: ProductGalleryLayout;
   /** "Play video: {title}" in the store's language. */
@@ -40,6 +47,8 @@ interface Props {
 const {
   product,
   media,
+  initialProductMediaId = null,
+  variants = [],
   layout = { gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null },
   playVideoLabel = "Play video: {title}",
   zoomLabel = "Zoom photo",
@@ -56,10 +65,11 @@ const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 
-const galleryMedia = productGalleryItems(product, media);
-// One page per product: a `?variant=` link's SKU photo is selected in the
-// browser (product-controller.ts), the page's cached first paint is the primary.
-const featuredMedia = featuredGalleryItem(galleryMedia, null);
+const galleryMedia = productGalleryItems(product, media, variants);
+// One page per product: the first paint shows the opening choice's SKU photo
+// (else the primary); a `?variant=` link's SKU photo is selected in the
+// browser (product-controller.ts).
+const featuredMedia = featuredGalleryItem(galleryMedia, initialProductMediaId);
 const hasMultipleMedia = galleryMedia.length > 1;
 const mainSlot = productGalleryMainSlot(layout, hasMultipleMedia);
 // Both rails share one slot, so the hidden rail's thumbnail names the

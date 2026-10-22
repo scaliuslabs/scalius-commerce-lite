@@ -21,6 +21,18 @@ describe("gallery media", () => {
     expect(featuredGalleryItem(items, null)?.id).toBe("v");
   });
 
+  it("names a SKU photo without its own words by the choice it shows", () => {
+    const option = (definition: string, value: string) => ({
+      optionDefinitionId: definition, optionValueId: `${definition}:${value}`, name: definition, value,
+      position: 0, valuePosition: 0, standardMapping: null,
+    }) as never;
+    const items = productGalleryItems({ name: "Echo Mini", imageAlt: null }, [item("a", "image", 0), item("b", "image", 1)], [
+      { imageId: "a", selectedOptions: [option("colour", "Black"), option("size", "S")] },
+      { imageId: "a", selectedOptions: [option("colour", "Black"), option("size", "M")] },
+    ]);
+    expect(items.map((entry) => entry.altText)).toEqual(["Echo Mini, Black", "Echo Mini"]);
+  });
+
   it("features a ?variant= SKU photo over the primary, never a video", () => {
     const items = productGalleryItems({ name: "Mug", imageAlt: null }, [
       item("v", "video", 0, { isPrimary: true }),
