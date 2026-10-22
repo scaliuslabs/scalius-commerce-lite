@@ -1,4 +1,4 @@
--- Plugin platform phase 2a (packages/plugin-sdk/docs/apps.md): per (plugin, event)
+-- Plugin platform phase 2a (docs/platform/PLUGINS.md): per (plugin, event)
 -- delivery rows with retries and a dead-letter state (the plugin twin of
 -- webhook_event_deliveries), and cron run claims: one row per (plugin, job,
 -- slot) so two scheduled ticks can never both run a slot, with a partial

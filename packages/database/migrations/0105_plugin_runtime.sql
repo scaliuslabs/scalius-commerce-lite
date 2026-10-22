@@ -1,4 +1,4 @@
--- Plugin platform runtime (packages/plugin-sdk/docs/apps.md, P1): installations with
+-- Plugin platform runtime (docs/platform/PLUGINS.md, P1): installations with
 -- their approved grant and sealed settings, extension-point registrations
 -- derived from the manifest, declared storage collections (generic hex-encoded
 -- index columns, per-collection unique indexes), a database key/value store and

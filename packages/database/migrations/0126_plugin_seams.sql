@@ -1,4 +1,4 @@
--- The plugin seams (packages/plugin-sdk/docs/apps.md, wave 7).
+-- The plugin seams (docs/platform/PLUGINS.md, wave 7).
 --
 -- metaobject_definitions and metaobject_entries: content types the merchant
 -- or an app defines (namespace `custom` or the app's id) and their entries.

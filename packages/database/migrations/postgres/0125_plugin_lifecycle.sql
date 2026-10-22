@@ -1,4 +1,4 @@
--- The app lifecycle and safety layer (packages/plugin-sdk/docs/apps.md, "Registry",
+-- The app lifecycle and safety layer (docs/platform/PLUGINS.md, "Registry",
 -- "Quotas", "Data updates"). `plugin_migrations` records each data update an
 -- app ran (one row per version, kept with its data on a keep-data uninstall).
 -- The new `plugin_installations` columns are added in place, without a table
