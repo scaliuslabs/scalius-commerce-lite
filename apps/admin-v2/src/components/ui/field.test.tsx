@@ -93,7 +93,7 @@ describe("Field", () => {
     render(<Field label="Price"><MoneyInput currencyCode="BDT" value={720} onValueChange={() => {}} /></Field>);
     const box = host.querySelector('[data-slot="input-affix"]')!;
     expect(box.firstElementChild!.textContent).toBe("৳");
-    expect(box.querySelector("input")!.value).toBe("720");
+    expect(box.querySelector("input")!.value).toBe("720.00");
     expect(host.querySelector("label")!.textContent).toBe("Price");
     render(<Field label="Fee"><PercentInput value={2.5} onValueChange={() => {}} /></Field>);
     expect(host.querySelector('[data-slot="input-affix"]')!.lastElementChild!.textContent).toBe("%");

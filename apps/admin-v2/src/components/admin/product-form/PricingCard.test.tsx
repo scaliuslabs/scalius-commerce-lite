@@ -168,7 +168,7 @@ describe("PricingCard", () => {
     currency.sale = 800;
     await render(<SkuCostProvider store={costStore(600)}><Harness variantPrices={null} price={1000} discount={20} /></SkuCostProvider>);
     const input = document.getElementById(costInput()!) as HTMLInputElement;
-    expect(input.value).toBe("600");
+    expect(input.value).toBe("600.00");
     expect(valueOf("profit")).toBe("৳200");
     expect(valueOf("margin")).toBe("25.0%");
   });
@@ -229,8 +229,8 @@ describe("PricingCard", () => {
     currency.sale = 800;
     let form!: UseFormReturn<ProductFormValues>;
     await render(<Harness variantPrices={null} price={1000} discount={20} onForm={(next) => { form = next; }} />);
-    expect(field("priceLabel").value).toBe("800");
-    expect(field("compareAtLabel").value).toBe("1000");
+    expect(field("priceLabel").value).toBe("800.00");
+    expect(field("compareAtLabel").value).toBe("1,000.00");
     expect(form.formState.isDirty).toBe(false);
     await type(field("priceLabel"), "700");
     expect(form.getValues()).toMatchObject({ price: 1000, discountType: "flat", discountAmount: 300 });
@@ -241,7 +241,7 @@ describe("PricingCard", () => {
     let form!: UseFormReturn<ProductFormValues>;
     await render(<Harness variantPrices={null} price={100} discount={discount} discountAmount={null} onForm={(next) => { form = next; }} />);
     const saved = form.getValues();
-    expect(field("priceLabel").value).toBe(String(selling));
+    expect(field("priceLabel").value).toBe(`${selling}.00`);
     expect(form.formState.isDirty).toBe(false);
     await type(field("priceLabel"), "85");
     expect(form.getValues()).toMatchObject({ discountType: "flat", discountPercentage: 0, discountAmount: 15 });
@@ -286,7 +286,7 @@ describe("PricingCard", () => {
     expect(form.getValues()).toEqual(sent);
     expect(form.formState.isDirty).toBe(false);
     act(() => form.reset({ ...sent, price: 200, discountType: "percentage", discountPercentage: 15, discountAmount: null }));
-    expect(field("priceLabel").value).toBe("170");
+    expect(field("priceLabel").value).toBe("170.00");
     await type(field("priceLabel"), "160");
     expect(form.formState.isDirty).toBe(true);
     await type(field("priceLabel"), "170");
@@ -294,7 +294,7 @@ describe("PricingCard", () => {
     expect(form.formState.isDirty).toBe(false);
     await type(field("priceLabel"), "160");
     act(() => form.reset());
-    expect(field("priceLabel").value).toBe("170");
+    expect(field("priceLabel").value).toBe("170.00");
     expect(form.formState.isDirty).toBe(false);
   });
 

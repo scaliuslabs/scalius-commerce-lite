@@ -177,7 +177,7 @@ describe("VariantsTab incoming stock and unit cost", () => {
     expect(dialog.textContent).toContain(t("costDialogTitle"));
     expect(dialog.textContent).toContain(t("costDialogDescriptionOne"));
     const input = dialog.querySelector<HTMLInputElement>(`input[aria-label="${t("costFor", { name: "Kori Trainer · 42" })}"]`)!;
-    expect(input.value).toBe("120.5");
+    expect(input.value).toBe("120.50");
   });
 
   it("shows no cost column, cost line or cost edit without View product costs", async () => {

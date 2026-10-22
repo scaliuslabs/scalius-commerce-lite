@@ -318,7 +318,7 @@ describe("variant prices on a new product", () => {
     });
     await settle();
   };
-  const priceOf = (name: string) => input(p("priceFor", { name })).value.replace(/\D/g, "");
+  const priceOf = (name: string) => input(p("priceFor", { name })).value.replace(/\.00$|,/g, "");
 
   /** Base price 1000, then one option "Amount" with A, B and C: the QA run's gift card. */
   async function giftCardWithAmounts() {

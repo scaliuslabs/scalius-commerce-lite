@@ -39,6 +39,8 @@ type NumberInputProps = Omit<InputProps, "value" | "onChange" | "type" | "defaul
    * its generic "not a number" error.
    */
   onRefusal?: (reason: string | null) => void;
+  /** How a number reads once it is settled (saved value, or after leaving the field): "2,500.00" for money. Typing is never rewritten. */
+  display?: (value: number) => string;
 };
 
 function hasFraction(number: number | null): boolean {
@@ -58,8 +60,9 @@ function understood(text: string, wholeUnitsMessage: string | undefined): number
  * nothing).
  */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, onFocus, onMouseUp, className, ...props }, ref) => {
-    const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
+  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, display, onBlur, onFocus, onMouseUp, className, ...props }, ref) => {
+    const settled = (number: number) => (display ? display(number) : String(number));
+    const shown = value === null || value === undefined || Number.isNaN(value) ? "" : settled(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
     if (!sameNumber(understood(text, wholeUnitsMessage), value ?? null) && text !== shown) setText(shown);
@@ -107,7 +110,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           // a fraction in a whole-unit amount stays as typed, still flagged.
           const number = parseLocaleNumber(text);
           const fractional = Boolean(wholeUnitsMessage) && hasFraction(number);
-          if (number !== null && !Number.isNaN(number) && !fractional) setText(String(number));
+          if (number !== null && !Number.isNaN(number) && !fractional) setText(settled(number));
           if (!fractional) event.currentTarget.setCustomValidity("");
           onBlur?.(event);
         }}
