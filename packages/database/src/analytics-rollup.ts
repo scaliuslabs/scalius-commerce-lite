@@ -148,7 +148,12 @@ export function analyticsFactMeasureSql(f: string): Record<(typeof ANALYTICS_MEA
     cancelled: `${f}.cancelled`,
     gross: `(case when ${sale} then ${f}.line_gross else 0 end)`,
     disc: `(case when ${sale} then ${f}.line_disc else 0 end)`,
-    returns: `(case when not (${sale}) then 0 when ${f}.reversed = 1 then ${f}.line_rev_returns else ${f}.line_returns end)`,
+    // Returned goods at what went back: a return refunded only in part (a
+    // restocking fee kept) counts the refund, not the item value; a return
+    // nothing was refunded for yet (cash on delivery never paid) counts the items.
+    returns: `(case when not (${sale}) then 0 when ${f}.reversed = 1 then ${f}.line_rev_returns
+      when ${f}.refund_sum > 0 and ${shop(`${f}.refund_sum`, f)} < ${f}.line_returns then ${shop(`${f}.refund_sum`, f)}
+      else ${f}.line_returns end)`,
     // Charged shipping less its discount (order discount − line discounts) and included shipping tax.
     shipping: `(case when ${kept} then ${f}.order_shipping - (${f}.order_discount - ${f}.line_disc_all)
       - (case when ${f}.incl = 1 then ${f}.order_tax - ${f}.line_tax_all else 0 end) else 0 end)`,
