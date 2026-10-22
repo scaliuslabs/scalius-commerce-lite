@@ -272,7 +272,7 @@ function LocationsCard({ reach }: { reach: HeaderMenuReach }) {
                   triggerClassName="w-full"
                 />
               </Field>
-              {slot.surface === "header" && !draft[key] ? <p className="text-sm text-muted-foreground">{t("noHeaderMenuHelp")}</p> : null}
+              {slot.surface === "header" && !draft[key] ? <p className="text-body text-muted-foreground">{t("noHeaderMenuHelp")}</p> : null}
               {headerNote ? <HeaderMenuNotice reach={reach} canSwitch={canEditTheme} /> : null}
             </div>
           );

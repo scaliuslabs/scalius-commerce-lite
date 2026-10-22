@@ -23,6 +23,8 @@ export interface NavigationResourceOption {
   type: NavigationResourceType;
   url: string;
   available: boolean;
+  /** Set on pages: a blog post is an "article", the rest are "page". */
+  contentType?: "page" | "article";
 }
 
 export interface NavigationResourcePage {
@@ -140,6 +142,7 @@ async function listReadyResources(
       type: "page",
       url: pageRoute(row),
       available: true,
+      contentType: row.contentType,
     })), limit);
   }
 
@@ -237,6 +240,7 @@ async function getNavigationResourceById(
       type,
       url: pageRoute(row),
       available: !row.deletedAt && row.isPublished,
+      contentType: row.contentType,
     } : null;
   }
 

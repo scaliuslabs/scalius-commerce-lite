@@ -41945,6 +41945,7 @@ export type GetApiV1AdminNavigationResourcesResponses = {
                 type: 'page' | 'category' | 'collection' | 'product';
                 url: string;
                 available: boolean;
+                contentType?: 'page' | 'article';
             }>;
             selected: {
                 id: string;
@@ -41952,6 +41953,7 @@ export type GetApiV1AdminNavigationResourcesResponses = {
                 type: 'page' | 'category' | 'collection' | 'product';
                 url: string;
                 available: boolean;
+                contentType?: 'page' | 'article';
             } | null;
             nextCursor: string | null;
         };

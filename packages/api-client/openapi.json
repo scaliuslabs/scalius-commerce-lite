@@ -150300,6 +150300,13 @@
                               },
                               "available": {
                                 "type": "boolean"
+                              },
+                              "contentType": {
+                                "type": "string",
+                                "enum": [
+                                  "page",
+                                  "article"
+                                ]
                               }
                             },
                             "required": [
@@ -150335,6 +150342,13 @@
                             },
                             "available": {
                               "type": "boolean"
+                            },
+                            "contentType": {
+                              "type": "string",
+                              "enum": [
+                                "page",
+                                "article"
+                              ]
                             }
                           },
                           "required": [

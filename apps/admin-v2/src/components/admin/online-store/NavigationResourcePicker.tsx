@@ -181,6 +181,9 @@ export function NavigationResourcePicker({
                       )}
                     />
                     <span className="min-w-0 flex-1 truncate">{option.name}</span>
+                    {option.contentType === "article" ? (
+                      <span className="shrink-0 text-body text-muted-foreground">{t("blogPostTag")}</span>
+                    ) : null}
                   </CommandItem>
                 ))}
               </CommandGroup>
