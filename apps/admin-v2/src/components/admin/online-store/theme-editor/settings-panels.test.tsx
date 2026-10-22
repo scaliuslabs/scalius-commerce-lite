@@ -202,11 +202,11 @@ describe("listing pages", () => {
     expect(chips.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("places category, collection and brand descriptions above the products", () => {
+  it("places category, collection and brand descriptions above the products by default, or below", () => {
     renderPart(DEFAULT_STOREFRONT_THEME, EDITOR_PARTS.listingToolbar);
-    expect(field("theme-listing-description-placement").textContent).toContain("Below products");
-    chooseOption(field<HTMLButtonElement>("theme-listing-description-placement"), "Above products");
-    expect(latest.blocks.listing.descriptionPlacement).toBe("above");
+    expect(field("theme-listing-description-placement").textContent).toContain("Above products");
+    chooseOption(field<HTMLButtonElement>("theme-listing-description-placement"), "Below products");
+    expect(latest.blocks.listing.descriptionPlacement).toBe("below");
   });
 
   it("replaces the filter drawer with a compact sidebar, which opens its groups", () => {

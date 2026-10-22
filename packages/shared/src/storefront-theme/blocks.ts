@@ -391,11 +391,12 @@ export const STOREFRONT_FILTER_VALUES_IN_HTML = 10;
 /** The small-catalogue rule: a store with fewer products than this shows no filters. */
 export const STOREFRONT_FILTER_MIN_RESULTS = 8;
 /**
- * A listing's own floor: once the store is past the small-catalogue rule,
- * any listing a filter can narrow (Dawn shows availability and price on a
- * five-product collection) shows them.
+ * A listing's own floor: once the store is past the small-catalogue rule, a
+ * listing of four or more that a filter can narrow shows them (Dawn shows
+ * availability and price on a five-product collection); two or three
+ * products are read at a glance.
  */
-export const STOREFRONT_FILTER_MIN_LISTING_RESULTS = 2;
+export const STOREFRONT_FILTER_MIN_LISTING_RESULTS = 4;
 
 /**
  * A template's own facet numbers over its style's (optional): each

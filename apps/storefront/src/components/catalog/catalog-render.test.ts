@@ -614,8 +614,10 @@ describe("listing controls", () => {
     expect(two.querySelector("#mobile-filter-toggle")).toBeNull();
     expect(two.querySelector("select#sortByMobile")).not.toBeNull();
     expect(two.querySelector(".product-card-media img")!.getAttribute("sizes")).toBe(gridSizes("grid", standard));
-    // Seven products with a facet: below the small-catalogue threshold (8).
-    expect((await renderListing(DEFAULT_STOREFRONT_THEME, few(7))).querySelector("#filter-section")).toBeNull();
+    // Three products with a facet: read at a glance, no filters.
+    expect((await renderListing(DEFAULT_STOREFRONT_THEME, few(3))).querySelector("#filter-section")).toBeNull();
+    // Five products with a facet in a store past the small-catalogue rule: filters (Dawn).
+    expect((await renderListing(DEFAULT_STOREFRONT_THEME, few(5))).querySelector("#filter-section")).not.toBeNull();
     // Eight products with nothing that differs between them: still no filters.
     const same = await renderListing(DEFAULT_STOREFRONT_THEME, { ...few(8, []), priceRange: { min: 900, max: 900 } });
     expect(same.querySelector("#filter-section")).toBeNull();

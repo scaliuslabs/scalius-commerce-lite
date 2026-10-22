@@ -180,16 +180,16 @@ describe("contract matrix: preset x card x filters x navigation source", () => {
 describe("listing filters", () => {
   const filtersOf = (template: StorefrontTemplateId) => storefrontTemplateTheme(template).blocks.listing.filters;
 
-  it("states the description placement and accepts a saved above-products choice", () => {
+  it("states the description placement (above the products, as the editor promises) and accepts a saved below-products choice", () => {
     const theme = storefrontTemplateTheme("marketplace");
-    expect(theme.blocks.listing.descriptionPlacement).toBe("below");
-    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("below");
+    expect(theme.blocks.listing.descriptionPlacement).toBe("above");
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
     // Version 6 states every listing choice: nothing falls back to a template's default.
     const { descriptionPlacement: _placement, ...unstated } = theme.blocks.listing;
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, blocks: { ...theme.blocks, listing: unstated } }).success).toBe(false);
-    theme.blocks.listing.descriptionPlacement = "above";
+    theme.blocks.listing.descriptionPlacement = "below";
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
-    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("above");
+    expect(resolveStorefrontTheme(theme, LIVE_SMALL).blocks.listing.descriptionPlacement).toBe("below");
   });
 
   it("gives the marketplace phone cards, searches as rows and a shopper view choice", () => {

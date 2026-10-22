@@ -68,6 +68,7 @@ describe("listing presentation", () => {
     const facets = { refinementCount: 0, facetValueCounts: [3, 2] };
     expect(catalogListingControls({ ...facets, total: 0 })).toEqual({ sort: false, filters: false });
     expect(catalogListingControls({ ...facets, total: 1 })).toEqual({ sort: false, filters: false });
+    expect(catalogListingControls({ ...facets, total: 3 })).toEqual({ sort: true, filters: false });
     // A five-product category filters like Dawn's collection page.
     expect(catalogListingControls({ ...facets, total: 5 })).toEqual({ sort: true, filters: true });
     expect(catalogListingControls({ ...facets, total: 8 })).toEqual({ sort: true, filters: true });

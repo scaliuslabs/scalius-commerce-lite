@@ -169,7 +169,7 @@ export function catalogListingPresentation(
 /**
  * Which listing controls help. Sort needs two results (or a refinement to
  * undo). Filters follow the small-catalogue rule
- * (`storefrontListingFiltersShown`): two results and a facet or the price
+ * (`storefrontListingFiltersShown`): four results and a facet or the price
  * range with two values, unless the buyer already refined; and the store
  * itself must reach the small-catalogue threshold (`storeShown`, the resolved
  * listing's `filters.shown`).
