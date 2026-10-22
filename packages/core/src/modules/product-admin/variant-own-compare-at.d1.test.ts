@@ -3,6 +3,9 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 import { saveProductOptionMatrix } from "./option-matrix";
 import { createProduct } from "./write";
+import { parseImportText } from "@scalius/shared/store-transfer/detect";
+import { withPublicMediaUrl } from "../../integrations/storage";
+import { buildProductCsvPage } from "../store-transfer/product-export";
 
 // Buyer QA B1 / merchant QA M4: a compare-at price typed on the product became
 // a product discount that reached every variant, so a variant the merchant
@@ -52,6 +55,14 @@ describe("a product with options keeps no product discount", () => {
             ["BEAM-BLACK", 250000, true],
             ["BEAM-WHITE", 270000, false],
         ]);
+
+        // Merchant QA M3: the Shopify CSV carries what the merchant typed, so a round trip is exact.
+        const page = await withPublicMediaUrl("https://media.example.com", () => buildProductCsvPage(db, { limit: 50 }));
+        const { table } = parseImportText(page.body);
+        const column = (name: string) => table.headers.indexOf(name);
+        const exported = table.rows.filter((row) => row.cells[column("Variant SKU")])
+            .map((row) => [row.cells[column("Variant SKU")], row.cells[column("Variant Price")], row.cells[column("Variant Compare At Price")]]);
+        expect(exported).toEqual([["BEAM-BLACK", "2500", "3000"], ["BEAM-WHITE", "2700", ""]]);
     });
 
     it("refuses a product discount on a new product with options", async () => {
