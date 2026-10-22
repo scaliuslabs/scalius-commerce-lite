@@ -4,14 +4,22 @@ import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData, getProductRecommendations } from "@/lib/api";
+import { getUrlRedirect } from "@/lib/api/navigation";
 import { recommendationTitle } from "@/lib/recommendations";
+import { serverPagePath } from "@/lib/server-presence";
 
-// A way back into the catalog: the store's popular products, or its newest
-// when there is not enough order history (the title says which).
-const [layoutData, suggestions] = await Promise.all([
+// An old address (a renamed product's handle) leads to its new one: looked up
+// here only, in the same read batch as the suggestions, so pages that exist
+// never pay for it. Otherwise a way back into the catalog: the store's popular
+// products, or its newest when there is not enough order history.
+const [layoutData, suggestions, redirectTo] = await Promise.all([
   getLayoutData().catch(() => null),
   getProductRecommendations([], 4).catch(() => null),
+  Astro.request.method === "GET" || Astro.request.method === "HEAD" ? getUrlRedirect(Astro.url.pathname) : Promise.resolve(null),
 ]);
+if (redirectTo) {
+  return Astro.redirect(`${serverPagePath(redirectTo)}${Astro.url.search}`, 301);
+}
 const products = suggestions?.products ?? [];
 ---
 

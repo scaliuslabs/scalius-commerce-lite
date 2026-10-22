@@ -1,6 +1,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useWatch, type UseFormReturn } from "react-hook-form";
+import { useFormState, useWatch, type UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -317,7 +317,7 @@ function ProductEditor({
         }
       },
       changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>)
-        .filter((key) => key !== "slugEdited" && key !== "variantPriced"),
+        .filter((key) => key !== "slugEdited" && key !== "keepOldAddress" && key !== "variantPriced"),
     });
   }
   // With options the variants carry the prices: the product price follows the cheapest one,
@@ -665,13 +665,14 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
   getStorefrontPath: (path: string) => string;
   readOnly: boolean;
 }) {
-  const slug = useWatch({ control: form.control, name: "slug" });
+  const { defaultValues: saved } = useFormState({ control: form.control });
   return (
     <>
       <StatusCard
         form={form}
         readOnly={readOnly}
-        storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
+        // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
+        storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
       />
       <OnlinePaymentNote form={form} />
     </>

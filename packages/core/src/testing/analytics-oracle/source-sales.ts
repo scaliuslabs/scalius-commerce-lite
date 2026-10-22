@@ -234,11 +234,24 @@ export function orderMetricsCtes(): SQL {
     from lv
     group by lv.order_id
   ),
+  om0 as (
+    select so.*, (
+      select sum(p.amount_minor) from order_payments p
+      where p.order_id = so.id and p.payment_type = 'refund' and p.status = 'refunded'
+    ) as refunded_order_minor
+    from so
+  ),
   om as (
     select so.*,
       coalesce(lo.gross, 0) as gross,
       coalesce(lo.disc, 0) as disc,
-      coalesce(lo.returns, 0) as returns,
+      -- A return refunded only in part counts the money refunded.
+      case
+        when so.reversed = 1 or so.refunded_order_minor is null or so.refunded_order_minor <= 0 then coalesce(lo.returns, 0)
+        when (case when so.fx = 0 then so.refunded_order_minor else cast(round(so.refunded_order_minor * so.fxm, 0) as bigint) end) < coalesce(lo.returns, 0)
+          then (case when so.fx = 0 then so.refunded_order_minor else cast(round(so.refunded_order_minor * so.fxm, 0) as bigint) end)
+        else coalesce(lo.returns, 0)
+      end as returns,
       coalesce(lo.net_units, 0) as net_units,
       case when so.reversed = 1 then 0 else
         so.shipping_amount_minor
@@ -248,7 +261,7 @@ export function orderMetricsCtes(): SQL {
       case when so.reversed = 1 then 0 else so.tax_amount_minor - coalesce(lo.all_tax, 0) end as shipping_tax,
       coalesce(lo.line_tax, 0)
         + case when so.reversed = 1 then 0 else so.tax_amount_minor - coalesce(lo.all_tax, 0) end as taxes
-    from so
+    from om0 so
     left join lo on lo.order_id = so.id
   )`;
 }

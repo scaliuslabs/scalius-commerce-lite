@@ -12,6 +12,7 @@ import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-sourc
 import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
+import { RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
@@ -186,6 +187,16 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     paymentMethod: manualOrderPaymentMethodSchema.optional(),
     /** An invoice's terms in days; omitted: the store's net days (Settings → Payments). */
     paymentTermsDays: z.number().int().min(1).max(PAYMENT_TERMS_MAX_DAYS).optional(),
+    /**
+     * Mark as paid: the whole amount was already received (cash at the
+     * counter, a bank transfer, a mobile wallet). The order is placed as an
+     * invoice and the payment is recorded right after, so it is paid and its
+     * downloads and gift cards are handed over.
+     */
+    paid: z.object({
+        via: z.enum(RECORDED_PAYMENT_VIAS),
+        reference: z.string().trim().max(120).nullable().optional(),
+    }).strict().optional(),
 });
 
 /** Schema for creating a new order (POST /api/orders). */

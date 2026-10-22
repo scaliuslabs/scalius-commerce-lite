@@ -183,6 +183,7 @@ export function SegmentConditionRow({
                 value={condition.tags}
                 max={CUSTOMER_TAGS_PER_CUSTOMER_MAX}
                 disabled={disabled}
+                preferExisting
                 onChange={(tags) => onChange({ ...condition, tags })}
                 {...aria}
               />

@@ -8548,6 +8548,7 @@
             "cod_returned",
             "payment_recorded",
             "refund_recorded",
+            "refund_kept",
             "return_created",
             "return_approved",
             "return_received",
@@ -8675,6 +8676,10 @@
            "out_of_stock",
            "other"
           ]
+         },
+         "notifyCustomer": {
+          "type": "boolean",
+          "description": "False sends the customer no message about this change (a test or duplicate order). Default true."
          },
          "expectedRevision": {
           "type": "integer",

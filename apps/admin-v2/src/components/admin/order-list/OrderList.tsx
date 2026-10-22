@@ -429,7 +429,7 @@ export function OrderList({
             onOpenChange={(open) => {
               if (!open) actions.setCancelOrder(null);
             }}
-            onConfirm={(order, reason) => actions.changeStatus(order, "cancelled", { confirmed: true, reason })}
+            onConfirm={(order, reason, notifyCustomer) => actions.changeStatus(order, "cancelled", { confirmed: true, reason, notifyCustomer })}
           />
         </Suspense>
       ) : null}

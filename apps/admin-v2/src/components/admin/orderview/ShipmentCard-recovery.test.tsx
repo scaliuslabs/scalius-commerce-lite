@@ -214,8 +214,14 @@ describe("ShipmentCard recovery authority", () => {
     expect(mocks.delivered).toHaveBeenCalledWith({ orderId: order.id });
   });
 
-  it("offers no Mark delivered for a cash order: collecting the cash delivers it", async () => {
-    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel()] });
+  it("offers Mark delivered for a cash order sent in full, saying the cash stays due", async () => {
+    await render({ shipmentRecovery: undefined, status: "shipped", paymentMethod: "cod", balanceDue: 880, items: [kurta(2, 2)], shipments: [riderParcel()] });
+    expect(host.textContent).toContain(en["primary.markDelivered"]);
+    expect(host.textContent).toContain(en["shipments.deliveredCashLater"]);
+  });
+
+  it("offers no Mark delivered while part of a cash order is unsent", async () => {
+    await render({ shipmentRecovery: undefined, status: "shipped", paymentMethod: "cod", balanceDue: 880, items: [kurta(2, 1)], shipments: [riderParcel()] });
     expect(host.textContent).not.toContain(en["primary.markDelivered"]);
   });
 });

@@ -59,7 +59,7 @@ export function MetricTile({ label, value, current, previous, comparedTo, change
               )}
             >
               <Icon className="size-4" aria-hidden />
-              <span className="sr-only">{delta! > 0 ? t("changeUp", { change: words }) : t("changeDown", { change: words })}</span>
+              <span className="sr-only">{flat ? t("changeNone") : delta! > 0 ? t("changeUp", { change: words }) : t("changeDown", { change: words })}</span>
               <span aria-hidden>{words}</span>
             </span>
             <span className="text-muted-foreground">{t(`vs.${comparedTo}`)}</span>

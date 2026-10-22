@@ -344,7 +344,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           ) : null}
         </dl>
 
-        {terms ? (
+        {/* An invoice paid in full has no due date left to show. */}
+        {terms && presentation.amountDue > 0 ? (
           <section className="space-y-2" aria-label={t("netTerms.title")} data-invoice-terms>
             <dl className="space-y-1">
               <Row label={t("netTerms.terms")} value={t("netTerms.netDays", { days: formatNumber(terms.days) })} />
@@ -572,6 +573,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             onClose={() => setCodAction(null)}
             initialCollector={codCollector}
             hasBalanceDue={hasCashBalanceDueOnDelivery}
+            delivered={["delivered", "completed"].includes(order.status.toLowerCase())}
             collectTitle={collectTitle}
             cashAmount={cashCollectionAmount}
             amountDue={presentation.amountDue}

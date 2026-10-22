@@ -2,7 +2,7 @@
 
 import { getConfiguredSdkClient } from "./transport";
 import { unwrapData } from "./unwrap";
-import { getApiV1NavigationCategories } from "@scalius/api-client/sdk";
+import { getApiV1NavigationCategories, getApiV1StorefrontRedirect } from "@scalius/api-client/sdk";
 import type { CategoryNavigationTree } from "./storefront";
 
 /**
@@ -22,3 +22,21 @@ export async function getCategoryNavigation(): Promise<CategoryNavigationTree | 
 }
 
 
+
+/**
+ * Where an address that answered 404 leads (a URL redirect: a renamed
+ * product's old handle), or null. Asked only on the not-found path, so pages
+ * that exist never read it; a failed read is no redirect.
+ */
+export async function getUrlRedirect(path: string): Promise<string | null> {
+  if (!path.startsWith("/") || path.length > 512) return null;
+  try {
+    const { data } = await getApiV1StorefrontRedirect({ client: getConfiguredSdkClient(), query: { path } });
+    const toPath = unwrapData<{ toPath: string | null }>(data)?.toPath ?? null;
+    // Only a path on this store: never another site.
+    return toPath && toPath.startsWith("/") && !toPath.startsWith("//") ? toPath : null;
+  } catch (error: unknown) {
+    console.error("Error fetching a URL redirect:", error);
+    return null;
+  }
+}

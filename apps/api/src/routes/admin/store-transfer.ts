@@ -20,7 +20,7 @@ import { customerImportBatchSchema } from "@scalius/shared/store-transfer/custom
 import { inventoryImportBatchSchema } from "@scalius/shared/store-transfer/inventory";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ok } from "../../utils/api-response";
-import { AppError } from "../../utils/api-error";
+import { AppError, ValidationError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { importMediaFromUrl } from "./media-url-import";
 import { notificationSender } from "../../background/notification-sender";
@@ -261,6 +261,9 @@ const pageQuery = (max: number) => ({
   header: z.enum(["true", "false"]).optional().openapi({ description: "false leaves out the header row (for pages after the first)." }),
 });
 
+/** Products one selection export request names (a list page holds at most 100; the dashboard sends 90). */
+const PRODUCT_EXPORT_SELECTION_MAX = 90;
+
 const exportProductsRoute = createRoute({
   operationId: "dashboard.export.products",
   method: "get",
@@ -268,7 +271,12 @@ const exportProductsRoute = createRoute({
   tags: ["Admin - Import and export"],
   summary: "Export products as a Shopify product CSV",
   description: `One page (at most ${PRODUCT_EXPORT_PAGE_MAX} products) of the catalogue in Shopify's product CSV columns, importable by Shopify and by Scalius. X-Export-Next-Cursor names the next page; join the pages for the whole file.`,
-  request: { query: z.object(pageQuery(PRODUCT_EXPORT_PAGE_MAX)) },
+  request: { query: z.object({
+    ...pageQuery(PRODUCT_EXPORT_PAGE_MAX),
+    ids: z.string().trim().min(1).max(PRODUCT_EXPORT_SELECTION_MAX * 64).optional().openapi({
+      description: `Only these products: comma-separated ids, at most ${PRODUCT_EXPORT_SELECTION_MAX} (a selection in the products list).`,
+    }),
+  }) },
   responses: {
     200: { description: "CSV page", content: { "text/csv": { schema: z.string() } } },
     ...errorResponses,
@@ -277,7 +285,12 @@ const exportProductsRoute = createRoute({
 
 exportApp.openapi(exportProductsRoute, async (c) => {
   const query = c.req.valid("query");
+  const ids = query.ids?.split(",").map((id) => id.trim()).filter(Boolean);
+  if (ids && ids.length > PRODUCT_EXPORT_SELECTION_MAX) {
+    throw new ValidationError(`Export at most ${PRODUCT_EXPORT_SELECTION_MAX} selected products at a time.`);
+  }
   const page = await buildProductCsvPage(c.get("db"), {
+    ...(ids ? { ids } : {}),
     after: query.after ?? null,
     limit: query.limit,
     includeHeader: query.header !== "false",

@@ -21,12 +21,15 @@ export function InvoiceActions({
   businessNameMissing,
   expectedOrderVersion,
   onIssued,
+  packingSlip = false,
 }: {
   orderId: string;
   issued: boolean;
   businessNameMissing: boolean;
   expectedOrderVersion: number;
   onIssued: (document: IssuedInvoiceDocument) => void;
+  /** The packing slip: printed as is, nothing to issue. */
+  packingSlip?: boolean;
 }) {
   const t = useMessages(orderDetailMessages);
   const operationKey = useRef<string | null>(null);
@@ -59,12 +62,12 @@ export function InvoiceActions({
           <Link to="/admin/orders/$orderId" params={{ orderId }}>{t("invoice.back")}</Link>
         </Button>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {issued ? null : (
+          {issued || packingSlip ? null : (
             <Button variant="outline" onClick={() => void issue()} loading={issuing}>{t("invoice.issue")}</Button>
           )}
           <Button onClick={() => window.print()}>{t("invoice.print")}</Button>
         </div>
-        {issued ? null : <p className="w-full text-body text-muted-foreground">{t("invoice.issueHelp")}</p>}
+        {issued || packingSlip ? null : <p className="w-full text-body text-muted-foreground">{t("invoice.issueHelp")}</p>}
         {error ? <p role="alert" className="w-full text-body text-destructive">{error}</p> : null}
         {businessNameMissing ? (
           <Alert variant="warning">

@@ -15,6 +15,12 @@ export const ORDER_NOTIFICATION_TYPES = [
     "order_completed",
     "order_cancelled",
     "order_returned",
+    /** Staff changed the order's items or total and chose to tell the customer. */
+    "order_updated",
+    /** A return the customer asked for was approved: how to send the items back. */
+    "return_approved",
+    /** The returned items arrived at the store. */
+    "return_received",
     "refund_processing",
     "refund_failed",
     "order_refunded",
@@ -118,6 +124,9 @@ export const ORDER_NOTIFICATION_LABELS: Record<OrderNotificationType, string> = 
     order_completed: "Order Completed",
     order_cancelled: "Order Cancelled",
     order_returned: "Order Returned",
+    order_updated: "Order Updated",
+    return_approved: "Return Approved",
+    return_received: "Return Received",
     refund_processing: "Refund Processing",
     refund_failed: "Refund Failed",
     order_refunded: "Order Refunded",

@@ -136,6 +136,18 @@ describe("Shopify product CSV", () => {
     expect(mapShopifyProducts(soapTable, { currency: { ...BDT, priceIncrementMinor: 1 } }).items[0]!.variants[0]!.price).toBe(99.5);
   });
 
+  it("says in the preview when two products of the file share a SKU, and imports non-shipping rows as digital", () => {
+    const text = "Handle,Title,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Requires Shipping\n"
+      + "soap,Neem Soap,Title,Default Title,SOAP-1,99,TRUE\n"
+      + "soap-2,Neem Soap 2,Title,Default Title,soap-1 ,120,TRUE\n"
+      + "ebook,Soap Guide,Title,Default Title,BOOK-1,50,FALSE\n";
+    const mapped = mapShopifyProducts(parseImportText(text).table, { currency: BDT });
+    expect(mapped.items.map((item) => item.ref)).toEqual(["soap", "ebook"]);
+    expect(mapped.issues).toEqual([expect.objectContaining({ code: "sku_duplicate_in_file", line: 3 })]);
+    expect(mapped.stats.failedProducts).toBe(1);
+    expect(mapped.items[1]!.variants[0]!.requiresShipping).toBe(false);
+  });
+
   it("produces items the API schema accepts", () => {
     for (const item of result.items) expect(productImportItemSchema.safeParse(item).success).toBe(true);
   });

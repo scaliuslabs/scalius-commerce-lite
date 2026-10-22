@@ -440,6 +440,8 @@ export interface OrderListFactsRow {
     codDeliveryAttempts: number | null;
     returnedValueMinor: number;
     refundedMinor: number;
+    /** Return value staff chose to keep (a restocking fee), from `refund_kept` timeline entries. */
+    keptMinor: number;
     requiresShipping: boolean;
     shippingMethodKind: "delivery" | "pickup" | null;
     pickupReadyAt: Date | null;
@@ -497,6 +499,12 @@ export function orderListFactsSelection() {
               AND ${orderPayments.paymentType} = 'refund'
               AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED}
         ), 0)`,
+        // Through order_events(order_id, created_at): an order has few entries.
+        keptMinor: sql<number>`COALESCE((
+            SELECT SUM(CAST(json_extract(${orderEvents.data}, '$.amountMinor') AS INTEGER)) FROM ${orderEvents}
+            WHERE ${orderEvents.orderId} = ${outerOrderId}
+              AND ${orderEvents.kind} = 'refund_kept'
+        ), 0)`,
     };
 }
 
@@ -509,7 +517,7 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
     const capturedMinor = order.paidAmountMinor + refundedMinor;
     const refundDueMinor = Math.max(
         0,
-        Math.min(Number(order.returnedValueMinor) || 0, capturedMinor) - refundedMinor,
+        Math.min(Number(order.returnedValueMinor) || 0, capturedMinor) - refundedMinor - (Number(order.keptMinor) || 0),
     );
     return {
         orderNumber: order.orderNumber,

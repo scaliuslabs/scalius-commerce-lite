@@ -50,8 +50,12 @@ type DeliveryAddress = {
  */
 export function deliveryRatesForAddress(data: DeliveryZones | undefined, address: DeliveryAddress) {
   if (!data) return [];
+  // "Zone · Rate", unless the rate is named after its zone ("Inside Dhaka" in "Inside Dhaka").
   const named = (zone: DeliveryZones["zones"][number]) =>
-    zone.rates.map((rate) => ({ ...rate, name: `${zone.name} · ${rate.name}` }));
+    zone.rates.map((rate) => ({
+      ...rate,
+      name: rate.name.trim().toLowerCase() === zone.name.trim().toLowerCase() ? rate.name : `${zone.name} · ${rate.name}`,
+    }));
   const pickup = data.pickup.rates;
   const active = (rate: (typeof pickup)[number]) => rate.isActive;
   const country = address.countryCode?.trim().toUpperCase() || "BD";
@@ -88,9 +92,9 @@ export function SummarySection() {
   const { fmt, code } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
-  const [city, zone, area, shippingMethodId, items, countryCode, adminArea, postalCode] = useWatch({
+  const [city, zone, area, shippingMethodId, items, countryCode, adminArea, postalCode, paymentMethod] = useWatch({
     control: form.control,
-    name: ["city", "zone", "area", "shippingMethodId", "items", "shippingCountryCode", "shippingAdminArea", "shippingPostalCode"],
+    name: ["city", "zone", "area", "shippingMethodId", "items", "shippingCountryCode", "shippingAdminArea", "shippingPostalCode", "paymentMethod"],
   });
   // Only physical lines need a delivery method; a cart of services has none (and no charge).
   const hasPhysical = !items?.length || items.some(isPhysicalLine);
@@ -166,7 +170,11 @@ export function SummarySection() {
     <Card>
       <CardHeader>
         <CardTitle>{t("payment")}</CardTitle>
-        {isEdit ? null : <CardDescription>{t("codNote")}</CardDescription>}
+        {isEdit ? null : (
+          <CardDescription>
+            {t(paymentMethod === "net_terms" ? "invoiceNote" : paymentMethod === "paid" ? "paidNote" : "codNote")}
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {hasPhysical ? null : <p className="text-body text-muted-foreground">{t("noDeliveryNeeded")}</p>}

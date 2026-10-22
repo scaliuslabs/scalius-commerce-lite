@@ -102,10 +102,21 @@ export function lineKeptTaxSql(tax: string, quantity: string, returned: string):
  *   for a reversed order
  * - taxes: kept line tax plus shipping tax (the order tax minus every
  *   line's), the shipping part zero for a reversed order
+ * - returns: the lines' returns, or the money refunded when a return was
+ *   refunded only in part (a fee kept); a reversed order returns everything
  * - net = gross − disc − returns; total = net + shipping + taxes
  */
 export function orderMetricsCtesText(): string {
-  return `lo as (
+  // Money refunded per order (order currency): a return refunded only in part
+  // counts what went back, not the item value (the projection's rule too).
+  return `rf as (
+    select so.id as order_id, cast(sum(p.amount_minor) as bigint) as refund
+    from so
+    cross join order_payments p
+    where p.order_id = so.id and p.payment_type = 'refund' and p.status = 'refunded'
+    group by so.id
+  ),
+  lo as (
     select lv.order_id,
       sum(case when lv.gc = 0 then lv.gross else 0 end) as gross,
       sum(case when lv.gc = 0 then lv.disc else 0 end) as disc,
@@ -121,7 +132,8 @@ export function orderMetricsCtesText(): string {
     select so.*,
       coalesce(lo.gross, 0) as gross,
       coalesce(lo.disc, 0) as disc,
-      coalesce(lo.returns, 0) as returns,
+      case when so.reversed = 0 and coalesce(rf.refund, 0) > 0 and ${shopMinorSql("rf.refund")} < coalesce(lo.returns, 0)
+        then ${shopMinorSql("rf.refund")} else coalesce(lo.returns, 0) end as returns,
       coalesce(lo.net_units, 0) as net_units,
       case when so.reversed = 1 then 0 else
         so.shipping_amount_minor
@@ -133,5 +145,6 @@ export function orderMetricsCtesText(): string {
         + case when so.reversed = 1 then 0 else so.tax_amount_minor - coalesce(lo.all_tax, 0) end as taxes
     from so
     left join lo on lo.order_id = so.id
+    left join rf on rf.order_id = so.id
   )`;
 }

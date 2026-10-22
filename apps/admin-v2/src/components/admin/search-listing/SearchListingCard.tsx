@@ -57,6 +57,8 @@ export interface SearchListingCardProps {
   errors?: Partial<Record<"title" | "description" | "handle", string>>;
   /** Permission-limited display: show readable facts and unmount every editor control. */
   disabled?: boolean;
+  /** The saved handle changed: whether the old address redirects to the new one. */
+  redirect?: { fromHandle: string; checked: boolean; onChange: (checked: boolean) => void };
 }
 
 export { autoHandleFor };
@@ -96,6 +98,7 @@ export function SearchListingCard({
   autoHandle,
   errors = {},
   disabled = false,
+  redirect,
 }: SearchListingCardProps) {
   const t = useMessages(searchListingMessages);
   const id = useId();
@@ -179,6 +182,21 @@ export function SearchListingCard({
                   onChange={(event) => onChange({ handle: event.target.value })}
                 />
               </Field>
+            ) : null}
+            {redirect && !disabled ? (
+              <label className="flex items-start gap-3 text-body">
+                <Checkbox
+                  checked={redirect.checked}
+                  onCheckedChange={(checked) => redirect.onChange(checked === true)}
+                  className="mt-0.5"
+                />
+                <span className="min-w-0">
+                  {t("redirectOld")}
+                  <span className="block truncate text-muted-foreground" title={`${prefix}${redirect.fromHandle} → ${prefix}${handle}`}>
+                    <code>{`${prefix}${redirect.fromHandle}`}</code>{" → "}<code>{`${prefix}${handle}`}</code>
+                  </span>
+                </span>
+              </label>
             ) : null}
             <label className="flex items-start gap-3 text-body">
               <Checkbox

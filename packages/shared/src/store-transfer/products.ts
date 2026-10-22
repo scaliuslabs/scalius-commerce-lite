@@ -68,6 +68,12 @@ export const productImportVariantSchema = z.object({
   barcode: z.string().trim().min(1).max(50).nullable(),
   /** False for services and digital goods (no delivery address). */
   requiresShipping: z.boolean(),
+  /**
+   * What a variant that ships nothing is: a download (Shopify's non-shipping
+   * products, WooCommerce's downloadable) or a service (WooCommerce's
+   * virtual). Omitted: digital.
+   */
+  nonShippingKind: z.enum(["digital", "service"]).optional(),
   /** The variant's own image (one of the product's image URLs). */
   imageUrl: importUrlSchema.nullable(),
 });

@@ -290,9 +290,14 @@ export function NavigationPage() {
       <OnlineStorePage
         title={t("navigationTitle")}
         actions={
-          <Button onClick={() => setAdding(true)}>
-            <Plus /> {t("addMenu")}
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/admin/online-store/navigation/redirects">{t("urlRedirectsLink")}</Link>
+            </Button>
+            <Button onClick={() => setAdding(true)}>
+              <Plus /> {t("addMenu")}
+            </Button>
+          </>
         }
       >
         <MenusCard reach={reach} />

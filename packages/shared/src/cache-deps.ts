@@ -119,6 +119,8 @@ export const CACHE_DEP_KINDS = [
   "tr",
   /** `obj:<typeId>`: one public object type and its published records. */
   "obj",
+  /** `rd`: URL redirects (any change); read only on the storefront's 404 path. */
+  "rd",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -212,6 +214,8 @@ export const cacheDep = {
   translationLocales: () => "tr:locales",
   /** One public object type and its published records. */
   objects: (typeId: string) => `obj:${typeId}`,
+  /** URL redirects: which old address leads where. */
+  redirects: () => "rd",
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -233,7 +237,7 @@ export function isCacheDep(dep: string): boolean {
   const kind = cacheDepKind(dep);
   if (kind === null || !KEY_PATTERN.test(dep)) return false;
   const constant = kind === "srch" || kind === "theme" || kind === "ship"
-    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "store"
+    || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "rd" || kind === "store"
     || kind === "popular" || kind === "recommendation-signals";
   return constant ? dep === kind : dep.length > kind.length + 1;
 }
@@ -725,6 +729,12 @@ const CACHE_DEP_TABLE_RULES = {
     rules: everyChange([{ prefix: "nav:", columns: ["menu_id"] }, { dep: "nav:*" }]),
   },
   analytics: { kinds: ["an"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "an" }]) },
+  url_redirects: {
+    kinds: ["rd"],
+    noise: ["created_at", "updated_at"],
+    note: "Read only when a storefront path answers 404 (the redirect lookup); every change advances the one key.",
+    rules: everyChange([{ dep: "rd" }]),
+  },
   checkout_languages: { kinds: ["lang"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "lang" }]) },
 
   // --- Shipping, locations, tax, promotions ---------------------------------------

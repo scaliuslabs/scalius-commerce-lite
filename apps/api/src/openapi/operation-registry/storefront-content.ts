@@ -25,6 +25,7 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
   },
   "storefront.layout.get": { limits: { request: 16_384 } },
   "storefront.markets.get": { limits: { request: 16_384 } },
+  "storefront.redirect.get": { limits: { request: 16_384 } },
   "storefront.meta_events.events": {
     exposure: "excluded",
     openWorld: true,

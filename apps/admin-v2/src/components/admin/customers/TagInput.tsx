@@ -31,6 +31,11 @@ interface TagInputProps {
   disabled?: boolean;
   /** Offer tags already in use (most used first, narrowed by what is typed). */
   suggest?: boolean;
+  /**
+   * A filter on tags customers already have (a segment): Enter takes the
+   * existing tag the typed text starts, so "whole" + Enter is "wholesale".
+   */
+  preferExisting?: boolean;
   /** Whether text is typed but not yet a tag (it becomes one when the field is left). */
   onPendingTextChange?: (pending: boolean) => void;
   handle?: Ref<TagInputHandle>;
@@ -52,6 +57,7 @@ export function TagInput({
   max,
   disabled = false,
   suggest = true,
+  preferExisting = false,
   onPendingTextChange,
   handle,
   ...aria
@@ -75,6 +81,10 @@ export function TagInput({
     .filter((entry) => !value.includes(entry.tag))
     .slice(0, SUGGESTIONS);
   const full = value.length >= max;
+  // The suggestions answer what is in the field now (not a slower, earlier query).
+  const freshSuggestions = suggestions.data && query === text.trim() && !suggestions.isPlaceholderData
+    ? suggestions.data.tags.map((entry) => entry.tag)
+    : null;
 
   const commit = (typed: string): { tags: string[]; rejected: boolean } => {
     if (!typed.trim()) {
@@ -98,7 +108,12 @@ export function TagInput({
     if (event.key === "Enter" || event.key === ",") {
       // Enter adds the tag; it never submits the page's form.
       event.preventDefault();
-      commit(text);
+      const typedNow = normalizeCustomerTag(text);
+      const completion = preferExisting && event.key === "Enter" && typedNow && !text.includes(",") && freshSuggestions
+        && !freshSuggestions.includes(typedNow)
+        ? freshSuggestions.find((tag) => tag.startsWith(typedNow) && !value.includes(tag))
+        : undefined;
+      commit(completion ?? text);
     } else if (event.key === "Backspace" && text === "" && value.length > 0) {
       onChange(value.slice(0, -1));
       setProblem(null);
@@ -173,7 +188,10 @@ export function TagInput({
         <p id={`${id}-note`} aria-live="polite" className={note.tone === "error" ? "text-body text-destructive" : "text-body text-muted-foreground"}>{note.text}</p>
       ) : null}
       {suggest && offered.length > 0 && !full && !disabled ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label={t("suggestedTags")}>
+        // Labelled apart from the chosen tags above, so a suggestion never reads as already added.
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span id={`${id}-suggested`} className="text-body text-muted-foreground">{t("suggestedTags")}</span>
+        <ul className="flex flex-wrap gap-1.5" aria-labelledby={`${id}-suggested`}>
           {offered.map((entry) => (
             <li key={entry.tag}>
               <Button
@@ -195,6 +213,7 @@ export function TagInput({
             </li>
           ))}
         </ul>
+        </div>
       ) : null}
     </div>
   );

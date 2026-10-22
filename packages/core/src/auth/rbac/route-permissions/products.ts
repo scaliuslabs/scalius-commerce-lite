@@ -27,6 +27,9 @@ export const PRODUCT_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     POST: { permission: PERMISSIONS.PRODUCTS_CREATE },
   },
+  "/api/v1/admin/products/bulk-edit": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
   "/api/v1/admin/products/by-ids": {
     GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW] },
   },

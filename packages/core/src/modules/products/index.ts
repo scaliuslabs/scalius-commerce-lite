@@ -22,3 +22,4 @@ export * from "./bundles";
 export * from "./emi";
 export * from "./digital-stock-rules";
 export * from "./gift-card-rules";
+export * from "./url-redirects";

@@ -86,7 +86,7 @@ describe("cancelling from the order list's status menu", () => {
       return found!;
     });
     expect(dialog.textContent).toContain(d["cancel.title"].replace("{name}", "#1088"));
-    expect(dialog.textContent).toContain(d["cancel.notify"]);
+    expect(dialog.textContent).toContain(d["cancel.notifyChoice"]);
 
     const reason = dialog.querySelector<HTMLButtonElement>('button[role="combobox"]')!;
     await act(async () => reason.click());

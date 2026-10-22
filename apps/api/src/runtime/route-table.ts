@@ -162,6 +162,7 @@ export const ROUTE_TABLE = [
   { mount: "/admin/inventory/transfers", router: "adminTransferRoutes", group: "admin-catalog" },
   { mount: "/admin/inventory", router: "adminInventoryRoutes", group: "admin-catalog" },
   { mount: "/admin/navigation", router: "adminNavigationRoutes", group: "admin-content" },
+  { mount: "/admin/url-redirects", router: "adminUrlRedirectRoutes", group: "admin-content" },
   // The stable app API's theme and menu writes (write_themes, write_navigation)
   // and its category and collection reads: longer prefixes than
   // /admin/resources, served with the theme, navigation and other content.

@@ -197,6 +197,7 @@ const templateRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         template: z.enum(["dhaka_two_zone", "dhaka_three_zone"]),
+                        language: z.enum(["en", "bn"]).optional().openapi({ description: "The language of the zone names and delivery promises; default English." }),
                     }),
                 },
             },
@@ -211,8 +212,8 @@ const templateRoute = createRoute({
 
 app.openapi(templateRoute, async (c) => {
     const db = c.get("db");
-    const { template } = c.req.valid("json");
-    await applyDeliveryZoneTemplate(db, template, await readStoreCurrency(db));
+    const { template, language } = c.req.valid("json");
+    await applyDeliveryZoneTemplate(db, template, await readStoreCurrency(db), language);
 
     return noContent(c);
 });

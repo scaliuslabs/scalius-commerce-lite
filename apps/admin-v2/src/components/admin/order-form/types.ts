@@ -1,3 +1,4 @@
+import { RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
@@ -206,8 +207,12 @@ export const orderFormSchema = z.object({
   sourceChoice: z.enum(ORDER_SOURCE_CHOICES).nullable().optional(),
   /** The name typed for an "Other" source. */
   sourceName: z.string().optional(),
-  /** New orders: cash on delivery (the default) or an invoice paid later (Payment card). */
-  paymentMethod: z.enum(["cod", "net_terms"]).optional(),
+  /** New orders: cash on delivery (the default), an invoice paid later, or already paid (Payment card). */
+  paymentMethod: z.enum(["cod", "net_terms", "paid"]).optional(),
+  /** Already paid: how the money came in. */
+  paidVia: z.enum(RECORDED_PAYMENT_VIAS).optional(),
+  /** Already paid: the transfer or wallet reference. */
+  paidReference: z.string().max(120).optional(),
   /** An invoice's days; null: the store's net days. */
   paymentTermsDays: z.number().int().min(1).max(365).nullable().optional(),
 }).superRefine((values, context) => {

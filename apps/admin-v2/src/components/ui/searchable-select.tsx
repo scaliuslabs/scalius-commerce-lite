@@ -44,6 +44,11 @@ interface CommonProps {
   placeholder?: string;
   searchPlaceholder?: string;
   emptyMessage?: string;
+  /**
+   * Offered when nothing matches the typed search (Shopify's "Add 'Acme'"):
+   * the label for the search and what to do; the list closes first.
+   */
+  emptyAction?: { label: (search: string) => string; onSelect: (search: string) => void };
   disabled?: boolean;
   required?: boolean;
   id?: string;
@@ -210,6 +215,7 @@ function ComboboxView({
   placeholder,
   searchPlaceholder,
   emptyMessage,
+  emptyAction,
   disabled = false,
   required = false,
   id,
@@ -474,7 +480,22 @@ function ComboboxView({
               </button>
             </div>
           ) : options.length === 0 ? (
-            <p className="px-3 py-5 text-center text-body text-muted-foreground">{emptyMessage ?? t("empty")}</p>
+            <div className="px-3 py-5 text-center">
+              <p className="text-body text-muted-foreground">{emptyMessage ?? t("empty")}</p>
+              {emptyAction && query.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const typed = query.trim();
+                    setOpen(false);
+                    emptyAction.onSelect(typed);
+                  }}
+                  className="mt-2 inline-flex h-9 items-center rounded-md px-3 text-body text-link hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
+                >
+                  {emptyAction.label(query.trim())}
+                </button>
+              ) : null}
+            </div>
           ) : (
             rows
           )}

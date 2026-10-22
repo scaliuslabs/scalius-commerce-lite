@@ -1109,14 +1109,23 @@ const TEMPLATE_GUARD = "DELIVERY_ZONE_TEMPLATE_GUARD";
 /**
  * Creates editable Dhaka-centric zones from the store's own locations: Inside
  * Dhaka (the Dhaka city), for three zones also Near Dhaka (Savar, Gazipur,
- * Narayanganj, Keraniganj where present), and the zone Bangladesh (the whole
- * country) with an "Outside Dhaka" rate. Only for a store without zones.
+ * Narayanganj, Keraniganj where present), and Outside Dhaka (the rest of the
+ * country). Only for a store without zones. Names and delivery promises are
+ * written in the language the merchant set it up in (they are the store's own
+ * text from then on, editable like any zone).
  */
+const TEMPLATE_COPY = {
+    en: { inside: "Inside Dhaka", near: "Near Dhaka", outside: "Outside Dhaka", fast: "Delivery in 1–2 days", slow: "Delivery in 2–3 days" },
+    bn: { inside: "ঢাকার ভিতরে", near: "ঢাকার কাছে", outside: "ঢাকার বাইরে", fast: "১–২ দিনে ডেলিভারি", slow: "২–৩ দিনে ডেলিভারি" },
+} as const;
+
 export async function applyDeliveryZoneTemplate(
     db: Database,
     template: DeliveryZoneTemplate,
     currency: StoreCurrency,
+    language: keyof typeof TEMPLATE_COPY = "en",
 ): Promise<void> {
+    const copy = TEMPLATE_COPY[language];
     const existing = await db.select({ id: deliveryZones.id }).from(deliveryZones).limit(1);
     if (existing.length > 0) {
         throw new ConflictError("Templates are for stores without shipping zones. Edit your zones instead.");
@@ -1140,24 +1149,25 @@ export async function applyDeliveryZoneTemplate(
     const nearDhaka = template === "dhaka_three_zone" ? named(NEAR_DHAKA) : [];
     const zones: DeliveryZoneInput[] = [
         {
-            name: "Inside Dhaka",
+            name: copy.inside,
             locationIds: dhaka.map((row) => row.id),
             rates: [{
-                name: "Inside Dhaka",
+                name: copy.inside,
                 fee: template === "dhaka_three_zone" ? 70 : 60,
-                description: "Delivery in 1–2 days",
+                description: copy.fast,
                 isActive: true,
             }],
         },
         ...(nearDhaka.length > 0 ? [{
-            name: "Near Dhaka",
+            name: copy.near,
             locationIds: nearDhaka.map((row) => row.id),
-            rates: [{ name: "Near Dhaka", fee: 90, description: "Delivery in 2–3 days", isActive: true }],
+            rates: [{ name: copy.near, fee: 90, description: copy.slow, isActive: true }],
         }] : []),
         {
-            name: "Bangladesh",
+            // The rest of the country: named for what it is beside Inside Dhaka (reports list zones by name).
+            name: copy.outside,
             regions: [{ countryCode: DELIVERY_HIERARCHY_COUNTRY }],
-            rates: [{ name: "Outside Dhaka", fee: 120, description: "Delivery in 2–3 days", isActive: true }],
+            rates: [{ name: copy.outside, fee: 120, description: copy.slow, isActive: true }],
         },
     ];
     const statements = zones.flatMap((input, sortOrder) => {

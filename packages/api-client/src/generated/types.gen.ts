@@ -4212,6 +4212,19 @@ export type InventoryTransfer = {
     }>;
 };
 
+export type UrlRedirect = {
+    id: string;
+    /**
+     * The old address, a path on the store (/products/old-name).
+     */
+    fromPath: string;
+    /**
+     * Where it leads, a path on the store.
+     */
+    toPath: string;
+    createdAt: string;
+};
+
 export type ThemeResource = {
     /**
      * The theme document version section settings follow.
@@ -6013,7 +6026,7 @@ export type StaffAlertPage = StaffAlertSummary & {
         seq: number;
         id: string;
         scope: 'orders' | 'conversations';
-        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'conversation_message';
+        kind: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'review_pending' | 'digital_keys_exhausted' | 'conversation_message';
         subjectId: string;
         occurredAt: string;
         orderNumber: string | null;
@@ -8871,6 +8884,38 @@ export type GetApiV1StorefrontMarketsResponses = {
 };
 
 export type GetApiV1StorefrontMarketsResponse = GetApiV1StorefrontMarketsResponses[keyof GetApiV1StorefrontMarketsResponses];
+
+export type GetApiV1StorefrontRedirectData = {
+    body?: never;
+    path?: never;
+    query: {
+        path: string;
+    };
+    url: '/api/v1/storefront/redirect';
+};
+
+export type GetApiV1StorefrontRedirectErrors = {
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1StorefrontRedirectError = GetApiV1StorefrontRedirectErrors[keyof GetApiV1StorefrontRedirectErrors];
+
+export type GetApiV1StorefrontRedirectResponses = {
+    /**
+     * The redirect target, or null
+     */
+    200: {
+        success: true;
+        data: {
+            toPath: string | null;
+        };
+    };
+};
+
+export type GetApiV1StorefrontRedirectResponse = GetApiV1StorefrontRedirectResponses[keyof GetApiV1StorefrontRedirectResponses];
 
 export type GetApiV1StorefrontBatchData = {
     body?: never;
@@ -43267,6 +43312,168 @@ export type PutApiV1AdminNavigationPlacementsByPlacementIdResponses = {
 
 export type PutApiV1AdminNavigationPlacementsByPlacementIdResponse = PutApiV1AdminNavigationPlacementsByPlacementIdResponses[keyof PutApiV1AdminNavigationPlacementsByPlacementIdResponses];
 
+export type GetApiV1AdminUrlRedirectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        search?: string;
+    };
+    url: '/api/v1/admin/url-redirects';
+};
+
+export type GetApiV1AdminUrlRedirectsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminUrlRedirectsError = GetApiV1AdminUrlRedirectsErrors[keyof GetApiV1AdminUrlRedirectsErrors];
+
+export type GetApiV1AdminUrlRedirectsResponses = {
+    /**
+     * URL redirects
+     */
+    200: {
+        success: true;
+        data: {
+            redirects: Array<UrlRedirect>;
+            truncated: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminUrlRedirectsResponse = GetApiV1AdminUrlRedirectsResponses[keyof GetApiV1AdminUrlRedirectsResponses];
+
+export type PostApiV1AdminUrlRedirectsData = {
+    body: {
+        fromPath: string;
+        toPath: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/url-redirects';
+};
+
+export type PostApiV1AdminUrlRedirectsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminUrlRedirectsError = PostApiV1AdminUrlRedirectsErrors[keyof PostApiV1AdminUrlRedirectsErrors];
+
+export type PostApiV1AdminUrlRedirectsResponses = {
+    /**
+     * The redirect
+     */
+    201: {
+        success: true;
+        data: {
+            redirect: UrlRedirect;
+        };
+    };
+};
+
+export type PostApiV1AdminUrlRedirectsResponse = PostApiV1AdminUrlRedirectsResponses[keyof PostApiV1AdminUrlRedirectsResponses];
+
+export type DeleteApiV1AdminUrlRedirectsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/url-redirects/{id}';
+};
+
+export type DeleteApiV1AdminUrlRedirectsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminUrlRedirectsByIdError = DeleteApiV1AdminUrlRedirectsByIdErrors[keyof DeleteApiV1AdminUrlRedirectsByIdErrors];
+
+export type DeleteApiV1AdminUrlRedirectsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminUrlRedirectsByIdResponse = DeleteApiV1AdminUrlRedirectsByIdResponses[keyof DeleteApiV1AdminUrlRedirectsByIdResponses];
+
 export type GetApiV1AdminResourcesThemeData = {
     body?: never;
     path?: never;
@@ -51135,6 +51342,10 @@ export type PutApiV1AdminSettingsShippingMethodsPickupResponse = PutApiV1AdminSe
 export type PutApiV1AdminSettingsShippingMethodsTemplateData = {
     body: {
         template: 'dhaka_two_zone' | 'dhaka_three_zone';
+        /**
+         * The language of the zone names and delivery promises; default English.
+         */
+        language?: 'en' | 'bn';
     };
     path?: never;
     query?: never;
@@ -53357,6 +53568,18 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_updated: {
+                        subject: string;
+                        body: string;
+                    };
+                    return_approved: {
+                        subject: string;
+                        body: string;
+                    };
+                    return_received: {
+                        subject: string;
+                        body: string;
+                    };
                     refund_processing: {
                         subject: string;
                         body: string;
@@ -53430,6 +53653,15 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     order_returned: {
                         body: string;
                     };
+                    order_updated: {
+                        body: string;
+                    };
+                    return_approved: {
+                        body: string;
+                    };
+                    return_received: {
+                        body: string;
+                    };
                     refund_processing: {
                         body: string;
                     };
@@ -53481,7 +53713,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         email?: {
             subject: string;
             body: string;
@@ -53574,6 +53806,18 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_updated: {
+                        subject: string;
+                        body: string;
+                    };
+                    return_approved: {
+                        subject: string;
+                        body: string;
+                    };
+                    return_received: {
+                        subject: string;
+                        body: string;
+                    };
                     refund_processing: {
                         subject: string;
                         body: string;
@@ -53647,6 +53891,15 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     order_returned: {
                         body: string;
                     };
+                    order_updated: {
+                        body: string;
+                    };
+                    return_approved: {
+                        body: string;
+                    };
+                    return_received: {
+                        body: string;
+                    };
                     refund_processing: {
                         body: string;
                     };
@@ -53693,12 +53946,12 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         subject: string;
         body: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'order_updated' | 'return_approved' | 'return_received' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         body: string;
         phone: string;
     };
@@ -53864,6 +54117,9 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
             order_completed: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
             order_cancelled: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
             order_returned: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
+            order_updated: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
+            return_approved: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
+            return_received: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
             refund_processing: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
             refund_failed: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
             order_refunded: Array<'email' | 'sms' | 'whatsapp' | 'push'>;
@@ -54000,6 +54256,9 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             order_completed: Array<'push'>;
             order_cancelled: Array<'push'>;
             order_returned: Array<'push'>;
+            order_updated: Array<'push'>;
+            return_approved: Array<'push'>;
+            return_received: Array<'push'>;
             refund_processing: Array<'push'>;
             refund_failed: Array<'push'>;
             order_refunded: Array<'push'>;
@@ -54953,6 +55212,10 @@ export type PutApiV1AdminOrdersByIdStatusData = {
         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
         reason?: 'customer_changed_mind' | 'unreachable' | 'fake_order' | 'out_of_stock' | 'other';
         /**
+         * False sends the customer no message about this change (a test or duplicate order). Default true.
+         */
+        notifyCustomer?: boolean;
+        /**
          * The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.
          */
         expectedRevision?: number;
@@ -55008,6 +55271,57 @@ export type PutApiV1AdminOrdersByIdStatusResponses = {
 };
 
 export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
+
+export type PostApiV1AdminOrdersByIdRefundKeptData = {
+    body: {
+        [key: string]: never;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/refund-kept';
+};
+
+export type PostApiV1AdminOrdersByIdRefundKeptErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminOrdersByIdRefundKeptError = PostApiV1AdminOrdersByIdRefundKeptErrors[keyof PostApiV1AdminOrdersByIdRefundKeptErrors];
+
+export type PostApiV1AdminOrdersByIdRefundKeptResponses = {
+    /**
+     * What was kept
+     */
+    200: {
+        success: true;
+        data: {
+            keptMinor: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdRefundKeptResponse = PostApiV1AdminOrdersByIdRefundKeptResponses[keyof PostApiV1AdminOrdersByIdRefundKeptResponses];
 
 export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
     body: {
@@ -57016,6 +57330,9 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 category: {
+                    /**
+                     * The category name; empty when the product has none.
+                     */
                     name: string;
                 };
                 variantCount: number;
@@ -57471,6 +57788,10 @@ export type PostApiV1AdminOrdersData = {
         };
         paymentMethod?: 'cod' | 'net_terms';
         paymentTermsDays?: number;
+        paid?: {
+            via: 'bank_transfer' | 'cash' | 'cheque' | 'card_terminal' | 'mobile_wallet' | 'other';
+            reference?: string | null;
+        };
     };
     headers?: {
         /**
@@ -58246,6 +58567,10 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         }>;
         requestKey?: string;
         quoteFingerprint: string;
+        /**
+         * Send the customer the updated order (order_updated). Default false.
+         */
+        notifyCustomer?: boolean;
     };
     headers?: {
         /**
@@ -58595,7 +58920,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -58664,7 +58989,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -59184,11 +59509,11 @@ export type GetApiV1AdminOrdersByIdResponses = {
             editReadiness: {
                 items: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
                 details: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
             };
             fulfillmentLocationId: string | null;
@@ -59839,11 +60164,11 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
             editReadiness: {
                 items: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
                 details: {
                     allowed: boolean;
-                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                    reason: 'shipped' | 'part_sent' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
                 };
             };
             productsWithVariants: Array<{
@@ -62176,6 +62501,9 @@ export type GetApiV1AdminProductsResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 category: {
+                    /**
+                     * The category name; empty when the product has none.
+                     */
                     name: string;
                 };
                 variantCount: number;
@@ -62655,6 +62983,81 @@ export type GetApiV1AdminProductsByIdsResponses = {
 };
 
 export type GetApiV1AdminProductsByIdsResponse = GetApiV1AdminProductsByIdsResponses[keyof GetApiV1AdminProductsByIdsResponses];
+
+export type GetApiV1AdminProductsBulkEditData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Comma-separated product IDs (at most 50).
+         */
+        ids: string;
+    };
+    url: '/api/v1/admin/products/bulk-edit';
+};
+
+export type GetApiV1AdminProductsBulkEditErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminProductsBulkEditError = GetApiV1AdminProductsBulkEditErrors[keyof GetApiV1AdminProductsBulkEditErrors];
+
+export type GetApiV1AdminProductsBulkEditResponses = {
+    /**
+     * Products for the bulk editor
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                isActive: boolean;
+                aggregateRevision: number;
+                price: number;
+                discountType: 'percentage' | 'flat';
+                discountPercentage: number;
+                discountAmount: number;
+                hasOptions: boolean;
+                skus: Array<{
+                    id: string;
+                    label: string | null;
+                    sku: string;
+                    trackInventory: boolean;
+                    /**
+                     * On hand at the default location; null when not tracked.
+                     */
+                    onHand: number | null;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsBulkEditResponse = GetApiV1AdminProductsBulkEditResponses[keyof GetApiV1AdminProductsBulkEditResponses];
 
 export type PostApiV1AdminProductsBulkDeleteData = {
     body: {
@@ -63477,6 +63880,7 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             excludeFromSitemap?: boolean;
             productCondition?: 'new' | 'refurbished' | 'used' | null;
             slug?: string;
+            redirectOldUrl?: boolean;
             emiEligible?: boolean;
             description?: string | null;
             metaTitle?: string | null;
@@ -63942,6 +64346,7 @@ export type PutApiV1AdminProductsByIdData = {
         warrantyPolicyId?: string | null;
         id: string;
         expectedAggregateRevision: number;
+        redirectOldUrl?: boolean;
         acknowledgedSkuImageRemovalIds?: Array<string>;
         /**
          * The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs.
@@ -76015,6 +76420,7 @@ export type PostApiV1AdminImportProductsData = {
                 weightGrams: number | null;
                 barcode: string | null;
                 requiresShipping: boolean;
+                nonShippingKind?: 'digital' | 'service';
                 imageUrl: string | null;
             }>;
             images?: Array<{
@@ -76360,6 +76766,10 @@ export type GetApiV1AdminExportProductsData = {
          * false leaves out the header row (for pages after the first).
          */
         header?: 'true' | 'false';
+        /**
+         * Only these products: comma-separated ids, at most 90 (a selection in the products list).
+         */
+        ids?: string;
     };
     url: '/api/v1/admin/export/products';
 };

@@ -20498,6 +20498,31 @@
           "activity"
         ]
       },
+      "UrlRedirect": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fromPath": {
+            "type": "string",
+            "description": "The old address, a path on the store (/products/old-name)."
+          },
+          "toPath": {
+            "type": "string",
+            "description": "Where it leads, a path on the store."
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fromPath",
+          "toPath",
+          "createdAt"
+        ]
+      },
       "ThemeResource": {
         "type": "object",
         "properties": {
@@ -26967,6 +26992,9 @@
                         "order_completed",
                         "order_cancelled",
                         "order_returned",
+                        "order_updated",
+                        "return_approved",
+                        "return_received",
                         "refund_processing",
                         "refund_failed",
                         "order_refunded",
@@ -36340,6 +36368,100 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when asked which countries and currencies the store sells in.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/storefront/redirect": {
+      "get": {
+        "operationId": "storefront.redirect.get",
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Where an old store address leads",
+        "description": "The URL redirect of a store path (`/products/old-name`): its target path, or null. The storefront asks only when a page answers 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The redirect target, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "toPath": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "toPath"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an old store link answers not found, to see where it moved.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -154841,6 +154963,484 @@
         }
       }
     },
+    "/api/v1/admin/url-redirects": {
+      "get": {
+        "operationId": "dashboard.url_redirects.list",
+        "tags": [
+          "Admin - URL redirects"
+        ],
+        "summary": "List URL redirects",
+        "description": "The newest 500 redirects, optionally those whose old or new path contains `search`; `truncated` says more exist.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "URL redirects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "redirects": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/UrlRedirect"
+                          }
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "redirects",
+                        "truncated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when checking which old store addresses lead elsewhere.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.header.edit"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.url_redirects.create",
+        "tags": [
+          "Admin - URL redirects"
+        ],
+        "summary": "Add a URL redirect",
+        "description": "Makes an old store address lead to another. A target that itself redirects is followed (one hop), redirects that led to the old address now lead to the new one, and an existing redirect from the same address is re-pointed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromPath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "toPath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "fromPath",
+                  "toPath"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The redirect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "redirect": {
+                          "$ref": "#/components/schemas/UrlRedirect"
+                        }
+                      },
+                      "required": [
+                        "redirect"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an old store address (a renamed product, a removed page) should lead to another.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.header.edit"
+        }
+      }
+    },
+    "/api/v1/admin/url-redirects/{id}": {
+      "delete": {
+        "operationId": "dashboard.url_redirects.delete",
+        "tags": [
+          "Admin - URL redirects"
+        ],
+        "summary": "Delete a URL redirect",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an old store address should stop redirecting.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.header.edit"
+        }
+      }
+    },
     "/api/v1/admin/resources/theme": {
       "get": {
         "operationId": "dashboard.resources.theme.get",
@@ -181794,6 +182394,14 @@
                       "dhaka_two_zone",
                       "dhaka_three_zone"
                     ]
+                  },
+                  "language": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "bn"
+                    ],
+                    "description": "The language of the zone names and delivery promises; default English."
                   }
                 },
                 "required": [
@@ -188815,6 +189423,57 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -189013,6 +189672,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -189137,6 +189799,42 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -189280,6 +189978,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -189473,6 +190174,9 @@
                       "order_completed",
                       "order_cancelled",
                       "order_returned",
+                      "order_updated",
+                      "return_approved",
+                      "return_received",
                       "refund_processing",
                       "refund_failed",
                       "order_refunded",
@@ -189705,6 +190409,57 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -189903,6 +190658,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -190027,6 +190785,42 @@
                                     "body"
                                   ]
                                 },
+                                "order_updated": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_approved": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
+                                "return_received": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
                                 "refund_processing": {
                                   "type": "object",
                                   "properties": {
@@ -190170,6 +190964,9 @@
                                 "order_completed",
                                 "order_cancelled",
                                 "order_returned",
+                                "order_updated",
+                                "return_approved",
+                                "return_received",
                                 "refund_processing",
                                 "refund_failed",
                                 "order_refunded",
@@ -190356,6 +191153,9 @@
                           "order_completed",
                           "order_cancelled",
                           "order_returned",
+                          "order_updated",
+                          "return_approved",
+                          "return_received",
                           "refund_processing",
                           "refund_failed",
                           "order_refunded",
@@ -190407,6 +191207,9 @@
                           "order_completed",
                           "order_cancelled",
                           "order_returned",
+                          "order_updated",
+                          "return_approved",
+                          "return_received",
                           "refund_processing",
                           "refund_failed",
                           "order_refunded",
@@ -191081,6 +191884,42 @@
                           ]
                         }
                       },
+                      "order_updated": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_approved": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_received": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp",
+                            "push"
+                          ]
+                        }
+                      },
                       "refund_processing": {
                         "type": "array",
                         "items": {
@@ -191226,6 +192065,9 @@
                       "order_completed",
                       "order_cancelled",
                       "order_returned",
+                      "order_updated",
+                      "return_approved",
+                      "return_received",
                       "refund_processing",
                       "refund_failed",
                       "order_refunded",
@@ -191762,6 +192604,33 @@
                           ]
                         }
                       },
+                      "order_updated": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_approved": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
+                      "return_received": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
                       "refund_processing": {
                         "type": "array",
                         "items": {
@@ -191866,6 +192735,9 @@
                       "order_completed",
                       "order_cancelled",
                       "order_returned",
+                      "order_updated",
+                      "return_approved",
+                      "return_received",
                       "refund_processing",
                       "refund_failed",
                       "order_refunded",
@@ -195033,6 +195905,10 @@
                       "other"
                     ]
                   },
+                  "notifyCustomer": {
+                    "type": "boolean",
+                    "description": "False sends the customer no message about this change (a test or duplicate order). Default true."
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
@@ -195167,14 +196043,169 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/refund-kept": {
+      "post": {
+        "operationId": "dashboard.orders.refund_owed_keep",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Keep the refund owed on an order (a restocking fee)",
+        "description": "A return refunded only in part: the rest of the received items' value is kept, recorded on the timeline (`refund_kept`), and the order stops showing a refund owed. Refused when nothing is owed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "What was kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "keptMinor": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "keptMinor",
+                        "replayed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant keeps the rest of a partly refunded return (a restocking fee) so no refund stays owed.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.refund"
+        }
+      }
+    },
     "/api/v1/admin/orders/{id}/mark-delivered": {
       "post": {
         "operationId": "dashboard.orders.mark_delivered",
         "tags": [
           "Admin - Orders"
         ],
-        "summary": "Mark a paid order your own rider delivered in full as delivered",
-        "description": "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
+        "summary": "Mark an order your own rider delivered in full as delivered",
+        "description": "Refused while anything is unsent. A paid order, an invoice, or a cash on delivery order whose cash is remitted later: the order stays unpaid until the cash is recorded (POST /{id}/cod, `collected`), which is also allowed on a delivered order.",
         "parameters": [
           {
             "schema": {
@@ -195325,7 +196356,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "when": "Use when a paid order your own rider delivered should be marked delivered.",
+          "when": "Use when an order your own rider delivered in full should be marked delivered (cash on delivery may be collected later).",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -202305,7 +203336,8 @@
                                 "type": "object",
                                 "properties": {
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "The category name; empty when the product has none."
                                   }
                                 },
                                 "required": [
@@ -203983,6 +205015,31 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 365
+                  },
+                  "paid": {
+                    "type": "object",
+                    "properties": {
+                      "via": {
+                        "type": "string",
+                        "enum": [
+                          "bank_transfer",
+                          "cash",
+                          "cheque",
+                          "card_terminal",
+                          "mobile_wallet",
+                          "other"
+                        ]
+                      },
+                      "reference": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      }
+                    },
+                    "required": [
+                      "via"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
@@ -206841,6 +207898,10 @@
                   "quoteFingerprint": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "notifyCustomer": {
+                    "type": "boolean",
+                    "description": "Send the customer the updated order (order_updated). Default false."
                   }
                 },
                 "required": [
@@ -207913,6 +208974,7 @@
                                   "cod_returned",
                                   "payment_recorded",
                                   "refund_recorded",
+                                  "refund_kept",
                                   "return_created",
                                   "return_approved",
                                   "return_received",
@@ -208116,6 +209178,7 @@
                             "cod_returned",
                             "payment_recorded",
                             "refund_recorded",
+                            "refund_kept",
                             "return_created",
                             "return_approved",
                             "return_received",
@@ -210092,6 +211155,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -210121,6 +211185,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -212941,6 +214006,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -212970,6 +214036,7 @@
                                   "nullable": true,
                                   "enum": [
                                     "shipped",
+                                    "part_sent",
                                     "closed",
                                     "paid",
                                     "online_payment",
@@ -221282,7 +222349,8 @@
                                 "type": "object",
                                 "properties": {
                                   "name": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "description": "The category name; empty when the product has none."
                                   }
                                 },
                                 "required": [
@@ -222832,6 +223900,239 @@
             "collections.view",
             "products.view"
           ]
+        }
+      }
+    },
+    "/api/v1/admin/products/bulk-edit": {
+      "get": {
+        "operationId": "dashboard.products.bulk_edit_read",
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Read selected products and their SKUs for the bulk editor",
+        "description": "Status, price, compare-at price and per-SKU on-hand of at most 50 products, with each product's aggregateRevision. Save with dashboard.products.update_section (base) and dashboard.inventory.set_stock.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 3200,
+              "description": "Comma-separated product IDs (at most 50)."
+            },
+            "required": true,
+            "description": "Comma-separated product IDs (at most 50).",
+            "name": "ids",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Products for the bulk editor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "aggregateRevision": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "enum": [
+                                  "percentage",
+                                  "flat"
+                                ]
+                              },
+                              "discountPercentage": {
+                                "type": "number"
+                              },
+                              "discountAmount": {
+                                "type": "number"
+                              },
+                              "hasOptions": {
+                                "type": "boolean"
+                              },
+                              "skus": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "sku": {
+                                      "type": "string"
+                                    },
+                                    "trackInventory": {
+                                      "type": "boolean"
+                                    },
+                                    "onHand": {
+                                      "type": "integer",
+                                      "nullable": true,
+                                      "description": "On hand at the default location; null when not tracked."
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "sku",
+                                    "trackInventory",
+                                    "onHand"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "isActive",
+                              "aggregateRevision",
+                              "price",
+                              "discountType",
+                              "discountPercentage",
+                              "discountAmount",
+                              "hasOptions",
+                              "skus"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "products"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "beta",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when editing status, price or stock of several known products: it returns their SKUs and revisions.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
         }
       }
     },
@@ -225900,6 +227201,9 @@
                             "maxLength": 100,
                             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                           },
+                          "redirectOldUrl": {
+                            "type": "boolean"
+                          },
                           "emiEligible": {
                             "type": "boolean"
                           },
@@ -227623,6 +228927,9 @@
                   "expectedAggregateRevision": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "redirectOldUrl": {
+                    "type": "boolean"
                   },
                   "acknowledgedSkuImageRemovalIds": {
                     "type": "array",
@@ -266299,6 +267606,13 @@
                               "requiresShipping": {
                                 "type": "boolean"
                               },
+                              "nonShippingKind": {
+                                "type": "string",
+                                "enum": [
+                                  "digital",
+                                  "service"
+                                ]
+                              },
                               "imageUrl": {
                                 "type": "string",
                                 "nullable": true,
@@ -267653,6 +268967,18 @@
             "required": false,
             "description": "false leaves out the header row (for pages after the first).",
             "name": "header",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 5760,
+              "description": "Only these products: comma-separated ids, at most 90 (a selection in the products list)."
+            },
+            "required": false,
+            "description": "Only these products: comma-separated ids, at most 90 (a selection in the products list).",
+            "name": "ids",
             "in": "query"
           }
         ],
@@ -285485,6 +286811,14 @@
           ]
         },
         {
+          "operationId": "dashboard.orders.refund_owed_keep",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.refund_owed_keep"
+          ]
+        },
+        {
           "operationId": "dashboard.orders.refund_reconcile",
           "surface": "dashboard",
           "mode": "curated",
@@ -285824,6 +287158,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.products.bulk_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.bulk_edit_read",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.bulk_edit_read"
           ]
         },
         {
@@ -287570,6 +288912,30 @@
           ]
         },
         {
+          "operationId": "dashboard.url_redirects.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.url_redirects.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.url_redirects.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.url_redirects.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.url_redirects.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.url_redirects.list"
+          ]
+        },
+        {
           "operationId": "dashboard.warranty_claims.get",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -288359,6 +289725,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.checkout-journey"
+          ]
+        },
+        {
+          "operationId": "storefront.redirect.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.redirect.get"
           ]
         },
         {

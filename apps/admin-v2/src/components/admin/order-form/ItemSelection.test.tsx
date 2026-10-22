@@ -65,7 +65,7 @@ describe("manual order variant choice", () => {
 
     await act(async () => variantChoice()!.click());
     const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
-      .find((candidate) => candidate.textContent?.includes("Color: White"));
+      .find((candidate) => candidate.textContent?.includes("White"));
     expect(option).toBeDefined();
     await act(async () => option!.click());
     expect(mocks.select).toHaveBeenLastCalledWith(white.id);

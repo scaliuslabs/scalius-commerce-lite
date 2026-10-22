@@ -49,6 +49,7 @@ export const STOREFRONT_WHEN: Readonly<Record<string, string>> = {
   "storefront.locations.city_summaries": "Use when finding delivery cities.",
   "storefront.locations.zone_summaries": "Use when finding delivery zones of a city.",
   "storefront.markets.get": "Use when asked which countries and currencies the store sells in.",
+  "storefront.redirect.get": "Use when an old store link answers not found, to see where it moved.",
   "storefront.navigation.categories_get": "Use when reading the category menu buyers can reach.",
   "storefront.navigation.get": "Use when reading the storefront's navigation menu links.",
   "storefront.navigation.items_list": "Use when reading one level of a published menu.",

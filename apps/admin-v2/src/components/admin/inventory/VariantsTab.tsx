@@ -453,7 +453,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
                 adjustOpener.current.focus();
               }
             }}
-            onSaved={() => void Promise.all([
+            onSaved={() => Promise.all([
               queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),
               queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),
             ])}

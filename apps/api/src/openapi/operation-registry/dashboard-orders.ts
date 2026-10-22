@@ -199,4 +199,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     openWorld: true,
     batch: "forbidden",
   },
+  "dashboard.orders.refund_owed_keep": {
+    batch: "forbidden",
+  },
 } satisfies Record<string, OperationRegistryEntry>;

@@ -3,6 +3,7 @@ import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { getStoreRegion } from "~/lib/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -43,7 +44,7 @@ const FIELD_LABEL = {
 function snapshot(change: { name: string | null; phone: string | null; email: string | null }, erased: string): Snapshot {
   return {
     name: shownText(change.name, erased) ?? "",
-    phone: change.phone ? formatPhoneForDisplay(change.phone) : "",
+    phone: change.phone ? formatPhoneForDisplay(change.phone, getStoreRegion()) : "",
     email: change.email ?? "",
   };
 }

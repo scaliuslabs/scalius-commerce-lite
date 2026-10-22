@@ -74,6 +74,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Products
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/products/new": { permission: PERMISSIONS.PRODUCTS_CREATE },
+  "/admin/products/bulk-edit": { permission: PERMISSIONS.PRODUCTS_EDIT },
 
   "/admin/price-lists": { permission: PERMISSIONS.PRODUCTS_VIEW },
   // Reviews and gift cards (Products menu)

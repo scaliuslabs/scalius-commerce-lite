@@ -10,6 +10,7 @@ import {
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
 import {
+    keepOwedRefund,
     recordOrderEvent,
     updateOrderStatus,
     shipmentCreationOptionsSchema,
@@ -158,6 +159,9 @@ const updateStatusRoute = createRoute({
                         status: z.enum(ORDER_STATUSES),
                         /** Why an order is cancelled; recorded on the timeline. */
                         reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
+                        notifyCustomer: z.boolean().optional().openapi({
+                            description: "False sends the customer no message about this change (a test or duplicate order). Default true.",
+                        }),
                         expectedRevision: z.number().int().min(1).optional().openapi({
                             description: "The order `revision` you read. A change since is refused with 409 and nothing changes. Omit to change it whatever happened since.",
                         }),
@@ -198,7 +202,7 @@ app.openapi(updateStatusRoute, async (c) => {
         });
     }
 
-    if (result.notification) {
+    if (result.notification && data.notifyCustomer !== false) {
         await sendOrderNotification({
             db,
             send: notificationSender(c),
@@ -215,6 +219,33 @@ app.openapi(updateStatusRoute, async (c) => {
     return ok(c, { order: await readOrderResource(db, orderId) });
 });
 
+// ─── POST /:id/refund-kept ───────────────────────────────────────────────────
+
+const keepOwedRefundRoute = createRoute({
+    operationId: "dashboard.orders.refund_owed_keep",
+    method: "post",
+    path: "/{id}/refund-kept",
+    tags: ["Admin - Orders"],
+    summary: "Keep the refund owed on an order (a restocking fee)",
+    description: "A return refunded only in part: the rest of the received items' value is kept, recorded on the timeline (`refund_kept`), and the order stops showing a refund owed. Refused when nothing is owed.",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { required: true, content: { "application/json": { schema: z.object({}).strict() } } },
+    },
+    responses: {
+        200: {
+            description: "What was kept",
+            content: { "application/json": { schema: successEnvelope(z.object({ keptMinor: z.number().int().min(0), replayed: z.boolean() })) } },
+        },
+        ...adminMutationErrorResponses,
+    },
+});
+
+app.openapi(keepOwedRefundRoute, async (c) => {
+    const result = await keepOwedRefund(c.get("db"), c.req.valid("param").id, actorIdOf(c));
+    return ok(c, result);
+});
+
 // ─── POST /:id/mark-delivered ────────────────────────────────────────────────
 
 const markDeliveredRoute = createRoute({
@@ -222,8 +253,8 @@ const markDeliveredRoute = createRoute({
     method: "post",
     path: "/{id}/mark-delivered",
     tags: ["Admin - Orders"],
-    summary: "Mark a paid order your own rider delivered in full as delivered",
-    description: "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
+    summary: "Mark an order your own rider delivered in full as delivered",
+    description: "Refused while anything is unsent. A paid order, an invoice, or a cash on delivery order whose cash is remitted later: the order stays unpaid until the cash is recorded (POST /{id}/cod, `collected`), which is also allowed on a delivered order.",
     request: {
         params: z.object({ id: z.string() }),
         body: {

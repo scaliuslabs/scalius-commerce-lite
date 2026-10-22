@@ -13,13 +13,40 @@ const EXPORT_PATH: Record<PagedExport, string> = {
 };
 
 const PAGE_SIZE: Record<PagedExport, number> = { products: 250, inventory: 500 };
+/** Selected products per request (one bound list on the server). */
+const SELECTION_CHUNK = 90;
 
 /** Fetches every page and joins them (the first page carries the BOM and header). */
 export async function fetchPagedExport(
   kind: PagedExport,
-  options: { locationId?: string; onProgress?: (rows: number) => void; signal?: AbortSignal; fetcher?: typeof fetch } = {},
+  options: {
+    locationId?: string;
+    /** Only these products (a list selection): sent 90 per request, the header on the first. */
+    ids?: readonly string[];
+    onProgress?: (rows: number) => void;
+    signal?: AbortSignal;
+    fetcher?: typeof fetch;
+  } = {},
 ): Promise<{ csv: string; rows: number }> {
   const fetcher = options.fetcher ?? fetch;
+  if (options.ids) {
+    const parts: string[] = [];
+    let rows = 0;
+    for (let start = 0; start < options.ids.length; start += SELECTION_CHUNK) {
+      const params = new URLSearchParams({ limit: String(SELECTION_CHUNK), ids: options.ids.slice(start, start + SELECTION_CHUNK).join(",") });
+      if (start > 0) params.set("header", "false");
+      const response = await fetcher(`${withDashboardBasePath(EXPORT_PATH[kind])}?${params.toString()}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+        signal: options.signal,
+      });
+      if (!response.ok) throw new Error(`Export failed with ${response.status}`);
+      parts.push(await response.text());
+      rows += Number(response.headers.get("X-Export-Row-Count") ?? "0") || 0;
+      options.onProgress?.(rows);
+    }
+    return { csv: parts.join(""), rows };
+  }
   const parts: string[] = [];
   let cursor: string | null = null;
   let rows = 0;
@@ -56,8 +83,8 @@ export function saveCsv(csv: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadPagedExport(kind: PagedExport, onProgress?: (rows: number) => void): Promise<number> {
-  const { csv, rows } = await fetchPagedExport(kind, { onProgress });
+export async function downloadPagedExport(kind: PagedExport, onProgress?: (rows: number) => void, ids?: readonly string[]): Promise<number> {
+  const { csv, rows } = await fetchPagedExport(kind, { onProgress, ...(ids ? { ids } : {}) });
   saveCsv(csv, `${kind}-${adminCalendarDateKey()}.csv`);
   return rows;
 }

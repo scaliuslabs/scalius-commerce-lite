@@ -1,3 +1,4 @@
+import { Checkbox } from "~/components/ui/checkbox";
 import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWatch } from "react-hook-form";
@@ -71,7 +72,7 @@ import { orderNeedsAddress } from "./order-form/order-line-properties";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
-import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readManualOrderDiscountLimitError } from "@/lib/admin-api-conflicts";
+import { isAdminApiRetryableReadError, readCheckoutRuleErrors, readManualOrderDiscountLimitError, readManualOrderItemIssues } from "@/lib/admin-api-conflicts";
 import { useCurrency } from "@/hooks/use-currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
@@ -215,6 +216,10 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string, billing
     ...(values.paymentMethod === "net_terms"
       ? { paymentMethod: "net_terms" as const, ...(values.paymentTermsDays ? { paymentTermsDays: values.paymentTermsDays } : {}) }
       : {}),
+    // Already paid: placed as an invoice and paid in full at once (downloads and gift cards go out).
+    ...(values.paymentMethod === "paid"
+      ? { paid: { via: values.paidVia ?? "cash", reference: values.paidReference?.trim() || null } }
+      : {}),
     items: values.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,
@@ -299,6 +304,8 @@ function OrderEditor({
   const confirmation = React.useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
   // The dialog stays mounted; the last amendment is kept while it animates closed.
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  // Shopify's "Send invoice / notify customer" on an edited order: off by default, staff choose.
+  const [notifyCustomer, setNotifyCustomer] = React.useState(false);
   const [pendingAmendment, setPendingAmendment] = React.useState<{
     input: ManualOrderAmendmentInput;
     quoteFingerprint: string;
@@ -393,7 +400,8 @@ function OrderEditor({
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
       // An invoice need not be a cash amount (cash on delivery collects whole taka).
-      ...(!isEdit && quotePaymentMethod === "net_terms" ? { paymentMethod: "net_terms" as const } : {}),
+      // Paid orders are placed as invoices: priced the same way, and they may hold downloads and gift cards.
+      ...(!isEdit && (quotePaymentMethod === "net_terms" || quotePaymentMethod === "paid") ? { paymentMethod: "net_terms" as const } : {}),
       // A new order that ships nothing is taxed in the billing country staff entered.
       ...(!isEdit && !needsAddress && billing.touched && billing.draft.countryCode
         ? {
@@ -458,6 +466,8 @@ function OrderEditor({
     : null;
   // An installed app's rule refused the quote: the summary lists the app's messages.
   const ruleErrors = currentQuoteError ? readCheckoutRuleErrors(currentQuoteError) : null;
+  // Lines the API refused (a download on a cash on delivery order, a SKU out of stock): said on each line.
+  const itemIssues = currentQuoteError ? readManualOrderItemIssues(currentQuoteError) : null;
   const manualQuote = {
     data: quoteQuery.data ?? null,
     isCurrent: canRequestQuote && quoteQuery.isSuccess,
@@ -473,7 +483,8 @@ function OrderEditor({
       localDecimalPlaces: currencyDecimalPlaces,
     }),
     ruleErrors,
-    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors
+    itemIssues,
+    errorMessage: currentQuoteError && !authoritativeDiscountLimit && !ruleErrors && !itemIssues
       ? getServerFnError(currentQuoteError, t("totalFailed"))
       : null,
     canRetry: currentQuoteError ? isAdminApiRetryableReadError(currentQuoteError) : false,
@@ -554,7 +565,9 @@ function OrderEditor({
       }
       throw new SaveNotCompleted(manualQuote.isLoading
         ? t("waitForTotal")
-        : manualQuote.ruleErrors ? t("appRulesTitle") : manualQuote.errorMessage ?? t("totalFailed"));
+        : manualQuote.ruleErrors ? t("appRulesTitle")
+          : manualQuote.itemIssues ? t("itemsRefused", { count: manualQuote.itemIssues.length })
+            : manualQuote.errorMessage ?? t("totalFailed"));
     }
     if (submitLock.current) throw new SaveNotCompleted(undefined, []);
     // The server stores the names of the places it validates; these only label the review.
@@ -669,6 +682,7 @@ function OrderEditor({
         ...pending.input,
         requestKey: pending.requestKey,
         quoteFingerprint: pending.quoteFingerprint,
+        ...(notifyCustomer ? { notifyCustomer: true } : {}),
       });
       setCompleted(true);
       closeConfirm(true);
@@ -797,6 +811,12 @@ function OrderEditor({
             <Alert variant="destructive">
               <AlertDescription>{amendError}</AlertDescription>
             </Alert>
+          ) : null}
+          {defaultValues?.customerEmail ? (
+            <label className="flex items-start gap-3 text-body">
+              <Checkbox checked={notifyCustomer} onCheckedChange={(checked) => setNotifyCustomer(checked === true)} className="mt-0.5" />
+              <span>{t("notifyUpdated")}</span>
+            </label>
           ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={amendMutation.isPending}>{r("cancel")}</AlertDialogCancel>

@@ -25,7 +25,7 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 
-import { sendOrderNotificationsForStatus } from "../../utils/order-notifications";
+import { sendOrderNotification, sendOrderNotificationsForStatus } from "../../utils/order-notifications";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
 
@@ -275,6 +275,17 @@ app.openapi(approveRoute, async (c) => {
             rejected: input.lines.reduce((sum, line) => sum + line.rejectedQuantity, 0),
         },
     });
+    // The customer hears it was approved (and to send the items), once per return.
+    if (input.lines.some((line) => line.approvedQuantity > 0)) {
+        await sendOrderNotification({
+            db: c.get("db"),
+            send: notificationSender(c),
+            orderId: id,
+            notificationType: "return_approved",
+            dedupeKey: `return:${returnId}:approved`,
+            source: "orders-return-approve",
+        });
+    }
     return ok(c, result);
 });
 app.openapi(receiveRoute, async (c) => {
@@ -299,6 +310,15 @@ app.openapi(receiveRoute, async (c) => {
             restocked: result.restockedQuantity,
             damaged: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.damagedQuantity, 0),
         },
+    });
+    // The customer hears the items arrived, once per return.
+    await sendOrderNotification({
+        db: c.get("db"),
+        send: notificationSender(c),
+        orderId: id,
+        notificationType: "return_received",
+        dedupeKey: `return:${returnId}:received`,
+        source: "orders-return-receive",
     });
     const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
     return ok(c, response);

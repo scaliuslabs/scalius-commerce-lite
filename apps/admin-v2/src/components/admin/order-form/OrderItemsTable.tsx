@@ -71,6 +71,8 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
           ? null
           : remainingStockForNewOrderLine(variant, items, index);
         const name = item.name ?? product?.name ?? t("unknownProduct");
+        const issue = manualQuote.itemIssues?.find((entry) => entry.index === index) ?? null;
+        const issueId = `order-line-issue-${index}`;
         const variantText = item.variantLabel !== undefined
           ? item.variantLabel
           : orderItemVariantLabel(variant);
@@ -95,6 +97,7 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
                   ))}
                 </ul>
               ) : null}
+              {issue ? <p id={issueId} className="text-body text-destructive">{issue.message}</p> : null}
             </div>
             <OrderItemQuantityInput
               id={orderLineQuantityId(index)}

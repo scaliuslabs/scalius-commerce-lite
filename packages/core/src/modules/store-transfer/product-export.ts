@@ -80,7 +80,14 @@ async function categoryPaths(db: Database): Promise<Map<string, string[]>> {
  */
 export async function buildProductCsvPage(
   db: Database,
-  input: { after?: string | null; limit?: number; includeHeader?: boolean; includeCosts?: boolean } = {},
+  input: {
+    after?: string | null;
+    limit?: number;
+    includeHeader?: boolean;
+    includeCosts?: boolean;
+    /** Only these products (a selection in the products list); at most one page of them. */
+    ids?: readonly string[];
+  } = {},
 ): Promise<CsvPage> {
   const includeCosts = input.includeCosts ?? true;
   const limit = Math.min(Math.max(input.limit ?? PRODUCT_EXPORT_PAGE_DEFAULT, 1), PRODUCT_EXPORT_PAGE_MAX);
@@ -102,7 +109,12 @@ export async function buildProductCsvPage(
     discountAmountMinor: products.discountAmountMinor,
   }).from(products)
     .leftJoin(brands, eq(brands.id, products.brandId))
-    .where(and(isNull(products.deletedAt), input.after ? gt(products.id, input.after) : undefined))
+    .where(and(
+      isNull(products.deletedAt),
+      input.after ? gt(products.id, input.after) : undefined,
+      // One bound JSON value, whatever the selection's size.
+      input.ids ? sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(input.ids)}))` : undefined,
+    ))
     .orderBy(asc(products.id))
     .limit(limit + 1);
   const hasMore = page.length > limit;

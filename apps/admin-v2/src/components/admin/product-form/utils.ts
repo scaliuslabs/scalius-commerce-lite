@@ -30,6 +30,7 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   attributes: "attributes",
   additionalInfo: "additionalSections",
   slugEdited: "webAddress",
+  keepOldAddress: "webAddress",
   variantPriced: "price",
   fulfillmentKind: "fulfilment",
   isGiftCard: "giftCardProduct",
@@ -108,6 +109,8 @@ export function formatFormValuesForSubmission(
     excludeFromSitemap: values.excludeFromSitemap,
     productCondition: values.productCondition,
     slug: values.slug,
+    // A new handle keeps the old address working unless the merchant unticked it.
+    ...(values.keepOldAddress === false ? { redirectOldUrl: false } : {}),
     media: values.media.map((item) => ({
       id: item.id,
       mediaId: item.mediaId,

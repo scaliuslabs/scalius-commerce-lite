@@ -48,9 +48,12 @@ export function SupplierDialog({
   open,
   onOpenChange,
   onSaved,
+  initialName = "",
 }: {
   /** The supplier being edited; null adds one. */
   supplier: Supplier | null;
+  /** A new supplier's name typed into a search that found nobody. */
+  initialName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: (supplier: Supplier) => void;
@@ -58,7 +61,7 @@ export function SupplierDialog({
   const t = useMessages(purchasingMessages);
   const r = useMessages(resourceMessages);
   const save = useSaveSupplier();
-  const [fields, setFields] = useState<SupplierFields>(() => fieldsOf(supplier));
+  const [fields, setFields] = useState<SupplierFields>(() => ({ ...fieldsOf(supplier), ...(supplier ? {} : { name: initialName }) }));
   const [touched, setTouched] = useState(false);
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const set = (key: keyof SupplierFields) => (value: string) => setFields((current) => ({ ...current, [key]: value }));

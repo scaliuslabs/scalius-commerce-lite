@@ -174,6 +174,7 @@ export function ImportDialog({ kind, open, onOpenChange }: { kind: ImportKind; o
         total={run.total}
         onRetryImages={run.imageFailures.length > 0 ? () => void session.retryImages() : undefined}
         onDownloadReport={session.issues.length > 0 ? session.downloadReport : undefined}
+        problems={session.issues.filter((issue) => issue.severity === "error")}
       />
     );
     footer = (

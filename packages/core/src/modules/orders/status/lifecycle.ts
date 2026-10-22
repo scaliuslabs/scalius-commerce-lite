@@ -368,7 +368,15 @@ export async function applyOrderStatusChange(
     orderId: string,
     status: string,
     data: { trackingId?: string; expectedVersion?: number } | undefined,
-    options: { generic: boolean },
+    options: {
+        generic: boolean;
+        /**
+         * Delivered before the cash is in: a cash on delivery parcel your own
+         * rider handed over, whose cash the rider or courier remits later.
+         * The order stays unpaid ("Due on delivery") until Collect cash.
+         */
+        codCashPending?: boolean;
+    },
 ): Promise<StatusUpdateResult> {
     const nextStatus = normalizeOrderStatus(status);
     if (!nextStatus) {
@@ -414,12 +422,14 @@ export async function applyOrderStatusChange(
     // Only recorded terms open this: a missing value keeps the money-due guard.
     const onTerms = typeof existingOrder.paymentTermsDays === "number";
     const deliveredOnTerms = nextStatus === OrderStatus.DELIVERED && onTerms;
+    const deliveredBeforeCash = nextStatus === OrderStatus.DELIVERED && options.codCashPending === true
+        && existingOrder.paymentMethod === PaymentMethod.COD;
     if (nextStatus === OrderStatus.DELIVERED && currentStatus !== nextStatus) {
         // Delivered only once every line that is handed over by a real
         // action was (F7); digital and gift-card lines never block.
         await assertOrderLinesHandedOver(db, orderId, existingOrder.requiresShipping);
     }
-    if (isDeliveredOrCompleted && !deliveredOnTerms) {
+    if (isDeliveredOrCompleted && !deliveredOnTerms && !deliveredBeforeCash) {
         const currency = resolveOrderCurrencySnapshot(existingOrder);
         // A partly refunded order was paid in full: its net paid amount is
         // below the total because money went back, not because any is owed.

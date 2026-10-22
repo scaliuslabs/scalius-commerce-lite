@@ -48,6 +48,13 @@ export function SupplierPicker({
   const t = useMessages(purchasingMessages);
   const [adding, setAdding] = useState(false);
   const [session, setSession] = useState(0);
+  // A name typed into the search that matched nobody starts the new supplier.
+  const [typedName, setTypedName] = useState("");
+  const startAdding = (name: string) => {
+    setTypedName(name);
+    setSession((current) => current + 1);
+    setAdding(true);
+  };
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
@@ -59,6 +66,7 @@ export function SupplierPicker({
           placeholder={t("chooseSupplier")}
           searchPlaceholder={t("searchSuppliersShort")}
           emptyMessage={t("noSuppliersFound")}
+          emptyAction={canAdd ? { label: (name) => t("addSupplierNamed", { name }), onSelect: startAdding } : undefined}
           clearable
           disabled={disabled}
           load={loadActiveSuppliers}
@@ -75,10 +83,7 @@ export function SupplierPicker({
           className="shrink-0"
           aria-label={t("addSupplier")}
           disabled={disabled}
-          onClick={() => {
-            setSession((current) => current + 1);
-            setAdding(true);
-          }}
+          onClick={() => startAdding("")}
         >
           <Plus />
         </Button>
@@ -86,6 +91,7 @@ export function SupplierPicker({
       <SupplierDialog
         key={session}
         supplier={null}
+        initialName={typedName}
         open={adding}
         onOpenChange={setAdding}
         onSaved={(supplier) => onChange({ id: supplier.id, name: supplier.name })}

@@ -41,8 +41,8 @@ describe("order edit readiness", () => {
     it.each([
         [{ status: "shipped" }, "shipped"],
         [{ status: "delivered" }, "shipped"],
-        [{ fulfillmentStatus: "partial" }, "shipped"],
-        [{ hasShipmentHistory: true }, "shipped"],
+        [{ fulfillmentStatus: "partial" }, "part_sent"],
+        [{ hasShipmentHistory: true }, "part_sent"],
         [{ status: "cancelled" }, "closed"],
         [{ status: "incomplete" }, "closed"],
         [{ archivedAt: new Date() }, "archived"],

@@ -17,6 +17,8 @@ import {
     getProductDetails,
     getProductStats,
     getProductsByIds,
+    PRODUCT_BULK_EDIT_MAX,
+    readProductsForBulkEdit,
     listProductAgentSummaries,
     listProducts,
     createVariant,
@@ -582,6 +584,55 @@ app.openapi(getByIdsRoute, async (c) => {
     const { ids } = c.req.valid("query");
     const products = await getProductsByIds(db, parseLookupIds(ids));
     return ok(c, { products });
+});
+
+// ── Bulk editor ──
+
+const bulkEditSkuSchema = z.object({
+    id: z.string(),
+    label: z.string().nullable(),
+    sku: z.string(),
+    trackInventory: z.boolean(),
+    onHand: z.number().int().nullable().openapi({ description: "On hand at the default location; null when not tracked." }),
+});
+
+const bulkEditReadRoute = createRoute({
+    method: "get",
+    path: "/bulk-edit",
+    operationId: "dashboard.products.bulk_edit_read",
+    tags: ["Admin - Products"],
+    summary: "Read selected products and their SKUs for the bulk editor",
+    description: `Status, price, compare-at price and per-SKU on-hand of at most ${PRODUCT_BULK_EDIT_MAX} products, with each product's aggregateRevision. Save with dashboard.products.update_section (base) and dashboard.inventory.set_stock.`,
+    request: {
+        query: z.object({
+            ids: z.string().max(PRODUCT_BULK_EDIT_MAX * 64).openapi({ description: `Comma-separated product IDs (at most ${PRODUCT_BULK_EDIT_MAX}).` }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Products for the bulk editor",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                products: z.array(z.object({
+                    id: z.string(),
+                    name: z.string(),
+                    isActive: z.boolean(),
+                    aggregateRevision: z.number().int().min(1),
+                    price: z.number(),
+                    discountType: z.enum(["percentage", "flat"]),
+                    discountPercentage: z.number(),
+                    discountAmount: z.number(),
+                    hasOptions: z.boolean(),
+                    skus: z.array(bulkEditSkuSchema),
+                })),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(bulkEditReadRoute, async (c) => {
+    const { ids } = c.req.valid("query");
+    return ok(c, { products: await readProductsForBulkEdit(c.get("db"), parseLookupIds(ids)) });
 });
 
 // ── Create Product ──

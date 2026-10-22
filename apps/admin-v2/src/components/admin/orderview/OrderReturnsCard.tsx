@@ -1,7 +1,13 @@
 import { InlineError } from "~/components/admin/states/InlineError";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { postApiV1AdminOrdersByIdRefundKept } from "@scalius/api-client/sdk";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { apiData } from "~/lib/api";
+import { toast } from "~/lib/toast";
+import { queryKeys } from "~/lib/query-keys";
+import { orderErrorMessage } from "~/lib/api-mutations/orders";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useHydrated } from "~/hooks/use-hydrated";
@@ -56,6 +62,19 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   const refundOwed = Math.min(order.refundDue, Number(order.paidAmount ?? 0));
   const canRefundOwed = actions.canRefundOrders && refundOwed > 0 && !order.activeRefundOperation?.active;
   const close = (open: boolean) => !open && setDialog(null);
+  // A return refunded only in part on purpose (a restocking fee): keep the rest, so nothing stays owed.
+  const queryClient = useQueryClient();
+  const [keeping, setKeeping] = useState(false);
+  const keep = useMutation({
+    mutationFn: () => apiData(postApiV1AdminOrdersByIdRefundKept({ path: { id: order.id }, body: {} })),
+    onSuccess: () => {
+      toast.success(t("returns.restKept"));
+      setKeeping(false);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
+    },
+    onError: (error) => toast.error(orderErrorMessage(error)),
+  });
+  const owedText = saved ? formatSavedMajorAmount(refundOwed, saved) : fmt(refundOwed);
   // Before delivery there is nothing to return: the card stays off the page (card-rules.ts).
   if (!hasReturnsCard(order, returns.length)) return null;
 
@@ -95,13 +114,30 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
         {canRefundOwed ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
             <p className="text-muted-foreground">{t("returns.refundOwedHelp")}</p>
-            <Button type="button" size="sm" onClick={onRefund}>
-              {t("returns.refundOwed", { amount: saved ? formatSavedMajorAmount(refundOwed, saved) : fmt(refundOwed) })}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setKeeping(true)}>
+                {t("returns.keepRest")}
+              </Button>
+              <Button type="button" size="sm" onClick={onRefund}>
+                {t("returns.refundOwed", { amount: owedText })}
+              </Button>
+            </div>
           </div>
         ) : null}
       </CardContent>
 
+      <ConfirmDialog
+        open={keeping}
+        onOpenChange={setKeeping}
+        title={t("returns.keepRestTitle", { amount: owedText })}
+        description={t("returns.keepRestBody")}
+        confirmLabel={t("returns.keepRest")}
+        variant="default"
+        cancelLabel={t("returns.keepRestCancel")}
+        loadingLabel={t("returns.keepRestWorking")}
+        isLoading={keep.isPending}
+        onConfirm={() => keep.mutate()}
+      />
       {dialogsLoaded ? (
         <Suspense fallback={null}>
           <CreateReturnDialog order={order} returns={returns} open={dialog === "create"} onOpenChange={close} />

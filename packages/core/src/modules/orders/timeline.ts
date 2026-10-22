@@ -22,6 +22,8 @@ export const ORDER_EVENT_KINDS = [
     /** Staff or an app recorded a payment against an invoice; `data`: amount, via, reference. */
     "payment_recorded",
     "refund_recorded",
+    /** Staff kept the rest of a return's value (a restocking fee); `data`: amount, amountMinor. Clears that much refund owed. */
+    "refund_kept",
     "return_created",
     "return_approved",
     "return_received",
@@ -89,7 +91,7 @@ export async function hasOrderEvent(
 }
 
 /** Staff accounts only; an agent or system actor records no name. */
-function knownStaffId(actorId: string | null | undefined) {
+export function knownStaffId(actorId: string | null | undefined) {
     return actorId
         ? sql<string | null>`(SELECT ${user.id} FROM ${user} WHERE ${user.id} = ${actorId})`
         : null;

@@ -117,6 +117,10 @@ export async function autoFulfilOrder(
     }
 
     const fulfilledAfter = new Map(items.map((item) => [item.id, item.fulfilledQuantity]));
+    // One type that can't be handed over (a download with no file yet) never
+    // keeps the others back: a gift card still goes out. The first failure is
+    // raised once the rest are done, so the sweep retries it.
+    let firstFailure: unknown = null;
     for (const type of AUTO_FULFILLMENT_TYPES) {
         const lines = pending.filter((item) => item.fulfillmentType === type);
         if (lines.length === 0) continue;
@@ -137,14 +141,17 @@ export async function autoFulfilOrder(
                 quantity: item.quantity - item.fulfilledQuantity,
             })),
         };
+        const afterThis = new Map(fulfilledAfter);
         for (const line of context.lines) {
-            fulfilledAfter.set(line.orderItemId, (fulfilledAfter.get(line.orderItemId) ?? 0) + line.quantity);
+            afterThis.set(line.orderItemId, (afterThis.get(line.orderItemId) ?? 0) + line.quantity);
         }
         const nextFulfillmentStatus = deriveOrderFulfilmentStatus(items.map((item) => ({
             quantity: item.quantity,
-            fulfilledQuantity: fulfilledAfter.get(item.id) ?? item.fulfilledQuantity,
+            fulfilledQuantity: afterThis.get(item.id) ?? item.fulfilledQuantity,
         })));
-        const statements: BatchItem<"sqlite">[] = [
+        let statements: BatchItem<"sqlite">[];
+        try {
+            statements = [
             // A hold that committed since the check above wins: the batch
             // stops before anything is handed over.
             buildBatchGuard(db, noOpenOrderHoldCondition(orderId), ORDER_ON_HOLD) as BatchItem<"sqlite">,
@@ -163,10 +170,15 @@ export async function autoFulfilOrder(
                 fulfillmentStatus: nextFulfillmentStatus,
                 updatedAt: sql`unixepoch()`,
             }).where(eq(orders.id, orderId)) as BatchItem<"sqlite">,
-        ];
+            ];
+        } catch (error) {
+            firstFailure ??= error;
+            continue;
+        }
         try {
             await safeBatch(db, statements);
             result.fulfilledTypes.push(type);
+            for (const [id, quantity] of afterThis) fulfilledAfter.set(id, quantity);
         } catch (error) {
             if (isBatchGuardError(error, ORDER_ON_HOLD)) {
                 // Types handed over earlier in this run stay handed over; the rest wait for staff.
@@ -177,10 +189,14 @@ export async function autoFulfilOrder(
             if (
                 message.includes("order_fulfillments_order_request_key_unique")
                 || message.includes("order_fulfillments.order_id, order_fulfillments.request_key")
-            ) continue;
-            throw error;
+            ) {
+                for (const [id, quantity] of afterThis) fulfilledAfter.set(id, quantity);
+                continue;
+            }
+            firstFailure ??= error;
         }
     }
+    if (firstFailure !== null) throw firstFailure;
 
     // A digital-only order is delivered once everything is handed over
     // (two validated transitions); an order with manual lines waits for them.

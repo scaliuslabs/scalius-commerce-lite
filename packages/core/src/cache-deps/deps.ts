@@ -104,6 +104,8 @@ export const deps = {
   promotions: (promotionIds: Iterable<Id>): void => declareEach(cacheDep.promotion, promotionIds),
   anyPromotion: (): void => declare(cacheDep.anyPromotion()),
   analytics: (): void => declare(cacheDep.analytics()),
+  /** `rd`: the URL redirects (a 404 path's lookup). */
+  redirects: (): void => declare(cacheDep.redirects()),
   /** `cf:<ownerType>`: the storefront-visible custom field definitions a reader shows values of. */
   customFieldDefinitions: (ownerType: string): void => declare(cacheDep.customFieldDefinitions(ownerType)),
   /** `plg:<id>`: one app installation (status, version, grant, manifest, settings). */

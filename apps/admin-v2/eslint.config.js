@@ -100,6 +100,7 @@ const TABLE_OWNERS = [
   "src/components/admin/apps/ui/PluginUiRenderer.tsx",
   "src/components/admin/attributes-manager/components/AttributeValueEditor.tsx",
   "src/components/admin/price-lists/PriceListPrices.tsx",
+  "src/components/admin/product-list/ProductBulkEditor.tsx",
   "src/components/admin/purchasing/PurchaseOrderDetail.tsx",
   "src/components/admin/purchasing/PurchaseOrderEditor.tsx",
   "src/components/admin/purchasing/ReceiveLines.tsx",

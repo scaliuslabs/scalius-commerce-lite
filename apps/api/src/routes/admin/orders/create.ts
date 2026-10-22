@@ -2,6 +2,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
+    buildAppPaymentReviewHoldInsert,
+    buildOrderEventInsert,
+    orderEventIdForRequest,
     confirmManualOrderAmendment,
     createManualOrder,
     previewManualOrderAmendment,
@@ -24,6 +27,13 @@ import {
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { createManualOrderAppFunctions, validateCheckoutAttributes } from "@scalius/core/modules/checkout";
 import type { Database } from "@scalius/database/client";
+import { orders } from "@scalius/database/schema";
+import { recordOrderPayment } from "@scalius/core/modules/payments";
+import { fromMinor } from "@scalius/shared/money";
+import { eq } from "drizzle-orm";
+import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
+import { notificationSender } from "../../../background/notification-sender";
+import { sendOrderNotification } from "../../../utils/order-notifications";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
@@ -171,7 +181,9 @@ const confirmManualOrderAmendmentRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
         headers: manualOrderIdempotencyHeadersSchema,
-        body: { content: { "application/json": { schema: confirmManualOrderAmendmentObjectSchema.partial({ requestKey: true }).superRefine(refineDeliveryLine) } } },
+        body: { content: { "application/json": { schema: confirmManualOrderAmendmentObjectSchema.partial({ requestKey: true }).extend({
+            notifyCustomer: z.boolean().optional().openapi({ description: "Send the customer the updated order (order_updated). Default false." }),
+        }).superRefine(refineDeliveryLine) } } },
     },
     responses: {
         200: {
@@ -184,7 +196,7 @@ const confirmManualOrderAmendmentRoute = createRoute({
 });
 
 app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
-    const { requestKey: bodyRequestKey, ...payload } = c.req.valid("json");
+    const { requestKey: bodyRequestKey, notifyCustomer, ...payload } = c.req.valid("json");
     const requestKey = resolveCanonicalIdempotencyKey(
         c.req.valid("header")["idempotency-key"],
         bodyRequestKey,
@@ -199,6 +211,17 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         { appProviders: requestAppProviders(c) },
     );
 
+    // The customer gets the updated order when staff chose to tell them (once per amendment).
+    if (notifyCustomer) {
+        await sendOrderNotification({
+            db: c.get("db"),
+            send: notificationSender(c),
+            orderId: result.id,
+            notificationType: "order_updated",
+            dedupeKey: `order_updated:${result.id}:${result.version}`,
+            source: "orders-amendment",
+        });
+    }
     return ok(c, {
         id: result.id,
         version: result.version,
@@ -250,14 +273,74 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
     const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
-    const { response, committed } = await createManualOrder(db, { ...data, ...(attributes ? { attributes } : {}) }, user?.id ?? null, {
+    // Mark as paid: placed as an invoice, then paid in full right after.
+    const placed = data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
+    const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, user?.id ?? null, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
         // Apps and agents invoice only while the store offers invoices; staff always may.
         automated: Boolean(c.get("pluginPrincipal") || c.get("agentPrincipal")),
     });
+    // A replay records it too: the payment's own key makes a second record a no-op.
+    if (data.paid) await recordPaidOnPlacement(c, db, response.id, data.requestKey, data.paid);
     // Apps' risk checks run from the order.created event (ctx.orders), never on this request.
     return { response, committed };
+}
+
+/**
+ * Records the payment of an order placed as paid: its whole balance, keyed by
+ * the order's request key, with its timeline line in the same batch; then
+ * hands over its downloads and gift cards. An app's word moves no money, so
+ * an app-placed order waits for staff review before they go out.
+ */
+async function recordPaidOnPlacement(
+    c: Context<{ Bindings: Env }>,
+    db: Database,
+    orderId: string,
+    requestKey: string,
+    paid: NonNullable<CreateOrderInput["paid"]>,
+): Promise<void> {
+    const order = await db.select({ balanceDueMinor: orders.balanceDueMinor }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) return;
+    const appPrincipal = c.get("pluginPrincipal");
+    const user = c.get("user") as { id?: string } | undefined;
+    const keyed = `${requestKey}:paid`;
+    const result = await recordOrderPayment(db, {
+        orderId,
+        // A replay after the payment landed: the key returns the first record, whatever is due now.
+        amountMinor: Math.max(order.balanceDueMinor, 1),
+        via: paid.via,
+        reference: paid.reference ?? null,
+        note: null,
+        recordedBy: appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${user?.id ?? "unknown"}`,
+        requestKey: keyed,
+        timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {
+            id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
+            orderId,
+            kind: "payment_recorded",
+            actorId: user?.id ?? null,
+            data: {
+                amount: fromMinor(order.balanceDueMinor, currency.decimalPlaces),
+                via: paid.via,
+                reference: paid.reference ?? null,
+                ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}),
+            },
+        }, landed) }),
+        ...(appPrincipal ? {
+            reviewHold: ({ paymentId, landed }) => buildAppPaymentReviewHoldInsert(db, {
+                orderId,
+                paymentId,
+                pluginId: appPrincipal.pluginId,
+                appName: appPrincipal.pluginName,
+                landed,
+            }),
+        } : {}),
+    }).catch((error: unknown) => {
+        // Already paid (a replay whose first payment used another amount): nothing more to record.
+        if (order.balanceDueMinor <= 0) return null;
+        throw error;
+    });
+    if (result && !result.replayed && result.paymentStatus === "paid") await autoFulfilAfterResponse(c, db, orderId, "paid-manual-order");
 }
 
 export { app as adminOrderCreateRoutes };

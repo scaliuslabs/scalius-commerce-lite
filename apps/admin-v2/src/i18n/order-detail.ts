@@ -7,6 +7,7 @@ export const orderDetailMessages = defineMessages({
     reload: "Reload",
     backToOrders: "Back to orders",
     printInvoice: "Print invoice",
+    printPackingSlip: "Print packing slip",
     cancelOrder: "Cancel order…",
     edit: "Edit",
     refresh: "Refresh",
@@ -248,6 +249,7 @@ export const orderDetailMessages = defineMessages({
 
 
     "invoice.title": "Invoice",
+    "invoice.packingSlip": "Packing slip",
     "invoice.billTo": "Bill to",
     "invoice.shipTo": "Ship to",
     "invoice.item": "Item",
@@ -274,6 +276,7 @@ export const orderDetailMessages = defineMessages({
     "primary.sendOwnCourier": "Mark as sent",
     "cancel.restock": "Units going back to stock: {count}.",
     "cancel.notify": "The customer gets a cancellation message.",
+    "cancel.notifyChoice": "Send the customer a cancellation message",
     "cancel.reason": "Reason (optional)",
     "cancel.reasonPlaceholder": "Choose a reason",
     "cancel.reason.customer_changed_mind": "Customer changed their mind",
@@ -356,6 +359,7 @@ export const orderDetailMessages = defineMessages({
     "badge.pickedUp": "Picked up",
     "badge.done": "Done",
     "badge.delivered": "Delivered",
+    "shipments.deliveredCashLater": "The cash stays due. Record it with Mark COD collected when the rider or courier hands it over.",
     "fulfilled.at": "{date}",
     "fulfilled.automaticAt": "{date} · automatically",
     "fulfilled.cash": "Cash received {amount}",
@@ -396,6 +400,7 @@ export const orderDetailMessages = defineMessages({
     reload: "আবার লোড করুন",
     backToOrders: "অর্ডারে ফিরে যান",
     printInvoice: "ইনভয়েস প্রিন্ট",
+    printPackingSlip: "প্যাকিং স্লিপ প্রিন্ট",
     cancelOrder: "অর্ডার বাতিল করুন…",
     edit: "এডিট",
     refresh: "রিফ্রেশ",
@@ -637,6 +642,7 @@ export const orderDetailMessages = defineMessages({
 
 
     "invoice.title": "ইনভয়েস",
+    "invoice.packingSlip": "প্যাকিং স্লিপ",
     "invoice.billTo": "বিল প্রাপক",
     "invoice.shipTo": "যেখানে পাঠানো হবে",
     "invoice.item": "প্রোডাক্ট",
@@ -663,6 +669,7 @@ export const orderDetailMessages = defineMessages({
     "primary.sendOwnCourier": "পাঠানো হিসেবে চিহ্নিত করুন",
     "cancel.restock": "স্টকে ফেরত যাবে: {count}টি।",
     "cancel.notify": "কাস্টমার বাতিলের মেসেজ পাবেন।",
+    "cancel.notifyChoice": "কাস্টমারকে বাতিলের মেসেজ পাঠান",
     "cancel.reason": "কারণ (ঐচ্ছিক)",
     "cancel.reasonPlaceholder": "একটি কারণ বাছাই করুন",
     "cancel.reason.customer_changed_mind": "কাস্টমার মত বদলেছেন",
@@ -743,6 +750,7 @@ export const orderDetailMessages = defineMessages({
     "badge.pickedUp": "নিয়ে গেছেন",
     "badge.done": "সম্পন্ন",
     "badge.delivered": "ডেলিভারি হয়েছে",
+    "shipments.deliveredCashLater": "টাকা বাকি থাকবে। রাইডার বা কুরিয়ার টাকা দিলে \"ক্যাশ পাওয়া হিসেবে চিহ্নিত করুন\" দিয়ে রেকর্ড করুন।",
     "fulfilled.at": "{date}",
     "fulfilled.automaticAt": "{date} · নিজে থেকে",
     "fulfilled.cash": "নগদ পাওয়া গেছে {amount}",

@@ -200,6 +200,13 @@ export function OrderView({ order }: { order: Order }) {
                           </Link>
                         </DropdownMenuItem>
                       ) : null}
+                      {actions.canPrintInvoices && order.requiresShipping ? (
+                        <DropdownMenuItem asChild>
+                          <Link to="/invoice/$orderId" params={{ orderId: order.id }} search={{ slip: "1" }} target="_blank" rel="noopener noreferrer">
+                            {t("printPackingSlip")}
+                          </Link>
+                        </DropdownMenuItem>
+                      ) : null}
                       {canArchive ? (
                         <DropdownMenuItem
                           disabled={archiveMutation.isPending}

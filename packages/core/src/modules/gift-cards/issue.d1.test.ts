@@ -217,6 +217,22 @@ describe("gift-card issue, lookup and buyer surfaces", () => {
         });
     });
 
+    it("issues the gift card even when a download in the same order has nothing to deliver yet", async () => {
+        paidGiftCardOrder("ord_gc_mixed", 1, null);
+        sqlite.exec(`
+            INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('p_book', 'E-book', 'e-book', 50000, 1);
+            INSERT INTO product_variants
+              (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)
+            VALUES ('v_book', 'p_book', 'BOOK-1', 50000, 0, 0, 0, 1, 0, 'digital');
+            INSERT INTO order_items (id, order_id, product_id, variant_id, quantity, product_name,
+              unit_price_minor, base_unit_price_minor, line_subtotal_minor, fulfillment_type, inventory_tracked)
+            VALUES ('item_book', 'ord_gc_mixed', 'p_book', 'v_book', 1, 'E-book', 50000, 50000, 50000, 'digital', 0);
+        `);
+        await expect(autoFulfilOrder(db, "ord_gc_mixed", FULFILLER_REGISTRY, { credentialEncryptionKey: TEST_KEY })).rejects.toThrow();
+        expect(one("SELECT count(*) AS n FROM gift_cards WHERE source_order_id = 'ord_gc_mixed'")).toEqual({ n: 1 });
+        expect(all("SELECT kind FROM order_fulfillments WHERE order_id = 'ord_gc_mixed'")).toEqual([{ kind: "gift_card" }]);
+    });
+
     it("fails closed without the key and leaves the lines owed", async () => {
         paidGiftCardOrder("ord_gc_2", 1, null);
         await expect(autoFulfilOrder(db, "ord_gc_2", FULFILLER_REGISTRY, {})).rejects.toThrow(/unavailable/);

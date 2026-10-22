@@ -165,6 +165,21 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         message: "We've received the return for your order.",
         sms: "your order {{order_number}} has been marked as returned. Contact us if you have questions.",
       },
+      order_updated: {
+        subject: "Order {{order_number}} was updated",
+        message: "We changed your order at your request. Here is the updated order.",
+        sms: "your order {{order_number}} was updated. New total: {{order_total}}.",
+      },
+      return_approved: {
+        subject: "Your return for order {{order_number}} is approved",
+        message: "We approved your return. Please send the items back, and we'll let you know when they arrive.",
+        sms: "your return for order {{order_number}} is approved. Please send the items back.",
+      },
+      return_received: {
+        subject: "We received your return for order {{order_number}}",
+        message: "The items you sent back have arrived. We'll let you know about your refund.",
+        sms: "we received the items you returned for order {{order_number}}.",
+      },
       refund_processing: {
         subject: "Refund in progress for order {{order_number}}",
         message: "We're processing the refund for this order and will let you know when it's done.\nRefund: {{refund_amount}}",
@@ -269,6 +284,21 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         subject: "অর্ডার {{order_number}} রিটার্ন হয়েছে",
         message: "আপনার অর্ডারের রিটার্ন আমরা পেয়েছি।",
         sms: "আপনার অর্ডার {{order_number}}-এর রিটার্ন আমরা পেয়েছি। কোনো প্রশ্ন থাকলে যোগাযোগ করুন।",
+      },
+      order_updated: {
+        subject: "অর্ডার {{order_number}} আপডেট হয়েছে",
+        message: "আপনার অনুরোধে আমরা অর্ডারটি বদলেছি। আপডেট করা অর্ডার নিচে দেওয়া হলো।",
+        sms: "আপনার অর্ডার {{order_number}} আপডেট হয়েছে। নতুন মোট: {{order_total}}।",
+      },
+      return_approved: {
+        subject: "অর্ডার {{order_number}}-এর ফেরত অনুমোদিত হয়েছে",
+        message: "আমরা আপনার ফেরত অনুমোদন করেছি। প্রোডাক্টগুলো ফেরত পাঠান, পৌঁছালে আমরা জানাব।",
+        sms: "অর্ডার {{order_number}}-এর ফেরত অনুমোদিত হয়েছে। প্রোডাক্টগুলো ফেরত পাঠান।",
+      },
+      return_received: {
+        subject: "অর্ডার {{order_number}}-এর ফেরত আমরা পেয়েছি",
+        message: "আপনার ফেরত পাঠানো প্রোডাক্টগুলো পৌঁছেছে। রিফান্ডের খবর আমরা জানাব।",
+        sms: "অর্ডার {{order_number}}-এর ফেরত পাঠানো প্রোডাক্টগুলো আমরা পেয়েছি।",
       },
       refund_processing: {
         subject: "অর্ডার {{order_number}}-এর রিফান্ড প্রক্রিয়াধীন",

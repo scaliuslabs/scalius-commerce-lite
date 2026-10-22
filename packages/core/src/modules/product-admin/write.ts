@@ -51,6 +51,8 @@ import {
   STOCK_CHANGED_MESSAGE,
   toStoredCustomizationSchema,
   productChannelChoiceStatement,
+  buildUrlRedirectStatements,
+  productPath,
 } from "../products";
 import { storeCurrencyCodeSql, toStoreMinor } from "../settings";
 import { readStoreCurrency, storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
@@ -1063,6 +1065,7 @@ export async function updateProduct(
     const existingProduct = await db
         .select({
             id: products.id,
+            slug: products.slug,
             isGiftCard: products.isGiftCard,
             storeCurrencyCode: storeCurrencyCodeSql(),
             storePriceIncrementMinor: storePriceIncrementSql(),
@@ -1231,6 +1234,10 @@ export async function updateProduct(
             .where(eq(products.id, id))
             .returning({ aggregateRevision: products.aggregateRevision }),
     ) - 1;
+    // A new URL handle: the old product address leads to the new one, in the same batch.
+    if (detailsChanged && data.slug !== existingProduct.slug && data.redirectOldUrl !== false) {
+        batchOps.push(...buildUrlRedirectStatements(db, productPath(existingProduct.slug), productPath(data.slug)));
+    }
     if (detailsChanged) batchOps.push(
         ...buildProductMediaUpdateStatements(db, id, mediaPlan, clearSkuImageIds),
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
