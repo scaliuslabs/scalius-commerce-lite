@@ -48,7 +48,7 @@ export function BusinessCard() {
   const { data, isError, refetch } = useQuery(businessQuery);
   // The store's search details (OnlineStore schema) need the theme's header logo; only a loaded theme without one warns.
   const { data: workspace } = useQuery({ ...themeWorkspaceQueryOptions(), retry: false });
-  const missingLogo = Boolean(workspace) && !workspace?.published.theme.brand?.logo?.url;
+  const missingLogo = Boolean(workspace) && !workspace?.published.theme.brand?.logo;
   if (isError) {
     return <SettingsLoadFailure title={t("loadBusiness")} onRetry={refetch} />;
   }

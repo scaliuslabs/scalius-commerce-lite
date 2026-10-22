@@ -25,7 +25,7 @@ describe("theme changes", () => {
   it("names the announcement bar apart from the header", () => {
     const before = structuredClone(DEFAULT_STOREFRONT_THEME);
     const after = structuredClone(before);
-    after.blocks.topBar = { ...after.blocks.topBar, variant: after.blocks.topBar.variant === "none" ? "announcement" : "none" };
+    after.blocks.topBar = { variant: "announcement", settings: { text: "Eid sale", link: null } };
     expect(compareThemeDocuments(before, after)).toEqual([{ kind: "settings-changed", area: "announcement" }]);
   });
 
