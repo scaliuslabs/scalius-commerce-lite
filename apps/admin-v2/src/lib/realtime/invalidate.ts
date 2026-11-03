@@ -84,21 +84,99 @@ function isOrderRead(key: QueryKey, orderId: string): boolean {
   return key[0] === "orders" && key[1] !== "list" && key[2] === orderId;
 }
 
+/** The dashboard's keys: Home, its activity feed and the setup guide all live under `["dashboard"]`. */
+function isDashboardMatch(match: KeyMatch): boolean {
+  return "prefix" in match && match.prefix[0] === queryKeys.dashboard.all[0];
+}
+
+/** At most one dashboard refetch per window while the tab is in view. */
+export const DASHBOARD_REFETCH_WINDOW_MS = 30_000;
+
+export interface InvalidatorOptions {
+  /** Milliseconds now (tests inject a clock). */
+  now?: () => number;
+  /** Whether the tab is in the background. */
+  isHidden?: () => boolean;
+  /** Calls `listener` when the tab is shown or hidden; returns the unsubscribe. */
+  onVisibilityChange?: (listener: () => void) => () => void;
+  dashboardWindowMs?: number;
+}
+
+const documentHidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+const documentVisibilityChange = (listener: () => void) => {
+  if (typeof document === "undefined") return () => {};
+  document.addEventListener("visibilitychange", listener);
+  return () => document.removeEventListener("visibilitychange", listener);
+};
+
 /**
  * Coalesces notices for `delayMs` and invalidates once: a burst (a bulk status
  * change, a stock import) costs one refetch per screen, not one per row.
+ *
+ * The dashboard is heavier than a list and every order notice touches it, so
+ * its queries refetch at most once per `dashboardWindowMs` while the tab is in
+ * view (the first notice at once, later ones at the window's end) and never
+ * while it is hidden: they are only marked stale, and one refetch runs when the
+ * tab is shown again. The query client does not refetch on window focus, so
+ * that return refetch is this function's.
  */
-export function createInvalidator(queryClient: QueryClient, delayMs = 250) {
+export function createInvalidator(queryClient: QueryClient, delayMs = 250, options: InvalidatorOptions = {}) {
+  const now = options.now ?? Date.now;
+  const isHidden = options.isHidden ?? documentHidden;
+  const windowMs = options.dashboardWindowMs ?? DASHBOARD_REFETCH_WINDOW_MS;
+  const subscribeVisibility = options.onVisibilityChange ?? documentVisibilityChange;
+
   let pending: KeyMatch[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let dashboardTimer: ReturnType<typeof setTimeout> | null = null;
+  let dashboardLastRefetch = Number.NEGATIVE_INFINITY;
+  /** Dashboard queries went stale while the tab was hidden. */
+  let dashboardStaleHidden = false;
+  let disposed = false;
+
+  const dashboardPredicate = (query: { queryKey: QueryKey }) => partialMatchKey(query.queryKey, queryKeys.dashboard.all);
+
+  const refreshDashboard = () => {
+    if (disposed) return;
+    if (isHidden()) {
+      void queryClient.invalidateQueries({ refetchType: "none", predicate: dashboardPredicate });
+      dashboardStaleHidden = true;
+      return;
+    }
+    const wait = dashboardLastRefetch + windowMs - now();
+    if (wait <= 0) {
+      if (dashboardTimer) clearTimeout(dashboardTimer);
+      dashboardTimer = null;
+      dashboardStaleHidden = false;
+      dashboardLastRefetch = now();
+      void queryClient.invalidateQueries({ refetchType: "active", predicate: dashboardPredicate });
+      return;
+    }
+    void queryClient.invalidateQueries({ refetchType: "none", predicate: dashboardPredicate });
+    dashboardTimer ??= setTimeout(() => {
+      dashboardTimer = null;
+      refreshDashboard();
+    }, wait);
+  };
+
+  const unsubscribeVisibility = subscribeVisibility(() => {
+    if (!isHidden() && dashboardStaleHidden) {
+      dashboardStaleHidden = false;
+      refreshDashboard();
+    }
+  });
+
   const flush = () => {
     timer = null;
     const matches = pending;
     pending = [];
     if (matches.length === 0) return;
+    if (matches.some(isDashboardMatch)) refreshDashboard();
+    const others = matches.filter((match) => !isDashboardMatch(match));
+    if (others.length === 0) return;
     void queryClient.invalidateQueries({
       refetchType: "active",
-      predicate: (query) => matches.some((match) => "prefix" in match
+      predicate: (query) => others.some((match) => "prefix" in match
         ? partialMatchKey(query.queryKey, match.prefix)
         : isOrderRead(query.queryKey, match.orderId)),
     });
@@ -110,9 +188,13 @@ export function createInvalidator(queryClient: QueryClient, delayMs = 250) {
       timer ??= setTimeout(flush, delayMs);
     },
     dispose() {
+      disposed = true;
       if (timer) clearTimeout(timer);
+      if (dashboardTimer) clearTimeout(dashboardTimer);
       timer = null;
+      dashboardTimer = null;
       pending = [];
+      unsubscribeVisibility();
     },
   };
 }
