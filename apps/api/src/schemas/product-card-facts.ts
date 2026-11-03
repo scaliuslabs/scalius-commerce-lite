@@ -12,6 +12,7 @@ export const productCardFactsSchema = z.object({
     label: z.string().openapi({ description: "The attribute's name." }),
     value: z.string().openapi({ description: "Its display value, as the specification table writes it (a number carries its unit)." }),
     unit: z.string().nullable().openapi({ description: "A number attribute's unit; null otherwise." }),
+    number: z.number().nullable().openapi({ description: "A number attribute's number, so a page can write it in its own digits; null otherwise." }),
   })).max(CARD_KEY_SPECS_MAX).openapi({
     description: `Up to ${CARD_KEY_SPECS_MAX} key specs from key-spec attributes, in spec-table order: name, value and unit (a card writes each as "name: value").`,
   }),

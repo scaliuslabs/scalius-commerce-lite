@@ -38,6 +38,7 @@ import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime } from "@/lib/api/runtime";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+import { specificationText } from "@/lib/specification-text";
 
 const CLASSIC_LOOK: StorefrontBuyBoxLook = { cta: { layout: "row" }, facts: "list", features: "none", details: "buy-box" };
 
@@ -434,7 +435,7 @@ function optionAriaLabel(
           {compactFacts.map((row) => (
             <div class="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-3">
               <dt class="min-w-0 break-words font-semibold text-foreground">{row.name}</dt>
-              <dd class="min-w-0 break-words text-foreground">{row.value}</dd>
+              <dd class="min-w-0 break-words text-foreground">{specificationText(row)}</dd>
             </div>
           ))}
         </dl>

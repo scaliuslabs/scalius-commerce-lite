@@ -375,10 +375,11 @@ export interface StorefrontProductCard {
   /** Short facts the store shows on cards (key specs, delivery). */
   facts: string[];
   /**
-   * The key specs among `facts` as rows (the card writes each as
-   * `label: value`), in the same order, three at most: `value` as the store
-   * writes it (a number carries its unit), `unit` a number attribute's unit,
-   * else null. Absent from older stores.
+   * The key specs among `facts` as rows, in the same order, three at most:
+   * `value` as stored (a number in canonical form, ASCII digits and a "."
+   * decimal, with its unit), `unit` a number attribute's unit, else null.
+   * The card's `facts` line writes a number in the page's digits. Absent
+   * from older stores.
    */
   keySpecs?: Array<{ label: string; value: string; unit: string | null }>;
   /** Requested storefront-visible custom fields, keyed by namespace.key (money as `StorefrontMoney`). */
@@ -591,7 +592,11 @@ export interface StorefrontSpecification {
   /** The attribute group; null outside one. */
   group: string | null;
   label: string;
-  /** The value as the store writes it in its table: a number carries its unit ("15.6 inch"). */
+  /**
+   * The value as stored: a number in canonical form with its unit ("15.6
+   * inch", ASCII digits and a "." decimal; the store's table writes the
+   * number in the page's digits).
+   */
   value: string;
   /** A number attribute's unit ("inch"); null otherwise. */
   unit: string | null;

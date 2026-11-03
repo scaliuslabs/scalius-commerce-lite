@@ -11,6 +11,7 @@ import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
 import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
+import { specificationText } from "@/lib/specification-text";
 import { capImageSrcSet } from "@/lib/responsive-image";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
@@ -34,7 +35,7 @@ export interface ProductCardFactValues {
   /** The card's lines, "label: value", written from `keySpecRows`. */
   keySpecs: string[];
   /** At most CARD_KEY_SPECS_MAX key specs: name, display value and unit. */
-  keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
+  keySpecRows: Array<{ label: string; value: string; unit: string | null; number: number | null }>;
   /** The average (0-5) and the count of published reviews. */
   rating: { average: number; count: number } | null;
   packSize: string | null;
@@ -112,11 +113,11 @@ function cardFactValues(product: ProductCardProduct, money: (amount: number) => 
   const keySpecRows = (facts?.keySpecRows ?? []).flatMap((spec) => {
     const label = nonEmpty(spec.label);
     const value = nonEmpty(spec.value);
-    return label && value ? [{ label, value, unit: nonEmpty(spec.unit) }] : [];
+    return label && value ? [{ label, value, unit: nonEmpty(spec.unit), number: typeof spec.number === "number" ? spec.number : null }] : [];
   }).slice(0, CARD_KEY_SPECS_MAX);
   return {
-    // One list: the lines are written from the rows, so they never disagree.
-    keySpecs: keySpecRows.map((spec) => `${spec.label}: ${spec.value}`),
+    // One list: the lines are written from the rows, so they never disagree; a number in the page's digits.
+    keySpecs: keySpecRows.map((spec) => `${spec.label}: ${specificationText(spec)}`),
     keySpecRows,
     rating: rating && rating.count > 0 && rating.average > 0 ? { average: rating.average, count: rating.count } : null,
     packSize: nonEmpty(facts?.packSize),

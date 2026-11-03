@@ -325,7 +325,8 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     quickAdd: model.quickAddEligible,
     needsOptions: model.needsOptions,
     facts,
-    keySpecs: model.facts.keySpecRows,
+    // Canonical data, as the API sends it (the card's facts lines are what it shows).
+    keySpecs: model.facts.keySpecRows.map(({ label, value, unit }) => ({ label, value, unit })),
     fields: Object.fromEntries(Object.entries(product.fields ?? {}).map(([key, value]) => [key, fieldValue(value, page)])) as StorefrontProductCard["fields"],
   };
 }

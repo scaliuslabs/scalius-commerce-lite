@@ -401,6 +401,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             group: attributeGroups.name,
             unit: productAttributes.unit,
             keySpec: productAttributes.keySpec,
+            // A number attribute's number, so the page writes it in its own digits.
+            number: sql<number | null>`CASE WHEN ${productAttributes.valueType} = 'number' THEN ${productAttributeValues.valueNumber} END`,
         }).from(productAttributeValues)
             .innerJoin(productAttributes, and(
                 eq(productAttributeValues.attributeId, productAttributes.id),
@@ -418,9 +420,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                 asc(productAttributes.sortOrder),
                 asc(productAttributes.name),
             )
-            .then((res: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean }>) => ({
+            .then((res: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean; number: number | null }>) => ({
                 type: "attributes",
-                data: res.map((row) => ({ ...row, keySpec: Boolean(row.keySpec) })),
+                data: res.map((row) => ({ ...row, keySpec: Boolean(row.keySpec), number: row.number === null ? null : Number(row.number) })),
             })),
     ];
 

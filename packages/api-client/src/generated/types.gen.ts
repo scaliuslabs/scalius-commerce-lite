@@ -123,6 +123,10 @@ export type ProductCardFacts = {
          * A number attribute's unit; null otherwise.
          */
         unit: string | null;
+        /**
+         * A number attribute's number, so a page can write it in its own digits; null otherwise.
+         */
+        number: number | null;
     }>;
     /**
      * Option axes with two or more values, in position order.
@@ -19043,6 +19047,10 @@ export type GetApiV1ProductsBySlugResponses = {
                     group: string | null;
                     unit: string | null;
                     keySpec: boolean;
+                    /**
+                     * A number attribute's number (`value` is its canonical text with the unit), so a page can write it in its own digits; null for other attributes.
+                     */
+                    number: number | null;
                 }>;
                 additionalInfo: Array<{
                     id: string;

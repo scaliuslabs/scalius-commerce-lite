@@ -334,6 +334,9 @@ const productPageAttributeSchema = productAttributeSchema.extend({
   unit: z.string().nullable(),
   /** A key spec: the buy box's fact list and the key-attributes table. */
   keySpec: z.boolean(),
+  number: z.number().nullable().openapi({
+    description: "A number attribute's number (`value` is its canonical text with the unit), so a page can write it in its own digits; null for other attributes.",
+  }),
 });
 
 const productAdditionalInfoSchema = z.object({

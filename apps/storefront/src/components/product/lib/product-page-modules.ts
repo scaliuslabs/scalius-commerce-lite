@@ -13,6 +13,7 @@ import {
   type StorefrontProductModule,
 } from "@scalius/shared/storefront-theme";
 import type { Product, ProductPageContentBlock, ProductRecommendations } from "@/lib/api";
+import { specificationText } from "@/lib/specification-text";
 
 /** Every module has a renderer; the type stays as the page's switch reads it. */
 export type RenderedProductModule = StorefrontProductModule;
@@ -148,5 +149,5 @@ export function buyBoxFeatures(product: Pick<Product, "features" | "attributes">
   return publicSpecificationRows(product.attributes ?? [])
     .filter((row) => row.keySpec)
     .slice(0, 6)
-    .map((row) => `${row.name}: ${row.value}`);
+    .map((row) => `${row.name}: ${specificationText(row)}`);
 }

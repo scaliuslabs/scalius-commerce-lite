@@ -391,12 +391,18 @@
                   "type": "string",
                   "nullable": true,
                   "description": "A number attribute's unit; null otherwise."
+                },
+                "number": {
+                  "type": "number",
+                  "nullable": true,
+                  "description": "A number attribute's number, so a page can write it in its own digits; null otherwise."
                 }
               },
               "required": [
                 "label",
                 "value",
-                "unit"
+                "unit",
+                "number"
               ]
             },
             "maxItems": 3,
@@ -71704,6 +71710,11 @@
                                   },
                                   "keySpec": {
                                     "type": "boolean"
+                                  },
+                                  "number": {
+                                    "type": "number",
+                                    "nullable": true,
+                                    "description": "A number attribute's number (`value` is its canonical text with the unit), so a page can write it in its own digits; null for other attributes."
                                   }
                                 },
                                 "required": [
@@ -71712,7 +71723,8 @@
                                   "value",
                                   "group",
                                   "unit",
-                                  "keySpec"
+                                  "keySpec",
+                                  "number"
                                 ]
                               }
                             },

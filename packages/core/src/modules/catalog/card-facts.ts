@@ -50,8 +50,8 @@ export interface ProductCardOptionFact {
 
 export interface ProductCardFacts {
     brand: { name: string; slug: string } | null;
-    /** At most CARD_KEY_SPECS_MAX key specs, in spec-table order: the attribute name, its display value (a number carries its unit) and the unit of a number attribute. */
-    keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
+    /** At most CARD_KEY_SPECS_MAX key specs, in spec-table order: the attribute name, its display value (a number carries its unit), the unit of a number attribute and its number (for writing it in the page's digits). */
+    keySpecRows: Array<{ label: string; value: string; unit: string | null; number: number | null }>;
     /** Option axes in position order, only those with two or more values. */
     options: ProductCardOptionFact[];
     /** Units sold in the last 30 days (`product_sales_stats`), only from CARD_SOLD_MIN. */
@@ -88,6 +88,8 @@ export interface ProductCardFactRow {
     position: number | null;
     extra: string | null;
     fee: number | null;
+    /** A spec row's number when its attribute is a number; null otherwise. */
+    number: number | null;
 }
 
 /**
@@ -168,7 +170,8 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             CAST((
                 SELECT min(rate."fee_minor") FROM "shipping_methods" rate
                 WHERE rate."is_active" = 1 AND rate."deleted_at" IS NULL AND rate."kind" = 'delivery'
-            ) AS INTEGER) AS fee
+            ) AS INTEGER) AS fee,
+            CAST(NULL AS DOUBLE PRECISION) AS spec_number
         FROM "products" card_product
         LEFT JOIN "brands" card_brand ON card_brand."id" = card_product."brand_id"
             AND card_brand."status" = 'published' AND card_brand."deleted_at" IS NULL
@@ -176,10 +179,11 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             AND sales."sold_30d" >= ${CARD_SOLD_MIN}
         WHERE ${idScope(`card_product."id"`)}
         UNION ALL
-        SELECT ranked_spec.product_id, 'spec', ranked_spec.label, ranked_spec.value, NULL, ranked_spec.spec_rank, ranked_spec.unit, NULL
+        SELECT ranked_spec.product_id, 'spec', ranked_spec.label, ranked_spec.value, NULL, ranked_spec.spec_rank, ranked_spec.unit, NULL, ranked_spec.spec_number
         FROM (
             SELECT spec_value."product_id" AS product_id, spec."name" AS label,
                 COALESCE(spec_enum."value", spec_value."value") AS value, spec."unit" AS unit,
+                CASE WHEN spec."value_type" = 'number' THEN spec_value."value_number" END AS spec_number,
                 ROW_NUMBER() OVER (
                     PARTITION BY spec_value."product_id"
                     ORDER BY spec_group."id" IS NULL, spec_group."sort_order", spec_group."name", spec."sort_order", spec."name", spec."id"
@@ -200,7 +204,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             (SELECT count(*) FROM "product_option_values" axis_value
                 WHERE axis_value."option_definition_id" = axis."id" AND axis_value."deleted_at" IS NULL
                   AND ${VALUE_ON_LIVE_SKU}),
-            axis."position", NULL, NULL
+            axis."position", NULL, NULL, NULL
         FROM "product_option_definitions" axis
         WHERE ${idScope(`axis."product_id"`)} AND axis."deleted_at" IS NULL
         UNION ALL
@@ -211,7 +215,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
                     AND swatch_value."deleted_at" IS NULL AND swatch_value."swatch_hex" IS NOT NULL
                 WHERE swatch_attribute."facet_display" = 'swatch' AND swatch_attribute."deleted_at" IS NULL
                 ORDER BY swatch_attribute."sort_order", swatch_attribute."id"
-                LIMIT 1), NULL
+                LIMIT 1), NULL, NULL
         FROM (
             SELECT axis."product_id" AS product_id, axis_value."value" AS label,
                 axis_value."normalized_value" AS normalized_value, axis."position" AS axis_position,
@@ -234,6 +238,7 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             position: sql<number | null>`card_fact.position`,
             extra: sql<string | null>`card_fact.extra`,
             fee: sql<number | null>`card_fact.fee`,
+            number: sql<number | null>`card_fact.spec_number`,
         })
         .from(facts);
 }
@@ -256,7 +261,7 @@ export function resolveProductCardFacts(
 ): (productId: string) => ProductCardFacts {
     const byProduct = new Map<string, {
         brand: ProductCardFacts["brand"];
-        specs: Array<{ rank: number; label: string; value: string; unit: string | null }>;
+        specs: Array<{ rank: number; label: string; value: string; unit: string | null; number: number | null }>;
         axes: Array<ProductCardOptionFact & { position: number }>;
         swatches: Array<{ position: number; label: string; hex: string | null }>;
         sold: number | null;
@@ -286,7 +291,10 @@ export function resolveProductCardFacts(
             const fee = Number(row.fee);
             if (row.fee !== null && Number.isFinite(fee) && fee >= 0) deliveryFeeMinor = fee;
         } else if (row.kind === "spec" && label && value) {
-            facts.specs.push({ rank: Number(row.position) || 0, label, value, unit: clean(row.extra) || null });
+            facts.specs.push({
+                rank: Number(row.position) || 0, label, value, unit: clean(row.extra) || null,
+                number: row.number === null || row.number === undefined || !Number.isFinite(Number(row.number)) ? null : Number(row.number),
+            });
         } else if (row.kind === "axis" && label) {
             const count = Math.floor(Number(row.amount) || 0);
             const kind: ProductCardOptionKind = value === "color" || value === "size" ? value : "other";
@@ -311,7 +319,7 @@ export function resolveProductCardFacts(
         const keySpecRows = [...facts.specs]
             .sort((left, right) => left.rank - right.rank)
             .slice(0, CARD_KEY_SPECS_MAX)
-            .map(({ label, value, unit }) => ({ label, value, unit }));
+            .map(({ label, value, unit, number }) => ({ label, value, unit, number }));
         return {
             brand: facts.brand,
             keySpecRows,

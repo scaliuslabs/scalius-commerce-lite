@@ -220,7 +220,7 @@ export interface SelectedProductOption {
 export interface ProductCardFacts {
   brand: { name: string; slug: string } | null;
   /** Up to CARD_KEY_SPECS_MAX key specs in spec-table order: name, display value (a number carries its unit) and unit. */
-  keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
+  keySpecRows: Array<{ label: string; value: string; unit: string | null; number?: number | null }>;
   /** Option axes with two or more values sold on a live SKU. */
   options: Array<{
     name: string;
@@ -272,7 +272,7 @@ export interface Product {
   features?: string[];
   additionalInfo?: ProductRichContent[];
   /** Specification rows, grouped and in the merchant's order. */
-  attributes?: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean }>;
+  attributes?: Array<{ name: string; value: string; slug: string; group: string | null; unit: string | null; keySpec: boolean; number?: number | null }>;
   /** The published brand record (product page, feeds); never a free-text attribute. */
   brand?: ProductBrand | null;
   categoryId: string | null;
