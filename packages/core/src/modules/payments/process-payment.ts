@@ -383,8 +383,9 @@ export async function inferPaymentType(
 /**
  * Whether a provider's payment may land on the order: its own gateway; an
  * order whose failed checkout switched to another online gateway; or an
- * invoice (`net_terms`) with nothing paid on it yet, which the buyer (or an
- * app, charging a saved method) pays through a provider instead. The payment
+ * invoice (`net_terms`) with nothing paid on it yet, which an app or staff
+ * pays by charging the customer's saved method with a provider (a buyer
+ * can't open a hosted session for an invoice). The payment
  * that lands switches the order to the provider in its own batch; a decline
  * leaves the invoice as it was. An invoice partly paid by recorded payments
  * keeps taking recorded payments only. Cash on delivery never switches.
