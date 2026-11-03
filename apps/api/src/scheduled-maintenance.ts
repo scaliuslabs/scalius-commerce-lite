@@ -78,6 +78,8 @@ type ScheduledRunContext = {
   cron: string;
   scheduledTime: string;
   scheduledAt: number | undefined;
+  /** Whether the tick did work worth a completion line (an idle tick logs nothing). */
+  worked: boolean;
 };
 
 /**
@@ -109,21 +111,32 @@ function createScheduledRunContext(metadata: ScheduledMaintenanceMetadata): Sche
     cron: metadata.cron ?? "unknown",
     scheduledTime,
     scheduledAt: typeof metadata.scheduledTime === "number" ? metadata.scheduledTime : undefined,
+    worked: false,
   };
 }
 
+/**
+ * Runs one operation of a tick. A failure is always logged; a success only
+ * when `logSuccess` says the operation did work (a drain that had due rows),
+ * so an idle tick logs nothing. Sweeps log their own summary when they found
+ * something.
+ */
 async function timedScheduledOperation<T>(
   runContext: ScheduledRunContext,
   operation: string,
   fn: () => Promise<T>,
+  options: { logSuccess?: boolean } = {},
 ): Promise<T> {
   const startedAt = Date.now();
   try {
     const result = await fn();
-    console.log(
-      `[scheduled] event=scheduled_operation_completed, runId=${runContext.runId}, operation=${operation}, ` +
-        `durationMs=${Date.now() - startedAt}`,
-    );
+    if (options.logSuccess) {
+      runContext.worked = true;
+      console.log(
+        `[scheduled] event=scheduled_operation_completed, runId=${runContext.runId}, operation=${operation}, ` +
+          `durationMs=${Date.now() - startedAt}`,
+      );
+    }
     return result;
   } catch (error) {
     console.error(
@@ -175,21 +188,15 @@ export async function runScheduledMaintenance(
   metadata: ScheduledMaintenanceMetadata = {},
 ): Promise<void> {
   const runContext = createScheduledRunContext(metadata);
-  console.log(
-    `[scheduled] event=scheduled_run_started, runId=${runContext.runId}, cron=${runContext.cron}, ` +
-      `scheduledTime=${runContext.scheduledTime}`,
-  );
+  const run = () => `runId=${runContext.runId}, cron=${runContext.cron}, scheduledTime=${runContext.scheduledTime}, ` +
+    `durationMs=${Date.now() - runContext.startedAt}`;
 
   try {
     await runScheduledMaintenanceInner(env, executionCtx, runContext);
-    console.log(
-      `[scheduled] event=scheduled_run_completed, runId=${runContext.runId}, durationMs=${Date.now() - runContext.startedAt}`,
-    );
+    // An idle tick (nothing due, nothing found) logs nothing: it runs 1,440 times a day.
+    if (runContext.worked) console.log(`[scheduled] event=scheduled_run_completed, ${run()}`);
   } catch (error) {
-    console.error(
-      `[scheduled] event=scheduled_run_failed, runId=${runContext.runId}, durationMs=${Date.now() - runContext.startedAt}`,
-      error,
-    );
+    console.error(`[scheduled] event=scheduled_run_failed, ${run()}`, error);
     throw error;
   }
 }
@@ -199,7 +206,7 @@ export interface SweepContext {
   env: Env;
   executionCtx: ExecutionContext;
   runContext: ScheduledRunContext;
-  timed: <T>(operation: string, fn: () => Promise<T>) => Promise<T>;
+  timed: <T>(operation: string, fn: () => Promise<T>, options?: { logSuccess?: boolean }) => Promise<T>;
 }
 
 export interface MaintenanceSweep {
@@ -225,11 +232,13 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           limit: planLimits().maintenance.inventoryExpiryPerRun,
         }),
       );
-      console.log(
-        `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
-          `, limit=${result.limit}, hasMore=${result.hasMore}` +
-          (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
-      );
+      if (result.found > 0 || result.hasMore || result.errors.length > 0) {
+        console.log(
+          `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
+            `, limit=${result.limit}, hasMore=${result.hasMore}` +
+            (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
+        );
+      }
     },
   },
   {
@@ -663,13 +672,15 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // browser handoffs. Cleanup, never on a buyer's path; each part retries
     // on the next turn.
     name: "agent_access_housekeeping",
-    async run({ db, env }) {
-      const parts: Array<() => Promise<unknown>> = [
-        async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env),
-        async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env),
-        async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db),
+    async run({ db, env, timed }) {
+      const parts: Array<[string, () => Promise<unknown>]> = [
+        ["agent_access_oauth_purge", async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env)],
+        ["agent_access_artifact_purge", async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env)],
+        ["agent_access_handoff_expiry", async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db)],
       ];
-      for (const part of parts) await part().catch(() => undefined);
+      // `timed` logs a part's failure; the next part still runs and the
+      // failed one retries on the job's next turn.
+      for (const [operation, part] of parts) await timed(operation, part).catch(() => undefined);
     },
   },
 ];
@@ -764,8 +775,8 @@ async function runScheduledMaintenanceInner(
   runContext: ScheduledRunContext,
 ): Promise<void> {
   const db = getDb(env);
-  const timed = <T>(operation: string, fn: () => Promise<T>) =>
-    timedScheduledOperation(runContext, operation, fn);
+  const timed = <T>(operation: string, fn: () => Promise<T>, options?: { logSuccess?: boolean }) =>
+    timedScheduledOperation(runContext, operation, fn, options);
   const failures: unknown[] = [];
   const writes = createEventWriteObserver();
   const publishChanges = () => publishRealtime(env, tableChanges(writes.realtimeTopics));
@@ -781,6 +792,7 @@ async function runScheduledMaintenanceInner(
   // Once a day (the 02:00 store-time minute) the nightly pass has the
   // invocation to itself; the drains and the rotation continue next minute.
   if (isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env))) {
+    runContext.worked = true;
     await isolated(() => runNightlyPass(context));
     await publishChanges();
     if (failures.length > 0) throw failures[0];
@@ -791,7 +803,9 @@ async function runScheduledMaintenanceInner(
   const due = await timed("due_work_probe", () => readDueDrains(db, BACKGROUND_DRAINS));
   for (const drain of BACKGROUND_DRAINS) {
     if (drain.due && due && !due.has(drain.name)) continue;
-    await isolated(() => timed(drain.name, () => drain.run(context)));
+    // A probed drain runs because it had due rows: its completion is work done.
+    // An unprobed one runs every tick and logs only what it found.
+    await isolated(() => timed(drain.name, () => drain.run(context), { logSuccess: Boolean(drain.due) }));
   }
 
   // A sweep tick: the rotation's next jobs (every job on Paid or a manual run).
