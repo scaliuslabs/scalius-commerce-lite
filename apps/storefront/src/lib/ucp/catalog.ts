@@ -1001,7 +1001,7 @@ function hasRecognizedSearchInput(body: SearchRequestBody): boolean {
 
 async function loadFeedProducts(
   options: Parameters<typeof getFeedProducts>[0],
-): Promise<FeedProductPage | null> {
+): Promise<FeedProductPage | "invalid_cursor" | null> {
   try {
     // UCP lists what the AI agents sales channel publishes (MARKETS-DESIGN D6).
     return await getFeedProducts({ ...options, channel: AGENTS_CHANNEL_ID });
@@ -1036,6 +1036,15 @@ export async function searchCatalog(
   }
   const options = buildSearchOptions(body, context, pagination);
   const result = await loadFeedProducts(options);
+  if (result === "invalid_cursor") {
+    return listError(
+      "search",
+      400,
+      "request_invalid",
+      "Catalog pagination cursor is invalid or no longer supported.",
+      { path: "$.pagination.cursor" },
+    );
+  }
   if (!result) {
     return listError("search", 503, "temporarily_unavailable", "Catalog search is temporarily unavailable.");
   }
@@ -1101,7 +1110,8 @@ async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[] | 
     limit: Math.max(inputs.length, DEFAULT_SEARCH_LIMIT),
     ids: inputs.map((input) => input.normalized).join(","),
   });
-  if (!result) return null;
+  // No cursor is sent, so the API cannot refuse one.
+  if (!result || result === "invalid_cursor") return null;
 
   return Array.from(
     new Map(result.data.map((product) => [product.id, product])).values(),

@@ -256,7 +256,7 @@ type OptionalFeedProductsSdk = {
   getApiV1ProductsFeed?: (args: {
     client: unknown;
     query: Record<string, unknown>;
-  }) => Promise<{ data?: unknown; error?: unknown }>;
+  }) => Promise<{ data?: unknown; error?: unknown; response?: { status: number } }>;
 };
 
 export function emptyProductPagination(
@@ -331,9 +331,14 @@ function normalizeSitemapProductListPayload(
   };
 }
 
+/**
+ * A feed page, "invalid_cursor" when the API refused the continuation cursor
+ * (one it did not sign: forged, stale after a secret rotation, or for another
+ * channel), or null when the page could not be read.
+ */
 async function readDedicatedFeedProducts(
   options: ProductListOptions,
-): Promise<FeedProductPage | null> {
+): Promise<FeedProductPage | "invalid_cursor" | null> {
   const sdk = (await import("@scalius/api-client/sdk")) as OptionalFeedProductsSdk;
   if (typeof sdk.getApiV1ProductsFeed !== "function") {
     console.error("Dedicated product feed SDK route is missing.");
@@ -341,11 +346,12 @@ async function readDedicatedFeedProducts(
   }
 
   try {
-    const { data, error } = await sdk.getApiV1ProductsFeed({
+    const { data, error, response } = await sdk.getApiV1ProductsFeed({
       client: getConfiguredSdkClient(),
       query: options as Record<string, unknown>,
     });
     if (error) {
+      if (response?.status === 400 && options.cursor) return "invalid_cursor";
       console.error("Error fetching feed products:", error);
       return null;
     }
@@ -482,7 +488,7 @@ export async function getAllProducts(
  */
 export async function getFeedProducts(
   options: ProductListOptions = {},
-): Promise<FeedProductPage | null> {
+): Promise<FeedProductPage | "invalid_cursor" | null> {
   const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
     defaultParams: { limit: 100 },

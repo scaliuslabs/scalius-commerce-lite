@@ -303,6 +303,7 @@ function generateCatalogFeed(
 
 type FeedItemWindowResult =
   | { status: "ok"; items: CatalogFeedRow[]; cursor?: string }
+  | { status: "invalid_cursor" }
   | { status: "unavailable" };
 
 async function readFeedItemWindow({
@@ -335,6 +336,7 @@ async function readFeedItemWindow({
       ...(nextCursor ? { cursor: nextCursor } : {}),
       limit: Math.min(API_FEED_PAGE_SIZE, remainingProducts),
     });
+    if (response === "invalid_cursor") return { status: "invalid_cursor" };
     if (!response) return { status: "unavailable" };
 
     items.push(...toCatalogFeedRows(
@@ -436,6 +438,14 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         feedsPolicy,
         feedVariantStrategy,
       });
+      // A cursor the API did not sign: a client error, so a crawler starts
+      // again from the first page instead of retrying a dead link.
+      if (feedWindow.status === "invalid_cursor") {
+        return new Response("Invalid cursor parameter; start again from the first page.", {
+          status: 400,
+          headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" },
+        });
+      }
       if (feedWindow.status === "unavailable") {
         return xmlDataUnavailableResponse(
           `${feedLabel} is temporarily unavailable`,
