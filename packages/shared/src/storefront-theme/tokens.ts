@@ -299,8 +299,17 @@ function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"
     "popover-foreground": colors["card-foreground"],
     ring: colors.primary,
     ...colors,
-    input: fieldBorder(colors.input, [colors.background, colors.card], colors.foreground),
+    input: storefrontThemeFieldBorder(colors),
   } as Palette;
+}
+
+/**
+ * A colour set's field border as the palettes give it: its `input` tint
+ * taken toward the ink until it shows (3:1) against the page and the card.
+ * A border that already shows comes back as it is.
+ */
+export function storefrontThemeFieldBorder(colors: Pick<StorefrontThemeColors, "input" | "background" | "card" | "foreground">): string {
+  return fieldBorder(colors.input, [colors.background, colors.card], colors.foreground);
 }
 
 /**
