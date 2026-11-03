@@ -1,8 +1,9 @@
 // The SDK seal reads emitted declarations, not implementation text. Existing
 // declarations are invariant: a type can be both an app input and a host output.
 // New exports, overloads and optional object members (also in a function's
-// result type) are additive, as is a constant's declared type gaining members
-// or trailing readonly-tuple entries (apps read a constant, never make one).
+// result type) are additive, as is a constant's declared type gaining top-level
+// keys or trailing top-level readonly-tuple entries (apps read a constant,
+// never make one); everything nested in a constant is invariant.
 // Retyping an existing signature requires the same explicit acknowledgement as
 // the JSON ABI.
 import ts from "typescript";
@@ -93,21 +94,12 @@ function memberKey(member: ts.TypeElement, source: ts.SourceFile): string {
 }
 
 /**
- * How a type may grow. A type apps may construct (an interface, a type alias,
- * a function's result) gains optional members only. A constant's declared
- * type (`declare const X: { … }`) is a value the host makes and an app only
- * reads, so it may also gain required members and its readonly tuples may
- * gain trailing members (a new list entry, a new limit).
+ * A type apps may construct (an interface, a type alias, a function's result)
+ * gains optional members only, at any depth.
  */
-interface Growth {
-  required: boolean;
-}
-const OPTIONAL_ONLY: Growth = { required: false };
-const CONSTANT: Growth = { required: true };
-
 function compatibleMembers(
   before: readonly ts.TypeElement[], after: readonly ts.TypeElement[],
-  oldSource: ts.SourceFile, newSource: ts.SourceFile, growth: Growth = OPTIONAL_ONLY,
+  oldSource: ts.SourceFile, newSource: ts.SourceFile,
 ): boolean {
   const existing = new Set(before.map((member) => memberKey(member, oldSource)));
   for (const member of before) {
@@ -119,11 +111,21 @@ function compatibleMembers(
         ts.factory.updatePropertySignature(node, node.modifiers, node.name, node.questionToken, undefined), source,
       );
       return header(member, oldSource) === header(next, newSource)
-        && compatibleType(member.type, next.type, oldSource, newSource, growth);
+        && compatibleType(member.type, next.type, oldSource, newSource);
     })) return false;
   }
-  // A new required member breaks apps that construct the public type (never a constant's).
-  return after.every((member) => existing.has(memberKey(member, newSource)) || !!member.questionToken || growth.required);
+  // A new required member breaks apps that construct the public type.
+  return after.every((member) => existing.has(memberKey(member, newSource)) || !!member.questionToken);
+}
+
+function compatibleType(
+  before: ts.TypeNode | undefined, after: ts.TypeNode | undefined,
+  oldSource: ts.SourceFile, newSource: ts.SourceFile,
+): boolean {
+  if (!before || !after) return before === after;
+  if (print(before, oldSource) === print(after, newSource)) return true;
+  return ts.isTypeLiteralNode(before) && ts.isTypeLiteralNode(after)
+    && compatibleMembers(before.members, after.members, oldSource, newSource);
 }
 
 /** A readonly tuple's elements (`readonly [a, b]`); null for any other type. */
@@ -133,21 +135,27 @@ function readonlyTuple(node: ts.TypeNode): readonly ts.TypeNode[] | null {
     : null;
 }
 
-function compatibleType(
-  before: ts.TypeNode | undefined, after: ts.TypeNode | undefined,
-  oldSource: ts.SourceFile, newSource: ts.SourceFile, growth: Growth = OPTIONAL_ONLY,
-): boolean {
-  if (!before || !after) return before === after;
+/**
+ * A constant's declared type (`declare const X: …`), a value the host makes
+ * and an app only reads, grows only at its top level: a readonly tuple keeps
+ * every member in its place and may gain trailing ones (a new list entry), an
+ * object type keeps every member exactly and may gain new ones (a new key).
+ * Every nested member is invariant: a list or object inside a constant (a
+ * port's required operations) never grows silently.
+ */
+function compatibleConstantType(before: ts.TypeNode, after: ts.TypeNode, oldSource: ts.SourceFile, newSource: ts.SourceFile): boolean {
   if (print(before, oldSource) === print(after, newSource)) return true;
-  // A constant's list keeps every member in its place and only gains trailing ones.
-  const oldTuple = growth.required ? readonlyTuple(before) : null;
+  const oldTuple = readonlyTuple(before);
   const newTuple = oldTuple ? readonlyTuple(after) : null;
   if (oldTuple && newTuple) {
     return newTuple.length >= oldTuple.length
       && oldTuple.every((element, index) => print(element, oldSource) === print(newTuple[index]!, newSource));
   }
-  return ts.isTypeLiteralNode(before) && ts.isTypeLiteralNode(after)
-    && compatibleMembers(before.members, after.members, oldSource, newSource, growth);
+  if (ts.isTypeLiteralNode(before) && ts.isTypeLiteralNode(after)) {
+    return before.members.every((member) => after.members.some((next) =>
+      memberKey(next, newSource) === memberKey(member, oldSource) && print(next, newSource) === print(member, oldSource)));
+  }
+  return false;
 }
 
 function compatibleDeclaration(before: Declaration, after: Declaration, oldSource: ts.SourceFile, newSource: ts.SourceFile): boolean {
@@ -168,12 +176,12 @@ function compatibleDeclaration(before: Declaration, after: Declaration, oldSourc
     return header(oldNode, oldSource) === header(newNode, newSource)
       && compatibleType(oldNode.type, newNode.type, oldSource, newSource);
   }
-  // A constant keeps its modifiers and name; its declared type may grow as a constant's does.
+  // A constant keeps its modifiers and name; its declared type grows only at the top level.
   if (ts.isVariableDeclaration(oldNode) && ts.isVariableDeclaration(newNode) && oldNode.type && newNode.type && !oldNode.initializer && !newNode.initializer) {
     const prefix = (declaration: Declaration, node: ts.VariableDeclaration, source: ts.SourceFile) =>
       declaration.text.slice(0, declaration.text.length - print(node, source).length) + print(node.name, source);
     return prefix(before, oldNode, oldSource) === prefix(after, newNode, newSource)
-      && compatibleType(oldNode.type, newNode.type, oldSource, newSource, CONSTANT);
+      && compatibleConstantType(oldNode.type, newNode.type, oldSource, newSource);
   }
   // A function keeps its modifiers, name, type parameters and parameters; its result may gain optional members.
   if (ts.isFunctionDeclaration(oldNode) && ts.isFunctionDeclaration(newNode) && oldNode.type && newNode.type) {

@@ -55,16 +55,26 @@ function isObject(value: unknown): value is Json {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-/** One constant's value: a list keeps every member, an object keeps every key and its value (both may grow), anything else stays equal. */
-function constantValueBreaks(path: string, was: unknown, now: unknown): string[] {
+/**
+ * One constant's value, grown only at its top level: a list keeps every
+ * member, an object keeps every key with exactly its value (both may gain
+ * entries); anything nested, and any other value, stays equal. A limits
+ * table (`…_LIMITS`) gains no key silently: a new limit restricts apps, so it
+ * needs an acknowledgement that says why what passed before still passes.
+ */
+function constantValueBreaks(name: string, was: unknown, now: unknown): string[] {
+  const path = `storefront.${name}`;
   if (Array.isArray(was) && Array.isArray(now)) {
     const kept = new Set(now.map((value) => JSON.stringify(value)));
     return was.filter((value) => !kept.has(JSON.stringify(value))).map((value) => `${path}: ${JSON.stringify(value)} was removed.`);
   }
   if (isObject(was) && isObject(now)) {
-    return Object.entries(was).flatMap(([key, value]) => key in now
-      ? constantValueBreaks(`${path}.${key}`, value, now[key])
-      : [`${path}.${key}: the key was removed.`]);
+    return [
+      ...Object.entries(was).flatMap(([key, value]) => !(key in now)
+        ? [`${path}.${key}: the key was removed.`]
+        : JSON.stringify(value) === JSON.stringify(now[key]) ? [] : [`${path}.${key}: the constant value changed.`]),
+      ...(name.endsWith("_LIMITS") ? Object.keys(now).filter((key) => !(key in was)).map((key) => `${path}.${key}: a new limit was added.`) : []),
+    ];
   }
   return JSON.stringify(was) === JSON.stringify(now) ? [] : [`${path}: the constant value changed.`];
 }
@@ -75,9 +85,17 @@ function constantBreaks(before: unknown, after: unknown): string[] {
   const now = record(after);
   for (const [name, was] of Object.entries(record(before))) {
     if (!(name in now)) problems.push(`storefront.${name}: the constant was removed.`);
-    else problems.push(...constantValueBreaks(`storefront.${name}`, was, now[name]));
+    else problems.push(...constantValueBreaks(name, was, now[name]));
   }
   return problems;
+}
+
+/** A stable port's required operations: an app implements every one, so the list never changes. */
+function providerRequiredBreaks(before: unknown, after: unknown): string[] {
+  const now = record(after);
+  return Object.entries(record(before)).flatMap(([kind, operations]) => kind in now && JSON.stringify(operations) !== JSON.stringify(now[kind])
+    ? [`providerRequired.${kind}: the required operations changed from ${JSON.stringify(operations)} to ${JSON.stringify(now[kind])}.`]
+    : []);
 }
 
 /** Functions, stable ports, admin UI, scopes, events and storefront constants. */
@@ -161,6 +179,7 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
   }
 
   problems.push(...constantBreaks(was.storefront, now.storefront));
+  problems.push(...providerRequiredBreaks(was.providerRequired, now.providerRequired));
   return problems;
 }
 

@@ -295,6 +295,8 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 
 `<scalius-embed kind="…">` hands a spot in your markup back to the store, which renders its own interactive piece there with its own data, rules, words and scripts. The SDK components write the tags. Each render allows its own kinds and counts; any other embed renders nothing.
 
+The store adds kinds, module names and error codes over time: `StorefrontEmbedKind`, `StorefrontProductModuleEmbed` and the product error codes are unions read from lists that only grow. Never switch over one exhaustively (a `Record<StorefrontEmbedKind, …>` or a `never` check stops compiling when the list grows); handle the values you know and ignore the rest.
+
 | Kind (SDK) | Where | Renders |
 | --- | --- | --- |
 | `buy_form` (`<BuyForm title={false} />`) | `product_main` (required, one) | The real buy form |
@@ -335,7 +337,7 @@ pnpm plugin pack ~/code/acme-studio --key <folder>    # dist/ and the signed upl
 - `assertHeaderContract(html, { islands })`: the same header checks on your own markup.
 - `checkSkinHtml(target, html)`: the problems that would make the store draw the core unit, and islands whose props it would leave out.
 - `storefrontShown(html, appId)`: what the store shows of your markup after its output check, and how many elements and attributes it `dropped`. Assert `dropped` is 0. `oversizedProps`, present only then, names the islands whose props are over 16 KiB.
-- Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)` and `fixtureSectionSkinData(type)`. `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`.
+- Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)` and `fixtureSectionSkinData(type)`. `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`. Fixtures carry what a real store sends, and gain fields as the store does: `fixtureProductCard()` has key specs (`facts` and `keySpecs` are not empty) and `fixtureProductPage()` has `specifications`. Pass `{ facts: [], keySpecs: [] }` for a card without them, and compare fixture output with `toMatchObject` rather than exact equality.
 - Fixture stores: `fixtureStore(name)` for each of `FIXTURE_STORES` (`sample`, `empty`, `other`) gives that store's `context()`, `productCards()`, `image()`, `productPage()` and `skinData(target)`, the data `pnpm plugin preview` renders with. Loop your skin and section tests over all three ([Build a theme](themes.md#test-on-more-than-one-store)).
 
 These are author checks, not proof of visual correctness. Exercise the composed page in a local store too.
