@@ -1188,11 +1188,6 @@ export function normalizePostgresResultObjects(
 }
 
 /**
- * Compatibility functions for the SQLite profile used by application SQL.
- * They intentionally live in a dedicated schema; public wrappers are exposed
- * only for names that existing queries call unqualified.
- */
-/**
  * SQLite's `json_array_length` and `json_each` on any JSON shape: a missing
  * path is NULL (`json_array_length`) or no rows (`json_each`), anything but
  * an array has length 0, and `json_each` over a scalar (JSON null included)
@@ -1391,6 +1386,11 @@ AS $function$
 $function$;
 `;
 
+/**
+ * Compatibility functions for the SQLite profile used by application SQL.
+ * They intentionally live in a dedicated schema; public wrappers are exposed
+ * only for names that existing queries call unqualified.
+ */
 export const POSTGRES_SQLITE_PROFILE_BOOTSTRAP_SQL = String.raw`
 CREATE SCHEMA IF NOT EXISTS scalius_compat;
 
