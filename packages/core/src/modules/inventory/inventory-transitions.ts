@@ -8,7 +8,17 @@
 
 import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
-import { digitalLicenceKeys, inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
+import {
+    digitalLicenceKeys,
+    inventoryLevels,
+    inventoryLocations,
+    inventoryMovements,
+    orders,
+    orderItems,
+    orderReturns,
+    InventoryPool,
+    productVariants,
+} from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, isTursoConflictError, safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -220,9 +230,8 @@ type InventoryPhase = {
     operation: StrictMovementOperation;
     entries: ReservationEntry[];
     /**
-     * Units whose licence keys went to the buyer: consumed where the order
-     * ships from (or the default location), with no shelf-coverage check, as
-     * a cancel or refund that used to release them must not be refused.
+     * Digital units (licence keys, downloads): they leave where the SKU's
+     * units are, not the shelf the order ships from (`resolveDigitalUnitLocation`).
      */
     consumesKeys?: true;
 };
@@ -299,7 +308,8 @@ export async function prepareInventoryForStatusChange(
     if (needsDeduct && currentAction === "reserved") {
         const lines = await getOrderInventoryLines(db, order);
         return prepareStrictInventoryPhases(db, order, "deducted", [
-            { operation: "deduct", entries: lines.map((line) => line.entry) },
+            { operation: "deduct", entries: lines.filter((line) => !line.digital).map((line) => line.entry) },
+            { operation: "deduct", entries: lines.filter((line) => line.digital).map((line) => line.entry), consumesKeys: true },
         ]);
     }
 
@@ -323,6 +333,46 @@ function unkeyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[
         : []);
 }
 
+/**
+ * Where digital units leave from: their units live where the keys were
+ * imported (the default location), not on the shelf an order ships from.
+ * The order's own location when its levels cover every entry, else the
+ * default, else any active location that covers them; the default when none
+ * does (the level trigger then refuses the batch as a shortfall, a 409).
+ */
+async function resolveDigitalUnitLocation(
+    db: Database,
+    order: InventoryTransitionOrder,
+    entries: readonly ReservationEntry[],
+): Promise<InventoryLocationRef> {
+    const levels = await db.select({
+        locationId: inventoryLevels.locationId,
+        variantId: inventoryLevels.variantId,
+        onHand: inventoryLevels.onHand,
+        name: inventoryLocations.name,
+        isDefault: inventoryLocations.isDefault,
+    }).from(inventoryLevels)
+        .innerJoin(inventoryLocations, eq(inventoryLocations.id, inventoryLevels.locationId))
+        .where(and(
+            inJsonArray(inventoryLevels.variantId, entries.map((entry) => entry.variantId)),
+            eq(inventoryLocations.status, "active"),
+        ))
+        .all();
+    const covering = new Map<string, { name: string; isDefault: boolean; covered: number }>();
+    for (const level of levels) {
+        const entry = entries.find((candidate) => candidate.variantId === level.variantId);
+        if (!entry || level.onHand < entry.quantity) continue;
+        const location = covering.get(level.locationId) ?? { name: level.name, isDefault: Boolean(level.isDefault), covered: 0 };
+        location.covered += 1;
+        covering.set(level.locationId, location);
+    }
+    const coversAll = [...covering.entries()].filter(([, location]) => location.covered === entries.length);
+    const pick = coversAll.find(([id]) => id === order.fulfillmentLocationId)
+        ?? coversAll.find(([, location]) => location.isDefault)
+        ?? coversAll.sort(([a], [b]) => a.localeCompare(b))[0];
+    return pick ? { id: pick[0], name: pick[1].name } : resolveActiveInventoryLocation(db, null);
+}
+
 /** The keys handed out for the order's lines when it was read: the split between kept and returned units. */
 function assignedKeyCount(lines: readonly OrderInventoryLine[]): number {
     return lines.reduce((total, line) => total + line.assigned, 0);
@@ -335,10 +385,16 @@ function inventoryChangeGuard(
     movementIds: readonly string[],
     assignedKeys: number | null = null,
 ): SQLiteBatchItem {
-    // A key assigned since the read would change which units come back.
+    // A key assigned since the read would change which units come back. The
+    // same lines as the read: stock-tracked lines with a SKU.
     const keysUnchanged = assignedKeys === null ? sql`1 = 1` : sql`(
         SELECT count(*) FROM ${digitalLicenceKeys}
-        WHERE ${digitalLicenceKeys.orderItemId} IN (SELECT ${orderItems.id} FROM ${orderItems} WHERE ${orderItems.orderId} = ${order.id})
+        WHERE ${digitalLicenceKeys.orderItemId} IN (
+            SELECT ${orderItems.id} FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${order.id}
+              AND ${orderItems.variantId} IS NOT NULL
+              AND ${orderItems.inventoryTracked} = 1
+        )
           AND ${digitalLicenceKeys.status} <> 'available'
     ) = ${assignedKeys}`;
     return buildBatchGuard(db, sql`EXISTS (
@@ -409,9 +465,9 @@ async function prepareStrictInventoryPhases(
         const deductLocation = operation !== "deduct"
             ? null
             : phase.consumesKeys
-                ? await resolveActiveInventoryLocation(db, await resolveRestoreFallbackLocation(db, order.fulfillmentLocationId))
+                ? await resolveDigitalUnitLocation(db, order, entries)
                 : await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
-        if (deductLocation && !phase.consumesKeys) deductLocationName = deductLocation.name;
+        if (deductLocation) deductLocationName = deductLocation.name;
         const claims = await buildTransitionMovementClaims(
             db, order, operation, entries, variants, pool, identities, null, deductLocation,
         );
@@ -1716,6 +1772,8 @@ type OrderInventoryLine = {
     keyed: number;
     /** The line's assigned keys as read (before capping at its quantity). */
     assigned: number;
+    /** A digital SKU's line (licence keys, downloads): its units are not on a shipping shelf. */
+    digital: boolean;
 };
 
 /** The order's stock-tracked lines, each with the units its assigned licence keys took. */
@@ -1732,6 +1790,8 @@ async function getOrderInventoryLines(
             keyed: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys}
                 WHERE ${digitalLicenceKeys.orderItemId} = ${sql.raw('"order_items"."id"')}
                   AND ${digitalLicenceKeys.status} <> 'available')`,
+            digital: sql<number>`(SELECT ${productVariants.fulfillmentKind} = 'digital' FROM ${productVariants}
+                WHERE ${productVariants.id} = ${sql.raw('"order_items"."variant_id"')})`,
         })
         .from(orderItems)
         .where(eq(orderItems.orderId, order.id))
@@ -1746,6 +1806,7 @@ async function getOrderInventoryLines(
                 entry: { variantId: item.variantId as string, quantity: item.quantity, pool },
                 keyed: Math.min(item.quantity, assigned),
                 assigned,
+                digital: Number(item.digital) === 1,
             };
         });
 }
