@@ -31,11 +31,13 @@ A theme is an app. Its manifest declares storefront parts and nothing else; ther
 | Stylesheet | `stylesheet: true` | One CSS file on the store's tokens. |
 | Public files | `public/` | Fonts and images you ship with the theme. |
 
-Your module is compiled once, when you pack, and the same code runs in every store. Each part is a pure function of three inputs: the settings the merchant chose, the data the store hands it (the **projection**: `data` in a skin, resolved settings in a section) and the render context (`context.store`: name, language, locale, currency). Anything you write as a literal (a link, a name, a field key, a picture) is the same in every store. Anything that should differ per store comes from those inputs.
+Your module is compiled once, when you pack, and the same code runs in every store. Each part is a pure function of three inputs: the settings the merchant chose, the data the store hands it (the **projection**: `data` in a skin, resolved settings in a section) and the render context (`context.store`: name, logo, language, locale, currency). Anything you write as a literal (a link, a name, a field key, a picture) is the same in every store. Anything that should differ per store comes from those inputs.
 
 | You need | Read it from | Never |
 | --- | --- | --- |
-| The store's name and logo | `data.store.name`, `data.store.logo` (header and footer), `data.store.footerLogo`, `context.store.name` | A wordmark, your app's name |
+| The store's name and logo | `data.store.name`, `data.store.logo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` (every part) | A wordmark, your app's name, the header's markup |
+| Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
+| The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec-table" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
 | Core routes | `data.routes` (`home`, `search`, `cart`, `account`, `orders`, `trackOrder`; footer `newsletter`) | Page paths such as `/about` |
 | Products | A `products` or `product` setting, a section's product source, each card's own `url` | `/products/<slug>` |
@@ -130,11 +132,12 @@ A store that just installed your theme may have no products, categories, collect
 | In the projection | On a new store |
 | --- | --- |
 | `data.menu`, `data.categories`, footer `data.menus`, `data.policies`, `data.store.social` | `[]` |
-| `data.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
+| `data.store.logo`, `context.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
 | A `products` setting, a section's `products.cards`, a listing's `cards` | `[]` |
 | An `image` setting | `null` |
 | A card's `image`, `hoverImage`, `compareAt`, `rating` | `null` |
-| A product page's `media`, `options`; `brand`, `rating` | `[]`; `null` |
+| A product page's `media`, `options`, `specifications`; `brand`, `rating` | `[]`; `null` |
+| A card's `keySpecs`; a `<ProductModule>` the product has nothing for | `[]`; nothing renders |
 
 Rules:
 
@@ -161,6 +164,7 @@ Validate warns about every bundled image over 200 KiB and every file name that s
 - The card quick add is the one link that acts: `<a {...quickAdd(product)}>` adds a simple product in place when JavaScript runs and opens the product page when it does not.
 - Search is a `GET` form to `data.routes.search` with `name={data.searchParam}`. A menu that opens is a `<details>` or a `popover`, which open without JavaScript. Forms post to store paths.
 - An island improves markup that already works: Escape to close, a carousel's arrows, a countdown. The page must read and work before the island loads and without it. Never put content buyers or crawlers need inside `<Deferred>`.
+- An island never moves or reads the store's markup (the header's logo, the spec table, the details tabs). Place a store module with `<ProductModule name="…" />` and read data from the projection or the context. Pass an island what it needs as `props` (16 KiB of JSON at most), not as hidden elements.
 
 Wrong:
 

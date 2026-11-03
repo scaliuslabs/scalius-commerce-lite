@@ -127,16 +127,19 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 | --- | --- | --- | --- |
 | `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | its slots | empty: core |
 | `product_card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | its two slots | empty: core |
-| `product_main` | `StorefrontProductPage` | `buy_form` (required, exactly one), `gallery`, `reviews`, `recommendations` | no buy form: core |
+| `product_main` | `StorefrontProductPage` | `buy_form` (required, exactly one), `gallery`, `reviews`, `recommendations`, `module` (each product module once) | no buy form: core |
 | `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (only an omitted `pagination` is appended; place `filters` and `toolbar` yourself) | empty: core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none | empty: the core section |
 
 - **`product_main`** draws the product page's breadcrumbs, gallery and buy box. `<BuyForm />` is the store's real buy form: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app components, kept current as the buyer chooses. `<Gallery />` is the theme's gallery (thumbnails and zoom on computers, a swipeable photo on phones, the chosen SKU's photo); its first photo is preloaded. Prefer it to drawing `product.media` yourself. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- **Product modules in a skin.** `<ProductModule name="spec-table" />` draws one of the theme template's product modules where the skin puts it, with the store's own renderer, words and scripts, and leaves it out from below. The names are `STOREFRONT_PRODUCT_MODULE_EMBEDS`: `description` (the merchant's extra tabs and the key features; the skin draws `descriptionHtml` itself), `spec-table`, `key-attributes`, `about-bullets`, `content-blocks`, `compare-similar`, `policies` and `recently-viewed`. Each renders once, and only when the template has it and the product has something for it; otherwise nothing renders there. Never move the store's markup with an island.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`.
 - **`listing_main`** draws the listing between the collection template's sections. Page links are numbered links on every listing, so crawlers reach every product.
 - **Core sections.** Each skinnable section type has its own sealed projection (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, …) with its own version. Core's stored settings never reach a skin. Images arrive as `StorefrontImage | null`, product sources as `products` (`{ title, url, cards }`), categories and collections as tiles, a promotion as `{ endsAt } | null`. A projection only gains optional fields; when core changes a section, the host adapts it so your input stays the same. `aboveFold` is true for the homepage's lead section: load its first row of photos eagerly. `recently_viewed`, `endless_grid` and `objects` have no skin.
 - **The header** gets menu items (three levels, at most `STOREFRONT_COMPONENT_LIMITS.menuItems`: the store's header menu and category cut fit whole, a larger tree is cut top levels first and a parent's page lists the rest) with their category's photo, `routes.orders` and `routes.trackOrder`, `searchScopes` (the top published categories) with `searchScopeParam` (a form sending `category=<value>` to `routes.search` searches that category, no JavaScript needed), `market` (country, currency, language and the country form's selection), and the theme's phone navigation (`phoneNavigation.menu`: `accordion` or `drill`; `tabBar`). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` and `whenSignedOut()` and the store shows the right one before first paint. On the homepage the header also gets `data.page.lead`, the first section when desktop and phone order agree.
-- **The product page** carries `sku` (a product without options), each variant's `sku`, and `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null. A category listing carries `children` (published child categories with photos).
+- **The product page** carries `sku` (a product without options), each variant's `sku`, `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null, and `specifications`: the specification table's rows in its order (`{ group, label, value, unit, keySpec }`, plain text; the store writes `value unit`). A category listing carries `children` (published child categories with photos).
+- **A card** carries `keySpecs` (`{ label, value }`), the key specs among its `facts` lines. Read those instead of splitting `facts`.
+- **Every unit's context** carries `context.store.logo` (`StorefrontImage | null`), the logo the store's header draws.
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product_main`, `listing_main` and product-slot components.
 
 ### Header behaviour
@@ -235,7 +238,7 @@ The keys of `sections`, `components` and `skins` match the manifest's section ty
 
 - `Image`: a responsive `<img>` with `srcset` and intrinsic size (no layout shift). Lazy unless `loading="eager"`, which also sets `fetchpriority="high"`; pass `fetchpriority="auto"` for the rest of an eager first row.
 - `Price`: the market's formatted price with an accessible compare-at (`from` for "From …").
-- `Island`: interactive markup (`hydrate`: `visible` (default), `idle`, `load`, `interaction`).
+- `Island`: interactive markup (`hydrate`: `visible` (default), `idle`, `load`, `interaction`). Its `props` are JSON in the page, at most 16 KiB (`islandPropsBytes`).
 - `Deferred`: markup laid out only at its moment (below).
 - `Slot`: a unit's component slot, in place.
 - `whenSignedIn()`, `whenSignedOut()`: the two versions of a signed-in part.
@@ -244,8 +247,8 @@ The keys of `sections`, `components` and `skins` match the manifest's section ty
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place. Preview only; the published page has no marks.
 - `asset(context, "fonts/display.woff2")`: the URL of a file in your package's `public/` folder. The helper adds `public/` itself, so pass the path inside it.
 - `t(context, { en, bn, … })`: words in the page's language (the exact BCP 47 tag, then its language, then English).
-- `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney(context, money)`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them. `context.store` carries the page's `language`, `locale`, `currency` and `timeZone`.
-- `BuyForm`, `Gallery`, `Reviews`, `Recommendations`, `Filters`, `Toolbar`, `Pagination`, `OrderForm`: core embeds (below).
+- `formatNumber`, `plural(context, count, { en: { one: "# review", other: "# reviews" } })`, `formatMoney(context, money)`, `formatDate`, `storeTime`: numbers, plurals, money and dates as the store writes them. `context.store` carries the page's `language`, `locale`, `currency` and `timeZone`, and the store's `logo`.
+- `BuyForm`, `Gallery`, `Reviews`, `Recommendations`, `ProductModule`, `Filters`, `Toolbar`, `Pagination`, `OrderForm`: core embeds (below).
 
 JSX escapes every string. `raw(...)` passes HTML through; the output check still runs. Event handler attributes and functions as attributes are refused at render time. Money on the storefront is `StorefrontMoney`: `{ amountMinor, currency, formatted }`.
 
@@ -273,6 +276,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 
 - An island's module loads from the store's origin only when its moment comes, once per page however often it appears.
 - `context` carries your file base (`assets`), the store's `language` and `currency`, `formatMoney`, `signedIn()`, the cart (`openCart`, `quickAdd(url)`, `addLine({ variantId, quantity?, purchaseOption? })` for a SKU without buyer inputs, one-time or under one of your own purchase options, and `onCart(listener)`, whose `total` is `StorefrontMoney`), and `fetchApp(path)`, which reaches your public routes through the storefront proxy (same origin, no CSP host needed).
+- An island's `props` are at most 16 KiB of JSON (`STOREFRONT_COMPONENT_LIMITS.islandPropsBytes`). Larger props are left out and the island mounts with `props` undefined; `storefrontShown`, `checkSkinHtml` and `pnpm plugin validate` name it. Load more with `fetchApp`, never by hiding data in extra markup.
 - On a product page, `context.product` gives `state()` (`{ variantId, quantity, inputs, purchaseOption }`) and `onChange(listener)`.
 - Return a cleanup for your listeners, timers and observers. The host cancels pending hydration on removal and mounts again when the element reconnects.
 
@@ -285,6 +289,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 | `buy_form` (`<BuyForm title={false} />`) | `product_main` (required, one) | The real buy form |
 | `gallery` (`<Gallery />`) | `product_main` (one) | The theme's gallery, in step with the chosen variant |
 | `reviews`, `recommendations` | `product_main` | The product's reviews and related products |
+| `module` (`<ProductModule name="…" />`) | `product_main` (each name once) | One of the template's product modules, left out from below |
 | `filters`, `toolbar`, `pagination` | `listing_main` | The filter form, sort and page size, page links |
 | `order_form` (`<OrderForm product={…} />`) | sections (up to two each) | The single-page order form |
 | `slot` (`<Slot name="…" />`) | header, footer and card skins | A component slot |
@@ -317,8 +322,8 @@ pnpm plugin pack ~/code/acme-studio --key <folder>    # dist/ and the signed upl
 - `renderSkin(module, id, target, settings?, data?, options?)`: a skin's HTML over its target's fixture projection (or yours). It throws when the store would draw the core unit instead: a missing buy form, an embed the target does not allow, or invalid header markup.
 - `renderHeader`, `renderFooter`, `renderProductCard`: `renderSkin` for those units, merging your partial data over the fixture. `renderHeader` also checks duplicate ids, form targets, unsafe action links, sticky markers and island names; pass `{ islands: ["menu"] }` to check names against your manifest.
 - `assertHeaderContract(html, { islands })`: the same header checks on your own markup.
-- `checkSkinHtml(target, html)`: the problems that would make the store draw the core unit.
-- `storefrontShown(html, appId)`: what the store shows of your markup after its output check, and how many elements and attributes it `dropped`. Assert `dropped` is 0.
+- `checkSkinHtml(target, html)`: the problems that would make the store draw the core unit, and islands whose props it would leave out.
+- `storefrontShown(html, appId)`: what the store shows of your markup after its output check, and how many elements and attributes it `dropped`. Assert `dropped` is 0. `oversizedProps`, present only then, names the islands whose props are over 16 KiB.
 - Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)` and `fixtureSectionSkinData(type)`. `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`.
 - Fixture stores: `fixtureStore(name)` for each of `FIXTURE_STORES` (`sample`, `empty`, `other`) gives that store's `context()`, `productCards()`, `image()`, `productPage()` and `skinData(target)`, the data `pnpm plugin preview` renders with. Loop your skin and section tests over all three ([Build a theme](themes.md#test-on-more-than-one-store)).
 
@@ -357,6 +362,7 @@ These are author checks, not proof of visual correctness. Exercise the composed 
 | One island / all islands | 64 KiB / 192 KiB |
 | Public files | 512 KiB each, 4 MiB and 40 files in all (woff2, woff, svg, png, jpg, jpeg, webp, avif) |
 | Markup per render | 256 KiB, nesting depth 48, 6,000 elements |
+| One island's props | 16 KiB of JSON, inside the markup's 256 KiB; any other attribute 2,000 characters |
 | Items in one menu a skin gets | 300 (links and headings; a larger tree is cut top levels first, every level kept) |
 | Jobs per batch | 120 |
 | Batch CPU (isolate) | 50 ms |
