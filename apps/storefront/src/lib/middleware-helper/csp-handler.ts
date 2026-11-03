@@ -221,8 +221,11 @@ export function setPageCspHeader(
   response: Response,
   origins: CspPlatformOrigins = {},
   merchantSources = "",
-  /** Origins besides the storefront that may frame the page (the dashboard, under a theme preview only). */
-  frameAncestors: readonly string[] = [],
+  /**
+   * Origins besides the storefront that may frame the page (the dashboard, under a theme preview only);
+   * `null` for a buyer's own page, which nothing frames, the storefront included.
+   */
+  frameAncestors: readonly string[] | null = [],
   /**
    * Origins of the active apps' scripts this page loads (the layout payload's
    * `appScripts` for this page kind): allowed to load and to connect.
@@ -261,7 +264,7 @@ export function setPageCspHeader(
     directive("worker-src", getWorkerSrcDirectives(additionalDomains)),
     "base-uri 'self'",
     "form-action 'self' https://www.facebook.com https://*.stripe.com",
-    ["frame-ancestors 'self'", ...frameAncestors].join(" "),
+    frameAncestors === null ? "frame-ancestors 'none'" : ["frame-ancestors 'self'", ...frameAncestors].join(" "),
   ];
 
   response.headers.set(

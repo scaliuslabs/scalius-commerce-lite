@@ -22,6 +22,8 @@ export function applyTransportSecurityHeaders(
      * X-Frame-Options overrides that for older browsers.
      */
     framedByPolicy?: boolean;
+    /** A buyer's own page: nothing frames it. */
+    buyerPage?: boolean;
   },
 ): Response {
   const privateDownload = isDigitalDownloadPathname(new URL(request.url).pathname);
@@ -31,7 +33,7 @@ export function applyTransportSecurityHeaders(
   const secured = applyBaselineSecurityHeaders(request, response, {
     frameProtection: options.framedByPolicy && !privateDownload
       ? "preserve"
-      : options.privateRelay || privateDownload ? "deny" : "same-origin",
+      : options.privateRelay || privateDownload || options.buyerPage ? "deny" : "same-origin",
   });
   if (options.privateRelay || privateDownload || pageWantsNoReferrer) secured.headers.set("Referrer-Policy", "no-referrer");
   return secured;
