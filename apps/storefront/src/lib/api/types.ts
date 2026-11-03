@@ -219,10 +219,8 @@ export interface SelectedProductOption {
  */
 export interface ProductCardFacts {
   brand: { name: string; slug: string } | null;
-  /** Up to four "Name: value" lines, in spec-table order. */
-  keySpecs: string[];
-  /** The same key specs as name, display value (a number carries its unit) and unit (absent from an older API). */
-  keySpecRows?: Array<{ label: string; value: string; unit: string | null }>;
+  /** Up to CARD_KEY_SPECS_MAX key specs in spec-table order: name, display value (a number carries its unit) and unit. */
+  keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
   /** Option axes with two or more values sold on a live SKU. */
   options: Array<{
     name: string;

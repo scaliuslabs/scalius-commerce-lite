@@ -10,6 +10,7 @@ import { formatMoney } from "@/lib/currency";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
+import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
 import { capImageSrcSet } from "@/lib/responsive-image";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
@@ -19,8 +20,6 @@ import { cssNamedColour } from "./css-colours";
 
 export type ProductCardProduct = Product & { secondaryImageUrl?: string | null };
 
-/** Key specs a card lists (two on phones, three from 640px). */
-export const KEY_SPECS_MAX = 3;
 /** Colour swatches a card draws before "+N". */
 export const SWATCHES_MAX = 5;
 
@@ -32,9 +31,10 @@ export const CARD_IMAGE_DIMENSIONS = {
 } as const satisfies Record<StorefrontImageRatio, { width: number; height: number }>;
 
 export interface ProductCardFactValues {
+  /** The card's lines, "label: value", written from `keySpecRows`. */
   keySpecs: string[];
-  /** The same key specs as name, display value and unit; null when the API sent only the lines. */
-  keySpecRows: Array<{ label: string; value: string; unit: string | null }> | null;
+  /** At most CARD_KEY_SPECS_MAX key specs: name, display value and unit. */
+  keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
   /** The average (0-5) and the count of published reviews. */
   rating: { average: number; count: number } | null;
   packSize: string | null;
@@ -109,18 +109,14 @@ function cardFactValues(product: ProductCardProduct, money: (amount: number) => 
     return label && colour ? [{ label, colour }] : [];
   });
   const items = known.slice(0, SWATCHES_MAX);
-  const keySpecRows = facts?.keySpecRows
-    ? facts.keySpecRows.flatMap((spec) => {
-      const label = nonEmpty(spec.label);
-      const value = nonEmpty(spec.value);
-      return label && value ? [{ label, value, unit: nonEmpty(spec.unit) }] : [];
-    }).slice(0, KEY_SPECS_MAX)
-    : null;
+  const keySpecRows = (facts?.keySpecRows ?? []).flatMap((spec) => {
+    const label = nonEmpty(spec.label);
+    const value = nonEmpty(spec.value);
+    return label && value ? [{ label, value, unit: nonEmpty(spec.unit) }] : [];
+  }).slice(0, CARD_KEY_SPECS_MAX);
   return {
     // One list: the lines are written from the rows, so they never disagree.
-    keySpecs: keySpecRows
-      ? keySpecRows.map((spec) => `${spec.label}: ${spec.value}`)
-      : (facts?.keySpecs ?? []).map((spec) => spec.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, KEY_SPECS_MAX),
+    keySpecs: keySpecRows.map((spec) => `${spec.label}: ${spec.value}`),
     keySpecRows,
     rating: rating && rating.count > 0 && rating.average > 0 ? { average: rating.average, count: rating.count } : null,
     packSize: nonEmpty(facts?.packSize),

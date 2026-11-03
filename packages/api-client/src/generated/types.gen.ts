@@ -108,11 +108,7 @@ export type ProductCardFacts = {
         slug: string;
     } | null;
     /**
-     * Up to four "Name: value" lines from key-spec attributes, in spec-table order.
-     */
-    keySpecs: Array<string>;
-    /**
-     * The same key specs as name, value and unit, in the same order.
+     * Up to 3 key specs from key-spec attributes, in spec-table order: name, value and unit (a card writes each as "name: value").
      */
     keySpecRows: Array<{
         /**

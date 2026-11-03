@@ -374,14 +374,6 @@
             ],
             "description": "The published brand entity."
           },
-          "keySpecs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 4,
-            "description": "Up to four \"Name: value\" lines from key-spec attributes, in spec-table order."
-          },
           "keySpecRows": {
             "type": "array",
             "items": {
@@ -407,8 +399,8 @@
                 "unit"
               ]
             },
-            "maxItems": 4,
-            "description": "The same key specs as name, value and unit, in the same order."
+            "maxItems": 3,
+            "description": "Up to 3 key specs from key-spec attributes, in spec-table order: name, value and unit (a card writes each as \"name: value\")."
           },
           "options": {
             "type": "array",
@@ -516,7 +508,6 @@
         },
         "required": [
           "brand",
-          "keySpecs",
           "keySpecRows",
           "options",
           "soldLast30Days",

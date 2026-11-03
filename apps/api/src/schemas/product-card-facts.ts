@@ -2,20 +2,18 @@
 // (catalog/card-facts.ts), shared by every route that returns listing or
 // homepage cards. Every fact is stored data; a missing fact is null or empty.
 import { z } from "@hono/zod-openapi";
+import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
 
 export const productCardFactsSchema = z.object({
   brand: z.object({ name: z.string(), slug: z.string() }).nullable().openapi({
     description: "The published brand entity.",
   }),
-  keySpecs: z.array(z.string()).max(4).openapi({
-    description: "Up to four \"Name: value\" lines from key-spec attributes, in spec-table order.",
-  }),
   keySpecRows: z.array(z.object({
     label: z.string().openapi({ description: "The attribute's name." }),
     value: z.string().openapi({ description: "Its display value, as the specification table writes it (a number carries its unit)." }),
     unit: z.string().nullable().openapi({ description: "A number attribute's unit; null otherwise." }),
-  })).max(4).openapi({
-    description: "The same key specs as name, value and unit, in the same order.",
+  })).max(CARD_KEY_SPECS_MAX).openapi({
+    description: `Up to ${CARD_KEY_SPECS_MAX} key specs from key-spec attributes, in spec-table order: name, value and unit (a card writes each as "name: value").`,
   }),
   options: z.array(z.object({
     name: z.string().openapi({ description: "The merchant's option axis name." }),

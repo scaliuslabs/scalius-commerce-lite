@@ -15,6 +15,7 @@ import type { StorefrontCustomFieldRow } from "../custom-fields";
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
+import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
 import {
   PRODUCT_MEDIA_QUERY_CHUNK,
   type ProductMediaProjection,
@@ -24,8 +25,6 @@ import {
 } from "../products";
 import { deps } from "../../cache-deps";
 
-/** Key specs a card lists (Star Tech shows four). */
-export const CARD_KEY_SPECS_MAX = 4;
 /** Swatches a card shows per colour axis (Amazon shows three to five). */
 export const CARD_SWATCHES_MAX = 5;
 /** Units sold in 30 days below which a card says nothing about sales (owner decision, 2026-09-25). */
@@ -51,9 +50,7 @@ export interface ProductCardOptionFact {
 
 export interface ProductCardFacts {
     brand: { name: string; slug: string } | null;
-    /** "Processor: Intel Core i5-1235U", at most CARD_KEY_SPECS_MAX, in spec-table order. */
-    keySpecs: string[];
-    /** The same key specs as rows: the attribute name, its display value (a number carries its unit) and the unit of a number attribute. */
+    /** At most CARD_KEY_SPECS_MAX key specs, in spec-table order: the attribute name, its display value (a number carries its unit) and the unit of a number attribute. */
     keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
     /** Option axes in position order, only those with two or more values. */
     options: ProductCardOptionFact[];
@@ -69,7 +66,6 @@ export interface ProductCardFacts {
 
 export const EMPTY_PRODUCT_CARD_FACTS: ProductCardFacts = Object.freeze({
     brand: null,
-    keySpecs: [],
     keySpecRows: [],
     options: [],
     soldLast30Days: null,
@@ -311,14 +307,13 @@ export function resolveProductCardFacts(
     };
     return (productId: string): ProductCardFacts => {
         const facts = byProduct.get(productId);
-        if (!facts) return { ...EMPTY_PRODUCT_CARD_FACTS, keySpecs: [], keySpecRows: [], options: [], delivery: delivery(productId) };
+        if (!facts) return { ...EMPTY_PRODUCT_CARD_FACTS, keySpecRows: [], options: [], delivery: delivery(productId) };
         const keySpecRows = [...facts.specs]
             .sort((left, right) => left.rank - right.rank)
             .slice(0, CARD_KEY_SPECS_MAX)
             .map(({ label, value, unit }) => ({ label, value, unit }));
         return {
             brand: facts.brand,
-            keySpecs: keySpecRows.map((spec) => `${spec.label}: ${spec.value}`),
             keySpecRows,
             options: [...facts.axes]
                 .sort((left, right) => left.position - right.position)

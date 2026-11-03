@@ -40,6 +40,7 @@ import { storefrontSectionDefault, storefrontVisibleSection } from "@scalius/sha
 import { coreSectionSkinSettings, type CoreSectionResolver } from "@scalius/shared/storefront-theme/skins";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 import { sanitizePluginHtml } from "@scalius/shared/plugins/html";
+import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
 
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
 
@@ -88,7 +89,7 @@ const SAMPLE_SPECIFICATIONS: StorefrontSpecification[] = [
 
 /** A card's key specs and its fact lines, written from the same rows as the store writes them. */
 function cardKeySpecs(specifications: readonly StorefrontSpecification[]): Pick<StorefrontProductCard, "facts" | "keySpecs"> {
-  const keySpecs = specifications.filter((row) => row.keySpec).slice(0, 4).map(({ label, value, unit }) => ({ label, value, unit }));
+  const keySpecs = specifications.filter((row) => row.keySpec).slice(0, CARD_KEY_SPECS_MAX).map(({ label, value, unit }) => ({ label, value, unit }));
   return { facts: keySpecs.map((row) => `${row.label}: ${row.value}`), keySpecs };
 }
 

@@ -163,7 +163,11 @@ export function cardProduct(index: number, options: { bangla?: boolean } = {}) {
     rating: seed.rating ? { average: seed.rating[0], count: seed.rating[1] } : null,
     cardFacts: {
       brand: brand ? { name: brand[1], slug: brand[0] } : null,
-      keySpecs: seed.specs ?? [],
+      // The seed writes each spec as "label: value", as a card shows it.
+      keySpecRows: (seed.specs ?? []).map((spec) => {
+        const [label = "", ...value] = spec.split(": ");
+        return { label, value: value.join(": "), unit: null };
+      }),
       options: [
         ...(seed.colors ? [{ name: "Colour", kind: "color" as const, count: seed.colors.length, swatches: seed.colors.slice(0, 5).map(([label, hex]) => ({ label, hex })) }] : []),
         ...(seed.sizes ? [{ name: "Size", kind: "size" as const, count: seed.sizes.length, swatches: [] }] : []),

@@ -114,7 +114,7 @@ function naturalOrder(left: string, right: string): number {
  * another shape are written, 90 products per batch with their revision bump
  * and projection refresh. Returns how many products were rewritten.
  */
-export async function rewriteNumberDisplays(
+async function rewriteNumberDisplays(
     db: Database,
     attributeId: string,
     unit: string | null | "in force",

@@ -376,9 +376,9 @@ export interface StorefrontProductCard {
   facts: string[];
   /**
    * The key specs among `facts` as rows (the card writes each as
-   * `label: value`), in the same order: `value` as the store writes it (a
-   * number carries its unit), `unit` a number attribute's unit, else null.
-   * Absent from older stores.
+   * `label: value`), in the same order, three at most: `value` as the store
+   * writes it (a number carries its unit), `unit` a number attribute's unit,
+   * else null. Absent from older stores.
    */
   keySpecs?: Array<{ label: string; value: string; unit: string | null }>;
   /** Requested storefront-visible custom fields, keyed by namespace.key (money as `StorefrontMoney`). */
