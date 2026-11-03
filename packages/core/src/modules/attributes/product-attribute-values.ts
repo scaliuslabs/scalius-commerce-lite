@@ -22,6 +22,7 @@ import { encodeAttributeValue } from "./attribute-value-codec";
 import { attributeValueInsertStatement, type NewAttributeValueRow } from "./attribute-definition";
 import { newAttributeValueId } from "./attribute-values";
 import type { AttributeBatchItem } from "./projection-refresh";
+import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
 
 /** Attributes one product may carry (one statement's worth of rows). */
 export const MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS = 90;
@@ -105,7 +106,7 @@ export async function prepareProductAttributeValueRows(
 
     const newEnumValues = new Map<string, NewAttributeValueRow & { attributeId: string }>();
     // `k` is the row's kind as text: json_extract() yields text on PostgreSQL.
-    const rows: Array<{ id: string; a: string; v: string; n: number | null; k: "enum" | "plain" }> = [];
+    const rows: Array<{ id: string; a: string; v: string; n: number | null; k: "enum" | "number" | "plain" }> = [];
     const planned: PlannedProductAttributeValue[] = [];
     for (const entry of entries) {
         const definition = byAttribute.get(entry.attributeId)!;
@@ -139,7 +140,10 @@ export async function prepareProductAttributeValueRows(
                 kind: "enum",
             });
         } else {
-            rows.push({ id: `val_${nanoid()}`, a: entry.attributeId, v: encoded.value, n: encoded.valueNumber, k: "plain" });
+            rows.push({
+                id: `val_${nanoid()}`, a: entry.attributeId, v: encoded.value, n: encoded.valueNumber,
+                k: definition.valueType === "number" ? "number" : "plain",
+            });
             planned.push({ attributeId: entry.attributeId, value: encoded.value, valueNumber: encoded.valueNumber, valueId: null, kind: "plain" });
         }
     }
@@ -157,8 +161,13 @@ export async function prepareProductAttributeValueRows(
 
     // Enum rows name their value by (attribute, normalised text) at write
     // time, so a value created above or renamed meanwhile still resolves.
-    // Numbers cast AS NUMERIC: REAL is single precision on PostgreSQL.
+    // Numbers cast AS NUMERIC: REAL is single precision on PostgreSQL. A
+    // number's text is written with the unit in force when the batch commits,
+    // so a save racing a unit change never stores the unit it replaced.
     const payload = JSON.stringify(rows);
+    const numberText = sql`${canonicalAttributeNumberSql(sql`CAST(json_extract(entry.value, '$.n') AS DOUBLE PRECISION)`)}
+        || COALESCE(' ' || (SELECT number_attribute.unit FROM ${productAttributes} AS number_attribute
+            WHERE number_attribute.id = CAST(json_extract(entry.value, '$.a') AS TEXT)), '')`;
     const enumValue = (column: "id" | "value") => sql`(
         SELECT enum_value.${sql.raw(column)} FROM ${attributeValues} AS enum_value
         WHERE enum_value.attribute_id = CAST(json_extract(entry.value, '$.a') AS TEXT)
@@ -171,6 +180,7 @@ export async function prepareProductAttributeValueRows(
                CAST(json_extract(entry.value, '$.a') AS TEXT),
                CASE WHEN CAST(json_extract(entry.value, '$.k') AS TEXT) = 'enum'
                     THEN COALESCE(${enumValue("value")}, CAST(json_extract(entry.value, '$.v') AS TEXT))
+                    WHEN CAST(json_extract(entry.value, '$.k') AS TEXT) = 'number' THEN ${numberText}
                     ELSE CAST(json_extract(entry.value, '$.v') AS TEXT) END,
                unixepoch(),
                CASE WHEN CAST(json_extract(entry.value, '$.k') AS TEXT) = 'enum' THEN ${enumValue("id")} ELSE NULL END,

@@ -155,6 +155,39 @@ export async function convertAttributeValueType(
     const dryRun = input.dryRun === true;
     const wrong = and(eq(productAttributeValues.attributeId, attribute.id), wrongShape(target, unit))!;
 
+    // A number keeping its type under another unit: every value's text is
+    // rewritten from its number (nothing can fail to convert). Rows go first
+    // and the definition last, so an interruption leaves the old unit in force
+    // and the next request for the new unit resumes only the rows still in the
+    // old shape (each product bumped once). Product saves write their text with
+    // the unit in force when they commit, so one pass after the switch catches
+    // a save that wrote the old unit after its chunk.
+    // (A conversion to number that an interruption left with text rows still
+    // to parse resumes below, through the validating path.)
+    const textToParse = attribute.valueType === "number" && target === "number"
+        ? await db.select({ rows: count() }).from(productAttributeValues)
+            .where(and(wrong, sql`(${productAttributeValues.valueNumber} IS NULL OR ${productAttributeValues.valueId} IS NOT NULL)`)).get()
+        : null;
+    if (textToParse && Number(textToParse.rows) === 0) {
+        const totalRow = await db.select({ rows: count() }).from(productAttributeValues).where(wrong).get();
+        const result: AttributeTypeConversionResult = {
+            attributeId: attribute.id, fromType: "number", valueType: "number", facetDisplay, unit, dryRun,
+            rows: Number(totalRow?.rows ?? 0), distinctValues: 0, newValues: 0, unconvertibleCount: 0, unconvertibleSamples: [],
+            converted: 0, skipped: 0, skippedSamples: [], changed: false,
+        };
+        if (dryRun) return result;
+        result.converted = await rewriteNumberDisplays(db, attribute.id, unit, refresh);
+        if (unit !== attribute.unit || facetDisplay !== attribute.facetDisplay) {
+            await db.update(productAttributes)
+                .set({ unit, facetDisplay, updatedAt: sql`unixepoch()` })
+                .where(and(eq(productAttributes.id, attribute.id), isNull(productAttributes.deletedAt)));
+            result.converted += await rewriteNumberDisplays(db, attribute.id, unit, refresh);
+            result.changed = true;
+        }
+        if (result.converted > 0) result.changed = true;
+        return result;
+    }
+
     // 1. Validate every value that still has to move, before anything changes.
     const totalRow = await db.select({ rows: count() }).from(productAttributeValues).where(wrong).get();
     const rows = Number(totalRow?.rows ?? 0);

@@ -36,7 +36,7 @@ import {
 } from "./attributes.validation";
 import { encodeAttributeValue } from "./attribute-value-codec";
 import { attributeValueInsertStatement, readLiveAttributeDefinition } from "./attribute-definition";
-import { rewriteNumberDisplays } from "./attribute-types";
+import { convertAttributeValueType } from "./attribute-types";
 import { assertLiveAttributeGroup } from "./attribute-groups";
 import {
     createAttributeValueRow,
@@ -491,7 +491,12 @@ export async function updateAttribute(
     }
     if (data.groupId !== undefined) await assertLiveAttributeGroup(db, data.groupId);
 
-    const { options, ...definition } = data;
+    const { options, unit, ...rest } = data;
+    // A number attribute's new unit is written by the conversion, after its values.
+    const unitChange = current.valueType === "number" && unit !== undefined && (unit?.trim() || null) !== current.unit
+        ? { unit: unit?.trim() || null }
+        : null;
+    const definition = unit === undefined || unitChange ? rest : { ...rest, unit };
     const plan = options !== undefined
         ? await planAttributeValuePresets(db, current, options ?? [])
         : undefined;
@@ -523,12 +528,13 @@ export async function updateAttribute(
             rewriteDisplay: plan.renamedEnumValueIds.length > 0,
         });
     }
-    // A number's display text carries its unit. Every save rewrites the values
-    // whose text is not their number with the saved unit: a new unit, or one an
-    // interrupted save or a racing product save left behind, so saving again
-    // always converges (nothing stale: one bounded read, no write).
-    if (current.valueType === "number") {
-        await rewriteNumberDisplays(db, id, updatedAttribute.unit, refresh);
+    // A number's display text carries its unit: a new unit goes through the
+    // resumable conversion (values first, the unit last), so an interrupted
+    // change resumes when the new unit is saved again. A save that keeps the
+    // unit reads no value.
+    if (unitChange) {
+        await convertAttributeValueType(db, { attributeId: id, valueType: "number", unit: unitChange.unit }, refresh);
+        return { attribute: { ...updatedAttribute, unit: unitChange.unit } };
     }
 
     return { attribute: updatedAttribute };
