@@ -253,6 +253,91 @@ export function settingsDocumentsJoin(documents: readonly { key: string }[]) {
   )!;
 }
 
+const SCOPED_READS = Symbol("scalius.scopedReads");
+
+type ScopedReads = Map<string, Promise<unknown>>;
+
+function scopedReadsOf(db: Database): ScopedReads | undefined {
+  return (db as unknown as { [SCOPED_READS]?: ScopedReads })[SCOPED_READS];
+}
+
+/**
+ * A handle for one unit of background work (one notification's dispatch) on
+ * which each settings document, and each read passed to `readOnce`, is read
+ * at most once. The memo lives on the returned handle, never in module state,
+ * so it ends with the work that holds it. Document writes through the handle
+ * and `forgetScopedRead` drop what they change. Request handlers do not use
+ * one: their reads declare the cache dependencies.
+ */
+export function withScopedReads(db: Database): Database {
+  if (scopedReadsOf(db)) return db;
+  return Object.create(db, { [SCOPED_READS]: { value: new Map() } }) as Database;
+}
+
+/** `load` once per key on a `withScopedReads` handle (a failed load is not kept); every call loads on any other handle. */
+export function readOnce<T>(db: Database, key: string, load: () => Promise<T>): Promise<T> {
+  const reads = scopedReadsOf(db);
+  if (!reads) return load();
+  const known = reads.get(key) as Promise<T> | undefined;
+  if (known) return known;
+  const pending = load();
+  reads.set(key, pending);
+  pending.catch(() => {
+    if (reads.get(key) === pending) reads.delete(key);
+  });
+  return pending;
+}
+
+/** Drops a `readOnce` result after a write through the same handle changed it. */
+export function forgetScopedRead(db: Database, key: string): void {
+  scopedReadsOf(db)?.delete(key);
+}
+
+const documentReadKey = (key: string) => `settings:${key}`;
+
+/**
+ * Several documents' rows in one statement. On a `withScopedReads` handle
+ * only the documents it has not read yet are selected, and each is kept for
+ * the handle's later reads.
+ */
+export async function readSettingsDocuments(
+  db: Database,
+  documents: readonly { key: string }[],
+): Promise<SettingsDocumentRow[]> {
+  const reads = scopedReadsOf(db);
+  if (!reads) return selectSettingsDocuments(db, documents);
+  const missing = documents.filter((document) => !reads.has(documentReadKey(document.key)));
+  if (missing.length > 0) {
+    const pending = selectSettingsDocuments(db, missing).then((rows) => rows as SettingsDocumentRow[]);
+    for (const document of missing) {
+      const row = pending.then((rows) => rows.find((candidate) => candidate.category === document.key));
+      reads.set(documentReadKey(document.key), row);
+      row.catch(() => {
+        if (reads.get(documentReadKey(document.key)) === row) reads.delete(documentReadKey(document.key));
+      });
+    }
+  }
+  const rows = await Promise.all(documents.map((document) => reads.get(documentReadKey(document.key)) as Promise<SettingsDocumentRow | undefined>));
+  return rows.filter((row): row is SettingsDocumentRow => row !== undefined);
+}
+
+/**
+ * Keeps documents' rows a caller selected in its own batch
+ * (`selectSettingsDocuments`) for a `withScopedReads` handle's later reads; a
+ * document without a row is kept as not stored. No-op on any other handle.
+ */
+export function rememberSettingsDocuments(
+  db: Database,
+  documents: readonly { key: string }[],
+  rows: readonly SettingsDocumentRow[],
+): void {
+  const reads = scopedReadsOf(db);
+  if (!reads) return;
+  for (const document of documents) {
+    reads.set(documentReadKey(document.key), Promise.resolve(rows.find((row) => row.category === document.key)));
+  }
+}
+
 function maskedMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -310,6 +395,7 @@ export async function writeSettingsDocuments(
   const before = options.before ?? [];
   const after = options.after ?? [];
   const retryable = requests.every((request) => request.expectedRevision === undefined);
+  for (const request of requests) forgetScopedRead(db, documentReadKey(request.document.key));
   for (let attempt = 1; ; attempt += 1) {
     const prepared: Array<PreparedSettingsWrite<object>> = [];
     for (const request of requests) {
@@ -440,6 +526,11 @@ export function defineSettingsDocument<T extends object>(
     return rows[0];
   }
 
+  /** The stored row, read once on a `withScopedReads` handle (a write always reads it fresh). */
+  async function readRowOnce(db: Database): Promise<SettingsDocumentRow | undefined> {
+    return (await readSettingsDocuments(db, [definition]))[0];
+  }
+
   async function readCache(ctx: SettingsDocumentContext): Promise<T | null> {
     if (!definition.cacheKey || !ctx.kv) return null;
     // A public render never bakes the mirror in: it may lag the row the
@@ -544,7 +635,7 @@ export function defineSettingsDocument<T extends object>(
         return { value: cached, revision: 0, stored: true, invalid: false, secretErrors: {}, secretsConfigured: {} };
       }
     }
-    const result = await resolveRow(await readRow(db), ctx);
+    const result = await resolveRow(await readRowOnce(db), ctx);
     // Never cache the defaults that stand in for an unreadable row as if saved.
     if (!result.invalid) await writeCache(ctx, result.value);
     return result;

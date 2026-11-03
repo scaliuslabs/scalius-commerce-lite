@@ -70,6 +70,14 @@
  * checks the event's legacy key in its own insert batch (exact event ids,
  * one round trip), and the batch that lands a payment closes the
  * off-session commands it settles (39 statements, 25 calls).
+ *
+ * Order notification (2026-11-03): one order_created message (buyer email,
+ * staff push without Firebase, one staff email) was 37 D1 calls: the settings
+ * documents read 9 times, the order and its context 6, provider health twice
+ * per channel, 3 calls per receipt and the staff alert recorded twice. A
+ * dispatch now reads its context and documents in one batch on a scoped
+ * handle, each receipt claim or skip is one statement and the staff alert is
+ * one batch recorded once: 12 calls.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -125,6 +133,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 295, fullScans: 7 },
     "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
+    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
@@ -159,5 +168,6 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 295, fullScans: 7 },
     "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
+    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
   },
 };

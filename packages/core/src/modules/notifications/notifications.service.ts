@@ -6,12 +6,12 @@ import { staffPermissionSql, type StaffPermissionRequirement } from "@scalius/co
 import { recordStaffAlert } from "./staff-alerts";
 import { staffPushPermission } from "./staff-push-policy";
 import type { Database } from "@scalius/database/client";
-import { adminFcmTokens, orders } from "@scalius/database/schema";
+import { adminFcmTokens } from "@scalius/database/schema";
 import { isReady } from "@scalius/shared/readiness";
 import { and, eq, sql } from "drizzle-orm";
 import { inJsonArray } from "../../utils/in-json-array";
-import { sendEmail } from "../../integrations/email";
-import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
+import { getEmailRuntimeSettings, sendEmail } from "../../integrations/email";
+import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailResult } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import { readFirebaseServiceAccountJson } from "../../integrations/firebase/settings";
@@ -27,6 +27,7 @@ import {
     markOrderNotificationDeliveryReceiptAccepted,
     markOrderNotificationDeliveryReceiptFailed,
     markOrderNotificationDeliveryReceiptSkipped,
+    recordSkippedOrderNotificationDeliveryReceipt,
     type OrderNotificationDeliveryChannel,
     type OrderNotificationDeliveryReceiptClaim,
     type OrderNotificationDeliveryTarget,
@@ -43,7 +44,7 @@ import {
     type OutboxNotificationType,
     type OrderNotificationType,
 } from "./notification-types";
-import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
+import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMessageContext, type OrderMessageContext } from "./order-email";
 import { notificationsDocument } from "./documents";
 import { getNotificationChannels, getOrderWhatsAppTemplateSettings } from "./channel-settings";
 import { getNotificationTemplates } from "./notification-templates.service";
@@ -69,6 +70,37 @@ interface OrderNotificationOptions {
     outboxId?: string;
     /** The app providers a saved SMS or email choice may name. */
     appProviders?: AppProviders;
+    /**
+     * The order's message context, read at most once for every channel of one
+     * dispatch (`readOrderContextOnce`). Without it each sender reads its own.
+     */
+    orderContext?: () => Promise<OrderMessageContext>;
+    /** The store's email settings, read at most once for every email of one dispatch (`readEmailSettingsOnce`). */
+    emailSettings?: () => Promise<EmailRuntimeSettings>;
+}
+
+/** One dispatch's email settings, read on the first email it sends. */
+export function readEmailSettingsOnce(
+    db: Database,
+    options: Pick<OrderNotificationOptions, "env" | "encryptionKey" | "appProviders">,
+): () => Promise<EmailRuntimeSettings> {
+    return once(() => getEmailRuntimeSettings({ db, env: options.env, encryptionKey: options.encryptionKey, appProviders: options.appProviders }));
+}
+
+async function emailRuntime(db: Database, options: OrderNotificationOptions): Promise<EmailRuntimeContext> {
+    const runtime: EmailRuntimeContext = { db, env: options.env, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
+    return options.emailSettings ? { ...runtime, settings: await options.emailSettings() } : runtime;
+}
+
+/**
+ * One dispatch's order message context, read on first use (after a target is
+ * claimed: a retry whose receipts are all settled never reads the order).
+ */
+export function readOrderContextOnce(
+    db: Database,
+    input: { orderId: string; name: string; type: OrderNotificationType; data?: Record<string, unknown>; storefrontUrl?: string },
+): () => Promise<OrderMessageContext> {
+    return once(() => readOrderMessageContext(input, db));
 }
 
 interface AdminPushOptions {
@@ -359,7 +391,7 @@ export async function sendAdminPush(
 ): Promise<OrderNotificationDispatchResult> {
     const permission = staffPushPermission(spec.receipt.notificationType);
     if (!permission) return EMPTY_DISPATCH_RESULT;
-    await recordStaffAlert(db, spec.outboxId, true);
+    // The dispatcher recorded the staff alert (`recordStaffAlert`) before any staff channel.
     const [fcm, web] = await Promise.all([sendAdminFcmPush(db, env, spec, permission), sendStaffWebPush(db, env, spec, permission)]);
     return buildDispatchResult([...fcm.outcomes, ...web]);
 }
@@ -716,17 +748,16 @@ export async function sendOrderNotificationEmail(
 
     // Read lazily, after a target is claimed: an accepted or skipped receipt
     // never re-reads the order or the store's templates.
-    const context = once(() => readOrderMessageContext({
+    const context = options.orderContext ?? readOrderContextOnce(db, {
         orderId, name, type, data,
         storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
-    }, db));
+    });
     const templates = once(async () => (await getNotificationTemplates(db, (await context()).language)).templates);
     const smsMessage = async () => composeOrderSms(await context(), (await templates()).sms[type].body);
 
     const outboxId = options.outboxId;
-    // The order's phone, read once for SMS and WhatsApp (null: placed without one).
-    const orderPhone = once(async () =>
-        (await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get())?.customerPhone ?? null);
+    // The order's phone for SMS and WhatsApp (null: placed without one), from the one context read.
+    const orderPhone = async () => (await context()).contact.phone;
 
     // An order placed without a phone (the shared contact rule then required
     // its email) hears by email where the merchant chose SMS or WhatsApp.
@@ -800,12 +831,7 @@ export async function sendOrderNotificationEmail(
                         ...await composeEmail(),
                         to: email,
                         idempotencyKey: target.receiptKey,
-                    }, {
-                        db,
-                        env: options.env,
-                        encryptionKey: options.encryptionKey,
-                        appProviders: options.appProviders,
-                    })),
+                    }, await emailRuntime(db, options))),
                 }));
             }
         } else {
@@ -813,12 +839,7 @@ export async function sendOrderNotificationEmail(
                 const result = await sendEmail({
                     ...await composeEmail(),
                     to: email,
-                }, {
-                    db,
-                    env: options.env,
-                    encryptionKey: options.encryptionKey,
-                    appProviders: options.appProviders,
-                });
+                }, await emailRuntime(db, options));
                 if (result && !result.success) {
                     console.error(`[Notifications] Email did not send for ${type} (order ${orderId}): ${result.rawStatus}`);
                 }
@@ -1141,6 +1162,7 @@ export async function sendOrderNotificationEmail(
             appProviders: options.appProviders,
             orderId,
             type,
+            customerId: async () => (await context()).contact.customerId,
             receipt: outboxId ? { outboxId } : null,
             message: async () => {
                 const message = await context();
@@ -1170,15 +1192,16 @@ async function sendOrderWebPush(options: {
     appProviders: AppProviders | undefined;
     orderId: string;
     type: OrderNotificationType;
+    /** The order's account (null for a guest order). */
+    customerId: () => Promise<string | null>;
     receipt: { outboxId: string } | null;
     message: () => Promise<{ title: string; body: string }>;
 }): Promise<OrderNotificationChannelOutcome[]> {
     const { db, orderId, type } = options;
     const outcomes: OrderNotificationChannelOutcome[] = [];
     try {
-        const order = await db.select({ customerId: orders.customerId }).from(orders).where(eq(orders.id, orderId)).get();
-        if (!order?.customerId) return [];
-        const customerId = order.customerId;
+        const customerId = await options.customerId();
+        if (!customerId) return [];
         const { pushProvider } = await notificationsDocument.read(db);
         if (isQualifiedProviderId(pushProvider)) {
             const notification = { ...await options.message(), url: `/account/orders/${encodeURIComponent(orderId)}` };
@@ -1246,35 +1269,81 @@ async function sendOrderWebPush(options: {
     }
 }
 
+/** One staff channel's part of an order notification: its result, or what it threw. */
+export interface OrderStaffChannelResult {
+    channel: "admin push" | "staff email";
+    result?: OrderNotificationDispatchResult;
+    error?: unknown;
+}
+
+/**
+ * The staff side of one order notification, in order: the staff alert,
+ * recorded once when any staff channel is on for the event (new-order email
+ * recipients are their own channel), then the staff push and the new-order
+ * staff emails. A failed settings read or alert record throws before any
+ * staff channel is tried; each channel's own failure comes back with it.
+ */
+export async function sendOrderStaffNotifications(
+    db: Database,
+    env: Env,
+    order: OrderNotificationData & { notificationType: OrderNotificationType },
+    options: OrderNotificationOptions & {
+        /** Staff push needs Platform's API origin; told when it is missing (the push is then not sent). */
+        onAdminPushSkipped?: () => void;
+    } = {},
+): Promise<OrderStaffChannelResult[]> {
+    const settings = await notificationsDocument.read(db);
+    const staffChannels = settings.adminChannels[order.notificationType] ?? [];
+    await recordStaffAlert(db, { outboxId: options.outboxId, kind: order.notificationType },
+        staffChannels.length > 0 || (order.notificationType === "order_created" && settings.staffEmailRecipients.length > 0));
+
+    const results: OrderStaffChannelResult[] = [];
+    if (staffChannels.includes("push")) {
+        const origin = (env as { PUBLIC_API_BASE_URL?: unknown }).PUBLIC_API_BASE_URL;
+        if (typeof origin !== "string" || !origin) {
+            options.onAdminPushSkipped?.();
+        } else {
+            try {
+                results.push({ channel: "admin push", result: await sendOrderNotification(db, order, env, origin, { outboxId: options.outboxId }) });
+            } catch (error: unknown) {
+                results.push({ channel: "admin push", error });
+            }
+        }
+    }
+    try {
+        results.push({ channel: "staff email", result: await sendStaffOrderEmails(db, order, options) });
+    } catch (error: unknown) {
+        results.push({ channel: "staff email", error });
+    }
+    return results;
+}
+
 /**
  * Emails every staff recipient from the notifications settings about a new
  * order, after it committed (from the order notification queue). Each
  * recipient is its own delivery receipt, so a retried outbox row never
- * emails the same person twice.
+ * emails the same person twice. The dispatcher records the staff alert
+ * first (`sendOrderStaffNotifications`).
  */
 export async function sendStaffOrderEmails(
     db: Database,
     order: { id: string; customerName: string; notificationType: OrderNotificationType },
     options: OrderNotificationOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
-    const settings = await notificationsDocument.read(db);
-    // This path runs for every order event, including push disabled/unavailable.
-    // New-order email recipients are their own existing staff-channel setting.
-    await recordStaffAlert(db, options.outboxId,
-        (settings.adminChannels[order.notificationType] ?? []).length > 0
-        || (order.notificationType === "order_created" && settings.staffEmailRecipients.length > 0));
     if (order.notificationType !== "order_created") return EMPTY_DISPATCH_RESULT;
-    const recipients = settings.staffEmailRecipients;
+    const recipients = (await notificationsDocument.read(db)).staffEmailRecipients;
     if (recipients.length === 0) return EMPTY_DISPATCH_RESULT;
 
-    const context = once(() => readOrderMessageContext({
+    // The buyer message's context when the dispatcher shares it: staff emails
+    // drop its links and support contacts, so the facts are the same.
+    const context = options.orderContext ?? once(() => readOrderMessageContext({
         orderId: order.id,
         name: order.customerName,
         type: order.notificationType,
     }, db));
     const compose = async () =>
         composeStaffOrderEmail(await context(), resolveDashboardOrderLink(options.env, order.id));
-    const emailContext = { db, env: options.env, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
+    const emailContext = () => emailRuntime(db, options);
     const outcomes: OrderNotificationChannelOutcome[] = [];
 
     for (const recipient of recipients) {
@@ -1287,7 +1356,7 @@ export async function sendStaffOrderEmails(
         };
         if (!options.outboxId) {
             try {
-                const result = await sendEmail({ ...await compose(), to: recipient }, emailContext);
+                const result = await sendEmail({ ...await compose(), to: recipient }, await emailContext());
                 if (!result.success) {
                     console.error(`[Notifications] Staff order email did not send for order ${order.id}: ${compactProviderLogDetail(result.rawStatus)}`);
                 }
@@ -1304,7 +1373,7 @@ export async function sendStaffOrderEmails(
                 ...await compose(),
                 to: recipient,
                 idempotencyKey: delivery.receiptKey,
-            }, emailContext)),
+            }, await emailContext())),
         }));
     }
     return buildDispatchResult(outcomes);
@@ -1547,14 +1616,32 @@ export async function recordSkippedDelivery(options: DeliveryReceiptSubject & {
     reason: string;
 }): Promise<OrderNotificationChannelOutcome> {
     const target = await createOrderNotificationDeliveryTarget(options);
-    const claim = await claimOrderNotificationDeliveryReceipt(options.db, target);
-    if (!claim.claimed) {
-        return outcomeFromUnclaimedReceipt(target, claim.reason);
+    let recorded: Awaited<ReturnType<typeof recordSkippedOrderNotificationDeliveryReceipt>>;
+    try {
+        recorded = await recordSkippedOrderNotificationDeliveryReceipt(options.db, target, options.reason, {
+            provider: options.provider,
+            providerStatus: options.reason,
+        });
+    } catch (error: unknown) {
+        console.error(`[Notifications] Failed to record ${target.channel} receipt skipped:`, error);
+        return {
+            channel: target.channel,
+            provider: options.provider,
+            recipientMasked: target.recipientMasked,
+            status: "failed",
+            error: normalizeError(error),
+            retryable: true,
+        };
     }
-    return await markSkippedOutcome(options.db, target, claim.receipt, options.reason, {
+    if (!recorded.recorded) return outcomeFromUnclaimedReceipt(target, recorded.reason);
+    return {
+        channel: target.channel,
         provider: options.provider,
+        recipientMasked: target.recipientMasked,
+        status: "skipped",
         providerStatus: options.reason,
-    });
+        retryable: false,
+    };
 }
 
 async function markAcceptedOutcome(

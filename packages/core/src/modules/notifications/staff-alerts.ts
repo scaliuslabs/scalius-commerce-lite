@@ -16,22 +16,23 @@ const scopeForKind = (kind: string): StaffAlertScope | null => kind === "convers
   : isOrderNotificationType(kind) || isStaffAlertNotificationType(kind) ? "orders" : null;
 const headSql = (userId: string) => sql`coalesce((SELECT last_seq FROM staff_alert_state WHERE user_id = ${userId} AND scope = '*'), 0)`;
 
-/** Called after existing staff rules resolve, before attempting staff channels. No subscription is required. */
-export async function recordStaffAlert(db: Database, outboxId: string | undefined, enabled: boolean): Promise<void> {
+/**
+ * Called once per outbox row by its dispatcher, after the staff rules resolve
+ * and before any staff channel is tried (the channels never record it). No
+ * subscription is required. One round trip: the alert's facts come from its
+ * outbox row inside the batch, and every statement is a no-op once the first
+ * recording completed, so a retried row records nothing new.
+ */
+export async function recordStaffAlert(db: Database, alert: { outboxId?: string; kind: string }, enabled: boolean): Promise<void> {
+  const { outboxId, kind } = alert;
   if (!outboxId || !enabled) return;
-  const [event] = await db.all<{ kind: string; subject_id: string; occurred_at: number; order_number: string | null; complete: number | null }>(sql`
-    SELECT n.notification_type AS kind, n.subject_id, n.created_at AS occurred_at,
-      CAST(o.order_number AS TEXT) AS order_number, a.fanout_complete AS complete
-    FROM notification_outbox n LEFT JOIN staff_alerts a ON a.id = n.id LEFT JOIN conversations c ON c.id = n.conversation_id
-    LEFT JOIN orders o ON o.id = coalesce(n.order_id, c.order_id) WHERE n.id = ${outboxId}`);
-  if (!event || Number(event.complete) === 1) return;
-  const scope = scopeForKind(event.kind);
-  const required = staffPushPermission(event.kind);
+  const scope = scopeForKind(kind);
+  const required = staffPushPermission(kind);
   if (!scope || !required) return;
   const pending = sql`EXISTS (SELECT 1 FROM staff_alerts WHERE id = ${outboxId} AND fanout_complete = 0)`;
   // Resolve assignment inside the transaction: a stale/deactivated assignee
   // must not swallow a new message. Null falls back to the authorized team.
-  const assignedRecipient = (ownerId: SQL) => event.kind === "conversation_message"
+  const assignedRecipient = (ownerId: SQL) => kind === "conversation_message"
     ? sql`${ownerId} = coalesce((SELECT c.assignee_user_id FROM conversations c
         INNER JOIN notification_outbox n ON n.conversation_id = c.id
         WHERE n.id = ${outboxId} AND ${staffPermissionSql(sql`c.assignee_user_id`, "conversations.reply")}), ${ownerId})`
@@ -39,8 +40,12 @@ export async function recordStaffAlert(db: Database, outboxId: string | undefine
   // One transaction fixes the first recipient set, even when empty. Provider
   // retries cannot retroactively deliver old facts to newly granted staff.
   await safeBatch(db, [
-    db.insert(staffAlerts).values({ id: outboxId, scope, kind: event.kind, subjectId: event.subject_id,
-      occurredAt: Number(event.occurred_at), orderNumber: event.order_number }).onConflictDoNothing(),
+    db.insert(staffAlerts).select(sql`
+      SELECT n.id, ${scope}, n.notification_type, n.subject_id, n.created_at, unixepoch(),
+        CAST(o.order_number AS TEXT), 0
+      FROM notification_outbox n LEFT JOIN conversations c ON c.id = n.conversation_id
+      LEFT JOIN orders o ON o.id = coalesce(n.order_id, c.order_id)
+      WHERE n.id = ${outboxId} AND n.notification_type = ${kind}`).onConflictDoNothing(),
     db.insert(staffAlertState).select(sql`
       SELECT ${user.id}, '*', 0, NULL, 0, 0, 0, 0, 0, NULL FROM ${user}
       WHERE ${pending} AND ${staffPermissionSql(user.id, required)} AND ${assignedRecipient(sql`${user.id}`)}`).onConflictDoNothing(),
