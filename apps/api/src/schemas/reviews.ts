@@ -65,7 +65,6 @@ export const productPageReviewFields = {
   reviews: productReviewsShape.nullable().openapi({
     description: "Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.",
   }),
-  warranty: productPageWarrantyShape.nullable().openapi({ description: "The product's warranty policy (its current terms); null without one." }),
   warranties: z.array(productPageWarrantyShape.extend({ id: z.string() })).openapi({
     description: "Every warranty a SKU of this page has, each once: a variant's `warrantyId` names one (a SKU inherits the product's, has its own, or none).",
   }),

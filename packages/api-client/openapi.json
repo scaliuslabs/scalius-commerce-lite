@@ -71889,61 +71889,6 @@
                               ],
                               "description": "Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state."
                             },
-                            "warranty": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "name": {
-                                  "type": "string"
-                                },
-                                "provider": {
-                                  "type": "string",
-                                  "enum": [
-                                    "brand",
-                                    "store"
-                                  ]
-                                },
-                                "duration": {
-                                  "type": "object",
-                                  "properties": {
-                                    "value": {
-                                      "type": "integer",
-                                      "minimum": 0,
-                                      "exclusiveMinimum": true
-                                    },
-                                    "unit": {
-                                      "type": "string",
-                                      "enum": [
-                                        "days",
-                                        "months",
-                                        "years"
-                                      ]
-                                    }
-                                  },
-                                  "required": [
-                                    "value",
-                                    "unit"
-                                  ]
-                                },
-                                "replacementDays": {
-                                  "type": "integer",
-                                  "nullable": true,
-                                  "minimum": 0
-                                },
-                                "terms": {
-                                  "type": "string",
-                                  "nullable": true
-                                }
-                              },
-                              "required": [
-                                "name",
-                                "provider",
-                                "duration",
-                                "replacementDays",
-                                "terms"
-                              ],
-                              "description": "The product's warranty policy (its current terms); null without one."
-                            },
                             "warranties": {
                               "type": "array",
                               "items": {
@@ -72137,7 +72082,6 @@
                             "bundles",
                             "emi",
                             "reviews",
-                            "warranty",
                             "warranties",
                             "customFields",
                             "offers"
