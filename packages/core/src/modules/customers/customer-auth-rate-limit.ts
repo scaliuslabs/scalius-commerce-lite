@@ -14,12 +14,18 @@ import { hmacSha256Hex, sha256Hex } from "@scalius/shared/hash";
  *   (see sendOtp), so an attacker can't strand the owner.
  * - Per IP: only a generous flood ceiling, because Bangladeshi carriers put
  *   many buyers behind one CGNAT address.
+ * - Per store and channel: a ceiling on the codes the whole store sends an
+ *   hour. Per-IP buckets do not bound a sender that rotates addresses (an IPv4
+ *   proxy pool), and every code on a paid channel is a bill. Sixty contacts at
+ *   their own hourly ceiling (600) is far above a store's real sign-in peak and
+ *   still caps a rotating flood at 600 messages an hour per channel.
  * The resend cooldown escalates with the contact's recent sends (60 s, 2 min,
  * 4 min … up to 10 min).
  */
 export const OTP_CONTACT_SENDER_RATE_LIMIT = { attempts: 5, windowSeconds: 15 * 60 } as const;
 export const OTP_CONTACT_RATE_LIMIT = { attempts: 10, windowSeconds: 60 * 60 } as const;
 export const OTP_IP_RATE_LIMIT = { attempts: 30, windowSeconds: 10 * 60 } as const;
+export const OTP_STORE_CHANNEL_RATE_LIMIT = { attempts: 60 * OTP_CONTACT_RATE_LIMIT.attempts, windowSeconds: 60 * 60 } as const;
 const BASE_RESEND_COOLDOWN_SECONDS = 60;
 const MAX_RESEND_COOLDOWN_SECONDS = 10 * 60;
 
@@ -47,7 +53,9 @@ export class OtpContactCeilingError extends RateLimitError {
 
 /**
  * Counts one code request against every contact it targets, per sender and
- * overall, and the caller's IP. Throws RateLimitError with the honest wait
+ * overall, the caller's IP and, when the delivery channel is known, the
+ * store's hourly ceiling for that channel (counted last, so a request another
+ * bucket refuses never spends it). Throws RateLimitError with the honest wait
  * (seconds until that bucket's window resets) once any bucket is full.
  */
 export async function enforceOtpSendRateLimits(
@@ -55,6 +63,8 @@ export async function enforceOtpSendRateLimits(
     input: {
         ip: string;
         identifiers: string[];
+        /** The channel the code goes out on (`sms`, `whatsapp`, `email`). */
+        channel?: string;
         hashKey?: string;
         nowSeconds?: number;
     },
@@ -76,6 +86,16 @@ export async function enforceOtpSendRateLimits(
     }
     const flood = await consumeRateLimitBucket(db, { scope: "ip", subject: ip, ...OTP_IP_RATE_LIMIT, hashKey: input.hashKey, nowSeconds });
     if ("retryAfterSeconds" in flood) throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, flood.retryAfterSeconds);
+    const channel = input.channel?.trim().toLowerCase();
+    if (channel) {
+        const store = await consumeRateLimitBucket(db, {
+            scope: "identifier", subject: `store-channel|${channel}`, ...OTP_STORE_CHANNEL_RATE_LIMIT, hashKey: input.hashKey, nowSeconds,
+        });
+        if ("retryAfterSeconds" in store) {
+            console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
+            throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, store.retryAfterSeconds);
+        }
+    }
     return {
         resendCooldownSeconds: Math.min(
             MAX_RESEND_COOLDOWN_SECONDS,

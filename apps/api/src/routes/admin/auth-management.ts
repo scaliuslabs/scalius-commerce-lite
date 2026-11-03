@@ -71,6 +71,7 @@ import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { getClientNetworkForLog, getTrustedClientIp } from "../../utils/client-ip";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
@@ -2434,7 +2435,7 @@ async function setupTokenMatches(provided: string, expected: string): Promise<bo
  * value is compared after the setup rate limit so guesses are bounded, and it
  * is never logged or echoed.
  */
-async function enforceSetupToken(c: Context<{ Bindings: Env }>, clientIp: string): Promise<void> {
+async function enforceSetupToken(c: Context<{ Bindings: Env }>): Promise<void> {
     const env = c.env;
     if (!isSetupTokenRequired(env)) return;
     const expected = env.ADMIN_SETUP_TOKEN;
@@ -2443,7 +2444,7 @@ async function enforceSetupToken(c: Context<{ Bindings: Env }>, clientIp: string
     }
     const provided = c.req.header(ADMIN_SETUP_TOKEN_HEADER)?.trim() ?? "";
     if (!provided || !(await setupTokenMatches(provided, expected))) {
-        console.warn(`[SECURITY] Setup token rejected. IP: ${clientIp}`);
+        console.warn(`[SECURITY] Setup token rejected. Network: ${getClientNetworkForLog(c)}`);
         throw new ForbiddenError("A valid setup token is required to complete first-admin setup.");
     }
 }
@@ -2564,15 +2565,13 @@ setupApp.openapi(setupRoute, async (c) => {
     const adminExists = await firstAdminExists(db);
 
     if (adminExists) {
-        const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-        console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${ip}`);
+        console.warn(`[SECURITY] Setup endpoint accessed after admin exists. Network: ${getClientNetworkForLog(c)}`);
         throw new ForbiddenError("An admin user already exists. Please use the login page.");
     }
 
     // The database is the setup authority and the first-admin bootstrap lock.
-    const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-    await enforceAdminSetupRateLimit(db, ip);
-    await enforceSetupToken(c, ip);
+    await enforceAdminSetupRateLimit(db, getTrustedClientIp(c));
+    await enforceSetupToken(c);
 
     const auth = createAuth(env, { appProviders: requestAppProviders(c) });
 

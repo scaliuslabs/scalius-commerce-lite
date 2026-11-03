@@ -97,10 +97,6 @@ export async function checkAgentRateLimit(
   return isWithinRateLimit(env, "RL_STANDARD", "agent", key);
 }
 
-export function getAgentClientIp(request: Request): string {
-  return request.headers.get("CF-Connecting-IP")?.trim() || "unknown";
-}
-
 export function agentNoStoreResponse(
   body: BodyInit | null,
   init: ResponseInit = {},

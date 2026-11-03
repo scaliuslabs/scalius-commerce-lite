@@ -489,6 +489,7 @@ export async function sendOtp(
         allowance = await enforceOtpSendRateLimits(db, {
             ip: input.ip,
             identifiers: [`${input.method}:${identifier}`],
+            channel,
             hashKey: input.encryptionKey,
         });
     } catch (error) {

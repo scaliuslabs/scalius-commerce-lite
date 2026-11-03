@@ -79,7 +79,7 @@ Format `$sc1$<algorithm>$<params>$<salt>$<hash>`. The plan profile (`planLimits(
 | Identity handoff routes | 10 per minute | plugin |
 | First-admin setup | 5 per hour per IP | D1 `admin_setup_rate_limits` |
 
-- Better Auth reads the client IP from `cf-connecting-ip`, then `x-forwarded-for`, and groups IPv6 by /64. API routes call `getTrustedClientIp` (`apps/api/src/utils/client-ip.ts`): it trusts `cf-connecting-ip` only, reads `x-forwarded-for` only when a platform origin is loopback, and otherwise returns `unknown`.
+- Better Auth reads the client IP from `cf-connecting-ip`, then `x-forwarded-for`, and groups IPv6 by /64. API routes call `getTrustedClientIp` (`apps/api/src/utils/client-ip.ts`): it trusts `cf-connecting-ip` only, reads `x-forwarded-for` only when a platform origin is loopback, and otherwise returns `unknown`; it groups IPv6 by /64 the same way, and it is the only reader of those headers in `apps/api/src`.
 - Native limiters `RL_STRICT` (5 per 60 s) and `RL_STANDARD` (60 per 60 s; it also limits agent calls) are in `apps/api/wrangler.jsonc`.
 
 ## Dashboard sign-in (`apps/api/src/dashboard/auth.ts`)

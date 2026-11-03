@@ -5,7 +5,7 @@ import { createId } from "@paralleldrive/cuid2";
 import {
   sendCapiEvent,
 } from "@scalius/core/integrations/meta/conversions-api";
-import { getClientIp } from "@scalius/shared/rate-limit";
+import { getClientAddress, getClientIp } from "@scalius/shared/rate-limit";
 import { trackingPageUrl } from "@scalius/shared/tracking-url";
 
 import { ok } from "../utils/api-response";
@@ -167,7 +167,7 @@ app.openapi(postEventRoute, async (c) => {
     throw new RateLimitError("Too many tracking events. Please try again later.");
   }
 
-  const clientIp = getClientIp(c.req.raw);
+  const clientIp = getClientAddress(c.req.raw);
   const clientIpForMeta =
     clientIp === "unknown" ? c.req.header("x-real-ip") : clientIp;
 
