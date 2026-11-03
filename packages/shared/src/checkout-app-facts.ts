@@ -107,6 +107,12 @@ export interface ManualOrderAppInput {
   requiresShipping: boolean;
   /** The shipping country (null when nothing ships); Bangladesh's City/Thana ids and names below. */
   shippingCountryCode?: string | null;
+  /**
+   * The country of the market that prices and places the order: the shipping country, the billing
+   * country when nothing physical ships, null for a pickup (the backup market). Required: apps see
+   * this market, never one derived from the destination alone.
+   */
+  marketCountry: string | null;
   address: { city: string; zone: string; area: string | null } | null;
   /** Another country's admin area and postal code: shipping zones match on them. */
   shippingAdminArea?: string | null;
