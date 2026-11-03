@@ -1,65 +1,99 @@
 // `context.product` for app islands on a product page: the store's buy form
-// as the buyer has it now (the chosen SKU, the quantity, the buyer input
-// answers), read here, in the store's own code, so an app never depends on
-// the form's markup. The product controller sets the SKU and quantity in
-// place as the buyer chooses, so a change is read after each input, change or
-// click inside the forms has been handled.
+// as the buyer has it now, so an app never depends on the form's markup.
+// The product controller (components/product/scripts/product-controller.ts)
+// is its one source: it publishes its state here once it has applied a
+// change, in the frame that shows it (the form, its hidden SKU field and the
+// gallery's photo), so a listener runs after the store has applied the
+// change and `state()` then equals the listener's state. Until the
+// controller runs, the state is the form as the server drew it.
 import type { StorefrontIslandContext, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
 import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buyer-inputs";
 
 type ProductContext = NonNullable<StorefrontIslandContext["product"]>;
+type Listener = (state: StorefrontProductState) => void;
+
+interface ProductStore {
+  /** The controller's last state; null until it first publishes. */
+  state: StorefrontProductState | null;
+  listeners: Set<Listener>;
+}
+
+const stores = new WeakMap<Document, ProductStore>();
+
+function storeOf(root: Document): ProductStore {
+  let store = stores.get(root);
+  if (!store) {
+    store = { state: null, listeners: new Set() };
+    stores.set(root, store);
+  }
+  return store;
+}
 
 function buyForm(root: Document): HTMLFormElement | null {
   return root.querySelector<HTMLFormElement>("form[data-product-buy-form]");
 }
 
-/** The buy form's state now; null off a product page. */
-export function readProductState(root: Document = document): StorefrontProductState | null {
-  const form = buyForm(root);
-  if (!form) return null;
-  const variant = form.querySelector<HTMLInputElement>('input[name="variant"]')?.value.trim() ?? "";
-  const quantity = Number.parseInt(root.getElementById("quantity") instanceof HTMLInputElement ? (root.getElementById("quantity") as HTMLInputElement).value : "1", 10);
+/** Each reader gets its own copy: an island cannot change the store's state. */
+function copy(state: StorefrontProductState): StorefrontProductState {
+  return { ...state, inputs: { ...state.inputs } };
+}
+
+/** The buy form as the server drew it: its SKU field, quantity, inputs, purchase option and Add to cart button. */
+function drawnState(root: Document, form: HTMLFormElement): StorefrontProductState {
+  const variant = form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]')?.value.trim() ?? "";
+  const quantityInput = root.getElementById("quantity");
+  const quantity = Number.parseInt(quantityInput instanceof HTMLInputElement ? quantityInput.value : "1", 10);
   const inputs: Record<string, string> = {};
-  const answers = root.querySelector<HTMLFormElement>("form[data-buyer-inputs]");
-  if (answers) {
-    for (const element of Array.from(answers.elements)) {
-      if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) continue;
-      if (!element.name.startsWith(BUYER_INPUT_FIELD_PREFIX)) continue;
-      const key = element.name.slice(BUYER_INPUT_FIELD_PREFIX.length);
-      inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
-    }
+  for (const element of Array.from(form.elements)) {
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) continue;
+    if (!element.name.startsWith(BUYER_INPUT_FIELD_PREFIX)) continue;
+    const key = element.name.slice(BUYER_INPUT_FIELD_PREFIX.length);
+    inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
   }
-  // The buy form's way to buy: an app's option, or "" for a one-time purchase.
   const option = root.querySelector<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]:checked')?.value ?? "";
-  return { variantId: variant || null, quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1, inputs, purchaseOption: option || null };
+  const add = root.querySelector('[data-product-summary] [data-action="add-to-cart"]');
+  return {
+    variantId: variant || null,
+    quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
+    inputs,
+    purchaseOption: option || null,
+    available: Boolean(variant) && add instanceof HTMLButtonElement && !add.disabled,
+    busy: false,
+    error: null,
+  };
+}
+
+/**
+ * The product controller's state, after it has applied a change: listeners
+ * whose last state differs hear it now. One listener's failure stops only
+ * that listener's call.
+ */
+export function publishProductState(state: StorefrontProductState, root: Document = document): void {
+  const store = storeOf(root);
+  store.state = copy(state);
+  for (const listener of [...store.listeners]) {
+    try { listener(copy(state)); } catch (error) { console.warn("App product listener failed", error); }
+  }
 }
 
 /** `context.product` on a product page; undefined elsewhere. */
 export function productContext(root: Document = document): ProductContext | undefined {
-  if (!buyForm(root)) return undefined;
+  const form = buyForm(root);
+  if (!form) return undefined;
+  const store = storeOf(root);
+  const state = () => copy(store.state ?? drawnState(root, form));
   return {
-    state: () => readProductState(root) ?? { variantId: null, quantity: 1, inputs: {}, purchaseOption: null },
+    state,
     onChange(listener) {
-      let last = JSON.stringify(readProductState(root));
-      let queued = false;
-      const check = () => {
-        queued = false;
-        const state = readProductState(root);
-        const next = JSON.stringify(state);
-        if (!state || next === last) return;
-        last = next;
-        listener(state);
+      let last = JSON.stringify(state());
+      const heard: Listener = (next) => {
+        const key = JSON.stringify(next);
+        if (key === last) return;
+        last = key;
+        listener(next);
       };
-      // After the store's own handlers for the same event have run.
-      const schedule = (event: Event) => {
-        const target = event.target instanceof Element ? event.target : null;
-        if (!target?.closest("form[data-product-buy-form], form[data-buyer-inputs], [data-product-summary], #quantity") || queued) return;
-        queued = true;
-        setTimeout(check, 0);
-      };
-      const events = ["input", "change", "click"] as const;
-      for (const type of events) root.addEventListener(type, schedule, true);
-      return () => { for (const type of events) root.removeEventListener(type, schedule, true); };
+      store.listeners.add(heard);
+      return () => { store.listeners.delete(heard); };
     },
   };
 }

@@ -45,7 +45,7 @@ export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Rend
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
 export {
   BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar,
-  accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut,
+  accountLink, asset, buyVariant, chooseVariant, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut,
 } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
