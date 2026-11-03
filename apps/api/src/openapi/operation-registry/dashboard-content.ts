@@ -57,7 +57,10 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     exposure: "excluded",
     reason: "Binary original read for the dashboard's browser rendition pipeline; agents use the public media URL.",
   },
-  "dashboard.media.pending_renditions": {},
+  "dashboard.media.pending_renditions": {
+    exposure: "excluded",
+    reason: "The dashboard's background WebP renderer's own queue, paired with the binary original read; agents list pending images with dashboard.media.list (variants=missing).",
+  },
   "dashboard.media.permanently_delete": {
     risk: "destructive",
     revision: "required",
