@@ -378,12 +378,12 @@ pnpm plugin pack ~/code/acme-studio --key <folder>    # dist/ and the signed upl
 
 - `renderSection(module, type, settings?, options?)`: a section's HTML.
 - `renderComponent(module, type, target, settings?, options?)`: a component's HTML at one target. In a product slot it draws over the fixture product page (or `options.data`); on `page` it takes `options.props`. It throws when the component places an embed a component may not place.
-- `renderSkin(module, id, target, settings?, data?, options?)`: a skin's HTML over its target's fixture projection (or yours). It throws when the store would draw the core unit instead: a missing buy form, an embed the target does not allow, or invalid header markup.
+- `renderSkin(module, id, target, settings?, data?, options?)`: a skin's HTML over its target's fixture projection (or yours). It throws on every problem `checkSkinHtml` names, and on invalid header markup.
 - `renderHeader`, `renderFooter`, `renderProductCard`: `renderSkin` for those units, merging your partial data over the fixture. `renderHeader` also checks duplicate ids, form targets, unsafe action links, sticky markers and island names; pass `{ islands: ["menu"] }` to check names against your manifest.
 - `assertHeaderContract(html, { islands })`: the same header checks on your own markup.
-- `checkSkinHtml(target, html)`: the problems that would make the store draw the core unit, and islands whose props it would leave out.
+- `checkSkinHtml(target, html)`: the problems the store would find in a skin's markup: a missing required embed (it then draws the core unit instead), an embed the target does not allow (it renders nothing), and an island whose props are over 16 KiB (it mounts with none).
 - `storefrontShown(html, appId)`: what the store shows of your markup after its output check, and how many elements and attributes it `dropped`. Assert `dropped` is 0. `oversizedProps`, present only then, names the islands whose props are over 16 KiB.
-- Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)` and `fixtureSectionSkinData(type)`. `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`. Fixtures carry what a real store sends, and gain fields as the store does: `fixtureProductCard()` has key specs (`facts` and `keySpecs` are not empty) and `fixtureProductPage()` has `specifications`. Pass `{ facts: [], keySpecs: [] }` for a card without them, and compare fixture output with `toMatchObject` rather than exact equality.
+- Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)` and `fixtureSectionSkinData(type)`. `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`. `fixtureProductCard()` and `fixtureProductPage()` stay bare (no key specs or specifications); the sample fixture store carries them (`fixtureStore("sample").productPage().product.specifications`, its card's `keySpecs` and `facts`), as the other store does. Optional fields can be added to fixtures as the store gains them, so compare fixture output with `toMatchObject` rather than exact equality.
 - Fixture stores: `fixtureStore(name)` for each of `FIXTURE_STORES` (`sample`, `empty`, `other`) gives that store's `context()`, `productCards()`, `image()`, `productPage()` and `skinData(target)`, the data `pnpm plugin preview` renders with. Loop your skin and section tests over all three ([Build a theme](themes.md#test-on-more-than-one-store)).
 
 These are author checks, not proof of visual correctness. Exercise the composed page in a local store too.
@@ -413,6 +413,8 @@ These are author checks, not proof of visual correctness. Exercise the composed 
 5. Checks the budgets and seals every file's SHA-256 into the bundle. The release signature covers the bundle, so it pins every storefront file; install refuses a package whose files do not match.
 
 ## Budgets
+
+`STOREFRONT_COMPONENT_LIMITS` (from `@scalius/plugin-sdk/storefront`) carries these numbers, so a test or an island can check against the store's own.
 
 | Limit | Value |
 | --- | --- |
