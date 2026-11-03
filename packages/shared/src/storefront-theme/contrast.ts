@@ -60,6 +60,8 @@ export const STOREFRONT_THEME_TEXT_PAIRS = [
 ] as const satisfies ReadonlyArray<StorefrontThemeContrastPair>;
 
 export const STOREFRONT_THEME_MIN_CONTRAST = 4.5;
+/** A field's border against the page and the card: the only edge a text field has (WCAG 1.4.11). */
+export const STOREFRONT_THEME_MIN_FIELD_BORDER_CONTRAST = 3;
 
 /**
  * Helper text is not an error. Secondary ("muted") text stays near-neutral

@@ -8,7 +8,7 @@
 // compares looks only (`storefrontThemeLook`).
 import { DEFAULT_STOREFRONT_THEME_BRAND, STOREFRONT_BRAND_IMAGE_KEYS } from "./brand";
 import { storefrontVariantSpec } from "./blocks";
-import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontTokensKeepingColorScheme } from "./tokens";
+import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontThemeFieldBorder, storefrontTokensKeepingColorScheme } from "./tokens";
 import { emptyStorefrontPageTemplates } from "./pages";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSection, type StorefrontSectionType } from "./sections";
@@ -103,9 +103,15 @@ export function storefrontThemeWithContent(
   });
 }
 
-/** The document's look: everything but its content (content reset to empty). */
+/**
+ * The document's look: everything but its content (content reset to empty).
+ * The field border reads as the palettes give it now, so a store saved from a
+ * template before its border was darkened to show (3:1) still matches it.
+ */
 export function storefrontThemeLook(theme: StorefrontThemeDocument): StorefrontThemeDocument {
-  return storefrontThemeWithContent(theme, null);
+  const look = storefrontThemeWithContent(theme, null);
+  const { colors } = look.tokens;
+  return { ...look, tokens: { ...look.tokens, colors: { ...colors, input: storefrontThemeFieldBorder(colors) } } };
 }
 
 /** One image a document names: where (a document path) and which media id. */

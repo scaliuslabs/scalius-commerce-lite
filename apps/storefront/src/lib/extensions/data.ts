@@ -149,8 +149,9 @@ export function storefrontImageOf(asset: { url: string; alt?: string | null; wid
 }
 
 /** A store logo as apps get it (header, footer and the render context): no alt text of its own is the store's name. */
-export function storeLogo(theme: Pick<RequestTheme, "brand">, storeName: string | null, which: "logo" | "darkLogo" = "logo"): StorefrontImage | null {
-  const logo = theme.brand[which];
+export function storeLogo(theme: Pick<RequestTheme, "brand">, storeName: string | null, which: "logo" | "darkLogo" | "footerLogo" = "logo"): StorefrontImage | null {
+  // The footer shows the main logo when the theme names no footer logo.
+  const logo = which === "footerLogo" ? theme.brand.footerLogo ?? theme.brand.logo : theme.brand[which];
   return storefrontImageOf(logo ? { ...logo, alt: logo.alt || storeName } : null);
 }
 
@@ -244,7 +245,7 @@ export function footerData(input: {
   business: StorefrontBusinessInfo | null | undefined;
   social: ReadonlyArray<{ label: string; url: string }>;
 }): StorefrontFooterData {
-  const { resolved, brand } = input.theme;
+  const { resolved } = input.theme;
   const business = input.business ?? {};
   const address = [business.addressLine1, business.addressLine2, business.city, business.postalCode]
     .map((part) => part?.trim()).filter(Boolean).join(", ");
@@ -255,7 +256,7 @@ export function footerData(input: {
       logo: storeLogo(input.theme, input.storeName),
       darkLogo: storeLogo(input.theme, input.storeName, "darkLogo"),
       logoWidth: resolved.brand.logoWidth,
-      footerLogo: storefrontImageOf(brand.footerLogo ?? brand.logo),
+      footerLogo: storeLogo(input.theme, input.storeName, "footerLogo"),
       phone: input.storePhone?.trim() || null,
       email: business.email?.trim() || null,
       address: address || null,

@@ -411,7 +411,7 @@ export async function getThemePreviewHomepageSections(
  * (a timeout, network error, 429, 5xx or unreadable body): the cookie is kept
  * and the next request asks again, so one blip never ends a merchant's preview.
  */
-export type ThemePreviewResolution =
+type ThemePreviewResolution =
   | { state: "live"; preview: ThemePreviewData }
   | { state: "ended" }
   | { state: "unavailable" };
