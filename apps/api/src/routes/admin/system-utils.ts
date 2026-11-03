@@ -6,8 +6,10 @@ import { assertContactSearchAllowed } from "./contact-access";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc } from "drizzle-orm";
 import { containsText } from "@scalius/core/utils/text-match";
-import { COUNT_PROBE_COLUMN, cappedCountQuery, tooDeepPage } from "@scalius/core/utils/keyset";
-import { capTotal } from "@scalius/shared/pagination";
+import { COUNT_PROBE_COLUMN, cappedCountQuery } from "@scalius/core/utils/keyset";
+import { AppError } from "@scalius/core/errors";
+import { formatNumber } from "@scalius/shared/locale-format";
+import { LIST_OFFSET_ERROR_CODE, capTotal } from "@scalius/shared/pagination";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
@@ -43,10 +45,19 @@ function abandonedCheckoutOrderBy(sort: (typeof ABANDONED_CHECKOUT_SORTS)[number
     }
 }
 
-/** Numbered pages reach the plan's first maxOffset rows only; deeper is a typed 400. */
+/**
+ * Numbered pages reach the plan's first maxOffset rows only; deeper is a typed
+ * 400. These lists have no cursor: a search narrows them instead.
+ */
 function assertPageReachable(offset: number) {
     const { maxOffset } = planLimits().lists;
-    if (offset >= maxOffset) throw tooDeepPage(offset, maxOffset);
+    if (offset < maxOffset) return;
+    throw new AppError(
+        400,
+        LIST_OFFSET_ERROR_CODE,
+        `Abandoned checkout pages reach the first ${formatNumber(maxOffset, "en")} rows of a sort only (this page starts at row ${formatNumber(offset + 1, "en")}). Search by phone or name, or reverse the sort, to reach the others.`,
+        { maxOffset, hint: "Start again from page 1, or search to narrow the list." },
+    );
 }
 
 /** The search box: the checkout search index, or the phone digits when the term looks like a phone. */
@@ -100,6 +111,8 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
 
     try {
         const { page, limit, search, sort, order } = c.req.valid("query");
+        // Searching by a buyer's phone or name needs the contact permission, as on the summaries list.
+        assertContactSearchAllowed(c, "search", search);
         const offset = (page - 1) * limit;
         assertPageReachable(offset);
 
