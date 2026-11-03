@@ -6,9 +6,10 @@
 //
 // A SKU inherits the product's warranty, has its own, or none. The row is
 // drawn once per warranty the page's SKUs have; the chosen SKU's shows, the
-// others are `hidden`. `data-warranty-by-variant` on the wrapper maps each
-// variant id to its row's `data-warranty-id` (null: no row), so the buy form
-// shows the chosen SKU's row when the buyer picks another.
+// others are `hidden`. `data-sx-warranty-by-variant` on the wrapper maps each
+// variant id to its row's `data-sx-warranty-id` (null: no row), so the buy form
+// shows the chosen SKU's row when the buyer picks another. The markers are
+// host-only (`data-sx-*`: app markup in the buy box never carries them).
 //
 // Mount (ProductBuyBox.astro, in ProductSummary's `after-actions` slot):
 //   <WarrantyRow slot="after-actions" product={product} variants={variants} initialVariantId={id} copy={copy} />
@@ -43,9 +44,9 @@ const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(product
 ---
 
 {rows.length > 0 && (
-  <div data-warranty-rows data-warranty-by-variant={JSON.stringify(perSku.byVariant)}>
+  <div data-sx-warranty-rows data-sx-warranty-by-variant={JSON.stringify(perSku.byVariant)}>
   {rows.map(({ id, warranty, hidden }) => (
-  <details class="group mt-3 rounded-lg border border-border bg-card" data-warranty-row data-warranty-id={id} hidden={hidden}>
+  <details class="group mt-3 rounded-lg border border-border bg-card" data-sx-warranty-row data-sx-warranty-id={id} hidden={hidden}>
     <summary class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
       <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
         <Icon name="shield-check" class="size-4" aria-hidden="true" />
