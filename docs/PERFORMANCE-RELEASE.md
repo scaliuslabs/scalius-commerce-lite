@@ -192,7 +192,9 @@ pnpm check:admin-perf --runtime --admin http://localhost:4323 --cpu 4 --rtt 40 -
 
 Other runtime flags: `--runs`, `--cdp-port`, `--typing-product <id>` and `--explorer <api origin>` (D1 calls per transition). `--admin` must be a local address.
 
-### Navigation timing (production, August 2026)
+### Navigation timing (production, August 2026; superseded)
+
+Superseded 2026-11-03: these figures predate route-code warming (`7f2a0a939`, 2026-09-24), which fetches the everyday screens' code while the merchant reads the first page, so the first-click column no longer describes the dashboard. Measure again with `pnpm check:admin-perf --runtime` before quoting a number, and replace this table with the result.
 
 Method: production dashboard, demo account. Figures are click to the route's heading in the DOM (not paint timing, not field INP). A repeat click comes after one visit.
 
