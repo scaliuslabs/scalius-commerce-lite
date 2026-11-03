@@ -16,6 +16,7 @@ import {
 } from "@scalius/shared/cache-generation";
 import {
   isBuyerShellPathname,
+  isPrivateStorefrontPathname,
   requestBypassesPublicStorefrontCache,
   toPublicCacheRequest,
 } from "@/lib/cache-policy";
@@ -60,27 +61,18 @@ const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
 
 const RESERVED_TOP_LEVEL_PATHS = new Set([
-  "account",
   "apps",
   "api",
   "blog",
   "brands",
-  "buy",
-  "cart",
   "categories",
-  "checkout",
   "collections",
   "health",
-  "newsletter",
-  "order-success",
-  "payment-recovery",
   "products",
-  "track-order",
   "robots.txt",
   "search",
   "sitemap.xml",
   "sitemap.xsl",
-  "theme-preview",
   "ucp",
 ]);
 
@@ -178,7 +170,9 @@ function isCmsPagePath(pathname: string): boolean {
   return (
     segments.length === 1 &&
     !segments[0]!.includes(".") &&
-    !RESERVED_TOP_LEVEL_PATHS.has(segments[0]!)
+    !RESERVED_TOP_LEVEL_PATHS.has(segments[0]!) &&
+    // A buyer's page is never a CMS page, whatever its slug looks like.
+    !isPrivateStorefrontPathname(pathname)
   );
 }
 
