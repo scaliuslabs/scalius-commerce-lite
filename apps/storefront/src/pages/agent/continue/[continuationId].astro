@@ -3,6 +3,11 @@ import "@/styles/global.css";
 import { readAgentContinuationCookie } from "@/lib/agent-continuation-cookie";
 import { getRuntimeStoreLanguage } from "@/lib/api/runtime";
 import { continuationCopy, continuationLanguage } from "@/lib/continuation-copy";
+import { getLayoutData } from "@/lib/api";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { themePaint } from "@/lib/theme-paint";
+import { colorSchemeBootScript, colorSchemeScriptSource } from "@/lib/color-scheme";
+import ThemeHead from "@/components/ThemeHead.astro";
 
 export const prerender = false;
 
@@ -13,22 +18,30 @@ const continuationId = Astro.params.continuationId?.trim() ?? "";
 const validContinuationId = /^acn_[A-Za-z0-9_-]{20}$/.test(continuationId)
   && readAgentContinuationCookie(Astro.request.headers.get("cookie"), continuationId) === continuationId;
 
+// The store's theme: its tokens and colour scheme, as every page paints them
+// (the layout read is the request's one, shared with the middleware).
+const requestTheme = await resolveRequestTheme(Astro, await getLayoutData().catch(() => null));
+const paint = themePaint(requestTheme.theme, requestTheme.resolved);
+// This page allows no inline script but the colour scheme's own, by its hash.
+const colorSchemeSource = await colorSchemeScriptSource(colorSchemeBootScript(paint.colorScheme, requestTheme.preview === null));
+
 Astro.response.headers.set("Cache-Control", "private, no-store");
 Astro.response.headers.set("Referrer-Policy", "no-referrer");
 Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
 Astro.response.headers.set(
   "Content-Security-Policy",
-  "default-src 'self'; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  `default-src 'self'; script-src 'self'${colorSchemeSource ? ` ${colorSchemeSource}` : ""} https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
 );
 
 if (!validContinuationId) Astro.response.status = 404;
 ---
 
 <!doctype html>
-<html lang={language}>
+<html lang={language} data-color-scheme={paint.colorScheme?.scheme}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
+    <ThemeHead paint={paint} preview={requestTheme.preview !== null} />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <meta name="referrer" content="no-referrer" />
     <title>{validContinuationId ? copy.pageTitle : copy.unavailableTitle}</title>

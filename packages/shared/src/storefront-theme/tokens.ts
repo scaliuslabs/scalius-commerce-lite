@@ -499,6 +499,7 @@ export function storefrontThemeShowsDarkColors(tokens: Pick<StorefrontThemeToken
 export function buildStorefrontColorCss(colors: StorefrontThemeColors, headerTone: StorefrontThemeHeaderTone) {
   const header = storefrontHeaderToneColors(headerTone, colors);
   const bands = storefrontHeaderBands(headerTone, colors);
+  const dark = storefrontThemeColorsAreDark(colors);
   return {
     ...colors,
     "theme-header-background": colors[header.background],
@@ -506,6 +507,10 @@ export function buildStorefrontColorCss(colors: StorefrontThemeColors, headerTon
     "theme-header-deep": bands.deep,
     "theme-header-raised": bands.raised,
     "theme-sale": colors.destructive,
+    // The ink surface (a dark footer): the darker of text and page, as the
+    // dark header tone takes it, with the other on it (an AA pair either way).
+    "theme-ink": dark ? colors.background : colors.foreground,
+    "theme-ink-foreground": dark ? colors.foreground : colors.background,
   };
 }
 

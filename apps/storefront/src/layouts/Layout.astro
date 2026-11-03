@@ -8,13 +8,13 @@ import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import SidebarNav from "../components/header/SidebarNav.astro";
 import ThemeFonts from "../components/ThemeFonts.astro";
+import ThemeHead from "../components/ThemeHead.astro";
 import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { themePaint } from "@/lib/theme-paint";
-import { colorSchemeBootScript } from "@/lib/color-scheme";
 import type { AnalyticsConfig } from "@/lib/api";
 import { getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
 import {
@@ -408,8 +408,6 @@ const cdnDomain = sameOriginMediaSource ? null : cdnDomainUrl || null;
 // Runtime API URL, CDN domain, and currency for client-side JS (the
 // per-request platform context is not available to Vite client bundles).
 const runtimeGlobalsScript = [
-  // The colour scheme before anything paints (lib/color-scheme.ts); the editor's canvas ignores the merchant's own choice.
-  colorSchemeBootScript(paint.colorScheme, !isThemePreview),
   // Consent first: Google's Consent Mode defaults precede every tag (components/consent).
   consentBoot,
   // The sign-in hint before first paint: `whenSignedIn()` / `whenSignedOut()` parts never flash (scripts/app-components.ts keeps it current).
@@ -546,7 +544,7 @@ const pageStoreTimeZone = storeTimeZone();
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
     {appHeadScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
-    <style set:html={paint.css} data-theme-tokens={isThemePreview ? "" : undefined} />
+    <ThemeHead paint={paint} preview={isThemePreview} />
     {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
 
     <slot name="head" />

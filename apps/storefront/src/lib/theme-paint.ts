@@ -50,22 +50,28 @@ export function themePaint(theme: StorefrontThemeDocument, resolved: ResolvedSto
   const tokens = theme.tokens;
   const productGrid = productGridSpec(layout.grid, tokens.imageRatio);
   const fluidGrid = productGridFluidCss(productGrid);
+  // Colours that are dark themselves (a dark palette) ask for the browser's dark
+  // controls and name their ink surface (a light palette's is the text colour,
+  // the CSS default, so its paint stays exactly as it was).
+  const darkPalette = storefrontThemeColorsAreDark(tokens.colors);
+  const ink = darkPalette ? buildStorefrontColorCss(tokens.colors, tokens.headerTone) : null;
   const light = declarations({
     ...buildStorefrontThemeTokens(theme),
     "theme-card-min-tablet": productGrid.cardMin.tablet,
     "theme-card-min-desktop": productGrid.cardMin.desktop,
     "grid-card-min-fluid": fluidGrid.cardMin,
     "grid-gap-fluid": fluidGrid.gap,
+    ...(ink ? { "theme-ink": ink["theme-ink"], "theme-ink-foreground": ink["theme-ink-foreground"] } : {}),
   });
-  // Dark colours as the only colours (a dark palette) still ask for the browser's dark controls.
-  let css = `:root, .site-root { ${storefrontThemeColorsAreDark(tokens.colors) ? "color-scheme: dark; " : ""}${light}; }`;
+  let css = `:root, .site-root { ${darkPalette ? "color-scheme: dark; " : ""}${light}; }`;
   const darkColors = storefrontThemeShowsDarkColors(tokens) ? tokens.darkColors : null;
   if (darkColors) {
     const colors = buildStorefrontColorCss(darkColors, tokens.headerTone);
     const dark = storefrontThemeColorsAreDark(darkColors);
-    css += ` ${darkBlock(":root[data-color-scheme=dark]", colors, dark)}`;
+    // On screens only: a printed page keeps the light colours.
+    css += ` @media screen { ${darkBlock(":root[data-color-scheme=dark]", colors, dark)} }`;
     // The head script resolves `system` to light or dark; this covers a page without JavaScript.
-    if (tokens.colorScheme === "system") css += ` @media (prefers-color-scheme: dark) { ${darkBlock(":root[data-color-scheme=system]", colors, dark)} }`;
+    if (tokens.colorScheme === "system") css += ` @media screen and (prefers-color-scheme: dark) { ${darkBlock(":root[data-color-scheme=system]", colors, dark)} }`;
   }
   return {
     css,

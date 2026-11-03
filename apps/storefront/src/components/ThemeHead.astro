@@ -1,0 +1,21 @@
+---
+// The theme's paint in a page's head, the same on every page that draws it
+// (the Layout, the agent continuation, the error page): the colour scheme's
+// own script (lib/color-scheme.ts), then the tokens and the dark colours
+// (lib/theme-paint.ts). The page puts `paint.colorScheme?.scheme` on its
+// <html data-color-scheme>.
+import { colorSchemeBootScript } from "@/lib/color-scheme";
+import type { ThemePaint } from "@/lib/theme-paint";
+
+interface Props {
+  paint: ThemePaint;
+  /** The theme editor's canvas: it shows the colours being edited, never a buyer's choice. */
+  preview?: boolean;
+}
+
+const { paint, preview = false } = Astro.props;
+const script = colorSchemeBootScript(paint.colorScheme, !preview);
+---
+
+{script && <script is:inline set:html={script} />}
+<style set:html={paint.css} data-theme-tokens={preview ? "" : undefined} />

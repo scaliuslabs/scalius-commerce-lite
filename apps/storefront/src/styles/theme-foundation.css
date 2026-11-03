@@ -1,11 +1,14 @@
 /* `dark:` follows the theme's colour scheme (lib/color-scheme.ts): the dark
    colours on <html data-color-scheme="dark">, or the device's dark setting
-   while `system` is not yet settled (a page without JavaScript). */
+   while `system` is not yet settled (a page without JavaScript). Screens
+   only: a printed page keeps the light colours. */
 @custom-variant dark {
-  &:where([data-color-scheme="dark"] *) {
-    @slot;
+  @media screen {
+    &:where([data-color-scheme="dark"] *) {
+      @slot;
+    }
   }
-  @media (prefers-color-scheme: dark) {
+  @media screen and (prefers-color-scheme: dark) {
     &:where([data-color-scheme="system"] *) {
       @slot;
     }
