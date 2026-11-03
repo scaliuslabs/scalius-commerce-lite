@@ -1,7 +1,12 @@
 ---
-import AgentContinuationPage from "../../agent/continue/[continuationId].astro";
+// A continuation an agent hands a buyer to (the API issues `/checkout/continue/<id>`).
+// The page's own frontmatter does every await and sets every header and the status.
+import ContinuationDocument from "@/components/continuation/ContinuationDocument.astro";
+import { prepareContinuationPage } from "@/lib/continuation-page";
 
 export const prerender = false;
+
+const page = await prepareContinuationPage(Astro);
 ---
 
-<AgentContinuationPage />
+<ContinuationDocument page={page} />

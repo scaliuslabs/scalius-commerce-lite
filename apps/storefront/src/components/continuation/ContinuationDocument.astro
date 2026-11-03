@@ -1,0 +1,152 @@
+---
+// The agent and checkout continuation document: the card entry an agent hands
+// a buyer to. Everything awaited and every response header (the strict card
+// policy, no referrer, no indexing, the 404) is set by each page's own
+// frontmatter (lib/continuation-page.ts), never here: a streamed child
+// renders after the response's headers and status are sent.
+import "@/styles/global.css";
+import ThemeHead from "@/components/ThemeHead.astro";
+import { continuationCopy } from "@/lib/continuation-copy";
+import type { ContinuationPage } from "@/lib/continuation-page";
+
+interface Props {
+  page: ContinuationPage;
+}
+
+const { page } = Astro.props;
+const copy = continuationCopy(page.language);
+---
+<!doctype html>
+<html lang={page.language} data-color-scheme={page.paint.colorScheme?.scheme}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <ThemeHead paint={page.paint} preview={page.preview} />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <meta name="referrer" content="no-referrer" />
+    <title>{page.continuationId ? copy.pageTitle : copy.unavailableTitle}</title>
+  </head>
+  <body class="min-h-screen bg-muted/30 text-foreground">
+    <main
+      id="agentContinuationRoot"
+      data-continuation-id={page.continuationId ?? undefined}
+      class="mx-auto flex min-h-screen w-full max-w-xl items-center px-4 py-10"
+    >
+      <section class="w-full rounded-xl border border-border bg-background p-5 shadow-sm sm:p-7" aria-labelledby="continuation-title">
+        <p class="text-sm font-medium uppercase tracking-wide text-muted-foreground">{copy.eyebrow}</p>
+        <h1 id="continuation-title" class="mt-2 text-2xl font-semibold tracking-tight">
+          {page.continuationId ? copy.heading : copy.unavailableHeading}
+        </h1>
+        {page.continuationId ? (
+          <>
+            <p class="mt-3 text-sm leading-6 text-muted-foreground">
+              {copy.privacy}
+            </p>
+            <div id="continuationStatus" class="mt-5 rounded-lg border border-border bg-muted/20 p-4" role="status" aria-live="polite">
+              <p class="font-medium">{copy.loading}</p>
+            </div>
+
+            <section id="customerAuthStep" class="mt-5 hidden space-y-5" aria-labelledby="customer-auth-title">
+              <h2 id="customer-auth-title" class="text-lg font-semibold">{copy.authorizeAccount}</h2>
+              <form id="customerAuthRequestForm" class="space-y-4">
+                <label class="block text-sm font-medium">
+                  {copy.verificationMethod}
+                  <select id="customerMethod" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5">
+                    <option value="phone">{copy.phone}</option>
+                    <option value="email">{copy.email}</option>
+                  </select>
+                </label>
+                <label class="block text-sm font-medium">
+                  {copy.deliveryChannel}
+                  <select id="customerChannel" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5">
+                    <option value="sms">{copy.sms}</option>
+                    <option value="whatsapp">{copy.whatsapp}</option>
+                    <option value="email">{copy.email}</option>
+                  </select>
+                </label>
+                <label class="block text-sm font-medium">
+                  {copy.identifier}
+                  <input id="customerIdentifier" required autocomplete="username" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5" />
+                </label>
+                <label class="block text-sm font-medium">
+                  {copy.name}
+                  <input id="customerName" autocomplete="name" maxlength="100" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5" />
+                </label>
+                <label class="block text-sm font-medium">
+                  {copy.profilePhone}
+                  <input id="customerPhone" autocomplete="tel" maxlength="32" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5" />
+                </label>
+                <label class="block text-sm font-medium">
+                  {copy.profileEmail}
+                  <input id="customerEmail" type="email" autocomplete="email" maxlength="254" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5" />
+                </label>
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground disabled:opacity-60">
+                  {copy.sendCode}
+                </button>
+              </form>
+              <form id="customerAuthVerifyForm" class="hidden space-y-4">
+                <label class="block text-sm font-medium">
+                  {copy.verificationCode}
+                  <input id="customerVerificationCode" required inputmode="numeric" autocomplete="one-time-code" maxlength="12" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 tracking-widest" />
+                </label>
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground disabled:opacity-60">
+                  {copy.verifyAuthorize}
+                </button>
+              </form>
+            </section>
+
+            <section id="paymentStep" class="mt-5 hidden space-y-4" aria-labelledby="payment-title">
+              <h2 id="payment-title" class="text-lg font-semibold">{copy.paymentHeading}</h2>
+              <p class="text-sm text-muted-foreground">{copy.paymentPrivacy}</p>
+              <div id="stripeCardSection" class="hidden space-y-3">
+                <div id="stripeCardElement" class="rounded-lg border border-border bg-background p-3"></div>
+                <p id="stripeCardError" class="text-sm text-destructive" aria-live="polite"></p>
+              </div>
+              <button id="startPaymentButton" type="button" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground disabled:opacity-60">
+                {copy.continuePayment}
+              </button>
+            </section>
+
+            <section id="recoveryStep" class="mt-5 hidden space-y-5" aria-labelledby="recovery-title">
+              <h2 id="recovery-title" class="text-lg font-semibold">{copy.verifyOrder}</h2>
+              <form id="recoveryRequestForm" class="space-y-4">
+                <label class="block text-sm font-medium">
+                  {copy.deliveryChannel}
+                  <select id="recoveryChannel" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5">
+                    <option value="email">{copy.email}</option>
+                    <option value="sms">{copy.sms}</option>
+                    <option value="whatsapp">{copy.whatsapp}</option>
+                  </select>
+                </label>
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground disabled:opacity-60">
+                  {copy.sendCode}
+                </button>
+              </form>
+              <form id="recoveryVerifyForm" class="hidden space-y-4">
+                <label class="block text-sm font-medium">
+                  {copy.verificationCode}
+                  <input id="recoveryVerificationCode" required inputmode="numeric" autocomplete="one-time-code" maxlength="12" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 tracking-widest" />
+                </label>
+                <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground disabled:opacity-60">
+                  {copy.verifyOrder}
+                </button>
+              </form>
+            </section>
+          </>
+        ) : (
+          <p class="mt-3 text-sm leading-6 text-muted-foreground">
+            {copy.invalidReference}
+          </p>
+        )}
+        <div class="mt-6 border-t border-border pt-4">
+          <a class="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/">{copy.returnToStore}</a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
+
+<script>
+  import { initAgentContinuation } from "@/lib/agent-continuation";
+  initAgentContinuation();
+</script>
