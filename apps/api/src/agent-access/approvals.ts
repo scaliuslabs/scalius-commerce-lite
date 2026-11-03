@@ -38,6 +38,7 @@ import {
 import { AgentDispatchError } from "./dispatch-error";
 import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
 import type { AgentPrincipal } from "./types";
+import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 
 /** The REST lane's retry header: `Scalius-Approval: abh_...`. */
 export const APPROVAL_HEADER = "Scalius-Approval";
@@ -184,7 +185,7 @@ async function readRequester(db: Database, grantId: string): Promise<AgentApprov
     // A paired CLI keeps its client's name on the pairing that created the grant.
     deviceClientName: sql<string | null>`(
       SELECT ${agentDeviceAuthorizations.clientName} FROM ${agentDeviceAuthorizations}
-      WHERE ${agentDeviceAuthorizations.grantId} = ${agentGrants.id} LIMIT 1
+      WHERE ${agentDeviceAuthorizations.grantId} = ${qualifiedColumn(agentGrants.id)} LIMIT 1
     )`,
   }).from(agentGrants).where(eq(agentGrants.id, grantId)).get();
   if (!grant) return null;

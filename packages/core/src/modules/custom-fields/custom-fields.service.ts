@@ -70,6 +70,7 @@ import type {
     SetCustomFieldValuesInput,
     UpdateCustomFieldDefinitionInput,
 } from "./custom-fields.validation";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -268,7 +269,7 @@ export async function listCustomFieldDefinitions(
         readCustomFieldCodecContext(db),
         db.select({
             ...definitionColumns,
-            valueCount: sql<number>`(SELECT count(*) FROM ${customFieldValues} WHERE ${customFieldValues.definitionId} = ${customFieldDefinitions.id})`,
+            valueCount: sql<number>`(SELECT count(*) FROM ${customFieldValues} WHERE ${customFieldValues.definitionId} = ${qualifiedColumn(customFieldDefinitions.id)})`,
         })
             .from(customFieldDefinitions)
             .where(options.ownerType ? eq(customFieldDefinitions.ownerType, options.ownerType) : undefined)

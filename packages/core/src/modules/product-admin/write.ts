@@ -91,6 +91,7 @@ import { type PlannedProductAttributeValue, prepareProductAttributeValueRows } f
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { handleOrNumberedCopy } from "../../utils/text-match";
 import { getProductDetails } from "./read";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 export type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -1613,7 +1614,7 @@ export async function duplicateProduct(
             pageTemplate: products.pageTemplate,
             emiEligible: products.emiEligible,
             // An archived tax class is not offered to new products.
-            taxClassId: sql<string | null>`(SELECT ${taxClasses.id} FROM ${taxClasses} WHERE ${taxClasses.id} = ${products.taxClassId} AND ${taxClasses.deletedAt} IS NULL)`,
+            taxClassId: sql<string | null>`(SELECT ${taxClasses.id} FROM ${taxClasses} WHERE ${taxClasses.id} = ${qualifiedColumn(products.taxClassId)} AND ${taxClasses.deletedAt} IS NULL)`,
         }).from(products).where(eq(products.id, id)).get(),
         db.select({ id: productVariants.id, sku: productVariants.sku })
             .from(productVariants)
@@ -1662,7 +1663,7 @@ async function buildSkuSettingsCopyStatements(
         allowPreorder: productVariants.allowPreorder,
         preorderDate: productVariants.preorderDate,
         preorderMessage: productVariants.preorderMessage,
-        taxClassId: sql<string | null>`(SELECT ${taxClasses.id} FROM ${taxClasses} WHERE ${taxClasses.id} = ${productVariants.taxClassId} AND ${taxClasses.deletedAt} IS NULL)`,
+        taxClassId: sql<string | null>`(SELECT ${taxClasses.id} FROM ${taxClasses} WHERE ${taxClasses.id} = ${qualifiedColumn(productVariants.taxClassId)} AND ${taxClasses.deletedAt} IS NULL)`,
     }).from(productVariants)
         .where(sql`${productVariants.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...copyIdOf.keys()])}))`);
     return sources.flatMap(({ id: sourceId, ...facts }) => {

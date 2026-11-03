@@ -9,6 +9,7 @@ import { inventoryLevels, inventoryLocations, products, productVariants } from "
 import type { Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import { readStoreDecimalPlaces, variantOptionLabelSql } from "../products";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 /** At most this many products open in the bulk editor at once. */
 export const PRODUCT_BULK_EDIT_MAX = 50;
@@ -68,7 +69,7 @@ export async function readProductsForBulkEdit(db: Database, ids: readonly string
             label: variantOptionLabelSql(productVariants.id),
             onHand: sql<number | null>`(SELECT ${inventoryLevels.onHand} FROM ${inventoryLevels}
                 JOIN ${inventoryLocations} ON ${inventoryLocations.id} = ${inventoryLevels.locationId}
-                WHERE ${inventoryLevels.variantId} = ${productVariants.id} AND ${inventoryLocations.isDefault} = 1)`,
+                WHERE ${inventoryLevels.variantId} = ${qualifiedColumn(productVariants.id)} AND ${inventoryLocations.isDefault} = 1)`,
             stock: productVariants.stock,
             weight: productVariants.weight,
             fulfillmentKind: productVariants.fulfillmentKind,

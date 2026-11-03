@@ -55,6 +55,7 @@ import {
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
 import { readLinePurchaseOption } from "@scalius/shared/line-properties";
+import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 
 /** The most lines a representation lists (an order's, a return's, a purchase order's): a bigger one is truncated as a whole. */
 const MAX_LINES = 500;
@@ -151,7 +152,7 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       title: orderItems.productName,
       variantLabel: orderItems.variantLabel,
       // The code it was sold under (0179); older lines read the SKU's current code, in the same read.
-      sku: sql<string | null>`coalesce(${orderItems.sku}, (SELECT ${productVariants.sku} FROM ${productVariants} WHERE ${productVariants.id} = ${orderItems.variantId}))`,
+      sku: sql<string | null>`coalesce(${orderItems.sku}, (SELECT ${productVariants.sku} FROM ${productVariants} WHERE ${productVariants.id} = ${qualifiedColumn(orderItems.variantId)}))`,
       quantity: orderItems.quantity,
       fulfilledQuantity: orderItems.fulfilledQuantity,
       unitPriceMinor: orderItems.unitPriceMinor,
