@@ -186,6 +186,9 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
   const errors = form.formState.errors;
   const committedSlug = defaultValues?.slug;
   const isCommittedLivePage = isEdit && Boolean(committedSlug) && defaultValues?.publicationMode === "published";
+  // A page on an address the store itself owns shows nowhere: say so instead of "visible", and offer no link to it.
+  const savedUnreachable = Boolean(committedSlug) && pageIsShadowedByStoreRoute(contentType, committedSlug!);
+  const typedUnreachable = Boolean(slug) && pageIsShadowedByStoreRoute(contentType, slug!);
 
   return (
     <FormContainer
@@ -334,11 +337,11 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               <FormField
                 control={form.control}
                 name="publicationMode"
-                render={({ field, fieldState }) => !canSave || !canPublish ? <ReadOnlyValue label={t("visibility")} value={t(saved.publicationMode === "published" ? "visible" : saved.publicationMode === "scheduled" ? "scheduled" : "draft")} help={canSave && !canPublish ? t("publishPermission") : undefined} /> : (
+                render={({ field, fieldState }) => !canSave || !canPublish ? <ReadOnlyValue label={t("visibility")} value={t(saved.publicationMode === "published" ? (savedUnreachable ? "notReachable" : "visible") : saved.publicationMode === "scheduled" ? "scheduled" : "draft")} help={canSave && !canPublish ? t("publishPermission") : savedUnreachable && saved.publicationMode === "published" ? t("notReachableHelp") : undefined} /> : (
                   <Field
                     help={!canPublish
                       ? t("publishPermission")
-                      : t(field.value === "published" ? "visibleHelp" : field.value === "scheduled" ? "scheduledHelp" : "draftHelp")}
+                      : t(field.value === "published" ? (typedUnreachable ? "notReachableHelp" : "visibleHelp") : field.value === "scheduled" ? "scheduledHelp" : "draftHelp")}
                     error={fieldState.error?.message}
                   >
                     <SearchableSelect
@@ -371,7 +374,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                   )}
                 />
               ) : null}
-              {isCommittedLivePage && committedSlug ? (
+              {isCommittedLivePage && committedSlug && !savedUnreachable ? (
                 <Button type="button" variant="outline" asChild>
                   <a href={getStorefrontPath(pathFor(committedSlug))} target="_blank" rel="noopener noreferrer">
                     <ExternalLink />
