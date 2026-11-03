@@ -199,7 +199,7 @@ Its `tokens` can set the colour scheme too, checked like any theme when the merc
 | --- | --- | --- |
 | `colorScheme` | `light`, `dark`, `system` | `colors`, `darkColors`, or whichever the buyer's device asks for. |
 | `darkColors` | the same keys as `colors`, or `null` | Required, and held to the same readable-text checks, while `colorScheme` isn't `light` or the switch is on. |
-| `colorSchemeToggle` | `true`, `false` | A switch in the header; each buyer's choice is remembered on their device. |
+| `colorSchemeToggle` | `true`, `false` | A switch in the header (a header skin gets it in its `header.actions` slot); each buyer's choice is remembered on their device. |
 
 A template that leaves dark off (`light`, no switch) keeps the merchant's own scheme, dark colours and switch when applied; one that shows dark brings its own. A template written for version 12 reads as `light`, no dark colours and no switch.
 

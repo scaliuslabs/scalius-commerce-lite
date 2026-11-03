@@ -1,0 +1,17 @@
+---
+// A header skin's `<Slot name="header.actions" />`: the apps' components, as
+// the core header draws them, then the merchant's light or dark switch when
+// the theme offers one, so it sits inside whichever header the theme draws.
+import type { StorefrontComponentSlot } from "@scalius/shared/plugins/storefront-protocol";
+import AppSlot from "@/components/apps/AppSlot.astro";
+import ColorSchemeToggle from "./ColorSchemeToggle.astro";
+
+interface Props {
+  name: StorefrontComponentSlot;
+}
+
+const { name } = Astro.props;
+---
+
+<AppSlot name={name} />
+{name === "header.actions" && <ColorSchemeToggle />}

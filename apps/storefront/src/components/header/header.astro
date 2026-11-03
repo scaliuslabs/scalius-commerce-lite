@@ -3,7 +3,8 @@
 // (`apps.skins.header`), else the theme's own header (CoreHeader.astro). An
 // app header that is inactive, fails or is late gives way to the core
 // header, so a page always has one. Under an app header the store adds the
-// theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts).
+// theme's phone tab bar and its menu disclosure behaviour (nav-disclosure.ts),
+// and the merchant's light or dark switch where the skin places `header.actions`.
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Skin from "@/components/apps/Skin.astro";
 import { appSkin, requestExtensions } from "@/lib/extensions";
@@ -13,6 +14,8 @@ import { getRuntimePresence } from "@/lib/api/runtime";
 import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import CoreHeader from "./CoreHeader.astro";
+import HeaderSlot from "./HeaderSlot.astro";
+import type { EmbedRenderers } from "@/lib/extensions/embeds";
 import MobileTabBar from "./MobileTabBar.astro";
 import AppHeaderBehaviour from "./AppHeaderBehaviour.astro";
 import { phoneNavigation } from "./phone-navigation";
@@ -24,6 +27,10 @@ const theme = await currentRequestTheme(Astro.locals);
 // Under an app header the store still draws the theme's phone tab bar.
 const phone = phoneNavigation(theme.resolved.blocks);
 const tabBar = phone.tabBar && props.mobileNavigation === "tabs";
+// A skin's slots: the apps' components, and the switch in `header.actions`.
+const embeds: EmbedRenderers = {
+  slot: ({ data: slot }) => ({ component: HeaderSlot as never, props: { name: slot.name } }),
+};
 // Built only when an app header draws, from reads the page already made.
 const data = async () => {
   const [skin, layout, { host }] = await Promise.all([
@@ -47,7 +54,7 @@ const data = async () => {
 ---
 
 <div class="contents" data-storefront-header>
-  <Skin target="header" data={data} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
+  <Skin target="header" data={data} embeds={embeds} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
     <CoreHeader {...props} />
     <Fragment slot="drawn">
       <AppHeaderBehaviour />
