@@ -5,12 +5,8 @@
 // URL). The product controller takes over the same form once it runs.
 import type { ProductCustomizationField } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import {
-  BUYER_INPUT_FIELD_PREFIX,
-  counterText,
-  surchargeText,
-  type BuyerInputCopy,
-} from "./lib/buyer-inputs";
+import { counterText, surchargeText, type BuyerInputCopy } from "./lib/buyer-inputs";
+import { BUYER_INPUT_FIELD_PREFIX } from "./lib/buy-form";
 
 interface Props {
   formId: string;

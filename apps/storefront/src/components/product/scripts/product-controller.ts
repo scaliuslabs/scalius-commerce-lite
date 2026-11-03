@@ -46,6 +46,7 @@ import {
   type ProductActionPresentation,
 } from "../lib/product-actions";
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/line-price";
+import { BUYER_INPUT_FIELD_PREFIX } from "../lib/buy-form";
 import type { BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
@@ -196,11 +197,15 @@ export function init() {
   state.error = null;
   missingOption = null;
   state.buyerInputs = null;
-  state.edit = null;
-  // Buyer inputs' script loads only for a product that has them.
-  buyerInputsReady = summary.querySelector("form[data-buyer-inputs]")
-    ? loadBuyerInputs(summary, cache.container.dataset.productId).catch(() => undefined)
-    : null;
+  // A cart line being edited ("Edit" in the cart; products with buyer
+  // inputs only) is known at once: the buttons say "Update cart" from the
+  // first frame, and its answers fill the fields the buyer has not touched.
+  const buyerForm = summary.querySelector<HTMLFormElement>("form[data-buyer-inputs]");
+  const productId = cache.container.dataset.productId;
+  state.edit = buyerForm && productId ? readCartLineEdit(productId) : null;
+  if (buyerForm && state.edit) prefillEdit(buyerForm, state.edit);
+  // The inputs' own script loads only for a product that has them.
+  buyerInputsReady = buyerForm ? loadBuyerInputs(summary) : null;
 
   initQuantity();
   bindOptions();
@@ -215,15 +220,16 @@ export function init() {
   });
 }
 
-/** Settles once the product's buyer inputs work; null for a product without them. */
+/**
+ * Settles once the product's buyer inputs work; null for a product without
+ * them. It rejects when their script fails to load: an add then refuses
+ * (`failed`) and the buyer's answers stay in the form; left unhandled, the
+ * rejection reaches the page's stale-asset recovery, which reloads.
+ */
 let buyerInputsReady: Promise<void> | null = null;
 
-/**
- * The live side of the buyer-inputs form (buyer-inputs-controller.ts), and a
- * cart line being edited ("Edit" in the cart): only products with buyer
- * inputs have either. An add waits for it.
- */
-async function loadBuyerInputs(summary: HTMLElement, productId: string | undefined) {
+/** The live side of the buyer-inputs form (buyer-inputs-controller.ts). An add waits for it. */
+async function loadBuyerInputs(summary: HTMLElement) {
   const { initBuyerInputs } = await import("./buyer-inputs-controller");
   if (cache.summary !== summary) return;
   state.buyerInputs = initBuyerInputs(summary, () => {
@@ -233,13 +239,18 @@ async function loadBuyerInputs(summary: HTMLElement, productId: string | undefin
     dropRefusal();
     refresh();
   });
-  state.edit = state.buyerInputs && productId ? readCartLineEdit(productId) : null;
-  if (state.buyerInputs && state.edit) {
-    if (cache.quantity) cache.quantity.value = String(state.edit.quantity);
-    state.buyerInputs.prefill(state.edit.properties);
-    selectPurchaseOption(state.edit.purchaseOption ?? "");
-  }
   refresh();
+}
+
+/** The edited line's quantity, answers and purchase option, in what the buyer has not changed yet. */
+function prefillEdit(form: HTMLFormElement, edit: CartLineEdit) {
+  if (cache.quantity?.value === "1") cache.quantity.value = String(edit.quantity);
+  for (const { key, value } of edit.properties) {
+    const field = form.elements.namedItem(`${BUYER_INPUT_FIELD_PREFIX}${key}`);
+    if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked ||= value === "true";
+    else if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) && !field.value) field.value = value;
+  }
+  if (!selectedPurchaseOption()) selectPurchaseOption(edit.purchaseOption ?? "");
 }
 
 /** The buy form's purchase-option radios (an app's ways to buy, beside a one-time purchase). */
@@ -434,8 +445,8 @@ function bindActions() {
   // default one); anything else still lands here, as the buyer's own choice.
   cache.form?.addEventListener("submit", (event) => {
     const submitter = (event as SubmitEvent).submitter;
-    // A skin's buy button pressed before its script has loaded posts its own
-    // SKU, as without JavaScript; once loaded, the script takes its press.
+    // A skin's buy button reaches the form only when its script failed to
+    // load: it posts its own SKU, as without JavaScript.
     if (submitter?.matches(SKIN_BUY_CONTROL)) return;
     event.preventDefault();
     void add(Boolean(submitter?.closest('[data-action="buy-now"]')));
@@ -461,12 +472,34 @@ function loadExtras() {
   const { signal } = (extrasBinding = new AbortController());
   const bound = "[data-sx-bound]";
   if (document.querySelector(bound) || Array.from(document.querySelectorAll<HTMLTemplateElement>("scalius-deferred>template")).some((template) => template.content.querySelector(bound))) {
+    // A press on a control before its script is in waits for it (the last
+    // one): a choice or buy then runs as if pressed after.
+    let pending: HTMLElement | null = null;
+    const hold = (event: MouseEvent) => {
+      const control = event.target instanceof Element
+        ? event.target.closest<HTMLElement>(`${bound}[data-choose-variant],${bound}[data-buy-variant]`)
+        : null;
+      // A new tab or window follows a link itself.
+      if (!control || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      pending = control;
+    };
+    document.addEventListener("click", hold, { capture: true, signal });
     void import("./skin-controls").then(({ bindSkinControls }) => {
+      document.removeEventListener("click", hold, { capture: true });
       if (signal.aborted) return;
       skinControls = bindSkinControls({ state, choose: chooseVariant, add, selected: exactVariant, stock: getBuyerStockSummary }, signal);
       // Controls in deferred markup take the form's state when they enter the page.
       document.addEventListener(DEFERRED_REVEAL_EVENT, skinControls.sync, { signal });
       skinControls.sync();
+      pending?.click();
+    }, (error: unknown) => {
+      // Their script is gone (a deploy): the press goes the native way (a
+      // link opens, a buy button posts its own SKU), and the page's
+      // stale-asset recovery hears the failure.
+      document.removeEventListener("click", hold, { capture: true });
+      pending?.click();
+      throw error;
     });
   }
   if (cache.summary && document.querySelector("[data-sx-app]")) {
@@ -474,7 +507,8 @@ function loadExtras() {
     void import("./island-state").then(({ islandState }) => {
       if (signal.aborted) return;
       publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, option: selectedPurchaseOption, stock: getBuyerStockSummary });
-      publishState();
+      // The first state goes out in a frame too, never ahead of what the page shows.
+      requestAnimationFrame(publish);
     });
   }
 }
@@ -699,7 +733,7 @@ function updateStockAndActions() {
     }
   } else if (state.edit && !actions.addToCart.disabled) {
     // Editing a cart line: one "Update cart" button replaces that line.
-    const label = state.buyerInputs?.copy.updateCartItemText ?? "";
+    const label = cache.actions?.dataset.updateCartText ?? "";
     if (cache.addLabel) cache.addLabel.textContent = label;
     cache.addButton?.setAttribute(
       "aria-label",
@@ -887,12 +921,13 @@ async function add(redirect: boolean, source: HTMLElement | null = null) {
 }
 
 async function addSelected(redirect: boolean, focusProblem: boolean) {
-  // Buyer inputs (and a cart line being edited) first, for a product that has them.
-  if (buyerInputsReady) await buyerInputsReady;
-  // A skin's button never buys while a cart line is edited ("Update cart" does).
-  if (focusProblem && state.edit) return;
   if (!cache.container || !state.productPricing) return;
   const fail = (message: string, error: StorefrontProductError) => showError(message, error, focusProblem);
+  // A product's buyer inputs work first; when their script failed to load,
+  // nothing is added (the answers and surcharges would be lost; they stay
+  // in the form for the next try).
+  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false)))
+    return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
   const validation = validateSelection(
     state.selection,
     state.options,

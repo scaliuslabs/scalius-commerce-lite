@@ -25,10 +25,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { isPurchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { OrderLineProperty, ProductCustomization } from "@/lib/api/types";
 import type { CartLineProperty } from "@/store/cart";
-import { BUY_FORM_VARIANT_FIELDS } from "./buy-form";
-
-/** Form field names of the no-JavaScript buyer-inputs form: `property.<key>`. */
-export const BUYER_INPUT_FIELD_PREFIX = "property.";
+import { BUY_FORM_VARIANT_FIELDS, BUYER_INPUT_FIELD_PREFIX } from "./buy-form";
 
 export const BUYER_INPUT_COPY_KEYS = [
   "customizationRequiredText",

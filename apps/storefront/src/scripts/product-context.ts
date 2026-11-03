@@ -9,7 +9,7 @@
 // Until the controller runs, the state is the form as the server drew it.
 // Only pages with app islands load this.
 import type { StorefrontIslandContext, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
-import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buyer-inputs";
+import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buy-form";
 import { PRODUCT_STATE_EVENT, PRODUCT_STATE_KEY, type ProductStateHolder } from "@/components/product/scripts/island-state";
 
 type ProductContext = NonNullable<StorefrontIslandContext["product"]>;
