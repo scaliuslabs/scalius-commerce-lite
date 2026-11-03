@@ -36,7 +36,6 @@ export interface CspPlatformOrigins {
 const ESSENTIAL_SCRIPT_SRC = [
   "'self'",
   "'unsafe-inline'", // Consider reducing usage if possible
-  "data:",
 ];
 
 const ESSENTIAL_CONNECT_SRC = ["'self'"];
@@ -59,7 +58,6 @@ const COMMON_THIRD_PARTY_DOMAINS = [
   "https://www.googletagmanager.com",
   "https://*.google-analytics.com",
   "https://*.analytics.google.com",
-  "https://cdn.jsdelivr.net",
   // Cloudflare Web Analytics / Insights
   "https://static.cloudflareinsights.com",
   "https://*.cloudflareinsights.com",
