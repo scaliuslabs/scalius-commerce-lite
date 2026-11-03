@@ -11,9 +11,10 @@
  *   `colorSchemeToggle()`) flips the scheme and remembers it; other tabs, and
  *   a page restored from the back/forward cache, follow. Every switch is
  *   `aria-pressed` while dark colours show, so its new state is announced
- *   under one stable name. The switch the store adds to a header skin
- *   yields to one the skin or an app drew there, and one drawn after a skin
- *   that places no slot moves into the skin's `<header>` (its landmark).
+ *   under one stable name. The store's switch (the core header's, or the one
+ *   it adds to a header skin) yields to one a header or footer skin, or an
+ *   app in their slots, drew: a page shows one. One drawn after a skin that
+ *   places no slot moves into the skin's `<header>` (its landmark).
  *
  * It is its own script, and a failure inside it is swallowed: nothing else
  * on the page waits on it. Without JavaScript the theme's scheme stands
@@ -21,6 +22,9 @@
  */
 import type { ThemeColorScheme } from "@/lib/theme-paint";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+
+/** A switch a header or footer skin (or an app in their slots) drew: the store's then yields to it. */
+const SKIN_DRAWN_SWITCH = "[data-storefront-header] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle]), [data-storefront-footer] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])";
 
 /** Where a buyer's choice is kept, on their device only. */
 export const COLOR_SCHEME_STORAGE_KEY = "scalius:color-scheme";
@@ -49,12 +53,13 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     "a();",
     remember ? 'if(t==="system")m.addEventListener("change",a);' : "",
     toggle ? 'r.setAttribute("data-color-scheme-switch","");' : "",
-    // Once the page is read: every switch says its state; one switch per header (the host's yields to one a
-    // skin or an app drew there: the CSS rule's fallback without :has()), and the host's sits in the header's landmark.
+    // Once the page is read: every switch says its state; one switch per page (the store's yields to one a header
+    // or footer skin drew: the CSS rule's fallback without :has()), and the store's sits in the header's landmark.
     toggle
-      ? 'document.addEventListener("DOMContentLoaded",function(){p();document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
-        + 'var d=h.closest("[data-storefront-header]");if(!d)return;'
-        + 'if(d.querySelector("[data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])")){h.hidden=true;return}'
+      ? 'document.addEventListener("DOMContentLoaded",function(){p();'
+        + `var o=document.querySelector(${serializeJsonForInlineScript(SKIN_DRAWN_SWITCH)});`
+        + 'document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
+        + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d)return;'
         + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h)})});'
       : "",
     toggle

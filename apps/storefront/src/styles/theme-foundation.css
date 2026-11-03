@@ -254,10 +254,10 @@ body {
   display: none !important;
 }
 
-/* One switch per header: the one the store adds to a header skin yields to
-   one the skin or an app drew there (the head script hides it where :has()
-   is missing). */
-[data-storefront-header]:has([data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])) [data-sx-host-color-scheme-toggle] {
+/* One switch per page: the store's (the core header's, or the one it adds
+   to a header skin) yields to one a header or footer skin, or an app in
+   their slots, drew (the head script hides it where :has() is missing). */
+:root:has([data-storefront-header] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle]), [data-storefront-footer] [data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])) [data-sx-host-color-scheme-toggle] {
   display: none !important;
 }
 
