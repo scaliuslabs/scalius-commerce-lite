@@ -146,21 +146,18 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * The product page's modules a product_main skin may place
  * (`product_module` embeds), the modules of the theme's product template
  * (Online store -> Theme):
- * - `description`: the store's details tabs as the page draws them: the
- *   description, the merchant's extra tabs and the key features (when the
- *   buy form does not list them). A skin that places it does not draw
- *   `descriptionHtml` itself; it draws whenever the product has any of
- *   them, even where the template lists no details module.
+ * - `description`: the store's details tabs as the page draws them. A skin
+ *   that places it does not draw `descriptionHtml` itself; it draws even
+ *   where the template lists no description module.
  * - `spec_table`: the specification table; `key_attributes`: its key-spec
- *   highlights (only when the table has more rows than key specs and the
- *   theme's buy box lists no facts column).
- * - `about_bullets`: "About this item", the key features (only when the
- *   theme's buy box does not list them; `<BuyForm />` does then).
+ *   highlights.
+ * - `about_bullets`: "About this item", the key features.
  * - `content_blocks`, `compare_similar`, `policies`, `recently_viewed`
  *   (this browser's list: it holds no space until filled).
  *
- * Each renders only where the template has it and the product has something
- * for it, else nothing. Reviews and related products have their own embeds.
+ * Each renders where the store would draw it below the fold for this
+ * product (the template has it and the product has something for it), else
+ * nothing. Reviews and related products have their own embeds.
  * Each name is the theme's own module id (`blocks.product.below`). The
  * warranty is part of `<BuyForm />`, never a module.
  */
