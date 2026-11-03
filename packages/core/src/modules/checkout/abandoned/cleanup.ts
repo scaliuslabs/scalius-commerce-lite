@@ -1,7 +1,8 @@
-import { and, asc, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, isNull, lte, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { abandonedCheckouts } from "@scalius/database/schema";
 import { isOnlinePaymentMethod } from "../../payments";
+import { inJsonArray } from "../../../utils/in-json-array";
 
 export const DEFAULT_ABANDONED_CHECKOUT_RETENTION_DAYS = 30;
 export const DEFAULT_EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES = 60;
@@ -105,10 +106,12 @@ export async function cleanupStaleAbandonedCheckouts(
     const expiredCutoff = Math.floor(nowSeconds - retentionDays * 24 * 60 * 60);
     const emptyCutoff = Math.floor(nowSeconds - emptyMaxAgeMinutes * 60);
 
+    // Each delete re-asserts its selection predicate, so a snapshot renewed after selection survives.
+    const expired = lte(abandonedCheckouts.createdAt, new Date(expiredCutoff * 1000));
     const expiredRows = await db
         .select({ id: abandonedCheckouts.id })
         .from(abandonedCheckouts)
-        .where(lte(abandonedCheckouts.createdAt, new Date(expiredCutoff * 1000)))
+        .where(expired)
         .orderBy(asc(abandonedCheckouts.createdAt), asc(abandonedCheckouts.id))
         .limit(limit + 1);
     const expiredIds = expiredRows.slice(0, limit).map((row) => row.id);
@@ -117,8 +120,10 @@ export async function cleanupStaleAbandonedCheckouts(
     result.hasMore = expiredRows.length > limit;
 
     if (expiredIds.length > 0) {
-        await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, expiredIds));
-        result.deletedExpired = expiredIds.length;
+        const deleted = await db.delete(abandonedCheckouts)
+            .where(and(expired, inJsonArray(abandonedCheckouts.id, expiredIds)))
+            .returning({ id: abandonedCheckouts.id });
+        result.deletedExpired = deleted.length;
     }
 
     const remainingLimit = Math.max(0, limit - expiredIds.length);
@@ -126,6 +131,10 @@ export async function cleanupStaleAbandonedCheckouts(
         return result;
     }
 
+    const staleWithoutPhone = and(
+        isNull(abandonedCheckouts.customerPhone),
+        lte(abandonedCheckouts.updatedAt, new Date(emptyCutoff * 1000)),
+    );
     const oldCandidates = await db
         .select({
             id: abandonedCheckouts.id,
@@ -133,10 +142,7 @@ export async function cleanupStaleAbandonedCheckouts(
             customerPhone: abandonedCheckouts.customerPhone,
         })
         .from(abandonedCheckouts)
-        .where(and(
-            isNull(abandonedCheckouts.customerPhone),
-            lte(abandonedCheckouts.updatedAt, new Date(emptyCutoff * 1000)),
-        ))
+        .where(staleWithoutPhone)
         .orderBy(asc(abandonedCheckouts.updatedAt), asc(abandonedCheckouts.id))
         .limit(remainingLimit + 1) as AbandonedCheckoutEmptyCandidate[];
     const boundedCandidates = oldCandidates.slice(0, remainingLimit);
@@ -148,8 +154,11 @@ export async function cleanupStaleAbandonedCheckouts(
     result.hasMore = result.hasMore || oldCandidates.length > remainingLimit;
 
     if (emptyIds.length > 0) {
-        await db.delete(abandonedCheckouts).where(inArray(abandonedCheckouts.id, emptyIds));
-        result.deletedEmpty = emptyIds.length;
+        // Every save bumps updated_at, so a row that gained data since selection fails the cutoff.
+        const deleted = await db.delete(abandonedCheckouts)
+            .where(and(staleWithoutPhone, inJsonArray(abandonedCheckouts.id, emptyIds)))
+            .returning({ id: abandonedCheckouts.id });
+        result.deletedEmpty = deleted.length;
     }
 
     // The NULL-to-timestamp edge emits checkout.abandoned once, even after a buyer resumes.
