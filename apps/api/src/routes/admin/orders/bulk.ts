@@ -57,11 +57,26 @@ const bulkShipResultItemSchema = z.object({
     error: z.string().optional(),
 }).passthrough();
 
+/**
+ * Orders of the request this one did not handle: each per-row bulk action
+ * takes the plan's number of orders per request (fewer on Free) and returns
+ * the rest, in the order sent, for the next request.
+ */
+const remainingOrderIdsSchema = z.array(z.string()).openapi({
+    description: "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.",
+});
+
+/** The orders this request handles, and the rest for the next one. */
+function sliceForRequest(orderIds: readonly string[], perRequest: number) {
+    return { handled: orderIds.slice(0, perRequest), remaining: orderIds.slice(perRequest) };
+}
+
 const bulkShipResponseSchema = successEnvelope(z.object({
     totalProcessed: z.number(),
     successCount: z.number(),
     failureCount: z.number(),
     results: z.array(bulkShipResultItemSchema),
+    remaining: remainingOrderIdsSchema,
 }));
 
 // ─── POST /archive ───────────────────────────────────────────────────────────
@@ -142,6 +157,7 @@ const bulkShipRoute = createRoute({
     path: "/bulk-ship",
     tags: ["Admin - Orders"],
     summary: "Bulk ship orders",
+    description: "Books a courier for each listed order. One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
     request: {
         body: { content: { "application/json": { schema: bulkShipOrderSchema } } }
     },
@@ -158,7 +174,8 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const db = c.get("db");
     const data = c.req.valid("json");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const results = await bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey, requestCourierProviders(c));
+    const { handled, remaining } = sliceForRequest(data.orderIds, planLimits().bulkOrders.ship);
+    const results = await bulkShipOrders(db, handled, data.providerId, data.options, encryptionKey, requestCourierProviders(c));
     const successCount = results.filter((r) => r.success).length;
     const newlyShippedResults = results.filter(isNewShipmentResult);
     const responseResults = results.map((result) => {
@@ -205,6 +222,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         successCount,
         failureCount: results.length - successCount,
         results: responseResults,
+        remaining,
     });
 }) as unknown as AdminRouteHandler<typeof bulkShipRoute>);
 
@@ -221,6 +239,7 @@ const bulkActionResponseSchema = successEnvelope(z.object({
         success: z.boolean(),
         error: z.string().optional(),
     })),
+    remaining: remainingOrderIdsSchema,
 }));
 
 const bulkConfirmRoute = createRoute({
@@ -229,7 +248,7 @@ const bulkConfirmRoute = createRoute({
     path: "/bulk-confirm",
     tags: ["Admin - Orders"],
     summary: "Confirm several new orders",
-    description: "Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done.",
+    description: "Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done. One request handles the plan's number of orders; the rest come back in `remaining`.",
     request: {
         body: { content: { "application/json": { schema: z.object({ orderIds: bulkOrderIdsSchema, requestKey: bulkRequestKeySchema }) } } },
     },
@@ -243,13 +262,15 @@ app.openapi(bulkConfirmRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const results = await bulkConfirmOrders(db, orderIds, { requestKey, actorId: user?.id ?? null });
+    const { handled, remaining } = sliceForRequest(orderIds, planLimits().bulkOrders.confirm);
+    const results = await bulkConfirmOrders(db, handled, { requestKey, actorId: user?.id ?? null });
     // The messages committed with their orders; one bounded sender takes them
     // after the response, and the scheduled drain sends whatever it leaves.
     const outboxIds = results.flatMap((result) => result.outboxId ? [result.outboxId] : []);
     if (outboxIds.length > 0) await notificationSender(c)(outboxIds);
     return ok(c, {
         results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })),
+        remaining,
     });
 });
 
@@ -259,6 +280,7 @@ const bulkFulfillRoute = createRoute({
     path: "/bulk-fulfill",
     tags: ["Admin - Orders"],
     summary: "Mark several confirmed orders as sent with your own courier",
+    description: "One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
     request: {
         body: {
             content: {
@@ -283,7 +305,8 @@ app.openapi(bulkFulfillRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, courierName, note, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const results = await bulkFulfillOrders(db, orderIds, { courierName, note, requestKey });
+    const { handled, remaining } = sliceForRequest(orderIds, planLimits().bulkOrders.send);
+    const results = await bulkFulfillOrders(db, handled, { courierName, note, requestKey });
 
     for (const result of results) {
         if (!result.success || !result.shipment) continue;
@@ -311,7 +334,10 @@ app.openapi(bulkFulfillRoute, async (c) => {
             .map((result) => [result.orderId, `shipment:${result.shipment!.shipmentId}:order_shipped`])),
         source: "orders-bulk-fulfill",
     });
-    return ok(c, { results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })) });
+    return ok(c, {
+        results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })),
+        remaining,
+    });
 });
 
 export { app as adminOrderBulkRoutes };

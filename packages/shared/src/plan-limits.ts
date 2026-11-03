@@ -127,6 +127,7 @@ export interface PlanLimits {
    * costs a few D1 queries of the invocation, so the Free bound keeps one call
    * well under its 50.
    */
+  readonly bulkOrders: BulkOrderLimits;
   readonly batchCreates: {
     readonly products: number;
     readonly categories: number;
@@ -164,6 +165,21 @@ export interface PlanLimits {
   };
 }
 
+/**
+ * Orders one per-row bulk order action handles per request; the rest come
+ * back as `remaining` and the dashboard sends them next. Each order costs its
+ * own D1 calls and the request's after-response work (one customer message
+ * on Free) counts against the same per-invocation cap (Free: 50 queries).
+ */
+export interface BulkOrderLimits {
+  /** Bulk confirm: one read for the whole slice, then one batch per 30 orders (status, timeline line, message). */
+  readonly confirm: number;
+  /** "Mark as sent" with your own courier: a fulfilment, its shipped status and its message per order. */
+  readonly send: number;
+  /** Booking a courier: a shipment claim, the courier's API call and the shipped status per order. */
+  readonly ship: number;
+}
+
 export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.freeze({
   free: Object.freeze({
     plan: "free",
@@ -196,6 +212,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 0.2,
     }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300 }),
+    bulkOrders: Object.freeze({ confirm: 30, send: 1, ship: 1 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -241,6 +258,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       limitScale: 1,
     }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000 }),
+    bulkOrders: Object.freeze({ confirm: 90, send: 30, ship: 20 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({
       cpuMs: 200,
