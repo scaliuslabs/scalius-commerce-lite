@@ -922,36 +922,29 @@ async function add(redirect: boolean, source: HTMLElement | null = null) {
   const button = source ?? (redirect ? cache.buyButton : cache.addButton);
   button?.setAttribute("aria-busy", "true");
   button?.classList.add("opacity-70", "cursor-progress");
+  let posted = false;
   try {
-    await addSelected(redirect, source !== null);
+    // The SKU as it was pressed: a choice made while the add waits (for the
+    // buyer inputs' script) never changes what it buys.
+    posted = (await addSelected(redirect, source !== null, state.selection)) === true;
   } finally {
-    state.adding = false;
-    button?.removeAttribute("aria-busy");
-    button?.classList.remove("opacity-70", "cursor-progress");
+    // A native post is on its way: the form stays busy and takes no other press.
+    if (!posted) {
+      state.adding = false;
+      button?.removeAttribute("aria-busy");
+      button?.classList.remove("opacity-70", "cursor-progress");
+    }
     updateActionsState();
     publish();
   }
 }
 
-async function addSelected(redirect: boolean, focusProblem: boolean) {
+/** Adds the SKU `selection` names; true when the form was posted the no-JavaScript way instead. */
+async function addSelected(redirect: boolean, focusProblem: boolean, selection: VariantSelection): Promise<boolean | void> {
   if (!cache.container || !state.productPricing) return;
   const fail = (message: string, error: StorefrontProductError) => showError(message, error, focusProblem);
-  // A product's buyer inputs work first. When their script failed to load
-  // (some browsers then refuse it for the life of the page), the form goes
-  // the no-JavaScript way: it posts every answer, the chosen SKU and the
-  // quantity, and the store checks and prices them. A cart line being
-  // edited cannot be replaced that way, so its update is refused instead
-  // (the answers stay in the form).
-  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false))) {
-    if (state.edit || !cache.form) return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
-    const field = cache.form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
-    const chosen = exactVariant();
-    if (field && chosen) field.value = chosen.id;
-    // Not requestSubmit: that comes back to this script's own submit handler.
-    return HTMLFormElement.prototype.submit.call(cache.form);
-  }
   const validation = validateSelection(
-    state.selection,
+    selection,
     state.options,
     state.variants,
   );
@@ -967,6 +960,22 @@ async function addSelected(redirect: boolean, focusProblem: boolean) {
   // The page's words, never the check's: the sold-out word, or the one for a choice no SKU has.
   if (!validation.valid || !validation.variant)
     return fail((validation.reason === "sold_out" ? cache.actions?.dataset.unavailableText : cache.actions?.dataset.combinationUnavailableText) ?? "", "unavailable");
+  // A product's buyer inputs work first. When their script failed to load
+  // (some browsers then refuse it for the life of the page), the form goes
+  // the no-JavaScript way once the browser's own checks pass (a required
+  // answer: its message, nothing posted): it posts every answer, this SKU
+  // and the quantity, and the store checks and prices them. A cart line
+  // being edited cannot be replaced that way, so its update is refused
+  // instead (the answers stay in the form).
+  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false))) {
+    if (state.edit || !cache.form) return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
+    if (!cache.form.reportValidity()) return setError("input_invalid");
+    const field = cache.form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
+    if (field) field.value = validation.variant.id;
+    // Not requestSubmit: that comes back to this script's own submit handler.
+    HTMLFormElement.prototype.submit.call(cache.form);
+    return true;
+  }
   // Each problem shows (and takes focus) under its field.
   const inputs = state.buyerInputs?.validate() ?? null;
   if (inputs && !inputs.ok) return setError("input_invalid");
