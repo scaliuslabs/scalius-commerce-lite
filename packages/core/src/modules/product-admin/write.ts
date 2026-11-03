@@ -112,6 +112,16 @@ async function assertLiveBrand(db: Database, brandId: string | null | undefined)
     }
 }
 
+/**
+ * A gift card has no warranty: the save that creates one, makes a product
+ * one or edits one clears the product's policy (its SKUs inherit, so none of
+ * them carries one either). The stored column is the one authority the
+ * product page, the buy box and the checkout freeze read.
+ */
+function withoutGiftCardWarranty<T extends { warrantyPolicyId?: string | null | undefined }>(data: T, isGiftCard: boolean): T {
+    return isGiftCard ? { ...data, warrantyPolicyId: null } : data;
+}
+
 export function defaultVariantValues(productId: string, priceMinor: number) {
     return defaultProductSkuValues(productId, priceMinor);
 }
@@ -447,6 +457,7 @@ export async function createProduct(
     // Typed attribute value rows, validated before any other read (unknown enum values are created first).
     const attributeRows = await prepareProductAttributeValueRows(db, productId, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
+    data = withoutGiftCardWarranty(data, data.isGiftCard === true);
     await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
     (data.optionMatrix?.variants ?? []).forEach((variant, index) => assertSkuWarrantyAllowed(variant, {
         isDefault: false,
@@ -1100,6 +1111,7 @@ export async function updateProduct(
 
     const attributeRows = await prepareProductAttributeValueRows(db, id, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
+    data = withoutGiftCardWarranty(data, data.isGiftCard ?? existingProduct.isGiftCard === true);
     await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
     const shippingProfile = await resolveProductShippingProfile(db, data, existingProduct);
     const currency = storeCurrencyFromSql(existingProduct.storeCurrencyCode, existingProduct.storePriceIncrementMinor);

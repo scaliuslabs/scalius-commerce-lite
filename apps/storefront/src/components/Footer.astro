@@ -29,8 +29,10 @@ const data = async () => footerData({
 });
 ---
 
-<Skin target="footer" data={data} embeds={embeds}>
-  <CoreFooter {...props} />
-  {/* A skin that places no slot still offers the forms, right after it. */}
-  <FooterLocalization slot="slotless" localization={props.localization} />
-</Skin>
+<div class="contents" data-storefront-footer>
+  <Skin target="footer" data={data} embeds={embeds}>
+    <CoreFooter {...props} />
+    {/* A skin that places no slot still offers the forms, right after it. */}
+    <FooterLocalization slot="slotless" localization={props.localization} />
+  </Skin>
+</div>

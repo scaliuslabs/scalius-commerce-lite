@@ -31,13 +31,15 @@ export interface StorefrontAppScript {
 /** Which kind of page a storefront path renders ("private": a buyer's page, no app code; null: a page only "all" scripts load on). */
 export function storefrontAppPage(pathname: string): StorefrontAppPage | "private" | null {
   const path = trimTrailingCharacter(pathname, "/") || "/";
+  // The buyer's own pages (`PRIVATE_STOREFRONT_ROOTS`) are decided first, so no other pattern can claim one;
+  // the theme editor's canvas is the merchant's.
+  if (isPrivateStorefrontPathname(path)) return /^\/theme-preview(?:\/|$)/.test(path) ? null : "private";
   if (path === "/") return "home";
   if (/^\/products\/[^/]+$/.test(path)) return "product";
   if (/^\/(?:categories|brands|collections)\/[^/]+$/.test(path) || /^\/(?:categories|collections|search)$/.test(path)) {
     return "listing";
   }
-  // The buyer's own pages (`PRIVATE_STOREFRONT_ROOTS`); the theme editor's canvas is the merchant's.
-  return isPrivateStorefrontPathname(path) && !/^\/theme-preview(?:\/|$)/.test(path) ? "private" : null;
+  return null;
 }
 
 /** App components (theme slots, sections and their islands) cannot name a page, so none renders on a buyer's page: the core chrome does. */

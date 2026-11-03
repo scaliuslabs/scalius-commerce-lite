@@ -76,7 +76,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
         <>
           <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.title}</ResourceRowLink>
           {/* A page saved before the store claimed its address is shadowed by the store's own page. */}
-          {isShadowed(row.original) ? <p className="text-body text-muted-foreground">{t("unreachable")}</p> : null}
+          {isShadowed(row.original) ? <p className="truncate text-body text-muted-foreground" title={t("unreachable")}>{t("unreachable")}</p> : null}
         </>
       ),
     },

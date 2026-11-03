@@ -19102,19 +19102,6 @@ export type GetApiV1ProductsBySlugResponses = {
                     nextCursor: string | null;
                 } | null;
                 /**
-                 * The product's warranty policy (its current terms); null without one.
-                 */
-                warranty: {
-                    name: string;
-                    provider: 'brand' | 'store';
-                    duration: {
-                        value: number;
-                        unit: 'days' | 'months' | 'years';
-                    };
-                    replacementDays: number | null;
-                    terms: string | null;
-                } | null;
-                /**
                  * Every warranty a SKU of this page has, each once: a variant's `warrantyId` names one (a SKU inherits the product's, has its own, or none).
                  */
                 warranties: Array<{

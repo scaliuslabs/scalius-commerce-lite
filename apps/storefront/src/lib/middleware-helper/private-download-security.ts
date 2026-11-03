@@ -22,6 +22,8 @@ export function applyTransportSecurityHeaders(
      * X-Frame-Options overrides that for older browsers.
      */
     framedByPolicy?: boolean;
+    /** A buyer's own page: nothing frames it. */
+    buyerPage?: boolean;
   },
 ): Response {
   const privateDownload = isDigitalDownloadPathname(new URL(request.url).pathname);
@@ -31,7 +33,7 @@ export function applyTransportSecurityHeaders(
   const secured = applyBaselineSecurityHeaders(request, response, {
     frameProtection: options.framedByPolicy && !privateDownload
       ? "preserve"
-      : options.privateRelay || privateDownload ? "deny" : "same-origin",
+      : options.privateRelay || privateDownload || options.buyerPage ? "deny" : "same-origin",
   });
   if (options.privateRelay || privateDownload || pageWantsNoReferrer) secured.headers.set("Referrer-Policy", "no-referrer");
   return secured;
@@ -41,8 +43,9 @@ export function applyTransportSecurityHeaders(
  * The page CSP for every response but those that own theirs: the download
  * streams and the private relay (by path), and any response its code marked
  * (`setOwnCsp`: the continuation pages' strict card-entry policy, an inbox or
- * warranty attachment's sandbox, an app's SVG file, an app proxy answer). Any
- * other policy, from an upstream or a framework, is replaced.
+ * warranty attachment's sandbox, an app proxy answer). An app's SVG file never
+ * reaches here: the worker serves it, with its own sandbox policy, before
+ * Astro. Any other policy, from an upstream or a framework, is replaced.
  */
 export function withPageCsp(
   pathname: string,

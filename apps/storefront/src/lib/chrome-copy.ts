@@ -19,9 +19,8 @@ export interface ChromeCopy {
     account: string;
     cart: string;
     call: (phone: string) => string;
-    /** The colour switch's name while the page is light, then while it is dark. */
+    /** The colour switch's one name; the switch is pressed while dark colours show. */
     darkColors: string;
-    lightColors: string;
   };
   nav: {
     main: string;
@@ -100,8 +99,7 @@ export const CHROME_EN: ChromeCopy = {
     account: "Account",
     cart: "Cart",
     call: (phone) => `Call ${phone}`,
-    darkColors: "Use dark colours",
-    lightColors: "Use light colours",
+    darkColors: "Dark colours",
   },
   nav: {
     main: "Main navigation",
@@ -176,8 +174,7 @@ export const CHROME_BN: ChromeCopy = {
     account: "অ্যাকাউন্ট",
     cart: "কার্ট",
     call: (phone) => `${phone} নম্বরে কল করুন`,
-    darkColors: "গাঢ় রং ব্যবহার করুন",
-    lightColors: "হালকা রং ব্যবহার করুন",
+    darkColors: "গাঢ় রং",
   },
   nav: {
     main: "প্রধান মেনু",

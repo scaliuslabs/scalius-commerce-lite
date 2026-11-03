@@ -32,7 +32,11 @@ export type ThemeDocumentChange = z.infer<typeof themeDocumentChangeSchema>;
 /** Most changes a version keeps; the rest are counted. */
 export const THEME_VERSION_CHANGES_MAX = 20;
 
-const TOKEN_AREA: Record<string, ThemeChangeArea> = { colors: "colors", typography: "typography", typeScale: "typography", headingCase: "typography" };
+const TOKEN_AREA: Record<string, ThemeChangeArea> = {
+  // The colour scheme, its dark colours and the buyers' switch are set with the colours.
+  colors: "colors", colorScheme: "colors", darkColors: "colors", colorSchemeToggle: "colors",
+  typography: "typography", typeScale: "typography", headingCase: "typography",
+};
 const BLOCK_AREA: Record<string, ThemeChangeArea> = {
   topBar: "announcement", header: "header", navigation: "navigation", desktopNav: "navigation", mobileNav: "navigation",
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",

@@ -90,6 +90,7 @@ const V12_PRODUCT_MODULES: Readonly<Record<string, string | null>> = {
  * The last version stored with the kebab-case module ids: version 13 first
  * shipped (in builds before its release) with them. Later versions never carry
  * them, so those names (and `warranty`) are free again from version 14.
+ * Versions 12 and lower are renamed by the 12 → 13 step.
  */
 const LAST_KEBAB_PRODUCT_MODULES_VERSION = 13;
 
@@ -250,8 +251,9 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
     }
   }
   // A version 13 document from a build that still wrote kebab-case module ids
-  // reads through the same mapping as the 12 → 13 step (idempotent).
-  const named = from <= LAST_KEBAB_PRODUCT_MODULES_VERSION ? snakeProductModules(document) : document;
+  // reads through the same mapping as the 12 → 13 step; an older one already
+  // took that step.
+  const named = from === LAST_KEBAB_PRODUCT_MODULES_VERSION ? snakeProductModules(document) : document;
   return upgradeSectionLists(named, chain);
 }
 

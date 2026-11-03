@@ -1,3 +1,6 @@
+import { SKIN_CHOOSE_CONTROL } from "@/components/product/lib/buy-form";
+import { STALE_ASSET_EVENT } from "@/scripts/browser-events";
+
 /**
  * The two classic scripts every page runs inline after its visible HTML and
  * before the deferred modules (Layout.astro), written compactly because they
@@ -27,10 +30,13 @@ export const AD_CLICK_ID_SCRIPT =
 /**
  * STALE_ASSET_RECOVERY_SCRIPT: a page cached before a deploy names build
  * files that no longer exist. A failed /_astro/ script or stylesheet, or a
- * failed dynamic import of one (Safari names no file: "Importing a module
- * script failed."), reloads the page once (at most every 30 s,
- * `_ar` in session storage). It stays inline: as a build file it would be the
- * stale asset itself.
+ * failed dynamic import of one that names it, reloads the page once (at
+ * most every 30 s, `_ar` in session storage). Safari names no file
+ * ("Importing a module script failed."), which an app island's own import
+ * may say too, so it is never matched: the store's own lazy scripts report
+ * their failure with STALE_ASSET_EVENT instead, and only when a reload
+ * loses nothing the buyer typed (product-controller.ts). It stays inline:
+ * as a build file it would be the stale asset itself.
  */
 export const STALE_ASSET_RECOVERY_SCRIPT =
   '(()=>{const r=sessionStorage.getItem("_ar");if(r&&Date.now()-parseInt(r,10)<3e4)return;' +
@@ -38,8 +44,9 @@ export const STALE_ASSET_RECOVERY_SCRIPT =
   'addEventListener("error",e=>{const t=e.target,s=t instanceof HTMLScriptElement;' +
   'if(!s&&!(t instanceof HTMLLinkElement))return;const u=s?t.src:t.href;' +
   'if(u.indexOf("/_astro/")>-1){console.warn("[StaleAsset] 404:",u);g()}},!0);' +
+  `addEventListener("${STALE_ASSET_EVENT}",()=>{console.warn("[StaleAsset] Import failed");g()});` +
   'addEventListener("unhandledrejection",e=>{const m=e.reason&&e.reason.message;' +
-  'if(m&&(m.indexOf("dynamically imported")>-1&&m.indexOf("/_astro/")>-1||m==="Importing a module script failed.")){console.warn("[StaleAsset] Import failed");g()}})})();';
+  'if(m&&m.indexOf("dynamically imported")>-1&&m.indexOf("/_astro/")>-1){console.warn("[StaleAsset] Import failed");g()}})})();';
 
 /**
  * VARIANT_PREPAINT_SCRIPT: a product page is one cached page whatever its
@@ -65,6 +72,6 @@ export const VARIANT_PREPAINT_SCRIPT =
  */
 export const SKIN_CHOICE_PREPAINT_SCRIPT =
   '(()=>{try{const v=new URLSearchParams(location.search).get("variant");if(!v)return;' +
-  'for(const e of document.querySelectorAll("[data-sx-bound][data-choose-variant]")){const s=e.dataset.chooseVariant===v;' +
+  `for(const e of document.querySelectorAll("${SKIN_CHOOSE_CONTROL}")){const s=e.dataset.chooseVariant===v;` +
   'e.dataset.state=s?"selected":"unselected";if(e.tagName==="BUTTON")e.setAttribute("aria-pressed",String(s));' +
   'else if(s)e.setAttribute("aria-current","true");else e.removeAttribute("aria-current")}}catch{}})();';

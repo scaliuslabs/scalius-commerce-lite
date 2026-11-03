@@ -66,7 +66,7 @@ A slot is a named place where apps add their piece.
 - The product slots are placed by the merchant in the theme's product page (at most 10 app components on one product page), with their own values. A component has at most one product slot among its targets.
 - Every other slot draws every active app's component that targets it, with default values.
 - Card slots render on every card, whoever draws it: core or another app's card skin. So your badge appears on cards another app's skin draws, from the card's own projection.
-- Core's header, footer, product page and card place their slots. A skin of a unit places that unit's slots with `<Slot name="header.actions" />`, `<Slot name="footer.columns" />`, `<Slot name="product_card.badges" />` and `<Slot name="product_card.meta" />`. A footer's `footer.columns` also carries the store's country and language forms; a footer skin that places no slot gets them right after it. A header's `header.actions` also carries the merchant's light or dark switch when the theme offers one, so a header skin never drops it; a header skin that places no slot gets it right after it. If your skin (or an app in the slot) draws its own `colorSchemeToggle()` button, the store's yields to it: a header never shows two.
+- Core's header, footer, product page and card place their slots. A skin of a unit places that unit's slots with `<Slot name="header.actions" />`, `<Slot name="footer.columns" />`, `<Slot name="product_card.badges" />` and `<Slot name="product_card.meta" />`. A footer's `footer.columns` also carries the store's country and language forms; a footer skin that places no slot gets them right after it. A header's `header.actions` also carries the merchant's light or dark switch when the theme offers one, so a header skin never drops it; a header skin that places no slot gets it right after it. If your header or footer skin (or an app in their slots) draws its own `colorSchemeToggle()` button, the store's yields to it: a page never shows two.
 - An empty slot renders nothing and costs no read.
 
 **UI slots** are on the buyer's own pages (cart, checkout, receipt, account, order tracking, payment recovery, warranty claims, the gift-card balance), filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there.
@@ -161,7 +161,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 - Put `stickyHeader()` on the box with `position: sticky` or `fixed`. The host publishes its stuck height as `--header-height`. Use `--scalius-z-header` for its layer and `--scalius-z-content-bar` for subordinate sticky content.
 - `menuDrawer()` marks the header's menu drawer (a `popover` or `<dialog>`); the store's phone tab bar opens it.
 - `searchOpener()` and `accountLink()` opt your controls into the host's search and account actions. Use native buttons or links with real destinations.
-- `colorSchemeToggle()` makes a native `<button type="button">` the buyer's light or dark switch. It shows only when the theme offers the switch and JavaScript runs; the host flips `<html data-color-scheme>` and remembers the choice on the buyer's device.
+- `colorSchemeToggle()` makes a native `<button type="button">` the buyer's light or dark switch. It shows only when the theme offers the switch and JavaScript runs; the host flips `<html data-color-scheme>`, remembers the choice on the buyer's device and keeps the button `aria-pressed` while dark colours show, so give it one stable name ("Dark colours"), not one that flips.
 - Under a header skin the store installs its menu disclosure behaviour: a `button[data-disclosure="popup"][aria-controls]` inside `[data-disclosure-item]` shows and hides its `hidden` panel (click, Enter, Escape, a press outside, hover intent), and a `ul[data-nav-overflow]` row whose items carry `data-nav-index` gets arrow keys. `<html data-nav-disclosure>` appears once it runs.
 - A header that overlays an empty or failed lead must restore solid styling when it sees `data-scalius-lead-empty`.
 
@@ -320,17 +320,24 @@ A product page skin can offer the SKUs its own way (denomination cards, a compar
 
 ```tsx
 {data.product.variants.map((variant) => (
-  <li class="acme-plan">
-    <a {...chooseVariant(variant)}>{variant.title} <Price price={variant.price} context={context} /></a>
-    <button {...buyVariant(variant, "add")}>Add to cart</button>
-    <button {...buyVariant(variant, "buy")}>Buy now</button>
+  <li>
+    <div class="acme-plan">
+      <a {...chooseVariant(variant)}>
+        {variant.title} <Price price={variant.price} context={context} />
+        {!variant.available && <span> · {settings.soldOutLabel}</span>}
+      </a>
+      <button {...buyVariant(variant, "add")}>Add to cart</button>
+      <button {...buyVariant(variant, "buy")}>Buy now</button>
+    </div>
   </li>
 ))}
 <BuyForm title={false} options={false} />
 ```
 
+A card that chooses and buys is a `<div>` holding the choice link and the buy buttons side by side. Never put a buy button inside the choice link: a button inside a link is invalid HTML, and keyboard, screen reader and switch users cannot reliably reach either control. The store still binds such markup (the nearest bound control wins a press) but warns once in the log. Write the sold-out word inside each choice control's own text, as above (from one of your text settings, so the store owner words it in their language): `data-availability` styles it, but assistive technology does not read attributes.
+
 - `chooseVariant(variant)` chooses that whole SKU (every option axis at once) through the form, so price, stock, buttons, gallery and `context.product` follow. It needs JavaScript. Put it on an `<a>`: the host makes it a link to the product with that SKU (`?variant=`), which the store's script opens on, so a press before the script has bound the click still lands on the SKU. Without JavaScript the link only opens the same page, where the form's own picker chooses; your buy buttons still buy.
-- `buyVariant(variant, "add" | "buy")` goes on a `<button>`. It chooses the SKU, then, once the page shows it, runs the form's own Add to cart or Buy now. Inside a choice card (`<a {...chooseVariant(v)}>… <button {...buyVariant(v, "add")}>`) the button buys. That run uses the form's checks, buyer inputs, purchase options, quantity and one-at-a-time guard. A problem shows inside the form, which takes focus. Without JavaScript the button submits the form with its own SKU.
+- `buyVariant(variant, "add" | "buy")` goes on a `<button>`. It chooses the SKU, then, once the page shows it, runs the form's own Add to cart or Buy now. Put it beside the SKU's choice link, never inside it. That run uses the form's checks, buyer inputs, purchase options, quantity and one-at-a-time guard. A problem shows inside the form, which takes focus. Without JavaScript the button submits the form with its own SKU.
 - The host binds these attributes after it checks your markup; you never write `form=` or a handler. It does so in product_main skins only; elsewhere they do nothing.
 - The host owns these attributes on your controls:
   - `data-availability` (`available`, `sold-out`) on both.
@@ -450,9 +457,10 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 - Drawing on the storefront is its own grant, and every browser host your islands reach is listed. A Super Admin approves both. An update that asks for more waits for approval.
 - The render input supplies settings, public page data and context, never buyer sessions or secrets.
 - Output passes the store's allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands, deferred markup and core embeds; classes; `id`s that start with your app's name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>` (except as deferred content), `<math>`, SVG animation and `foreignObject`, event handlers, host `data-sx-*` attributes, and every URL that is not a store path, `http(s)`, `mailto`, `tel` or a fragment.
-- App components, islands, stylesheets and browser hosts never reach a buyer's own page: cart, checkout, the receipt, account, payment recovery, order tracking, warranty claims and the gift-card balance. Core chrome renders there.
+- App components, islands, stylesheets and browser hosts never reach a buyer's own page: cart, checkout, the receipt, account, payment recovery, order tracking, warranty claims and the gift-card balance. Core chrome renders there, and nothing frames those pages (the cart and checkout, which the theme editor previews, excepted).
 - Island code is served from the store's origin; CSP `script-src` gains nothing. Browser hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - Approved islands are trusted same-origin JavaScript: they can read the page's DOM, including embedded forms, and make requests the browser allows. Activation approval, CSP and server authorization are the boundaries; HTML sanitizing does not sandbox an island.
+- Approved apps are trusted same-origin JavaScript. Keeping app code off a buyer's pages does not stop an app script on a public page reading buyer data through same-origin requests (the buyer's JSON routes under `/api`, a fetch of a page, a popup) with the buyer's cookies, as the store's own scripts do. Real containment needs apps on a separate origin; until then, request only the scopes you need and approve apps accordingly.
 - SVG files are served with a sandboxing CSP and `nosniff`.
 
 ## Stored themes and versioning
