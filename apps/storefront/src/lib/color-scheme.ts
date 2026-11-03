@@ -44,8 +44,8 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     toggle ? 'r.setAttribute("data-color-scheme-switch","");' : "",
     // One switch per header: the host's yields to one a skin or an app drew there (the CSS rule's fallback without :has()).
     toggle
-      ? 'document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-host-color-scheme-toggle]").forEach(function(h){'
-        + 'var d=h.closest("[data-storefront-header]");if(d&&d.querySelector("[data-color-scheme-toggle]:not([data-host-color-scheme-toggle])"))h.hidden=true})});'
+      ? 'document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
+        + 'var d=h.closest("[data-storefront-header]");if(d&&d.querySelector("[data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])"))h.hidden=true})});'
       : "",
     toggle
       ? 'document.addEventListener("click",function(e){var b=e.target instanceof Element?e.target.closest("[data-color-scheme-toggle]"):null;'

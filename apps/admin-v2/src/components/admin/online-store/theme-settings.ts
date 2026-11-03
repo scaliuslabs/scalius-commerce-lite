@@ -108,7 +108,7 @@ function withDarkColorsStored(theme: StorefrontThemeDocument, tokens: Partial<St
 }
 
 /** Whether the dark colours are the ones made from the colours: they follow the colours until the merchant edits them. */
-export function darkColorsFollowColors(theme: StorefrontThemeDocument): boolean {
+function darkColorsFollowColors(theme: StorefrontThemeDocument): boolean {
   const dark = theme.tokens.darkColors;
   return dark !== null && storefrontDarkColorsAreMade(theme.tokens.colors, dark);
 }
