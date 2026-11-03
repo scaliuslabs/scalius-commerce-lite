@@ -11,7 +11,15 @@ import {
     type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { nanoid } from "nanoid";
-import { autoFulfillerFor, FULFILLER_REGISTRY, type AutoFulfilRuntime, type FulfillerRegistry } from "./registry";
+import { sha256Hex } from "@scalius/shared/hash";
+import {
+    AutoFulfilLinesOwedError,
+    autoFulfillerFor,
+    FULFILLER_REGISTRY,
+    type AutoFulfilLine,
+    type AutoFulfilRuntime,
+    type FulfillerRegistry,
+} from "./registry";
 import { buildFulfilmentInsertStatements, orderFulfilmentStatusSql } from "./ledger";
 import { applyOrderStatusChange, listOrderHolds, noOpenOrderHoldCondition } from "../orders";
 import { awaitingAppHoldDecision } from "./hold-window";
@@ -100,10 +108,28 @@ async function readAutoFulfilMode(db: Database): Promise<AutoFulfilMode> {
 }
 
 /**
- * Hands every settled order's automatic lines over, idempotently: one
- * fulfilment per type (request key `auto:<type>`), whose unique index makes
- * retries and concurrent runs safe. Only after settlement (F10),
- * and in `after_confirmation` mode only once staff confirmed the order.
+ * The request key of one handover: its type and exactly the units it hands
+ * over (each line with the quantity already handed over before it). Two runs
+ * that read the same owed units collide on the unique index; a later run for
+ * the lines left owed gets its own key.
+ */
+async function autoRequestKey(
+    type: FulfillmentType,
+    lines: readonly AutoFulfilLine[],
+    fulfilledBefore: ReadonlyMap<string, number>,
+): Promise<string> {
+    const units = lines.map((line) => [line.orderItemId, fulfilledBefore.get(line.orderItemId) ?? 0, line.quantity]);
+    return `auto:${type}:${(await sha256Hex(JSON.stringify(units))).slice(0, 40)}`;
+}
+
+/**
+ * Hands every settled order's automatic lines over, idempotently: per type,
+ * one fulfilment for the lines that can be handed over now (its request key
+ * names them, and the unique index makes retries and concurrent runs safe).
+ * A line that cannot be handed over yet (no file ready, a short key pool, a
+ * card with no value) stays owed with a staff alert; the sweep retries only
+ * what is missing. Only after settlement (F10), and in `after_confirmation`
+ * mode only once staff confirmed the order.
  */
 export async function autoFulfilOrder(
     db: Database,
@@ -183,13 +209,28 @@ export async function autoFulfilOrder(
                 quantity: item.quantity - item.refundedQuantity - item.fulfilledQuantity,
             })),
         };
+        let prepared: Awaited<ReturnType<typeof fulfiller.prepare>>;
+        try {
+            prepared = await fulfiller.prepare(db, context);
+        } catch (error) {
+            firstFailure ??= error;
+            continue;
+        }
+        const preparation = Array.isArray(prepared)
+            ? { statements: prepared, deliveredLineIds: context.lines.map((line) => line.orderItemId), owedReason: undefined }
+            : prepared;
+        const deliveredIds = new Set(preparation.deliveredLineIds);
+        const deliveredLines = context.lines.filter((line) => deliveredIds.has(line.orderItemId));
+        if (deliveredLines.length < context.lines.length) {
+            const owed = context.lines.filter((line) => !deliveredIds.has(line.orderItemId)).map((line) => line.orderItemId);
+            firstFailure ??= new AutoFulfilLinesOwedError(type, owed, preparation.owedReason);
+        }
+        if (deliveredLines.length === 0) continue;
         const afterThis = new Map(fulfilledAfter);
-        for (const line of context.lines) {
+        for (const line of deliveredLines) {
             afterThis.set(line.orderItemId, (afterThis.get(line.orderItemId) ?? 0) + line.quantity);
         }
-        let statements: BatchItem<"sqlite">[];
-        try {
-            statements = [
+        const statements: BatchItem<"sqlite">[] = [
             // A hold that committed since the check above wins: the batch
             // stops before anything is handed over.
             buildBatchGuard(db, noOpenOrderHoldCondition(orderId), ORDER_ON_HOLD) as BatchItem<"sqlite">,
@@ -216,21 +257,17 @@ export async function autoFulfilOrder(
                 fulfillmentId,
                 orderId,
                 kind: type,
-                requestKey: `auto:${type}`,
+                requestKey: await autoRequestKey(type, deliveredLines, fulfilledAfter),
                 actor: { type: "system", id: null },
-                lines: context.lines,
+                lines: deliveredLines,
             }),
-            ...await fulfiller.prepare(db, context),
+            ...preparation.statements,
             db.update(orders).set({
                 fulfillmentStatus: orderFulfilmentStatusSql(orderId),
                 version: sql`${orders.version} + 1`,
                 updatedAt: sql`unixepoch()`,
             }).where(eq(orders.id, orderId)) as BatchItem<"sqlite">,
-            ];
-        } catch (error) {
-            firstFailure ??= error;
-            continue;
-        }
+        ];
         try {
             await safeBatch(db, statements);
             result.fulfilledTypes.push(type);
@@ -244,7 +281,7 @@ export async function autoFulfilOrder(
                 throw new ConflictError("The order or its delivery settings changed before handover. Please retry.");
             }
             const message = error instanceof Error ? error.message : "";
-            // Another run already handed this type over.
+            // Another run already handed these units over.
             if (
                 message.includes("order_fulfillments_order_request_key_unique")
                 || message.includes("order_fulfillments.order_id, order_fulfillments.request_key")

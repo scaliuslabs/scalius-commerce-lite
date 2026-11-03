@@ -1,7 +1,7 @@
 // The gift-card fulfiller (Wave B §4.2): one card, one `issue` transaction and
 // one `gift_card_issued` outbox row per unit, in the auto-fulfil batch after
 // the ledger insert, so a card exists exactly when its unit is handed over.
-// Idempotent twice over: the fulfilment request key `auto:gift_card` fails a
+// Idempotent twice over: the fulfilment request key (`auto:gift_card:` and the units) fails a
 // repeated run before any card, and `gift_cards_purchase_unit_unique`
 // (order item, unit) would refuse a second card for the same unit.
 //
@@ -85,14 +85,29 @@ export const giftCardFulfiller: AutoFulfiller = {
         const expiresAt = giftCardExpiryFromMonths(settings.value.defaultExpiryMonths);
 
         const statements: BatchItem<"sqlite">[] = [];
+        const deliveredLineIds: string[] = [];
+        const noValue: string[] = [];
+        const day = new Date().toISOString().slice(0, 10);
         for (const line of context.lines) {
             const item = itemById.get(line.orderItemId);
             if (!item) throw new Error(`Order line ${line.orderItemId.slice(0, 12)} is missing.`);
             // The card's value is the base price (no discount, no surcharge).
             const valueMinor = item.baseUnitPriceMinor ?? item.unitPriceMinor - (item.propertiesPriceMinor ?? 0);
             if (!Number.isSafeInteger(valueMinor) || valueMinor <= 0) {
-                throw new Error(`Gift-card line ${line.orderItemId.slice(0, 12)} has no value.`);
+                // This line stays owed (staff alerted once a day); the others are issued.
+                noValue.push(line.orderItemId);
+                await buildNotificationOutboxInsert(db, {
+                    subjectType: "order",
+                    subjectId: context.orderId,
+                    audience: "staff",
+                    notificationType: "digital_keys_exhausted",
+                    dedupeKey: `gift_card_no_value:${line.orderItemId}:${day}`,
+                    source: "auto_fulfil",
+                    data: { reason: "gift_card_no_value", orderItemId: line.orderItemId },
+                }).statement.run();
+                continue;
             }
+            deliveredLineIds.push(line.orderItemId);
             const { recipient, message } = giftCardDeliveryFromProperties(item.properties);
             // Units already handed over keep their index; this run issues the rest.
             const firstUnit = item.quantity - line.quantity;
@@ -139,6 +154,10 @@ export const giftCardFulfiller: AutoFulfiller = {
                 }
             }
         }
-        return statements;
+        return {
+            statements,
+            deliveredLineIds,
+            owedReason: noValue.length > 0 ? `${noValue.length} gift-card line(s) have no value` : undefined,
+        };
     },
 };
