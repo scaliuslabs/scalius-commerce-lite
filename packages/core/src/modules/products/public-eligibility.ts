@@ -40,10 +40,15 @@ export function operationalSkuRowPredicate(alias = "product_variants"): SQL {
               AND operational_option_sku.is_default = 0
               AND operational_option_sku.deleted_at IS NULL
               AND trim(coalesce(operational_option_sku.option_combination_key, '')) <> ''
+            LIMIT 1 OFFSET 0
         )
     )`;
 }
 
+// Each EXISTS under an OR ends LIMIT 1 OFFSET 0: PostgreSQL then never turns
+// it into a hashed subplan over every SKU (an OFFSET is its optimisation
+// fence), and runs it per product as an index probe. SQLite already stops at
+// the first row, so its plans are unchanged.
 function buyerOptionTopologyPredicate(
     productId: SQL,
     aliasPrefix: "buyer" | "buyer_available",
@@ -62,6 +67,7 @@ function buyerOptionTopologyPredicate(
               AND ${sql.raw(`${optionAlias}.is_default`)} = 0
               AND ${hasCustomerOptionPredicate(optionAlias)}
               ${availability}
+            LIMIT 1 OFFSET 0
         )
         AND (SELECT count(*) FROM "product_option_definitions" AS buyer_axis
              WHERE buyer_axis.product_id = ${productId} AND buyer_axis.deleted_at IS NULL) > 0
@@ -85,6 +91,7 @@ function buyerOptionTopologyPredicate(
                 WHERE buyer_required_axis.product_id = ${productId}
                   AND buyer_required_axis.deleted_at IS NULL
               )
+            LIMIT 1 OFFSET 0
         )
     )`;
 }
@@ -113,6 +120,7 @@ export function publicProductHasBuyerResolvableSku(productId: SQL = sql`${produc
                 FROM "product_variants" AS buyer_simple_sku
                 WHERE ${activePersistedSkuPredicate("buyer_simple_sku", productId)}
                   AND ${sql.raw("buyer_simple_sku.is_default")} = 1
+                LIMIT 1 OFFSET 0
             )
         )
     )`;
@@ -137,6 +145,7 @@ export function publicProductHasAvailableBuyerSku(productId: SQL = sql`${product
                 WHERE ${activePersistedSkuPredicate("buyer_available_simple_sku", productId)}
                   AND ${sql.raw("buyer_available_simple_sku.is_default")} = 1
                   AND ${availableSkuPredicate("buyer_available_simple_sku")}
+                LIMIT 1 OFFSET 0
             )
         )
     )`;
