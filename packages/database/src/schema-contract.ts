@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 188,
-  name: "0188_platform_integrity",
+  version: 189,
+  name: "0189_variant_warranty",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -721,6 +721,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 188,
     name: "0188_platform_integrity",
     sourceSha256: "f957b22b83b380f41b7ad3efa6c577b3187bb0ef5e7ba9a164e0d0bd49859c16",
+  },
+  {
+    version: 189,
+    name: "0189_variant_warranty",
+    sourceSha256: "9ccd757df67283856fb19481463cc3cacb37a8126cb703399cfc0ce88b256331",
   },
 ] as const;
 
