@@ -1,7 +1,7 @@
-// src/components/product/lib/product-validation.ts
-/**
- * Product Validation Module
- */
+// The product page's own check of a line before it reaches the cart
+// (product-controller.ts). It runs in the buyer's browser on every add, so
+// it stays small: its problems are codes for the controller, which shows
+// the page's own words, never these.
 import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import { PUBLIC_BUYER_QUANTITY_CEILING } from "@scalius/shared/buyer-availability";
 
@@ -10,50 +10,7 @@ export const QUANTITY_CONSTRAINTS = {
   MAX: PUBLIC_BUYER_QUANTITY_CEILING,
 } as const;
 
-/**
- * Validate and normalize quantity input
- */
-export function validateQuantity(input: string | number): {
-  valid: boolean;
-  value: number;
-  error: string | null;
-} {
-  const parsed = typeof input === "string" ? parseInt(input, 10) : input;
-
-  if (isNaN(parsed)) {
-    return {
-      valid: false,
-      value: QUANTITY_CONSTRAINTS.MIN,
-      error: "Quantity must be a number",
-    };
-  }
-
-  if (parsed < QUANTITY_CONSTRAINTS.MIN) {
-    return {
-      valid: false,
-      value: QUANTITY_CONSTRAINTS.MIN,
-      error: `Minimum quantity is ${QUANTITY_CONSTRAINTS.MIN}`,
-    };
-  }
-
-  if (parsed > QUANTITY_CONSTRAINTS.MAX) {
-    return {
-      valid: false,
-      value: QUANTITY_CONSTRAINTS.MAX,
-      error: `Maximum quantity is ${QUANTITY_CONSTRAINTS.MAX}`,
-    };
-  }
-
-  return {
-    valid: true,
-    value: parsed,
-    error: null,
-  };
-}
-
-/**
- * Clamp quantity to valid range
- */
+/** Clamp quantity to valid range */
 export function clampQuantity(quantity: number): number {
   return Math.max(
     QUANTITY_CONSTRAINTS.MIN,
@@ -62,102 +19,15 @@ export function clampQuantity(quantity: number): number {
 }
 
 /**
- * Check if stock is available for requested quantity
+ * Why a line was refused: the product's facts are missing, the quantity is
+ * out of range, the SKU's band is sold out, or (an untracked band only)
+ * fewer are left than asked for.
  */
-export function isStockAvailable(
-  stock: number,
-  requestedQuantity: number,
-): {
-  available: boolean;
-  maxAvailable: number;
-  error: string | null;
-} {
-  if (stock <= 0) {
-    return {
-      available: false,
-      maxAvailable: 0,
-      error: "Product is out of stock",
-    };
-  }
+export type AddToCartProblem = "product" | "quantity" | "out_of_stock" | "stock";
 
-  if (requestedQuantity > stock) {
-    return {
-      available: false,
-      maxAvailable: stock,
-      error: `Only ${stock} item${stock === 1 ? "" : "s"} available`,
-    };
-  }
-
-  return {
-    available: true,
-    maxAvailable: stock,
-    error: null,
-  };
-}
-
-export interface ProductData {
-  id: string;
-  slug: string;
-  name: string;
-  price: number;
-  image: string | null | undefined;
-}
-
-/**
- * Validate required product data for cart operations
- */
-export function validateProductData(data: Partial<ProductData>): {
-  valid: boolean;
-  errors: string[];
-} {
-  const errors: string[] = [];
-
-  if (!data.id || data.id.trim() === "") {
-    errors.push("Product ID is required");
-  }
-
-  if (!data.slug || data.slug.trim() === "") {
-    errors.push("Product slug is required");
-  }
-
-  if (!data.name || data.name.trim() === "") {
-    errors.push("Product name is required");
-  }
-
-  if (data.price === undefined || data.price === null || data.price < 0) {
-    errors.push("Valid product price is required");
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}
-
-/**
- * Validate image URL
- */
-export function isValidImageUrl(url: string | null | undefined): boolean {
-  if (!url) return false;
-
-  try {
-    const parsed = new URL(url, window.location.origin);
-    return (
-      parsed.protocol === "http:" ||
-      parsed.protocol === "https:" ||
-      parsed.protocol === "data:"
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Validate all inputs before adding to cart
- */
 export interface AddToCartValidation {
   valid: boolean;
-  errors: string[];
+  errors: AddToCartProblem[];
   data: {
     id: string;
     slug: string;
@@ -186,55 +56,19 @@ export function validateAddToCart(input: {
   imageMediaId?: string;
   freeDelivery?: boolean;
 }): AddToCartValidation {
-  const errors: string[] = [];
-
-  // Validate product data
-  const productValidation = validateProductData({
-    id: input.productId,
-    slug: input.slug,
-    name: input.name,
-    price: input.price,
-    image: input.image,
-  });
-
-  if (!productValidation.valid) {
-    errors.push(...productValidation.errors);
-  }
-
-  // Validate quantity
+  const errors: AddToCartProblem[] = [];
+  if (!input.productId?.trim() || !input.slug?.trim() || !input.name?.trim() || input.price == null || input.price < 0) errors.push("product");
   const quantity = input.quantity || 1;
-  const quantityValidation = validateQuantity(quantity);
-
-  if (!quantityValidation.valid) {
-    errors.push(quantityValidation.error!);
+  if (!Number.isInteger(quantity) || quantity < QUANTITY_CONSTRAINTS.MIN || quantity > QUANTITY_CONSTRAINTS.MAX) errors.push("quantity");
+  // A public band is the buyer's truth (live cart validation checks the
+  // quantity); only a SKU without one is checked against its stock here.
+  if (input.availabilityBand === "out_of_stock") errors.push("out_of_stock");
+  else if (input.availabilityBand === undefined && input.trackInventory !== false && input.stock !== undefined) {
+    const available = Math.max(0, input.stock - (input.reservedStock ?? 0));
+    if (available <= 0) errors.push("out_of_stock");
+    else if (quantity > available) errors.push("stock");
   }
-
-  // Validate stock
-  if (input.availabilityBand === "out_of_stock") {
-    errors.push("Product is out of stock");
-  } else if (
-    input.availabilityBand === undefined
-    && input.trackInventory !== false
-    && input.stock !== undefined
-  ) {
-    const availableStock = Math.max(0, input.stock - (input.reservedStock ?? 0));
-    const stockValidation = isStockAvailable(
-      availableStock,
-      quantityValidation.value,
-    );
-    if (!stockValidation.available) {
-      errors.push(stockValidation.error!);
-    }
-  }
-
-  if (errors.length > 0) {
-    return {
-      valid: false,
-      errors,
-      data: null,
-    };
-  }
-
+  if (errors.length > 0) return { valid: false, errors, data: null };
   return {
     valid: true,
     errors: [],
@@ -243,7 +77,7 @@ export function validateAddToCart(input: {
       slug: input.slug!,
       name: input.name!,
       price: input.price!,
-      quantity: quantityValidation.value,
+      quantity,
       variantId: input.variantId,
       image: input.image,
       imageMediaId: input.imageMediaId,

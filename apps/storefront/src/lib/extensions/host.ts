@@ -79,7 +79,7 @@ export function clearExtensionMemo(): void {
 
 const warned = new Set<string>();
 /** Whether this is the first time this isolate meets the problem (it then logs it). */
-function warnOnce(key: string, message: string): boolean {
+export function warnOnce(key: string, message: string): boolean {
   if (warned.has(key) || warned.size > 200) return false;
   warned.add(key);
   console.warn(`[Storefront components] ${message}`);

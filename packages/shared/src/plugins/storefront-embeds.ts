@@ -39,15 +39,17 @@ const DEFERRED_EDGE = new RegExp(`<(/?)${STOREFRONT_DEFERRED_TAG}\\b`, "g");
 /**
  * Whether a place in the markup is inside deferred markup (its content is a
  * `<template>` the browser fills in later): an embed there would cut the
- * template, so it renders nothing, as the sanitizer leaves it out.
+ * template, so it renders nothing, as the sanitizer leaves it out (and a
+ * product page skin's SKU controls there count for no option it covers).
  */
-function deferredAt(html: string): (position: number) => boolean {
+export function deferredAt(html: string): (position: number) => boolean {
   if (!html.includes(`<${STOREFRONT_DEFERRED_TAG}`)) return () => false;
   const edges = [...html.matchAll(DEFERRED_EDGE)].map((match) => ({ at: match.index, step: match[1] ? -1 : 1 }));
   return (position) => edges.reduce((depth, edge) => (edge.at < position ? depth + edge.step : depth), 0) > 0;
 }
 
-function decode(value: string): string {
+/** An attribute value of checked markup as written (the sanitizer escapes `&<>"` and a no-break space). */
+export function decodeAttribute(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&nbsp;/g, "\u00a0").replace(/&amp;/g, "&");
 }
 
@@ -69,7 +71,7 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
     for (const match of html.matchAll(EMBED)) {
       parts.push({ kind: "html", html: html.slice(last, match.index) });
       last = match.index + match[0].length;
-      const attributes = new Map([...match[1]!.matchAll(ATTRIBUTE)].map(([, name, value]) => [name!, decode(value!)]));
+      const attributes = new Map([...match[1]!.matchAll(ATTRIBUTE)].map(([, name, value]) => [name!, decodeAttribute(value!)]));
       const kind = attributes.get("kind") ?? "";
       const allowed = KINDS.has(kind) ? rule.allowed[kind as StorefrontEmbedKind] ?? 0 : 0;
       const used = counts.get(kind as StorefrontEmbedKind) ?? 0;

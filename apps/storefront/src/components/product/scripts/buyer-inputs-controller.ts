@@ -1,7 +1,7 @@
 import type { LinePropertyInput } from "@scalius/shared/line-properties";
 import type { ProductCustomizationField } from "@/lib/api/types";
+import { BUYER_INPUT_FIELD_PREFIX } from "../lib/buy-form";
 import {
-  BUYER_INPUT_FIELD_PREFIX,
   buyerInputsSurchargeMinor,
   counterText,
   characterCount,
@@ -19,12 +19,10 @@ import {
  */
 export interface BuyerInputsController {
   form: HTMLFormElement;
-  copy: BuyerInputCopy;
   values(): LinePropertyInput[];
   surchargeMinor(): number;
   /** Shows a message under every field that needs one and focuses the first. */
   validate(): BuyerInputsValidation;
-  prefill(values: readonly LinePropertyInput[]): void;
 }
 
 type FieldControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
@@ -102,7 +100,6 @@ export function initBuyerInputs(root: ParentNode, onChange: () => void): BuyerIn
 
   return {
     form,
-    copy,
     values,
     surchargeMinor: () => buyerInputsSurchargeMinor(schema, values()),
     validate() {
@@ -117,21 +114,6 @@ export function initBuyerInputs(root: ParentNode, onChange: () => void): BuyerIn
         }
       }
       return result;
-    },
-    prefill(entries) {
-      const byKey = new Map(entries.map((entry) => [entry.key, entry.value]));
-      for (const field of schema.fields) {
-        const element = control(field.key);
-        const value = byKey.get(field.key);
-        if (!element || value === undefined) continue;
-        if (element instanceof HTMLInputElement && element.type === "checkbox") {
-          element.checked = value === "true";
-        } else {
-          element.value = value;
-        }
-        updateCounter(field.key);
-      }
-      onChange();
     },
   };
 }

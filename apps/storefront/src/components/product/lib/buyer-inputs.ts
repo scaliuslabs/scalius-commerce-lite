@@ -21,15 +21,11 @@ import {
 } from "@scalius/shared/line-properties";
 import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import { fromMinor, toMinor } from "@scalius/shared/money";
+import { fromMinor } from "@scalius/shared/money";
 import { isPurchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { OrderLineProperty, ProductCustomization } from "@/lib/api/types";
 import type { CartLineProperty } from "@/store/cart";
-import { BUY_FORM_VARIANT_FIELDS } from "./buy-form";
-
-/** Form field names of the no-JavaScript buyer-inputs form: `property.<key>`. */
-export const BUYER_INPUT_FIELD_PREFIX = "property.";
+import { BUY_FORM_VARIANT_FIELDS, BUYER_INPUT_FIELD_PREFIX } from "./buy-form";
 
 export const BUYER_INPUT_COPY_KEYS = [
   "customizationRequiredText",
@@ -118,13 +114,6 @@ export function counterText(copy: Pick<BuyerInputCopy, "customizationCounterText
   return formatCheckoutLanguageText(copy.customizationCounterText, { count: characterCount(value), max });
 }
 
-/** Currency places the money helpers accept (0–3), else the currency's own. */
-export function moneyPlaces(decimalPlaces: number | null | undefined, currencyCode: string): number {
-  return Number.isInteger(decimalPlaces) && decimalPlaces! >= 0 && decimalPlaces! <= 3
-    ? decimalPlaces!
-    : getDecimalPlaces(currencyCode);
-}
-
 /** "+৳200" for a surcharge, or null when the input is free. */
 export function surchargeText(
   copy: Pick<BuyerInputCopy, "customizationSurchargeText">,
@@ -156,19 +145,6 @@ export function buyerInputsSurchargeMinor(
     }
   }
   return total;
-}
-
-/**
- * One unit with its inputs: the base (the SKU's sale price, the product's own
- * discount applied to the base only) plus the surcharges, in exact minor units.
- */
-export function unitPriceWithSurcharge(basePrice: number, surchargeMinor: number, places: number): number {
-  if (!(surchargeMinor > 0)) return basePrice;
-  try {
-    return fromMinor(toMinor(Math.max(0, basePrice), places) + surchargeMinor, places);
-  } catch {
-    return basePrice;
-  }
 }
 
 export interface BuyerInputError {
@@ -262,16 +238,13 @@ export type PostedBuyerInputs =
   }
   | { ok: false };
 
-const VARIANT_FIELDS = new Set<string>(Object.values(BUY_FORM_VARIANT_FIELDS));
-
 /**
  * Reads the no-JavaScript form body: the SKU (`BUY_FORM_VARIANT_FIELDS`: the
  * pressed button's, else the picker's, else the form's last, whatever their
  * order in the body; a repeated button or picker field refuses it),
- * `quantity`, `purchaseOption` (empty:
- * one-time; a malformed one refuses the body) and bounded `property.<key>`
- * fields (at most 10, each at most 1,000 characters). Anything else in the
- * body is ignored.
+ * `quantity`, `purchaseOption` (empty: one-time; a malformed one refuses
+ * the body) and bounded `property.<key>` fields (at most 10, each at most
+ * 1,000 characters). Anything else in the body is ignored.
  */
 export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryValue]>): PostedBuyerInputs {
   const variants = new Map<string, string | null>();
@@ -281,7 +254,7 @@ export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryVa
   const seen = new Set<string>();
   for (const [name, entry] of entries) {
     if (typeof entry !== "string") return { ok: false };
-    if (VARIANT_FIELDS.has(name)) {
+    if (Object.values(BUY_FORM_VARIANT_FIELDS).some((field) => field === name)) {
       // A page from the build before the picker had its own name posts
       // `variant` twice (the form's, then the picker's): its last one is the
       // buyer's. The newer fields come once from a real page.

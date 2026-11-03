@@ -17169,6 +17169,13 @@
   "STOREFRONT_STYLESHEET_FILE": "styles.css",
   "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
+  "STOREFRONT_PRODUCT_ERRORS": [
+   "option_required",
+   "input_invalid",
+   "unavailable",
+   "quantity_limit",
+   "failed"
+  ],
   "STOREFRONT_SECTION_SKIN_PROJECTIONS": {
    "hero": 1,
    "usp_strip": 1,

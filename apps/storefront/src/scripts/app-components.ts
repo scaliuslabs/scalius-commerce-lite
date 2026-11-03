@@ -19,7 +19,7 @@ import type { StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney }
 import { toMinor } from "@scalius/shared/money";
 import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { productContext } from "./product-context";
-import { DEFERRED_REVEAL_EVENT } from "./deferred-reveal";
+import { DEFERRED_REVEAL_EVENT } from "./browser-events";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 
 type CartSummary = { count: number; total: StorefrontMoney };

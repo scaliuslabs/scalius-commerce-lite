@@ -11,6 +11,9 @@
  */
 export const BUY_FORM_ID = "sx_buy-form";
 
+/** Form field names of the buyer inputs (ProductBuyerInputs.astro): `property.<key>`. */
+export const BUYER_INPUT_FIELD_PREFIX = "property.";
+
 /**
  * The SKU fields a buy form post can carry. The POST handler reads them by
  * name, strongest first, never by their order in the body: the pressed

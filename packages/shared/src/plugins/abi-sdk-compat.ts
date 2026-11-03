@@ -118,12 +118,56 @@ function compatibleMembers(
   return after.every((member) => existing.has(memberKey(member, newSource)) || !!member.questionToken);
 }
 
+/**
+ * A type printed with every union's members, and every object type's
+ * properties, in one order. TypeScript prints both in the order it happened
+ * to create their types, which unrelated code can change (a new literal
+ * `"failed"` elsewhere reorders `"unknown" | "failed"`); neither order means
+ * anything. Tuples, parameters and overloads keep theirs. A list's members
+ * (`(typeof LIST)[number]`, LIST a `declare const` readonly tuple of the
+ * same file) read as the union they are, so a union may become a list that
+ * then grows at its end.
+ */
+function canonical(node: ts.TypeNode, source: ts.SourceFile): string {
+  const listMembers = (name: string): readonly ts.TypeNode[] | null => {
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      const declaration = statement.declarationList.declarations.find((entry) => ts.isIdentifier(entry.name) && entry.name.text === name);
+      if (declaration?.type) return readonlyTuple(declaration.type);
+    }
+    return null;
+  };
+  const result = ts.transform(node, [(context) => (root) => {
+    const byText = (a: ts.Node, b: ts.Node) => print(a, source).localeCompare(print(b, source));
+    const visit = (child: ts.Node): ts.Node => {
+      if (ts.isIndexedAccessTypeNode(child) && child.indexType.kind === ts.SyntaxKind.NumberKeyword) {
+        const object = ts.isParenthesizedTypeNode(child.objectType) ? child.objectType.type : child.objectType;
+        const members = ts.isTypeQueryNode(object) && ts.isIdentifier(object.exprName) ? listMembers(object.exprName.text) : null;
+        if (members?.length) return visit(context.factory.createUnionTypeNode(members));
+      }
+      const next = ts.visitEachChild(child, visit, context);
+      if (ts.isUnionTypeNode(next)) return context.factory.updateUnionTypeNode(next, context.factory.createNodeArray([...next.types].sort(byText)));
+      if (ts.isTypeLiteralNode(next) && next.members.every(ts.isPropertySignature)) {
+        return context.factory.updateTypeLiteralNode(next, context.factory.createNodeArray([...next.members].sort(byText)));
+      }
+      return next;
+    };
+    return ts.visitNode(root, visit) as ts.TypeNode;
+  }]);
+  try {
+    return print(result.transformed[0]!, source);
+  } finally {
+    result.dispose();
+  }
+}
+
 function compatibleType(
   before: ts.TypeNode | undefined, after: ts.TypeNode | undefined,
   oldSource: ts.SourceFile, newSource: ts.SourceFile,
 ): boolean {
   if (!before || !after) return before === after;
   if (print(before, oldSource) === print(after, newSource)) return true;
+  if (canonical(before, oldSource) === canonical(after, newSource)) return true;
   return ts.isTypeLiteralNode(before) && ts.isTypeLiteralNode(after)
     && compatibleMembers(before.members, after.members, oldSource, newSource);
 }
