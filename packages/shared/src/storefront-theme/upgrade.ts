@@ -79,15 +79,51 @@ function snakeCoreNames(document: Json): Json {
   return next;
 }
 
+/** The product modules version 12 wrote kebab-case; `warranty` drew nothing (the buy box shows it) and goes. */
+const V12_PRODUCT_MODULES: Readonly<Record<string, string | null>> = {
+  "key-attributes": "key_attributes", "about-bullets": "about_bullets", "spec-table": "spec_table",
+  "content-blocks": "content_blocks", "compare-similar": "compare_similar", "recently-viewed": "recently_viewed",
+  warranty: null,
+};
+
+/**
+ * The last version stored with the kebab-case module ids: version 13 first
+ * shipped (in builds before its release) with them. Later versions never carry
+ * them, so those names (and `warranty`) are free again from version 14.
+ */
+const LAST_KEBAB_PRODUCT_MODULES_VERSION = 13;
+
+/**
+ * A (partial) document's product modules under their one snake_case name.
+ * Renaming can meet a module already listed under its new name (a list holding
+ * `spec-table` and `spec_table`): it keeps the first, so the list still reads.
+ */
+function snakeProductModules(document: Json): Json {
+  const blocks = document.blocks;
+  const product = isRecord(blocks) ? blocks.product : undefined;
+  if (!isRecord(blocks) || !isRecord(product) || !Array.isArray(product.below)) return document;
+  const seen = new Set<string>();
+  const below = product.below.flatMap((module: unknown) => {
+    if (typeof module !== "string") return [module];
+    const name = Object.hasOwn(V12_PRODUCT_MODULES, module) ? V12_PRODUCT_MODULES[module] ?? null : module;
+    if (name === null || seen.has(name)) return [];
+    seen.add(name);
+    return [name];
+  });
+  return { ...document, blocks: { ...blocks, product: { ...product, below } } };
+}
+
 /**
  * Version 12 → 13: the tokens name a colour scheme and the brand a logo for
- * dark pages. A stored theme keeps what its buyers saw: the light scheme, no
- * dark colours, no switch, no dark logo.
+ * dark pages (a stored theme keeps what its buyers saw: the light scheme, no
+ * dark colours, no switch, no dark logo), and the product modules take their
+ * snake_case names.
  */
 function lightColorScheme(document: Json): Json {
-  const { tokens, brand } = document;
+  const next = snakeProductModules(document);
+  const { tokens, brand } = next;
   return {
-    ...document,
+    ...next,
     ...(isRecord(tokens) ? { tokens: { ...tokens, colorScheme: "light", darkColors: null, colorSchemeToggle: false } } : {}),
     ...(isRecord(brand) ? { brand: { ...brand, darkLogo: null } } : {}),
   };
@@ -110,7 +146,9 @@ function lightColorScheme(document: Json): Json {
  * - 12 → 13: tokens gain `colorScheme`, `darkColors` and `colorSchemeToggle`,
  *   the brand `darkLogo`; a stored theme (or an app template's tokens) reads
  *   as the light scheme with no dark colours, no switch and no dark logo, so
- *   its pages paint exactly as before.
+ *   its pages paint exactly as before; `blocks.product.below` names its
+ *   modules in snake_case (`spec-table` → `spec_table`) and drops `warranty`,
+ *   which drew nothing.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
@@ -211,7 +249,10 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
       throw failure(error, `The upgrade from version ${version}`);
     }
   }
-  return upgradeSectionLists(document, chain);
+  // A version 13 document from a build that still wrote kebab-case module ids
+  // reads through the same mapping as the 12 → 13 step (idempotent).
+  const named = from <= LAST_KEBAB_PRODUCT_MODULES_VERSION ? snakeProductModules(document) : document;
+  return upgradeSectionLists(named, chain);
 }
 
 /** A stored document read through the chain: the current document and the version it was stored at. */

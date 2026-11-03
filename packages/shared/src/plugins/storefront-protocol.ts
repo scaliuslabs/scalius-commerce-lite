@@ -146,26 +146,23 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * The product page's modules a product_main skin may place
  * (`product_module` embeds), the modules of the theme's product template
  * (Online store -> Theme):
- * - `details`: the store's details tabs as the page draws them: the
- *   description, the merchant's extra tabs and the key features (when the
- *   buy form does not list them). A skin that places it does not draw
- *   `descriptionHtml` itself; it draws whenever the product has any of
- *   them, even where the template lists no details module.
+ * - `description`: the store's details tabs as the page draws them. A skin
+ *   that places it does not draw `descriptionHtml` itself; it draws even
+ *   where the template lists no description module.
  * - `spec_table`: the specification table; `key_attributes`: its key-spec
- *   highlights (only when the table has more rows than key specs and the
- *   theme's buy box lists no facts column).
- * - `about_bullets`: "About this item", the key features (only when the
- *   theme's buy box does not list them; `<BuyForm />` does then).
+ *   highlights.
+ * - `about_bullets`: "About this item", the key features.
  * - `content_blocks`, `compare_similar`, `policies`, `recently_viewed`
  *   (this browser's list: it holds no space until filled).
  *
- * Each renders only where the template has it and the product has something
- * for it, else nothing. Reviews and related products have their own embeds.
- * The warranty is part of `<BuyForm />` (the template's warranty module draws
- * nothing of its own), so it is not a module here.
+ * Each renders where the store would draw it below the fold for this
+ * product (the template has it and the product has something for it), else
+ * nothing. Reviews and related products have their own embeds.
+ * Each name is the theme's own module id (`blocks.product.below`). The
+ * warranty is part of `<BuyForm />`, never a module.
  */
 export const STOREFRONT_PRODUCT_MODULE_EMBEDS = [
-  "details", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed",
+  "description", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed",
 ] as const;
 export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMBEDS)[number];
 
@@ -962,6 +959,11 @@ export interface StorefrontRenderContext {
      * store's mark without reading another unit's markup. Absent from older stores.
      */
     logo?: StorefrontImage | null;
+    /**
+     * The logo for dark pages, beside `logo`, swapped by the same two selectors
+     * as the header data's `darkLogo`; null without one. Absent from older stores.
+     */
+    darkLogo?: StorefrontImage | null;
   };
   page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */

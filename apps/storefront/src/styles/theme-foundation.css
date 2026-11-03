@@ -254,6 +254,13 @@ body {
   display: none !important;
 }
 
+/* One switch per header: the one the store adds to a header skin yields to
+   one the skin or an app drew there (the head script hides it where :has()
+   is missing). */
+[data-storefront-header]:has([data-color-scheme-toggle]:not([data-host-color-scheme-toggle])) [data-host-color-scheme-toggle] {
+  display: none !important;
+}
+
 /* One keyboard focus indicator for every control (WCAG 2.4.7). It is
    unlayered on purpose so it wins over `outline-none` utilities and no
    control can drop its focus ring by accident. Text fields keep their own

@@ -30,9 +30,12 @@ if (method !== "GET") {
 
 const routePath = normalizeThemePreviewRoutePath(requestedPath);
 const initialDevice = normalizeThemePreviewDevice(requestedDevice);
-const preview = token ? await resolveThemePreview(token) : null;
+const resolution = token ? await resolveThemePreview(token) : null;
+const preview = resolution?.state === "live" ? resolution.preview : null;
+// Only the API's "ended" drops the cookie; no answer keeps it for a reload.
+const ended = !token || resolution?.state === "ended";
 
-if (token && !preview) {
+if (token && ended) {
   appendClearThemePreviewCookies(Astro.response.headers);
 }
 ---
@@ -116,7 +119,11 @@ if (token && !preview) {
       <main class="unavailable">
         <article>
           <h1>Draft preview unavailable</h1>
-          <p>This preview expired or is no longer valid. Return to Theme settings and open a new preview.</p>
+          {ended ? (
+            <p>This preview expired or is no longer valid. Return to Theme settings and open a new preview.</p>
+          ) : (
+            <p>This preview could not be loaded just now. Reload the page to try again.</p>
+          )}
         </article>
       </main>
     )}

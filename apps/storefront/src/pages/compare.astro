@@ -37,7 +37,7 @@ const { resolved, language } = await currentRequestTheme(Astro.locals);
 const copy = shopCopy(language).compare;
 const words = storefrontCopy(language);
 // The empty state names the way in only where it exists: a product page that lists compare-similar.
-const canStartCompare = resolved.blocks.product.below.includes("compare-similar");
+const canStartCompare = resolved.blocks.product.below.includes("compare_similar");
 
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;

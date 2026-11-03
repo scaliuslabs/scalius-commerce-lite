@@ -456,7 +456,7 @@
     },
     "below": [
      "description",
-     "content-blocks",
+     "content_blocks",
      "policies",
      "reviews",
      "related"

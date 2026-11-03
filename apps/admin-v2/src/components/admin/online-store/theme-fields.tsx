@@ -83,7 +83,10 @@ function ColorField({
   onChange: (value: string) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const valid = isStorefrontThemeHexColor(value);
+  // What the merchant types stays here; the document takes only a complete #rrggbb.
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  const valid = isStorefrontThemeHexColor(text.trim().toLowerCase());
   const [left, setLeft] = useState(false);
   const server = useServerFieldError(id);
   const asked = useThemeReveal() !== null;
@@ -96,33 +99,39 @@ function ColorField({
   ].filter((error): error is string => Boolean(error));
   const change = (next: string) => {
     server.clear();
-    // The document stores lowercase #rrggbb.
-    onChange(next.trim().toLowerCase());
+    setText(next);
+    // The document stores lowercase #rrggbb, and only a complete one.
+    const color = next.trim().toLowerCase();
+    if (isStorefrontThemeHexColor(color)) onChange(color);
   };
   return (
     <Field id={id} label={label}>
       <div className="flex items-center gap-2">
         <label
-          style={{ "--swatch": valid ? value : "transparent" } as CSSProperties}
+          style={{ "--swatch": value } as CSSProperties}
           className="relative size-11 shrink-0 cursor-pointer rounded-lg border bg-(--swatch) sm:pointer-fine:size-9"
         >
           <span className="sr-only">{t("pickColor", { name: label })}</span>
           <input
             type="color"
-            value={valid ? value : "#000000"}
+            value={value}
             onChange={(event) => change(event.target.value)}
             className="absolute inset-0 size-full cursor-pointer opacity-0"
           />
         </label>
         <Input
           id={id}
-          value={value}
+          value={text}
           maxLength={7}
           spellCheck={false}
           autoComplete="off"
           aria-invalid={errors.length > 0 ? true : undefined}
           aria-describedby={errors.length > 0 ? `${id}-note` : undefined}
-          onBlur={() => setLeft(true)}
+          onBlur={() => {
+            setLeft(true);
+            // Leaving a half-typed colour shows the colour the draft keeps: the field never disagrees with it.
+            if (!valid) setText(value);
+          }}
           onChange={(event) => change(event.target.value)}
         />
       </div>
@@ -252,14 +261,21 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
           <TabsContent value="darkColors" className="space-y-4">
             <p className="text-body text-muted-foreground">{t("darkColorsHelp")}</p>
             <ColorSetFields theme={theme} set="darkColors" setDraft={setDraft} />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!darkColorsEdited(theme)}
-              onClick={() => setConfirmRegenerate(true)}
-            >
-              {t("darkColorsRegenerate")}
-            </Button>
+            <div className="space-y-1">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!darkColorsEdited(theme)}
+                aria-describedby={darkColorsEdited(theme) ? undefined : "theme-dark-colors-regenerate-help"}
+                onClick={() => setConfirmRegenerate(true)}
+              >
+                {t("darkColorsRegenerate")}
+              </Button>
+              {/* A disabled button says why (DESIGN C5). */}
+              {darkColorsEdited(theme) ? null : (
+                <p id="theme-dark-colors-regenerate-help" className="text-body text-muted-foreground">{t("darkColorsFollowing")}</p>
+              )}
+            </div>
             <ConfirmDialog
               open={confirmRegenerate}
               onOpenChange={setConfirmRegenerate}

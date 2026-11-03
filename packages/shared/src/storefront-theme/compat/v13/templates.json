@@ -416,7 +416,7 @@
     },
     "below": [
      "description",
-     "content-blocks",
+     "content_blocks",
      "policies",
      "reviews",
      "related"
@@ -705,11 +705,10 @@
      "settings": {}
     },
     "below": [
-     "about-bullets",
-     "key-attributes",
-     "spec-table",
+     "about_bullets",
+     "key_attributes",
+     "spec_table",
      "description",
-     "warranty",
      "reviews",
      "related"
     ],
@@ -1290,7 +1289,7 @@
      }
     },
     "below": [
-     "content-blocks",
+     "content_blocks",
      "description",
      "reviews"
     ],

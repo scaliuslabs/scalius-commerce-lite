@@ -298,5 +298,17 @@
   "from": "45518b090628cdc6",
   "change": "storefront.STOREFRONT_COMPONENT_LIMITS.islandPropsBytes: a new limit was added.",
   "reason": "It relaxes a bound rather than adding one: an island's data-props was held to the 2,000-character cap of every attribute (at most 6,000 UTF-8 bytes) and is now bounded on its own at 16 KiB of JSON, still inside htmlBytes. Every props value that passed before still passes (html.test.ts pins the 16 KiB boundary), and an oversized one is now named instead of dropped silently."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "a6dbeb7a67326113",
+  "change": "storefront.STOREFRONT_PRODUCT_MODULE_EMBEDS: \"details\" was removed.",
+  "reason": "Unreleased: STOREFRONT_PRODUCT_MODULE_EMBEDS was added after v2.0.0-beta.2 in this same wave; it is in no tag and not in the public export (only on the private origin), so no app can depend on it. `details` is renamed `description`, the module's theme id."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "600d697d672275b0",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_PRODUCT_MODULE_EMBEDS: an existing signature changed or gained a required member.",
+  "reason": "Unreleased: STOREFRONT_PRODUCT_MODULE_EMBEDS was added after v2.0.0-beta.2 in this same wave; it is in no tag and not in the public export (only on the private origin), so no app can depend on it. `details` is renamed `description`, the module's theme id."
  }
 ]

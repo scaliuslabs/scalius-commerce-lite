@@ -3370,7 +3370,7 @@
         ]
        },
        "below": {
-        "maxItems": 11,
+        "maxItems": 10,
         "type": "array",
         "items": {
          "$ref": "#/$defs/__schema27"
@@ -3704,17 +3704,16 @@
    "__schema27": {
     "type": "string",
     "enum": [
-     "key-attributes",
-     "about-bullets",
-     "spec-table",
+     "key_attributes",
+     "about_bullets",
+     "spec_table",
      "description",
-     "content-blocks",
-     "compare-similar",
-     "warranty",
+     "content_blocks",
+     "compare_similar",
      "reviews",
      "policies",
      "related",
-     "recently-viewed"
+     "recently_viewed"
     ]
    },
    "__schema28": {

@@ -17115,7 +17115,7 @@
   ],
   "STOREFRONT_EMBED_TAG": "scalius-embed",
   "STOREFRONT_PRODUCT_MODULE_EMBEDS": [
-   "details",
+   "description",
    "spec_table",
    "key_attributes",
    "about_bullets",

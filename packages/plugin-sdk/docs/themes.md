@@ -35,9 +35,9 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 | You need | Read it from | Never |
 | --- | --- | --- |
-| The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` (every part) | A wordmark, your app's name, the header's markup |
+| The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` and `context.store.darkLogo` (every part) | A wordmark, your app's name, the header's markup |
 | Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
-| The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="details" />` in a product skin | Moving the store's markup with an island |
+| The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="description" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
 | Core routes | `data.routes` (`home`, `search`, `cart`, `account`, `orders`, `trackOrder`; footer `newsletter`) | Page paths such as `/about` |
 | Products | A `products` or `product` setting, a section's product source, each card's own `url` | `/products/<slug>` |
@@ -132,7 +132,7 @@ A store that just installed your theme may have no products, categories, collect
 | In the projection | On a new store |
 | --- | --- |
 | `data.menu`, `data.categories`, footer `data.menus`, `data.policies`, `data.store.social` | `[]` |
-| `data.store.logo`, `darkLogo`, `context.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
+| `data.store.logo`, `darkLogo`, `context.store.logo`, `context.store.darkLogo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
 | A `products` setting, a section's `products.cards`, a listing's `cards` | `[]` |
 | An `image` setting | `null` |
 | A card's `image`, `hoverImage`, `compareAt`, `rating` | `null` |
@@ -199,7 +199,7 @@ Its `tokens` can set the colour scheme too, checked like any theme when the merc
 | --- | --- | --- |
 | `colorScheme` | `light`, `dark`, `system` | `colors`, `darkColors`, or whichever the buyer's device asks for. |
 | `darkColors` | the same keys as `colors`, or `null` | Required, and held to the same readable-text checks, while `colorScheme` isn't `light` or the switch is on. |
-| `colorSchemeToggle` | `true`, `false` | A switch in the header; each buyer's choice is remembered on their device. |
+| `colorSchemeToggle` | `true`, `false` | A switch in the header (a header skin gets it in its `header.actions` slot); each buyer's choice is remembered on their device. |
 
 A template that leaves dark off (`light`, no switch) keeps the merchant's own scheme, dark colours and switch when applied; one that shows dark brings its own. A template written for version 12 reads as `light`, no dark colours and no switch.
 

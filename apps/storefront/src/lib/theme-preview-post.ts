@@ -61,7 +61,9 @@ export async function readThemePreviewPost<Body>(
   if (!layoutData) return themePreviewRefusal(503);
   const requestTheme = await resolveRequestTheme(astro, layoutData);
   // An expired or revoked session: the bridge asks the editor for a new one.
+  // No answer from the API keeps the cookie: the editor may simply retry.
   if (!requestTheme.preview) {
+    if (!requestTheme.previewEnded) return themePreviewRefusal(503);
     const refusal = themePreviewRefusal(401);
     appendClearThemePreviewCookies(refusal.headers);
     return refusal;

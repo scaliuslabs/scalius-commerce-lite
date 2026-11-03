@@ -447,7 +447,7 @@ function productEntries(): GalleryEntry[] {
   for (const module of modules) {
     const theme = clone(base);
     theme.blocks.product = { ...theme.blocks.product, below: [module] };
-    entries.push({ id: entryId("product", "module", module), family: "product:module", title: `Product module ${module}`, page: "product", theme, focus: module === "content-blocks" ? { include: ["[data-product-content-blocks] [data-content-block]"] } : MAIN, scenario: { product: "electronics", productContent: module === "content-blocks" } });
+    entries.push({ id: entryId("product", "module", module), family: "product:module", title: `Product module ${module}`, page: "product", theme, focus: module === "content_blocks" ? { include: ["[data-product-content-blocks] [data-content-block]"] } : MAIN, scenario: { product: "electronics", productContent: module === "content_blocks" } });
   }
   const all = clone(base);
   all.blocks.product = { ...all.blocks.product, below: modules };
@@ -463,7 +463,7 @@ function productEntries(): GalleryEntry[] {
     entries.push({ id: entryId("product", "state", product), family: "product:state", title: `Product page, ${product}`, page: "product", theme: clone(base), focus: product === "one-image" ? { include: ["[data-product-gallery] img[data-mobile-main-image], [data-product-gallery] img[data-desktop-main-image]"] } : MAIN, scenario: { product, ...(product === "bangla" ? { locale: "bn" as const } : {}) } });
   }
   const content = clone(base);
-  content.blocks.product.below = ["description", "content-blocks", "reviews"];
+  content.blocks.product.below = ["description", "content_blocks", "reviews"];
   entries.push({ id: "product-content-blocks", family: "product:state", title: "Authored body content and FAQ", page: "product", theme: content, focus: { include: ["[data-product-content-blocks] [data-content-block]"] }, scenario: { product: "fashion", productContent: true } });
   for (const locale of [undefined, "ar"] as const) {
     const theme = clone(base);
@@ -619,7 +619,7 @@ function noorEntries(): GalleryEntry[] {
   const base = noorTheme(baseTheme());
   base.blocks.product = {
     ...base.blocks.product,
-    below: ["description", "spec-table", "reviews", "related"],
+    below: ["description", "spec_table", "reviews", "related"],
     sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "anchor-bar" },
   };
   const product = (id: string, title: string, values: StorefrontSkinRef["values"] = {}, scenario: GalleryScenario = {}): GalleryEntry => {

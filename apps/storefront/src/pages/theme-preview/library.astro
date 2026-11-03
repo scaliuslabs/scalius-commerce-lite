@@ -27,7 +27,7 @@ if (selection.presence) renderForPresence(selection.presence);
 const layoutData = await getLayoutData();
 if (!layoutData) return refuse(503);
 const saved = await resolveRequestTheme(Astro, layoutData);
-if (!saved.preview) return refuse(401);
+if (!saved.preview) return refuse(saved.previewEnded ? 401 : 503);
 const dashboard = themeEditorOrigin(getRuntimeDashboardUrl());
 if (!dashboard || dashboard === Astro.url.origin) return refuse(403);
 if (selection.presence && (!layoutData.markets || !marketOfPresence(layoutData.markets, selection.presence))) return refuse(404);
