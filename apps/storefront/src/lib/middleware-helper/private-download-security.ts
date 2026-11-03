@@ -36,11 +36,19 @@ export function applyTransportSecurityHeaders(
   return secured;
 }
 
-/** The page CSP for everything but the streams and the private relay, which keep their own. */
+/**
+ * The page CSP for every response that states none of its own. A response
+ * with its own policy keeps it whole: the download streams' and an inbox
+ * attachment's sandbox, an app's SVG file, the continuation pages' strict
+ * policy (the card entry: no inline script but the colour scheme's, by
+ * hash). The private relay never takes the page policy.
+ */
 export function withPageCsp(
   pathname: string,
   response: Response,
   options: { privateRelay: boolean; setPageCsp: (response: Response) => Response },
 ): Response {
-  return options.privateRelay || isDigitalDownloadPathname(pathname) ? response : options.setPageCsp(response);
+  return options.privateRelay || isDigitalDownloadPathname(pathname) || response.headers.has("Content-Security-Policy")
+    ? response
+    : options.setPageCsp(response);
 }
