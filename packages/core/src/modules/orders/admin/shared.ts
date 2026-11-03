@@ -43,7 +43,7 @@ import type {
     OrderShipmentRecoverySummary,
     OrderShipmentSummary,
 } from "../types";
-import { hasActiveShipmentClaim, isShipmentClaimLeaseLive, noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel";
+import { hasActiveShipmentClaim, isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../../delivery";
 
 // ─────────────────────────────────────────
@@ -293,8 +293,8 @@ export function buildShipmentRecoverySummary(
     latestShipment: OrderShipmentSummary | null,
     nowSeconds: number,
 ): OrderShipmentRecoverySummary {
-    // A running lease is a booking in flight; an expired one waits for resolution.
-    const hasActiveClaim = isShipmentClaimLeaseLive(order, nowSeconds);
+    // A running lease is a booking in flight; an expired or held one waits for resolution.
+    const hasActiveClaim = isShipmentClaimLeaseLive(order, nowSeconds) && !isShipmentClaimHeld(order);
     const hasClaim = Boolean(order.shipmentClaimId);
     const status = latestShipment?.status?.toLowerCase() ?? null;
     const shipmentId = latestShipment?.id ?? null;
@@ -331,7 +331,8 @@ export function buildShipmentRecoverySummary(
             shipmentId,
             status,
             providerType,
-            canRefresh: canProviderRefresh && !hasActiveClaim,
+            // A refresh refuses while any claim locks the order; Repair finishes it.
+            canRefresh: canProviderRefresh && !hasClaim,
             canRetryCreate: false,
             canRepair: true,
             unknownOutcome: false,

@@ -40,6 +40,14 @@ export function isShipmentClaimLeaseLive(
     return expiresAt === null || expiresAt > nowSeconds;
 }
 
+/**
+ * A claim held for reconciliation (its lease removed): no booking is running,
+ * and it stays until staff or the maintenance sweep resolve its attempt.
+ */
+export function isShipmentClaimHeld(snapshot: ShipmentClaimSnapshot): boolean {
+    return Boolean(snapshot.shipmentClaimId) && toUnixSeconds(snapshot.shipmentClaimExpiresAt) === null;
+}
+
 /** Shipment row states that prove an attempt left nothing booked. */
 const RELEASED_SHIPMENT_STATUSES = new Set(["failed", "cancelled"]);
 

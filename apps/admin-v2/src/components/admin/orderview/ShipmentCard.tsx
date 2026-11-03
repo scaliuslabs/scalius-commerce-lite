@@ -141,9 +141,9 @@ function CourierCheckDialog({
     operationKey.current = null;
     onOpenChange(false);
   };
-  // "Not created" rests on the staff's own search of the courier (a lookup
-  // can only veto it), so the note names the order number they searched.
-  const needsOrderNumber = outcome === "confirmed_not_created";
+  // "Not created" and "cancelled" rest on the staff's own search of the
+  // courier (a lookup can only veto them), so the note names the order ID searched.
+  const needsOrderNumber = outcome !== "confirmed_existing";
   const ready = confirmed
     && evidenceNote.trim().length >= 8
     && (!needsOrderNumber || evidenceNote.toLowerCase().includes(order.id.toLowerCase()))

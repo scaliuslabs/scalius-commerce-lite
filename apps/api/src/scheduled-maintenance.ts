@@ -3,7 +3,7 @@ import { runWithReadObserver } from "@scalius/database/read-observer";
 import { createEventWriteObserver } from "./middleware/event-dispatch";
 import { publishRealtime, tableChanges } from "./realtime/publish";
 import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
-import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { releaseExpiredReservations, sweepExpiredReservationHistory } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
@@ -37,7 +37,7 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
-import { sendOrderRefundNotification } from "./utils/order-notifications";
+import { sendOrderNotificationsForStatus, sendOrderRefundNotification } from "./utils/order-notifications";
 import { dueSweepIndexes, firstSweepRunOfHour } from "./scheduled/slices";
 import {
   isNightlyCatalogTick,
@@ -433,16 +433,33 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Order locks a dead invocation left behind: refund attempts, then courier
     // booking claims whose lease ran out (one job, so the rotation keeps its
-    // length). A dead booking becomes a courier confirmation on the order.
+    // length). A booked attempt is finished, a dead one becomes a courier
+    // confirmation on the order, an empty one is released.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
+      // A cursor walks the expired claims, so one that keeps failing never holds the others back.
+      const claimCursor = await readMaintenanceCursor(db, "shipment-claims");
       const claims = await timed("expired_shipment_claim_sweep", () =>
-        sweepExpiredShipmentClaims(db, { limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT) }),
+        sweepExpiredShipmentClaims(db, { limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT), afterOrderId: claimCursor.value.orders }),
       );
-      if (claims.scanned > 0 || claims.hasMore) {
+      await claimCursor.save({ orders: claims.lastOrderId });
+      for (const booked of claims.finalized) {
+        if (!booked.orderStatusChanged) continue;
+        // The notification drain sends it on the next tick.
+        await sendOrderNotificationsForStatus({
+          db,
+          send: undefined,
+          orderIds: [booked.orderId],
+          newStatus: booked.orderStatus,
+          trackingByOrderId: { [booked.orderId]: booked.trackingId },
+          dedupeKeyByOrderId: { [booked.orderId]: `shipment:${booked.shipmentId}:order_${booked.orderStatus}` },
+          source: "expired-shipment-claim-sweep",
+        });
+      }
+      if (claims.scanned > 0) {
         console.log(
           `[scheduled] Expired shipment claims: scanned=${claims.scanned}, released=${claims.released}, ` +
-            `held=${claims.held}, failed=${claims.failed}, hasMore=${claims.hasMore}`,
+            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}`,
         );
       }
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
@@ -922,16 +939,20 @@ async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<
       `projectionsRepaired=${nightly.projectionsRepaired}`,
   );
   // The routine expiry sweep reads only recent reservations; once a day the
-  // full pass finds older orphans (e.g. holds left while the sweep was down).
-  const expiry = await timed("inventory_expiry_full_pass", () =>
-    releaseExpiredReservations(db, 30, {
+  // history pass reads a bounded span of older ones from its cursor (e.g.
+  // holds left while the sweep was down), moving past what it read.
+  const historyCursor = await readMaintenanceCursor(db, "inventory-expiry-history");
+  const history = await timed("inventory_expiry_history_pass", () =>
+    sweepExpiredReservationHistory(db, {
+      after: historyCursor.value.after ? Number(historyCursor.value.after) : null,
       limit: planLimits().maintenance.inventoryExpiryPerRun,
-      fullHistory: true,
     }),
   );
-  if (expiry.found > 0) {
+  await historyCursor.save({ after: history.next === null ? null : String(history.next) });
+  if (history.result && history.result.found > 0) {
     console.log(
-      `[scheduled] Inventory expiry full pass: found=${expiry.found}, released=${expiry.released}, hasMore=${expiry.hasMore}`,
+      `[scheduled] Inventory expiry history pass: found=${history.result.found}, released=${history.result.released}, ` +
+        `hasMore=${history.result.hasMore}`,
     );
   }
   const { measurePluginStorage } = await import("./plugins/scheduled");

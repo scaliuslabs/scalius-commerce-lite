@@ -16,7 +16,6 @@ import {
 import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
-  expiredShipmentClaimCondition,
   isShipmentClaimLeaseLive,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
@@ -25,7 +24,7 @@ import {
   SHIPMENT_CLAIM_LEASE_SECONDS,
   validateTransition,
 } from "../order-kernel";
-import { sql, eq, and, asc } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   assertOrderNotOnHold,
@@ -111,54 +110,6 @@ export async function resolveExpiredShipmentClaim(
             error: "Previous shipment creation attempt requires reconciliation before retry.",
         },
     };
-}
-
-export const EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT = 25;
-
-export interface ExpiredShipmentClaimSweepResult {
-    scanned: number;
-    released: number;
-    held: number;
-    failed: number;
-    hasMore: boolean;
-}
-
-/**
- * The maintenance backstop for dead courier bookings: every order whose
- * shipment claim lease ran out is resolved (`resolveExpiredShipmentClaim`),
- * oldest lease first. Held claims lose their expiry, so they leave this range.
- */
-export async function sweepExpiredShipmentClaims(
-    db: Database,
-    options: { limit?: number } = {},
-): Promise<ExpiredShipmentClaimSweepResult> {
-    const limit = Math.max(1, Math.min(EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT * 4, Math.floor(options.limit ?? EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT)));
-    const rows = await db
-        .select({ id: orders.id, shipmentClaimId: orders.shipmentClaimId })
-        .from(orders)
-        .where(expiredShipmentClaimCondition())
-        .orderBy(asc(orders.shipmentClaimExpiresAt), asc(orders.id))
-        .limit(limit + 1)
-        .all();
-    const result: ExpiredShipmentClaimSweepResult = {
-        scanned: Math.min(rows.length, limit),
-        released: 0,
-        held: 0,
-        failed: 0,
-        hasMore: rows.length > limit,
-    };
-    for (const row of rows.slice(0, limit)) {
-        if (!row.shipmentClaimId) continue;
-        try {
-            const outcome = await resolveExpiredShipmentClaim(db, row.id, row.shipmentClaimId);
-            if (outcome.blocked) result.held += 1;
-            else result.released += 1;
-        } catch (error) {
-            result.failed += 1;
-            console.error(`[fulfilment] Expired shipment claim ${row.shipmentClaimId} of order ${row.id} could not be resolved:`, error);
-        }
-    }
-    return result;
 }
 
 export async function bulkShipOrders(

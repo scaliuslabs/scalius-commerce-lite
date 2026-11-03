@@ -18,10 +18,13 @@ export const MAX_EXPIRY_SWEEP_LIMIT = 200;
 /**
  * An orphan appears within minutes of its checkout, so the routine sweep reads
  * only reservations this much older than the expiry cutoff: its cost follows
- * recent checkouts, not the whole ledger. A full pass (the nightly one) still
- * finds anything older, e.g. holds left while the sweep was down.
+ * recent checkouts, not the whole ledger. The nightly history pass walks the
+ * older reservations a bounded span at a time (`sweepExpiredReservationHistory`),
+ * e.g. holds left while the sweep was down.
  */
 export const EXPIRY_SWEEP_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+/** The history the nightly pass reads in one night, at most. */
+export const EXPIRY_HISTORY_SPAN_SECONDS = 30 * 24 * 60 * 60;
 
 /**
  * Result of an expiry sweep, for observability.
@@ -41,13 +44,19 @@ export interface ExpiryResult {
   availabilityTransitionVariantIds: string[];
   /** Any errors encountered (non-fatal) */
   errors: string[];
+  /** The first reservation time (unix seconds) of the last group read, for a cursor. */
+  lastCreatedAt: number | null;
 }
 
 export interface ExpirySweepOptions {
   /** Maximum reservation groups to process in one invocation. Defaults to 50. */
   limit?: number;
-  /** Read every aged reservation instead of the recent window. */
-  fullHistory?: boolean;
+  /**
+   * Read reservations created in [createdFrom, createdBefore) (unix seconds)
+   * instead of the recent window; `createdBefore` never passes the expiry cutoff.
+   */
+  createdFrom?: number;
+  createdBefore?: number;
 }
 
 type ReservationMovementType = "reserved" | "preorder_reserved";
@@ -155,8 +164,8 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  *
  * A reservation is "expired" when:
  *   1. It is an inventory_movement of type "reserved" (or "preorder_reserved")
- *   2. It was created more than `maxAgeMinutes` ago (and, unless
- *      `fullHistory`, within `EXPIRY_SWEEP_WINDOW_SECONDS` before that)
+ *   2. It was created more than `maxAgeMinutes` ago, within
+ *      `EXPIRY_SWEEP_WINDOW_SECONDS` before that (or the given range)
  *   3. It is orphaned from its order row
  *   4. Its pool-specific reserved quantity is greater than the quantity
  *      already deducted or released
@@ -175,7 +184,7 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  * @param db - Drizzle database instance
  * @param maxAgeMinutes - Maximum age in minutes before a reservation expires (default: 30)
  * @param options.limit - Maximum reservation groups to process in one invocation (default: 50, max: 200)
- * @param options.fullHistory - Read every aged reservation, not only the recent window
+ * @param options.createdFrom - With createdBefore: the range read instead of the recent window
  */
 export async function releaseExpiredReservations(
   db: Database,
@@ -191,6 +200,7 @@ export async function releaseExpiredReservations(
     releasedVariantIds: [],
     availabilityTransitionVariantIds: [],
     errors: [],
+    lastCreatedAt: null,
   };
 
   // Calculate the cutoff timestamp
@@ -232,15 +242,14 @@ export async function releaseExpiredReservations(
       reservationType: inventoryMovements.type,
       pool: inventoryMovements.pool,
       reservationGeneration: inventoryMovements.reservationGeneration,
+      firstCreatedAt: sql<number>`MIN(${inventoryMovements.createdAt})`,
     })
     .from(inventoryMovements)
     .where(
       and(
         sql`${inventoryMovements.type} IN ('reserved', 'preorder_reserved')`,
-        lt(inventoryMovements.createdAt, new Date(cutoffSeconds * 1000)),
-        options.fullHistory
-          ? undefined
-          : gte(inventoryMovements.createdAt, new Date((cutoffSeconds - EXPIRY_SWEEP_WINDOW_SECONDS) * 1000)),
+        lt(inventoryMovements.createdAt, new Date(Math.min(cutoffSeconds, options.createdBefore ?? cutoffSeconds) * 1000)),
+        gte(inventoryMovements.createdAt, new Date((options.createdFrom ?? cutoffSeconds - EXPIRY_SWEEP_WINDOW_SECONDS) * 1000)),
         sql`${inventoryMovements.orderId} IS NOT NULL`,
         // Active/live orders may remain reserved for longer than the checkout
         // timeout. Order cancellation must go through order transition logic;
@@ -267,6 +276,8 @@ export async function releaseExpiredReservations(
   const expiredReservations = expiredReservationCandidates.slice(0, limit);
   result.found = expiredReservations.length;
   result.hasMore = expiredReservationCandidates.length > limit;
+  const lastRead = expiredReservations.at(-1)?.firstCreatedAt;
+  result.lastCreatedAt = lastRead === undefined || lastRead === null ? null : Number(lastRead);
 
   if (expiredReservations.length === 0) {
     return result;
@@ -450,4 +461,35 @@ export async function releaseExpiredReservations(
   }
 
   return result;
+}
+
+/**
+ * The nightly history pass: reservations older than the routine window, a
+ * bounded span at a time from the persisted cursor (`after`, unix seconds),
+ * each night starting at the first reservation at or after it. The cursor
+ * moves past what it read, failures included, and wraps to the start (null)
+ * once it reaches the routine window.
+ */
+export async function sweepExpiredReservationHistory(
+  db: Database,
+  options: { after: number | null; limit?: number; spanSeconds?: number; maxAgeMinutes?: number },
+): Promise<{ result: ExpiryResult | null; next: number | null }> {
+  const maxAgeMinutes = options.maxAgeMinutes ?? 30;
+  const windowStart = Math.floor(Date.now() / 1000) - maxAgeMinutes * 60 - EXPIRY_SWEEP_WINDOW_SECONDS;
+  const after = new Date((options.after ?? 0) * 1000);
+  // The first reservation of each type at or after the cursor: one index row each.
+  const firsts = await Promise.all((["reserved", "preorder_reserved"] as const).map((type) =>
+    db.select({ createdAt: inventoryMovements.createdAt })
+      .from(inventoryMovements)
+      .where(and(eq(inventoryMovements.type, type), gte(inventoryMovements.createdAt, after)))
+      .orderBy(inventoryMovements.createdAt)
+      .limit(1)
+      .get()));
+  const starts = firsts.flatMap((row) => (row?.createdAt ? [Math.floor(row.createdAt.getTime() / 1000)] : []));
+  const from = starts.length > 0 ? Math.min(...starts) : null;
+  if (from === null || from >= windowStart) return { result: null, next: null };
+  const before = Math.min(from + (options.spanSeconds ?? EXPIRY_HISTORY_SPAN_SECONDS), windowStart);
+  const result = await releaseExpiredReservations(db, maxAgeMinutes, { limit: options.limit, createdFrom: from, createdBefore: before });
+  const next = result.hasMore && result.lastCreatedAt !== null ? result.lastCreatedAt + 1 : before;
+  return { result, next: next >= windowStart ? null : next };
 }

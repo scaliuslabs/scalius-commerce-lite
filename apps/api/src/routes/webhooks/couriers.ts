@@ -14,11 +14,11 @@
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { deliveryProviders, deliveryShipments } from "@scalius/database/schema";
+import { deliveryProviders, deliveryShipments, ShipmentStatus } from "@scalius/database/schema";
 import { courierFor, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
-import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
+import { settleShipmentClaimForCourierPush, syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import {
   isQualifiedProviderId,
   providerErrorOf,
@@ -28,7 +28,7 @@ import {
 } from "@scalius/shared/plugins/providers";
 import { requestCourierProviders } from "../../plugins/providers/courier";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { sendOrderStatusChangeNotification } from "../../utils/order-notifications";
+import { sendOrderNotificationsForStatus, sendOrderStatusChangeNotification } from "../../utils/order-notifications";
 import {
   claimProviderEvent,
   markWebhookEventFailed,
@@ -79,8 +79,13 @@ export const COURIER_PUSH_IN_FLIGHT_RETRY_SECONDS = 60;
  */
 function inFlight(c: Context, status: string | undefined): Response | null {
   if (status !== "processing" && status !== "retrying" && status !== "failed") return null;
+  return retryLater(c);
+}
+
+/** Nothing was applied; the courier sends the push again. */
+function retryLater(c: Context): Response {
   return c.json(
-    { error: "This event is still being applied. Send it again shortly." },
+    { error: "This event can't be applied yet. Send it again shortly." },
     503,
     { "Retry-After": String(COURIER_PUSH_IN_FLIGHT_RETRY_SECONDS) },
   );
@@ -213,6 +218,25 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   }
 
   const { tracking } = verification;
+  // The push proves the booking: an order still claimed by it (a booking whose
+  // invocation died) is finished first. A booking still finishing, or one held
+  // for staff, is never written over: the courier sends the push again.
+  const settled = await settleShipmentClaimForCourierPush(db, shipment.id);
+  if (settled.state !== "ready") return retryLater(c);
+  if (settled.finalized?.orderStatusChanged) {
+    await sendOrderNotificationsForStatus({
+      db,
+      send: notificationSender(c),
+      orderIds: [settled.finalized.orderId],
+      newStatus: settled.finalized.orderStatus,
+      trackingByOrderId: { [settled.finalized.orderId]: settled.finalized.trackingId },
+      dedupeKeyByOrderId: { [settled.finalized.orderId]: `shipment:${shipment.id}:order_${settled.finalized.orderStatus}` },
+      source: "courier-webhook",
+    });
+  }
+  const current = settled.finalized
+    ? await db.select().from(deliveryShipments).where(eq(deliveryShipments.id, shipment.id)).get() ?? shipment
+    : shipment;
   // The courier's own event id when it sends one, else the state it reports at its time.
   const sourceEventId = verification.eventId
     ? `${externalId}:${verification.eventId}`
@@ -232,17 +256,25 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   }
 
   try {
-    await db.update(deliveryShipments).set({
+    const written = await db.update(deliveryShipments).set({
       status: tracking.status,
       rawStatus: tracking.rawStatus,
       lastChecked: new Date(),
       updatedAt: new Date(),
       metadata: JSON.stringify({
-        ...parseMetadata(shipment.metadata),
+        ...parseMetadata(current.metadata),
         ...(tracking.details ?? {}),
         lastWebhookAt: new Date().toISOString(),
       }),
-    }).where(eq(deliveryShipments.id, shipment.id));
+    }).where(and(
+      eq(deliveryShipments.id, shipment.id),
+      // A shipment that became a reconciliation meanwhile waits for staff.
+      ne(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
+    )).returning({ id: deliveryShipments.id });
+    if (written.length === 0) {
+      await markWebhookEventFailed(db, eventId, { error: "courier_webhook_shipment_held" });
+      return retryLater(c);
+    }
 
     // The ledger follows the parcel (F11): before the order moves for units
     // the courier holds, after it for units the courier never took.
@@ -253,7 +285,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       db,
       send: notificationSender(c),
       statusChange: statusResult?.statusChange ?? null,
-      trackingId: shipment.trackingId,
+      trackingId: current.trackingId,
       source: "courier-webhook",
     });
 
@@ -261,7 +293,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       externalId,
       status: tracking.status,
       rawStatus: tracking.rawStatus,
-      previousStatus: shipment.status,
+      previousStatus: current.status,
     });
     return accepted(c, reply, { received: true, status: tracking.status });
   } catch (error) {

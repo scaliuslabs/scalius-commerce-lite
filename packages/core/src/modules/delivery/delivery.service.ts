@@ -422,7 +422,15 @@ export async function lookupShipmentByMerchantOrderId(
   const provider = await getDeliveryProvider(db, providerId);
   if (!provider) throw new NotFoundError("Delivery provider not found");
   const courier = await courierFor(couriers, provider.type);
-  if (!courier?.findShipment) {
+  // An app courier that is not loaded may have a lookup: that proves nothing.
+  if (!courier) {
+    return {
+      confirmed: false,
+      reason: "unavailable",
+      message: `${provider.type} is not available right now, so the order number could not be looked up. The recovery lock remains active.`,
+    };
+  }
+  if (!courier.findShipment) {
     return {
       confirmed: false,
       reason: "unsupported",
