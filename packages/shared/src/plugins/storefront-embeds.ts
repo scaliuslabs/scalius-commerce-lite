@@ -29,6 +29,8 @@ export interface StorefrontEmbedSplit {
   missing: StorefrontEmbedKind[];
   /** Embeds left out: a kind the rule does not allow, or one beyond its count. */
   dropped: number;
+  /** Of `dropped`, embeds inside a form, link or button (the store's form or control cannot nest there). */
+  wrapped?: number;
 }
 
 const EMBED = /<scalius-embed\b([^>]*)>[\s\S]*?<\/scalius-embed>/g;
@@ -48,6 +50,19 @@ export function deferredAt(html: string): (position: number) => boolean {
   return (position) => edges.reduce((depth, edge) => (edge.at < position ? depth + edge.step : depth), 0) > 0;
 }
 
+const WRAPPER_EDGE = /<(\/?)(form|a|button)(?=[\s>/])/gi;
+
+/**
+ * Whether a place in the markup is inside a form, link or button: an embed
+ * there renders nothing (the browser would fold the store's nested form into
+ * the app's, or its controls into a link), as the sanitizer leaves it out.
+ */
+function wrappedAt(html: string): (position: number) => boolean {
+  if (!/<(form|a|button)(?=[\s>/])/i.test(html)) return () => false;
+  const edges = [...html.matchAll(WRAPPER_EDGE)].map((match) => ({ at: match.index, step: match[1] ? -1 : 1 }));
+  return (position) => edges.reduce((depth, edge) => (edge.at < position ? depth + edge.step : depth), 0) > 0;
+}
+
 /** An attribute value of checked markup as written (the sanitizer escapes `&<>"` and a no-break space). */
 export function decodeAttribute(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&nbsp;/g, "\u00a0").replace(/&amp;/g, "&");
@@ -57,17 +72,20 @@ export function decodeAttribute(value: string): string {
  * The checked markup cut at its embeds, under one render's rule: each
  * allowed kind up to its count (any other embed is dropped), the rule's
  * appended kinds added at the end when the markup leaves them out, and the
- * required kinds it is missing. An embed inside deferred markup is dropped.
+ * required kinds it is missing. An embed inside deferred markup, or inside a
+ * form, link or button, is dropped.
  */
 export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): StorefrontEmbedSplit {
   const parts: StorefrontMarkupPart[] = [];
   const counts = new Map<StorefrontEmbedKind, number>();
   const named = new Set<string>();
   let dropped = 0;
+  let wrapped = 0;
   let index = 0;
   let last = 0;
   if (html.includes("<scalius-embed")) {
     const deferred = deferredAt(html);
+    const inWrapper = wrappedAt(html);
     for (const match of html.matchAll(EMBED)) {
       parts.push({ kind: "html", html: html.slice(last, match.index) });
       last = match.index + match[0].length;
@@ -78,6 +96,11 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
       // A slot or product module embed names one of the unit's slots or modules, each placed once.
       const names: readonly string[] | null = kind === "slot" ? rule.slots ?? [] : kind === "product_module" ? rule.productModules ?? [] : null;
       const name = names ? `${kind}:${attributes.get("data-name") ?? ""}` : null;
+      if (inWrapper(match.index)) {
+        dropped += 1;
+        wrapped += 1;
+        continue;
+      }
       if (used >= allowed || deferred(match.index) || (name !== null && (!names!.some((each) => `${kind}:${each}` === name) || named.has(name)))) {
         dropped += 1;
         continue;
@@ -97,5 +120,6 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
     parts: parts.filter((part) => part.kind !== "html" || part.html !== ""),
     missing: rule.required.filter((kind) => !counts.has(kind)),
     dropped,
+    ...(wrapped > 0 ? { wrapped } : {}),
   };
 }

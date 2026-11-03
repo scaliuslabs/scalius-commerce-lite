@@ -478,13 +478,17 @@ export function fixtureStore(name: FixtureStoreName): FixtureStore {
 export function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[] {
   const split = splitStorefrontEmbeds(html, storefrontEmbedRule(target));
   const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy_form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
-  if (split.dropped > 0) {
+  const wrapped = split.wrapped ?? 0;
+  if (wrapped > 0) {
+    issues.push(`${wrapped} embed(s) sit inside a <form>, <a> or <button> and render nothing: the store's forms and controls cannot nest in yours. Place them outside.`);
+  }
+  if (split.dropped > wrapped) {
     const rule = storefrontEmbedRule(target);
     const named = [
       ...(rule.slots ? [`slot names ${rule.slots.join(", ")}`] : []),
       ...(rule.productModules ? [`product_module names ${rule.productModules.join(", ")}`] : []),
     ];
-    issues.push(`${split.dropped} embed(s) render nothing here: ${target} allows ${Object.keys(rule.allowed).join(", ") || "none"}${named.length ? ` (${named.join("; ")}, each once)` : ""}.`);
+    issues.push(`${split.dropped - wrapped} embed(s) render nothing here: ${target} allows ${Object.keys(rule.allowed).join(", ") || "none"}${named.length ? ` (${named.join("; ")}, each once)` : ""}.`);
   }
   issues.push(...islandPropsIssues(html));
   return issues;

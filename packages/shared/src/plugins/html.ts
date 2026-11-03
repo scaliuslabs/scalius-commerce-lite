@@ -293,7 +293,12 @@ interface Scope {
   exceeded: boolean;
   /** Inside deferred markup's template: no core embeds, no JSON-LD. */
   deferred: boolean;
+  /** Enclosing forms, links and buttons: a core embed inside one renders nothing (the store's forms and controls cannot nest). */
+  wrapped: number;
 }
+
+/** Elements a core embed may never sit inside: the browser would fold the store's form or control into the app's. */
+const EMBED_WRAPPERS: ReadonlySet<string> = new Set(["form", "a", "button"]);
 
 const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", " ": "&nbsp;" };
 const escapeText = (value: string) => value.replace(/[&<> ]/g, (char) => ESCAPES[char]!);
@@ -482,8 +487,10 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
       scope.exceeded = true;
       return;
     }
-    // Deferred content places no core embed: the store would cut its template there.
-    if (tag === "scalius-embed" && scope.deferred) {
+    // Deferred content places no core embed: the store would cut its template
+    // there. Nor does a form, link or button: the browser would drop the
+    // store's nested form, and its fields would post with the app's.
+    if (tag === "scalius-embed" && (scope.deferred || scope.wrapped > 0)) {
       scope.dropped += 1;
       continue;
     }
@@ -526,7 +533,12 @@ function walk(nodes: ChildNode[], depth: number, scope: Scope, inForm: boolean, 
     if (VOID_TAGS.has(tag)) continue;
     // RCDATA in the browser: a textarea shows text only.
     if (tag === "textarea") out.push(escapeText(textOf(node.children)));
-    else walk(node.children, depth + 1, scope, inForm || tag === "form", svg || tag === "svg", out);
+    else {
+      const wraps = EMBED_WRAPPERS.has(tag);
+      if (wraps) scope.wrapped += 1;
+      walk(node.children, depth + 1, scope, inForm || tag === "form", svg || tag === "svg", out);
+      if (wraps) scope.wrapped -= 1;
+    }
     out.push(`</${name}>`);
   }
 }
@@ -556,6 +568,7 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
     oversizedProps: [],
     exceeded: false,
     deferred: false,
+    wrapped: 0,
   };
   const out: string[] = [];
   walk(document.children, 1, scope, false, false, out);
