@@ -81,13 +81,15 @@ export const DEV_SCHEDULED_TICK_SECONDS = 60;
  * its configured cron by itself, so retries, the outbox and app crons would sit still.
  */
 export function devScheduledUrl(ports = readDevPorts()) {
-  return `http://127.0.0.1:${ports.api}/cdn-cgi/handler/scheduled?cron=*+*+*+*+*`;
+  return `http://127.0.0.1:${ports.api}/cdn-cgi/local/scheduled?cron=*+*+*+*+*`;
 }
 
 /**
- * Calls the scheduled handler every `intervalSeconds` until `signal` aborts. Calls never
- * overlap (the next wait starts after a call ends) and a failed call only reports itself:
- * the API may be restarting.
+ * Calls the scheduled handler every `intervalSeconds` until `signal` aborts and returns
+ * `{ ticks, failures }`. Calls never overlap (the next wait starts after a call ends). A
+ * call that does not answer, or answers outside 2xx (a wrong path answers 404), is logged
+ * every time with the running failure count, so a tick that never runs cannot pass for one
+ * that does; the loop keeps going because the API may be restarting.
  */
 export async function runScheduledTick({
   ports = readDevPorts(),
@@ -97,23 +99,27 @@ export async function runScheduledTick({
   log = (message) => console.error(message),
 } = {}) {
   const url = devScheduledUrl(ports);
-  let failing = false;
+  const result = { ticks: 0, failures: 0 };
   while (!signal?.aborted) {
     await new Promise((done) => {
       const timer = setTimeout(done, intervalSeconds * 1000);
       signal?.addEventListener("abort", () => { clearTimeout(timer); done(); }, { once: true });
     });
     if (signal?.aborted) break;
+    result.ticks += 1;
     try {
       const response = await fetchImpl(url, { signal: AbortSignal.timeout(Math.max(30_000, intervalSeconds * 1000)) });
       await response.arrayBuffer();
-      if (!response.ok && !failing) log(`Scheduled tick: ${url} answered ${response.status}.`);
-      failing = !response.ok;
+      if (!response.ok) {
+        result.failures += 1;
+        log(`Scheduled tick failed (${result.failures} of ${result.ticks}): ${url} answered ${response.status}.`);
+      }
     } catch (error) {
-      if (!failing) log(`Scheduled tick: ${url} did not answer (${error instanceof Error ? error.message : error}).`);
-      failing = true;
+      result.failures += 1;
+      log(`Scheduled tick failed (${result.failures} of ${result.ticks}): ${url} did not answer (${error instanceof Error ? error.message : error}).`);
     }
   }
+  return result;
 }
 
 function isLoopbackOrigin(value) {

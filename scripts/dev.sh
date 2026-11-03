@@ -559,6 +559,16 @@ if [ "$HAS_FILTERS" = "1" ]; then
     exit 0
   fi
 
+  # Any other filter set (all three apps, or a subset of the stack): turbo starts them
+  # together. A filter that includes the API gets the tick too; its first call comes a
+  # minute after start, and a call before the API answers only logs.
+  if [ "$HAS_API" = "1" ]; then
+    start_cron_tick
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] $PNPM_BIN exec turbo run dev $*"
+    exit 0
+  fi
   "$PNPM_BIN" exec turbo run dev "$@" &
   TURBO_PID=$!
   wait "$TURBO_PID"
