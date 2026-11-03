@@ -62,6 +62,10 @@ overrides:
   # the lint parents that ask for ^10 (the API is unchanged), and to jsx-a11y (3.x). jsx-a11y
   # calls the default export, which 11 lacks; only its jsx-a11y rule set reaches that call,
   # and eslint.config.js enables only astro's flat/recommended. Revisit if jsx-a11y rules are enabled.
+  # Supply-chain facts, kept deliberately: 11.0.1 was 7 days old when pinned (11.0.4 and other patch
+  # releases exist; the pin stays exact until the owner accepts the age), and it adds the dependency
+  # @isaacs/nonrecursive-glob-match 1.0.3, a package created on 2026-10-26. Enabling any jsx-a11y rule
+  # set (astro's jsx-a11y-* configs) would crash lint under the jsx-a11y override above.
   "eslint>minimatch": "11.0.1"
   "@eslint/config-array>minimatch": "11.0.1"
   "@typescript-eslint/typescript-estree>minimatch": "11.0.1"
