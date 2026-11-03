@@ -523,8 +523,11 @@ export async function updateAttribute(
             rewriteDisplay: plan.renamedEnumValueIds.length > 0,
         });
     }
-    // A number's display text carries its unit: a new unit rewrites every value.
-    if (current.valueType === "number" && data.unit !== undefined && updatedAttribute.unit !== current.unit) {
+    // A number's display text carries its unit. Every save rewrites the values
+    // whose text is not their number with the saved unit: a new unit, or one an
+    // interrupted save or a racing product save left behind, so saving again
+    // always converges (nothing stale: one bounded read, no write).
+    if (current.valueType === "number") {
         await rewriteNumberDisplays(db, id, updatedAttribute.unit, refresh);
     }
 
