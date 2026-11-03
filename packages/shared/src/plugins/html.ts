@@ -61,7 +61,7 @@ export type PluginHtmlResult =
     html: string;
     /** Elements and attributes left out (an author diagnostic). */
     dropped: number;
-    /** Islands (by name) whose `data-props` is over `islandPropsBytes`: left out, so they mount with no props. */
+    /** Islands (by name, at most 8; an invalid name as "(invalid name)") whose `data-props` is over `islandPropsBytes`: left out, so they mount with no props. */
     oversizedProps: string[];
   }
   | { ok: false; reason: "too_large" | "too_complex" };
@@ -299,6 +299,11 @@ const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", "
 const escapeText = (value: string) => value.replace(/[&<> ]/g, (char) => ESCAPES[char]!);
 const escapeAttribute = (value: string) => value.replace(/[&<>" ]/g, (char) => ESCAPES[char]!);
 
+/** A declared island's name (its `islands/<name>.js`). */
+const ISLAND_NAME = /^[a-z][a-z0-9_-]{0,47}$/;
+/** Islands `oversizedProps` names at most. */
+const MAX_NAMED_ISLANDS = 8;
+
 /** An island's props: JSON, bounded on its own (it stays escaped text the island only `JSON.parse`s). */
 function islandProps(tag: string, name: string): boolean {
   return tag === "scalius-island" && name === "data-props";
@@ -379,7 +384,11 @@ function attributes(tag: string, input: Record<string, string>, svg: boolean, sc
     if (kept) result.set(kept[0], kept[1]);
     else {
       scope.dropped += 1;
-      if (islandProps(tag, name)) scope.oversizedProps.push(input["data-island"] ?? "");
+      if (islandProps(tag, name) && scope.oversizedProps.length < MAX_NAMED_ISLANDS) {
+        // Only a name an island may have, so a log line carries nothing an app chose freely.
+        const island = input["data-island"] ?? "";
+        scope.oversizedProps.push(ISLAND_NAME.test(island) ? island : "(invalid name)");
+      }
     }
   }
   if (tag === "input" && input.type !== undefined && !result.has("type")) return null; // a password, file or image input

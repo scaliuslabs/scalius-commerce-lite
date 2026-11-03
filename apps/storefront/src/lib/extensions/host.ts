@@ -195,7 +195,8 @@ export class ExtensionHost {
           continue;
         }
         if (checked.oversizedProps.length > 0) {
-          warnOnce(`${extension.pluginId}:props`, `${extension.pluginId} gave island(s) ${checked.oversizedProps.join(", ")} props over ${STOREFRONT_COMPONENT_LIMITS.islandPropsBytes} bytes: they mount with none.`);
+          // Once per release (the names are the sanitizer's: island names only, at most eight).
+          warnOnce(`props:${extension.pluginId}:${extension.release}`, `${extension.pluginId}@${extension.release.slice(0, 12)} gave island(s) ${checked.oversizedProps.join(", ")} props over ${STOREFRONT_COMPONENT_LIMITS.islandPropsBytes} bytes: they mount with none.`);
         }
         remember(entry.key, checked.html);
         entry.resolve(checked.html);
