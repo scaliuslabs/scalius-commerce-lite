@@ -35,7 +35,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 | You need | Read it from | Never |
 | --- | --- | --- |
-| The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` (every part) | A wordmark, your app's name, the header's markup |
+| The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` and `context.store.darkLogo` (every part) | A wordmark, your app's name, the header's markup |
 | Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
 | The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="details" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
@@ -132,7 +132,7 @@ A store that just installed your theme may have no products, categories, collect
 | In the projection | On a new store |
 | --- | --- |
 | `data.menu`, `data.categories`, footer `data.menus`, `data.policies`, `data.store.social` | `[]` |
-| `data.store.logo`, `darkLogo`, `context.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
+| `data.store.logo`, `darkLogo`, `context.store.logo`, `context.store.darkLogo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
 | A `products` setting, a section's `products.cards`, a listing's `cards` | `[]` |
 | An `image` setting | `null` |
 | A card's `image`, `hoverImage`, `compareAt`, `rating` | `null` |

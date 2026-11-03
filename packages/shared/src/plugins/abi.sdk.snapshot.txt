@@ -4628,6 +4628,7 @@ export interface StorefrontRenderContext {
         language: string;
         timeZone: string;
         logo?: StorefrontImage | null;
+        darkLogo?: StorefrontImage | null;
     };
     page: {
         kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other";

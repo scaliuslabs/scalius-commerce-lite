@@ -117,6 +117,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
           language,
           timeZone: storeTimeZone(),
           logo: storeLogo(theme, page.storeName || null),
+          darkLogo: storeLogo(theme, page.storeName || null, "darkLogo"),
         },
         page: { kind: pageKind(path), path },
         assets: "",

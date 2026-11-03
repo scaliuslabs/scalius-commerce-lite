@@ -954,6 +954,11 @@ export interface StorefrontRenderContext {
      * store's mark without reading another unit's markup. Absent from older stores.
      */
     logo?: StorefrontImage | null;
+    /**
+     * The logo for dark pages, beside `logo`, swapped by the same two selectors
+     * as the header data's `darkLogo`; null without one. Absent from older stores.
+     */
+    darkLogo?: StorefrontImage | null;
   };
   page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */

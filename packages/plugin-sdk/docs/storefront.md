@@ -141,7 +141,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
   | `key_attributes` | The key-spec highlights | The table has more rows than key specs, and the theme's buy box lists no facts column |
   | `about_bullets` | "About this item": the key features | The theme's buy box does not list the features (`<BuyForm />` does then) |
   | `content_blocks`, `compare_similar`, `policies` | The content blocks, compare with similar items, the store's policies | The product or store has them |
-  | `recently_viewed` | This browser's recently viewed products | Always placed; it holds no space until the browser fills it, so place it below the fold |
+  | `recently_viewed` | This browser's recently viewed products | The template lists it; it holds no space until the browser fills it, so place it below the fold |
 
   Reviews and related products have their own embeds. The warranty is part of `<BuyForm />`, never a module. A placed module keeps its heading.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`.
@@ -153,7 +153,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 - **The header** gets menu items (three levels, at most `STOREFRONT_COMPONENT_LIMITS.menuItems`: the store's header menu and category cut fit whole, a larger tree is cut top levels first and a parent's page lists the rest) with their category's photo, `routes.orders` and `routes.trackOrder`, `searchScopes` (the top published categories) with `searchScopeParam` (a form sending `category=<value>` to `routes.search` searches that category, no JavaScript needed), `market` (country, currency, language and the country form's selection), and the theme's phone navigation (`phoneNavigation.menu`: `accordion` or `drill`; `tabBar`). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` and `whenSignedOut()` and the store shows the right one before first paint. On the homepage the header also gets `data.page.lead`, the first section when desktop and phone order agree.
 - **The product page** carries `sku` (a product without options), each variant's `sku`, `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null, and `specifications`: the specification table's rows in its order (`{ group, label, value, unit, keySpec }`, plain text). `value` is what the table shows: a number already carries its unit ("15.6 inch"), and `unit` names that unit ("inch"; null for other attributes), so never append it again. A category listing carries `children` (published child categories with photos).
 - **A card** carries `keySpecs` (`{ label, value, unit }`, the same shape), the key specs among its `facts` lines, which the card writes from these rows as `label: value`. Read them instead of splitting `facts`.
-- **Every unit's context** carries `context.store.logo` (`StorefrontImage | null`), the logo the store's header draws.
+- **Every unit's context** carries `context.store.logo` (`StorefrontImage | null`), the logo the store's header draws, and `context.store.darkLogo`, its version for dark pages (swap them as the header data's `darkLogo` says).
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product_main`, `listing_main` and product-slot components.
 
 ### Header behaviour
