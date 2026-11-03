@@ -393,16 +393,22 @@
                 },
                 "value": {
                   "type": "string",
-                  "description": "Its value (an option's display text)."
+                  "description": "Its display value, as the specification table writes it (a number carries its unit)."
+                },
+                "unit": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "A number attribute's unit; null otherwise."
                 }
               },
               "required": [
                 "label",
-                "value"
+                "value",
+                "unit"
               ]
             },
             "maxItems": 4,
-            "description": "The same key specs as name and value, in the same order."
+            "description": "The same key specs as name, value and unit, in the same order."
           },
           "options": {
             "type": "array",

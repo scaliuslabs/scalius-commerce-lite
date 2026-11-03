@@ -117,16 +117,16 @@ export function groupSpecificationRows(
   return groups;
 }
 
-export function specificationValue(row: { value: string; unit: string | null }): string {
-  return row.unit ? `${row.value} ${row.unit}` : row.value;
-}
-
-/** Merchant highlights win; saved key specifications fill an otherwise empty buy-box list. */
+/**
+ * Merchant highlights win; saved key specifications fill an otherwise empty
+ * buy-box list. A row's `value` is its display text: a number already carries
+ * its unit (the attribute codec), so it is never appended again.
+ */
 export function buyBoxFeatures(product: Pick<Product, "features" | "attributes">, savedOnly = false): string[] {
   if (product.features?.length) return product.features;
   if (savedOnly) return [];
   return publicSpecificationRows(product.attributes ?? [])
     .filter((row) => row.keySpec)
     .slice(0, 6)
-    .map((row) => `${row.name}: ${specificationValue(row)}`);
+    .map((row) => `${row.name}: ${row.value}`);
 }

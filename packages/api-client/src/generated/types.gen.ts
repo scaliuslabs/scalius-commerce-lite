@@ -112,7 +112,7 @@ export type ProductCardFacts = {
      */
     keySpecs: Array<string>;
     /**
-     * The same key specs as name and value, in the same order.
+     * The same key specs as name, value and unit, in the same order.
      */
     keySpecRows: Array<{
         /**
@@ -120,9 +120,13 @@ export type ProductCardFacts = {
          */
         label: string;
         /**
-         * Its value (an option's display text).
+         * Its display value, as the specification table writes it (a number carries its unit).
          */
         value: string;
+        /**
+         * A number attribute's unit; null otherwise.
+         */
+        unit: string | null;
     }>;
     /**
      * Option axes with two or more values, in position order.

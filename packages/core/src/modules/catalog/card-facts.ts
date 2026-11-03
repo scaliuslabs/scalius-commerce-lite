@@ -53,8 +53,8 @@ export interface ProductCardFacts {
     brand: { name: string; slug: string } | null;
     /** "Processor: Intel Core i5-1235U", at most CARD_KEY_SPECS_MAX, in spec-table order. */
     keySpecs: string[];
-    /** The same key specs as rows: the attribute's name and its value. */
-    keySpecRows: Array<{ label: string; value: string }>;
+    /** The same key specs as rows: the attribute name, its display value (a number carries its unit) and the unit of a number attribute. */
+    keySpecRows: Array<{ label: string; value: string; unit: string | null }>;
     /** Option axes in position order, only those with two or more values. */
     options: ProductCardOptionFact[];
     /** Units sold in the last 30 days (`product_sales_stats`), only from CARD_SOLD_MIN. */
@@ -151,7 +151,9 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
     deps.shipping();
     const packSlugs = CARD_PACK_SIZE_SLUGS.map((slug) => `'${slug}'`).join(", ");
     const packRank = CARD_PACK_SIZE_SLUGS.map((slug, index) => `WHEN '${slug}' THEN ${index}`).join(" ");
-    // Four terms: D1 refuses a compound SELECT of more than five.
+    // Four terms: D1 refuses a compound SELECT of more than five. Key specs
+    // are the specification table's rows in its order (a named, filled value;
+    // no "Brand" row, the brand is its record), each with its unit in `extra`.
     const facts = sql`(
         WITH ${cardIdsCte(productIds)}
         SELECT CAST(card_product."id" AS TEXT) AS product_id, CAST('product' AS TEXT) AS kind,
@@ -178,20 +180,22 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
             AND sales."sold_30d" >= ${CARD_SOLD_MIN}
         WHERE ${idScope(`card_product."id"`)}
         UNION ALL
-        SELECT ranked_spec.product_id, 'spec', ranked_spec.label, ranked_spec.value, NULL, ranked_spec.spec_rank, NULL, NULL
+        SELECT ranked_spec.product_id, 'spec', ranked_spec.label, ranked_spec.value, NULL, ranked_spec.spec_rank, ranked_spec.unit, NULL
         FROM (
             SELECT spec_value."product_id" AS product_id, spec."name" AS label,
-                COALESCE(spec_enum."value", spec_value."value") AS value,
+                COALESCE(spec_enum."value", spec_value."value") AS value, spec."unit" AS unit,
                 ROW_NUMBER() OVER (
                     PARTITION BY spec_value."product_id"
-                    ORDER BY COALESCE(spec_group."sort_order", 1000000), spec."sort_order", spec."name", spec."id"
+                    ORDER BY spec_group."id" IS NULL, spec_group."sort_order", spec_group."name", spec."sort_order", spec."name", spec."id"
                 ) AS spec_rank
             FROM "product_attribute_values" spec_value
             INNER JOIN "product_attributes" spec ON spec."id" = spec_value."attribute_id"
                 AND spec."key_spec" = 1 AND spec."deleted_at" IS NULL
+                AND trim(spec."name") <> '' AND lower(trim(spec."name")) <> 'brand'
             LEFT JOIN "attribute_groups" spec_group ON spec_group."id" = spec."group_id" AND spec_group."deleted_at" IS NULL
             LEFT JOIN "attribute_values" spec_enum ON spec_enum."id" = spec_value."value_id"
             WHERE ${idScope(`spec_value."product_id"`)}
+                AND trim(COALESCE(spec_enum."value", spec_value."value")) <> ''
         ) AS ranked_spec
         WHERE ranked_spec.spec_rank <= ${CARD_KEY_SPECS_MAX}
         UNION ALL
@@ -256,7 +260,7 @@ export function resolveProductCardFacts(
 ): (productId: string) => ProductCardFacts {
     const byProduct = new Map<string, {
         brand: ProductCardFacts["brand"];
-        specs: Array<{ rank: number; label: string; value: string }>;
+        specs: Array<{ rank: number; label: string; value: string; unit: string | null }>;
         axes: Array<ProductCardOptionFact & { position: number }>;
         swatches: Array<{ position: number; label: string; hex: string | null }>;
         sold: number | null;
@@ -286,7 +290,7 @@ export function resolveProductCardFacts(
             const fee = Number(row.fee);
             if (row.fee !== null && Number.isFinite(fee) && fee >= 0) deliveryFeeMinor = fee;
         } else if (row.kind === "spec" && label && value) {
-            facts.specs.push({ rank: Number(row.position) || 0, label, value });
+            facts.specs.push({ rank: Number(row.position) || 0, label, value, unit: clean(row.extra) || null });
         } else if (row.kind === "axis" && label) {
             const count = Math.floor(Number(row.amount) || 0);
             const kind: ProductCardOptionKind = value === "color" || value === "size" ? value : "other";
@@ -311,7 +315,7 @@ export function resolveProductCardFacts(
         const keySpecRows = [...facts.specs]
             .sort((left, right) => left.rank - right.rank)
             .slice(0, CARD_KEY_SPECS_MAX)
-            .map(({ label, value }) => ({ label, value }));
+            .map(({ label, value, unit }) => ({ label, value, unit }));
         return {
             brand: facts.brand,
             keySpecs: keySpecRows.map((spec) => `${spec.label}: ${spec.value}`),

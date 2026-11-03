@@ -29,7 +29,6 @@ import {
 } from "./lib/product-actions";
 import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
-import { specificationValue } from "./lib/product-page-modules";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -424,7 +423,7 @@ function optionAriaLabel(
           {compactFacts.map((row) => (
             <div class="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-3">
               <dt class="min-w-0 break-words font-semibold text-foreground">{row.name}</dt>
-              <dd class="min-w-0 break-words text-foreground">{specificationValue(row)}</dd>
+              <dd class="min-w-0 break-words text-foreground">{row.value}</dd>
             </div>
           ))}
         </dl>

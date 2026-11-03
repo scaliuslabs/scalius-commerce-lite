@@ -4149,6 +4149,7 @@ export interface StorefrontProductCard {
     keySpecs?: Array<{
         label: string;
         value: string;
+        unit: string | null;
     }>;
     fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }

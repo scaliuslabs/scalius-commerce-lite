@@ -374,10 +374,12 @@ export interface StorefrontProductCard {
   /** Short facts the store shows on cards (key specs, delivery). */
   facts: string[];
   /**
-   * The key specs among `facts` as name and value (the store's card writes
-   * `label: value`), in the same order. Absent from older stores.
+   * The key specs among `facts` as rows (the card writes each as
+   * `label: value`), in the same order: `value` as the store writes it (a
+   * number carries its unit), `unit` a number attribute's unit, else null.
+   * Absent from older stores.
    */
-  keySpecs?: Array<{ label: string; value: string }>;
+  keySpecs?: Array<{ label: string; value: string; unit: string | null }>;
   /** Requested storefront-visible custom fields, keyed by namespace.key (money as `StorefrontMoney`). */
   fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }
@@ -565,11 +567,9 @@ export interface StorefrontProductPage {
     buyerInputs?: StorefrontBuyerInput[];
     /**
      * The product's specifications, the rows of the store's specification
-     * table in its order (the merchant's attribute groups, then rows): each
-     * row's group (null outside one), name, value and unit (null without one;
-     * the store writes `value unit`). `keySpec` marks the rows the store
-     * shows as key specs (highlights, cards, compare). Plain text. Absent
-     * from older stores.
+     * table in its order (the merchant's attribute groups, then rows).
+     * `keySpec` marks the rows the store shows as key specs (highlights,
+     * cards, compare). Plain text. Absent from older stores.
      */
     specifications?: StorefrontSpecification[];
   };
@@ -577,9 +577,12 @@ export interface StorefrontProductPage {
 
 /** One row of a product's specifications (`StorefrontProductPage.product.specifications`). */
 export interface StorefrontSpecification {
+  /** The attribute group; null outside one. */
   group: string | null;
   label: string;
+  /** The value as the store writes it in its table: a number carries its unit ("15.6 inch"). */
   value: string;
+  /** A number attribute's unit ("inch"); null otherwise. */
   unit: string | null;
   keySpec: boolean;
 }

@@ -12,9 +12,10 @@ export const productCardFactsSchema = z.object({
   }),
   keySpecRows: z.array(z.object({
     label: z.string().openapi({ description: "The attribute's name." }),
-    value: z.string().openapi({ description: "Its value (an option's display text)." }),
+    value: z.string().openapi({ description: "Its display value, as the specification table writes it (a number carries its unit)." }),
+    unit: z.string().nullable().openapi({ description: "A number attribute's unit; null otherwise." }),
   })).max(4).openapi({
-    description: "The same key specs as name and value, in the same order.",
+    description: "The same key specs as name, value and unit, in the same order.",
   }),
   options: z.array(z.object({
     name: z.string().openapi({ description: "The merchant's option axis name." }),

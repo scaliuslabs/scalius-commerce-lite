@@ -33,8 +33,8 @@ export const CARD_IMAGE_DIMENSIONS = {
 
 export interface ProductCardFactValues {
   keySpecs: string[];
-  /** The same key specs as name and value; null when the API sent only the lines. */
-  keySpecRows: Array<{ label: string; value: string }> | null;
+  /** The same key specs as name, display value and unit; null when the API sent only the lines. */
+  keySpecRows: Array<{ label: string; value: string; unit: string | null }> | null;
   /** The average (0-5) and the count of published reviews. */
   rating: { average: number; count: number } | null;
   packSize: string | null;
@@ -109,18 +109,19 @@ function cardFactValues(product: ProductCardProduct, money: (amount: number) => 
     return label && colour ? [{ label, colour }] : [];
   });
   const items = known.slice(0, SWATCHES_MAX);
+  const keySpecRows = facts?.keySpecRows
+    ? facts.keySpecRows.flatMap((spec) => {
+      const label = nonEmpty(spec.label);
+      const value = nonEmpty(spec.value);
+      return label && value ? [{ label, value, unit: nonEmpty(spec.unit) }] : [];
+    }).slice(0, KEY_SPECS_MAX)
+    : null;
   return {
-    keySpecs: (facts?.keySpecs ?? [])
-      .map((spec) => spec.replace(/\s+/g, " ").trim())
-      .filter(Boolean)
-      .slice(0, KEY_SPECS_MAX),
-    keySpecRows: facts?.keySpecRows
-      ? facts.keySpecRows.flatMap((spec) => {
-        const label = nonEmpty(spec.label);
-        const value = nonEmpty(spec.value);
-        return label && value ? [{ label, value }] : [];
-      }).slice(0, KEY_SPECS_MAX)
-      : null,
+    // One list: the lines are written from the rows, so they never disagree.
+    keySpecs: keySpecRows
+      ? keySpecRows.map((spec) => `${spec.label}: ${spec.value}`)
+      : (facts?.keySpecs ?? []).map((spec) => spec.replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, KEY_SPECS_MAX),
+    keySpecRows,
     rating: rating && rating.count > 0 && rating.average > 0 ? { average: rating.average, count: rating.count } : null,
     packSize: nonEmpty(facts?.packSize),
     delivery,
