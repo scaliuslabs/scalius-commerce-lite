@@ -52,7 +52,20 @@ overrides:
   "@cloudflare/vite-plugin>workerd": "1.20261006.1"
   better-call: ">=1.4.0"
   ws: ">=8.21.0"
-  qs: "6.16.0"
+  # GHSA-6pq8-jhm2-2vcw: the MCP SDK's express still allows older qs; 6.16.1 is the first patched release.
+  qs: "6.16.1"
+  # GHSA-f86p-h4j2-7qgj and GHSA-9wx9-5pv9-3349: router-core allows ^1.6.7; hold the first
+  # patched 1.6 line (1.6.11) until @tanstack/router-core raises its own floor.
+  seroval: "1.6.11"
+  seroval-plugins: "1.6.11"
+  # GHSA-g3hv-75wg-m249: 11.0.1 is the only patched line (no backport to 10.x). Scoped to
+  # the lint parents that ask for ^10 (the API is unchanged), and to jsx-a11y (3.x). jsx-a11y
+  # calls the default export, which 11 lacks; only its jsx-a11y rule set reaches that call,
+  # and eslint.config.js enables only astro's flat/recommended. Revisit if jsx-a11y rules are enabled.
+  "eslint>minimatch": "11.0.1"
+  "@eslint/config-array>minimatch": "11.0.1"
+  "@typescript-eslint/typescript-estree>minimatch": "11.0.1"
+  "eslint-plugin-jsx-a11y>minimatch": "11.0.1"
   js-yaml: "4.3.2"
   brace-expansion: "5.0.12"
   "nanoid@<3.3.17": "3.3.17"
