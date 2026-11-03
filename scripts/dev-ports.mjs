@@ -26,6 +26,8 @@
  *   node scripts/dev-ports.mjs api-worker-name       # scalius-api-local[-<api port>]
  *   node scripts/dev-ports.mjs storefront-config     # built storefront bound to it
  *   node scripts/dev-ports.mjs verify-binding        # the storefront reached this API
+ *   node scripts/dev-ports.mjs scheduled-url         # where the local scheduled handler runs
+ *   node scripts/dev-ports.mjs scheduled-tick        # call it every minute until stopped (dev.sh)
  */
 
 import { pathToFileURL } from "node:url";
@@ -69,6 +71,49 @@ export function devOrigins(ports = readDevPorts()) {
     dashboardUrl: `http://localhost:${ports.admin}`,
     mediaUrl: `${apiUrl}/api/v1/media`,
   };
+}
+
+/** The local cron cadence: the production trigger is `* * * * *`, so one minute. */
+export const DEV_SCHEDULED_TICK_SECONDS = 60;
+
+/**
+ * Where wrangler dev runs the API Worker's scheduled handler. `wrangler dev` never fires
+ * its configured cron by itself, so retries, the outbox and app crons would sit still.
+ */
+export function devScheduledUrl(ports = readDevPorts()) {
+  return `http://127.0.0.1:${ports.api}/cdn-cgi/handler/scheduled?cron=*+*+*+*+*`;
+}
+
+/**
+ * Calls the scheduled handler every `intervalSeconds` until `signal` aborts. Calls never
+ * overlap (the next wait starts after a call ends) and a failed call only reports itself:
+ * the API may be restarting.
+ */
+export async function runScheduledTick({
+  ports = readDevPorts(),
+  intervalSeconds = DEV_SCHEDULED_TICK_SECONDS,
+  fetchImpl = fetch,
+  signal,
+  log = (message) => console.error(message),
+} = {}) {
+  const url = devScheduledUrl(ports);
+  let failing = false;
+  while (!signal?.aborted) {
+    await new Promise((done) => {
+      const timer = setTimeout(done, intervalSeconds * 1000);
+      signal?.addEventListener("abort", () => { clearTimeout(timer); done(); }, { once: true });
+    });
+    if (signal?.aborted) break;
+    try {
+      const response = await fetchImpl(url, { signal: AbortSignal.timeout(Math.max(30_000, intervalSeconds * 1000)) });
+      await response.arrayBuffer();
+      if (!response.ok && !failing) log(`Scheduled tick: ${url} answered ${response.status}.`);
+      failing = !response.ok;
+    } catch (error) {
+      if (!failing) log(`Scheduled tick: ${url} did not answer (${error instanceof Error ? error.message : error}).`);
+      failing = true;
+    }
+  }
 }
 
 function isLoopbackOrigin(value) {
@@ -293,6 +338,18 @@ async function main() {
     console.log(devApiWorkerName());
     return;
   }
+  if (options.command === "scheduled-url") {
+    console.log(devScheduledUrl());
+    return;
+  }
+  if (options.command === "scheduled-tick") {
+    const seconds = Number(process.env.SCALIUS_DEV_CRON_TICK_SECONDS ?? DEV_SCHEDULED_TICK_SECONDS);
+    if (!(seconds > 0)) throw new Error("SCALIUS_DEV_CRON_TICK_SECONDS must be a positive number.");
+    const controller = new AbortController();
+    for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => controller.abort());
+    await runScheduledTick({ intervalSeconds: seconds, signal: controller.signal });
+    return;
+  }
   if (options.command === "storefront-config") {
     // Rebinds the built storefront (apps/storefront/dist/server) to this stack's API.
     const { readFileSync, writeFileSync } = await import("node:fs");
@@ -316,7 +373,7 @@ async function main() {
     console.log(`${origins.storefrontUrl} renders through this stack's API (${devApiWorkerName()}).`);
     return;
   }
-  console.error("Usage: node scripts/dev-ports.mjs <sync-platform [--state <dir>] | print | api-worker-name | storefront-config [--out <file>] | verify-binding [--media-url <origin>]>");
+  console.error("Usage: node scripts/dev-ports.mjs <sync-platform [--state <dir>] | print | api-worker-name | scheduled-url | scheduled-tick | storefront-config [--out <file>] | verify-binding [--media-url <origin>]>");
   process.exitCode = 1;
 }
 
