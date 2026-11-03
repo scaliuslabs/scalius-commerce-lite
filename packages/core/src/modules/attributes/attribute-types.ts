@@ -29,6 +29,7 @@ import {
 import { newAttributeValueId } from "./attribute-values";
 import {
     ATTRIBUTE_WRITE_PRODUCTS_PER_BATCH,
+    forEachAttributeProductChunk,
     jsonIdSet,
     productRevisionBumpStatement,
     type AttributeBatchItem,
@@ -114,6 +115,30 @@ function wrongShape(type: AttributeValueType, unit: string | null): SQL {
 
 function naturalOrder(left: string, right: string): number {
     return left.localeCompare(right, "en", { numeric: true, sensitivity: "base" }) || (left < right ? -1 : left > right ? 1 : 0);
+}
+
+/**
+ * A number attribute's unit changed: each value's display text becomes its
+ * number with the new unit (`formatAttributeNumber`, here in SQL), so the
+ * value carries exactly the unit the attribute names. Only rows in another
+ * shape are written, 90 products per batch with their revision bump and
+ * projection refresh. Returns how many products were rewritten.
+ */
+export async function rewriteNumberDisplays(
+    db: Database,
+    attributeId: string,
+    unit: string | null,
+    refresh: CatalogProjectionRefresh,
+): Promise<number> {
+    const v = productAttributeValues;
+    const number = canonicalNumberSql(sql`${v.valueNumber}`);
+    const display = unit ? sql`${number} || ' ' || ${unit}` : number;
+    const stale = and(eq(v.attributeId, attributeId), sql`${v.valueNumber} IS NOT NULL`, sql`${v.value} <> ${display}`)!;
+    return forEachAttributeProductChunk(db, stale, (productIds) => [
+        db.update(v).set({ value: display }).where(and(stale, sql`${v.productId} IN ${jsonIdSet(productIds)}`)),
+        productRevisionBumpStatement(db, productIds),
+        ...refresh(productIds),
+    ]);
 }
 
 /**

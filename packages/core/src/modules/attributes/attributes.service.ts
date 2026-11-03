@@ -36,6 +36,7 @@ import {
 } from "./attributes.validation";
 import { encodeAttributeValue } from "./attribute-value-codec";
 import { attributeValueInsertStatement, readLiveAttributeDefinition } from "./attribute-definition";
+import { rewriteNumberDisplays } from "./attribute-types";
 import { assertLiveAttributeGroup } from "./attribute-groups";
 import {
     createAttributeValueRow,
@@ -521,6 +522,10 @@ export async function updateAttribute(
         await refreshProductsReferencingValues(db, plan.changedEnumValueIds, refresh, {
             rewriteDisplay: plan.renamedEnumValueIds.length > 0,
         });
+    }
+    // A number's display text carries its unit: a new unit rewrites every value.
+    if (current.valueType === "number" && data.unit !== undefined && updatedAttribute.unit !== current.unit) {
+        await rewriteNumberDisplays(db, id, updatedAttribute.unit, refresh);
     }
 
     return { attribute: updatedAttribute };
