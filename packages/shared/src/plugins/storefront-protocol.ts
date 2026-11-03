@@ -117,7 +117,10 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  *
  * - `buy_form`: the product's price, options, buyer inputs, quantity and
  *   buttons (a real form; works before hydration). `data-title="false"`
- *   leaves out its heading when the skin draws the product title itself.
+ *   leaves out its heading when the skin draws the product title itself;
+ *   `data-options="false"` leaves out its option buttons when the skin's
+ *   own SKU controls (`data-choose-variant`, `data-buy-variant`) cover every
+ *   buyable SKU, and only then.
  * - `reviews`, `recommendations`: the product's reviews and related products.
  * - `gallery`: the product's photos and videos as the theme's gallery draws
  *   them (one main image with thumbnails, a swipeable stage on phones,
@@ -490,7 +493,7 @@ export interface StorefrontProductPage {
     rating: { average: number; count: number } | null;
     /** The merchant's option axes, in order, with their values. */
     options: Array<{ name: string; values: Array<{ label: string; swatch: string | null }> }>;
-    /** The buyer's SKUs (100 at most; sold-out ones `available: false`), each with its value of every option, in option order. */
+    /** The buyer's SKUs (all of them, up to the catalog's 150; sold-out ones `available: false`), each with its value of every option, in option order. */
     /** The SKU code of a product without options (its one SKU); null otherwise or without one. Absent from older stores. */
     sku?: string | null;
     /** Instalments (EMI) available for this product; null when none applies. Absent from older stores. */
@@ -530,6 +533,15 @@ export interface StorefrontBuyerInput {
   options: Array<{ value: string; label: string }>;
 }
 
+/**
+ * Why the buy form refused the buyer's last add or Buy now, as it says so
+ * beside its buttons: `option_required` (an option is not chosen yet),
+ * `input_invalid` (a buyer input is missing or too long), `unavailable` (the
+ * chosen SKU is sold out, or no SKU has that choice), `quantity_limit` (more
+ * than one order line holds) or `failed` (anything else; try again).
+ */
+export type StorefrontProductError = "option_required" | "input_invalid" | "unavailable" | "quantity_limit" | "failed";
+
 /** The buy form as the buyer has it now (`context.product`). */
 export interface StorefrontProductState {
   /** The chosen SKU; null until the buyer has chosen every option. */
@@ -539,6 +551,12 @@ export interface StorefrontProductState {
   inputs: Record<string, string>;
   /** The purchase option the buyer chose (`<app id>.<key>`, a subscription); null for a one-time purchase. Absent from older stores. */
   purchaseOption?: string | null;
+  /** The chosen SKU can be bought now (chosen, in stock, and the store sells it); false until one is chosen. Absent from older stores. */
+  available?: boolean;
+  /** An add or Buy now is in flight; the form takes no other until it ends. Absent from older stores. */
+  busy?: boolean;
+  /** Why the form refused the last add or Buy now, while it still says so; null otherwise. Absent from older stores. */
+  error?: StorefrontProductError | null;
 }
 
 /** What a listing_main skin gets: the listing as the core listing page shows it (this page of it). */
@@ -972,8 +990,11 @@ export interface StorefrontIslandContext {
   signedIn(): boolean;
   /**
    * On a product page: the store's buy form, read through the store (never
-   * its markup). `onChange` calls the listener when the variant, quantity or
-   * an answer changes; it returns the unsubscribe. Absent on other pages.
+   * its markup). `onChange` calls the listener when the variant, quantity,
+   * an answer, the purchase option or the form's `available`, `busy` or
+   * `error` changes, after the store has applied that change (the form and
+   * gallery show it), so `state()` then equals the listener's state; it
+   * returns the unsubscribe. Absent on other pages.
    */
   product?: {
     state(): StorefrontProductState;

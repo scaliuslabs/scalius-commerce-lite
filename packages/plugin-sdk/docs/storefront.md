@@ -69,7 +69,7 @@ A slot is a named place where apps add their piece.
 - Core's header, footer, product page and card place their slots. A skin of a unit places that unit's slots with `<Slot name="header.actions" />`, `<Slot name="footer.columns" />`, `<Slot name="product_card.badges" />` and `<Slot name="product_card.meta" />`. A footer's `footer.columns` also carries the store's country and language forms; a footer skin that places no slot gets them right after it.
 - An empty slot renders nothing and costs no read.
 
-**UI slots** are on the buyer's own pages, filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there.
+**UI slots** are on the buyer's own pages (cart, checkout, receipt, account, order tracking, payment recovery, warranty claims, the gift-card balance), filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there.
 
 | Page | UI slots |
 | --- | --- |
@@ -131,9 +131,12 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 | `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (only an omitted `pagination` is appended; place `filters` and `toolbar` yourself) | empty: core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none | empty: the core section |
 
-- **`product_main`** draws the product page's breadcrumbs, gallery and buy box. `<BuyForm />` is the store's real buy form: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app components, kept current as the buyer chooses. `<Gallery />` is the theme's gallery (thumbnails and zoom on computers, a swipeable photo on phones, the chosen SKU's photo); its first photo is preloaded. Prefer it to drawing `product.media` yourself. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
+- **`product_main`** draws the product page's breadcrumbs, gallery and buy box. `<BuyForm />` is the store's real buy form: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app components, kept current as the buyer chooses. `<Gallery />` is the theme's gallery (thumbnails and zoom on computers, a swipeable photo on phones, the chosen SKU's photo); its first photo is preloaded. Prefer it to drawing `product.media` yourself. To offer the SKUs your own way, see [Your own SKU controls](#your-own-sku-controls). The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`.
 - **`listing_main`** draws the listing between the collection template's sections. Page links are numbered links on every listing, so crawlers reach every product.
+- **Filter placement is the merchant's.** `<Filters />` draws the form in the placement the listing resolves (the theme's filter style, or the category's own): a sidebar (`sidebar-dense`, `sidebar-comfortable`) or a bar of dropdowns (`bar-dropdowns`). A skin cannot pick another one. A `drawer` style draws as a sidebar in the embed, since an embed cannot host the drawer's dialog. Below 64rem the form stays inline in every placement; there is no phone sheet. Without JavaScript a bar shows all its groups.
+  - Style the wrapper with `[data-catalog-embed="filters"][data-placement="sidebar"]` and `[data-catalog-embed="filters"][data-placement="bar"]`. A bar spans its row: a skin that puts `<Filters />` in a fixed-width column needs a `[data-placement="bar"]` rule that lets it run across the results.
+  - The wrapper carries the style's measured numbers as `--catalog-filter-column` (a sidebar's width), `--catalog-filter-row` (a row's height) and `--catalog-filter-label` (the label size). Read or override them; a missing property means the theme's density token applies.
 - **Core sections.** Each skinnable section type has its own sealed projection (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, …) with its own version. Core's stored settings never reach a skin. Images arrive as `StorefrontImage | null`, product sources as `products` (`{ title, url, cards }`), categories and collections as tiles, a promotion as `{ endsAt } | null`. A projection only gains optional fields; when core changes a section, the host adapts it so your input stays the same. `aboveFold` is true for the homepage's lead section: load its first row of photos eagerly. `recently_viewed`, `endless_grid` and `objects` have no skin.
 - **The header** gets menu items (three levels, at most `STOREFRONT_COMPONENT_LIMITS.menuItems`: the store's header menu and category cut fit whole, a larger tree is cut top levels first and a parent's page lists the rest) with their category's photo, `routes.orders` and `routes.trackOrder`, `searchScopes` (the top published categories) with `searchScopeParam` (a form sending `category=<value>` to `routes.search` searches that category, no JavaScript needed), `market` (country, currency, language and the country form's selection), and the theme's phone navigation (`phoneNavigation.menu`: `accordion` or `drill`; `tabBar`). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` and `whenSignedOut()` and the store shows the right one before first paint. On the homepage the header also gets `data.page.lead`, the first section when desktop and phone order agree.
 - **The product page** carries `sku` (a product without options), each variant's `sku`, and `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null. A category listing carries `children` (published child categories with photos).
@@ -241,6 +244,7 @@ The keys of `sections`, `components` and `skins` match the manifest's section ty
 - `Slot`: a unit's component slot, in place.
 - `whenSignedIn()`, `whenSignedOut()`: the two versions of a signed-in part.
 - `quickAdd(product)`, `openCart()`, `CartCount`: the store's cart behaviour with no app JavaScript.
+- `chooseVariant(variant)`, `buyVariant(variant, "add" | "buy")`: your own SKU controls on the product page, run by the store's buy form (below).
 - `searchOpener()`, `accountLink()`, `colorSchemeToggle()`, `menuDrawer()`, `stickyHeader()`: header behaviour (above).
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place. Preview only; the published page has no marks.
 - `asset(context, "fonts/display.woff2")`: the URL of a file in your package's `public/` folder. The helper adds `public/` itself, so pass the path inside it.
@@ -274,7 +278,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 
 - An island's module loads from the store's origin only when its moment comes, once per page however often it appears.
 - `context` carries your file base (`assets`), the store's `language` and `currency`, `formatMoney`, `signedIn()`, the cart (`openCart`, `quickAdd(url)`, `addLine({ variantId, quantity?, purchaseOption? })` for a SKU without buyer inputs, one-time or under one of your own purchase options, and `onCart(listener)`, whose `total` is `StorefrontMoney`), and `fetchApp(path)`, which reaches your public routes through the storefront proxy (same origin, no CSP host needed).
-- On a product page, `context.product` gives `state()` (`{ variantId, quantity, inputs, purchaseOption }`) and `onChange(listener)`.
+- On a product page, `context.product` gives `state()` and `onChange(listener)`, with or without buyer inputs. The state is `{ variantId, quantity, inputs, purchaseOption, available, busy, error }`: `available` means the chosen SKU can be bought now, `busy` that an add or Buy now is running, and `error` why the form refused the last one (`option_required`, `input_invalid`, `unavailable`, `quantity_limit`, `failed`; null otherwise). A listener runs after the store has applied the change: the form, its SKU field and the gallery already show it, and `state()` equals the listener's state. Between a click and that moment, `state()` still returns what the page shows. To choose or buy from your own markup, use `chooseVariant` and `buyVariant`, not clicks on the form's elements.
 - Return a cleanup for your listeners, timers and observers. The host cancels pending hydration on removal and mounts again when the element reconnects.
 
 ## Core embeds
@@ -283,12 +287,53 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 
 | Kind (SDK) | Where | Renders |
 | --- | --- | --- |
-| `buy_form` (`<BuyForm title={false} />`) | `product_main` (required, one) | The real buy form |
+| `buy_form` (`<BuyForm title={false} options={false} />`) | `product_main` (required, one) | The real buy form |
 | `gallery` (`<Gallery />`) | `product_main` (one) | The theme's gallery, in step with the chosen variant |
 | `reviews`, `recommendations` | `product_main` | The product's reviews and related products |
 | `filters`, `toolbar`, `pagination` | `listing_main` | The filter form, sort and page size, page links |
 | `order_form` (`<OrderForm product={…} />`) | sections (up to two each) | The single-page order form |
 | `slot` (`<Slot name="…" />`) | header, footer and card skins | A component slot |
+
+### Your own SKU controls
+
+A product page skin can offer the SKUs its own way (denomination cards, a comparison table, a row per plan). The store's buy form still does the buying.
+
+```tsx
+{data.product.variants.map((variant) => (
+  <li class="acme-plan">
+    <a {...chooseVariant(variant)}>{variant.title} <Price price={variant.price} context={context} /></a>
+    <button {...buyVariant(variant, "add")}>Add to cart</button>
+    <button {...buyVariant(variant, "buy")}>Buy now</button>
+  </li>
+))}
+<BuyForm title={false} options={false} />
+```
+
+- `chooseVariant(variant)` chooses that whole SKU (every option axis at once) through the form, so price, stock, buttons, gallery and `context.product` follow. Put it on an `<a>`: the host makes it a link to the product with that SKU (`?variant=`), which the page opens on. So it works before the store's script has bound the click. Without JavaScript the form's own picker chooses, and your buy buttons still buy. On a `<button>` it needs JavaScript.
+- `buyVariant(variant, "add" | "buy")` goes on a `<button>`. It chooses the SKU, then runs the form's own Add to cart or Buy now. That run uses the form's checks, buyer inputs, purchase options, quantity and one-at-a-time guard. A problem shows inside the form, which takes focus. Without JavaScript the button submits the form with its own SKU.
+- The host binds these attributes after it checks your markup; you never write `form=` or a handler. It does so in product_main skins only; elsewhere they do nothing.
+- The host owns these attributes on your controls:
+  - `data-availability` (`available`, `sold-out`) on both.
+  - On a choice: `data-state` (`selected`, `unselected`), plus `aria-current` on a link or `aria-pressed` on a button.
+  - On a buy button: `type`, `disabled`, `hidden` and `aria-busy`. It is off while its SKU is sold out (a `"buy"` button is then gone), busy while it adds, and hidden while the buyer edits a cart line (the form's "Update cart" replaces that line).
+- `<BuyForm options={false} />` leaves out the form's option buttons only when your controls cover every SKU that can be bought. Otherwise the store draws them, so no buyer is stuck. Buyer inputs, purchase options, quantity, messages and the form's own buttons always stay. So does the no-JavaScript picker.
+- `data.product.variants` lists every SKU, up to the catalog's 150.
+
+### Styling the buy form
+
+The form's parts carry `data-buy-part`:
+
+| Part | `data-state` |
+| --- | --- |
+| `price` | |
+| `options` | |
+| `inputs` | |
+| `purchase-options` | |
+| `quantity` | |
+| `actions` | `ready`, `busy`, `unavailable` |
+| `status` | `idle`, `error` |
+
+`status` holds the form's message when it refuses an add. The part names and states are permanent. Their nesting and the classes inside them are not, so never depend on them.
 
 ### The single-page order
 
@@ -382,7 +427,7 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 - Drawing on the storefront is its own grant, and every browser host your islands reach is listed. A Super Admin approves both. An update that asks for more waits for approval.
 - The render input supplies settings, public page data and context, never buyer sessions or secrets.
 - Output passes the store's allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands, deferred markup and core embeds; classes; `id`s that start with your app's name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>` (except as deferred content), `<math>`, SVG animation and `foreignObject`, event handlers, host `data-sx-*` attributes, and every URL that is not a store path, `http(s)`, `mailto`, `tel` or a fragment.
-- App components, islands, stylesheets and browser hosts never reach cart, checkout, the receipt, account, payment recovery or order tracking. Core chrome renders there.
+- App components, islands, stylesheets and browser hosts never reach a buyer's own page: cart, checkout, the receipt, account, payment recovery, order tracking, warranty claims and the gift-card balance. Core chrome renders there.
 - Island code is served from the store's origin; CSP `script-src` gains nothing. Browser hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - Approved islands are trusted same-origin JavaScript: they can read the page's DOM, including embedded forms, and make requests the browser allows. Activation approval, CSP and server authorization are the boundaries; HTML sanitizing does not sandbox an island.
 - SVG files are served with a sandboxing CSP and `nosniff`.

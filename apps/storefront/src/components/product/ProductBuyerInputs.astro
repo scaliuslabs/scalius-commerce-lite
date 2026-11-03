@@ -44,9 +44,11 @@ const describedBy = (field: ProductCustomizationField) =>
   method="post"
   action={`/buy/${encodeURIComponent(slug)}`}
   class="space-y-3"
+  data-product-buy-form
   data-buyer-inputs
+  data-buy-part="inputs"
 >
-  <input type="hidden" name="variant" value={variantId ?? ""} data-buyer-inputs-variant />
+  <input type="hidden" name="variant" value={variantId ?? ""} />
   <script is:inline type="application/json" id="product-customization-data" set:html={schemaJson} />
   <script is:inline type="application/json" id="product-customization-copy" set:html={copyJson} />
 

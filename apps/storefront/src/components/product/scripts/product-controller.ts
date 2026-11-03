@@ -49,6 +49,18 @@ import { moneyPlaces, unitPriceWithSurcharge } from "../lib/buyer-inputs";
 import { initBuyerInputs, type BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
+import { publishProductState } from "@/scripts/product-context";
+import type { StorefrontProductError, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
+
+// The buy form's one authority: its option buttons, a product_main skin's
+// bound SKU controls (`chooseVariant`, `buyVariant`) and app islands
+// (`context.product`) all go through this controller's selection and add.
+// Every lookup of the form's parts stays inside `[data-product-summary]`, so
+// a skin's own `.product-price` or `[data-action]` is never taken over.
+
+/** A skin's SKU controls the host bound (lib/extensions/purchase-controls.ts); only the host writes `data-sx-*`. */
+const CHOOSE_CONTROL = "[data-sx-bound][data-choose-variant]";
+const BUY_CONTROL = "[data-sx-bound][data-buy-variant]";
 
 const state = {
   variants: [] as Variant[],
@@ -68,14 +80,25 @@ const state = {
    */
   purchaseBlocked: false,
   adding: false,
+  /** Why the last add or Buy now was refused, while the form says so. */
+  error: null as StorefrontProductError | null,
 };
 
 const cache = {
   container: null as HTMLElement | null,
+  /** The buy form's container: every part below is looked up inside it. */
+  summary: null as HTMLElement | null,
+  /** The buy form (with or without buyer inputs). */
+  form: null as HTMLFormElement | null,
   actions: null as HTMLElement | null,
   quantity: null as HTMLInputElement | null,
   optionButtons: [] as HTMLButtonElement[],
-  status: null as HTMLElement | null,
+  /** The screen reader's line for a choice ("Selected: Red"). */
+  announcer: null as HTMLElement | null,
+  /** Where the purchase's problems show (`data-buy-part="status"`). */
+  statusPart: null as HTMLElement | null,
+  /** The buttons' row (`data-buy-part="actions"`). */
+  actionsPart: null as HTMLElement | null,
   unavailableNotice: null as HTMLElement | null,
   stockBadge: null as HTMLElement | null,
   stockText: null as HTMLElement | null,
@@ -99,29 +122,32 @@ function number(value?: string) {
 
 export function init() {
   cache.container = document.getElementById("product-container");
-  if (!cache.container) return;
-  cache.actions = document.getElementById("product-actions");
-  cache.quantity = document.getElementById(
-    "quantity",
-  ) as HTMLInputElement | null;
+  const summary = document.querySelector<HTMLElement>("[data-product-summary]");
+  if (!cache.container || !summary) return;
+  cache.summary = summary;
+  cache.form = summary.querySelector<HTMLFormElement>("form[data-product-buy-form]");
+  cache.actions = summary.querySelector<HTMLElement>("#product-actions");
+  cache.quantity = summary.querySelector<HTMLInputElement>("#quantity");
   cache.optionButtons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(".variant-option-btn"),
+    summary.querySelectorAll<HTMLButtonElement>(".variant-option-btn"),
   );
-  cache.status = document.getElementById("variant-availability-status");
-  cache.unavailableNotice = document.getElementById(
-    "variant-unavailable-query-notice",
+  cache.announcer = summary.querySelector("#variant-availability-status");
+  cache.statusPart = summary.querySelector('[data-buy-part="status"]');
+  cache.actionsPart = summary.querySelector('[data-buy-part="actions"]');
+  cache.unavailableNotice = summary.querySelector(
+    "#variant-unavailable-query-notice",
   );
-  cache.stockBadge = document.getElementById("product-stock-badge");
-  cache.stockText = document.getElementById("product-stock-text");
-  cache.addButton = document.querySelector('[data-action="add-to-cart"]');
-  cache.buyButton = document.querySelector('[data-action="buy-now"]');
-  cache.addLabel = document.querySelector('[data-action-label="add-to-cart"]');
-  cache.buyLabel = document.querySelector('[data-action-label="buy-now"]');
-  cache.priceElements = Array.from(document.querySelectorAll(".product-price"));
+  cache.stockBadge = summary.querySelector("#product-stock-badge");
+  cache.stockText = summary.querySelector("#product-stock-text");
+  cache.addButton = summary.querySelector('[data-action="add-to-cart"]');
+  cache.buyButton = summary.querySelector('[data-action="buy-now"]');
+  cache.addLabel = summary.querySelector('[data-action-label="add-to-cart"]');
+  cache.buyLabel = summary.querySelector('[data-action-label="buy-now"]');
+  cache.priceElements = Array.from(summary.querySelectorAll(".product-price"));
   cache.originalPriceElements = Array.from(
-    document.querySelectorAll(".product-original-price"),
+    summary.querySelectorAll(".product-original-price"),
   );
-  cache.discountBadge = document.querySelector(".discount-badge");
+  cache.discountBadge = summary.querySelector(".discount-badge");
 
   state.variants = loadVariantsFromDOM();
   state.options = loadOptionsFromDOM();
@@ -163,10 +189,16 @@ export function init() {
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
 
-  state.purchaseBlocked = Boolean(
-    document.querySelector("[data-product-summary] [data-purchase-blocked]"),
-  );
-  state.buyerInputs = initBuyerInputs(document, refresh);
+  state.purchaseBlocked = Boolean(summary.querySelector("[data-purchase-blocked]"));
+  state.adding = false;
+  state.error = null;
+  missingOption = null;
+  state.buyerInputs = initBuyerInputs(summary, () => {
+    // Editing an answer takes its message away; the problem ends with the last one.
+    const shown = state.buyerInputs?.form.querySelector("[data-buyer-input-error]:not(.hidden)");
+    if (state.error === "input_invalid" && !shown) state.error = null;
+    refresh();
+  });
   state.edit = null;
   const productId = cache.container.dataset.productId;
   if (state.buyerInputs && productId) {
@@ -181,6 +213,8 @@ export function init() {
   initQuantity();
   bindOptions();
   bindActions();
+  bindSkinControls();
+  for (const input of purchaseOptionInputs()) input.addEventListener("change", publish);
   refresh(true);
   // The pre-paint hold of a `?variant=` link (VARIANT_PREPAINT_SCRIPT) ends in
   // the frame that paints the linked SKU.
@@ -191,7 +225,7 @@ export function init() {
 
 /** The buy form's purchase-option radios (an app's ways to buy, beside a one-time purchase). */
 function purchaseOptionInputs(): HTMLInputElement[] {
-  return Array.from(document.querySelectorAll<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]'));
+  return Array.from(cache.summary?.querySelectorAll<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]') ?? []);
 }
 
 function selectPurchaseOption(id: string) {
@@ -209,7 +243,7 @@ function selectedPurchaseOption(): CartLinePurchaseOption | null {
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
 function hideExpiredOffers() {
   const now = Date.now() / 1000;
-  document.querySelectorAll<HTMLElement>("[data-offer-ends]").forEach((offer) => {
+  cache.summary?.querySelectorAll<HTMLElement>("[data-offer-ends]").forEach((offer) => {
     const endsAt = Number(offer.dataset.offerEnds);
     if (endsAt > 0 && endsAt <= now) offer.hidden = true;
   });
@@ -219,13 +253,23 @@ function hideExpiredOffers() {
  * The quantity accepts Bangla digits, never changes silently, and says so
  * when it is capped at the most one order line can hold.
  */
+function typedQuantity(value: string): number {
+  const latin = toLatinDigits(value).trim();
+  // A minus sign is a quantity below one ("-2" becomes 1), never "2".
+  return /^[-−]/u.test(latin) ? 0 : Number.parseInt(latin.replace(/\D/g, ""), 10);
+}
+
+/** The quantity the field means now, without touching it. */
+function currentQuantity(): number {
+  const typed = typedQuantity(cache.quantity?.value ?? "1");
+  return clampQuantity(Number.isFinite(typed) ? typed : 1);
+}
+
 function readQuantity(): number {
   const input = cache.quantity;
-  const message = document.getElementById("quantity-message");
+  const message = cache.summary?.querySelector<HTMLElement>("#quantity-message");
   if (!input) return 1;
-  const latin = toLatinDigits(input.value).trim();
-  // A minus sign is a quantity below one ("-2" becomes 1), never "2".
-  const typed = /^[-−]/u.test(latin) ? 0 : Number.parseInt(latin.replace(/\D/g, ""), 10);
+  const typed = typedQuantity(input.value);
   const quantity = clampQuantity(Number.isFinite(typed) ? typed : 1);
   input.value = String(quantity);
   const capped = Number.isFinite(typed) && typed > QUANTITY_CONSTRAINTS.MAX;
@@ -239,16 +283,52 @@ function readQuantity(): number {
 }
 
 function initQuantity() {
-  const minus = document.getElementById("quantity-minus");
-  const plus = document.getElementById("quantity-plus");
-  if (!minus || !plus || !cache.quantity) return;
+  const input = cache.quantity;
+  if (!input) return;
   const update = (delta: number) => {
-    cache.quantity!.value = String(readQuantity() + delta);
+    input.value = String(readQuantity() + delta);
     readQuantity();
+    publish();
   };
-  minus.addEventListener("click", () => update(-1));
-  plus.addEventListener("click", () => update(1));
-  cache.quantity.addEventListener("change", readQuantity);
+  cache.summary?.querySelector("#quantity-minus")?.addEventListener("click", () => update(-1));
+  cache.summary?.querySelector("#quantity-plus")?.addEventListener("click", () => update(1));
+  input.addEventListener("change", () => {
+    readQuantity();
+    publish();
+  });
+  // Typing: the field is read as the buyer types, corrected when they leave it.
+  input.addEventListener("input", publish);
+}
+
+/**
+ * Chooses a selection, as an option button or a skin's SKU control does:
+ * the choice shows (and is announced) in the next frame, the URL names the
+ * chosen SKU, and the message under each option just chosen goes.
+ */
+function applySelection(selection: VariantSelection, announcement: string, chosen: readonly string[]) {
+  state.hasVariantSelectionInteraction = true;
+  state.unavailableRequestedVariant = null;
+  for (const definitionId of chosen) showMissingOption(definitionId, "");
+  state.selection = selection;
+  if (cache.announcer && announcement)
+    cache.announcer.textContent = formatCheckoutLanguageText(
+      cache.actions?.dataset.optionSelectedText || "{value}",
+      { value: announcement },
+    );
+  refresh(true);
+  replaceVariantUrl();
+}
+
+/** Chooses one whole SKU (every option of it at once); false for an id the page does not sell. */
+function chooseVariant(variantId: string): boolean {
+  const chosen = resolveExactVariantSelection(state.variants, { variantId });
+  if (!chosen) return false;
+  applySelection(
+    chosen.selection,
+    chosen.variant.selectedOptions.map((option) => option.value).join(" / "),
+    state.options.map((option) => option.id),
+  );
+  return true;
 }
 
 function bindOptions() {
@@ -259,25 +339,13 @@ function bindOptions() {
     if (!definitionId || !valueId) return;
     // Options behave like radio buttons: choosing the chosen value keeps it.
     const choose = () => {
-      state.hasVariantSelectionInteraction = true;
-      state.unavailableRequestedVariant = null;
-      showMissingOption(definitionId, "");
-      if (state.selection[definitionId] !== valueId) {
-        state.selection = reconcileSelectionForValue(
-          state.variants,
-          definitionId,
-          valueId,
-          state.selection,
-          order,
-        );
-      }
-      if (cache.status)
-        cache.status.textContent = formatCheckoutLanguageText(
-          cache.actions?.dataset.optionSelectedText || "{value}",
-          { value: button.dataset.optionValue || "" },
-        );
-      refresh(true);
-      replaceVariantUrl();
+      applySelection(
+        state.selection[definitionId] === valueId
+          ? state.selection
+          : reconcileSelectionForValue(state.variants, definitionId, valueId, state.selection, order),
+        button.dataset.optionValue || "",
+        [definitionId],
+      );
     };
     button.addEventListener("click", choose);
     button.addEventListener("keydown", (event) => {
@@ -326,15 +394,64 @@ function bindActions() {
     }
   });
   // Enter in a text field (a buyer input or quantity) submits through the
-  // first button; anything else still lands here.
-  const buyForm =
-    state.buyerInputs?.form ??
-    document.querySelector<HTMLFormElement>("form[data-product-buy-form]");
-  buyForm?.addEventListener("submit", (event) => {
+  // form's first button (a skin's buyVariant buttons come after the host's
+  // default one); anything else still lands here, as the buyer's own choice.
+  cache.form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const submitter = (event as SubmitEvent).submitter;
     void add(Boolean(submitter?.closest('[data-action="buy-now"]')));
   });
+}
+
+let skinControls: AbortController | null = null;
+
+/**
+ * A product_main skin's SKU controls (`chooseVariant`, `buyVariant`): a
+ * choice goes through the same selection as the option buttons, a buy
+ * button chooses its SKU, then runs the form's own add or Buy now (its
+ * checks, buyer inputs, purchase option and one-at-a-time guard), with any
+ * problem shown in the form.
+ */
+function bindSkinControls() {
+  skinControls?.abort();
+  skinControls = new AbortController();
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    const choice = event.target.closest<HTMLElement>(CHOOSE_CONTROL);
+    if (choice) {
+      // A new tab or window follows the link itself.
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      chooseVariant(choice.dataset.chooseVariant ?? "");
+      return;
+    }
+    const button = event.target.closest<HTMLButtonElement>(BUY_CONTROL);
+    if (!button) return;
+    event.preventDefault();
+    if (button.disabled || state.adding || state.purchaseBlocked) return;
+    if (!chooseVariant(button.dataset.buyVariant ?? "")) return;
+    void add(button.dataset.buyIntent === "buy", button);
+  }, { signal: skinControls.signal });
+}
+
+/** Keeps the skin's SKU controls in step with the form: the choice, stock, and an edit of a cart line. */
+function updateSkinControls() {
+  const exact = exactVariant();
+  for (const control of document.querySelectorAll<HTMLElement>(CHOOSE_CONTROL)) {
+    const selected = Boolean(exact) && control.dataset.chooseVariant === exact!.id;
+    control.dataset.state = selected ? "selected" : "unselected";
+    if (control instanceof HTMLButtonElement) control.setAttribute("aria-pressed", String(selected));
+    else if (selected) control.setAttribute("aria-current", "true");
+    else control.removeAttribute("aria-current");
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>(BUY_CONTROL)) {
+    const variant = state.variants.find((candidate) => candidate.id === button.dataset.buyVariant);
+    const soldOut = !variant || !getBuyerStockSummary([variant]).canPurchaseAny;
+    // As the form's own buttons: off when it can't be bought, Buy now gone
+    // then, and none while a cart line is edited (the form updates that line).
+    button.disabled = soldOut || state.purchaseBlocked;
+    button.hidden = Boolean(state.edit) || (button.dataset.buyIntent === "buy" && button.disabled);
+  }
 }
 
 function replaceVariantUrl() {
@@ -350,19 +467,53 @@ function replaceVariantUrl() {
   history.replaceState(null, "", url.toString());
 }
 
+/**
+ * Shows the current choice in the next frame: the form (its SKU field,
+ * options, stock, buttons and price), the skin's controls and the gallery's
+ * photo, then publishes the state to app islands, which so hear a change
+ * only once the store shows it.
+ */
 function refresh(revealSelection = false) {
   requestAnimationFrame(() => {
-    state.buyerInputs?.setVariant(exactVariant()?.id ?? null);
+    // The form's SKU field: what a post before the next frame, or without
+    // the script, buys (with or without buyer inputs).
+    const field = cache.form?.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
+    if (field) field.value = exactVariant()?.id ?? "";
     updateOptionButtons();
     if (revealSelection) revealSelectedOptions();
     updateStockAndActions();
     updatePrice();
     updateVariantImage();
+    publish();
   });
 }
 
-export function revealSelectedOptions() {
-  document.querySelectorAll<HTMLElement>(".variant-option-values[data-option-overflow]").forEach((list) => {
+/** What app islands read as `context.product` (scripts/product-context.ts). */
+function productState(): StorefrontProductState {
+  const exact = exactVariant();
+  return {
+    variantId: exact?.id ?? null,
+    quantity: currentQuantity(),
+    inputs: Object.fromEntries((state.buyerInputs?.values() ?? []).map(({ key, value }) => [key, value])),
+    purchaseOption: selectedPurchaseOption()?.id ?? null,
+    available: Boolean(exact) && !state.purchaseBlocked && getBuyerStockSummary([exact!]).canPurchaseAny,
+    busy: state.adding,
+    error: state.error,
+  };
+}
+
+function publish() {
+  publishProductState(productState());
+}
+
+/** The purchase's problem as islands read it (the form shows its words). */
+function setError(error: StorefrontProductError | null) {
+  state.error = error;
+  publish();
+}
+
+export function revealSelectedOptions(root: ParentNode = cache.summary ?? document) {
+  root.querySelectorAll<HTMLElement>(".variant-option-values[data-option-overflow]").forEach((list) => {
     const selected = list.querySelector<HTMLElement>('.variant-option-btn[aria-pressed="true"]');
     if (!selected) return;
     const listRect = list.getBoundingClientRect();
@@ -543,6 +694,14 @@ function updateStockAndActions() {
     );
     if (cache.buyButton) cache.buyButton.hidden = true;
   }
+  updateActionsState();
+  updateSkinControls();
+}
+
+/** The buttons' row: `busy` while an add runs, `unavailable` while nothing chosen can be bought, else `ready`. */
+function updateActionsState() {
+  if (!cache.actionsPart) return;
+  cache.actionsPart.dataset.state = state.adding ? "busy" : cache.addButton?.disabled ? "unavailable" : "ready";
 }
 
 function setButton(
@@ -630,39 +789,71 @@ function selectedCartOptions(variant: Variant): CartItemOption[] {
   }));
 }
 
-/** "Choose a Size" under the option the buyer has not picked yet. */
-function showMissingOption(definitionId: string, message: string) {
-  const group = document.querySelector<HTMLElement>(
+/** The option whose "Choose a …" message shows. */
+let missingOption: string | null = null;
+
+/**
+ * "Choose a Size" under the option the buyer has not picked yet; in the
+ * form's status instead when the form leaves its options out (a skin
+ * chooses the SKU). An empty message takes it away.
+ */
+function showMissingOption(definitionId: string, message: string, focus = false) {
+  const group = cache.summary?.querySelector<HTMLElement>(
     `fieldset[data-option-definition-id="${CSS.escape(definitionId)}"]`,
   );
   const note = group?.querySelector<HTMLElement>(".option-missing-message");
-  if (!note) return;
-  note.textContent = message;
-  note.classList.toggle("hidden", !message);
-  if (message) {
-    group!.scrollIntoView({ behavior: "smooth", block: "center" });
-    group!.querySelector<HTMLButtonElement>(".variant-option-btn")?.focus({ preventScroll: true });
+  if (!message) {
+    if (note) {
+      note.textContent = "";
+      note.classList.add("hidden");
+    }
+    if (missingOption === definitionId) {
+      missingOption = null;
+      if (state.error === "option_required") clearError();
+    }
+    return;
   }
+  missingOption = definitionId;
+  if (!note) return showError(message, "option_required", focus);
+  note.textContent = message;
+  note.classList.remove("hidden");
+  group!.scrollIntoView({ behavior: "smooth", block: "center" });
+  group!.querySelector<HTMLButtonElement>(".variant-option-btn")?.focus({ preventScroll: true });
+  setError("option_required");
 }
 
-async function add(redirect: boolean) {
+/**
+ * Adds the chosen SKU (Buy now: then checks out), once at a time. `source`
+ * is a skin's buyVariant button: it shows the busy state, and a problem
+ * moves focus to the form's message, since the buyer pressed elsewhere.
+ */
+async function add(redirect: boolean, source: HTMLElement | null = null) {
   if (state.adding || state.purchaseBlocked) return;
   state.adding = true;
+  // A new try: the last one's message goes.
+  cache.summary?.querySelector("[data-product-action-error]")?.remove();
+  state.error = null;
+  if (cache.statusPart) cache.statusPart.dataset.state = "idle";
+  updateActionsState();
+  publish();
   // Busy while the line is added, so a slow phone shows the press took.
-  const button = redirect ? cache.buyButton : cache.addButton;
+  const button = source ?? (redirect ? cache.buyButton : cache.addButton);
   button?.setAttribute("aria-busy", "true");
   button?.classList.add("opacity-70", "cursor-progress");
   try {
-    await addSelected(redirect);
+    await addSelected(redirect, source !== null);
   } finally {
     state.adding = false;
     button?.removeAttribute("aria-busy");
     button?.classList.remove("opacity-70", "cursor-progress");
+    updateActionsState();
+    publish();
   }
 }
 
-async function addSelected(redirect: boolean) {
+async function addSelected(redirect: boolean, focusProblem: boolean) {
   if (!cache.container || !state.productPricing) return;
+  const fail = (message: string, error: StorefrontProductError) => showError(message, error, focusProblem);
   const validation = validateSelection(
     state.selection,
     state.options,
@@ -674,13 +865,15 @@ async function addSelected(redirect: boolean) {
       formatCheckoutLanguageText(cache.actions?.dataset.chooseOptionText || "{option}", {
         option: validation.missingOption.name,
       }),
+      focusProblem,
     );
   }
   // The page's words, never the check's: the sold-out word, or the one for a choice no SKU has.
   if (!validation.valid || !validation.variant)
-    return showError((validation.reason === "sold_out" ? cache.actions?.dataset.unavailableText : cache.actions?.dataset.combinationUnavailableText) ?? "");
+    return fail((validation.reason === "sold_out" ? cache.actions?.dataset.unavailableText : cache.actions?.dataset.combinationUnavailableText) ?? "", "unavailable");
+  // Each problem shows (and takes focus) under its field.
   const inputs = state.buyerInputs?.validate() ?? null;
-  if (inputs && !inputs.ok) return;
+  if (inputs && !inputs.ok) return setError("input_invalid");
   const properties = inputs?.ok ? inputs.properties : [];
   const quantity = readQuantity();
   const pricing = calculateVariantPrice(state.productPricing, {
@@ -714,8 +907,11 @@ async function addSelected(redirect: boolean) {
   });
   let failureMessage = cache.actions?.dataset.cartAddFailedText ?? "";
   // The line's own checks are a developer's words; the buyer reads the page's.
-  if (!cartData.valid || !cartData.data)
-    return showError(validation.variant.availabilityBand === "out_of_stock" ? cache.actions?.dataset.unavailableText ?? failureMessage : failureMessage);
+  if (!cartData.valid || !cartData.data) {
+    return validation.variant.availabilityBand === "out_of_stock"
+      ? fail(cache.actions?.dataset.unavailableText ?? failureMessage, "unavailable")
+      : fail(failureMessage, "failed");
+  }
   // An app's option (a subscription) is priced by the app: the line takes the store's price for it.
   const purchaseOption = selectedPurchaseOption();
   let price = cartData.data.price;
@@ -723,7 +919,7 @@ async function addSelected(redirect: boolean) {
   if (purchaseOption) {
     // Only app-priced lines need this check; ordinary products do not load it.
     const lineValidation = await import("@/lib/cart/new-line").catch(() => null);
-    if (!lineValidation) return showError(failureMessage);
+    if (!lineValidation) return fail(failureMessage, "failed");
     const { acceptedNewCartLine, validateCartLinesInBrowser, validateNewCartLine } = lineValidation;
     const checked = acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
       cartKey: "new",
@@ -736,7 +932,7 @@ async function addSelected(redirect: boolean) {
       ...(properties.length > 0 ? { properties: properties.map(({ key, value }) => ({ key, value })) } : {}),
       purchaseOption: purchaseOption.id,
     }));
-    if (!checked.item) return showError(checked.message || failureMessage);
+    if (!checked.item) return fail(checked.message || failureMessage, "failed");
     price = checked.item.unitPrice;
     chosenOption = checked.item.purchaseOption ?? purchaseOption;
   }
@@ -750,10 +946,12 @@ async function addSelected(redirect: boolean) {
     ...(validation.variant.fulfillmentKind ? { fulfillmentKind: validation.variant.fulfillmentKind } : {}),
   };
   const edit = state.edit;
+  let failure: StorefrontProductError = "failed";
   // Buy now keeps the full cart and requires persistence before navigation.
   const options = {
     onFailure(reason: CartAddFailureReason) {
       if (reason === "quantity_limit") {
+        failure = "quantity_limit";
         failureMessage = formatCheckoutLanguageText(cache.actions?.dataset.quantityLimitText ?? "", {
           count: QUANTITY_CONSTRAINTS.MAX,
         });
@@ -765,7 +963,7 @@ async function addSelected(redirect: boolean) {
     : redirect
       ? await startBuyNow(line, options)
       : await addToCart(line, options);
-  if (!added) return showError(failureMessage);
+  if (!added) return fail(failureMessage, failure);
   if (edit) {
     clearCartLineEdit();
     window.location.href = pagePath("/cart");
@@ -787,14 +985,29 @@ async function addSelected(redirect: boolean) {
   }
 }
 
-/** A problem with the purchase stays next to the buttons until the next try. */
-function showError(message: string) {
-  const existing = cache.actions?.querySelector<HTMLElement>("[data-product-action-error]");
-  existing?.remove();
+/**
+ * A problem with the purchase stays next to the buttons, in the form's
+ * status, until the next try. `focus` moves focus to it (the buyer pressed
+ * a skin's button elsewhere on the page).
+ */
+function showError(message: string, error: StorefrontProductError, focus = false) {
+  cache.summary?.querySelector("[data-product-action-error]")?.remove();
   const element = document.createElement("p");
   element.dataset.productActionError = "";
   element.className = "rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive";
   element.textContent = message;
   element.setAttribute("role", "alert");
-  cache.actions?.insertBefore(element, cache.actions.firstChild);
+  element.tabIndex = -1;
+  if (cache.statusPart) {
+    cache.statusPart.append(element);
+    cache.statusPart.dataset.state = "error";
+  } else cache.actions?.insertBefore(element, cache.actions.firstChild);
+  setError(error);
+  if (focus) element.focus();
+}
+
+function clearError() {
+  cache.summary?.querySelector("[data-product-action-error]")?.remove();
+  if (cache.statusPart) cache.statusPart.dataset.state = "idle";
+  setError(null);
 }

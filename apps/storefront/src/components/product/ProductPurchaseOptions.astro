@@ -18,7 +18,7 @@ const choiceClass =
 ---
 
 {options.length > 0 && (
-  <fieldset class="space-y-2" data-product-purchase-options>
+  <fieldset class="space-y-2" data-product-purchase-options data-buy-part="purchase-options">
     <legend class="mb-1 text-sm font-medium text-foreground">{copy.legend}</legend>
     <label class={choiceClass}>
       <input type="radio" name="purchaseOption" value="" form={formId} checked class="mt-0.5 size-5 shrink-0 accent-primary" />

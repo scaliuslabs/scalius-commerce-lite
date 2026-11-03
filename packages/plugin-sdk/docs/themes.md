@@ -157,7 +157,7 @@ Validate warns about every bundled image over 200 KiB and every file name that s
 ### 6. Real buttons and links, and no-JavaScript fallbacks
 
 - A control that goes somewhere is an `<a href>` with a real destination. A control that acts on the page is a `<button>`. Never an `<a href="#">` that only an island makes work.
-- On the product page, buying happens only in the store's `<BuyForm />` (required, exactly one), which keeps price, options and stock current. Do not draw an Add to cart of your own there.
+- On the product page, buying happens only through the store's `<BuyForm />` (required, exactly one), which keeps price, options and stock current. To offer SKUs your own way (cards, a table), put `chooseVariant(variant)` on a link and `buyVariant(variant, "add" | "buy")` on a button: the store binds them to the form, and a buy button works without JavaScript too. Never script clicks on the form's own buttons or read its markup; read `context.product` instead. Style the form through its [`[data-buy-part]` hooks](storefront.md#styling-the-buy-form).
 - The card quick add is the one link that acts: `<a {...quickAdd(product)}>` adds a simple product in place when JavaScript runs and opens the product page when it does not.
 - Search is a `GET` form to `data.routes.search` with `name={data.searchParam}`. A menu that opens is a `<details>` or a `popover`, which open without JavaScript. Forms post to store paths.
 - An island improves markup that already works: Escape to close, a carousel's arrows, a countdown. The page must read and work before the island loads and without it. Never put content buyers or crawlers need inside `<Deferred>`.
@@ -172,6 +172,7 @@ Right:
 
 ```tsx
 <BuyForm title={false} />                      // on the product page
+<button {...buyVariant(variant, "add")}>Add</button>  // a SKU's own button, run by the form
 <a {...quickAdd(product)}>Add to cart</a>       // on a card
 ```
 
