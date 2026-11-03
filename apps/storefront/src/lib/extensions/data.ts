@@ -246,7 +246,7 @@ export function footerData(input: {
       name: input.storeName?.trim() || "Store",
       url: "/",
       logo: storefrontImageOf(brand.logo),
-      darkLogo: storefrontImageOf(brand.darkLogo),
+      darkLogo: storefrontImageOf(brand.darkLogo ? { ...brand.darkLogo, alt: brand.darkLogo.alt || input.storeName } : null),
       logoWidth: resolved.brand.logoWidth,
       footerLogo: storefrontImageOf(brand.footerLogo ?? brand.logo),
       phone: input.storePhone?.trim() || null,
