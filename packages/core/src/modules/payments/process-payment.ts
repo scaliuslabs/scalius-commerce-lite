@@ -1,7 +1,7 @@
 // src/modules/payments/process-payment.ts
 // Applies provider-authenticated payment events to orders, for every gateway.
 
-import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import {
   orders,
   orderPayments,
@@ -360,6 +360,8 @@ export async function inferPaymentType(
  * that lands switches the order to the provider in its own batch; a decline
  * leaves the invoice as it was. An invoice partly paid by recorded payments
  * keeps taking recorded payments only. Cash on delivery never switches.
+ * A provider event that switches the order must also name a payment the
+ * platform opened with that provider (`providerMayPayOrderCondition`).
  */
 export function acceptsProviderPayment(
   order: { paymentMethod: string; paymentStatus: string; paidAmountMinor: number },
@@ -373,6 +375,45 @@ export function acceptsProviderPayment(
   return isOnlinePaymentMethod(order.paymentMethod) &&
     order.paymentStatus === PaymentStatus.FAILED &&
     order.paidAmountMinor <= 0;
+}
+
+/**
+ * SQL for an order CAS: the provider is the order's gateway already, or the
+ * platform opened a payment with it for this order (a hosted session or an
+ * off-session command, both `payment_session_attempts` rows, written before
+ * the provider is called). A provider's event alone never moves an order to
+ * the provider that sent it: the order an event names is the app's word.
+ */
+function providerMayPayOrderCondition(orderId: string, provider: string): SQL {
+  return sql`(${orders.paymentMethod} = ${provider} OR EXISTS (
+    SELECT 1 FROM ${paymentSessionAttempts}
+    WHERE ${paymentSessionAttempts.orderId} = ${orderId}
+      AND ${paymentSessionAttempts.gateway} = ${provider}
+  ))`;
+}
+
+/**
+ * Why a provider's payment may not land on the order as read, or null: the
+ * order takes a payment from it (`acceptsProviderPayment`), and a switch to it
+ * names a payment the platform opened with it. The order CAS re-proves both.
+ */
+async function providerPaymentRefusal(
+  db: Database,
+  order: { id: string; paymentMethod: string; paymentStatus: string; paidAmountMinor: number },
+  provider: string,
+  label: string,
+): Promise<string | null> {
+  if (!acceptsProviderPayment(order, provider)) {
+    return `${label} ${provider} payment conflicts with the current order payment method`;
+  }
+  if (order.paymentMethod === provider) return null;
+  const opened = await db
+    .select({ id: paymentSessionAttempts.id })
+    .from(paymentSessionAttempts)
+    .where(and(eq(paymentSessionAttempts.orderId, order.id), eq(paymentSessionAttempts.gateway, provider)))
+    .limit(1)
+    .get();
+  return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
 }
 
 /**
@@ -491,12 +532,9 @@ export async function processPaymentConfirmed(
     if (initialUnpayableReason) {
       return { success: false, error: initialUnpayableReason, retryable: false };
     }
-    if (!acceptsProviderPayment(initialOrder, params.provider)) {
-      return {
-        success: false,
-        retryable: false,
-        error: `Confirmed ${params.provider} payment conflicts with the current order payment method`,
-      };
+    const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
+    if (initialProviderRefusal) {
+      return { success: false, retryable: false, error: initialProviderRefusal };
     }
 
     const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
@@ -569,6 +607,7 @@ export async function processPaymentConfirmed(
             totalAmountMinor: orders.totalAmountMinor,
             paidAmountMinor: orders.paidAmountMinor,
             balanceDueMinor: orders.balanceDueMinor,
+            paymentMethod: orders.paymentMethod,
             paymentStatus: orders.paymentStatus,
             status: orders.status,
             inventoryPool: orders.inventoryPool,
@@ -591,6 +630,11 @@ export async function processPaymentConfirmed(
         return { success: false, error: unpayableReason, retryable: false };
       }
       if (attempt > 0) {
+        // The order moved since the first read: it must still take this provider's payment.
+        const providerRefusal = await providerPaymentRefusal(db, order, params.provider, "Confirmed");
+        if (providerRefusal) {
+          return { success: false, retryable: false, error: providerRefusal };
+        }
         const paymentStateError = await validateIncomingPaymentState(
           db,
           order,
@@ -658,6 +702,7 @@ export async function processPaymentConfirmed(
           isNull(orders.deletedAt),
           notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
           notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
+          providerMayPayOrderCondition(params.orderId, params.provider),
           paymentPlanReadyPredicate,
           sql`EXISTS (
             SELECT 1 FROM order_payments
@@ -1251,9 +1296,8 @@ export async function processPaymentAuthorized(
 
     const unpayableReason = getUnpayableOrderReason(order);
     if (unpayableReason) return { success: false, retryable: false, error: unpayableReason };
-    if (!acceptsProviderPayment(order, params.provider)) {
-      return { success: false, retryable: false, error: `Authorized ${params.provider} payment conflicts with the current order payment method` };
-    }
+    const providerRefusal = await providerPaymentRefusal(db, order, params.provider, "Authorized");
+    if (providerRefusal) return { success: false, retryable: false, error: providerRefusal };
     const paymentType = params.paymentType ?? await inferPaymentType(db, order, amountMinor);
     if (!paymentType) {
       return { success: false, retryable: false, error: "Authorized amount does not match any payable amount on the order" };
@@ -1282,6 +1326,7 @@ export async function processPaymentAuthorized(
         notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
         notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
         noActiveShipmentClaimCondition(),
+        providerMayPayOrderCondition(params.orderId, params.provider),
         // One authorization in flight per order, and nothing captured meanwhile for this payment type.
         sql`NOT EXISTS (
           SELECT 1 FROM order_payments
