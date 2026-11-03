@@ -158,7 +158,7 @@ export async function loadPluginContract() {
         'export { storefrontTemplateCardFieldNotes } from "@scalius/shared/plugins/storefront-template-fields";',
         'export { storefrontModuleFieldNotes, storefrontPortabilityNotes } from "@scalius/shared/plugins/storefront-portability";',
         'export { storefrontDefinitionOf } from "./src/storefront/define";',
-        'export { checkSkinHtml, checkStorefrontHeaderHtml, FIXTURE_STORES, fixtureContext, fixtureProductCard, fixtureProductPage, fixtureSkinData, fixtureStore } from "./src/storefront/testing";',
+        'export { checkSkinHtml, checkStorefrontHeaderHtml, FIXTURE_STORES, fixtureContext, fixtureProductCard, fixtureProductPage, fixtureSkinData, fixtureStore, storefrontShown } from "./src/storefront/testing";',
       ].join("\n"),
       resolveDir: join(root, "packages/plugin-sdk"),
       loader: "ts",
@@ -427,6 +427,14 @@ export async function packStorefront(contract, manifest, source) {
       if ("error" in result) fail(`${result.id} fails to render its defaults: ${result.error}`);
       if (Buffer.byteLength(result.html) > limits.htmlBytes) fail(`${result.id} renders ${Buffer.byteLength(result.html)} bytes of HTML; the limit is ${limits.htmlBytes}.`);
       const job = jobs.find((each) => each.id === result.id);
+      // An island whose props are over their bound mounts with none on a store: say which, here.
+      let oversized = [];
+      try {
+        oversized = contract.storefrontShown(result.html, manifest.id).oversizedProps ?? [];
+      } catch {
+        // Markup the storefront would show nothing of is not this check's to name.
+      }
+      if (oversized.length > 0) fail(`${result.id} gives the island(s) ${oversized.map((name) => name || "(unnamed)").join(", ")} props over ${limits.islandPropsBytes} bytes (islandPropsBytes): the storefront leaves them out and the island mounts with none. Pass less, or load the rest with context.fetchApp.`);
       if (job?.kind === "component") {
         // A component embeds nothing: the storefront drops what it places.
         const dropped = contract.splitStorefrontEmbeds(result.html, contract.storefrontEmbedRule("component")).dropped;

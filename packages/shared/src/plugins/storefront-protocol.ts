@@ -234,6 +234,12 @@ export const STOREFRONT_COMPONENT_LIMITS = {
   publicFiles: 40,
   /** Markup one render answers. */
   htmlBytes: 256 * 1024,
+  /**
+   * One island's props (`<Island props>`, the JSON in its `data-props`),
+   * counted inside `htmlBytes`. Larger props are left out and the island
+   * mounts with none; fetch bigger data from the app's routes (`fetchApp`).
+   */
+  islandPropsBytes: 16 * 1024,
   /** Element nesting and element count of one render's markup. */
   htmlDepth: 48,
   htmlElements: 6_000,

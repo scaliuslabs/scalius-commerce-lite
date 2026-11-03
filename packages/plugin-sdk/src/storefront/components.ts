@@ -112,7 +112,11 @@ export function Price(props: PriceProps): Html {
 export interface IslandProps {
   /** A declared island (`storefront.islands`), built from `src/islands/<name>.ts`. */
   name: string;
-  /** JSON the island's `mount` gets. Keep it small: it is in the page's HTML. */
+  /**
+   * JSON the island's `mount` gets. It is in the page's HTML: at most
+   * `STOREFRONT_COMPONENT_LIMITS.islandPropsBytes` (16 KiB) of JSON, else the
+   * store leaves it out and the island mounts with none.
+   */
   props?: unknown;
   /** When its code loads: `visible` (default), `idle`, `load` or `interaction` (first focus, hover or tap). */
   hydrate?: StorefrontIslandHydration;

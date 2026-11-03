@@ -1046,6 +1046,7 @@ export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-ht
 export declare function storefrontShown(html: string, pluginId: string): {
     html: string;
     dropped: number;
+    oversizedProps?: string[];
 };
 export declare function assertHeaderContract(html: string, options?: StorefrontHeaderCheckOptions): void;
 export declare function fixtureContext(overrides?: Partial<StorefrontRenderContext>): StorefrontRenderContext;
@@ -4096,6 +4097,7 @@ export declare const STOREFRONT_COMPONENT_LIMITS: {
     readonly publicBytes: number;
     readonly publicFiles: 40;
     readonly htmlBytes: number;
+    readonly islandPropsBytes: number;
     readonly htmlDepth: 48;
     readonly htmlElements: 6000;
     readonly menuItems: 300;

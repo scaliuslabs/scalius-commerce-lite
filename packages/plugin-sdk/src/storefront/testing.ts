@@ -10,6 +10,7 @@
 
 import {
   STOREFRONT_COMPONENT_ABI,
+  STOREFRONT_COMPONENT_LIMITS,
   STOREFRONT_SECTION_SKIN_PROJECTIONS,
   storefrontEmbedRule,
   type StorefrontComponentJob,
@@ -44,11 +45,21 @@ export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-ht
 /**
  * What the storefront shows of a component's markup (the host's sanitizer),
  * and how many elements and attributes it left out: assert `dropped` is 0.
+ * `oversizedProps`, present only when there are some, names the islands
+ * whose props it left out for being over
+ * `STOREFRONT_COMPONENT_LIMITS.islandPropsBytes` (they mount with none).
  */
-export function storefrontShown(html: string, pluginId: string): { html: string; dropped: number } {
+export function storefrontShown(html: string, pluginId: string): { html: string; dropped: number; oversizedProps?: string[] } {
   const result = sanitizePluginHtml(html, { pluginId });
   if (!result.ok) throw new Error(`The storefront would show nothing: ${result.reason}.`);
-  return { html: result.html, dropped: result.dropped };
+  return { html: result.html, dropped: result.dropped, ...(result.oversizedProps.length > 0 ? { oversizedProps: result.oversizedProps } : {}) };
+}
+
+/** The problem an island's oversized props make, in words an author can act on; none when every island's props fit. */
+function islandPropsIssues(html: string): string[] {
+  const result = sanitizePluginHtml(html, { pluginId: "app.check" });
+  if (!result.ok) return [];
+  return result.oversizedProps.map((island) => `The island ${island ? `"${island}"` : "(unnamed)"} gets no props: its data-props is over ${STOREFRONT_COMPONENT_LIMITS.islandPropsBytes} bytes (islandPropsBytes). Pass less, or load the rest from the app's routes with context.fetchApp.`);
 }
 
 /** Assert declared header capabilities without requiring search, nav or account. */
@@ -428,6 +439,7 @@ export function checkSkinHtml(target: StorefrontSkinTarget, html: string): strin
   const split = splitStorefrontEmbeds(html, storefrontEmbedRule(target));
   const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy_form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
   if (split.dropped > 0) issues.push(`${split.dropped} embed(s) render nothing here: ${target} allows ${Object.keys(storefrontEmbedRule(target).allowed).join(", ") || "none"}.`);
+  issues.push(...islandPropsIssues(html));
   return issues;
 }
 

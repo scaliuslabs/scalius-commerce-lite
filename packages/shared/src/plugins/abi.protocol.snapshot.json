@@ -17129,6 +17129,7 @@
    "publicBytes": 4194304,
    "publicFiles": 40,
    "htmlBytes": 262144,
+   "islandPropsBytes": 16384,
    "htmlDepth": 48,
    "htmlElements": 6000,
    "menuItems": 300,

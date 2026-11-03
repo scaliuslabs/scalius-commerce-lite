@@ -25,7 +25,9 @@
 // `data-sx-*` attributes. Unknown tags are unwrapped; executable or raw-text
 // ones are dropped with their content. Input, output, depth and element count
 // are bounded: over a bound the result is `ok: false` (render nothing), never
-// truncated markup.
+// truncated markup. An attribute value over its bound is left out: an island's
+// `data-props` over `islandPropsBytes` (named in `oversizedProps`), any other
+// over 2,000 characters.
 //
 // Parser differentials (mXSS) cannot change the result: the input is parsed
 // into a tree and the output written from what is kept, every text escaped
@@ -54,7 +56,14 @@ export interface PluginHtmlOptions {
 }
 
 export type PluginHtmlResult =
-  | { ok: true; html: string; /** Elements and attributes left out (an author diagnostic). */ dropped: number }
+  | {
+    ok: true;
+    html: string;
+    /** Elements and attributes left out (an author diagnostic). */
+    dropped: number;
+    /** Islands (by name) whose `data-props` is over `islandPropsBytes`: left out, so they mount with no props. */
+    oversizedProps: string[];
+  }
   | { ok: false; reason: "too_large" | "too_complex" };
 
 // ── Elements ──────────────────────────────────────────────────────────────
@@ -279,6 +288,8 @@ interface Scope {
   maxElements: number;
   elements: number;
   dropped: number;
+  /** Islands whose props were over their bound. */
+  oversizedProps: string[];
   exceeded: boolean;
   /** Inside deferred markup's template: no core embeds, no JSON-LD. */
   deferred: boolean;
@@ -288,8 +299,15 @@ const ESCAPES: Readonly<Record<string, string>> = { "&": "&amp;", "<": "&lt;", "
 const escapeText = (value: string) => value.replace(/[&<> ]/g, (char) => ESCAPES[char]!);
 const escapeAttribute = (value: string) => value.replace(/[&<>" ]/g, (char) => ESCAPES[char]!);
 
+/** An island's props: JSON, bounded on its own (it stays escaped text the island only `JSON.parse`s). */
+function islandProps(tag: string, name: string): boolean {
+  return tag === "scalius-island" && name === "data-props";
+}
+
 function attribute(name: string, value: string, tag: string, svg: boolean, scope: Scope): [string, string] | null {
-  if (name.startsWith("on") || value.length > MAX_ATTRIBUTE_VALUE) return null;
+  if (name.startsWith("on")) return null;
+  if (islandProps(tag, name)) return byteLength(value) <= STOREFRONT_COMPONENT_LIMITS.islandPropsBytes ? [name, value] : null;
+  if (value.length > MAX_ATTRIBUTE_VALUE) return null;
   if (svg && SVG_ATTRIBUTES[name]) {
     if (!SVG_VALUE.test(value) || /url\s*\(\s*(?!#)/i.test(value)) return null;
     return [SVG_ATTRIBUTES[name]!, value];
@@ -356,9 +374,13 @@ function attribute(name: string, value: string, tag: string, svg: boolean, scope
 function attributes(tag: string, input: Record<string, string>, svg: boolean, scope: Scope): Map<string, string> | null {
   const result = new Map<string, string>();
   for (const [rawName, rawValue] of Object.entries(input)) {
-    const kept = attribute(rawName.toLowerCase(), String(rawValue ?? ""), tag, svg, scope);
+    const name = rawName.toLowerCase();
+    const kept = attribute(name, String(rawValue ?? ""), tag, svg, scope);
     if (kept) result.set(kept[0], kept[1]);
-    else scope.dropped += 1;
+    else {
+      scope.dropped += 1;
+      if (islandProps(tag, name)) scope.oversizedProps.push(input["data-island"] ?? "");
+    }
   }
   if (tag === "input" && input.type !== undefined && !result.has("type")) return null; // a password, file or image input
   if (tag === "a" && result.get("target") === "_blank") {
@@ -522,6 +544,7 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
     maxElements: STOREFRONT_COMPONENT_LIMITS.htmlElements,
     elements: 0,
     dropped: 0,
+    oversizedProps: [],
     exceeded: false,
     deferred: false,
   };
@@ -530,5 +553,5 @@ export function sanitizePluginHtml(html: string, options: PluginHtmlOptions): Pl
   if (scope.exceeded) return { ok: false, reason: "too_complex" };
   const output = out.join("");
   if (byteLength(output) > maxBytes) return { ok: false, reason: "too_large" };
-  return { ok: true, html: output, dropped: scope.dropped };
+  return { ok: true, html: output, dropped: scope.dropped, oversizedProps: scope.oversizedProps };
 }
