@@ -24,7 +24,7 @@ import { sortHeader } from "~/components/admin/resource/columns";
 import { ListDate } from "~/components/admin/data-table/ListDate";
 import { formatDateTime, useMessages } from "~/i18n";
 import { contentMessages } from "~/i18n/content";
-import { contentListName, type ContentType, type validatePageSearch } from "./page-list-state";
+import { contentListName, pageIsShadowedByStoreRoute, type ContentType, type validatePageSearch } from "./page-list-state";
 import { useListSearch } from "~/lib/list-search";
 
 const INVALIDATE = [queryKeys.pages.all];
@@ -41,6 +41,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
   const canPublish = hasPermission(PERMISSIONS.PAGES_PUBLISH);
   const isBlog = type === "article";
   const base = isBlog ? "/admin/articles" : "/admin/pages";
+  const isShadowed = (row: PageListItem) => pageIsShadowedByStoreRoute(type, row.slug);
   const editTo = (row: PageListItem) => (canEdit ? `${base}/${row.id}/edit` : undefined);
   // The list's filter as "all matching" actions send it (the API reads the pages itself).
   const matchingFilter = {
@@ -71,7 +72,13 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       accessorKey: "title",
       header: sortHeader(isBlog ? t("blogPost") : t("page")),
       meta: { mobile: "primary", minWidth: 220 },
-      cell: ({ row }) => <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.title}</ResourceRowLink>,
+      cell: ({ row }) => (
+        <>
+          <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.title}</ResourceRowLink>
+          {/* A page saved before the store claimed its address is shadowed by the store's own page. */}
+          {isShadowed(row.original) ? <p className="text-body text-muted-foreground">{t("unreachable")}</p> : null}
+        </>
+      ),
     },
     {
       id: "status",
@@ -123,7 +130,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       ] }}
       rowTo={editTo}
       rowLabel={(row) => row.title}
-      viewUrl={(row) => (isPageLive(row) ? getStorefrontPath(isBlog ? `/blog/${row.slug}` : `/${row.slug}`) : undefined)}
+      viewUrl={(row) => (isPageLive(row) && !isShadowed(row) ? getStorefrontPath(isBlog ? `/blog/${row.slug}` : `/${row.slug}`) : undefined)}
       matchingBulk
       bulkActions={canPublish ? (target, done, run) => (
         <>

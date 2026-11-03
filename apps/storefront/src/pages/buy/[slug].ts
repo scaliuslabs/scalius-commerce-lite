@@ -15,10 +15,9 @@ import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
 import {
   cartLinePropertiesFromOrderLine,
   customizationSchemaFromView,
-  moneyPlaces,
   readPostedBuyerInputs,
-  unitPriceWithSurcharge,
 } from "@/components/product/lib/buyer-inputs";
+import { moneyPlaces, unitPriceWithSurcharge } from "@/components/product/lib/line-price";
 import {
   canonicalizeLineProperties,
   resolveLineProperties,

@@ -26,22 +26,21 @@
 
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { decodeAttribute, deferredAt } from "@scalius/shared/plugins/storefront-embeds";
 import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "@/components/product/lib/buy-form";
 import { SKIN_CHOICE_PREPAINT_SCRIPT } from "@/lib/inline-boot-scripts";
+import { warnOnce } from "./host";
 import type { AppMarkup } from "./index";
 
 const CONTROL_TAG = /<(a|button)\b([^<>]*)>/g;
-const ATTRIBUTE = /\s([a-z][a-z0-9-]*)(?:="([^"]*)")?/g;
+// Every attribute name the sanitizer writes (SVG keeps camelCase), so no value is read as names.
+const ATTRIBUTE = /\s([^\s"'<>/=]+)(?:="([^"]*)")?/g;
 const BOUND = "data-sx-bound";
 /** What the host writes on a bound control: the app's own values of these go. */
-const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "disabled", "aria-pressed", "aria-current", "data-state", "data-availability"]);
+const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "disabled", "aria-pressed", "aria-current", "aria-busy", "data-state", "data-availability"]);
 
 /** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice (off, as the form's own, where nothing can be bought). */
 const defaultSubmit = (blocked: boolean) => `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true"${blocked ? " disabled" : ""} ${BOUND}></button>`;
-
-function decode(value: string): string {
-  return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
-}
 
 function write(tag: string, attributes: ReadonlyArray<[string, string | null]>): string {
   return `<${tag}${attributes.map(([name, value]) => (value === null ? ` ${name}` : ` ${name}="${escapeHtml(value)}"`)).join("")}>`;
@@ -55,8 +54,6 @@ export interface PurchasePage {
   opening: string | null;
 }
 
-const optionsWarnings = new Set<string>();
-
 /** The skin's markup with its SKU controls bound to the buy form, and its `options={false}` honoured only when they cover every buyable SKU. */
 export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProductPage["product"], page: PurchasePage): AppMarkup {
   const variants = new Map(product.variants.map((variant) => [variant.id, variant]));
@@ -65,8 +62,9 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   let buttonsBeforeForm = false;
   let choicesBound = false;
 
-  const bindTag = (whole: string, tag: string, rest: string): string => {
-    const attributes = [...rest.matchAll(ATTRIBUTE)].map(([, name, value]): [string, string | null] => [name!, value === undefined ? null : decode(value)]);
+  // `deferred`: inside deferred markup, which may never enter the page: bound, but it covers no SKU.
+  const bindTag = (whole: string, tag: string, rest: string, deferred: boolean): string => {
+    const attributes = [...rest.matchAll(ATTRIBUTE)].map(([, name, value]): [string, string | null] => [name!, value === undefined ? null : decodeAttribute(value)]);
     const read = (name: string) => attributes.find(([key]) => key === name)?.[1] ?? null;
     const choice = read("data-choose-variant");
     const buy = tag === "button" ? read("data-buy-variant") : null;
@@ -75,8 +73,8 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
     const variant = variants.get(id);
     // A SKU this page does not sell: the control stays the app's, unbound.
     if (!variant) return whole;
-    covered.add(variant.id);
-    const kept = attributes.filter(([name]) => !HOST_ATTRIBUTES.has(name) && name !== BOUND);
+    if (!deferred) covered.add(variant.id);
+    const kept = attributes.filter(([name]) => !HOST_ATTRIBUTES.has(name));
     const availability: [string, string] = ["data-availability", variant.available ? "available" : "sold-out"];
     if (buy !== null) {
       if (!formPlaced) buttonsBeforeForm = true;
@@ -123,16 +121,16 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
       return part;
     }
     if (!part.html.includes("data-choose-variant") && !part.html.includes("data-buy-variant")) return part;
-    return { ...part, html: part.html.replace(CONTROL_TAG, bindTag) };
+    const inDeferred = deferredAt(part.html);
+    return { ...part, html: part.html.replace(CONTROL_TAG, (whole: string, tag: string, rest: string, at: number) => bindTag(whole, tag, rest, inDeferred(at))) };
   });
 
   // Every SKU that can be bought has a control (and the skin has some).
   const coversEveryBuyableSku = covered.size > 0 && product.variants.every((variant) => !variant.available || covered.has(variant.id));
   const bound = parts.map((part) => {
     if (part.kind !== "embed" || part.embed !== "buy_form" || part.data.options !== "false" || coversEveryBuyableSku) return part;
-    if (product.options.length > 0 && !optionsWarnings.has(markup.pluginId) && optionsWarnings.size < 200) {
-      optionsWarnings.add(markup.pluginId);
-      console.warn(`[Storefront components] ${markup.pluginId} product_main skin asks for <BuyForm options={false} /> without a chooseVariant or buyVariant control for every buyable SKU: the store draws the options.`);
+    if (product.options.length > 0) {
+      warnOnce(`${markup.pluginId}:buy-form-options`, `${markup.pluginId} product_main skin asks for <BuyForm options={false} /> without a chooseVariant or buyVariant control (outside deferred markup) for every buyable SKU: the store draws the options.`);
     }
     return { ...part, data: Object.fromEntries(Object.entries(part.data).filter(([name]) => name !== "options")) };
   });

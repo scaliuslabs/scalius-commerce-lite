@@ -550,6 +550,8 @@ const exploreAnchorId = drawnModules.includes("related") && recommendations.prod
 const reviewsAnchorId = drawnModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const appsBelow = (await appSlotComponents(Astro.locals, Astro.url, "product.below")).length > 0;
 const buyBox = {
+  // The warranty row opens on the SKU the page opens with.
+  openingVariantId: buyerInitialPresentation.stockVariant?.id ?? null,
   summary: {
     product,
     category: productCategory,

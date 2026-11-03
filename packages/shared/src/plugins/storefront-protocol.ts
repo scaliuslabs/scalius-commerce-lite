@@ -624,10 +624,15 @@ export interface StorefrontBuyerInput {
  *   the line); the buyer can try again.
  *
  * The last three go as soon as the buyer changes the SKU, quantity, an
- * answer or the purchase option. Codes are only ever added, never renamed
- * or removed: treat a code you do not know as `failed`.
+ * answer or the purchase option. Codes are only ever added, at the end of
+ * the list, never renamed or removed: treat a code you do not know as
+ * `failed`.
  */
-export type StorefrontProductError = "option_required" | "input_invalid" | "unavailable" | "quantity_limit" | "failed";
+// Written out as its type too, so the sealed declaration is this list (a code
+// is added at its end) and emitting it infers nothing.
+export const STOREFRONT_PRODUCT_ERRORS: readonly ["option_required", "input_invalid", "unavailable", "quantity_limit", "failed"] =
+  ["option_required", "input_invalid", "unavailable", "quantity_limit", "failed"];
+export type StorefrontProductError = (typeof STOREFRONT_PRODUCT_ERRORS)[number];
 
 /** The buy form as the buyer has it now (`context.product`). */
 export interface StorefrontProductState {

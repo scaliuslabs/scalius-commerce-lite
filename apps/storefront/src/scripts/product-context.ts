@@ -1,38 +1,18 @@
 // `context.product` for app islands on a product page: the store's buy form
 // as the buyer has it now, so an app never depends on the form's markup.
 // The product controller (components/product/scripts/product-controller.ts)
-// is its one source: it publishes its state here once it has applied a
-// change, in the frame that shows it (the form, its hidden SKU field and the
-// gallery's photo), so a listener runs after the store has applied the
-// change and `state()` then equals the listener's state. Until the
-// controller runs, the state is the form as the server drew it.
+// is its one source: once it has applied a change, in the frame that shows
+// it (the form, its hidden SKU field and the gallery's photo), it keeps its
+// state on the form's container and fires PRODUCT_STATE_EVENT
+// (components/product/scripts/island-state.ts), so a listener runs after
+// the store has applied the change and `state()` then equals its state.
+// Until the controller runs, the state is the form as the server drew it.
+// Only pages with app islands load this.
 import type { StorefrontIslandContext, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
-import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buyer-inputs";
+import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buy-form";
+import { PRODUCT_STATE_EVENT, PRODUCT_STATE_KEY, type ProductStateHolder } from "@/components/product/scripts/island-state";
 
 type ProductContext = NonNullable<StorefrontIslandContext["product"]>;
-type Listener = (state: StorefrontProductState) => void;
-
-interface ProductStore {
-  /** The controller's last state; null until it first publishes. */
-  state: StorefrontProductState | null;
-  listeners: Set<Listener>;
-}
-
-const stores = new WeakMap<Document, ProductStore>();
-
-function storeOf(root: Document): ProductStore {
-  let store = stores.get(root);
-  if (!store) {
-    store = { state: null, listeners: new Set() };
-    stores.set(root, store);
-  }
-  return store;
-}
-
-function buyForm(root: Document): HTMLFormElement | null {
-  // Host-only markers (the sanitizer strips `data-sx-*` from app markup): a skin cannot stand in for them.
-  return root.querySelector<HTMLFormElement>("[data-sx-product-summary] form[data-sx-buy-form]");
-}
 
 /** Each reader gets its own copy: an island cannot change the store's state. */
 function copy(state: StorefrontProductState): StorefrontProductState {
@@ -40,8 +20,7 @@ function copy(state: StorefrontProductState): StorefrontProductState {
 }
 
 /** The buy form as the server drew it: its SKU field, quantity, inputs, purchase option and Add to cart button. */
-function drawnState(form: HTMLFormElement): StorefrontProductState {
-  const summary = form.closest("[data-sx-product-summary]")!;
+function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductState {
   const variant = form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]')?.value.trim() ?? "";
   const quantityInput = summary.querySelector("#quantity");
   const quantity = Number.parseInt(quantityInput instanceof HTMLInputElement ? quantityInput.value : "1", 10);
@@ -65,37 +44,27 @@ function drawnState(form: HTMLFormElement): StorefrontProductState {
   };
 }
 
-/**
- * The product controller's state, after it has applied a change: listeners
- * whose last state differs hear it now. One listener's failure stops only
- * that listener's call.
- */
-export function publishProductState(state: StorefrontProductState, root: Document = document): void {
-  const store = storeOf(root);
-  store.state = copy(state);
-  for (const listener of [...store.listeners]) {
-    try { listener(copy(state)); } catch (error) { console.warn("App product listener failed", error); }
-  }
-}
-
 /** `context.product` on a product page; undefined elsewhere. */
 export function productContext(root: Document = document): ProductContext | undefined {
-  const form = buyForm(root);
-  if (!form) return undefined;
-  const store = storeOf(root);
-  const state = () => copy(store.state ?? drawnState(form));
+  // Host-only markers (the sanitizer strips `data-sx-*` from app markup): a skin cannot stand in for them.
+  const summary = root.querySelector<ProductStateHolder>("[data-sx-product-summary]");
+  const form = summary?.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
+  if (!summary || !form) return undefined;
+  const state = () => copy(summary[PRODUCT_STATE_KEY] ?? drawnState(summary, form));
   return {
     state,
     onChange(listener) {
       let last = JSON.stringify(state());
-      const heard: Listener = (next) => {
+      const heard = (event: Event) => {
+        const next = (event as CustomEvent<StorefrontProductState>).detail;
         const key = JSON.stringify(next);
         if (key === last) return;
         last = key;
-        listener(next);
+        // One listener's failure stops only that listener's call.
+        try { listener(copy(next)); } catch (error) { console.warn("App product listener failed", error); }
       };
-      store.listeners.add(heard);
-      return () => { store.listeners.delete(heard); };
+      root.addEventListener(PRODUCT_STATE_EVENT, heard);
+      return () => root.removeEventListener(PRODUCT_STATE_EVENT, heard);
     },
   };
 }

@@ -19,6 +19,7 @@ import { readStorefrontThemeDocument } from '@/lib/storefront-theme-context';
 import type { Page } from '@/lib/api/types';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
+import { STOREFRONT_ROUTE_SEGMENTS } from '@scalius/shared/storefront-route-segments';
 
 export const prerender = false;
 
@@ -73,7 +74,8 @@ export const GET: APIRoute = async (_context: APIContext) => {
 
     const pageUrls: SitemapUrl[] = [
       ...allPages
-        .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
+        // A page saved on a storefront route's address is not served there (the route answers), so it is not listed.
+        .filter((page) => page.isPublished && page.slug && !STOREFRONT_ROUTE_SEGMENTS.has(page.slug) && !page.noIndex && !page.excludeFromSitemap)
         .map((page) => ({
           loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`),
           lastmod: page.updatedAt ?? undefined,

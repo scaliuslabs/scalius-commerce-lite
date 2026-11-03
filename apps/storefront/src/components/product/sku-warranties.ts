@@ -1,17 +1,10 @@
-// B5 (warranty): the product page's warranty facts. `productWarranty` reads the
-// product's `warranty` (the policy's current terms, from GET /products/{slug});
-// `warrantySpecRow` is the specification table's "Warranty" row. Until the
-// spec table lands (templates), the row renders in the classic description tab.
+// The buy box's warranty facts (WarrantyRow.astro): each warranty the page's
+// SKUs have (`product.warranties`, from GET /products/{slug}) and each
+// variant's (`warrantyId`). A SKU inherits the product's, has its own, or none.
 import type { Product, ProductVariant } from "@/lib/api";
-import {
-  warrantySummaryText,
-  type WarrantyCopy,
-  type WarrantyDurationUnit,
-  type WarrantyProvider,
-  type WarrantyTerms,
-} from "@/lib/account-warranties";
+import type { WarrantyDurationUnit, WarrantyProvider, WarrantyTerms } from "@/lib/account-warranties";
 
-/** `product.warranty` as the API sends it; null without a policy. */
+/** One warranty as the page shows it. */
 export interface ProductWarrantyView {
   name: string;
   provider: WarrantyProvider;
@@ -20,15 +13,7 @@ export interface ProductWarrantyView {
   terms: string | null;
 }
 
-/** The product's warranty, or null when it has none (or the field is malformed). */
-export function productWarranty(product: Product): ProductWarrantyView | null {
-  return parseWarranty(product.warranty);
-}
-
-/**
- * Each SKU's effective warranty (it inherits the product's, has its own, or
- * none): the page's `warranties` by id, and each variant's `warrantyId`.
- */
+/** The page's warranties by id, and each variant's (null: none or unreadable). */
 export function skuWarranties(product: Product, variants: readonly ProductVariant[]): {
   byId: Map<string, ProductWarrantyView>;
   byVariant: Record<string, string | null>;
@@ -67,19 +52,12 @@ function parseWarranty(value: unknown): ProductWarrantyView | null {
   };
 }
 
-export function productWarrantyTerms(warranty: ProductWarrantyView): WarrantyTerms {
+/** The terms the summary line reads ("1 year brand warranty · 7-day replacement"). */
+export function warrantyTerms(warranty: ProductWarrantyView): WarrantyTerms {
   return {
     provider: warranty.provider,
     durationValue: warranty.duration.value,
     durationUnit: warranty.duration.unit,
     replacementDays: warranty.replacementDays,
   };
-}
-
-/** The spec table's row: "Warranty · 1 year brand warranty · 7-day replacement". */
-export function warrantySpecRow(product: Product, copy: WarrantyCopy): { label: string; value: string } | null {
-  const warranty = productWarranty(product);
-  return warranty
-    ? { label: copy.warrantyLabelText, value: warrantySummaryText(productWarrantyTerms(warranty), copy) }
-    : null;
 }

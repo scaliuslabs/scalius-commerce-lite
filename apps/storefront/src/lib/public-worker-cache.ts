@@ -170,9 +170,9 @@ function isPublicCachePath(pathname: string): boolean {
     /^\/(?:products|categories|brands|collections)\/[^/]+\/?$/.test(pathname) ||
     // A product's review pages (noindex, but a public page like any other).
     /^\/products\/[^/]+\/reviews\/?$/.test(pathname) ||
-    // The category index and the header's whole menu panels (a partial).
     /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
-    /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
+    // The category and collection indexes and the header's whole menu panels (a partial).
+    /^\/(?:categories|collections|navigation\/panels)\/?$/.test(pathname) ||
     /^\/(?:search|compare)\/?$/.test(pathname) ||
     /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) ||
     pathname === "/blog/feed.xml" ||
@@ -199,7 +199,8 @@ export function isLayoutBatchedPagePath(pathname: string): boolean {
     pathname === "/" ||
     /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
     /^\/(?:products|categories|brands|collections)\/[^/]+\/?$/.test(pathname) ||
-    /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
+    /^\/products\/[^/]+\/reviews\/?$/.test(pathname) ||
+    /^\/(?:categories|collections|navigation\/panels)\/?$/.test(pathname) ||
     /^\/(?:search|compare|cart|checkout)\/?$/.test(pathname) ||
     /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) && !pathname.endsWith(".xml") ||
     isCmsPagePath(pathname)

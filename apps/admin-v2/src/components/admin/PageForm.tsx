@@ -9,6 +9,7 @@ import { FormField } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { RichContent } from "../ui/rich-content";
@@ -35,6 +36,7 @@ import { formatDateTime, getLocale, useMessages } from "~/i18n";
 import { formatList } from "@scalius/shared/locale-words";
 import { pageFormMessages } from "~/i18n/page-form";
 import { defaultPageScheduleDate, toDateTimeLocalValue, type PagePublicationMode } from "@/lib/page-publication";
+import { pageIsShadowedByStoreRoute } from "./pages/page-list-state";
 import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
 import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { AppActionsMenu } from "./apps/ui/AppActions";
@@ -277,6 +279,13 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               />
             </CardContent>
           </Card>
+
+          {isEdit && committedSlug && slug === committedSlug && pageIsShadowedByStoreRoute(contentType, committedSlug) ? (
+            <Alert variant="warning" role="note">
+              <AlertTitle>{t("addressShadowedTitle")}</AlertTitle>
+              <AlertDescription>{t("addressShadowed")}</AlertDescription>
+            </Alert>
+          ) : null}
 
           <SearchListingCard
             resource={isArticle ? "blogPost" : "page"}

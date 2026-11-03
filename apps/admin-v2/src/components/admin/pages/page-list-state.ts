@@ -1,3 +1,4 @@
+import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import {
   createListSearchValidator,
   normalizeOptionalEnumSearchParam,
@@ -8,6 +9,14 @@ export type ContentType = "page" | "article";
 
 /** The list's session search key (list-search.ts). */
 export const contentListName = (type: ContentType) => (type === "article" ? "articles" : "pages");
+
+/**
+ * A page saved before the store claimed its address: the store's own page answers there, so visitors never
+ * reach the page. Blog posts live under `/blog/` and never collide.
+ */
+export function pageIsShadowedByStoreRoute(type: ContentType, slug: string): boolean {
+  return type === "page" && STOREFRONT_ROUTE_SEGMENTS.has(slug);
+}
 
 export const PAGE_STATUS_FILTERS = ["draft", "scheduled", "published"] as const;
 export type PageStatusFilter = (typeof PAGE_STATUS_FILTERS)[number];

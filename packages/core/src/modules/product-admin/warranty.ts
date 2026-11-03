@@ -80,10 +80,16 @@ export function assertSkuWarrantyAllowed(
     }
 }
 
-/** Whether the product is a gift card (a SKU write that sets a warranty asks). */
-export async function productIsGiftCard(db: Database, productId: string): Promise<boolean> {
-    const row = await db.select({ isGiftCard: products.isGiftCard }).from(products).where(eq(products.id, productId)).get();
-    return row?.isGiftCard === true;
+/** A single-SKU write's check: it reads whether the product is a gift card only when the write names a warranty of its own. */
+export async function assertSingleSkuWarrantyAllowed(
+    db: Database,
+    productId: string,
+    input: { warrantyMode?: string | undefined },
+    sku: { isDefault: boolean; field: string },
+): Promise<void> {
+    if (input.warrantyMode === undefined || input.warrantyMode === "inherit") return;
+    const product = await db.select({ isGiftCard: products.isGiftCard }).from(products).where(eq(products.id, productId)).get();
+    assertSkuWarrantyAllowed(input, { ...sku, isGiftCard: product?.isGiftCard === true });
 }
 
 /** A product's policy: it exists and is not archived (omitted or null passes). */

@@ -73,6 +73,8 @@ interface Props {
   mobileFacetRail?: boolean;
   /** Leave the category group out (the sub-category pills above the results carry it). */
   withoutCategories?: boolean;
+  /** The form sits in the page, not in the listing's phone sheet (a skin's embed): its apply bar ends the form instead of pinning to the screen. */
+  inline?: boolean;
   /** The Customer rating group's "N★ & up" rows (catalogRatingRows); empty hides the group. */
   ratingRows?: CatalogRatingRow[];
 }
@@ -95,6 +97,7 @@ const {
   presentation,
   mobileFacetRail = false,
   withoutCategories = false,
+  inline = false,
   ratingRows = [],
 } = Astro.props;
 
@@ -498,7 +501,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
   <div
     class:list={[
       "z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
-      drawer ? "sticky bottom-0" : "fixed inset-x-0 bottom-0 lg:hidden",
+      drawer ? "sticky bottom-0" : inline ? "lg:hidden" : "fixed inset-x-0 bottom-0 lg:hidden",
     ]}
   >
     <div class:list={["grid gap-3", hasActiveFilters ? "grid-cols-2" : "grid-cols-1"]}>

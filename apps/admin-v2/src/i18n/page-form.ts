@@ -49,6 +49,8 @@ export const pageFormMessages = defineMessages({
     reloadToSave: "Reload the page, then save again.",
     conflict: "This was changed somewhere else. Reload the page to see the latest version.",
     addressTaken: "This web address is taken. Try another.",
+    addressShadowedTitle: "Visitors cannot reach this page",
+    addressShadowed: "The store itself uses this web address now, so the page does not show there. Choose another address under Search listing, then save.",
   },
   bn: {
     yes: "হ্যাঁ",
@@ -97,5 +99,7 @@ export const pageFormMessages = defineMessages({
     reloadToSave: "পেজটি রিলোড করে আবার সেভ করুন।",
     conflict: "এটি অন্য কোথাও বদলানো হয়েছে। সর্বশেষ সংস্করণ দেখতে পেজটি রিলোড করুন।",
     addressTaken: "এই ওয়েব ঠিকানাটি আগেই নেওয়া হয়েছে। অন্য একটি দিন।",
+    addressShadowedTitle: "ভিজিটররা এই পেজে পৌঁছাতে পারছেন না",
+    addressShadowed: "স্টোর নিজেই এখন এই ওয়েব ঠিকানা ব্যবহার করে, তাই পেজটি সেখানে দেখা যায় না। সার্চ লিস্টিং অংশে অন্য একটি ঠিকানা দিয়ে সেভ করুন।",
   },
 });

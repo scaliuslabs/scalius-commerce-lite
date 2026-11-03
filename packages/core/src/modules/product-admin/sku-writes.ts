@@ -166,7 +166,12 @@ async function planMatrix(db: Database, productId: string, draft: MatrixDraft, v
             issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
         });
     }
-    return planProductOptionMatrix(db, productId, parsed.data, { isActive: draft.isActive, isGiftCard: draft.isGiftCard });
+    // A retired SKU brought back is the same row: it keeps its warranty (an archived own policy becomes none).
+    return planProductOptionMatrix(db, productId, parsed.data, {
+        isActive: draft.isActive,
+        isGiftCard: draft.isGiftCard,
+        restoredRowsKeepWarranty: true,
+    });
 }
 
 function assertSellablePrice(isActive: boolean, priceMinor: number | undefined): void {

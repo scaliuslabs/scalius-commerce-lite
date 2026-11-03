@@ -21,6 +21,7 @@ import {
   setRuntimeImageCdnPolicy,
 } from "@/lib/api/runtime";
 import { dashboardReservedSegment } from "@scalius/shared/platform-config";
+import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
@@ -67,6 +68,12 @@ if (invalidSlugs.some((invalid) => slug.startsWith(invalid))) {
 // Most CMS systems use clean URL slugs - reject anything weird
 const validSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 if (!validSlugPattern.test(slug)) {
+  return new Response(null, { status: 404 });
+}
+
+// 5. A storefront route's own segment (`/agent`, `/warranty-claims`, ...) is never a CMS page:
+// a page saved under it before the route existed is unreachable here, and the dashboard says so.
+if (STOREFRONT_ROUTE_SEGMENTS.has(slug)) {
   return new Response(null, { status: 404 });
 }
 

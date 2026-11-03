@@ -541,6 +541,13 @@ export async function planProductOptionMatrix(
         attachedImages?: ReadonlyMap<string, { status: SkuImageStatus }>;
         /** Whether the product is a gift card after this save (its SKUs keep the product's warranty). */
         isGiftCard: boolean;
+        /**
+         * A row that brings a retired SKU back and names no warranty keeps
+         * that SKU's (the app API's restore and add: "the same row"). The
+         * editor's draft rows leave it off: a restored combination starts at
+         * the product's warranty unless the row names one.
+         */
+        restoredRowsKeepWarranty?: boolean;
     },
 ): Promise<ProductOptionMatrixPlan> {
     const { adminUserId, fieldPrefix = "" } = context;
@@ -701,7 +708,9 @@ export async function planProductOptionMatrix(
     // A restored combination's SKU is new to the merchant, like a new row:
     // only a live saved SKU has a warranty to keep.
     const plannedWarranties = await planMatrixSkuWarranties(db, normalizedVariants.map((variant, index) => ({
-        input: variant,
+        input: context.restoredRowsKeepWarranty && variant.warrantyMode === undefined && restoredVariantById.has(variant.id)
+            ? restoredVariantById.get(variant.id)!
+            : variant,
         savedPolicyId: activeVariantById.has(variant.id) ? activeVariantById.get(variant.id)!.warrantyPolicyId : undefined,
         field: `${fieldPrefix}variants.${index}.warrantyPolicyId`,
     })), context.isGiftCard);
