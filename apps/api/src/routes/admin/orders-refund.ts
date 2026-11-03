@@ -19,6 +19,8 @@ import type { NotificationSender } from "@scalius/core/modules/notifications";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { requiredRequestKey } from "./idempotency-key";
 import {
     conflictResponse,
     errorResponses,
@@ -290,6 +292,11 @@ const refundOrderRoute = createRoute({
     summary: "Process order refund",
     request: {
         params: z.object({ id: z.string() }),
+        headers: z.object({
+            "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].openapi({
+                description: "One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required.",
+            }),
+        }),
         body: {
             content: {
                 "application/json": {
@@ -306,7 +313,7 @@ const refundOrderRoute = createRoute({
                             description: "original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.",
                         }),
                         requestKey: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional().openapi({
-                            description: "One key per refund (per dialog opening). Repeating it returns the first refund.",
+                            description: "One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it.",
                         }),
                         lines: refundLinesSchema.optional(),
                     })
@@ -330,7 +337,8 @@ const refundOrderRoute = createRoute({
  */
 export async function executeOrderRefund(
     c: Context<{ Bindings: Env }>,
-    request: RefundRequest,
+    // A refund moves money that can't be taken back: every caller names its retry key.
+    request: RefundRequest & { requestKey: string },
 ): Promise<{ result: RefundServiceResult; notificationCount: number; sideEffectErrors: number }> {
     const db = c.get("db");
     // The durable key also seals a store-credit card's code (fails closed when missing).
@@ -407,6 +415,8 @@ export async function executeOrderRefund(
 app.openapi(refundOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
+    // A refund with no key is refused: its retry would refund again.
+    const requestKey = await requiredRequestKey(c, "dashboard.orders.refund", c.req.valid("header")["idempotency-key"], data.requestKey, "requestKey");
     const actorId = (c.get("user") as { id?: string } | undefined)?.id ?? null;
     const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
         orderId,
@@ -414,7 +424,7 @@ app.openapi(refundOrderRoute, async (c) => {
         reason: data.reason ?? "Refund requested",
         gateway: data.gateway,
         manualSettlementConfirmed: data.manualSettlementConfirmed,
-        requestKey: data.requestKey,
+        requestKey,
         settlement: data.settlement,
         actorUserId: actorId,
         ...(data.lines ? { lines: data.lines } : {}),

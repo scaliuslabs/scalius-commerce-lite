@@ -38,6 +38,8 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { protectedField as pii } from "../../schemas/protected";
 import { notificationSender } from "../../background/notification-sender";
+import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { requiredRequestKey } from "./idempotency-key";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -142,7 +144,15 @@ function amountToMinor(amount: number, currencyCode: string, priceIncrementMinor
   return minor;
 }
 
-const requestKeySchema = z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9:_-]+$/);
+/** Issuing or moving value takes one key, in the body or as the Idempotency-Key header (`requiredRequestKey`). */
+const requestKeySchema = z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9:_-]+$/).optional().openapi({
+  description: "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.",
+});
+const valueKeyHeaders = z.object({
+  "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].openapi({
+    description: "The retry key, instead of body.requestKey.",
+  }),
+});
 
 // ── List ──
 
@@ -364,8 +374,9 @@ app.openapi(createRoute({
   path: "/",
   tags: ["Admin - Gift cards"],
   summary: "Issue a gift card",
-  description: "Issues a manual gift card. Idempotent by `requestKey`. The response carries the full code once; afterwards staff see the last 4 characters only.",
+  description: "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required. The response carries the full code once; afterwards staff see the last 4 characters only.",
   request: {
+    headers: valueKeyHeaders,
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
@@ -395,6 +406,7 @@ app.openapi(createRoute({
   noStore(c);
   const db = c.get("db");
   const body = c.req.valid("json");
+  const requestKey = await requiredRequestKey(c, "dashboard.gift_cards.create", c.req.valid("header")["idempotency-key"], body.requestKey, "requestKey");
   const actorUserId = staffId(c);
   const [currency, settings] = await Promise.all([readStoreCurrency(db), readGiftCardSettings(db)]);
   if (!settings.ok) throw new ServiceUnavailableError("Gift-card settings can't be read right now. Try again.");
@@ -412,7 +424,7 @@ app.openapi(createRoute({
   const notify = body.notify && Boolean(recipient?.email || recipient?.phone || body.customerId);
   let outboxId: string | null = null;
   const result = await issueManualGiftCard(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
-    requestKey: body.requestKey,
+    requestKey,
     amountMinor,
     currencyCode: currency.code,
     expiresAt,
@@ -440,9 +452,10 @@ app.openapi(createRoute({
   path: "/{giftCardId}/adjust",
   tags: ["Admin - Gift cards"],
   summary: "Adjust a gift card balance",
-  description: "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey`.",
+  description: "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required.",
   request: {
     params: z.object({ giftCardId: z.string().min(4).max(80) }),
+    headers: valueKeyHeaders,
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
@@ -464,6 +477,7 @@ app.openapi(createRoute({
   const db = c.get("db");
   const { giftCardId } = c.req.valid("param");
   const body = c.req.valid("json");
+  const requestKey = await requiredRequestKey(c, "dashboard.gift_cards.adjust", c.req.valid("header")["idempotency-key"], body.requestKey, "requestKey");
   const [card, store] = await Promise.all([getStaffGiftCardSummary(db, giftCardId), readStoreCurrency(db)]);
   const amountMinor = amountToMinor(
     body.amount,
@@ -475,7 +489,7 @@ app.openapi(createRoute({
     giftCardId,
     amountMinor,
     reason: body.reason,
-    requestKey: body.requestKey,
+    requestKey,
     actorUserId: staffId(c),
   });
   return ok(c, { giftCard: presentSummary(summary) });
