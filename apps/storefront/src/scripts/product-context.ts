@@ -30,7 +30,8 @@ function storeOf(root: Document): ProductStore {
 }
 
 function buyForm(root: Document): HTMLFormElement | null {
-  return root.querySelector<HTMLFormElement>("form[data-product-buy-form]");
+  // Host-only markers (the sanitizer strips `data-sx-*` from app markup): a skin cannot stand in for them.
+  return root.querySelector<HTMLFormElement>("[data-sx-product-summary] form[data-sx-buy-form]");
 }
 
 /** Each reader gets its own copy: an island cannot change the store's state. */
@@ -39,9 +40,10 @@ function copy(state: StorefrontProductState): StorefrontProductState {
 }
 
 /** The buy form as the server drew it: its SKU field, quantity, inputs, purchase option and Add to cart button. */
-function drawnState(root: Document, form: HTMLFormElement): StorefrontProductState {
+function drawnState(form: HTMLFormElement): StorefrontProductState {
+  const summary = form.closest("[data-sx-product-summary]")!;
   const variant = form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]')?.value.trim() ?? "";
-  const quantityInput = root.getElementById("quantity");
+  const quantityInput = summary.querySelector("#quantity");
   const quantity = Number.parseInt(quantityInput instanceof HTMLInputElement ? quantityInput.value : "1", 10);
   const inputs: Record<string, string> = {};
   for (const element of Array.from(form.elements)) {
@@ -50,8 +52,8 @@ function drawnState(root: Document, form: HTMLFormElement): StorefrontProductSta
     const key = element.name.slice(BUYER_INPUT_FIELD_PREFIX.length);
     inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
   }
-  const option = root.querySelector<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]:checked')?.value ?? "";
-  const add = root.querySelector('[data-product-summary] [data-action="add-to-cart"]');
+  const option = summary.querySelector<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]:checked')?.value ?? "";
+  const add = summary.querySelector('[data-action="add-to-cart"]');
   return {
     variantId: variant || null,
     quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
@@ -81,7 +83,7 @@ export function productContext(root: Document = document): ProductContext | unde
   const form = buyForm(root);
   if (!form) return undefined;
   const store = storeOf(root);
-  const state = () => copy(store.state ?? drawnState(root, form));
+  const state = () => copy(store.state ?? drawnState(form));
   return {
     state,
     onChange(listener) {

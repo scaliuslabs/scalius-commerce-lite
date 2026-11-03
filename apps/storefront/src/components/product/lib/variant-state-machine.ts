@@ -150,8 +150,9 @@ export function validateSelection(
   return { valid: true, variant: resolved };
 }
 
-export function loadVariantsFromDOM(): Variant[] {
-  const element = document.getElementById("product-variants-data");
+/** The SKUs the buy form drew (`root`: its container; the gallery reads them page-wide). */
+export function loadVariantsFromDOM(root: ParentNode = document): Variant[] {
+  const element = root.querySelector("#product-variants-data");
   if (!element?.textContent) return [];
   try {
     const value = JSON.parse(element.textContent);
@@ -161,8 +162,8 @@ export function loadVariantsFromDOM(): Variant[] {
   }
 }
 
-export function loadOptionsFromDOM(): ProductOptionDefinition[] {
-  const element = document.getElementById("product-options-data");
+export function loadOptionsFromDOM(root: ParentNode = document): ProductOptionDefinition[] {
+  const element = root.querySelector("#product-options-data");
   if (!element?.textContent) return [];
   try {
     const value = JSON.parse(element.textContent);

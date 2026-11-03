@@ -300,6 +300,8 @@ export function createDeferredElement(): CustomElementConstructor {
       if (!template) return;
       template.replaceWith(template.content);
       this.dataset.revealed = "";
+      // The store's own scripts bring what entered up to date (a skin's SKU controls).
+      this.dispatchEvent(new CustomEvent("scalius-deferred-reveal", { bubbles: true }));
     }
   };
 }

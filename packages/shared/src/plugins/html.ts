@@ -43,6 +43,7 @@ import { parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_DEFERRED_HYDRATION, STOREFRONT_DEFERRED_TAG } from "./storefront-protocol";
 import { APP_FORM_OWNER_ATTRIBUTE } from "./app-form";
+import { HOST_ID_PREFIX } from "./host-id";
 
 export interface PluginHtmlOptions {
   /** The app the markup belongs to: its id prefix (`<app name>-`). */
@@ -308,7 +309,7 @@ function attribute(name: string, value: string, tag: string, svg: boolean, scope
       return tokens.length > 0 ? [name, tokens.join(" ")] : null;
     }
     case "id":
-      return value.startsWith(scope.idPrefix) && ID_REFERENCE.test(value) ? [name, value] : null;
+      return value.startsWith(scope.idPrefix) && !value.startsWith(HOST_ID_PREFIX) && ID_REFERENCE.test(value) ? [name, value] : null;
     case "for":
     case "popovertarget":
       return ID_REFERENCE.test(value) ? [name, value] : null;
