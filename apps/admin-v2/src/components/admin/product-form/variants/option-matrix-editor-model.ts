@@ -95,11 +95,6 @@ export type VariantSeed = {
   barcodeType?: DraftVariant["barcodeType"];
   /** Whether new rows count stock (a service starts untracked). */
   trackInventory?: boolean;
-  /**
-   * Archived warranty policies: a new row never copies one (the save would
-   * refuse it). It gets no warranty, which is what its source sells with.
-   */
-  archivedPolicyIds?: ReadonlySet<string>;
 };
 
 const seedOf = (seed: number | VariantSeed): VariantSeed => (typeof seed === "number" ? { price: seed, compareAt: null } : seed);
@@ -350,21 +345,6 @@ export function withFulfilmentMode<T extends Pick<DraftVariant, "fulfillmentKind
   return rows.map((row) => (row.fulfillmentKind === mode ? row : { ...row, fulfillmentKind: mode }));
 }
 
-/**
- * The warranty a new row takes from the rows it comes from, as a pair (like
- * the price): theirs when they share one, unless it is an archived own
- * policy, which becomes none; nothing (the product's) when they differ.
- */
-function sharedWarranty(
-  mode: DraftVariant["warrantyMode"] | undefined,
-  policyId: DraftVariant["warrantyPolicyId"] | undefined,
-  archived: ReadonlySet<string> | undefined,
-): Pick<DraftVariant, "warrantyMode" | "warrantyPolicyId"> {
-  if (!mode || policyId === undefined) return {};
-  if (mode === "policy" && policyId && archived?.has(policyId)) return { warrantyMode: "none", warrantyPolicyId: null };
-  return { warrantyMode: mode, warrantyPolicyId: policyId };
-}
-
 export function initialOptions(options: ProductOptionDefinition[]): DraftOption[] {
   return options.map((option) => ({
     id: option.id,
@@ -428,7 +408,11 @@ export function materializeVariants(
       barcode: keepsSimpleBarcode ? seed.barcode! : null,
       barcodeType: keepsSimpleBarcode ? seed.barcodeType ?? null : null,
       ...(shared("fulfillmentKind") ? { fulfillmentKind: shared("fulfillmentKind") } : {}),
-      ...sharedWarranty(shared("warrantyMode"), shared("warrantyPolicyId"), seed.archivedPolicyIds),
+      // The warranty moves as a pair, like the price. A copied archived own
+      // policy is saved as none (the server decides: the row sells without one).
+      ...(shared("warrantyMode") && shared("warrantyPolicyId") !== undefined
+        ? { warrantyMode: shared("warrantyMode"), warrantyPolicyId: shared("warrantyPolicyId") }
+        : {}),
     };
   });
 }

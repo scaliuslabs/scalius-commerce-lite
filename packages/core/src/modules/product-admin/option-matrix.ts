@@ -40,12 +40,11 @@ import {
   planDigitalSkuWrites,
   addSkuWarrantyIssues,
   skuStockSchema,
-  skuWarrantyColumns,
   skuWarrantyInputShape,
   skuWeightSchema,
   STOCK_CHANGED_MESSAGE,
 } from "../products";
-import { assertLiveSkuWarrantyPolicies, assertSkuWarrantyAllowed } from "./warranty";
+import { planMatrixSkuWarranties } from "./warranty";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -699,18 +698,14 @@ export async function planProductOptionMatrix(
         ...activeVariantById,
         ...restoredVariantById,
     ]);
-    normalizedVariants.forEach((variant, index) => assertSkuWarrantyAllowed(variant, {
-        isDefault: false,
-        isGiftCard: context.isGiftCard,
-        field: `${fieldPrefix}variants.${index}.warrantyMode`,
-    }));
-    // Only a live SKU keeps a policy archived after it was chosen: a restored
-    // combination's SKU is new to the merchant, like a new row.
-    await assertLiveSkuWarrantyPolicies(db, normalizedVariants.map((variant, index) => ({
-        policyId: variant.warrantyPolicyId,
-        savedPolicyId: activeVariantById.get(variant.id)?.warrantyPolicyId ?? null,
+    // A restored combination's SKU is new to the merchant, like a new row:
+    // only a live saved SKU has a warranty to keep.
+    const plannedWarranties = await planMatrixSkuWarranties(db, normalizedVariants.map((variant, index) => ({
+        input: variant,
+        savedPolicyId: activeVariantById.has(variant.id) ? activeVariantById.get(variant.id)!.warrantyPolicyId : undefined,
         field: `${fieldPrefix}variants.${index}.warrantyPolicyId`,
-    })));
+    })), context.isGiftCard);
+    const warrantyByVariantId = new Map(normalizedVariants.map((variant, index) => [variant.id, plannedWarranties[index]]));
 
     // A digital SKU's stock is its licence keys: new digital rows start at 0,
     // saved digital rows keep their stock, rows turning digital hold none, and
@@ -1034,12 +1029,9 @@ export async function planProductOptionMatrix(
             discountType: variant.discountType,
             discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
             discountAmountMinor: variant.discountType === "flat" ? toStoreMinor(variant.discountAmount ?? 0, currency) : 0,
-            // Omitted keeps a saved row's kind and warranty; a restored
-            // combination never brings back its retired SKU's warranty.
+            // Omitted keeps a saved row's kind and warranty (planMatrixSkuWarranties).
             ...(variant.fulfillmentKind !== undefined ? { fulfillmentKind: variant.fulfillmentKind } : {}),
-            ...skuWarrantyColumns(activeVariantById.has(variant.id)
-                ? variant
-                : { warrantyMode: variant.warrantyMode ?? "inherit", warrantyPolicyId: variant.warrantyPolicyId }),
+            ...warrantyByVariantId.get(variant.id),
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {
