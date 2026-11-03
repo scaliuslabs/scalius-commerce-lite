@@ -80,6 +80,15 @@ type ScheduledRunContext = {
   scheduledAt: number | undefined;
 };
 
+/**
+ * The minute a tick was scheduled for (its start when the trigger gave none):
+ * the clock of work that cuts by day, so a delayed or replayed tick, and the
+ * budget harness on any day, does the same work.
+ */
+function tickDate(runContext: ScheduledRunContext): Date {
+  return new Date(runContext.scheduledAt ?? runContext.startedAt);
+}
+
 /** A sweep's row limit under the plan: the full limit on Paid, a fraction on Free. */
 function scaled(limit: number): number {
   return Math.max(1, Math.floor(limit * planLimits().maintenance.limitScale));
@@ -565,8 +574,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Finished UTC days become analytics buckets; until then reports read their facts.
     name: "analytics_seal",
-    async run({ db, timed }) {
-      const sealed = await timed("analytics_seal", () => sealAnalyticsDays(db));
+    async run({ db, timed, runContext }) {
+      const sealed = await timed("analytics_seal", () => sealAnalyticsDays(db, tickDate(runContext)));
       if (sealed > 0) console.log(`[scheduled] Analytics seal: days=${sealed}`);
     },
   },
@@ -808,7 +817,7 @@ async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<
   const { measurePluginStorage } = await import("./plugins/scheduled");
   await timed("plugin_storage_measure", () => measurePluginStorage(db));
   // A sampled drift check of the derived projections, repaired in place.
-  const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db));
+  const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db, { now: tickDate(runContext) }));
   if (projections.analytics.drift || projections.recommendations.drift || projections.inbox.drift) {
     console.log(
       `[scheduled] Derived projections repaired: analytics=${projections.analytics.drift}, ` +

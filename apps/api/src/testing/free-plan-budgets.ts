@@ -101,6 +101,15 @@
  * whatever the count. Free now drains 20 events and sends 4 deliveries a
  * tick (2 after a write, in the write's invocation): 24 calls with 5 apps
  * and 3 webhooks (160 delivery rows).
+ *
+ * Pinned clock (2026-11-03): the analytics seal took the wall clock, so each
+ * real day the file ran later sealed one more day on the first idle tick
+ * (cron-idle had reached 123 rows written against 117). The seal and the
+ * nightly pass now take the tick's scheduled time, and the harness starts the
+ * wall clock and SQL time at 2026-10-03T10:00Z, so a run on any day measures
+ * the same store. Re-measured: idle worst minute 19 -> 10 calls Free (the
+ * seeded orders are 12 days old, not 40: nothing ages into a sweep), 57 -> 48
+ * Paid.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -150,8 +159,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm-repair": { d1Calls: 26, d1Statements: 122, externalFetches: 0, rowsWritten: 325, rowsRead: 85, fullScans: 5 },
     "order-refund": { d1Calls: 42, d1Statements: 48, externalFetches: 0, rowsWritten: 22, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 19, d1Statements: 20, externalFetches: 0, rowsWritten: 117, rowsRead: 7556, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 15.79 },
-    "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 432, rowsRead: 25963, fullScans: 91 },
+    "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 18, meanRowsWritten: 0, meanRowsRead: 15.79 },
+    "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 430, rowsRead: 25782, fullScans: 77 },
     "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 103, rowsRead: 882, fullScans: 21 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
     "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
@@ -188,8 +197,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm-repair": { d1Calls: 197, d1Statements: 293, externalFetches: 0, rowsWritten: 425, rowsRead: 145, fullScans: 5 },
     "order-refund": { d1Calls: 42, d1Statements: 48, externalFetches: 0, rowsWritten: 22, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 57, d1Statements: 63, externalFetches: 0, rowsWritten: 175, rowsRead: 7992, fullScans: 27, meanRowsWritten: 0, meanRowsRead: 30.1 },
-    "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 432, rowsRead: 28529, fullScans: 467 },
+    "cron-idle": { d1Calls: 48, d1Statements: 54, externalFetches: 0, rowsWritten: 101, rowsRead: 7889, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 30.1 },
+    "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 430, rowsRead: 28348, fullScans: 453 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 118, rowsRead: 890, fullScans: 27 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
     "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },

@@ -21,11 +21,13 @@ const count = async (db: Database, text: string) =>
 
 /**
  * Builds the buckets of finished UTC days (before `now`'s day) that are not
- * sealed, oldest first. By default it seals the days after the newest sealed
- * one; `holes` also finds older days a late write unsealed (a read of every
- * day of history: the nightly pass, not the minute sweep).
+ * sealed, oldest first. `now` is the caller's clock (a cron tick passes its
+ * scheduled time), so a run seals the same days whatever the wall clock says.
+ * By default it seals the days after the newest sealed one; `holes` also
+ * finds older days a late write unsealed (a read of every day of history: the
+ * nightly pass, not the minute sweep).
  */
-export async function sealAnalyticsDays(db: Database, now: Date = new Date(), options: { holes?: boolean } = {}): Promise<number> {
+export async function sealAnalyticsDays(db: Database, now: Date, options: { holes?: boolean } = {}): Promise<number> {
   const through = Math.floor(now.getTime() / 1000 / DAY) * DAY;
   const days = (await db.all<{ day: number | null }>(sql.raw(analyticsUnsealedDaysSql(through, ANALYTICS_SEAL_DAYS_PER_RUN, options))))
     .map((row) => Number(row.day)).filter(Number.isSafeInteger);
