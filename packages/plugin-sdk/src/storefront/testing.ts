@@ -107,7 +107,7 @@ export function fixtureProductCard(overrides: Partial<StorefrontProductCard> = {
     rating: { average: 4.6, count: 12 },
     quickAdd: true,
     needsOptions: false,
-    ...cardKeySpecs(SAMPLE_SPECIFICATIONS),
+    facts: [],
     fields: {},
     ...overrides,
   };
@@ -165,7 +165,6 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       ],
       fields: {},
       breadcrumbs: [{ title: "Home", url: "/" }, { title: "Shirts", url: "/categories/shirts" }, { title: card.title, url: card.url }],
-      specifications: SAMPLE_SPECIFICATIONS,
       ...overrides,
     },
   };
@@ -296,14 +295,25 @@ export interface FixtureStore {
   skinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"];
 }
 
+/** The sample shop's linen shirt as a card: the bare fixture card with the key specs the store sends. */
+function sampleCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontProductCard {
+  return fixtureProductCard({ ...cardKeySpecs(SAMPLE_SPECIFICATIONS), ...overrides });
+}
+
 const SAMPLE_STORE: FixtureStore = {
   name: "sample",
-  description: "A sample shop: Acme Store, clothing, prices in BDT.",
+  description: "A sample shop: Acme Store, clothing, prices in BDT; its shirt has specifications and key specs.",
   context: (overrides) => fixtureContext(overrides),
-  productCards: () => fixtureSectionResolver.products({} as never).cards,
+  productCards: () => fixtureSectionResolver.products({} as never).cards.map((card) => ({ ...card, ...cardKeySpecs(SAMPLE_SPECIFICATIONS) })),
   image: () => fixtureProductCard().image,
-  productPage: (overrides) => fixtureProductPage(overrides),
-  skinData: (target) => fixtureSkinData(target),
+  productPage: (overrides) => fixtureProductPage({ specifications: SAMPLE_SPECIFICATIONS, ...overrides }),
+  skinData: (target) => {
+    switch (target) {
+      case "product_card": return { product: sampleCard(), position: 0, aboveFold: true };
+      case "product_main": return SAMPLE_STORE.productPage();
+      default: return fixtureSkinData(target);
+    }
+  },
 };
 
 /** A product with nothing optional: no photo, price cut, rating, brand, description or options. */
