@@ -5,7 +5,6 @@
 // `dashboard.derived_projections.maintain` operation.
 import { sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { advanceCacheDeps } from "@scalius/database/cache-dep-writes";
 import {
   conversationInboxCountsDriftSql, conversationInboxCountsRebuild,
   recommendationPairsDriftSql, recommendationPairsRepairStatements,
@@ -29,13 +28,12 @@ export interface DerivedProjectionReport {
 const statement = (db: Database, text: string) => db.run(sql.raw(text.replace(/;\s*$/, "")));
 const drift = async (db: Database, text: string) => Number((await db.all<{ drift: number }>(sql.raw(text)))[0]?.drift ?? 0);
 
-/** Rewrites the recommendation pairs of `orderIds`, advancing the ranking dependency once. */
+/**
+ * Rewrites the recommendation pairs of `orderIds`. Only the background
+ * recommendation refresh reads them, so no cache key advances.
+ */
 async function repairRecommendationPairs(db: Database, orderIds: string): Promise<void> {
-  await safeBatch(db, [
-    ...recommendationPairsRepairStatements(orderIds).map((text) => statement(db, text)),
-    // The projection is not a dependency source: a repair invalidates its readers itself.
-    advanceCacheDeps(db, ["recommendation-signals"]),
-  ]);
+  await safeBatch(db, recommendationPairsRepairStatements(orderIds).map((text) => statement(db, text)));
 }
 
 /**

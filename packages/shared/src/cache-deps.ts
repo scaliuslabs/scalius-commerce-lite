@@ -42,8 +42,6 @@ export const CACHE_DEP_KINDS = [
   "sold",
   /** Popular home-list membership and ordering. */
   "popular",
-  /** Private order signals used only by the live recommendation fallback. */
-  "recommendation-signals",
   /** `lm:<scope>`: membership (and newest order) of a public product set; `lm:seo` the sitemap/feed flags and lastmods; `lm:shape` the store-shape counts. */
   "lm",
   /** `lo:<facet>:<scope>`: an ordering/filter fact of a member (price, band, discount, name). */
@@ -153,7 +151,6 @@ export const cacheDep = {
   recommendations: (productId: string) => `rec:${productId}`,
   sold: (productId: string) => `sold:${productId}`,
   popular: () => "popular",
-  recommendationSignals: () => "recommendation-signals",
   listMembership: (scope: CacheDepScope) => `lm:${scope}`,
   /** Sitemap and product-feed facts: noindex/exclusion flags and every sitemap lastmod. */
   discoveryMembership: () => "lm:seo",
@@ -238,7 +235,7 @@ export function isCacheDep(dep: string): boolean {
   if (kind === null || !KEY_PATTERN.test(dep)) return false;
   const constant = kind === "srch" || kind === "theme" || kind === "ship"
     || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "rd" || kind === "store"
-    || kind === "popular" || kind === "recommendation-signals";
+    || kind === "popular";
   return constant ? dep === kind : dep.length > kind.length + 1;
 }
 
@@ -1040,23 +1037,6 @@ const CACHE_DEP_TABLE_RULES = {
     note: "Which locations' on-hand a channel sells: linking or unlinking one can change the availability of every product a channel shows, so it advances `store` (a rare merchant setting).",
     rules: everyChange([{ dep: "store" }]),
   },
-
-  orders: {
-    kinds: ["recommendation-signals"], noise: [],
-    note: "Only live fallback ranking reads private order signals; no order or buyer identifier enters a dependency key.",
-    rules: everyChange([{ dep: "recommendation-signals" }]).map((rule) => ({
-      ...rule,
-      ...(rule.event === "update" ? { changed: ["id", "status", "customer_phone", "customer_email", "created_at", "deleted_at"] } : {}),
-      where: { exists: "SELECT 1 WHERE R.deleted_at IS NULL AND R.status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')" },
-    })),
-  },
-  order_items: {
-    kinds: ["recommendation-signals"], noise: [],
-    rules: everyChange([{ dep: "recommendation-signals" }]).map((rule) => ({
-      ...rule,
-      ...(rule.event === "update" ? { changed: ["product_id", "order_id", "created_at"] } : {}),
-    })),
-  },
 } as const satisfies Record<string, CacheDepTableSpec>;
 
 export type CacheDepTable = keyof typeof CACHE_DEP_TABLE_RULES;
@@ -1082,6 +1062,16 @@ const MACHINERY = "Cache machinery itself.";
 const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch.";
 const PURCHASING = "Purchasing and transfer documents: staff-only; buyers never see incoming or in-transit stock.";
 
+/**
+ * Key kinds a trigger advances that no cached public route declares, each
+ * with its reason. Every other advanced kind must be read by some cached
+ * public route (`apps/api/src/cache-deps-coverage.test.ts`): a trigger whose
+ * keys nobody reads only writes rows.
+ */
+export const CACHE_DEP_UNREAD_KINDS: Readonly<Partial<Record<CacheDepKind, string>>> = {
+  tax: "No cached read outputs tax yet (the checkout quote reads it live under its fence); its triggers fire only on rare merchant tax edits, never on a buyer write, and keep the key ready for the first cached tax read.",
+};
+
 /** No table uses age-based freshness; retained for recording API compatibility. */
 export const CACHE_DEP_SOFT_TABLES: readonly string[] = [];
 export type CacheDepSoftTable = never;
@@ -1092,7 +1082,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   products_fts: FTS,
   product_facet_public_counts: "Derived public facet counts read by plain shop-all facets; canonical facet lf and buyer-state lm dependencies cover them.",
   product_facet_scope_counts: "Derived public facet counts per category and brand (0174), read by plain category, brand and shop-all listings; canonical facet lf, buyer-state lm and review-stat dependencies cover them.",
-  recommendation_order_products: "Derived order/product popularity; source orders and order_items advance recommendation-signals in the same transaction, which every live ranking declares.",
+  recommendation_order_products: "Derived order/product popularity read only by the background recommendation and sales-stats refreshes, which store their results in product_recommendations and product_sales_stats (registered: rec, sold, popular).",
   categories_fts: FTS,
   pages_fts: "FTS index maintained by triggers from pages title and content, which advance pg:<id> and pg:*.",
   search_fts_terms: "The FTS index of Turso and PostgreSQL, maintained by triggers from the same columns as the FTS5 tables, whose rules advance srch and pg:<id>/pg:*.",
@@ -1128,6 +1118,11 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   checkout_authority: "Checkout fence revision; cart and checkout are never cached.",
   delivery_providers: PRIVATE,
   delivery_shipments: PRIVATE,
+  // Orders and their lines: no public cached read touches them. Their cache
+  // triggers advanced private ranking signals only the background
+  // recommendation refresh read; migration 0192 dropped them.
+  orders: PRIVATE,
+  order_items: PRIVATE,
   order_discount_allocations: PRIVATE,
   admin_fcm_tokens: PRIVATE,
   push_subscriptions: PRIVATE,
