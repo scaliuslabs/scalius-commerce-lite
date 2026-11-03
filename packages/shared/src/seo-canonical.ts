@@ -1,4 +1,5 @@
 import { MARKET_SUBFOLDER_PATTERN } from "./markets";
+import { STOREFRONT_ROUTE_SEGMENTS } from "./storefront-route-segments";
 
 export const CANONICAL_PATH_MAX_LENGTH = 2048;
 
@@ -8,34 +9,8 @@ export type CanonicalResourceKind =
 const CANONICAL_SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CANONICAL_COLLECTION_SEGMENT_PATTERN =
   /^(?:col_[A-Za-z0-9_-]+|[A-Za-z0-9_-]{18,32})$/;
-const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
-  "account",
-  "admin",
-  "api",
-  // Installed apps' storefront proxy (/apps/<plugin id>/*).
-  "apps",
-  "buy",
-  "blog",
-  "brands",
-  "cart",
-  "categories",
-  "checkout",
-  "collections",
-  "health",
-  // The market selector's form target (/localization).
-  "localization",
-  // Newsletter result, confirmation and unsubscribe pages (/newsletter/*).
-  "newsletter",
-  "404",
-  "500",
-  "order-success",
-  "payment-recovery",
-  "products",
-  "robots.txt",
-  "search",
-  "sitemap.xml",
-  "track-order",
-]);
+// Every storefront route, and the dashboard's own path on a shared host.
+const RESERVED_PAGE_CANONICAL_SEGMENTS: ReadonlySet<string> = new Set([...STOREFRONT_ROUTE_SEGMENTS, "admin"]);
 
 export function normalizeCanonicalPathInput(
   value: string | null | undefined,

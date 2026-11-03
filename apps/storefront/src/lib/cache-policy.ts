@@ -9,7 +9,7 @@ const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
  * page of that kind is added here; `private-pages.test.ts` fails until every
  * page under `src/pages` is on this list or declared public.
  */
-const PRIVATE_STOREFRONT_ROOTS = [
+export const PRIVATE_STOREFRONT_ROOTS = [
   "account",
   "agent",
   "buy",
