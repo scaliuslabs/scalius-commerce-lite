@@ -141,7 +141,7 @@ export async function getTrackingHealth(
     db.select(aliased({
       event: metaConversionsLogs.eventName,
       // Browser successes are logged as a sample: each row stands for its share.
-      sent: sql<number>`sum(case when ${metaConversionsLogs.status} = 'success' then ${capiSuccessWeightSql(metaConversionsLogs.eventId)} else 0 end)`,
+      sent: sql<number>`sum(case when ${metaConversionsLogs.status} = 'success' then ${capiSuccessWeightSql(metaConversionsLogs.requestPayload)} else 0 end)`,
       failed: counted("failed", metaConversionsLogs.status),
     })).from(metaConversionsLogs)
       .where(gte(metaConversionsLogs.createdAt, new Date(since * 1000)))

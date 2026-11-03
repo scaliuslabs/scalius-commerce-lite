@@ -231,6 +231,17 @@ export function summarizeMetaResponsePayload(
     }
 }
 
+/** A request summary (a JSON object) with the events one row stands for, when more than one. */
+function withSampleWeight(summary: string, weight: number): string {
+    if (weight <= 1) return summary;
+    try {
+        const parsed = JSON.parse(summary) as Record<string, unknown>;
+        return JSON.stringify({ ...parsed, sampleWeight: weight });
+    } catch {
+        return JSON.stringify({ available: false, sampleWeight: weight });
+    }
+}
+
 /**
  * The Meta Conversions API settings with the access token strictly decrypted
  * (empty when unreadable), or null when never saved or unreadable.
@@ -249,48 +260,42 @@ export async function getCapiSettings(
 }
 
 /**
- * One success in this many is logged for a browser event (a deterministic
- * sample of its event id). Purchase events (bounded by orders) and staff test
- * events are logged in full, and so is every failure.
+ * One success in this many is logged when a caller samples its successes
+ * (browser events); each logged one carries the weight in its request
+ * summary (`sampleWeight`). Failures are always logged.
  */
 export const CAPI_SUCCESS_LOG_SAMPLE = 100;
 
-/** Event ids the server mints for orders and staff tests: every one of their successes is logged. */
-function isFullyLoggedEventId(eventId: string): boolean {
-    return eventId.startsWith("Purchase:") || eventId.startsWith("Test:");
+/** Server randomness in [0, 1): the caller of a browser event cannot steer it. */
+function serverDraw(): number {
+    return crypto.getRandomValues(new Uint32Array(1))[0]! / 2 ** 32;
 }
 
-/** FNV-1a of the event id: the same id always gets the same answer, retries included. */
-function sampledEventId(eventId: string): boolean {
-    let hash = 0x811c9dc5;
-    for (let index = 0; index < eventId.length; index += 1) {
-        hash ^= eventId.charCodeAt(index);
-        hash = Math.imul(hash, 0x01000193);
-    }
-    return (hash >>> 0) % CAPI_SUCCESS_LOG_SAMPLE === 0;
-}
-
-/**
- * Whether a success is logged: an anonymous browser event writes a log row
- * for one success in CAPI_SUCCESS_LOG_SAMPLE only, so page views cost no D1
- * writes (Workers Free allows 100,000 rows written a day).
- */
-export function shouldLogCapiSuccess(eventId: string): boolean {
-    return isFullyLoggedEventId(eventId) || sampledEventId(eventId);
+export interface CapiLogOptions {
+    /**
+     * `every`: log every success (the server's own events: order purchases
+     * and staff test events). `sample` (the default, every browser event):
+     * one success in CAPI_SUCCESS_LOG_SAMPLE, chosen by server randomness,
+     * so a page view costs no D1 write whatever event id it sends.
+     */
+    successLog?: "every" | "sample";
+    /** Test seam: a draw in [0, 1); a success is sampled when it is below 1 / CAPI_SUCCESS_LOG_SAMPLE. */
+    draw?: () => number;
 }
 
 /**
  * How many events one success row stands for in a count (tracking health):
- * a sampled browser success stands for CAPI_SUCCESS_LOG_SAMPLE, the rest for one.
+ * the `sampleWeight` its request summary stores, else one (rows logged in full,
+ * and every row written before sampling).
  */
-export function capiSuccessWeightSql(eventIdColumn: SQL | AnyColumn): SQL {
-    return sql`(case when substr(${eventIdColumn}, 1, 9) = 'Purchase:' or substr(${eventIdColumn}, 1, 5) = 'Test:' then 1 else ${sql.raw(String(CAPI_SUCCESS_LOG_SAMPLE))} end)`;
+export function capiSuccessWeightSql(requestPayloadColumn: SQL | AnyColumn): SQL {
+    return sql`(case when json_valid(${requestPayloadColumn}) then coalesce(cast(json_extract(${requestPayloadColumn}, '$.sampleWeight') as integer), 1) else 1 end)`;
 }
 
 /**
- * Logs a CAPI event: every failure, and a sample of browser successes
- * (`shouldLogCapiSuccess`). It never deletes: expired rows go in the
- * maintenance sweep (`purgeExpiredCapiLogs`), a bounded delete, not a
+ * Logs a CAPI event: every failure, and every success or a sample of them as
+ * the caller says (`CapiLogOptions`). It never deletes: expired rows go in
+ * the maintenance sweep (`purgeExpiredCapiLogs`), a bounded delete, not a
  * whole-table delete on every event.
  */
 export async function logCapiEvent(
@@ -306,15 +311,20 @@ export async function logCapiEvent(
     },
     /** Unused: retention is the maintenance sweep's (callers may still pass it). */
     _retentionHours?: number,
+    options: CapiLogOptions = {},
 ): Promise<void> {
-    if (logData.status === "success" && !shouldLogCapiSuccess(logData.eventId)) return;
+    const sampled = logData.status === "success" && options.successLog !== "every";
+    if (sampled && (options.draw ?? serverDraw)() >= 1 / CAPI_SUCCESS_LOG_SAMPLE) return;
     try {
         const { eventTime } = logData;
         const safeLogData = {
             eventId: logData.eventId.slice(0, 200),
             eventName: logData.eventName.slice(0, 100),
             status: logData.status,
-            requestPayload: summarizeMetaRequestPayload(logData.requestPayload) ?? SAFE_META_LOG_PAYLOAD_UNAVAILABLE,
+            requestPayload: withSampleWeight(
+                summarizeMetaRequestPayload(logData.requestPayload) ?? SAFE_META_LOG_PAYLOAD_UNAVAILABLE,
+                sampled ? CAPI_SUCCESS_LOG_SAMPLE : 1,
+            ),
             responsePayload: summarizeMetaResponsePayload(logData.responsePayload) ?? undefined,
             errorMessage: logData.errorMessage
                 ? "Meta delivery failed. Review provider configuration."

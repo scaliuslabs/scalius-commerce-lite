@@ -49,7 +49,7 @@ export async function sendTrackingTestEvent(
       action_source: "website",
       user_data: { client_user_agent: "Scalius tracking test", client_ip_address: "192.0.2.1" },
       custom_data: { content_name: "Scalius test event" },
-    }, { encryptionKey: options.encryptionKey });
+    }, { encryptionKey: options.encryptionKey, successLog: "every" });
     return {
       destination,
       accepted: result.success,
