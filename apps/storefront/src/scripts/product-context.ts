@@ -22,7 +22,8 @@ function copy(state: StorefrontProductState): StorefrontProductState {
 /** The buy form as the server drew it: its SKU field, quantity, inputs, purchase option and Add to cart button. */
 function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductState {
   const variant = form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]')?.value.trim() ?? "";
-  const quantityInput = summary.querySelector("#quantity");
+  // The form's own parts (host-only roles), never an app slot's look-alikes in the same container.
+  const quantityInput = summary.querySelector('[data-sx-buy="quantity"]');
   const quantity = Number.parseInt(quantityInput instanceof HTMLInputElement ? quantityInput.value : "1", 10);
   const inputs: Record<string, string> = {};
   for (const element of Array.from(form.elements)) {
@@ -31,8 +32,8 @@ function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductS
     const key = element.name.slice(BUYER_INPUT_FIELD_PREFIX.length);
     inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
   }
-  const option = summary.querySelector<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]:checked')?.value ?? "";
-  const add = summary.querySelector('[data-action="add-to-cart"]');
+  const option = summary.querySelector<HTMLInputElement>('[data-sx-buy="purchase-option"]:checked')?.value ?? "";
+  const add = summary.querySelector('[data-sx-buy="add"]');
   return {
     variantId: variant || null,
     quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,

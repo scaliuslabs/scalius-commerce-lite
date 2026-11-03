@@ -42,6 +42,13 @@ const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "disab
 /** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice (off, as the form's own, where nothing can be bought). */
 const defaultSubmit = (blocked: boolean) => `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true"${blocked ? " disabled" : ""} ${BOUND}></button>`;
 
+/** Whether offset `at` of checked markup is inside an `<a>` carrying `data-choose-variant` (links do not nest). */
+function insideChoiceLink(html: string, at: number): boolean {
+  const before = html.slice(0, at);
+  const open = Math.max(before.lastIndexOf("<a "), before.lastIndexOf("<a>"));
+  return open > before.lastIndexOf("</a>") && /^<a\s[^>]*\bdata-choose-variant=/.test(before.slice(open));
+}
+
 function write(tag: string, attributes: ReadonlyArray<[string, string | null]>): string {
   return `<${tag}${attributes.map(([name, value]) => (value === null ? ` ${name}` : ` ${name}="${escapeHtml(value)}"`)).join("")}>`;
 }
@@ -122,7 +129,14 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
     }
     if (!part.html.includes("data-choose-variant") && !part.html.includes("data-buy-variant")) return part;
     const inDeferred = deferredAt(part.html);
-    return { ...part, html: part.html.replace(CONTROL_TAG, (whole: string, tag: string, rest: string, at: number) => bindTag(whole, tag, rest, inDeferred(at))) };
+    return { ...part, html: part.html.replace(CONTROL_TAG, (whole: string, tag: string, rest: string, at: number) => {
+      // Still bound (the nearest bound control wins a press), but a button in a link is invalid HTML that
+      // assistive technology and switch users cannot reach reliably: the docs teach sibling controls.
+      if (tag === "button" && rest.includes("data-buy-variant") && insideChoiceLink(part.html, at)) {
+        warnOnce(`${markup.pluginId}:buy-in-choice-link`, `${markup.pluginId} product_main skin puts a buyVariant button inside a chooseVariant link: a button inside a link is invalid HTML that keyboard, screen reader and switch users cannot use reliably. Make them siblings inside the card (a <div>).`);
+      }
+      return bindTag(whole, tag, rest, inDeferred(at));
+    }) };
   });
 
   // Every SKU that can be bought has a control (and the skin has some).

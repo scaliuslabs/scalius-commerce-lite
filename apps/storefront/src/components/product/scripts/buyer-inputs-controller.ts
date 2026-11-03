@@ -37,12 +37,12 @@ function readJson<T>(root: ParentNode, id: string): T | null {
   }
 }
 
-export function initBuyerInputs(root: ParentNode, onChange: () => void): BuyerInputsController | null {
-  const form = root.querySelector<HTMLFormElement>("form[data-buyer-inputs]");
-  const fields = readJson<ProductCustomizationField[]>(root, "product-customization-data");
-  const copy = readJson<BuyerInputCopy>(root, "product-customization-copy");
+/** `form`: the buy form with buyer inputs (ProductBuyerInputs.astro); its fields and their schema are inside it. */
+export function initBuyerInputs(form: HTMLFormElement, onChange: () => void): BuyerInputsController | null {
+  const fields = readJson<ProductCustomizationField[]>(form, "product-customization-data");
+  const copy = readJson<BuyerInputCopy>(form, "product-customization-copy");
   const schema = customizationSchemaFromView({ fields: Array.isArray(fields) ? fields : [] });
-  if (!form || !schema || !copy) return null;
+  if (!schema || !copy) return null;
   // Our own messages replace the browser's bubbles once the script runs.
   form.noValidate = true;
 

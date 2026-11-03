@@ -21,7 +21,7 @@ const choiceClass =
   <fieldset class="space-y-2" data-product-purchase-options data-buy-part="purchase-options">
     <legend class="mb-1 text-sm font-medium text-foreground">{copy.legend}</legend>
     <label class={choiceClass}>
-      <input type="radio" name="purchaseOption" value="" form={formId} checked class="mt-0.5 size-5 shrink-0 accent-primary" />
+      <input type="radio" name="purchaseOption" data-sx-buy="purchase-option" value="" form={formId} checked class="mt-0.5 size-5 shrink-0 accent-primary" />
       <span class="min-w-0 flex-1 text-sm font-medium text-foreground">{copy.oneTime}</span>
     </label>
     {options.map((option) => {
@@ -31,6 +31,7 @@ const choiceClass =
           <input
             type="radio"
             name="purchaseOption"
+            data-sx-buy="purchase-option"
             value={option.id}
             form={formId}
             aria-describedby={hint}
