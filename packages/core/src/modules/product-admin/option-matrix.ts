@@ -697,9 +697,11 @@ export async function planProductOptionMatrix(
         ...activeVariantById,
         ...restoredVariantById,
     ]);
+    // Only a live SKU keeps a policy archived after it was chosen: a restored
+    // combination's SKU is new to the merchant, like a new row.
     await assertLiveSkuWarrantyPolicies(db, normalizedVariants.map((variant, index) => ({
         policyId: variant.warrantyPolicyId,
-        savedPolicyId: variantById.get(variant.id)?.warrantyPolicyId ?? null,
+        savedPolicyId: activeVariantById.get(variant.id)?.warrantyPolicyId ?? null,
         field: `${fieldPrefix}variants.${index}.warrantyPolicyId`,
     })));
 
@@ -1025,9 +1027,12 @@ export async function planProductOptionMatrix(
             discountType: variant.discountType,
             discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
             discountAmountMinor: variant.discountType === "flat" ? toStoreMinor(variant.discountAmount ?? 0, currency) : 0,
-            // Omitted keeps a saved row's kind and warranty.
+            // Omitted keeps a saved row's kind and warranty; a restored
+            // combination never brings back its retired SKU's warranty.
             ...(variant.fulfillmentKind !== undefined ? { fulfillmentKind: variant.fulfillmentKind } : {}),
-            ...skuWarrantyColumns(variant),
+            ...skuWarrantyColumns(activeVariantById.has(variant.id)
+                ? variant
+                : { warrantyMode: variant.warrantyMode ?? "inherit", warrantyPolicyId: variant.warrantyPolicyId }),
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {

@@ -77,6 +77,7 @@ import { constrainSkuForKind, digitalSkuTracks, isDigitalSku, productKindRules, 
 import { DigitalStockStatus } from "../DigitalStock";
 import { digitalAssetsQueryOptions, digitalSkuStock } from "../digital-stock";
 import { useProductEditorSlots } from "../editor-slots";
+import { warrantyPoliciesQueryOptions } from "~/lib/api-query-options/warranty";
 import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-costs";
 import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { barcodePatch, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
@@ -464,13 +465,23 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   // one SKU's barcode goes to the first row, so printed labels keep scanning.
   const seedBarcode = savedOptions.length === 0 ? simpleSkuDraft.barcode : null;
   const seedBarcodeType = savedOptions.length === 0 ? simpleSkuDraft.barcodeType : null;
+  // A saved SKU's own warranty policy may be archived since: new rows from it get none.
+  const policies = useQuery({
+    ...warrantyPoliciesQueryOptions(true),
+    enabled: savedVariants.some((variant) => variant.warrantyMode === "policy"),
+  });
+  const archivedPolicyIds = React.useMemo(
+    () => new Set((policies.data ?? []).filter((policy) => policy.archivedAt).map((policy) => policy.id)),
+    [policies.data],
+  );
   const seed = React.useMemo<VariantSeed>(() => ({
     price: productPrice,
     compareAt: productCompareAt,
     barcode: seedBarcode,
     barcodeType: seedBarcodeType,
     trackInventory: fulfilmentMode !== "service",
-  }), [productPrice, productCompareAt, seedBarcode, seedBarcodeType, fulfilmentMode]);
+    archivedPolicyIds,
+  }), [productPrice, productCompareAt, seedBarcode, seedBarcodeType, fulfilmentMode, archivedPolicyIds]);
 
   // A new product's kind sets whether it counts stock until the merchant
   // chooses: a service starts untracked instead of "Sold out" at 0 (buyer QA m1).
