@@ -59,8 +59,17 @@ import {
     deriveGiftCardKeys,
     giftCardExpiryFromMonths,
     giftCardIdsForTenderPayments,
+    isGiftCardLedgerError,
     normalizeGiftCardRecipient,
 } from "../gift-cards";
+import {
+    GIFT_CARD_VALUE_SPENT_REASON,
+    buildGiftCardClawbackStatements,
+    giftCardPurchaseReads,
+    giftCardPurchaseState,
+    planGiftCardClawback,
+    releaseGiftCardClawbackOfFailedRefund,
+} from "./refund-gift-card-clawback";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
 import { allocateRefundAcrossSources, type RefundSourceSettlement } from "@scalius/shared/refund-sources";
@@ -148,6 +157,8 @@ export interface RefundResult {
     settlement?: RefundSettlement;
     /** Set when the refund was issued as store credit. */
     storeCredit?: RefundStoreCredit;
+    /** Unspent value taken back from gift cards the order bought (minor units), and how many cards. */
+    giftCardsTakenBack?: { cards: number; amountMinor: number };
     error?: string;
     /** Internal cache signal; API responses must not expose this field. */
     availabilityTransitionVariantIds: string[];
@@ -1574,12 +1585,17 @@ export async function processRefund(
     // Validate the complete ledger before any local mutation or provider call.
     // A wrong-currency failed/pending row would otherwise surface only during
     // finalization, after inventory repair or an external refund was accepted.
-    const paymentLedgerRows = await db
-        .select()
-        .from(orderPayments)
-        .where(eq(orderPayments.orderId, params.orderId))
-        // Newest first, id breaking a same-second tie: the refund order `listRefundSources()` previews.
-        .orderBy(desc(orderPayments.createdAt), desc(orderPayments.id));
+    // The gift cards the order bought ride the same read (one call): a refund
+    // takes their unspent value back (refund-gift-card-clawback.ts).
+    const [paymentLedgerRows, giftCardItems, giftCardRefundedUnits, purchasedCards, purchasedCardsSpent] = await db.batch([
+        db
+            .select()
+            .from(orderPayments)
+            .where(eq(orderPayments.orderId, params.orderId))
+            // Newest first, id breaking a same-second tie: the refund order `listRefundSources()` previews.
+            .orderBy(desc(orderPayments.createdAt), desc(orderPayments.id)),
+        ...giftCardPurchaseReads(db, params.orderId),
+    ]);
     for (const payment of paymentLedgerRows) {
         assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
     }
@@ -1642,6 +1658,29 @@ export async function processRefund(
     // A partly paid invoice still owes the rest after its payments go back.
     const isFullRefund = refundAmount >= paidAmount
         && !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL);
+
+    // Gift cards the order bought: the refund takes back their unspent value,
+    // and never gives back value the buyer already spent from them.
+    const giftCardClawback = planGiftCardClawback({
+        state: giftCardPurchaseState(giftCardItems, giftCardRefundedUnits, purchasedCards, purchasedCardsSpent),
+        refundLines,
+        receivedMinor: paymentLedgerRows.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        refundedBeforeMinor: paymentLedgerRows.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        refundMinor: refundAmount,
+        closesOrder: isFullRefund,
+    });
+    if (giftCardClawback.shortfallMinor > 0) {
+        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
+        const maxMinor = Math.max(0, refundAmount - giftCardClawback.shortfallMinor);
+        const why = [
+            giftCardClawback.spentMinor > 0 ? `${display(giftCardClawback.spentMinor)} of the gift cards this order bought was already spent` : null,
+            giftCardClawback.unissuedMinor > 0 ? `${display(giftCardClawback.unissuedMinor)} in gift cards is still to be issued (name those units in the refund lines to cancel them)` : null,
+        ].filter(Boolean).join(", and ");
+        throw new ValidationError(
+            `This refund gives back more than the order kept: ${why}. Refund at most ${display(maxMinor)}.`,
+            { reason: GIFT_CARD_VALUE_SPENT_REASON, maxRefundAmount: display(maxMinor) },
+        );
+    }
 
     const capturedPayments = paymentLedgerRows
         .filter((payment) =>
@@ -1809,9 +1848,20 @@ export async function processRefund(
             }),
             // One new card for the whole refund, after the attempt it belongs to.
             ...(storeCredit?.statements ?? []),
+            // The bought cards' value goes back with the money, after the attempt it names.
+            ...buildGiftCardClawbackStatements(db, {
+                plan: giftCardClawback,
+                orderId: params.orderId,
+                refundAttemptId: getRefundAttemptId(allocations[0]!),
+                actor,
+            }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         ] as any);
     } catch (error: unknown) {
+        if (giftCardClawback.clawbacks.length > 0 && isGiftCardLedgerError(error)) {
+            // A card the order bought was spent between the read and the claim: nothing was written.
+            throw new ConflictError("A gift card this order bought was used while the refund was being recorded. Reload and try again.");
+        }
         if (isBatchGuardError(error, REFUND_CLAIM_CONFLICT)) {
             // Lost the claim: another refund, payment or edit got there first.
             const replay = requestKey
@@ -1908,6 +1958,12 @@ export async function processRefund(
 
         const completedAmount = completedAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
         const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
+        if (completedAmount === 0 && !isProviderRefundOutcomeUnknownError(error) && giftCardClawback.clawbacks.length > 0) {
+            // No money went back: the cards keep their value.
+            await releaseGiftCardClawbackOfFailedRefund(db, refundGroupId).catch((releaseError: unknown) => {
+                console.error("[refund-service] Gift card value of a failed refund was not given back yet:", releaseError instanceof Error ? releaseError.name : "error");
+            });
+        }
         if (completedAmount > 0) {
             let finalizedResult: FinalizeAcceptedRefundAttemptsResult;
             try {
@@ -2014,6 +2070,12 @@ export async function processRefund(
                 amount: fromMinor(refundAmount, currency.decimalPlaces),
                 amountMinor: refundAmount,
                 notificationOutboxId: storeCredit.notificationOutboxId,
+            },
+        } : {}),
+        ...(giftCardClawback.clawbacks.length > 0 ? {
+            giftCardsTakenBack: {
+                cards: giftCardClawback.clawbacks.length,
+                amountMinor: giftCardClawback.clawbacks.reduce((sum, clawback) => sum + clawback.amountMinor, 0),
             },
         } : {}),
         availabilityTransitionVariantIds,

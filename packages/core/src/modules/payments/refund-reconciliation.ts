@@ -26,6 +26,7 @@ import {
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { canOperateExistingPayments, type GatewayProviderRefund, type GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus } from "./refund-service";
+import { clawBackGiftCardsForProviderRefund, releaseGiftCardClawbackOfFailedRefund } from "./refund-gift-card-clawback";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
 
@@ -331,6 +332,10 @@ async function markAttemptFailed(
     }).where(eq(refundAttempts.id, attempt.id)),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any);
+  // A refund none of whose money went back gives the bought cards' value back (a no-op otherwise).
+  await releaseGiftCardClawbackOfFailedRefund(db, attempt.refundGroupId).catch((error: unknown) => {
+    console.error("[refund-reconciliation] Gift card value of a failed refund was not given back yet:", error instanceof Error ? error.name : "error");
+  });
 }
 
 async function markAttemptReconcileRequired(
@@ -720,6 +725,11 @@ async function reconcileExternalRefundWebhookEvent(
     });
     imported += 1;
     importedRefundIds.push(refund.id);
+    // Gift cards the order bought give their unspent value back with it.
+    await clawBackGiftCardsForProviderRefund(db, { orderId: sourcePayment.orderId, refundAttemptId: attemptId, refundMinor: amountMinor })
+      .catch((error: unknown) => {
+        console.error("[refund-reconciliation] Gift card value of an imported refund was not taken back:", error instanceof Error ? error.name : "error");
+      });
 
     try {
       const result = await finalizeAcceptedRefundAttemptIds(db, [attemptId]);
