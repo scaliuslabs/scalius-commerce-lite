@@ -14,6 +14,7 @@ import {
 import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
+  isShipmentClaimLeaseLive,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
   validateTransition,
@@ -28,6 +29,7 @@ import {
 } from "../orders";
 import { parseShipmentMetadata, clearShipmentClaim } from "./shared";
 import { recordCourierBookingFulfilment } from "./ledger";
+import { resolveExpiredShipmentClaim } from "./bulk";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     return value && typeof value === "object" && !Array.isArray(value)
@@ -432,6 +434,47 @@ export async function reconcileOrderShipment(
     orderId: string,
     shipmentId: string,
 ): Promise<OrderShipmentReconciliationResult> {
+    // Repair settles an expired booking claim first (as the maintenance sweep
+    // would): released when its attempt booked nothing, otherwise it becomes
+    // the reconciliation or the courier confirmation handled below.
+    const claim = await db
+        .select({
+            status: orders.status,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+    if (claim?.shipmentClaimId === shipmentId && !isShipmentClaimLeaseLive(claim)) {
+        const attempt = await db
+            .select({ orderId: deliveryShipments.orderId, status: deliveryShipments.status })
+            .from(deliveryShipments)
+            .where(eq(deliveryShipments.id, shipmentId))
+            .get();
+        if (attempt && attempt.orderId !== orderId) {
+            throw new ValidationError("Shipment does not belong to this order");
+        }
+        if (attempt?.status !== ShipmentStatus.RECONCILE_REQUIRED) {
+            const outcome = await resolveExpiredShipmentClaim(db, orderId, shipmentId);
+            if (!outcome.blocked) {
+                return {
+                    status: "repaired",
+                    orderId,
+                    shipmentId,
+                    orderStatus: claim.status,
+                    shipmentStatus: attempt?.status ?? ShipmentStatus.FAILED,
+                    orderStatusChanged: false,
+                    inventoryReconciled: false,
+                    claimCleared: true,
+                    trackingId: null,
+                    message: "The expired shipment attempt booked nothing. The shipment lock is released.",
+                    availabilityTransitionVariantIds: [],
+                };
+            }
+        }
+    }
+
     const shipment = await db
         .select({
             id: deliveryShipments.id,

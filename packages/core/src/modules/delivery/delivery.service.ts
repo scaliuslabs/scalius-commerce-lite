@@ -27,7 +27,7 @@ import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
-  hasActiveShipmentClaim,
+  isShipmentClaimLeaseLive,
 } from "../order-kernel";
 import { assertOrderStockCoverable, InventoryLocationShortfallError } from "../inventory";
 import { getDeliveryProviderReadinessSummary } from "./provider-readiness";
@@ -851,7 +851,9 @@ export async function deleteShipmentRecord(db: Database, id: string) {
     .get();
 
   if (orderClaim) {
-    if (hasActiveShipmentClaim(orderClaim)) {
+    // A running lease is a booking in flight; an expired claim on this
+    // shipment is settled by its own status below.
+    if (isShipmentClaimLeaseLive(orderClaim)) {
       throw new ConflictError("Cannot delete a shipment while order shipment creation is in progress");
     }
 

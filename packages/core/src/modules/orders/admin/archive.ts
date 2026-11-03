@@ -9,6 +9,7 @@ import {
   assertNoActiveRefundAttemptsForOrders,
   assertNoActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
+  noActiveShipmentClaimCondition,
   noActiveRefundAttemptForOrderIdCondition,
 } from "../../order-kernel";
 import { assertNoActiveReturnReceipt } from "../returns/returns";
@@ -112,7 +113,6 @@ export async function archiveOrders(
     await assertNoActiveRefundAttemptsForOrders(db, requestedIds);
     await assertNoActivePaymentSessionAttemptsForOrders(db, requestedIds);
 
-    const nowSeconds = Math.floor(Date.now() / 1000);
     const statements = requestedOrders.map(({ id, expectedVersion }) =>
         db
             .update(orders)
@@ -127,7 +127,7 @@ export async function archiveOrders(
                 isNull(orders.deletedAt),
                 isNull(orders.archivedAt),
                 inArray(orders.status, [...ARCHIVABLE_ORDER_STATUSES]),
-                sql`(${orders.shipmentClaimId} IS NULL OR ${orders.shipmentClaimExpiresAt} IS NULL OR ${orders.shipmentClaimExpiresAt} <= ${nowSeconds})`,
+                noActiveShipmentClaimCondition(),
                 noActiveRefundAttemptForOrderIdCondition(id),
                 noActivePaymentSessionAttemptForOrderIdCondition(id),
             ))

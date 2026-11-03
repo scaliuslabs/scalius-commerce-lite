@@ -17,7 +17,7 @@ import {
 } from "@scalius/core/modules/orders";
 import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
-import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
+import { sweepAutoFulfilment, sweepExpiredShipmentClaims } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integrations/meta/capi-settings";
@@ -70,6 +70,7 @@ export const STAFF_ATTEMPT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
+export const EXPIRED_SHIPMENT_CLAIM_LIMIT = 10;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const TAX_DOCUMENT_DRAIN_LIMIT = 10;
 export { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour, sweepPeriodMinutes } from "./scheduled/slices";
@@ -430,8 +431,20 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // Order locks a dead invocation left behind: refund attempts, then courier
+    // booking claims whose lease ran out (one job, so the rotation keeps its
+    // length). A dead booking becomes a courier confirmation on the order.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
+      const claims = await timed("expired_shipment_claim_sweep", () =>
+        sweepExpiredShipmentClaims(db, { limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT) }),
+      );
+      if (claims.scanned > 0 || claims.hasMore) {
+        console.log(
+          `[scheduled] Expired shipment claims: scanned=${claims.scanned}, released=${claims.released}, ` +
+            `held=${claims.held}, failed=${claims.failed}, hasMore=${claims.hasMore}`,
+        );
+      }
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
         reconcileDueRefundAttempts(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
