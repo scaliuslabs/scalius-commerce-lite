@@ -144,6 +144,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 - Put `stickyHeader()` on the box with `position: sticky` or `fixed`. The host publishes its stuck height as `--header-height`. Use `--scalius-z-header` for its layer and `--scalius-z-content-bar` for subordinate sticky content.
 - `menuDrawer()` marks the header's menu drawer (a `popover` or `<dialog>`); the store's phone tab bar opens it.
 - `searchOpener()` and `accountLink()` opt your controls into the host's search and account actions. Use native buttons or links with real destinations.
+- `colorSchemeToggle()` makes a native `<button type="button">` the buyer's light or dark switch. It shows only when the theme offers the switch and JavaScript runs; the host flips `<html data-color-scheme>` and remembers the choice on the buyer's device.
 - Under a header skin the store installs its menu disclosure behaviour: a `button[data-disclosure="popup"][aria-controls]` inside `[data-disclosure-item]` shows and hides its `hidden` panel (click, Enter, Escape, a press outside, hover intent), and a `ul[data-nav-overflow]` row whose items carry `data-nav-index` gets arrow keys. `<html data-nav-disclosure>` appears once it runs.
 - A header that overlays an empty or failed lead must restore solid styling when it sees `data-scalius-lead-empty`.
 
@@ -240,7 +241,7 @@ The keys of `sections`, `components` and `skins` match the manifest's section ty
 - `Slot`: a unit's component slot, in place.
 - `whenSignedIn()`, `whenSignedOut()`: the two versions of a signed-in part.
 - `quickAdd(product)`, `openCart()`, `CartCount`: the store's cart behaviour with no app JavaScript.
-- `searchOpener()`, `accountLink()`, `menuDrawer()`, `stickyHeader()`: header behaviour (above).
+- `searchOpener()`, `accountLink()`, `colorSchemeToggle()`, `menuDrawer()`, `stickyHeader()`: header behaviour (above).
 - `editable(context, key)`: marks the element that shows a text setting, so the editor edits it in place. Preview only; the published page has no marks.
 - `asset(context, "fonts/display.woff2")`: the URL of a file in your package's `public/` folder. The helper adds `public/` itself, so pass the path inside it.
 - `t(context, { en, bn, … })`: words in the page's language (the exact BCP 47 tag, then its language, then English).

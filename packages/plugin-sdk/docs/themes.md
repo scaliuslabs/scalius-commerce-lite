@@ -181,17 +181,28 @@ Right:
 - Format with the SDK: `formatNumber`, `plural`, `formatMoney`, `formatDate`. Money arrives as `StorefrontMoney` (`{ amountMinor, currency, formatted }`); show `formatted` or `<Price />`, never arithmetic on floats.
 - Write sides as logical properties so a right-to-left page mirrors without a second stylesheet: `margin-inline-start` (not `margin-left`), `padding-inline`, `inset-inline-start`, `border-inline-end`, `text-align: start`.
 - Style on the store's tokens so the merchant's colours and type still apply: `var(--primary)`, `--primary-foreground`, `--foreground`, `--background`, `--border`, `--muted-foreground`, `--radius`, `--theme-font-body`, `--theme-font-heading`.
+- The tokens already follow the store's colour scheme: on dark pages they hold the theme's dark colours, on every page, private ones included. Don't ship a second palette or your own light/dark switch. For what tokens can't say (a dark logo, an image swap), select on `:root[data-color-scheme="dark"]`; for a switch, put `colorSchemeToggle()` on a native button.
 - Prefix every class with your app's name (`studio-header`); an `id` must start with it.
 
 ## Templates
 
-A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 12 today); stores upgrade it from there.
+A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 13 today); stores upgrade it from there.
+
+Its `tokens` can set the colour scheme too, checked like any theme when the merchant saves:
+
+| Token | Values | What buyers see |
+| --- | --- | --- |
+| `colorScheme` | `light`, `dark`, `system` | `colors`, `darkColors`, or whichever the buyer's device asks for. |
+| `darkColors` | the same keys as `colors`, or `null` | Required, and held to the same readable-text checks, while `colorScheme` isn't `light` or the switch is on. |
+| `colorSchemeToggle` | `true`, `false` | A switch in the header; each buyer's choice is remembered on their device. |
+
+A template written for version 12 reads as `light`, no dark colours and no switch.
 
 ```ts
 templates: [{
   id: "studio",
   name: "Studio",
-  themeVersion: 12,
+  themeVersion: 13,
   theme: {
     apps: { skins: { header: { app: "acme.studio/header", values: {} }, product_card: { app: "acme.studio/card", values: {} } } },
     sections: [
