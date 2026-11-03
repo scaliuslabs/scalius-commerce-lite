@@ -908,6 +908,19 @@ async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<
       `soldRecommendations=${nightly.soldRecommendations}, projectionsChecked=${nightly.projectionsChecked}, ` +
       `projectionsRepaired=${nightly.projectionsRepaired}`,
   );
+  // The routine expiry sweep reads only recent reservations; once a day the
+  // full pass finds older orphans (e.g. holds left while the sweep was down).
+  const expiry = await timed("inventory_expiry_full_pass", () =>
+    releaseExpiredReservations(db, 30, {
+      limit: planLimits().maintenance.inventoryExpiryPerRun,
+      fullHistory: true,
+    }),
+  );
+  if (expiry.found > 0) {
+    console.log(
+      `[scheduled] Inventory expiry full pass: found=${expiry.found}, released=${expiry.released}, hasMore=${expiry.hasMore}`,
+    );
+  }
   const { measurePluginStorage } = await import("./plugins/scheduled");
   await timed("plugin_storage_measure", () => measurePluginStorage(db));
   // A sampled drift check of the derived projections, repaired in place.

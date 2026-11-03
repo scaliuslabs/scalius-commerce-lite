@@ -3,7 +3,7 @@
 // Designed to be called from the cron's sweep rotation.
 
 import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
-import { eq, and, sql, lt, type SQL } from "drizzle-orm";
+import { eq, and, sql, lt, gte, type SQL } from "drizzle-orm";
 import {
   inventoryMovements,
   orders,
@@ -15,6 +15,13 @@ import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-avail
 
 export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;
 export const MAX_EXPIRY_SWEEP_LIMIT = 200;
+/**
+ * An orphan appears within minutes of its checkout, so the routine sweep reads
+ * only reservations this much older than the expiry cutoff: its cost follows
+ * recent checkouts, not the whole ledger. A full pass (the nightly one) still
+ * finds anything older, e.g. holds left while the sweep was down.
+ */
+export const EXPIRY_SWEEP_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 
 /**
  * Result of an expiry sweep, for observability.
@@ -39,6 +46,8 @@ export interface ExpiryResult {
 export interface ExpirySweepOptions {
   /** Maximum reservation groups to process in one invocation. Defaults to 50. */
   limit?: number;
+  /** Read every aged reservation instead of the recent window. */
+  fullHistory?: boolean;
 }
 
 type ReservationMovementType = "reserved" | "preorder_reserved";
@@ -146,7 +155,8 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  *
  * A reservation is "expired" when:
  *   1. It is an inventory_movement of type "reserved" (or "preorder_reserved")
- *   2. It was created more than `maxAgeMinutes` ago
+ *   2. It was created more than `maxAgeMinutes` ago (and, unless
+ *      `fullHistory`, within `EXPIRY_SWEEP_WINDOW_SECONDS` before that)
  *   3. It is orphaned from its order row
  *   4. Its pool-specific reserved quantity is greater than the quantity
  *      already deducted or released
@@ -165,6 +175,7 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  * @param db - Drizzle database instance
  * @param maxAgeMinutes - Maximum age in minutes before a reservation expires (default: 30)
  * @param options.limit - Maximum reservation groups to process in one invocation (default: 50, max: 200)
+ * @param options.fullHistory - Read every aged reservation, not only the recent window
  */
 export async function releaseExpiredReservations(
   db: Database,
@@ -195,6 +206,11 @@ export async function releaseExpiredReservations(
   // without mixing the regular and preorder pools. Read one sentinel row
   // beyond the processing limit so cron logs can tell whether another bounded
   // pass is needed.
+  // Drizzle leaves a column of a single-table select list unqualified, so an
+  // outer reference rendered there inside the aliased subquery would bind to
+  // `terminal` instead. The HAVING clause qualifies its columns, and the loop
+  // below re-reads each group's exact outstanding quantity, so the select list
+  // carries only the group key.
   const outstandingQuantitySql = sql<number>`(
     SUM(${inventoryMovements.quantity}) - COALESCE((
       SELECT SUM(${terminalReservationQuantitySql(sql`${inventoryMovements.type}`, "terminal")})
@@ -216,13 +232,15 @@ export async function releaseExpiredReservations(
       reservationType: inventoryMovements.type,
       pool: inventoryMovements.pool,
       reservationGeneration: inventoryMovements.reservationGeneration,
-      totalQuantity: outstandingQuantitySql.as("total_quantity"),
     })
     .from(inventoryMovements)
     .where(
       and(
         sql`${inventoryMovements.type} IN ('reserved', 'preorder_reserved')`,
         lt(inventoryMovements.createdAt, new Date(cutoffSeconds * 1000)),
+        options.fullHistory
+          ? undefined
+          : gte(inventoryMovements.createdAt, new Date((cutoffSeconds - EXPIRY_SWEEP_WINDOW_SECONDS) * 1000)),
         sql`${inventoryMovements.orderId} IS NOT NULL`,
         // Active/live orders may remain reserved for longer than the checkout
         // timeout. Order cancellation must go through order transition logic;
@@ -256,7 +274,7 @@ export async function releaseExpiredReservations(
 
   // Release each expired reservation
   for (const reservation of expiredReservations) {
-    const { variantId, orderId, totalQuantity } = reservation;
+    const { variantId, orderId } = reservation;
     const reservationType = reservation.reservationType as ReservationMovementType;
     const reservationGeneration = reservation.reservationGeneration ?? null;
     const movementPool = (reservation.pool
@@ -265,7 +283,6 @@ export async function releaseExpiredReservations(
     if (
       !variantId ||
       !orderId ||
-      totalQuantity <= 0 ||
       (reservationType !== "reserved" && reservationType !== "preorder_reserved")
     ) continue;
 
