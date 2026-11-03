@@ -7,6 +7,7 @@ import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { formatCount, formatStoreDateTime, storeTimeZone } from "@/lib/store-time-zone";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { canonicalizeStorefrontHtmlCachePath } from "@scalius/shared/storefront-cache-path";
 import type { ProductReviews, ProductReviewSummary, PublicProductReview } from "@/lib/api/types";
 
 /** The public list's sorts (`GET /products/{id}/reviews?sort=`); "recent" is the default and stays out of URLs. */
@@ -213,14 +214,19 @@ export function readReviewListView(params: URLSearchParams): ReviewListView & { 
   };
 }
 
-/** The full review page of a product for a view (no JavaScript, and the "See all" link). */
+/**
+ * The full review page of a product for a view (no JavaScript, and the "See all" link). The URL is in the shared
+ * cache's canonical form: the edge renders that form, and the page redirects any other spelling of its view to
+ * this one, so a differently ordered link would redirect forever for a buyer served from the edge.
+ */
 export function productReviewsPageHref(slug: string, view: Partial<ReviewListView> & { after?: string | null } = {}): string {
   const params = new URLSearchParams();
   if (view.rating) params.set("rating", String(view.rating));
   if (view.sort && view.sort !== "recent") params.set("sort", view.sort);
   if (view.after) params.set("after", view.after);
   const query = params.toString();
-  return `/products/${encodeURIComponent(slug)}/reviews${query ? `?${query}` : ""}`;
+  const href = `/products/${encodeURIComponent(slug)}/reviews${query ? `?${query}` : ""}`;
+  return canonicalizeStorefrontHtmlCachePath(href) ?? href;
 }
 
 /** The same-origin proxy the product page's script reads further pages from. */
