@@ -67,13 +67,13 @@ const EMPTY_SUPPORT_REQUEST_ACTIONS: OrderReceiptSupportRequestAction[] = [];
 function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
   switch (severity) {
     case "success":
-      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+      return "border-success/40 bg-success/10 text-foreground";
     case "warning":
-      return "border-amber-200 bg-amber-50 text-amber-800";
+      return "border-warning/50 bg-warning/10 text-foreground";
     case "danger":
-      return "border-red-200 bg-red-50 text-red-800";
+      return "border-destructive/30 bg-destructive/10 text-destructive";
     default:
-      return "border-slate-200 bg-slate-50 text-slate-800";
+      return "border-border bg-muted/40 text-foreground";
   }
 }
 

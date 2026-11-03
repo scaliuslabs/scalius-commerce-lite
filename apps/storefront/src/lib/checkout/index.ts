@@ -349,11 +349,13 @@ function appendProviderIdentity(
   presentation: GatewayPresentation,
 ): void {
   // One badge size for every method (Shopify's payment rows): a brand's
-  // wordmark fills it, a plain icon sits in its middle.
+  // wordmark fills it, a plain icon sits in its middle. Marks are drawn for
+  // white, so the badge stays white in the dark colours unless the mark has
+  // a dark version.
   if (!presentation.markSrc) return;
   const identity = document.createElement("span");
   identity.className =
-    "flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5";
+    `flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5${presentation.darkMarkSrc ? " dark:bg-card" : ""}`;
   identity.setAttribute("aria-hidden", "true");
   const wordmark = presentation.markKind === "wordmark";
   const light = document.createElement("img");

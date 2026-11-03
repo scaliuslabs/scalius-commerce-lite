@@ -1,4 +1,4 @@
-// The storefront theme document (version 12): the template it is based on
+// The storefront theme document (version 13): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
 // the shared navigation source, the listing's filter style and page chrome),
 // the page sections and the page templates' sections. The dashboard
@@ -28,10 +28,16 @@ import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontProductSourceSchema, storefrontSectionListSchemaOf } from "./sections";
 import { storefrontSettingBindingsSchema } from "./bindings";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
-import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
+import {
+  buildStorefrontTokenCss,
+  storefrontThemeShowsDarkColors,
+  storefrontThemeTokensSchema,
+  type StorefrontThemeColorSet,
+  type StorefrontThemeTokens,
+} from "./tokens";
 import { storefrontThemeTranslationsSchema } from "./text";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 12 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 13 as const;
 
 /**
  * The five presets of one design system ("Scalius Base"), named by
@@ -72,24 +78,26 @@ export function storefrontThemeContrastPairs(blocks: StorefrontThemeBlocks): Sto
   return pairs;
 }
 
-/** Pairs below AA for the colours, blocks and header tone of a document. */
+/**
+ * Pairs below AA for one colour set of a document (the colours, or the dark
+ * colours), its blocks and header tone. No dark colours: no problems.
+ */
 export function listStorefrontThemeDocumentContrastProblems(document: {
-  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone">;
+  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone"> & Partial<Pick<StorefrontThemeTokens, "darkColors">>;
   blocks: StorefrontThemeBlocks;
-}): StorefrontThemeContrastProblem[] {
-  return listStorefrontThemeContrastProblems(
-    document.tokens.colors,
-    storefrontThemeContrastPairs(document.blocks),
-    document.tokens.headerTone,
-  );
+}, set: StorefrontThemeColorSet = "colors"): StorefrontThemeContrastProblem[] {
+  const colors = document.tokens[set];
+  if (!colors) return [];
+  return listStorefrontThemeContrastProblems(colors, storefrontThemeContrastPairs(document.blocks), document.tokens.headerTone);
 }
 
-/** The colour token behind a contrast role (header roles follow the header tone). */
+/** The colour token behind a contrast role in one colour set (header roles follow the header tone). */
 export function storefrontContrastRoleToken(
   role: StorefrontThemeContrastRole,
-  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone">,
+  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone"> & Partial<Pick<StorefrontThemeTokens, "darkColors">>,
+  set: StorefrontThemeColorSet = "colors",
 ): StorefrontThemeColorKey {
-  const header = storefrontHeaderToneColors(tokens.headerTone, tokens.colors);
+  const header = storefrontHeaderToneColors(tokens.headerTone, tokens[set] ?? tokens.colors);
   if (role === "header-background") return header.background;
   if (role === "header-foreground") return header.foreground;
   return role;
@@ -159,15 +167,24 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
      */
     translations: storefrontThemeTranslationsSchema.optional(),
   }).strict().superRefine((value, context) => {
-    for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value)) {
-      context.addIssue({
-        code: "custom",
-        path: ["tokens", "colors", storefrontContrastRoleToken(text, value.tokens)],
-        message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
-      });
+    // The dark colours meet the same rules as the colours while buyers can see them.
+    const sets: StorefrontThemeColorSet[] = storefrontThemeShowsDarkColors(value.tokens) ? ["colors", "darkColors"] : ["colors"];
+    if (sets.includes("darkColors") && !value.tokens.darkColors) {
+      context.addIssue({ code: "custom", path: ["tokens", "darkColors"], message: "A dark or device colour scheme, or the buyer's switch, needs the dark colours." });
     }
-    for (const problem of listStorefrontThemeSemanticColorProblems(value.tokens.colors)) {
-      context.addIssue({ code: "custom", path: ["tokens", "colors", "muted-foreground"], message: problem });
+    for (const set of sets) {
+      const colors = value.tokens[set];
+      if (!colors) continue;
+      for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value, set)) {
+        context.addIssue({
+          code: "custom",
+          path: ["tokens", set, storefrontContrastRoleToken(text, value.tokens, set)],
+          message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
+        });
+      }
+      for (const problem of listStorefrontThemeSemanticColorProblems(colors)) {
+        context.addIssue({ code: "custom", path: ["tokens", set, "muted-foreground"], message: problem });
+      }
     }
   });
   return { document, sections, landingPage, pageTemplate };

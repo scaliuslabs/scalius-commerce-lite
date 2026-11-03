@@ -40,7 +40,7 @@ export function initAgentContinuation(): void {
 
   function setStatus(message: string, tone: "neutral" | "success" | "error" = "neutral"): void {
     if (!statusElement) return;
-    statusElement.className = `mt-5 rounded-lg border p-4 ${tone === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : tone === "success" ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-800" : "border-border bg-muted/20"}`;
+    statusElement.className = `mt-5 rounded-lg border p-4 ${tone === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : tone === "success" ? "border-success/40 bg-success/10 text-foreground" : "border-border bg-muted/20"}`;
     statusElement.textContent = message;
   }
 

@@ -4,10 +4,19 @@
 import { z } from "zod";
 import {
   STOREFRONT_THEME_COLOR_KEYS,
+  STOREFRONT_THEME_MAX_MUTED_CHROMA,
+  STOREFRONT_THEME_MIN_CONTRAST,
+  STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE,
   storefrontHeaderBands,
   storefrontHeaderToneColors,
+  storefrontThemeChroma,
+  storefrontThemeColorDistance,
+  storefrontThemeContrast,
+  storefrontThemeLuminance,
+  storefrontThemeMix,
   type StorefrontThemeColorKey,
   type StorefrontThemeColors,
+  type StorefrontThemeHeaderTone,
 } from "./contrast";
 
 /**
@@ -49,6 +58,13 @@ export const STOREFRONT_IMAGE_RATIOS = ["square", "portrait", "landscape"] as co
 /** contain: catalogue photos on white; cover: lifestyle photos. */
 export const STOREFRONT_IMAGE_FITS = ["contain", "cover"] as const;
 export const STOREFRONT_HEADER_TONES = ["light", "dark", "brand"] as const;
+/**
+ * The colours buyers see on every page: `light` the colours (`colors`),
+ * `dark` the dark colours (`darkColors`), `system` whichever the buyer's
+ * device asks for. The page's HTML is the same for every buyer: the choice
+ * is made in the browser before the first paint.
+ */
+export const STOREFRONT_COLOR_SCHEMES = ["light", "dark", "system"] as const;
 /** Content width cap in px (`full` caps at 2560px for image sizing). */
 export const STOREFRONT_CONTAINERS = ["1200", "1290", "1360", "1440", "full"] as const;
 
@@ -63,6 +79,9 @@ export type StorefrontImageRatio = (typeof STOREFRONT_IMAGE_RATIOS)[number];
 export type StorefrontImageFit = (typeof STOREFRONT_IMAGE_FITS)[number];
 export type StorefrontHeaderTone = (typeof STOREFRONT_HEADER_TONES)[number];
 export type StorefrontContainer = (typeof STOREFRONT_CONTAINERS)[number];
+export type StorefrontColorScheme = (typeof STOREFRONT_COLOR_SCHEMES)[number];
+/** The two colour sets of the tokens: the colours, and the dark colours. */
+export type StorefrontThemeColorSet = "colors" | "darkColors";
 
 // ─── Density ──────────────────────────────────────────────────────────────
 
@@ -369,17 +388,87 @@ export const STOREFRONT_THEME_PALETTES = {
 export type StorefrontThemePaletteKey = keyof typeof STOREFRONT_THEME_PALETTES;
 export const STOREFRONT_THEME_PALETTE_KEYS = Object.keys(STOREFRONT_THEME_PALETTES) as StorefrontThemePaletteKey[];
 
+/** `color` moved toward `toward` until it reads (AA) on every surface; `toward` itself at worst. */
+function readableOn(color: string, surfaces: readonly string[], toward: string): string {
+  for (let step = 0; step <= 20; step += 1) {
+    const candidate = storefrontThemeMix(color, toward, step / 20);
+    if (surfaces.every((surface) => storefrontThemeContrast(candidate, surface) >= STOREFRONT_THEME_MIN_CONTRAST)) return candidate;
+  }
+  return toward;
+}
+
+/** `color` moved toward black until its luminance is at most `luminance`. */
+function deepened(color: string, luminance: number): string {
+  for (let step = 0; step <= 20; step += 1) {
+    const candidate = storefrontThemeMix(color, "#000000", step / 20);
+    if (storefrontThemeLuminance(candidate) <= luminance) return candidate;
+  }
+  return "#000000";
+}
+
+/**
+ * Dark colours made from a theme's colours, for a merchant who turns on the
+ * dark scheme (the dashboard stores them; nothing derives them when a page
+ * renders). The page is the ink deepened to near black, so it keeps the
+ * palette's tint; surfaces step up from it; text is the page colour; a dark
+ * action colour (charcoal buttons) becomes the light ink, a coloured one
+ * lightens until it reads on the page; the error colour lightens the same
+ * way. Every result passes the readable-text rules of every block (tested).
+ * Colours that are already dark come back as they are.
+ */
+export function storefrontDarkPalette(colors: StorefrontThemeColors): StorefrontThemeColors {
+  if (storefrontThemeColorsAreDark(colors)) return { ...colors };
+  const mix = storefrontThemeMix;
+  const paper = colors.background;
+  const background = deepened(colors.foreground, 0.008);
+  const card = mix(background, paper, 0.05);
+  const muted = mix(background, paper, 0.1);
+  const neutralAction = storefrontThemeLuminance(colors.primary) < 0.1 && storefrontThemeChroma(colors.primary) <= STOREFRONT_THEME_MAX_MUTED_CHROMA;
+  const lift = (color: string) => readableOn(color, [background, card, muted], "#ffffff");
+  const coloured = neutralAction ? null : lift(colors.primary);
+  const accent = mix(background, coloured ?? paper, coloured ? 0.2 : 0.14);
+  const foreground = readableOn(mix(paper, background, 0.06), [background, card, muted, accent], "#ffffff");
+  const primary = coloured ?? foreground;
+  let mutedForeground = readableOn(mix(foreground, background, 0.38), [background, card, muted], foreground);
+  if (storefrontThemeChroma(mutedForeground) > STOREFRONT_THEME_MAX_MUTED_CHROMA) mutedForeground = readableOn("#9c9c9c", [background, card, muted], "#ffffff");
+  let destructive = lift(colors.destructive);
+  for (let step = 1; step <= 10 && storefrontThemeColorDistance(mutedForeground, destructive) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE; step += 1) {
+    destructive = lift(mix(colors.destructive, "#ff0000", step / 10));
+  }
+  return {
+    background, foreground, card, "card-foreground": foreground, popover: card, "popover-foreground": foreground,
+    primary, "primary-foreground": background,
+    secondary: muted, "secondary-foreground": foreground,
+    muted, "muted-foreground": mutedForeground,
+    accent, "accent-foreground": foreground,
+    destructive, "destructive-foreground": background,
+    border: mix(background, paper, 0.16), input: mix(background, paper, 0.24), ring: primary,
+  };
+}
+
 // ─── Schema ───────────────────────────────────────────────────────────────
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Use a #rrggbb colour.");
 
+const colorsSchema = z.object(
+  Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema])) as Record<
+    StorefrontThemeColorKey,
+    typeof hexColorSchema
+  >,
+).strict();
+
 export const storefrontThemeTokensSchema = z.object({
-  colors: z.object(
-    Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema])) as Record<
-      StorefrontThemeColorKey,
-      typeof hexColorSchema
-    >,
-  ).strict(),
+  colors: colorsSchema,
+  /** Which colours buyers see (STOREFRONT_COLOR_SCHEMES). */
+  colorScheme: z.enum(STOREFRONT_COLOR_SCHEMES),
+  /**
+   * The dark colours: the same tokens as `colors`, for dark pages. Required,
+   * and held to the same readable-text rules, while buyers can see them
+   * (`storefrontThemeShowsDarkColors`); kept as they are otherwise.
+   */
+  darkColors: colorsSchema.nullable(),
+  /** A switch in the header lets each buyer pick light or dark (remembered on their device). */
+  colorSchemeToggle: z.boolean(),
   typography: z.enum(STOREFRONT_TYPE_PAIRINGS),
   typeScale: z.enum(STOREFRONT_TYPE_SCALES),
   headingCase: z.enum(STOREFRONT_HEADING_CASES),
@@ -395,15 +484,42 @@ export const storefrontThemeTokensSchema = z.object({
 
 export type StorefrontThemeTokens = z.infer<typeof storefrontThemeTokensSchema>;
 
+/** Whether buyers can see the dark colours: a dark or device scheme, or the buyer's switch. */
+export function storefrontThemeShowsDarkColors(tokens: Pick<StorefrontThemeTokens, "colorScheme" | "colorSchemeToggle">): boolean {
+  return tokens.colorScheme !== "light" || tokens.colorSchemeToggle;
+}
+
 // ─── CSS ──────────────────────────────────────────────────────────────────
 
-/** CSS custom properties for the tokens: only constants and validated hex colours. */
+/**
+ * The custom properties that follow a colour set: its colours, the header's
+ * surfaces (the header tone applied to it) and the sale colour. The dark
+ * colours repaint exactly these.
+ */
+export function buildStorefrontColorCss(colors: StorefrontThemeColors, headerTone: StorefrontThemeHeaderTone) {
+  const header = storefrontHeaderToneColors(headerTone, colors);
+  const bands = storefrontHeaderBands(headerTone, colors);
+  return {
+    ...colors,
+    "theme-header-background": colors[header.background],
+    "theme-header-foreground": colors[header.foreground],
+    "theme-header-deep": bands.deep,
+    "theme-header-raised": bands.raised,
+    "theme-sale": colors.destructive,
+  };
+}
+
+/** Whether a colour set is dark (its page darker than its text): the browser's own controls and scrollbars follow it. */
+export function storefrontThemeColorsAreDark(colors: Pick<StorefrontThemeColors, "background" | "foreground">): boolean {
+  return storefrontThemeLuminance(colors.background) < storefrontThemeLuminance(colors.foreground);
+}
+
+/** CSS custom properties for the tokens (the colours, not the dark colours): only constants and validated hex colours. */
 export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<string, string> {
   const density = STOREFRONT_DENSITY_SPECS[tokens.density];
   const type = STOREFRONT_TYPE_PAIRING_SPECS[tokens.typography];
   const scale = STOREFRONT_TYPE_SCALE_SPECS[tokens.typeScale];
-  const header = storefrontHeaderToneColors(tokens.headerTone, tokens.colors);
-  const bands = storefrontHeaderBands(tokens.headerTone, tokens.colors);
+  const colors = buildStorefrontColorCss(tokens.colors, tokens.headerTone);
   return {
     ...tokens.colors,
     "theme-font-heading": fontStack(type.heading, type.bangla),
@@ -434,13 +550,13 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     "theme-section-gap-desktop": density.section.desktop,
     "theme-image-ratio": IMAGE_RATIO_TOKENS[tokens.imageRatio],
     "theme-image-fit": tokens.imageFit,
-    "theme-header-background": tokens.colors[header.background],
-    "theme-header-foreground": tokens.colors[header.foreground],
-    "theme-header-deep": bands.deep,
-    "theme-header-raised": bands.raised,
+    "theme-header-background": colors["theme-header-background"],
+    "theme-header-foreground": colors["theme-header-foreground"],
+    "theme-header-deep": colors["theme-header-deep"],
+    "theme-header-raised": colors["theme-header-raised"],
     // Colour roles beyond the palette: sale is the error colour (discounted
     // prices and the sale badge only), rating and success are constants.
-    "theme-sale": tokens.colors.destructive,
+    "theme-sale": colors["theme-sale"],
     "theme-rating": STOREFRONT_RATING_COLOR,
     "theme-success": STOREFRONT_SUCCESS_COLOR,
     "theme-surface-border": STOREFRONT_ELEVATION[tokens.surface].border,

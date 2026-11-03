@@ -214,6 +214,16 @@ export function accountLink(): Attributes {
 }
 
 /**
+ * The buyer's light or dark switch: a native `<button type="button">` the
+ * store flips the colour scheme with and remembers on the buyer's device.
+ * It shows only where the theme offers the switch (and JavaScript runs);
+ * style its two states on `:root[data-color-scheme="dark"]`.
+ */
+export function colorSchemeToggle(): Attributes {
+  return { "data-color-scheme-toggle": "" };
+}
+
+/**
  * Attributes of a card's add link: an `<a>` to the product that adds it to
  * the cart in place and opens the cart (simple products), else opens its page.
  *

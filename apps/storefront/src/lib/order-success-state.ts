@@ -205,31 +205,33 @@ export function getOrderSuccessVisibleBalanceDue(
   return Math.max(0, Number(order.totalAmount ?? 0) - Number(order.paidAmount ?? 0));
 }
 
+// Status badges tint a surface with a tone and keep the words in the text
+// colour, so they read in the theme's light and dark colours alike.
 export function getOrderStatusBadgeClass(value: string | null | undefined): string {
   const status = normalize(value);
   if (["delivered", "completed"].includes(status)) {
-    return "bg-emerald-100 text-emerald-800";
+    return "bg-success/15 text-foreground";
   }
   if (["failed"].includes(status)) {
     return "bg-destructive text-destructive-foreground";
   }
   if (["pending"].includes(status)) {
-    return "bg-amber-100 text-amber-800";
+    return "bg-warning/15 text-foreground";
   }
   if (["confirmed", "processing", "shipped"].includes(status)) {
-    return "bg-sky-100 text-sky-800";
+    return "bg-primary/10 text-primary-ink";
   }
-  return "bg-slate-100 text-slate-800";
+  return "bg-muted text-foreground";
 }
 
 export function getPaymentStatusBadgeClass(value: string | null | undefined): string {
   const status = normalize(value);
-  if (status === "paid") return "bg-emerald-100 text-emerald-800";
+  if (status === "paid") return "bg-success/15 text-foreground";
   if (status === "failed") return "bg-destructive text-destructive-foreground";
   if (["unpaid", "pending", "processing", "partial"].includes(status)) {
-    return "bg-amber-100 text-amber-800";
+    return "bg-warning/15 text-foreground";
   }
-  return "bg-slate-100 text-slate-800";
+  return "bg-muted text-foreground";
 }
 
 type OrderDeliveryFacts = Partial<Pick<OrderFulfilmentView, "requiresShipping" | "shippingMethodKind">>;
@@ -265,7 +267,7 @@ export function getOrderPaymentPresentation(
         ? codDueText(order, copy)
         : formatOrderSuccessLabel(order.paymentStatus, copy),
     badgeClass: codCollection
-      ? "bg-slate-100 text-slate-800"
+      ? "bg-muted text-foreground"
       : getPaymentStatusBadgeClass(order.paymentStatus),
     methodLabel: formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order),
     giftCardTenders,
@@ -321,7 +323,7 @@ export function getOrderSuccessViewState(
       message: formatCheckoutLanguageText(copy.orderReceiptPaymentPendingMessageText, { orderId }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
-      orderBadgeClass: "bg-amber-100 text-amber-800",
+      orderBadgeClass: "bg-warning/15 text-foreground",
       paymentBadgeClass: payment.badgeClass,
     };
   }

@@ -80,6 +80,17 @@ function snakeCoreNames(document: Json): Json {
 }
 
 /**
+ * Version 12 → 13: the tokens name a colour scheme. A stored theme keeps the
+ * colours its buyers saw: the light scheme, no dark colours, no switch.
+ */
+function lightColorScheme(document: Json): Json {
+  const tokens = document.tokens;
+  return isRecord(tokens)
+    ? { ...document, tokens: { ...tokens, colorScheme: "light", darkColors: null, colorSchemeToggle: false } }
+    : document;
+}
+
+/**
  * The document steps by the version they upgrade from: entry `n` turns a
  * version `n` document into version `n + 1`. compat.test.ts requires one for
  * every version from the oldest readable one to the one before the current.
@@ -93,10 +104,14 @@ function snakeCoreNames(document: Json): Json {
  *   (`usp-strip` → `usp_strip`) and every `apps.skins` unit
  *   (`product-card` → `product_card`) reads with its hyphens as underscores,
  *   as the storefront protocol names them (skin targets, `section:<type>`).
+ * - 12 → 13: tokens gain `colorScheme`, `darkColors` and `colorSchemeToggle`;
+ *   a stored theme (or an app template's tokens) reads as the light scheme
+ *   with no dark colours and no switch, so its pages paint exactly as before.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
   11: snakeCoreNames,
+  12: lightColorScheme,
 };
 
 /** A chain: the versions it reads, its document steps and each section type's own. */

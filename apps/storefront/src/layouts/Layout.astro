@@ -14,6 +14,7 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { themePaint } from "@/lib/theme-paint";
+import { colorSchemeBootScript } from "@/lib/color-scheme";
 import type { AnalyticsConfig } from "@/lib/api";
 import { getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
 import {
@@ -343,7 +344,10 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // CSS comes only from shared enum constants and schema-validated hex colours
 // (plus the fluid grid steps derived from the density constants, widened for
 // portrait photos). Body data attributes carry the tokens CSS selects on.
-// The theme editor's paint route returns the same three for an unsaved document.
+// The theme editor's paint route returns the same for an unsaved document.
+// The colour scheme is the theme's, on <html>, for every buyer and every page
+// (private ones too); the head script settles `system` and the buyer's own
+// choice before the first paint, so the HTML and its caches never vary.
 const paint = themePaint(storefrontTheme, resolvedTheme);
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
@@ -404,6 +408,8 @@ const cdnDomain = sameOriginMediaSource ? null : cdnDomainUrl || null;
 // Runtime API URL, CDN domain, and currency for client-side JS (the
 // per-request platform context is not available to Vite client bundles).
 const runtimeGlobalsScript = [
+  // The colour scheme before anything paints (lib/color-scheme.ts); the editor's canvas ignores the merchant's own choice.
+  colorSchemeBootScript(paint.colorScheme, !isThemePreview),
   // Consent first: Google's Consent Mode defaults precede every tag (components/consent).
   consentBoot,
   // The sign-in hint before first paint: `whenSignedIn()` / `whenSignedOut()` parts never flash (scripts/app-components.ts keeps it current).
@@ -444,6 +450,7 @@ const pageStoreTimeZone = storeTimeZone();
 <!doctype html>
 <html
   data-library-preview={libraryPreview ? "" : undefined}
+  data-color-scheme={paint.colorScheme?.scheme}
   lang={pageLanguage}
   dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}
   data-market-presence={marketPresence ?? undefined}

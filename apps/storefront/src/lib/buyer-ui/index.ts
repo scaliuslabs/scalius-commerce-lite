@@ -26,7 +26,8 @@ const ACTION_FAILED = {
 const controlClass ="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const toneClasses = {
   neutral: "border-border bg-muted/40", info: "border-border bg-muted/40",
-  success: "border-green-200 bg-green-50 text-green-900", warning: "border-amber-200 bg-amber-50 text-amber-900",
+  // A tinted surface; the words stay in the text colour, readable in the light and the dark colours.
+  success: "border-success/40 bg-success/10 text-foreground", warning: "border-warning/50 bg-warning/10 text-foreground",
   critical: "border-destructive/30 bg-destructive/10 text-destructive",
 } as const;
 
