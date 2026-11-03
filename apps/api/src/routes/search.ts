@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { search } from "@scalius/core/modules/catalog";
 import { getClientIp } from "@scalius/shared/rate-limit";
+import { isSearchableQuery } from "@scalius/shared/search-query";
 
 import { ok } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
@@ -156,8 +157,9 @@ app.openapi(searchRoute, async (c) => {
   } = params;
   const query = normalizePublicFtsSearchQuery(q);
 
-  // If no query, return empty results
-  if (!query) {
+  // No query, or one too short for search-as-you-type: the same empty answer,
+  // before the rate limiter and any database statement.
+  if (!query || !isSearchableQuery(query)) {
     return ok(c, {
       products: [],
       pages: [],
