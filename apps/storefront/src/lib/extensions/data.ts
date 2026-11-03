@@ -322,6 +322,7 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     quickAdd: model.quickAddEligible,
     needsOptions: model.needsOptions,
     facts,
+    ...(model.facts.keySpecRows ? { keySpecs: model.facts.keySpecRows } : {}),
     fields: Object.fromEntries(Object.entries(product.fields ?? {}).map(([key, value]) => [key, fieldValue(value, page)])) as StorefrontProductCard["fields"],
   };
 }

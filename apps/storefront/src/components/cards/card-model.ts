@@ -33,6 +33,8 @@ export const CARD_IMAGE_DIMENSIONS = {
 
 export interface ProductCardFactValues {
   keySpecs: string[];
+  /** The same key specs as name and value; null when the API sent only the lines. */
+  keySpecRows: Array<{ label: string; value: string }> | null;
   /** The average (0-5) and the count of published reviews. */
   rating: { average: number; count: number } | null;
   packSize: string | null;
@@ -112,6 +114,13 @@ function cardFactValues(product: ProductCardProduct, money: (amount: number) => 
       .map((spec) => spec.replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, KEY_SPECS_MAX),
+    keySpecRows: facts?.keySpecRows
+      ? facts.keySpecRows.flatMap((spec) => {
+        const label = nonEmpty(spec.label);
+        const value = nonEmpty(spec.value);
+        return label && value ? [{ label, value }] : [];
+      }).slice(0, KEY_SPECS_MAX)
+      : null,
     rating: rating && rating.count > 0 && rating.average > 0 ? { average: rating.average, count: rating.count } : null,
     packSize: nonEmpty(facts?.packSize),
     delivery,

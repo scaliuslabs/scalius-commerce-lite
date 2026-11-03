@@ -357,6 +357,11 @@ export interface StorefrontProductCard {
   needsOptions: boolean;
   /** Short facts the store shows on cards (key specs, delivery). */
   facts: string[];
+  /**
+   * The key specs among `facts` as name and value (the store's card writes
+   * `label: value`), in the same order. Absent from older stores.
+   */
+  keySpecs?: Array<{ label: string; value: string }>;
   /** Requested storefront-visible custom fields, keyed by namespace.key (money as `StorefrontMoney`). */
   fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }

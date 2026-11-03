@@ -10,6 +10,12 @@ export const productCardFactsSchema = z.object({
   keySpecs: z.array(z.string()).max(4).openapi({
     description: "Up to four \"Name: value\" lines from key-spec attributes, in spec-table order.",
   }),
+  keySpecRows: z.array(z.object({
+    label: z.string().openapi({ description: "The attribute's name." }),
+    value: z.string().openapi({ description: "Its value (an option's display text)." }),
+  })).max(4).openapi({
+    description: "The same key specs as name and value, in the same order.",
+  }),
   options: z.array(z.object({
     name: z.string().openapi({ description: "The merchant's option axis name." }),
     kind: z.enum(["color", "size", "other"]),

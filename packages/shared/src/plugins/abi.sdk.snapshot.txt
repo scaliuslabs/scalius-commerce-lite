@@ -4144,6 +4144,10 @@ export interface StorefrontProductCard {
     quickAdd: boolean;
     needsOptions: boolean;
     facts: string[];
+    keySpecs?: Array<{
+        label: string;
+        value: string;
+    }>;
     fields: Record<string, CustomFieldWireValue | StorefrontMoney | StorefrontMoney[]>;
 }
 export interface StorefrontMenuItem {

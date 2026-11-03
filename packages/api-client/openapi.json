@@ -382,6 +382,28 @@
             "maxItems": 4,
             "description": "Up to four \"Name: value\" lines from key-spec attributes, in spec-table order."
           },
+          "keySpecRows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "The attribute's name."
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Its value (an option's display text)."
+                }
+              },
+              "required": [
+                "label",
+                "value"
+              ]
+            },
+            "maxItems": 4,
+            "description": "The same key specs as name and value, in the same order."
+          },
           "options": {
             "type": "array",
             "items": {
@@ -489,6 +511,7 @@
         "required": [
           "brand",
           "keySpecs",
+          "keySpecRows",
           "options",
           "soldLast30Days",
           "packSize",

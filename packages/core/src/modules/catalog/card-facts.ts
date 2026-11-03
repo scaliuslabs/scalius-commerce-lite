@@ -53,6 +53,8 @@ export interface ProductCardFacts {
     brand: { name: string; slug: string } | null;
     /** "Processor: Intel Core i5-1235U", at most CARD_KEY_SPECS_MAX, in spec-table order. */
     keySpecs: string[];
+    /** The same key specs as rows: the attribute's name and its value. */
+    keySpecRows: Array<{ label: string; value: string }>;
     /** Option axes in position order, only those with two or more values. */
     options: ProductCardOptionFact[];
     /** Units sold in the last 30 days (`product_sales_stats`), only from CARD_SOLD_MIN. */
@@ -68,6 +70,7 @@ export interface ProductCardFacts {
 export const EMPTY_PRODUCT_CARD_FACTS: ProductCardFacts = Object.freeze({
     brand: null,
     keySpecs: [],
+    keySpecRows: [],
     options: [],
     soldLast30Days: null,
     packSize: null,
@@ -253,7 +256,7 @@ export function resolveProductCardFacts(
 ): (productId: string) => ProductCardFacts {
     const byProduct = new Map<string, {
         brand: ProductCardFacts["brand"];
-        specs: Array<{ rank: number; text: string }>;
+        specs: Array<{ rank: number; label: string; value: string }>;
         axes: Array<ProductCardOptionFact & { position: number }>;
         swatches: Array<{ position: number; label: string; hex: string | null }>;
         sold: number | null;
@@ -283,7 +286,7 @@ export function resolveProductCardFacts(
             const fee = Number(row.fee);
             if (row.fee !== null && Number.isFinite(fee) && fee >= 0) deliveryFeeMinor = fee;
         } else if (row.kind === "spec" && label && value) {
-            facts.specs.push({ rank: Number(row.position) || 0, text: `${label}: ${value}` });
+            facts.specs.push({ rank: Number(row.position) || 0, label, value });
         } else if (row.kind === "axis" && label) {
             const count = Math.floor(Number(row.amount) || 0);
             const kind: ProductCardOptionKind = value === "color" || value === "size" ? value : "other";
@@ -304,13 +307,15 @@ export function resolveProductCardFacts(
     };
     return (productId: string): ProductCardFacts => {
         const facts = byProduct.get(productId);
-        if (!facts) return { ...EMPTY_PRODUCT_CARD_FACTS, keySpecs: [], options: [], delivery: delivery(productId) };
+        if (!facts) return { ...EMPTY_PRODUCT_CARD_FACTS, keySpecs: [], keySpecRows: [], options: [], delivery: delivery(productId) };
+        const keySpecRows = [...facts.specs]
+            .sort((left, right) => left.rank - right.rank)
+            .slice(0, CARD_KEY_SPECS_MAX)
+            .map(({ label, value }) => ({ label, value }));
         return {
             brand: facts.brand,
-            keySpecs: [...facts.specs]
-                .sort((left, right) => left.rank - right.rank)
-                .slice(0, CARD_KEY_SPECS_MAX)
-                .map((spec) => spec.text),
+            keySpecs: keySpecRows.map((spec) => `${spec.label}: ${spec.value}`),
+            keySpecRows,
             options: [...facts.axes]
                 .sort((left, right) => left.position - right.position)
                 .map(({ position, ...axis }) => ({

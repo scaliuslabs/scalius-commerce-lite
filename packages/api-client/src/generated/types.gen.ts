@@ -112,6 +112,19 @@ export type ProductCardFacts = {
      */
     keySpecs: Array<string>;
     /**
+     * The same key specs as name and value, in the same order.
+     */
+    keySpecRows: Array<{
+        /**
+         * The attribute's name.
+         */
+        label: string;
+        /**
+         * Its value (an option's display text).
+         */
+        value: string;
+    }>;
+    /**
      * Option axes with two or more values, in position order.
      */
     options: Array<{
