@@ -199,9 +199,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         // advance p:<id> for public rows (cache-deps product_buyer_state).
         .leftJoin(productBuyerState, and(eq(productBuyerState.productId, products.id), eq(productBuyerState.isPublic, true)))
         .leftJoin(productReviewStats, eq(productReviewStats.productId, products.id))
+        // A gift card has no warranty, whatever a row saved before gift cards cleared it names.
         .leftJoin(warrantyPolicies, and(
             eq(warrantyPolicies.id, products.warrantyPolicyId),
             isNull(warrantyPolicies.archivedAt),
+            sql`${products.isGiftCard} = 0`,
         ))
         .where(and(
             productBySlugCondition(slug, translation),
@@ -514,6 +516,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     // The page lists each policy once (`warranties`); a SKU names one by id.
     const warranties = new Map<string, ReturnType<typeof presentWarranty>>();
     const effectiveWarrantyId = (variant: Pick<VariantResult, "warrantyMode" | "ownWarranty">): string | null => {
+        if (product.isGiftCard === true) return null;
         const row = variant.warrantyMode === "none" ? null : variant.warrantyMode === "policy" ? variant.ownWarranty : warranty;
         if (!row?.id) return null;
         if (!warranties.has(row.id)) warranties.set(row.id, presentWarranty(row));
