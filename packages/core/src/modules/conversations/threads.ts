@@ -857,23 +857,10 @@ export async function listBuyerThreads(
   options: { cursor?: string | null } = {},
 ): Promise<{ items: BuyerConversationSummary[]; nextCursor: string | null }> {
   const cursor = decodeConversationCursor(options.cursor);
-  const owned = db.select({ id: orders.id }).from(orders)
-    .where(and(eq(orders.accountOwnerCustomerId, customerId), isNull(orders.deletedAt)));
-  const orderScoped = and(ne(conversations.subjectType, "store"), inArray(conversations.orderId, owned));
-  const verified = await isVerifiedCustomerAccount(db, customerId);
   const rows = await db
     .select()
     .from(conversations)
-    .where(and(
-      isNotNull(conversations.lastMessageAt),
-      verified
-        ? or(
-          and(eq(conversations.customerId, customerId), eq(conversations.subjectType, "store")),
-          orderScoped,
-        )
-        : orderScoped,
-      keysetAfter(cursor),
-    ))
+    .where(and(await buyerThreadsCondition(db, customerId), keysetAfter(cursor)))
     .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
     .limit(BUYER_LIST_PAGE_SIZE + 1)
     .all();
@@ -900,10 +887,45 @@ export async function listBuyerThreads(
   };
 }
 
-/** Unread public lines across the buyer's threads (the account Inbox badge). */
+/**
+ * The buyer's threads: their store threads (a verified account only) and
+ * every order-scoped thread of orders the account owns, once a line exists.
+ */
+async function buyerThreadsCondition(db: Database, customerId: string): Promise<SQL> {
+  const owned = db.select({ id: orders.id }).from(orders)
+    .where(and(eq(orders.accountOwnerCustomerId, customerId), isNull(orders.deletedAt)));
+  const orderScoped = and(ne(conversations.subjectType, "store"), inArray(conversations.orderId, owned));
+  const verified = await isVerifiedCustomerAccount(db, customerId);
+  return and(
+    isNotNull(conversations.lastMessageAt),
+    verified
+      ? or(
+        and(eq(conversations.customerId, customerId), eq(conversations.subjectType, "store")),
+        orderScoped,
+      )
+      : orderScoped,
+  )!;
+}
+
+/**
+ * Unread public lines across all the buyer's threads (the account Inbox
+ * badge): one aggregate over the same threads as the list, never only the
+ * list's first page.
+ */
 export async function countBuyerUnread(db: Database, customerId: string): Promise<number> {
-  const { items } = await listBuyerThreads(db, customerId);
-  return items.reduce((sum, item) => sum + item.unread, 0);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(conversationMessages)
+    .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
+    .where(and(
+      await buyerThreadsCondition(db, customerId),
+      eq(conversationMessages.visibility, "public"),
+      sql`${conversationMessages.seq} > ${conversations.customerReadSeq}`,
+      // The buyer's own lines are never unread.
+      inArray(conversationMessages.authorType, ["staff", "system"]),
+    ))
+    .all();
+  return Number(row?.count ?? 0);
 }
 
 /**
