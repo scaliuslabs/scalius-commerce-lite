@@ -11,6 +11,14 @@
  */
 export const BUY_FORM_ID = "sx_buy-form";
 
+/**
+ * A product_main skin's SKU controls the host bound to this form
+ * (lib/extensions/purchase-controls.ts): `data-sx-bound`, which only the host
+ * writes, on a `chooseVariant` control or a `buyVariant` button.
+ */
+export const SKIN_CHOOSE_CONTROL = "[data-sx-bound][data-choose-variant]";
+export const SKIN_BUY_CONTROL = "[data-sx-bound][data-buy-variant]";
+
 /** Form field names of the buyer inputs (ProductBuyerInputs.astro): `property.<key>`. */
 export const BUYER_INPUT_FIELD_PREFIX = "property.";
 

@@ -46,11 +46,11 @@ import {
   type ProductActionPresentation,
 } from "../lib/product-actions";
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/line-price";
-import { BUYER_INPUT_FIELD_PREFIX } from "../lib/buy-form";
+import { BUYER_INPUT_FIELD_PREFIX, SKIN_BUY_CONTROL, SKIN_CHOOSE_CONTROL } from "../lib/buy-form";
 import type { BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
-import { DEFERRED_REVEAL_EVENT } from "@/scripts/browser-events";
+import { DEFERRED_REVEAL_EVENT, STALE_ASSET_EVENT } from "@/scripts/browser-events";
 import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-protocol";
 
 // The buy form's one authority: its option buttons, a product_main skin's
@@ -61,9 +61,6 @@ import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-
 // `data-sx-*` from app markup), so a skin's own `.product-price`,
 // `[data-action]` or look-alike container is never taken over. The product's
 // facts come from the page's `#product-container`, which wraps the skin.
-
-/** A skin's buy button the host bound (lib/extensions/purchase-controls.ts); only the host writes `data-sx-*`. */
-const SKIN_BUY_CONTROL = "[data-sx-bound][data-buy-variant]";
 
 const state = {
   variants: [] as Variant[],
@@ -130,6 +127,28 @@ function parts<T extends Element = HTMLElement>(role: string): T[] {
 
 /** The purchase's problem as the form shows it (showError). */
 let errorMessage: HTMLElement | null = null;
+
+/**
+ * Whether the product's buyer inputs work, once their script is in (or
+ * failed to load); null for a product without them. An add waits for it;
+ * when it failed, the add posts the form the no-JavaScript way after the
+ * form's own checks (an edited line's update is refused), and the page
+ * reloads only if that loses nothing the buyer typed (`staleAsset`).
+ */
+let buyerInputsReady: Promise<boolean> | null = null;
+
+/**
+ * One of the store's lazy scripts failed to load (a page cached before a
+ * deploy): the page's stale-asset recovery reloads it, unless the buyer has
+ * typed an answer that a reload would lose.
+ */
+function staleAsset() {
+  const typed = Array.from(cache.form?.elements ?? []).some((field) =>
+    (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)
+    && field.name.startsWith(BUYER_INPUT_FIELD_PREFIX)
+    && (field instanceof HTMLInputElement && field.type === "checkbox" ? field.checked : field.value !== ""));
+  if (!typed) window.dispatchEvent(new Event(STALE_ASSET_EVENT));
+}
 
 function parseDiscountType(value?: string): DiscountType {
   return value === "percentage" || value === "flat" ? value : null;
@@ -218,7 +237,12 @@ export function init() {
   state.edit = buyerForm && productId ? readCartLineEdit(productId) : null;
   if (buyerForm && state.edit) prefillEdit(buyerForm, state.edit);
   // The inputs' own script loads only for a product that has them.
-  buyerInputsReady = buyerForm ? loadBuyerInputs(buyerForm) : null;
+  buyerInputsReady = buyerForm
+    ? loadBuyerInputs(buyerForm).then(() => true, () => {
+      staleAsset();
+      return false;
+    })
+    : null;
 
   initQuantity();
   bindOptions();
@@ -232,14 +256,6 @@ export function init() {
     delete document.documentElement.dataset.variantPending;
   });
 }
-
-/**
- * Settles once the product's buyer inputs work; null for a product without
- * them. It rejects when their script fails to load: an add then refuses
- * (`failed`) and the buyer's answers stay in the form; left unhandled, the
- * rejection reaches the page's stale-asset recovery, which reloads.
- */
-let buyerInputsReady: Promise<void> | null = null;
 
 /** The live side of the buyer-inputs form (buyer-inputs-controller.ts). An add waits for it. */
 async function loadBuyerInputs(form: HTMLFormElement) {
@@ -458,9 +474,6 @@ function bindActions() {
   // default one); anything else still lands here, as the buyer's own choice.
   cache.form?.addEventListener("submit", (event) => {
     const submitter = (event as SubmitEvent).submitter;
-    // A skin's buy button reaches the form only when its script failed to
-    // load: it posts its own SKU, as without JavaScript.
-    if (submitter?.matches(SKIN_BUY_CONTROL)) return;
     event.preventDefault();
     void add(Boolean(submitter?.matches('[data-sx-buy="buy"]')));
   });
@@ -485,35 +498,16 @@ function loadExtras() {
   const { signal } = (extrasBinding = new AbortController());
   const bound = "[data-sx-bound]";
   if (document.querySelector(bound) || Array.from(document.querySelectorAll<HTMLTemplateElement>("scalius-deferred>template")).some((template) => template.content.querySelector(bound))) {
-    // A press on a control before its script is in waits for it (the last
-    // one): a choice or buy then runs as if pressed after.
-    let pending: HTMLElement | null = null;
-    const hold = (event: MouseEvent) => {
-      const control = event.target instanceof Element
-        ? event.target.closest<HTMLElement>(`${bound}[data-choose-variant],${bound}[data-buy-variant]`)
-        : null;
-      // A new tab or window follows a link itself.
-      if (!control || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      event.preventDefault();
-      pending = control;
-    };
-    document.addEventListener("click", hold, { capture: true, signal });
-    void import("./skin-controls").then(({ bindSkinControls }) => {
-      document.removeEventListener("click", hold, { capture: true });
+    // Their presses are the form's from the first moment; only showing
+    // their state (skin-controls.ts) loads later.
+    document.addEventListener("click", pressSkinControl, { capture: true, signal });
+    void import("./skin-controls").then(({ syncSkinControls }) => {
       if (signal.aborted) return;
-      skinControls = bindSkinControls({ state, choose: chooseVariant, add, selected: exactVariant, stock: getBuyerStockSummary }, signal);
+      skinControls = { sync: () => syncSkinControls(state, exactVariant, getBuyerStockSummary) };
       // Controls in deferred markup take the form's state when they enter the page.
       document.addEventListener(DEFERRED_REVEAL_EVENT, skinControls.sync, { signal });
       skinControls.sync();
-      pending?.click();
-    }, (error: unknown) => {
-      // Their script is gone (a deploy): a held press goes the native way (a
-      // link opens, a buy button posts its own SKU), the one navigation;
-      // with none held, the page's stale-asset recovery hears the failure.
-      document.removeEventListener("click", hold, { capture: true });
-      if (pending) pending.click();
-      else throw error;
-    });
+    }, staleAsset);
   }
   if (cache.summary && document.querySelector("[data-sx-app]")) {
     const summary = cache.summary;
@@ -522,8 +516,38 @@ function loadExtras() {
       publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, option: selectedPurchaseOption, stock: getBuyerStockSummary });
       // The first state goes out in a frame too, never ahead of what the page shows.
       requestAnimationFrame(publish);
-    });
+    }, staleAsset);
   }
+}
+
+/**
+ * A press on a product_main skin's SKU control (`chooseVariant`,
+ * `buyVariant`). The nearest bound control is the one pressed: a buy button
+ * inside a choice card buys. A choice goes through the form's selection; a
+ * buy button chooses its SKU, is taken at once (a second press is refused),
+ * then, after the frame that shows the SKU (and tells islands), runs the
+ * form's own add or Buy now. While a cart line is edited the form's
+ * "Update cart" is the only way to buy.
+ */
+function pressSkinControl(event: MouseEvent) {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest<HTMLButtonElement>(SKIN_BUY_CONTROL);
+  const choice = event.target.closest<HTMLElement>(SKIN_CHOOSE_CONTROL);
+  if (button && (!choice || choice.contains(button))) {
+    event.preventDefault();
+    if (button.disabled || state.adding || state.purchaseBlocked || state.edit) return;
+    if (!chooseVariant(button.dataset.buyVariant ?? "")) return;
+    state.adding = true;
+    requestAnimationFrame(() => {
+      state.adding = false;
+      void add(button.dataset.buyIntent === "buy", button);
+    });
+    return;
+  }
+  // A new tab or window follows a link itself.
+  if (!choice || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  chooseVariant(choice.dataset.chooseVariant ?? "");
 }
 
 function replaceVariantUrl() {
@@ -967,7 +991,7 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
   // and the quantity, and the store checks and prices them. A cart line
   // being edited cannot be replaced that way, so its update is refused
   // instead (the answers stay in the form).
-  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false))) {
+  if (buyerInputsReady && !(await buyerInputsReady)) {
     if (state.edit || !cache.form) return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
     if (!cache.form.reportValidity()) return setError("input_invalid");
     const field = cache.form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
