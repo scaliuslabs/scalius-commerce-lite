@@ -425,6 +425,7 @@ export async function lookupShipmentByMerchantOrderId(
   if (!courier?.findShipment) {
     return {
       confirmed: false,
+      reason: "unsupported",
       message: `${provider.type} does not support lookup by the original order number. Confirm the outcome in the courier portal or with courier support.`,
     };
   }
@@ -435,9 +436,9 @@ export async function lookupShipmentByMerchantOrderId(
   } catch (error) {
     const failure = providerErrorOf(error);
     if (!failure) throw error;
-    return { confirmed: false, message: `${failure.message} The recovery lock remains active.` };
+    return { confirmed: false, reason: "unavailable", message: `${failure.message} The recovery lock remains active.` };
   }
-  if (!found.found) return { confirmed: false, message: found.message };
+  if (!found.found) return { confirmed: false, reason: "not_found", message: found.message };
   return {
     confirmed: true,
     courier: courier.label,

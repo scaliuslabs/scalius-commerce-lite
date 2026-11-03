@@ -345,6 +345,17 @@ export async function resolveUnknownOrderShipment(
                 `${lookup.courier} confirms a shipment for this order. Record the confirmed shipment or a courier-confirmed cancellation; it cannot be marked not created.`,
             );
         }
+        // A lookup that could not run proves nothing: the lock stays.
+        if (lookup.reason === "unavailable") throw new ConflictError(lookup.message);
+        // A lookup only ever vetoes (it is positive-only, and Pathao has none),
+        // so releasing rests on the staff's own search of the courier: the note
+        // names the order number they searched for. A re-booking after a wrong
+        // "not created" would send a second cash-on-delivery parcel.
+        if (!input.evidenceNote.toLowerCase().includes(input.orderId.toLowerCase())) {
+            throw new ValidationError(
+                `Search the courier for order ${input.orderId} and note what it showed, including the order number, before marking it not created.`,
+            );
+        }
     }
 
     const evidence: UnknownShipmentResolutionEvidence = {

@@ -141,8 +141,12 @@ function CourierCheckDialog({
     operationKey.current = null;
     onOpenChange(false);
   };
+  // "Not created" rests on the staff's own search of the courier (a lookup
+  // can only veto it), so the note names the order number they searched.
+  const needsOrderNumber = outcome === "confirmed_not_created";
   const ready = confirmed
     && evidenceNote.trim().length >= 8
+    && (!needsOrderNumber || evidenceNote.toLowerCase().includes(order.id.toLowerCase()))
     && (outcome !== "confirmed_existing" || externalId.trim().length > 0);
   const submit = () => {
     if (!ready) return;
@@ -200,7 +204,11 @@ function CourierCheckDialog({
               options={EVIDENCE_SOURCES.map((value) => ({ value, label: t(`courier.source.${value}`) }))}
             />
           </Field>
-          <Field id="courier-evidence" label={t("courier.details")}>
+          <Field
+            id="courier-evidence"
+            label={t("courier.details")}
+            help={needsOrderNumber ? t("courier.notCreatedEvidence", { order: order.id }) : undefined}
+          >
             <Textarea
               id="courier-evidence"
               value={evidenceNote}

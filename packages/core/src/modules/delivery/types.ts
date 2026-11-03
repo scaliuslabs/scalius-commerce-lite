@@ -27,6 +27,12 @@ export type MerchantOrderShipmentLookup =
   | {
     confirmed: false;
     message: string;
+    /**
+     * Why: the courier answered that it has no booking (`not_found`), it has
+     * no lookup by order number (`unsupported`), or the lookup could not run
+     * (`unavailable`, which proves nothing).
+     */
+    reason: "not_found" | "unsupported" | "unavailable";
   };
 
 /**
