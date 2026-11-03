@@ -114,6 +114,13 @@ export const PATH_RULES = [
     run: ["rules/rulebook.test.ts", "rules/scenarios.test.ts"],
   },
   {
+    // The test reads the budgets file and the generated table in docs/SCALE.md with fs and a
+    // dynamic import, outside the module graph.
+    name: "Free plan budgets and their table",
+    when: [/^apps\/api\/src\/testing\/free-plan-budgets\.ts$/, /^docs\/SCALE\.md$/, /^scripts\/free-plan-budget\.mjs$/],
+    run: ["scripts/free-plan-budget.test.mjs"],
+  },
+  {
     name: "generated contracts",
     when: [
       /^apps\/api\/src\/generated\//,

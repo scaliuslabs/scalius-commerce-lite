@@ -6,7 +6,8 @@
  * An importer is affected when one of its direct dependency entries changed, or
  * when any snapshot in its transitive closure (in the old or the new lockfile)
  * changed or appeared or vanished. A workspace package that links an affected
- * one is affected too. Anything this module cannot read says "all".
+ * one is affected too, and so is the root whenever anything is (its tests import
+ * workspace source by relative path). Anything this module cannot read says "all".
  */
 import YAML from "yaml";
 
@@ -34,6 +35,8 @@ function packageKey(snapshotKey) {
 function snapshotKeyOf(name, version) {
   if (typeof version !== "string" || version.startsWith("link:")) return undefined;
   if (version.startsWith("npm:")) return version.slice(4);
+  // An alias (`typescript7: typescript@7.0.2`) names its target; a plain version starts with a digit.
+  if (/^(?:@[^/@]+\/)?[^/@]+@/.test(version)) return version;
   return `${name}@${version}`;
 }
 
@@ -84,7 +87,7 @@ function changedSnapshotKeys(base, head) {
   return changed;
 }
 
-/** Importers (lockfile keys such as "." and "apps/api") that link the given importers, transitively. */
+/** The given importers, the importers (keys such as "apps/api") that link them transitively, and the root when any. */
 export function withDependents(importers, lock) {
   const affected = new Set(importers);
   const directory = (from, link) => {
@@ -113,6 +116,9 @@ export function withDependents(importers, lock) {
       queue.push(dependent);
     }
   }
+  // The root's tests (tests/, scripts/, rules/) import workspace source by relative path, so the
+  // root depends on every package whether or not its manifest links it.
+  if (affected.size > 0) affected.add(".");
   return affected;
 }
 
