@@ -30,6 +30,10 @@ export async function paginatedSitemapResponse<T extends { updatedAt: string | n
   const page = parseSitemapPage(url.searchParams.get("page"));
   if (page === null) return new Response("Invalid page parameter", { status: 400 });
   let after: string | undefined;
+  // The first page starts at the top: an `after` there is a URL the index never listed.
+  if (options.boundaries && page === 1 && url.searchParams.has("after")) {
+    return new Response("Page not found", { status: 404 });
+  }
   if (options.boundaries && page > 1) {
     // A page the index never listed is not found, before any read.
     const value = url.searchParams.get("after");

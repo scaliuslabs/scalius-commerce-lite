@@ -31,7 +31,8 @@ import {
 } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError, ValidationError } from "../utils/api-error";
-import { signPublicCursor, verifyPublicCursor } from "../utils/public-cursor";
+import { publicCursorSigner } from "../utils/public-cursor";
+import { SITEMAP_PAGE_SIZE } from "@scalius/shared/sitemap-pagination";
 import {
   successEnvelope,
   paginationSchema,
@@ -139,7 +140,7 @@ const productFeedSchema = z.object({
   channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
     description: "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
   }),
-}).superRefine(validatePriceRange);
+}).strict().superRefine(validatePriceRange);
 
 const productSitemapSchema = sitemapQuerySchema.extend({
   limit: sitemapQuerySchema.shape.limit.default(100),
@@ -149,7 +150,7 @@ const productSitemapSchema = sitemapQuerySchema.extend({
   outline: z.enum(["true"]).optional().openapi({
     description: "The sitemap index's read: no rows, the number of listed products, and every later page with its `after`.",
   }),
-});
+}).strict();
 
 const productSitemapPaginationSchema = z.object({
   page: z.number().int().min(1),
@@ -736,11 +737,12 @@ const feedProductsRoute = createRoute({
 app.openapi(feedProductsRoute, async (c) => {
   const { presence: _presence, cursor: publicCursor, ...params } = c.req.valid("query");
   const scope = feedCursorScope(params.channel);
+  const signer = publicCursorSigner(c.env);
   // Only a continuation this store issued, for this channel: anything else is
   // refused before any read, so no request can ask for an arbitrary position.
   let cursor: string | undefined;
   if (publicCursor) {
-    const position = await verifyPublicCursor(c.env, scope, publicCursor.slice(PUBLIC_FEED_CURSOR_PREFIX.length));
+    const position = await signer.verify(scope, publicCursor.slice(PUBLIC_FEED_CURSOR_PREFIX.length));
     if (!position) throw new ValidationError("Invalid product feed cursor. Start again from the first page.");
     cursor = `${CORE_FEED_CURSOR_PREFIX}${position}`;
   }
@@ -753,7 +755,7 @@ app.openapi(feedProductsRoute, async (c) => {
     pagination: {
       ...result.pagination,
       ...(next
-        ? { cursor: `${PUBLIC_FEED_CURSOR_PREFIX}${await signPublicCursor(c.env, scope, next.slice(CORE_FEED_CURSOR_PREFIX.length))}` }
+        ? { cursor: `${PUBLIC_FEED_CURSOR_PREFIX}${await signer.sign(scope, next.slice(CORE_FEED_CURSOR_PREFIX.length))}` }
         : {}),
     },
   });
@@ -784,12 +786,16 @@ const sitemapProductsRoute = createRoute({
 app.openapi(sitemapProductsRoute, async (c) => {
   const db = c.get("db");
   const { presence: _presence, page, limit, after, outline } = c.req.valid("query");
+  const signer = publicCursorSigner(c.env);
   if (outline) {
+    // The index's read only: one page size (the sitemap chunk), so it hands
+    // out at most one boundary per 5,000 products and has one cache entry.
     if (page !== 1 || after) throw new ValidationError("The sitemap outline takes no page or after.");
+    if (limit !== SITEMAP_PAGE_SIZE) throw new ValidationError(`The sitemap outline is read with limit=${SITEMAP_PAGE_SIZE}.`);
     const result = await getStorefrontSitemapOutline(db, { limit });
     const pages = await Promise.all(result.boundaries.map(async (boundary, index) => ({
       page: index + 2,
-      after: await signPublicCursor(c.env, sitemapAfterScope(index + 2, limit), encodeSitemapPosition(boundary)),
+      after: await signer.sign(sitemapAfterScope(index + 2, limit), encodeSitemapPosition(boundary)),
     })));
     return ok(c, {
       products: [],
@@ -800,7 +806,7 @@ app.openapi(sitemapProductsRoute, async (c) => {
   // a page or boundary it never handed out is refused before any read.
   let position: ReturnType<typeof decodeSitemapPosition> = null;
   if (page > 1) {
-    const signed = after ? await verifyPublicCursor(c.env, sitemapAfterScope(page, limit), after) : null;
+    const signed = after ? await signer.verify(sitemapAfterScope(page, limit), after) : null;
     position = signed ? decodeSitemapPosition(signed) : null;
     if (!position) throw new ValidationError("Sitemap pages after the first need the `after` their sitemap index lists.");
   } else if (after) {
