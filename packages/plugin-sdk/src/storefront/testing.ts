@@ -458,7 +458,12 @@ export function fixtureStore(name: FixtureStoreName): FixtureStore {
   }
 }
 
-/** What the storefront would do with a skin's markup: the problems that make it draw the core unit instead. */
+/**
+ * The problems the storefront would find in a skin's markup: a missing
+ * required embed (it then draws the core unit instead), embeds the target
+ * does not allow (they render nothing) and islands whose props are over
+ * their bound (they mount with none).
+ */
 export function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[] {
   const split = splitStorefrontEmbeds(html, storefrontEmbedRule(target));
   const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy_form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
@@ -519,9 +524,11 @@ export function renderComponent(
 }
 
 /**
- * A skin's HTML over its target's fixture projection (or yours). Throws
- * when the storefront would draw the core unit instead: a missing required
- * embed, an embed the target does not allow, or (headers) invalid markup.
+ * A skin's HTML over its target's fixture projection (or yours). Throws on
+ * each problem `checkSkinHtml` names (a missing required embed makes the
+ * storefront draw the core unit instead; an embed the target does not allow,
+ * or an island whose props are over their bound, renders without that part)
+ * and, for headers, on invalid markup.
  */
 export function renderSkin<Target extends StorefrontSkinTarget>(
   module: StorefrontModule,
