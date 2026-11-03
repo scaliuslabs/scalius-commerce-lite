@@ -71,7 +71,8 @@ import {
     giftCardPurchaseReads,
     giftCardPurchaseState,
     planGiftCardClawback,
-    releaseGiftCardClawbackOfFailedRefund,
+    buildGiftCardClawbackSettlement,
+    giftCardHandoverPending,
     type GiftCardPurchaseState,
 } from "./refund-gift-card-clawback";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
@@ -885,6 +886,8 @@ export async function finalizeAcceptedRefundAttemptIds(
                 version: orders.version,
                 currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
+                // The order id is bound as a value (an outer column would bind to the card's own id).
+                hasPurchasedGiftCards: sql<number>`EXISTS (SELECT 1 FROM ${giftCards} WHERE ${giftCards.sourceOrderId} = ${orderId} AND ${giftCards.source} = 'purchase')`,
             })
             .from(orders)
             .where(eq(orders.id, orderId))
@@ -959,10 +962,29 @@ export async function finalizeAcceptedRefundAttemptIds(
                 actorUserId: options.actorUserId ?? null,
             })
             : null;
+        // An order that bought gift cards settles each ending refund's clawback
+        // against the money that went back, in this same batch.
+        const clawbackSettlement: unknown[] = [];
+        if (order.hasPurchasedGiftCards) {
+            for (const refundGroupId of new Set(orderAttempts.map((attempt) => attempt.refundGroupId))) {
+                clawbackSettlement.push(...await buildGiftCardClawbackSettlement(db, {
+                    orderId,
+                    refundGroupId,
+                    outcomes: new Map(orderAttempts
+                        .filter((attempt) => attempt.refundGroupId === refundGroupId)
+                        .map((attempt) => [attempt.id, "refunded" as const])),
+                }));
+            }
+        }
+        // The announced attempts are still unannounced when the batch runs: a
+        // concurrent finalization that read them first can't announce them twice.
+        const unannounced = announcement
+            ? sql` AND NOT EXISTS (SELECT 1 FROM ${refundAttempts} WHERE ${inJsonArray(refundAttempts.id, announced.map((attempt) => attempt.id))} AND ${refundAttempts.refundedAt} IS NOT NULL)`
+            : sql``;
 
         try {
             await db.batch([
-                buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`, REFUND_FINALIZE_CONFLICT),
+                buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})${unannounced}`, REFUND_FINALIZE_CONFLICT),
                 db.update(orderPayments).set({
                     status: PaymentRecordStatus.REFUNDED,
                     updatedAt: sql`unixepoch()`,
@@ -984,6 +1006,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                         .where(and(inJsonArray(refundAttempts.id, announced.map((attempt) => attempt.id)), isNull(refundAttempts.refundedAt))),
                     ...announcement.statements,
                 ] : []),
+                ...clawbackSettlement,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
             ] as any);
         } catch (error: unknown) {
@@ -1313,12 +1336,14 @@ async function markRefundAllocationsFailed(
         claimVersion: number;
         allocationCount: number;
         error: unknown;
+        /** Written with the failure (the gift-card clawback settlement). */
+        extraStatements?: unknown[];
     },
 ): Promise<void> {
     if (params.allocations.length === 0) return;
 
-    await db.batch(
-        params.allocations.flatMap((allocation) => [
+    await db.batch([
+        ...params.allocations.flatMap((allocation) => [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.FAILED,
             metadata: buildRefundMetadata({
@@ -1341,9 +1366,10 @@ async function markRefundAllocationsFailed(
             failedAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        ]) as any,
-    );
+        ]),
+        ...(params.extraStatements ?? []),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any);
 }
 
 async function markRefundAllocationsProviderUnknown(
@@ -1778,7 +1804,8 @@ export async function processRefund(
         receivedMinor: paymentLedgerRows.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
         refundedBeforeMinor: paymentLedgerRows.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
         refundMinor: refundAmount,
-        closesOrder: isFullRefund,
+        // Units not issued yet count only while the handover will still issue them.
+        closesOrder: !giftCardHandoverPending(order.paymentStatus, isFullRefund),
     });
     if (giftCardClawback.shortfallMinor > 0) {
         const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
@@ -2057,24 +2084,40 @@ export async function processRefund(
                 error,
             });
         } else {
-            await markRefundAllocationsFailed(db, {
-                request: params,
-                allocations: unresolvedAllocations,
-                groupId: refundGroupId,
-                claimVersion,
-                allocationCount: allocations.length,
-                error,
-            });
+            // The refund ends here: what it took from the order's gift cards
+            // beyond the money that went back returns to them in the batch that
+            // fails the rest. If that can't be planned, the attempts stay as they
+            // are and reconciliation fails and settles them together.
+            let settlement: unknown[] | null = [];
+            if (giftCardClawback.clawbacks.length > 0) {
+                settlement = await buildGiftCardClawbackSettlement(db, {
+                    orderId: params.orderId,
+                    refundGroupId,
+                    outcomes: new Map([
+                        ...unresolvedAllocations.map((allocation) => [getRefundAttemptId(allocation), "failed"] as const),
+                        ...completedAllocations.map((allocation) => [getRefundAttemptId(allocation), "refunded"] as const),
+                    ]),
+                    actor,
+                }).catch((settleError: unknown) => {
+                    console.error("[refund-service] Gift card settlement of a failed refund is left to reconciliation:", settleError instanceof Error ? settleError.name : "error");
+                    return null;
+                });
+            }
+            if (settlement) {
+                await markRefundAllocationsFailed(db, {
+                    request: params,
+                    allocations: unresolvedAllocations,
+                    groupId: refundGroupId,
+                    claimVersion,
+                    allocationCount: allocations.length,
+                    error,
+                    extraStatements: settlement,
+                });
+            }
         }
 
         const completedAmount = completedAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
         const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
-        if (completedAmount === 0 && !isProviderRefundOutcomeUnknownError(error) && giftCardClawback.clawbacks.length > 0) {
-            // No money went back: the cards keep their value.
-            await releaseGiftCardClawbackOfFailedRefund(db, refundGroupId).catch((releaseError: unknown) => {
-                console.error("[refund-service] Gift card value of a failed refund was not given back yet:", releaseError instanceof Error ? releaseError.name : "error");
-            });
-        }
         if (completedAmount > 0) {
             let finalizedResult: FinalizeAcceptedRefundAttemptsResult;
             try {
