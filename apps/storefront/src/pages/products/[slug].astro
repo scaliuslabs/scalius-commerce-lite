@@ -599,7 +599,7 @@ const productGalleryProps = {
 const productEmbeds: EmbedRenderers = {
   "buy_form": ({ data }) => ({
     component: ProductBuyBox as EmbedRender["component"],
-    props: { ...buyBox, summary: { ...buyBox.summary, details: false, title: data.title !== "false" } },
+    props: { ...buyBox, summary: { ...buyBox.summary, details: false, title: data.title !== "false", nativeOptions: data.options !== "false" } },
   }),
   gallery: () => ({ component: ProductGallery as EmbedRender["component"], props: productGalleryProps }),
   reviews: () => ({
