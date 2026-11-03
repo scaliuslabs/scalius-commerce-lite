@@ -50,6 +50,8 @@ export {
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 /** The product modules `<ProductModule name="…" />` can place: the theme's own module ids. */
 export { STOREFRONT_PRODUCT_MODULE_EMBEDS } from "@scalius/shared/plugins/storefront-protocol";
+/** The budgets the packer, the upload and the storefront hold a render to (`islandPropsBytes`, `htmlBytes`, …). */
+export { STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-protocol";
 export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
 export type {
   StorefrontBannerMosaicSkinSettings,

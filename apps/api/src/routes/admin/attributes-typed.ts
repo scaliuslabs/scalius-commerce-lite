@@ -407,7 +407,8 @@ app.openapi(createRoute({
         "Validates every product value first and refuses the whole conversion (count and up to 10 samples) "
         + "when any does not convert; `dryRun` returns that preview without writing. Otherwise switches the "
         + "type, then rewrites product values 90 products per batch with their projection refresh. Repeating "
-        + "a conversion continues with the values not yet converted.",
+        + "a conversion continues with the values not yet converted. A number kept a number under a new unit "
+        + "rewrites each value's text from its number first and switches the unit last.",
     request: {
         params: z.object({ id: idParam }),
         body: { required: true, content: { "application/json": { schema: convertAttributeTypeSchema } } },
