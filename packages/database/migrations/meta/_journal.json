@@ -1331,6 +1331,13 @@
       "when": 1792780000000,
       "tag": "0189_variant_warranty",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "6",
+      "when": 1792790000000,
+      "tag": "0190_postgres_json_shapes",
+      "breakpoints": true
     }
   ]
 }
