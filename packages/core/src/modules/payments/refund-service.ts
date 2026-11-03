@@ -870,6 +870,7 @@ export async function finalizeAcceptedRefundAttemptIds(
             version: number;
             currencyCode: string;
             currencyDecimalPlaces: number;
+            hasPurchasedGiftCards: number;
         };
         currency: OrderCurrencySnapshot;
         paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
