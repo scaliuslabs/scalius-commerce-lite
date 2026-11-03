@@ -88,4 +88,4 @@ Courier status checks (`POST /{id}/shipments/{shipmentId}/refresh`) live in the 
 
 - Move order status only through `applyOrderStatusChange()` (`orders`) or the CAS paths in this domain. The state machine and the locks live in `order-kernel`. Cash at the door does not deliver an order that was not shipped.
 - Commit local state before a courier call. Never call the courier a second time to repair local state.
-- The dashboard submits one `/bulk-ship` request for the selected orders. Money, item count and contents come from the saved order, never from the request.
+- A `/bulk-ship` request books at most the plan's `bulkOrders.ship` orders (1 on Free, 20 on Paid) and returns the rest as `remaining`; the dashboard sends those in its next request. Money, item count and contents come from the saved order, never from the request.

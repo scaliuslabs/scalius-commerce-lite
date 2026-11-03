@@ -104,6 +104,12 @@ export function queueAfterBulkResponse(
   return [...left, ...next];
 }
 
+/** Orders a request was sent but answered neither in `results` nor in `remaining`: not done. */
+export function unansweredBulkOrders(sent: readonly string[], response: BulkRequestResult): string[] {
+  const answered = new Set([...response.results.map((result) => result.orderId), ...(response.remaining ?? [])]);
+  return sent.filter((orderId) => !answered.has(orderId));
+}
+
 /** What a bulk run did: the orders it finished and a short plain reason for each one it couldn't. */
 export interface OrderBulkOutcome {
   succeeded: string[];

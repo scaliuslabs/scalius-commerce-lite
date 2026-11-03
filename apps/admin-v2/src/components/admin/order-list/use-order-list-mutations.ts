@@ -17,6 +17,7 @@ import {
   nextBulkRequest,
   queueAfterBulkResponse,
   summarizeBulkResults,
+  unansweredBulkOrders,
   type BulkRequestResult,
   type OrderBulkOutcome,
 } from "./order-bulk-actions";
@@ -76,6 +77,9 @@ export function useOrderBulkRun() {
           const part = summarizeBulkResults(response.results, t("bulkFailedGeneric"));
           outcome.succeeded.push(...part.succeeded);
           outcome.failures.push(...part.failures);
+          // An order the server neither answered nor left for later is not done: say so.
+          outcome.failures.push(...unansweredBulkOrders(sent, response)
+            .map((orderId) => ({ orderId, error: t("bulkFailedGeneric") })));
           const after = queueAfterBulkResponse(sent, next, response);
           if (after) {
             queue = after;
