@@ -280,7 +280,13 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     const shippingMethodIds = uniqueNonEmpty(
         inputs.map((input) => input.shippingMethodId),
     );
-    const taxPlan = createStorefrontTaxAuthorityReadPlan(db);
+    // Tax regions are read for the countries an order can be taxed in: the
+    // shipping country, the billing country (an order that ships nothing is
+    // taxed there); the store's own (pickup, no address) rides on the statement.
+    const taxPlan = createStorefrontTaxAuthorityReadPlan(db, [
+        ...destinationCountries,
+        ...inputs.map((input) => input.billingCountryCode),
+    ]);
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),

@@ -857,7 +857,7 @@ export async function createStorefrontOrder(
     // without one reads it now, and the order is priced with that read.
     const handedOverAtStore = paymentCountryIsStore(deliveryPreflight.fulfilment);
     const taxAuthority = taxAuthoritySnapshot
-        ?? (handedOverAtStore ? await readStorefrontTaxAuthority(storefrontDb) : undefined);
+        ?? (handedOverAtStore ? await readStorefrontTaxAuthority(storefrontDb, [data.billingCountryCode]) : undefined);
     const paymentCountry = paymentCountryOf(
         deliveryPreflight.fulfilment,
         deliveryPreflight.address?.countryCode,
