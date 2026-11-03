@@ -295,6 +295,11 @@ export async function listOrdersAwaitingAutoFulfil(
     afterOrderId?: string,
 ): Promise<string[]> {
     const autoFulfilMode = mode ?? await readAutoFulfilMode(db);
+    // The owed lines' partial index drives the read; the unary `+` keeps the
+    // order's columns off every orders index (deleted_at, payment_status and
+    // status lead indexes over the whole settled history).
+    const orderIn = (column: typeof orders.paymentStatus | typeof orders.status, values: readonly string[]) =>
+        sql`+${column} IN (${sql.join(values.map((value) => sql`${value}`), sql`, `)})`;
     const rows = await db.selectDistinct({ id: orderItems.orderId })
         .from(orderItems)
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
@@ -302,11 +307,11 @@ export async function listOrdersAwaitingAutoFulfil(
             AUTO_PENDING_LINE,
             sql`${orderItems.fulfilledQuantity} < ${orderItems.quantity} - ${refundedLineQuantitySql()}`,
             afterOrderId ? gt(orderItems.orderId, afterOrderId) : undefined,
-            inArray(orders.paymentStatus, SETTLED_PAYMENT_STATUSES),
+            orderIn(orders.paymentStatus, SETTLED_PAYMENT_STATUSES),
             notInArray(orders.status, CLOSED_ORDER_STATUSES),
-            isNull(orders.deletedAt),
+            sql`+${orders.deletedAt} IS NULL`,
             autoFulfilMode === "after_confirmation"
-                ? inArray(orders.status, STAFF_CONFIRMED_ORDER_STATUSES)
+                ? orderIn(orders.status, STAFF_CONFIRMED_ORDER_STATUSES)
                 : undefined,
         ))
         .orderBy(asc(orderItems.orderId))
