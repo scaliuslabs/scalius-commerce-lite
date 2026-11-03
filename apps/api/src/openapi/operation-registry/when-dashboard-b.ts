@@ -19,6 +19,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.media.import_url": "Use when importing an image or video from a public HTTPS URL into the media library.",
   "dashboard.media.list": "Use when listing or searching media library images and videos.",
   "dashboard.media.move": "Use when moving media files into another folder.",
+  "dashboard.media.pending_renditions": "Use when finding images that still lack pre-generated WebP renditions, to render them.",
   "dashboard.media.permanently_delete": "Use when a trashed, unused media file must be deleted for good.",
   "dashboard.media.restore": "Use when bringing a trashed media file back.",
   "dashboard.media.trash": "Use when moving a media file to trash.",

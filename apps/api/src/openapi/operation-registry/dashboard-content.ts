@@ -57,6 +57,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     exposure: "excluded",
     reason: "Binary original read for the dashboard's browser rendition pipeline; agents use the public media URL.",
   },
+  "dashboard.media.pending_renditions": {},
   "dashboard.media.permanently_delete": {
     risk: "destructive",
     revision: "required",

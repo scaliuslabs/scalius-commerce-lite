@@ -175,7 +175,7 @@ async function assertActiveFolder(db: Database, folderId: string | null | undefi
     if (!folder) throw new ValidationError("Media folder does not exist.");
 }
 
-export async function listMediaFiles(db: Database, input: {
+type MediaListInput = {
     cursor?: string;
     limit?: number;
     search?: string;
@@ -187,7 +187,10 @@ export async function listMediaFiles(db: Database, input: {
     view?: "ready" | "trash";
     /** "missing": images that can still get pre-generated renditions. */
     variants?: "missing";
-}) {
+};
+
+/** One page of files in a stable cursor order, without usage. */
+async function pageMediaFiles(db: Database, input: MediaListInput) {
     const boundedLimit = Math.min(100, Math.max(1, input.limit ?? 24));
     const sortBy = input.sortBy ?? "createdAt";
     const sortOrder = input.sortOrder ?? "desc";
@@ -263,17 +266,38 @@ export async function listMediaFiles(db: Database, input: {
     const rawValue = last
         ? sortBy === "size" ? last.size : sortBy === "filename" ? last.filename : last.createdAt.getTime()
         : null;
-    const usage = await countMediaUsage(db, pageRows.map((row) => row.id));
     return {
-        files: pageRows.map((row) => ({
-            ...presentMediaProjection(row),
-            usageCount: usage.get(row.id)?.usageCount ?? 0,
-            keptForOrders: usage.get(row.id)?.keptForOrders ?? false,
-        })),
+        rows: pageRows,
         nextCursor: hasMore && last && rawValue !== null
             ? encodeCursor({ sortBy, sortOrder, value: rawValue, id: last.id, scope })
             : null,
     };
+}
+
+/** The Files list and picker: each file with where it is used. */
+export async function listMediaFiles(db: Database, input: MediaListInput) {
+    const page = await pageMediaFiles(db, input);
+    const usage = await countMediaUsage(db, page.rows.map((row) => row.id));
+    return {
+        files: page.rows.map((row) => ({
+            ...presentMediaProjection(row),
+            usageCount: usage.get(row.id)?.usageCount ?? 0,
+            keptForOrders: usage.get(row.id)?.keptForOrders ?? false,
+        })),
+        nextCursor: page.nextCursor,
+    };
+}
+
+/**
+ * Images still waiting for pre-generated renditions, oldest first, for the
+ * dashboard's background renderer. It never reads usage (the renderer has no
+ * use for it, and the usage index reads content blocks, text surfaces and
+ * order lines for every page); the partial `media_pending_variants_idx`
+ * answers the idle "anything pending?" check without walking rendered images.
+ */
+export async function listMediaPendingRenditions(db: Database, input: { cursor?: string; limit?: number } = {}) {
+    const page = await pageMediaFiles(db, { cursor: input.cursor, limit: input.limit, variants: "missing", sortOrder: "asc" });
+    return { files: page.rows.map((row) => presentMediaProjection(row)), nextCursor: page.nextCursor };
 }
 
 /** Ids a caller may choose for new media (store import names them after their source URL). */
