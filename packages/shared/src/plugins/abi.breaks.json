@@ -292,5 +292,11 @@
   "from": "30133e20c46aac41",
   "change": "storefront/testing fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): type is now a StorefrontSkinnableSection and settings a Partial of its sealed projection; the result is the full projection, typed by it.",
   "reason": "Pre-lock (black-box platform M4): the fixture returned settings {} for every section, contradicting the sealed StorefrontSectionSkinSettings the host fills completely, so correctly typed skins failed validate."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "76c1945816629d86",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#TypeAliasDeclaration:StorefrontProductError: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (same day, never shipped; audit M3): the buy form's error codes become the keys of the STOREFRONT_PRODUCT_ERRORS table, like APP_ERROR_CODES, so a code can be added later without changing the declaration; the codes are the same five."
  }
 ]

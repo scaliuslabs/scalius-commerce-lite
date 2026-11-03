@@ -4304,7 +4304,14 @@ export interface StorefrontBuyerInput {
         label: string;
     }>;
 }
-export type StorefrontProductError = "option_required" | "input_invalid" | "unavailable" | "quantity_limit" | "failed";
+export declare const STOREFRONT_PRODUCT_ERRORS: {
+    readonly option_required: "An option is not chosen yet; the form asks for it under that option. Gone once the buyer chooses it.";
+    readonly input_invalid: "A buyer input is missing or too long; the form says so under the field. Gone once the buyer fixes the last one.";
+    readonly unavailable: "The chosen SKU is sold out, or no SKU has that choice. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.";
+    readonly quantity_limit: "More than one order line holds. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.";
+    readonly failed: "Anything else (the cart could not be saved, the store refused the line); try again. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.";
+};
+export type StorefrontProductError = keyof typeof STOREFRONT_PRODUCT_ERRORS;
 export interface StorefrontProductState {
     variantId: string | null;
     quantity: number;

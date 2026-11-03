@@ -17141,6 +17141,13 @@
   "STOREFRONT_STYLESHEET_FILE": "styles.css",
   "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
+  "STOREFRONT_PRODUCT_ERRORS": {
+   "option_required": "An option is not chosen yet; the form asks for it under that option. Gone once the buyer chooses it.",
+   "input_invalid": "A buyer input is missing or too long; the form says so under the field. Gone once the buyer fixes the last one.",
+   "unavailable": "The chosen SKU is sold out, or no SKU has that choice. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.",
+   "quantity_limit": "More than one order line holds. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.",
+   "failed": "Anything else (the cart could not be saved, the store refused the line); try again. Gone once the buyer changes the SKU, quantity, an answer or the purchase option."
+  },
   "STOREFRONT_SECTION_SKIN_PROJECTIONS": {
    "hero": 1,
    "usp_strip": 1,
