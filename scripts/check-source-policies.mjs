@@ -442,6 +442,37 @@ export const policies = [
     sample: "sql`lower(trim(${customers.email})) IN (SELECT CAST(value AS TEXT) FROM json_each(${emails}))`",
   },
   {
+    rule: "an id list bound as one json_each() value beside a live-row filter writes the filter +deleted_at",
+    why: "without planner statistics (D1 keeps none) SQLite estimates a json_each list as large and walks every live row on a deleted_at-led index (products_list_price_idx, customers_list_name_idx) instead of seeking the list; `+deleted_at IS NULL` keeps it a filter (collections.service.ts, customer-tags.ts). A list bound as parameters (inArray) is planned on its index already",
+    paths: ["apps/api/src", "packages/core/src"],
+    allow: Object.fromEntries([
+      ["packages/core/src/modules/store-transfer/product-export.ts", "Its child lookups match the product id list on (product_id, deleted_at) indexes, which seek the list and the live filter together; the product page itself writes +deleted_at (import-lookup-plans.d1.test.ts)."],
+      ["packages/core/src/modules/store-transfer/product-images.ts", "The variant image update leads with product_id = ? on (product_id, deleted_at), which seeks before the id list applies."],
+      ...[
+      "packages/core/src/modules/settings/site-settings.service.ts",
+      "packages/core/src/modules/storefront/theme-handles.ts",
+      "packages/core/src/modules/price-lists/market-pricing.ts",
+      "packages/core/src/modules/price-lists/price-lists.service.ts",
+      "packages/core/src/modules/catalog/compare.ts",
+      "packages/core/src/modules/catalog/public-sku-cards.ts",
+      "packages/core/src/modules/checkout/cart-validation.ts",
+      "packages/core/src/modules/product-admin/read.ts",
+      "packages/core/src/modules/product-admin/semantic-sections.ts",
+      "packages/core/src/modules/product-admin/option-matrix.ts",
+      "packages/core/src/modules/product-admin/write.ts",
+      "packages/core/src/modules/attributes/attributes.service.ts",
+      "packages/core/src/modules/inventory/inventory.service.ts",
+      "packages/core/src/modules/inventory/reserve.ts",
+      "packages/core/src/modules/delivery/zones.ts",
+      ].map((file) => [file, "Not yet swept: each lookup needs its own plan check (some lists drive a joined table, or a unique column outranks the deleted_at index); the sweep follows, file by file, and removes the entry."]),
+    ]),
+    forbid: [
+      /(?:IN\s*\(\s*SELECT\s+(?:CAST\(\s*value\s+AS\s+TEXT\s*\)|value)\s+FROM\s+json_each\(|inJsonArray\()[^;]{0,300}?(?<![+\w])(?:isNull\(\s*\w+\.deletedAt\s*\)|\$\{\s*\w+\.deletedAt\s*\}\s+IS\s+NULL)/i,
+      /(?<![+\w])(?:isNull\(\s*\w+\.deletedAt\s*\)|\$\{\s*\w+\.deletedAt\s*\}\s+IS\s+NULL)[^;]{0,300}?(?:IN\s*\(\s*SELECT\s+(?:CAST\(\s*value\s+AS\s+TEXT\s*\)|value)\s+FROM\s+json_each\(|inJsonArray\()/i,
+    ],
+    sample: "db.select().from(products).where(and(sql`${products.id} IN (SELECT value FROM json_each(${ids}))`, isNull(products.deletedAt)))",
+  },
+  {
     rule: "request-scoped state never lives in known module globals",
     why: "Workers reuse isolates across requests and merchants; cached auth/clients/URLs leak between them",
     paths: [
