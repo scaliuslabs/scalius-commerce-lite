@@ -8,12 +8,13 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
  * two inputs (the layout payload and the URL path), so a page's CSP names
  * exactly the app scripts the page loads.
  *
- * "all" means every page except the buyer's pages (cart, checkout, the receipt and
- * every private page: account, payment recovery, order tracking, …). An
- * app's JavaScript never runs on those pages and a manifest cannot name them.
+ * "all" means every page except the buyer's pages (cart, checkout, the receipt,
+ * and every private page: account, payment recovery, order tracking, warranty
+ * claims, the gift-card balance, …). An app's JavaScript never runs on those
+ * pages and a manifest cannot name them.
  */
 
-import { isUncachedPrivateStorefrontPathname } from "./cache-policy";
+import { isPrivateStorefrontPathname } from "./cache-policy";
 
 /** The page kinds an app script can name (besides "all"). */
 export const STOREFRONT_APP_PAGES = ["home", "product", "listing"] as const;
@@ -35,9 +36,8 @@ export function storefrontAppPage(pathname: string): StorefrontAppPage | "privat
   if (/^\/(?:categories|brands|collections)\/[^/]+$/.test(path) || /^\/(?:categories|collections|search)$/.test(path)) {
     return "listing";
   }
-  // Cart, checkout, the receipt and the other buyer pages; the theme editor's canvas is the merchant's.
-  if (path === "/cart" || path.startsWith("/cart/") || path === "/checkout" || path.startsWith("/checkout/") || path === "/order-success") return "private";
-  return isUncachedPrivateStorefrontPathname(path) && !/^\/theme-preview(?:\/|$)/.test(path) ? "private" : null;
+  // The buyer's own pages (`PRIVATE_STOREFRONT_ROOTS`); the theme editor's canvas is the merchant's.
+  return isPrivateStorefrontPathname(path) && !/^\/theme-preview(?:\/|$)/.test(path) ? "private" : null;
 }
 
 /** App components (theme slots, sections and their islands) cannot name a page, so none renders on a buyer's page: the core chrome does. */

@@ -69,7 +69,7 @@ A slot is a named place where apps add their piece.
 - Core's header, footer, product page and card place their slots. A skin of a unit places that unit's slots with `<Slot name="header.actions" />`, `<Slot name="footer.columns" />`, `<Slot name="product_card.badges" />` and `<Slot name="product_card.meta" />`. A footer's `footer.columns` also carries the store's country and language forms; a footer skin that places no slot gets them right after it.
 - An empty slot renders nothing and costs no read.
 
-**UI slots** are on the buyer's own pages, filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there.
+**UI slots** are on the buyer's own pages (cart, checkout, receipt, account, order tracking, payment recovery, warranty claims, the gift-card balance), filled by storefront extensions (`storefront.extensions`) with a `ui` tree that core draws. No app HTML or JavaScript runs there.
 
 | Page | UI slots |
 | --- | --- |
@@ -381,7 +381,7 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 - Drawing on the storefront is its own grant, and every browser host your islands reach is listed. A Super Admin approves both. An update that asks for more waits for approval.
 - The render input supplies settings, public page data and context, never buyer sessions or secrets.
 - Output passes the store's allowlist. It keeps content, list, table and form elements, `h1`, `video`, an SVG drawing subset, islands, deferred markup and core embeds; classes; `id`s that start with your app's name (`noor-…` for `scalius.noor`); inline style without loading functions (`url()`, `image-set()`), escapes or comments; forms that post to a store path; and schema.org JSON-LD (dropped on `noindex` pages). It drops `<script>`, `<style>` (CSS belongs in the stylesheet), `<iframe>`, `<noscript>`, `<template>` (except as deferred content), `<math>`, SVG animation and `foreignObject`, event handlers, host `data-sx-*` attributes, and every URL that is not a store path, `http(s)`, `mailto`, `tel` or a fragment.
-- App components, islands, stylesheets and browser hosts never reach cart, checkout, the receipt, account, payment recovery or order tracking. Core chrome renders there.
+- App components, islands, stylesheets and browser hosts never reach a buyer's own page: cart, checkout, the receipt, account, payment recovery, order tracking, warranty claims and the gift-card balance. Core chrome renders there.
 - Island code is served from the store's origin; CSP `script-src` gains nothing. Browser hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - Approved islands are trusted same-origin JavaScript: they can read the page's DOM, including embedded forms, and make requests the browser allows. Activation approval, CSP and server authorization are the boundaries; HTML sanitizing does not sandbox an island.
 - SVG files are served with a sandboxing CSP and `nosniff`.
