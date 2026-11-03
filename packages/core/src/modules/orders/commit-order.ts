@@ -5,6 +5,7 @@
 // record) and hands the kernel the statements that policy adds.
 import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
+    abandonedCheckouts,
     codTracking,
     customerHistory,
     customers,
@@ -43,6 +44,7 @@ import { nextOrderNumberSql } from "./number";
 import { deferredOrderColumns } from "./payment-terms-columns";
 import { orderShippingAddressInsertColumns, orderShippingCountry } from "./shipping-address";
 import type { OrderFacts, OrderLine } from "./types";
+import { ABANDONED_CHECKOUT_SESSION_ID_PATTERN } from "./validation";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 type ReservationPool = "regular" | "preorder" | "backorder";
@@ -72,6 +74,12 @@ export interface OrderPlan {
     appDiscounts?: readonly AppliedAppDiscount[];
     /** The stable identity of the order's ledger-v2 reservation movements. */
     reservationKey: string;
+    /**
+     * The abandoned-checkout session the order completes (a storefront
+     * checkout's session id, or the snapshot staff created the order from):
+     * its row is deleted in the order batch. Any other id deletes nothing.
+     */
+    abandonedCheckoutId?: string | null;
 }
 
 /** The customer record an order is filed under, resolved by its channel's policy. */
@@ -155,6 +163,7 @@ export async function commitOrder(
             ...before,
             ...reservation.statements,
             ...orderRowStatements(db, plan, prelude.customer),
+            ...abandonedCheckoutStatements(db, plan),
             ...(prelude.after ?? []),
         ];
         let results: readonly unknown[];
@@ -206,6 +215,18 @@ export async function commitOrder(
             ),
         };
     }
+}
+
+/**
+ * The abandoned checkout the order completes ends with it: deleted in the same
+ * batch, so no recovery list shows a checkout that became an order. Only a
+ * checkout session id names one (an archived hosted-payment order's row is
+ * keyed by its order id and is never deleted here).
+ */
+function abandonedCheckoutStatements(db: Database, plan: OrderPlan): SQLiteBatchItem[] {
+    const checkoutId = plan.abandonedCheckoutId?.trim();
+    if (!checkoutId || !ABANDONED_CHECKOUT_SESSION_ID_PATTERN.test(checkoutId)) return [];
+    return [db.delete(abandonedCheckouts).where(eq(abandonedCheckouts.checkoutId, checkoutId))];
 }
 
 /** The tracked lines an order reserves: none unless it holds stock from commit. */

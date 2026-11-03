@@ -21,7 +21,12 @@ export interface OrderPrefill {
   shippingMethodId: string | null;
   shippingCharge: number | null;
   items: OrderItem[];
+  /** The abandoned checkout session the order completes: creating the order deletes its snapshot. */
+  abandonedCheckoutId?: string;
 }
+
+/** A storefront checkout session id, as the API accepts it for `abandonedCheckoutId`. */
+const CHECKOUT_SESSION_ID = /^chk_session_[A-Za-z0-9_-]{16,64}$/;
 
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
@@ -90,5 +95,6 @@ export function takeOrderPrefill(): OrderPrefill | null {
       ? value.shippingCharge
       : null,
     items,
+    ...(CHECKOUT_SESSION_ID.test(text(value.abandonedCheckoutId)) ? { abandonedCheckoutId: text(value.abandonedCheckoutId) } : {}),
   };
 }
