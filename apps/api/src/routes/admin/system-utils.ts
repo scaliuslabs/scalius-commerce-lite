@@ -4,8 +4,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { assertContactSearchAllowed } from "./contact-access";
 import { createId } from "@paralleldrive/cuid2";
-import { sql, inArray, desc, asc, and, count } from "drizzle-orm";
+import { sql, inArray, desc, asc } from "drizzle-orm";
 import { containsText } from "@scalius/core/utils/text-match";
+import { COUNT_PROBE_COLUMN, cappedCountQuery, tooDeepPage } from "@scalius/core/utils/keyset";
+import { capTotal } from "@scalius/shared/pagination";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { abandonedCheckouts, adminFcmTokens } from "@scalius/database/schema";
 import { searchMatch } from "@scalius/core/search";
@@ -19,6 +22,58 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 // --- Abandoned Checkouts ---
 // ── List Abandoned Checkouts ──
 
+/**
+ * The sorts the dashboard offers, each one an index read in order:
+ * updatedAt on abandoned_checkouts_updated_idx, customerPhone on
+ * abandoned_checkouts_empty_candidate_idx and checkoutId on the unique
+ * ab_checkout_id_unique. Any other column name is refused by validation.
+ */
+const ABANDONED_CHECKOUT_SORTS = ["updatedAt", "customerPhone", "checkoutId"] as const;
+
+/** Same direction for every term, ending in the id so equal values keep one order. */
+function abandonedCheckoutOrderBy(sort: (typeof ABANDONED_CHECKOUT_SORTS)[number], order: "asc" | "desc") {
+    const direction = order === "asc" ? asc : desc;
+    switch (sort) {
+        case "customerPhone":
+            return [direction(abandonedCheckouts.customerPhone), direction(abandonedCheckouts.updatedAt), direction(abandonedCheckouts.id)];
+        case "checkoutId":
+            return [direction(abandonedCheckouts.checkoutId)];
+        default:
+            return [direction(abandonedCheckouts.updatedAt), direction(abandonedCheckouts.id)];
+    }
+}
+
+/** Numbered pages reach the plan's first maxOffset rows only; deeper is a typed 400. */
+function assertPageReachable(offset: number) {
+    const { maxOffset } = planLimits().lists;
+    if (offset >= maxOffset) throw tooDeepPage(offset, maxOffset);
+}
+
+/** The search box: the checkout search index, or the phone digits when the term looks like a phone. */
+function abandonedCheckoutSearchCondition(db: Parameters<typeof searchMatch>[0], search: string) {
+    if (!search) return undefined;
+    const digitsOnly = search.replace(/[^0-9]/g, "");
+    const compactSearch = search.replace(/\s/g, "");
+    const looksLikePhone = digitsOnly.length >= 4
+        && compactSearch.length > 0
+        && digitsOnly.length / compactSearch.length > 0.5;
+    const ftsCondition = searchMatch(db, "abandoned_checkouts", search);
+    if (looksLikePhone && ftsCondition) {
+        return sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`;
+    }
+    if (looksLikePhone) return containsText(abandonedCheckouts.customerPhone, digitsOnly);
+    return ftsCondition ?? undefined;
+}
+
+const abandonedCheckoutPaginationSchema = z.object({
+    page: z.number().int(),
+    limit: z.number().int(),
+    total: z.number().int(),
+    /** `total` is a lower bound ("1,000+"): more rows match than the count reads. */
+    totalIsCapped: z.boolean(),
+    totalPages: z.number().int(),
+});
+
 const listAbandonedCheckoutsRoute = createRoute({
     operationId: "dashboard.abandoned_checkouts.list",
     method: "get",
@@ -27,15 +82,15 @@ const listAbandonedCheckoutsRoute = createRoute({
     summary: "List abandoned checkouts",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
-            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+            sort: z.enum(ABANDONED_CHECKOUT_SORTS).default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).default("desc").openapi({ description: "Sort order" })
         })
     },
     responses: {
-        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) }).passthrough()), pagination: z.object({ page: z.number(), limit: z.number(), total: z.number(), totalPages: z.number() }) })) } } },
+        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) })), pagination: abandonedCheckoutPaginationSchema })) } } },
         ...errorResponses,
     }
 });
@@ -43,53 +98,32 @@ const listAbandonedCheckoutsRoute = createRoute({
 app.openapi(listAbandonedCheckoutsRoute, async (c) => {
     const db = c.get("db");
 
-    // --- Fetch Data for UI ---
     try {
-        const query = c.req.valid("query");
-        const page = query.page;
-        const limit = query.limit;
-        const search = query.search || "";
-        const sortField = (query.sort || "updatedAt") as string;
-        const orderStr = query.order || "desc";
+        const { page, limit, search, sort, order } = c.req.valid("query");
         const offset = (page - 1) * limit;
+        assertPageReachable(offset);
 
-        const whereConditions = [];
-        if (search) {
-            const digitsOnly = search.replace(/[^0-9]/g, "");
-            const looksLikePhone = digitsOnly.length >= 4 && digitsOnly.length / search.replace(/\s/g, "").length > 0.5;
-            const ftsCondition = searchMatch(db, "abandoned_checkouts", search);
+        const combinedWhere = abandonedCheckoutSearchCondition(db, search);
 
-            if (looksLikePhone && ftsCondition) {
-                whereConditions.push(sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`);
-            } else if (looksLikePhone) {
-                whereConditions.push(containsText(abandonedCheckouts.customerPhone, digitsOnly));
-            } else if (ftsCondition) {
-                whereConditions.push(ftsCondition);
-            }
-        }
-
-        const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
-
-        // Safe column access — fall back to updatedAt if sort field doesn't exist
-        const sortColumn = (sortField in abandonedCheckouts)
-            ? abandonedCheckouts[sortField as keyof typeof abandonedCheckouts._.columns]
-            : abandonedCheckouts.updatedAt;
-
-        const results = await db.select().from(abandonedCheckouts).where(combinedWhere).orderBy(
-            orderStr === 'asc' ? asc(sortColumn) : desc(sortColumn)
-        ).limit(limit).offset(offset);
-
-        const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
-        const total = totalResult[0]?.total ?? 0;
+        // The count reads at most the plan's count cap + 1 index rows, never the table.
+        const [counted, results] = await db.batch([
+            cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(abandonedCheckouts).where(combinedWhere).$dynamic()),
+            db.select({
+                id: abandonedCheckouts.id,
+                checkoutId: abandonedCheckouts.checkoutId,
+                customerPhone: abandonedCheckouts.customerPhone,
+                checkoutData: abandonedCheckouts.checkoutData,
+                createdAt: abandonedCheckouts.createdAt,
+                updatedAt: abandonedCheckouts.updatedAt,
+            }).from(abandonedCheckouts).where(combinedWhere)
+                .orderBy(...abandonedCheckoutOrderBy(sort, order))
+                .limit(limit).offset(offset),
+        ]);
+        const { total, totalIsCapped } = capTotal(Number(counted[0]?.count ?? 0));
 
         return ok(c, {
             checkouts: results,
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit)
-            }
+            pagination: { page, limit, total, totalIsCapped, totalPages: Math.ceil(total / limit) },
         });
 
     } catch (error: unknown) {
@@ -131,12 +165,7 @@ const listAbandonedCheckoutSummariesRoute = createRoute({
             description: "PII-minimized abandoned checkout summaries",
             content: { "application/json": { schema: successEnvelope(z.object({
                 checkouts: z.array(abandonedCheckoutAgentSummarySchema).max(100),
-                pagination: z.object({
-                    page: z.number().int(),
-                    limit: z.number().int(),
-                    total: z.number().int(),
-                    totalPages: z.number().int(),
-                }),
+                pagination: abandonedCheckoutPaginationSchema,
             })) } },
         },
         ...errorResponses,
@@ -148,41 +177,28 @@ app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
     const { page, limit, search, order } = c.req.valid("query");
     assertContactSearchAllowed(c, "search", search);
     const offset = (page - 1) * limit;
-    const whereConditions = [];
-    if (search) {
-        const digitsOnly = search.replace(/[^0-9]/g, "");
-        const compactSearch = search.replace(/\s/g, "");
-        const looksLikePhone = digitsOnly.length >= 4
-            && compactSearch.length > 0
-            && digitsOnly.length / compactSearch.length > 0.5;
-        const ftsCondition = searchMatch(db, "abandoned_checkouts", search);
-        if (looksLikePhone && ftsCondition) {
-            whereConditions.push(sql`(${ftsCondition} OR ${containsText(abandonedCheckouts.customerPhone, digitsOnly)})`);
-        } else if (looksLikePhone) {
-            whereConditions.push(containsText(abandonedCheckouts.customerPhone, digitsOnly));
-        } else if (ftsCondition) {
-            whereConditions.push(ftsCondition);
-        }
-    }
-    const combinedWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
-    const rows = await db.select({
-        id: abandonedCheckouts.id,
-        customerPhone: abandonedCheckouts.customerPhone,
-        checkoutData: abandonedCheckouts.checkoutData,
-        createdAt: abandonedCheckouts.createdAt,
-        updatedAt: abandonedCheckouts.updatedAt,
-    }).from(abandonedCheckouts).where(combinedWhere)
-        .orderBy(order === "asc" ? asc(abandonedCheckouts.updatedAt) : desc(abandonedCheckouts.updatedAt))
-        .limit(limit).offset(offset);
-    const totalResult = await db.select({ total: count() }).from(abandonedCheckouts).where(combinedWhere);
-    const total = totalResult[0]?.total ?? 0;
+    assertPageReachable(offset);
+    const combinedWhere = abandonedCheckoutSearchCondition(db, search);
+    const [counted, rows] = await db.batch([
+        cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(abandonedCheckouts).where(combinedWhere).$dynamic()),
+        db.select({
+            id: abandonedCheckouts.id,
+            customerPhone: abandonedCheckouts.customerPhone,
+            checkoutData: abandonedCheckouts.checkoutData,
+            createdAt: abandonedCheckouts.createdAt,
+            updatedAt: abandonedCheckouts.updatedAt,
+        }).from(abandonedCheckouts).where(combinedWhere)
+            .orderBy(...abandonedCheckoutOrderBy("updatedAt", order))
+            .limit(limit).offset(offset),
+    ]);
+    const { total, totalIsCapped } = capTotal(Number(counted[0]?.count ?? 0));
 
     return ok(c, {
         checkouts: rows.map(({ checkoutData, customerPhone, ...row }) => ({
             ...row,
             ...projectAbandonedCheckoutAgentSummary(checkoutData, customerPhone),
         })),
-        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+        pagination: { page, limit, total, totalIsCapped, totalPages: Math.ceil(total / limit) },
     });
 });
 
