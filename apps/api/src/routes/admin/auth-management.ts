@@ -654,6 +654,7 @@ const deleteUserRoute = createRoute({
     responses: {
         200: { description: "User deleted", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -725,7 +726,22 @@ app.openapi(deleteUserRoute, async (c) => {
             createdAt: revokedAt,
             updatedAt: revokedAt,
         })));
+        // The invitee may accept (set a password) between the reads above and
+        // this batch: the pending state is checked again with the writes, so a
+        // just-accepted administrator is never deleted.
+        const stillPending = buildBatchGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${user}
+            WHERE ${user.id} = ${userId}
+              AND ${user.mustChangePassword} = ${true}
+              AND ${user.isSuperAdmin} = ${false}
+        ) AND EXISTS (
+            SELECT 1 FROM ${adminInvitations}
+            WHERE ${adminInvitations.id} = ${userToDelete.invitationId}
+              AND ${adminInvitations.userId} = ${userId}
+              AND ${adminInvitations.status} = 'pending'
+        )`, "ADMIN_INVITATION_REVOKE_CONFLICT");
         await safeBatch(db, [
+            stillPending,
             ...(liveLinks.length ? [
                 db.delete(verification).where(inJsonArray(verification.id, liveLinks.map(({ id }) => id))),
                 ...chunkInsertRowsForD1(cancelledMarkers, (row) => db.insert(verification).values(row))
@@ -748,6 +764,9 @@ app.openapi(deleteUserRoute, async (c) => {
 
         return ok(c, { message: "Administrator invitation revoked" });
     } catch (error: unknown) {
+        if (isBatchGuardError(error, "ADMIN_INVITATION_REVOKE_CONFLICT")) {
+            throw new ConflictError("The invitation was accepted or changed before it could be revoked");
+        }
         console.error("Delete admin user error:", error);
         throw error;
     }
