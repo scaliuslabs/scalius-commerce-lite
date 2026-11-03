@@ -414,6 +414,8 @@ These are author checks, not proof of visual correctness. Exercise the composed 
 
 ## Budgets
 
+`STOREFRONT_COMPONENT_LIMITS` (from `@scalius/plugin-sdk/storefront`) carries these numbers, so a test or an island can check against the store's own.
+
 | Limit | Value |
 | --- | --- |
 | Compiled module | 512 KiB |
