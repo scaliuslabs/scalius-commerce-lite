@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // Dashboard performance gate.
 //
-// Default: builds the dashboard into a temporary directory, maps every route
+// Default: takes the chunk graph of the dashboard build that is already in
+// apps/admin-v2/dist (the build writes it beside its cache: scripts/admin-chunk-graph.mjs,
+// valid only while dist holds the bytes it describes), or else builds the
+// dashboard into a temporary directory. It maps every route
 // to the JavaScript its first render needs (the entry chunk, plus the lazy
 // component chunks of the route and its layouts, plus everything those import
 // statically) and checks each against a Brotli budget. It fails when a heavy
@@ -11,12 +14,14 @@
 //
 // --runtime: times first load and route transitions against a running local
 // stack in headless Chrome (see scripts/admin-perf-runtime.mjs).
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
+
+import { chunkGraphPath, readBuiltChunkGraph, sha256 } from "./admin-chunk-graph.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = resolve(scriptDirectory, "..");
@@ -257,52 +262,89 @@ export function validateBundleReport(report, budgets = BUNDLE_BUDGETS) {
 
 // ── Build ──────────────────────────────────────────────────────────────────
 
-/** Builds the dashboard into `outDir` and returns its chunk graph (the build's own config, plus a reporter). */
+/**
+ * Builds the dashboard into `outDir` and returns its chunk graph. The build's own
+ * config writes the graph (adminChunkGraphPlugin); this reads it back and drops it.
+ */
 export async function buildAdminBundle(rootDir, outDir) {
   const adminDir = join(rootDir, ADMIN_DIR);
   const requireFromAdmin = createRequire(join(adminDir, "package.json"));
   const { build } = await import(pathToFileURL(requireFromAdmin.resolve("vite")).href);
-  let chunks = [];
-  let cssFiles = [];
   await build({
     root: adminDir,
     configFile: join(adminDir, "vite.config.ts"),
     logLevel: "silent",
     build: { outDir, emptyOutDir: true },
-    plugins: [{
-      name: "scalius-admin-perf-report",
-      generateBundle(_options, bundle) {
-        chunks = Object.values(bundle)
-          .filter((item) => item.type === "chunk")
-          .map((chunk) => ({
-            fileName: chunk.fileName,
-            isEntry: chunk.isEntry,
-            imports: chunk.imports,
-            moduleIds: chunk.moduleIds ?? Object.keys(chunk.modules),
-          }));
-        cssFiles = Object.values(bundle)
-          .filter((item) => item.type === "asset" && item.fileName.endsWith(".css"))
-          .map((item) => item.fileName);
-      },
-    }],
   });
-  return { chunks, cssFiles, routesDir: join(adminDir, "src/routes") };
+  const graph = readBuiltChunkGraph(adminDir, outDir);
+  rmSync(chunkGraphPath(adminDir, outDir), { force: true });
+  if (!graph) throw new Error("The dashboard build wrote no chunk graph (adminChunkGraphPlugin in apps/admin-v2/vite.config.ts).");
+  return { chunks: graph.chunks, cssFiles: graph.cssFiles, routesDir: join(adminDir, "src/routes") };
 }
 
-function brotliSize(file) {
-  return brotliCompressSync(readFileSync(file), {
-    params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
-  }).length;
+const BROTLI_QUALITY = 11;
+
+function brotliSize(content) {
+  return brotliCompressSync(content, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY } }).length;
 }
 
-export async function runBundleCheck({ rootDir = defaultRootDir } = {}) {
-  const outDir = mkdtempSync(join(tmpdir(), "scalius-admin-perf-build-"));
+/**
+ * Brotli sizes cached by content hash: a chunk whose bytes did not change is not
+ * compressed again at quality 11 (about 14 s for the dashboard). The key holds the
+ * quality and the Node build's Brotli version, so neither can serve a stale size.
+ * `size(path)` reads the file; `save()` writes the cache file, keeping the entries
+ * this run used and the most recent earlier ones.
+ */
+export function createBrotliCache({ file, compress = brotliSize, keep = 4000, brotliVersion = process.versions.brotli } = {}) {
+  let stored = {};
   try {
-    const { chunks, cssFiles, routesDir } = await buildAdminBundle(rootDir, outDir);
+    const parsed = file ? JSON.parse(readFileSync(file, "utf8")) : {};
+    if (parsed && typeof parsed === "object" && parsed.version === 1 && parsed.sizes) stored = parsed.sizes;
+  } catch {
+    stored = {};
+  }
+  const used = new Map();
+  const stats = { hits: 0, compressed: 0 };
+  return {
+    stats,
+    size(path) {
+      const content = readFileSync(path);
+      const key = `brotli@${brotliVersion}:q${BROTLI_QUALITY}:${sha256(content)}`;
+      let bytes = used.get(key) ?? stored[key];
+      if (Number.isInteger(bytes)) stats.hits += 1;
+      else {
+        bytes = compress(content);
+        stats.compressed += 1;
+      }
+      used.set(key, bytes);
+      return bytes;
+    },
+    save() {
+      if (!file) return;
+      const sizes = {};
+      const older = Object.keys(stored).filter((key) => !used.has(key)).slice(-Math.max(0, keep - used.size));
+      for (const key of older) sizes[key] = stored[key];
+      for (const [key, bytes] of used) sizes[key] = bytes;
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, `${JSON.stringify({ version: 1, sizes })}\n`);
+    },
+  };
+}
+
+export async function runBundleCheck({ rootDir = defaultRootDir, brotliCacheFile = join(rootDir, "node_modules/.cache/scalius/admin-perf-brotli.json") } = {}) {
+  const adminDir = join(rootDir, ADMIN_DIR);
+  const builtDir = join(adminDir, "dist");
+  const existing = readBuiltChunkGraph(adminDir, builtDir);
+  const outDir = existing ? builtDir : mkdtempSync(join(tmpdir(), "scalius-admin-perf-build-"));
+  try {
+    const { chunks, cssFiles, routesDir } = existing
+      ? { chunks: existing.chunks, cssFiles: existing.cssFiles, routesDir: join(adminDir, "src/routes") }
+      : await buildAdminBundle(rootDir, outDir);
     const parentByFile = parseRouteTree(readFileSync(join(rootDir, ADMIN_DIR, "src/routeTree.gen.ts"), "utf8"));
+    const brotli = createBrotliCache({ file: brotliCacheFile });
     const cache = new Map();
     const brotliBytes = (fileName) => {
-      if (!cache.has(fileName)) cache.set(fileName, brotliSize(join(outDir, fileName)));
+      if (!cache.has(fileName)) cache.set(fileName, brotli.size(join(outDir, fileName)));
       return cache.get(fileName);
     };
     const report = measureRoutes({ chunks, parentByFile, routesDir, brotliBytes });
@@ -316,9 +358,15 @@ export async function runBundleCheck({ rootDir = defaultRootDir } = {}) {
       .sort((a, b) => b.brotliBytes - a.brotliBytes)
       .slice(0, 8);
     report.brotliByFile = Object.fromEntries(cache);
+    report.source = {
+      graph: existing ? "the existing dashboard build" : "a fresh dashboard build",
+      brotliCached: brotli.stats.hits,
+      brotliCompressed: brotli.stats.compressed,
+    };
+    brotli.save();
     return report;
   } finally {
-    rmSync(outDir, { recursive: true, force: true });
+    if (!existing) rmSync(outDir, { recursive: true, force: true });
   }
 }
 
@@ -327,6 +375,9 @@ export function formatBundleReport(report, budgets = BUNDLE_BUDGETS) {
   const lines = [
     `entry: ${kib(report.entry.brotliBytes)} KiB Brotli in ${report.entry.files} file(s) (budget ${budgets.entry})`,
   ];
+  if (report.source) {
+    lines.unshift(`chunk graph from ${report.source.graph}; Brotli 11 sizes: ${report.source.brotliCached} cached by content hash, ${report.source.brotliCompressed} compressed`);
+  }
   if (report.css) lines.push(`stylesheet: ${kib(report.css.brotliBytes)} KiB Brotli (budget ${budgets.css})`);
   const budgeted = report.routes.filter((route) => budgets.routes[route.route] !== undefined);
   const heaviest = report.routes
