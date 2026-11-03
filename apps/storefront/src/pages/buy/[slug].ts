@@ -28,6 +28,9 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 import { serverPagePath } from "@/lib/server-presence";
 import { validateNewCartLine } from "@/lib/cart/new-line";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { themePaint, type ThemePaint } from "@/lib/theme-paint";
+import { colorSchemeBootScript } from "@/lib/color-scheme";
 
 export const prerender = false;
 
@@ -104,9 +107,22 @@ interface QuickBuyRequest {
   /** An app's purchase option chosen in the form (POST); null: one-time. */
   purchaseOption: string | null;
   redirectStatus: 303 | 307;
+  /** The request, for the theme the handoff page paints. */
+  page: { request: Request; locals: object };
 }
 
-export const GET: APIRoute = async ({ params, url }) => {
+/** The handoff page's paint: the store's theme and its colour scheme, as every page draws them; none if it cannot be read. */
+async function handoffPaint(page: QuickBuyRequest["page"], layoutData: Parameters<typeof resolveRequestTheme>[1]): Promise<{ paint: ThemePaint; script: string } | null> {
+  try {
+    const theme = await resolveRequestTheme(page, layoutData);
+    const paint = themePaint(theme.theme, theme.resolved);
+    return { paint, script: colorSchemeBootScript(paint.colorScheme, theme.preview === null) };
+  } catch {
+    return null;
+  }
+}
+
+export const GET: APIRoute = async ({ params, url, request, locals }) => {
   const { slug } = params;
   if (!slug) {
     return new Response(null, { status: 307, headers: { Location: "/cart" } });
@@ -118,6 +134,7 @@ export const GET: APIRoute = async ({ params, url }) => {
     properties: null,
     purchaseOption: null,
     redirectStatus: 307,
+    page: { request: request ?? new Request(url), locals: locals ?? {} },
   });
 };
 
@@ -132,7 +149,7 @@ function isFormBody(request: Request): boolean {
  * product's schema and priced by cart validation, then join the cart through
  * the same page as a quick-buy link.
  */
-export const POST: APIRoute = async ({ params, request }) => {
+export const POST: APIRoute = async ({ params, request, locals }) => {
   const { slug } = params;
   if (shouldRejectCrossOriginCookieRequest(request)) {
     return new Response(null, { status: 403 });
@@ -164,6 +181,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     properties: posted.properties,
     purchaseOption: posted.purchaseOption,
     redirectStatus: 303,
+    page: { request, locals: locals ?? {} },
   });
 };
 
@@ -174,6 +192,7 @@ async function quickBuy({
   properties: postedProperties,
   purchaseOption,
   redirectStatus,
+  page,
 }: QuickBuyRequest): Promise<Response> {
   const productRedirect = (target: string, error: string) =>
     productRedirectWithStatus(target, error, redirectStatus);
@@ -370,24 +389,33 @@ async function quickBuy({
       words.continue,
     );
 
+    // The store's colours and scheme, painted before first paint as on every page (the theme's alone: no buyer variance).
+    const theme = await handoffPaint(page, layoutData);
+    const scheme = theme?.paint.colorScheme?.scheme;
     const html = `
       <!DOCTYPE html>
-      <html lang="${language}">
+      <html lang="${language}"${scheme ? ` data-color-scheme="${scheme}"` : ""}>
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${escapeHtml(words.title)}</title>
+        ${theme?.script ? `<script>${theme.script}</script>` : ""}
+        ${theme ? `<style>${theme.paint.css}</style>` : ""}
         <style>
-          :root { --primary-color: #059669; /* Fallback primary color */ }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f3f4f6; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; }
-          .card { background-color: #ffffff; border-radius: 0.75rem; padding: 2rem; text-align: center; max-width: 320px; width: 100%; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); transform: translateY(-20px); opacity: 0; animation: fadeIn 0.5s 0.1s ease-out forwards; }
-          .product-image { width: 80px; height: 80px; border-radius: 0.5rem; object-fit: cover; margin: 0 auto 1rem; border: 1px solid #e5e7eb; }
-          .product-name { font-weight: 600; color: #1f2937; margin: 0 0 0.5rem; font-size: 1rem; }
-          .status-text { color: #4b5563; margin: 0 0 1.5rem; font-size: 0.9rem; }
-          .loader { height: 4px; width: 100%; background-color: #e5e7eb; border-radius: 2px; overflow: hidden; }
-          .loader-bar { content: ''; display: block; height: 100%; width: 100%; background-color: var(--primary-color); border-radius: 2px; transform: translateX(-100%); animation: loading 1.5s linear infinite; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--muted, #f3f4f6); color: var(--foreground, #1f2937); display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 1rem; box-sizing: border-box; }
+          .card { background-color: var(--card, #ffffff); color: var(--card-foreground, #1f2937); border: 1px solid var(--border, #e5e7eb); border-radius: 0.75rem; padding: 2rem; text-align: center; max-width: 320px; width: 100%; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); transform: translateY(-20px); opacity: 0; animation: fadeIn 0.5s 0.1s ease-out forwards; }
+          .product-image { width: 80px; height: 80px; border-radius: 0.5rem; object-fit: cover; margin: 0 auto 1rem; border: 1px solid var(--border, #e5e7eb); }
+          .product-name { font-weight: 600; margin: 0 0 0.5rem; font-size: 1rem; }
+          .status-text { color: var(--muted-foreground, #4b5563); margin: 0 0 1.5rem; font-size: 0.9rem; }
+          .loader { height: 4px; width: 100%; background-color: var(--muted, #e5e7eb); border-radius: 2px; overflow: hidden; }
+          .loader-bar { display: block; height: 100%; width: 100%; background-color: var(--primary, #059669); border-radius: 2px; transform: translateX(-100%); animation: loading 1.5s linear infinite; }
           @keyframes fadeIn { to { transform: translateY(0); opacity: 1; } }
           @keyframes loading { 0% { transform: translateX(-100%); } 50% { transform: translateX(0%); } 100% { transform: translateX(100%); } }
+          /* No motion for a buyer who asks for none: the card is simply there, the bar still. */
+          @media (prefers-reduced-motion: reduce) {
+            .card { animation: none; opacity: 1; transform: none; }
+            .loader-bar { animation: none; transform: none; }
+          }
         </style>
       </head>
       <body>
