@@ -83,6 +83,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
   data-hdr-search={spec.search}
   data-hdr-sticky={stickyMenuRow ? "menu-row" : "header"}
   data-phone-drop={phoneDrop || undefined}
+  data-hdr-switch={theme.tokens.colorSchemeToggle || undefined}
   style={style}
 >
   <div class="hdr-main" data-tone={spec.toneRow ? "tone" : "surface"}>
@@ -369,9 +370,23 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     z-index: 1;
     display: flex;
     align-items: center;
-    max-width: calc(100% - 12rem);
+    /* Room for the end icons (cart and account: 6rem a side, with the gutter). */
+    max-width: calc(100% - 2 * var(--hdr-phone-end, 6rem));
     transform: translate(-50%, -50%);
     color: inherit;
+  }
+
+  /* The buyer's light or dark switch is a third icon at the end on phones
+     (unless bottom tabs carry the account): the centred logo keeps clear of
+     it, so no tap meant for the switch opens the home page (WCAG 2.5.8). */
+  :root[data-color-scheme-switch] .hdr[data-hdr-switch]:not([data-phone-drop~="account"]) {
+    --hdr-phone-end: 8.75rem;
+  }
+
+  @media (max-width: 63.99rem) {
+    :root[data-color-scheme-switch] .hdr[data-hdr-switch]:not([data-phone-drop~="account"]) .hdr-logo-image {
+      max-width: min(var(--header-logo-mobile-width), calc(100vw - 17.5rem));
+    }
   }
 
   :root[dir="rtl"] .hdr-logo {
