@@ -403,7 +403,18 @@ export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
 
 /** An app template applied to the document (`applyStorefrontAppTemplate`): its look, skins and homepage sections. */
 export function applyAppTemplate(template: AppTemplateEntry, current: StorefrontThemeDocument): StorefrontThemeDocument {
-  return applyStorefrontAppTemplate(current, template.key, template.theme);
+  return withFollowingDarkColors(current, applyStorefrontAppTemplate(current, template.key, template.theme));
+}
+
+/**
+ * A look applied over a draft whose dark colours still follow its colours
+ * (made by this editor, a light colour perhaps half typed): the kept dark
+ * colours are made again from the look's colours, never left stale.
+ */
+function withFollowingDarkColors(current: StorefrontThemeDocument | null, applied: StorefrontThemeDocument): StorefrontThemeDocument {
+  const kept = applied.tokens.darkColors;
+  if (!current || kept === null || !darkColorsFollowColors(current) || !sameFormValue(kept, current.tokens.darkColors)) return applied;
+  return { ...applied, tokens: { ...applied.tokens, darkColors: madeDarkColors(applied.tokens.colors) } };
 }
 
 /** Each template's complete document, for previews and matching. */
@@ -424,7 +435,7 @@ export function selectedTemplate(theme: StorefrontThemeDocument): StorefrontTemp
  * slides, chosen categories and collections, and what `/` shows.
  */
 export function applyTemplate(id: StorefrontTemplateId, current: StorefrontThemeDocument | null): StorefrontThemeDocument {
-  return storefrontThemeWithContent(storefrontTemplateTheme(id), current);
+  return withFollowingDarkColors(current, storefrontThemeWithContent(storefrontTemplateTheme(id), current));
 }
 
 // ─── Typography ───────────────────────────────────────────────────────────
