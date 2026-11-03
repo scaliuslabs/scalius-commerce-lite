@@ -282,10 +282,10 @@ function isCustomerContactConstraintError(error: unknown): boolean {
  * to the product's. The SKU row binds one value (its id); its policy column
  * is set exactly in `policy` mode (CHECK), so COALESCE picks the effective
  * one. An expanded bundle's lines are its components, so each freezes its
- * component SKU's warranty. The warranty is not price-relevant, so it is
+ * component SKU's warranty; a line an order amendment adds freezes the same way. The warranty is not price-relevant, so it is
  * outside any authority fence.
  */
-function currentWarrantyRevisionSql(variantId: string) {
+export function currentWarrantyRevisionSql(variantId: string) {
     return sql<string | null>`(
         SELECT ${warrantyPolicies.currentRevisionId}
         FROM ${productVariants}
