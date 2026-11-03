@@ -28,8 +28,20 @@ export const PRIVATE_STOREFRONT_ROOTS = [
 
 const PRIVATE_STOREFRONT_PATHNAME_RE = new RegExp(`^/(?:${PRIVATE_STOREFRONT_ROOTS.join("|")})(?:/|$)`);
 
+/**
+ * Whether a pathname is a buyer's own page. The router decodes percent-escapes
+ * before it matches a route, so `/%67ift-card-balance` is the gift-card page:
+ * the decoded path is checked as well as the raw one, and a path whose escapes
+ * cannot be decoded is treated as private, never as public.
+ */
 export function isPrivateStorefrontPathname(pathname: string): boolean {
-  return PRIVATE_STOREFRONT_PATHNAME_RE.test(pathname);
+  if (PRIVATE_STOREFRONT_PATHNAME_RE.test(pathname)) return true;
+  if (!pathname.includes("%")) return false;
+  try {
+    return PRIVATE_STOREFRONT_PATHNAME_RE.test(decodeURIComponent(pathname));
+  } catch {
+    return true;
+  }
 }
 
 /**

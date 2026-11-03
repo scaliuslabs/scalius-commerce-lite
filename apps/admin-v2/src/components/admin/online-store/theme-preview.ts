@@ -4,8 +4,7 @@ import {
   getApiV1Platform,
   postApiV1AdminSettingsThemePreviewSession,
 } from "@scalius/api-client/sdk";
-import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
-import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
+import { isThemePreviewablePath } from "@scalius/shared/theme-preview-path";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { apiData } from "~/lib/api";
 
@@ -29,19 +28,7 @@ export function isSafeThemePreviewPath(value: string): boolean {
     const parsed = new URL(value, "https://theme-preview.invalid");
     if (parsed.origin !== "https://theme-preview.invalid" || parsed.hash) return false;
     if (`${parsed.pathname}${parsed.search}` !== value) return false;
-    // A market presence's page (`/en-in/products/x`): the page under its subfolder.
-    const presence = presenceOfPath(parsed.pathname);
-    const page = presence ? stripPresencePath(parsed.pathname, presence) : parsed.pathname;
-    if (presence && page === parsed.pathname) return false;
-    const segments = page.split("/").filter(Boolean);
-    // The cart is a page template the editor previews.
-    if (segments.length === 0 || page === "/search" || page === "/cart") return true;
-    if (segments.length === 2 && ["products", "categories", "collections", "pages"].includes(segments[0]!)) {
-      return /^[A-Za-z0-9_-]+$/.test(segments[1]!);
-    }
-    return segments.length === 1 && /^[A-Za-z0-9_-]+$/.test(segments[0]!) &&
-      !STOREFRONT_ROUTE_SEGMENTS.has(segments[0]!.toLowerCase()) &&
-      !segments[0]!.toLowerCase().startsWith("sitemap");
+    return isThemePreviewablePath(parsed.pathname);
   } catch {
     return false;
   }

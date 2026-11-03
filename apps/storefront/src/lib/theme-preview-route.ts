@@ -1,33 +1,4 @@
-import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
-import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
-
-const PUBLIC_RESOURCE_PREFIXES = new Set([
-  "products",
-  "categories",
-  "collections",
-  "pages",
-]);
-
-function isSafePublicPath(pathname: string): boolean {
-  // A market presence's page (`/en-in/products/x`): the page under its subfolder.
-  const presence = presenceOfPath(pathname);
-  const page = presence ? stripPresencePath(pathname, presence) : pathname;
-  if (presence && page === pathname) return false;
-  // The cart is a page template the theme editor previews.
-  if (page === "/" || page === "/search" || page === "/cart") return true;
-
-  const segments = page.split("/").filter(Boolean);
-  if (segments.length === 2 && PUBLIC_RESOURCE_PREFIXES.has(segments[0]!)) {
-    return /^[A-Za-z0-9_-]+$/.test(segments[1]!);
-  }
-
-  if (segments.length !== 1 || !/^[A-Za-z0-9_-]+$/.test(segments[0]!)) {
-    return false;
-  }
-
-  const segment = segments[0]!.toLowerCase();
-  return !STOREFRONT_ROUTE_SEGMENTS.has(segment) && !segment.startsWith("sitemap");
-}
+import { isThemePreviewablePath } from "@scalius/shared/theme-preview-path";
 
 function hasControlCharacter(value: string): boolean {
   for (const character of value) {
@@ -62,7 +33,7 @@ export function normalizeThemePreviewRoutePath(value: unknown): string {
     if (parsed.origin !== "https://theme-preview.invalid" || parsed.hash) {
       return "/";
     }
-    if (!isSafePublicPath(parsed.pathname)) return "/";
+    if (!isThemePreviewablePath(parsed.pathname)) return "/";
     return `${parsed.pathname}${parsed.search}`;
   } catch {
     return "/";

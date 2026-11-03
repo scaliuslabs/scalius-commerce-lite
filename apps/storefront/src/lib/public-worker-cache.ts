@@ -160,13 +160,13 @@ function isCmsPagePath(pathname: string): boolean {
 }
 
 /**
- * Anonymous pages, discovery files and the buyer shells (`isBuyerShellPathname`);
- * everything else is never cached.
+ * The anonymous HTML pages: each is stored by the shared cache and starts its
+ * layout read together with its own reads (one API batch), using no platform
+ * origin before that read resolves.
  */
-function isPublicCachePath(pathname: string): boolean {
+function isPublicHtmlPagePath(pathname: string): boolean {
   return (
     pathname === "/" ||
-    isBuyerShellPathname(pathname) ||
     /^\/(?:products|categories|brands|collections)\/[^/]+\/?$/.test(pathname) ||
     // A product's review pages (noindex, but a public page like any other).
     /^\/products\/[^/]+\/reviews\/?$/.test(pathname) ||
@@ -174,7 +174,20 @@ function isPublicCachePath(pathname: string): boolean {
     // The category and collection indexes and the header's whole menu panels (a partial).
     /^\/(?:categories|collections|navigation\/panels)\/?$/.test(pathname) ||
     /^\/(?:search|compare)\/?$/.test(pathname) ||
-    /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) ||
+    (pathname !== "/blog/feed.xml" && /^\/blog(?:\/[^/]+)?\/?$/.test(pathname)) ||
+    // CMS shortcode reads contribute their product dependencies to the page proof.
+    isCmsPagePath(pathname)
+  );
+}
+
+/**
+ * Anonymous pages, discovery files and the buyer shells (`isBuyerShellPathname`);
+ * everything else is never cached.
+ */
+function isPublicCachePath(pathname: string): boolean {
+  return (
+    isPublicHtmlPagePath(pathname) ||
+    isBuyerShellPathname(pathname) ||
     pathname === "/blog/feed.xml" ||
     pathname === "/llms.txt" ||
     pathname === "/robots.txt" ||
@@ -183,9 +196,7 @@ function isPublicCachePath(pathname: string): boolean {
     /^\/sitemap-.*\.xml$/.test(pathname) ||
     pathname === "/api/product-feed.xml" ||
     pathname === "/api/facebook-feed.xml" ||
-    pathname === "/.well-known/ucp" ||
-    // CMS shortcode reads contribute their product dependencies to the page proof.
-    isCmsPagePath(pathname)
+    pathname === "/.well-known/ucp"
   );
 }
 
@@ -195,16 +206,7 @@ function isPublicCachePath(pathname: string): boolean {
  * other route gets the layout, and so the origins, before it runs.
  */
 export function isLayoutBatchedPagePath(pathname: string): boolean {
-  return (
-    pathname === "/" ||
-    /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
-    /^\/(?:products|categories|brands|collections)\/[^/]+\/?$/.test(pathname) ||
-    /^\/products\/[^/]+\/reviews\/?$/.test(pathname) ||
-    /^\/(?:categories|collections|navigation\/panels)\/?$/.test(pathname) ||
-    /^\/(?:search|compare|cart|checkout)\/?$/.test(pathname) ||
-    /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) && !pathname.endsWith(".xml") ||
-    isCmsPagePath(pathname)
-  );
+  return isPublicHtmlPagePath(pathname) || isBuyerShellPathname(pathname);
 }
 
 /**

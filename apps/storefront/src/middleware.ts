@@ -45,6 +45,7 @@ import { themeAppConnectHosts } from "@/lib/extensions/stylesheets";
 import { appendClearThemePreviewCookies, readThemePreviewCookie, THEME_PREVIEW_COOKIE_NAME } from "@/lib/theme-preview-cookie";
 import { catalogRedirectBeforeReads } from "@/lib/listing-url-redirect";
 import { presenceOfRenderRequest } from "@/lib/market-presence";
+import { buyerPageForbidsFraming } from "@/lib/middleware-helper/buyer-page-framing";
 
 interface PreviewFramingLocals {
   /** Set by the response policy: the page rendered a valid theme preview. */
@@ -195,7 +196,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         cdnBaseUrl: getCdnBase(),
       },
       getRuntimeCspAllowedDomains(),
-      frameAncestors,
+      // A buyer's own page is framed by nothing (the shells, the editor's canvas and a theme preview render excepted).
+      buyerPageForbidsFraming(url.pathname) && frameAncestors.length === 0 ? null : frameAncestors,
       // The same choice Layout.astro makes: the scripts of this page kind.
       appScriptOrigins(appScriptsForPage(layout?.appScripts, storefrontAppPage(url.pathname))),
       // The browser hosts of the apps the theme draws (their islands).
@@ -240,17 +242,22 @@ function redirectBeforeReads(request: Request, url: URL, routePattern: string): 
 }
 
 const transportSecurityMiddleware = defineMiddleware(
-  async ({ request, locals }, next) => {
+  async ({ request, locals, url }, next) => {
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
-    const pathname = new URL(request.url).pathname;
+    // The same path the page policy reads (Astro's `url.pathname`), so both framing answers agree.
+    const pathname = url.pathname;
     const privateRelay = isBrowserContinuationRelayPathname(pathname);
     const response = await next();
     // The editor's relay and a preview render state their framing in CSP frame-ancestors.
     const framedByPolicy = isFramedBrowserContinuationRelayPathname(pathname)
       || (locals as PreviewFramingLocals).themePreviewRender === true;
-    return applyTransportSecurityHeaders(request, response, { privateRelay, framedByPolicy });
+    return applyTransportSecurityHeaders(request, response, {
+      privateRelay,
+      framedByPolicy,
+      buyerPage: buyerPageForbidsFraming(pathname),
+    });
   },
 );
 
