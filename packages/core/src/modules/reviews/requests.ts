@@ -104,9 +104,11 @@ export async function sweepReviewRequests(
   const skip = due.filter((row) => !ask.includes(row.orderId)).map((row) => row.orderId);
 
   if (skip.length > 0) {
+    // By primary key: the unary `+` keeps the status index (every scheduled
+    // request) from driving the update.
     await db.update(orderReviewRequests)
       .set({ status: "skipped", updatedAt: now })
-      .where(and(inJsonArray(orderReviewRequests.orderId, skip), eq(orderReviewRequests.status, "scheduled")));
+      .where(and(inJsonArray(orderReviewRequests.orderId, skip), sql`+${orderReviewRequests.status} = 'scheduled'`));
   }
   for (let index = 0; index < ask.length; index += SWEEP_BATCH_ORDERS) {
     const statements = ask.slice(index, index + SWEEP_BATCH_ORDERS).flatMap((orderId) => {
