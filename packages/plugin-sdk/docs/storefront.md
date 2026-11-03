@@ -318,17 +318,24 @@ A product page skin can offer the SKUs its own way (denomination cards, a compar
 
 ```tsx
 {data.product.variants.map((variant) => (
-  <li class="acme-plan">
-    <a {...chooseVariant(variant)}>{variant.title} <Price price={variant.price} context={context} /></a>
-    <button {...buyVariant(variant, "add")}>Add to cart</button>
-    <button {...buyVariant(variant, "buy")}>Buy now</button>
+  <li>
+    <div class="acme-plan">
+      <a {...chooseVariant(variant)}>
+        {variant.title} <Price price={variant.price} context={context} />
+        {!variant.available && <span> · {settings.soldOutLabel}</span>}
+      </a>
+      <button {...buyVariant(variant, "add")}>Add to cart</button>
+      <button {...buyVariant(variant, "buy")}>Buy now</button>
+    </div>
   </li>
 ))}
 <BuyForm title={false} options={false} />
 ```
 
+A card that chooses and buys is a `<div>` holding the choice link and the buy buttons side by side. Never put a buy button inside the choice link: a button inside a link is invalid HTML, and keyboard, screen reader and switch users cannot reliably reach either control. The store still binds such markup (the nearest bound control wins a press) but warns once in the log. Write the sold-out word inside each choice control's own text, as above (from one of your text settings, so the store owner words it in their language): `data-availability` styles it, but assistive technology does not read attributes.
+
 - `chooseVariant(variant)` chooses that whole SKU (every option axis at once) through the form, so price, stock, buttons, gallery and `context.product` follow. It needs JavaScript. Put it on an `<a>`: the host makes it a link to the product with that SKU (`?variant=`), which the store's script opens on, so a press before the script has bound the click still lands on the SKU. Without JavaScript the link only opens the same page, where the form's own picker chooses; your buy buttons still buy.
-- `buyVariant(variant, "add" | "buy")` goes on a `<button>`. It chooses the SKU, then, once the page shows it, runs the form's own Add to cart or Buy now. Inside a choice card (`<a {...chooseVariant(v)}>… <button {...buyVariant(v, "add")}>`) the button buys. That run uses the form's checks, buyer inputs, purchase options, quantity and one-at-a-time guard. A problem shows inside the form, which takes focus. Without JavaScript the button submits the form with its own SKU.
+- `buyVariant(variant, "add" | "buy")` goes on a `<button>`. It chooses the SKU, then, once the page shows it, runs the form's own Add to cart or Buy now. Put it beside the SKU's choice link, never inside it. That run uses the form's checks, buyer inputs, purchase options, quantity and one-at-a-time guard. A problem shows inside the form, which takes focus. Without JavaScript the button submits the form with its own SKU.
 - The host binds these attributes after it checks your markup; you never write `form=` or a handler. It does so in product_main skins only; elsewhere they do nothing.
 - The host owns these attributes on your controls:
   - `data-availability` (`available`, `sold-out`) on both.
