@@ -738,7 +738,7 @@ export type StorefrontThemeDocument = {
                 };
                 bindings?: StorefrontSettingBindings;
             };
-            below: Array<'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'warranty' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
+            below: Array<'key_attributes' | 'about_bullets' | 'spec_table' | 'description' | 'content_blocks' | 'compare_similar' | 'reviews' | 'policies' | 'related' | 'recently_viewed'>;
             apps?: Array<{
                 id: string;
                 app: string;
