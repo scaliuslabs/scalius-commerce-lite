@@ -71,6 +71,13 @@ export const policies = [
     sample: 'import { formatMoney } from "@scalius/shared/currency";',
   },
   {
+    rule: "a saved order's money and free-line presentation is defined once, in @scalius/shared/order-money-presentation",
+    why: "the dashboard and storefront each kept a copy (order-tax-presentation.ts) and the copies drifted: the receipt showed a free gift at full price while the dashboard and invoice showed it free",
+    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src"],
+    forbid: [/\bfunction\s+(?:resolveSavedOrderMoneySummary|hasSavedOrderLineMoney|resolveSavedOrderLineMoney|isFreeOrderLine)\b/],
+    sample: "export function resolveSavedOrderMoneySummary(order) { return null; }",
+  },
+  {
     rule: "a count handed to a dashboard message is the number, never formatNumber(count)",
     why: "t() writes a number in the store's format and picks the plural word from it; a pre-formatted string ('1,200') has no plural category and the dashboard once printed the raw plural text (apps/admin-v2/src/i18n/index.ts)",
     paths: ["apps/admin-v2/src"],

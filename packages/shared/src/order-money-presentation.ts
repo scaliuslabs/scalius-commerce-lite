@@ -1,4 +1,3 @@
-import { formatMoney } from "@/lib/currency";
 export interface SavedOrderMoneyFields {
   currencyCode?: string | null;
   currencyDecimalPlaces?: number | null;
@@ -23,7 +22,7 @@ export interface SavedOrderMoneySummary {
   pricesIncludeTax: boolean;
 }
 
-export interface SavedOrderLineTaxFields {
+export interface SavedOrderLineMoneyFields {
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;
   discountAmountMinor?: number | null;
@@ -52,10 +51,6 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
-/**
- * Returns the immutable order snapshot only when it is complete and internally
- * consistent. Legacy orders deliberately fall back to their decimal amounts.
- */
 export function resolveSavedOrderMoneySummary(
   order: SavedOrderMoneyFields,
 ): SavedOrderMoneySummary | null {
@@ -72,23 +67,19 @@ export function resolveSavedOrderMoneySummary(
 
   if (
     !/^[A-Z]{3}$/.test(currencyCode)
-    || !Number.isInteger(decimalPlaces)
     || decimalPlaces == null
+    || !Number.isInteger(decimalPlaces)
     || decimalPlaces < 0
     || decimalPlaces > 3
     || !taxLabel
     || typeof order.pricesIncludeTax !== "boolean"
     || !amounts.every(isNonNegativeSafeInteger)
-  ) {
-    return null;
-  }
+  ) return null;
 
   const [subtotalMinor, shippingMinor, discountMinor, taxMinor, totalMinor] = amounts as number[];
   const expectedTotal = subtotalMinor + shippingMinor - discountMinor
     + (order.pricesIncludeTax ? 0 : taxMinor);
-  if (!Number.isSafeInteger(expectedTotal) || expectedTotal !== totalMinor) {
-    return null;
-  }
+  if (!Number.isSafeInteger(expectedTotal) || expectedTotal !== totalMinor) return null;
 
   return {
     currencyCode,
@@ -104,9 +95,9 @@ export function resolveSavedOrderMoneySummary(
 }
 
 export function hasSavedOrderLineMoney(
-  line: SavedOrderLineTaxFields,
+  line: SavedOrderLineMoneyFields,
   summary: SavedOrderMoneySummary | null,
-): line is SavedOrderLineTaxFields & CompleteSavedOrderLineMoney {
+): line is SavedOrderLineMoneyFields & CompleteSavedOrderLineMoney {
   if (!summary) return false;
   const amounts = [
     line.unitPriceMinor,
@@ -124,7 +115,7 @@ export function hasSavedOrderLineMoney(
 }
 
 export function resolveSavedOrderLineMoney(
-  line: SavedOrderLineTaxFields,
+  line: SavedOrderLineMoneyFields,
   summary: SavedOrderMoneySummary | null,
 ): SavedOrderLineMoneyPresentation | null {
   if (!hasSavedOrderLineMoney(line, summary) || !summary) return null;
@@ -139,16 +130,13 @@ export function resolveSavedOrderLineMoney(
   };
 }
 
-export function hasSavedOrderLineTax(
-  line: SavedOrderLineTaxFields,
-  summary: SavedOrderMoneySummary | null,
-): line is SavedOrderLineTaxFields & CompleteSavedOrderLineMoney {
-  return hasSavedOrderLineMoney(line, summary) && Number(line.taxAmountMinor) > 0;
-}
-
-export function formatSavedMinorAmount(
-  amountMinor: number,
-  summary: Pick<SavedOrderMoneySummary, "currencyCode" | "decimalPlaces">,
-): string {
-  return formatMoney(amountMinor / 10 ** summary.decimalPlaces, { code: summary.currencyCode });
+/**
+ * A line its own discount pays in full: a free gift, the "get" item of a
+ * buy-one-get-one. It reads zero with its price struck, never at full price
+ * beside a payment that shows it free.
+ */
+export function isFreeOrderLine(
+  line: { grossSubtotalMinor: number; discountMinor: number } | null,
+): boolean {
+  return line !== null && line.grossSubtotalMinor > 0 && line.discountMinor >= line.grossSubtotalMinor;
 }

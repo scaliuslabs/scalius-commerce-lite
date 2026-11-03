@@ -33,10 +33,8 @@ import {
 } from "~/lib/api-mutations/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveOrderOperationalReadState } from "~/lib/order-operational-read-state";
-import {
-  formatSavedMajorAmount,
-  resolveSavedOrderMoneySummary,
-} from "~/lib/order-tax-presentation";
+import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./formatters";

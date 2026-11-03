@@ -1,7 +1,7 @@
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { formatDateTime } from "~/i18n";
-import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
+import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import type { OrderTimestamp } from "./types";
 
 function toDate(value: OrderTimestamp | null | undefined): Date | null {

@@ -40,7 +40,8 @@ import {
 } from "~/lib/api-mutations/orders";
 import { orderCodQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
-import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
+import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import { getOrderItemName } from "./order-returns/shared";
