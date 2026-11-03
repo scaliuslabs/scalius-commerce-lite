@@ -63,13 +63,25 @@ export type AttributeDefinition = z.infer<typeof attributeDefinitionSchema>;
 
 /**
  * The canonical text of a number value: no exponent, no trailing zeros, at
- * most 6 decimals (15.60 -> "15.6", 1e3 -> "1000"). Used as the facet value key.
+ * most 6 decimals, rounded half away from zero (15.60 -> "15.6", 1e3 ->
+ * "1000"). Used as the facet value key and in the display text. Its SQL twin
+ * (core `canonicalAttributeNumberSql`) takes the same double steps and integer
+ * digits, so both agree exactly over the whole range (|value| < 1e12).
  */
 export function canonicalAttributeNumber(value: number): string {
   if (!Number.isFinite(value)) throw new RangeError("Attribute numbers must be finite.");
-  const rounded = Math.round(value * 1e6) / 1e6;
-  const text = (Object.is(rounded, -0) ? 0 : rounded).toFixed(6).replace(/\.?0+$/, "");
-  return text === "" ? "0" : text;
+  // The whole part and the fraction left over are exact doubles; only the
+  // fraction (below 1) is scaled, so a large number gains no stray digits.
+  const absolute = Math.abs(value);
+  const whole = Math.floor(absolute);
+  const millionths = Math.floor((absolute - whole) * 1e6 + 0.5);
+  const million = BigInt(1_000_000);
+  // The magnitude in millionths, exact (up to 1e18, past 2^53, so BigInt); a fraction rounding to a million carries.
+  const magnitude = BigInt(whole) * million + BigInt(millionths);
+  const fraction = magnitude % million;
+  const sign = value < 0 && magnitude > BigInt(0) ? "-" : "";
+  const decimals = fraction === BigInt(0) ? "" : `.${String(fraction).padStart(6, "0").replace(/0+$/, "")}`;
+  return `${sign}${magnitude / million}${decimals}`;
 }
 
 /** A merchant-typed number ("15.6", "1,000", "2.4") or null when it is not one. */

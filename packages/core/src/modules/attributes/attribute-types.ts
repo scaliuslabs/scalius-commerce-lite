@@ -36,6 +36,7 @@ import {
     type CatalogProjectionRefresh,
 } from "./projection-refresh";
 import { formatNumber } from "@scalius/shared/locale-format";
+import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
 
 /** Distinct values an enum conversion may create. */
 export const MAX_ENUM_CONVERSION_VALUES = 2_000;
@@ -77,20 +78,6 @@ export interface AttributeTypeConversionResult {
 }
 
 /**
- * Canonical number text in SQL, the twin of `canonicalAttributeNumber` (the
- * same expression the facet projection uses): six decimals, no trailing zeros.
- */
-function canonicalNumberSql(value: SQL): SQL<string> {
-    const scaled = sql`CAST(round(${value} * 1000000) AS INTEGER)`;
-    const magnitude = sql`abs(${scaled})`;
-    const fraction = sql`(${magnitude} % 1000000)`;
-    return sql<string>`(CASE WHEN ${scaled} < 0 THEN '-' ELSE '' END
-        || CAST(${magnitude} / 1000000 AS TEXT)
-        || CASE WHEN ${fraction} = 0 THEN ''
-            ELSE '.' || rtrim(substr(CAST(1000000 + ${fraction} AS TEXT), 2), '0') END)`;
-}
-
-/**
  * Rows of the attribute whose stored shape does not match `type` (the trigger
  * rules plus the display text the writer produces for numbers and yes/no),
  * so a unit change or a yes/no row reinterpreted as a number is rewritten too.
@@ -104,8 +91,8 @@ function wrongShape(type: AttributeValueType, unit: string | null): SQL {
             return sql`(${v.valueId} IS NULL OR ${v.valueNumber} IS NOT NULL)`;
         case "number": {
             const display = unit
-                ? sql`${canonicalNumberSql(sql`${v.valueNumber}`)} || ' ' || ${unit}`
-                : canonicalNumberSql(sql`${v.valueNumber}`);
+                ? sql`${canonicalAttributeNumberSql(sql`${v.valueNumber}`)} || ' ' || ${unit}`
+                : canonicalAttributeNumberSql(sql`${v.valueNumber}`);
             return sql`(${v.valueId} IS NOT NULL OR ${v.valueNumber} IS NULL OR ${v.value} <> ${display})`;
         }
         case "boolean":
@@ -131,7 +118,7 @@ export async function rewriteNumberDisplays(
     refresh: CatalogProjectionRefresh,
 ): Promise<number> {
     const v = productAttributeValues;
-    const number = canonicalNumberSql(sql`${v.valueNumber}`);
+    const number = canonicalAttributeNumberSql(sql`${v.valueNumber}`);
     const display = unit ? sql`${number} || ' ' || ${unit}` : number;
     const stale = and(eq(v.attributeId, attributeId), sql`${v.valueNumber} IS NOT NULL`, sql`${v.value} <> ${display}`)!;
     return forEachAttributeProductChunk(db, stale, (productIds) => [

@@ -45,6 +45,7 @@ import { buildBuyerCatalogPricingProjection } from "./buyer-projection";
 import { publicProductHasBuyerResolvableSku } from "./public-eligibility";
 import { channelAvailableStockSql, productPublishedToChannelSql } from "./channel-publications";
 import { storeDefaultLowStockThresholdSql } from "./low-stock-policy";
+import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -213,27 +214,12 @@ function buyerStateUpsert(db: Database, scope: ProductScope): SQLiteBatchItem {
         });
 }
 
-/**
- * Canonical number text in SQL, the twin of `canonicalAttributeNumber`:
- * six decimals, no trailing zeros ("15.60" -> "15.6", 1e3 -> "1000"),
- * computed in integer arithmetic so D1, Turso and PostgreSQL agree.
- */
-function canonicalNumberSql(value: SQL): SQL<string> {
-    const scaled = sql`CAST(round(${value} * 1000000) AS INTEGER)`;
-    const magnitude = sql`abs(${scaled})`;
-    const fraction = sql`(${magnitude} % 1000000)`;
-    return sql<string>`(CASE WHEN ${scaled} < 0 THEN '-' ELSE '' END
-        || CAST(${magnitude} / 1000000 AS TEXT)
-        || CASE WHEN ${fraction} = 0 THEN ''
-            ELSE '.' || rtrim(substr(CAST(1000000 + ${fraction} AS TEXT), 2), '0') END)`;
-}
-
 /** The facet value key of a stored attribute value (`attributeFacetValueKey`). */
 function attributeFacetValueKeySql(): SQL<string | null> {
     return sql<string | null>`CASE ${productAttributes.valueType}
         WHEN 'enum' THEN ${productAttributeValues.valueId}
         WHEN 'number' THEN CASE WHEN ${productAttributeValues.valueNumber} IS NULL THEN NULL
-            ELSE ${canonicalNumberSql(sql`${productAttributeValues.valueNumber}`)} END
+            ELSE ${canonicalAttributeNumberSql(sql`${productAttributeValues.valueNumber}`)} END
         WHEN 'boolean' THEN CASE WHEN ${productAttributeValues.valueNumber} IS NULL THEN NULL
             ELSE CAST(CAST(${productAttributeValues.valueNumber} AS INTEGER) AS TEXT) END
         ELSE substr(lower(trim(${productAttributeValues.value})), 1, 200)
