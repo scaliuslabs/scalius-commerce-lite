@@ -185,18 +185,35 @@ function bucketStart(column: string, grain: number): string {
   return `((${truncated} - case when ${column} < 0 and ${column} <> ${truncated} * ${grain} then 1 else 0 end) * ${grain})`;
 }
 
-/** Raw dimensions are typed by separate columns, so actual IDs cannot collide with fallback keys. */
+/**
+ * The bucket dimensions (kind, key1, key2 over facts `f`): every day-grain
+ * row has one of these kinds, and the 15-minute grain only `total`. Raw
+ * dimensions are typed by separate columns, so actual IDs cannot collide with
+ * fallback keys.
+ */
+const BUCKET_DIMENSIONS = [
+  ["total", "''", "''"], ["channel", "f.channel", "coalesce(f.channel_source, '')"],
+  ["payment", "f.payment_method", "''"], ["city", "coalesce(f.city_name, '')", "''"],
+  ["delivery", "case when f.requires_shipping = 0 then 'none' when f.shipping_method_kind = 'pickup' then 'pickup' when f.shipping_method_id is null then 'unknown' else 'method' end", "coalesce(f.shipping_method_id, '')"],
+  ["location", "case when f.fulfillment_location_id is null then 'default' else 'id' end", "coalesce(f.fulfillment_location_id, '')"],
+] as const;
+
+/**
+ * Bucket rows of [from, through) through the primary key (grain, kind,
+ * bucket_start, ...): the prefix names every grain and kind a seal writes, so
+ * the range is one seek per (grain, kind), never a walk of the bucket table.
+ */
+function bucketRange(alias: string, from: number, through: number): string {
+  const a = alias ? `${alias}.` : "";
+  return `${a}grain_seconds in (86400, 900) and ${a}dimension_kind in (${BUCKET_DIMENSIONS.map(([kind]) => `'${kind}'`).join(", ")})
+    and ${a}bucket_start >= ${from} and ${a}bucket_start < ${through}`;
+}
+
 function bucketContributions(source: string): string {
   const salesMeasures = new Set<string>(["order_count", "gross", "disc", "returns", "shipping", "taxes", "net_units"]);
   const measures = (total: boolean) => ANALYTICS_MEASURES
     .map((c) => total || salesMeasures.has(c) ? `f.${c}` : `0 as ${c}`).join(", ");
-  const dimensions = [
-    ["total", "''", "''"], ["channel", "f.channel", "coalesce(f.channel_source, '')"],
-    ["payment", "f.payment_method", "''"], ["city", "coalesce(f.city_name, '')", "''"],
-    ["delivery", "case when f.requires_shipping = 0 then 'none' when f.shipping_method_kind = 'pickup' then 'pickup' when f.shipping_method_id is null then 'unknown' else 'method' end", "coalesce(f.shipping_method_id, '')"],
-    ["location", "case when f.fulfillment_location_id is null then 'default' else 'id' end", "coalesce(f.fulfillment_location_id, '')"],
-  ];
-  const parts = dimensions.map(([kind, k1, k2]) => `select 86400 as grain_seconds, '${kind}' as dimension_kind,
+  const parts = BUCKET_DIMENSIONS.map(([kind, k1, k2]) => `select 86400 as grain_seconds, '${kind}' as dimension_kind,
     ${bucketStart("f.created_at", 86400)} as bucket_start,
     f.shop_currency, ${k1} as key1, ${k2} as key2, ${measures(kind === "total")}
     from d f where ${kind === "total" ? "f.placed <> 0" : "f.order_count <> 0"}`);
@@ -240,16 +257,28 @@ function dayRuns(days: readonly number[]): Array<[number, number]> {
  */
 export function analyticsSealStatements(days: readonly number[]): string[] {
   return dayRuns(days).flatMap(([from, through]) => [
-    `delete from analytics_sales_buckets where bucket_start >= ${from} and bucket_start < ${through}`,
+    `delete from analytics_sales_buckets where ${bucketRange("", from, through)}`,
     `insert into analytics_sales_buckets (${[...ANALYTICS_BUCKET_KEYS, ...ANALYTICS_MEASURES].join(", ")}) ${bucketRows(dayFacts(from, through))}`,
     `insert into analytics_sealed_days (day) values ${Array.from({ length: (through - from) / 86400 }, (_, i) => `(${from + i * 86400})`).join(", ")} on conflict (day) do nothing`,
   ]);
 }
 
-/** Unsealed UTC days from the first fact's day to `through`, oldest first. */
-export function analyticsUnsealedDaysSql(through: number, limit: number): string {
+/**
+ * Unsealed UTC days before `through`, oldest first. By default the span starts
+ * after the newest sealed day (the days no seal has reached: one primary-key
+ * seek). `holes` starts it at the first fact's day instead, to also find older
+ * days a late write unsealed; that costs about a row per day of history, so
+ * the nightly pass does it, not every sweep. The first fact's day floors
+ * `min(created_at)` outside the aggregate, so the minimum is one index seek,
+ * not a walk of every fact.
+ */
+export function analyticsUnsealedDaysSql(through: number, limit: number, options: { holes?: boolean } = {}): string {
+  const firstFactDay = `(select ${bucketStart("m.at", 86400)} from (select min(f.created_at) as at from analytics_order_facts f) as m)`;
+  const start = options.holes
+    ? firstFactDay
+    : `coalesce((select max(s.day) + 86400 from analytics_sealed_days s), ${firstFactDay})`;
   return `with recursive span (day) as (
-      select min(${bucketStart("f.created_at", 86400)}) from analytics_order_facts f
+      select ${start}
       union all select day + 86400 from span where day + 86400 < ${through})
     select day from span where day < ${through}
       and not exists (select 1 from analytics_sealed_days s where s.day = span.day)
@@ -262,7 +291,7 @@ export function analyticsBucketDriftSql(from: number, through: number): string {
   const sealedDay = (column: string) => `exists (select 1 from analytics_sealed_days s where s.day = ${bucketStart(column, 86400)})`;
   const expected = `select * from (${bucketRows(dayFacts(from, through))}) as e where ${sealedDay("e.bucket_start")}`;
   const stored = `select ${columns} from analytics_sales_buckets b
-    where b.bucket_start >= ${from} and b.bucket_start < ${through} and ${sealedDay("b.bucket_start")}`;
+    where ${bucketRange("b", from, through)} and ${sealedDay("b.bucket_start")}`;
   return symmetricDifference(expected, stored);
 }
 

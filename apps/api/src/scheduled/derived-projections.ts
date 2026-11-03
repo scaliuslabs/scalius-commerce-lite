@@ -47,7 +47,9 @@ export async function maintainDerivedProjections(
   options: { repair?: boolean; rebuild?: boolean; afterOrderId?: string | null; now?: Date } = {},
 ): Promise<DerivedProjectionReport> {
   const repair = options.repair ?? true;
-  const sealedDays = await sealAnalyticsDays(db, options.now);
+  // Every unsealed day, older ones a late write unsealed included (the minute
+  // sweep seals only the days after the newest sealed one).
+  const sealedDays = await sealAnalyticsDays(db, options.now ?? new Date(), { holes: true });
   let analytics: DerivedProjectionReport["analytics"];
   let orderIds = `SELECT id FROM orders ORDER BY created_at DESC, id DESC LIMIT ${ORDERS_PER_CALL}`;
   let cursor: Pick<DerivedProjectionReport, "nextAfterOrderId" | "done"> = {};
