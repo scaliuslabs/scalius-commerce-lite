@@ -118,7 +118,7 @@ export async function search(runtime: Runtime, output: OutputOptions, query: str
     if (steps) lines.push("", `${plan ? "Plan" : "Steps"} for ${String(top!.id)}: ${steps.join(" -> ")}`);
     for (const rule of Array.isArray(plan?.rules) ? plan.rules.slice(0, 4) : []) lines.push(`  - ${String(rule)}`);
     const control = hits.find((hit) => hit.kind === "control");
-    if (control) lines.push("", `Control (${String(control.disposition)}): ${String(control.summary)}`);
+    if (control) lines.push("", `Control (${String(control.disposition)}, guidance the server does not enforce): ${String(control.summary)}`);
     const notes = Array.isArray(result.value.notes) ? result.value.notes : [];
     for (const note of notes) lines.push(`Note: ${String(note)}`);
     lines.push("", "Next: scalius describe <id>: an operation's inputs and an example, or a workflow's steps.");

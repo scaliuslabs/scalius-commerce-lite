@@ -35,6 +35,8 @@ export interface SearchHit {
   disposition?: string;
   code?: string;
   safePlan?: Record<string, unknown> | null;
+  /** Control hits only: the router's advice. The server does not enforce it. */
+  guidance?: true;
 }
 
 const STOPWORDS = new Set([
@@ -206,13 +208,14 @@ async function workflowHits(query: string, surface: AgentResource, principal: Ag
       });
     }
   } else if (resolution.kind === "control") {
-    // Refuse/ask controls pass through unchanged: the agent must honour them.
+    // Controls pass through unchanged as advice: no server path reads them, so the hit says so.
     hits.push({
       id: resolution.classification.controlId,
       kind: "control",
       title: clip(resolution.classification.code),
       summary: clip(resolution.classification.reason),
       score: 1,
+      guidance: true,
       disposition: resolution.disposition,
       code: resolution.classification.code,
       safePlan: resolution.safePlan ? compactPlan(resolution.safePlan) : null,

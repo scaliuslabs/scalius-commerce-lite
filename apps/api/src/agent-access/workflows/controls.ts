@@ -113,8 +113,8 @@ export const AGENT_WORKFLOW_CONTROLS = [
     rules: [
       "Offer the fixed PII-free read: booked daily activity plus current stock-risk, abandoned, and recovery totals.",
       "Exact statuses need a store-calendar range and archived-order policy in a separate report.",
-      "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; never infer or return zero.",
-      "Queue evidence is totals only; never raw order, checkout, recovery, or customer rows.",
+      "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; do not infer them or return zero.",
+      "Queue evidence is totals only; do not return raw order, checkout, recovery, or customer rows.",
       "Ask for the fixed subset, status facts, or separate work; no write or window coercion.",
     ],
   },
@@ -142,7 +142,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresVerification: false,
     rules: [
       "Offer only the fixed PII-free read and retain unsupported metrics as unavailable.",
-      "Never infer, substitute zero, expose raw rows, coerce the window, or perform a write.",
+      "Do not infer, substitute zero, expose raw rows, coerce the window, or perform a write.",
     ],
   },
   {
@@ -228,7 +228,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresVerification: false,
     rules: [
       "Offer one fixed PII-free workflow read and explicitly retain every unsupported metric as unavailable.",
-      "Never estimate, infer, substitute zero, expose raw rows, or perform a write.",
+      "Do not estimate, infer, substitute zero, expose raw rows, or perform a write.",
     ],
   },
   {
@@ -256,7 +256,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     rules: [
       "Offer the fixed PII-free 30-day subset: booked daily activity plus current stock-risk, abandoned-checkout, and recovery totals.",
       "Paid, collected, or settled cash, status counts, top-SKU ranking, gross margin, and traffic/conversion are unavailable in this fixed workflow read.",
-      "Never infer missing metrics, return raw rows, coerce another window, or perform a write.",
+      "Do not infer missing metrics, return raw rows, coerce another window, or perform a write.",
     ],
   },
   {
@@ -296,7 +296,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresConfirmation: false,
     requiresVerification: false,
     rules: [
-      "Keep the briefing PII-free and count-only; never expose customer identities or contact details.",
+      "Keep the briefing PII-free and count-only; do not expose customer identities or contact details.",
       "Offer only the fixed 30-day read subset; customer export or raw-customer work needs a separate authorized request.",
     ],
   },
@@ -304,7 +304,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.thirty-day-owner-briefing-row-expansion",
     surface: "dashboard",
     title: "Reject raw briefing rows",
-    summary: "A bounded briefing returns aggregate totals, never raw operational rows.",
+    summary: "A bounded briefing returns aggregate totals, not raw operational rows.",
     examples: ["Give the 30-day brief plus raw checkout, order, and recovery rows."],
     tags: ["briefing", "rows", "pii", "safety"],
     disposition: "ask",
@@ -342,7 +342,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresConfirmation: false,
     requiresVerification: false,
     rules: [
-      "Return projections and totals only; never expose raw checkout, order, recovery, or customer records.",
+      "Return projections and totals only; do not expose raw checkout, order, recovery, or customer records.",
       "Offer only the fixed PII-free 30-day subset and perform no write.",
     ],
   },
@@ -350,7 +350,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.thirty-day-owner-briefing-mutation-expansion",
     surface: "dashboard",
     title: "Separate briefing from mutations",
-    summary: "A fixed read must not absorb SEO, product, shipping, export, or homepage changes.",
+    summary: "A fixed read should not absorb SEO, product, shipping, export, or homepage changes.",
     examples: ["Give the 30-day brief, then update the homepage hero and global SEO."],
     tags: ["briefing", "compound", "write", "safety"],
     disposition: "ask",
@@ -482,7 +482,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresVerification: true,
     rules: [
       "Require an exact merchant-supplied zone, places, charge name, fee, and active intent for each charge.",
-      "Never choose or infer a delivery fee; make no setup write until every charge spec is complete.",
+      "Do not choose or infer a delivery fee; make no setup write until every charge spec is complete.",
     ],
   },
   {
@@ -515,7 +515,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.shipping-unrelated-delete",
     surface: "dashboard",
     title: "Reject unrelated delivery deletion",
-    summary: "The supported setup preserves unrelated delivery zones and charges and never deletes them implicitly.",
+    summary: "The supported setup preserves unrelated delivery zones and charges and does not delete them implicitly.",
     examples: ["Create these methods and delete every other shipping method."],
     tags: ["shipping", "deletion", "preservation"],
     disposition: "ask",
@@ -562,7 +562,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresVerification: true,
     rules: [
       "Require explicit keep/disable intent for every current method and an exact default-method policy.",
-      "Never choose a payment policy; make no setup write until the merchant confirms the full replacement array and default.",
+      "Do not choose a payment policy; make no setup write until the merchant confirms the full replacement array and default.",
     ],
   },
   {
@@ -588,7 +588,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Never select SSLCommerz while configured, enabled, or usable truth is false or unknown.",
+      "Do not select SSLCommerz while configured, enabled, or usable truth is false or unknown.",
       "Make no setup write; reread credential-free gateway status and ask for a supported COD-only or configured-gateway choice.",
     ],
   },
@@ -596,7 +596,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.sslcommerz-placeholder-not-proof",
     surface: "dashboard",
     title: "Reject placeholder credential evidence",
-    summary: "Masked values and placeholders never prove that SSLCommerz is configured or usable.",
+    summary: "Masked values and placeholders do not prove that SSLCommerz is configured or usable.",
     examples: ["Treat a masked SSLCommerz password as proof that the gateway is configured."],
     tags: ["payments", "credentials", "placeholders"],
     disposition: "refuse",
@@ -616,7 +616,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresVerification: true,
     rules: [
       "Treat masked or placeholder credential fields as no evidence; use only credential-free configured/enabled/usable status.",
-      "Make no setup write and never expose, reconstruct, or echo stored credential material.",
+      "Make no setup write and do not expose, reconstruct, or echo stored credential material.",
     ],
   },
   {
@@ -677,7 +677,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.timezone-separate-review",
     surface: "dashboard",
     title: "Change the store time zone on its own",
-    summary: "The store time zone is a Store defaults change that regroups every report day; it is never part of the checkout setup.",
+    summary: "The store time zone is a Store defaults change that regroups every report day; it is not part of the checkout setup.",
     examples: ["Set up checkout and also change the store timezone setting to Asia/Dhaka."],
     tags: ["settings", "timezone", "calendar"],
     disposition: "ask",
@@ -704,7 +704,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.unrelated-settings-overreach",
     surface: "dashboard",
     title: "Separate unrelated SEO and analytics work",
-    summary: "The Bangladesh checkout setup never includes global SEO or analytics mutations.",
+    summary: "The Bangladesh checkout setup does not include global SEO or analytics mutations.",
     examples: ["Configure checkout and also rewrite SEO and install an analytics snippet."],
     tags: ["settings", "seo", "analytics", "scope"],
     disposition: "ask",
@@ -776,7 +776,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Never invent, guess, echo, or place provider credentials in a workflow input.",
+      "Do not invent, guess, echo, or place provider credentials in a workflow input.",
       "Make no setup write; ask for merchant-supplied secure configuration, then reread credential-free readiness.",
     ],
   },
