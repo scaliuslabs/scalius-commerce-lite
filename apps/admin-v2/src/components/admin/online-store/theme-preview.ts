@@ -5,16 +5,11 @@ import {
   postApiV1AdminSettingsThemePreviewSession,
 } from "@scalius/api-client/sdk";
 import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
+import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { apiData } from "~/lib/api";
 
 type Device = "full" | "desktop" | "mobile";
-
-const PRIVATE_PATHS = new Set([
-  ".well-known", "404", "500", "account", "api", "buy", "cart",
-  "checkout", "health", "order-success", "payment-recovery", "robots.txt",
-  "search", "theme-preview", "track-order", "ucp",
-]);
 
 function hasUnsafeCharacter(value: string): boolean {
   for (const character of value) {
@@ -45,7 +40,7 @@ export function isSafeThemePreviewPath(value: string): boolean {
       return /^[A-Za-z0-9_-]+$/.test(segments[1]!);
     }
     return segments.length === 1 && /^[A-Za-z0-9_-]+$/.test(segments[0]!) &&
-      !PRIVATE_PATHS.has(segments[0]!.toLowerCase()) &&
+      !STOREFRONT_ROUTE_SEGMENTS.has(segments[0]!.toLowerCase()) &&
       !segments[0]!.toLowerCase().startsWith("sitemap");
   } catch {
     return false;

@@ -1,3 +1,4 @@
+import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import { presenceOfPath, stripPresencePath } from "@scalius/shared/markets";
 
 const PUBLIC_RESOURCE_PREFIXES = new Set([
@@ -5,27 +6,6 @@ const PUBLIC_RESOURCE_PREFIXES = new Set([
   "categories",
   "collections",
   "pages",
-]);
-
-const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
-  ".well-known",
-  "404",
-  "500",
-  "account",
-  "api",
-  "buy",
-  "cart",
-  "checkout",
-  "health",
-  "newsletter",
-  "order-success",
-  "payment-recovery",
-  "robots.txt",
-  "search",
-  "pages",
-  "theme-preview",
-  "track-order",
-  "ucp",
 ]);
 
 function isSafePublicPath(pathname: string): boolean {
@@ -46,7 +26,7 @@ function isSafePublicPath(pathname: string): boolean {
   }
 
   const segment = segments[0]!.toLowerCase();
-  return !RESERVED_SINGLE_SEGMENT_PATHS.has(segment) && !segment.startsWith("sitemap");
+  return !STOREFRONT_ROUTE_SEGMENTS.has(segment) && !segment.startsWith("sitemap");
 }
 
 function hasControlCharacter(value: string): boolean {
