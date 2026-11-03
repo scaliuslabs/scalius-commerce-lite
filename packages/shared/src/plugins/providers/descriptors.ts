@@ -243,6 +243,19 @@ export const messagingProviderDescriptorSchema = z.object({
     .refine((channels) => new Set(channels).size === channels.length, "List each channel once."),
 }).strict();
 
+/**
+ * An SMS or email provider. `dedupesOnIdempotencyKey: true` promises that a
+ * `send` repeated with the same `idempotencyKey` is applied once (the provider
+ * dedupes on the key, or the app does, keyed on it), so the platform may retry
+ * a send whose answer was lost (a timeout: the message may already be sent).
+ * Left out (or `false`): such a send is never repeated, because the message
+ * could reach the buyer twice.
+ */
+const messageSenderProviderDescriptorSchema = <K extends "sms" | "email">(kind: K) => z.object({
+  ...base(kind),
+  dedupesOnIdempotencyKey: z.boolean().optional(),
+}).strict();
+
 /** An address provider knows addresses of some countries (default `any`); checkout asks it only for those. */
 export const addressProviderDescriptorSchema = z.object({
   ...base("address"),
@@ -252,8 +265,8 @@ export const addressProviderDescriptorSchema = z.object({
 const PROVIDER_DESCRIPTOR_SCHEMAS = {
   payment: paymentProviderDescriptorSchema,
   courier: courierProviderDescriptorSchema,
-  sms: plain("sms"),
-  email: plain("email"),
+  sms: messageSenderProviderDescriptorSchema("sms"),
+  email: messageSenderProviderDescriptorSchema("email"),
   courier_history: courierHistoryProviderDescriptorSchema,
   tax: plain("tax"),
   translation: plain("translation"),
@@ -271,6 +284,7 @@ export type CourierProviderDescriptor = z.output<typeof courierProviderDescripto
 export type CourierHistoryProviderDescriptor = z.output<typeof courierHistoryProviderDescriptorSchema>;
 export type MessagingProviderDescriptor = z.output<typeof messagingProviderDescriptorSchema>;
 export type AddressProviderDescriptor = z.output<typeof addressProviderDescriptorSchema>;
+export type MessageSenderProviderDescriptor = z.output<ReturnType<typeof messageSenderProviderDescriptorSchema<"sms">>>;
 type PlainProviderDescriptor = z.output<ReturnType<typeof plain>>;
 
 /** One declared provider, flat, as the parsed manifest keeps it. */
@@ -280,7 +294,8 @@ export type PluginProviderDeclaration =
   | ({ kind: "courier_history" } & CourierHistoryProviderDescriptor)
   | ({ kind: "messaging" } & MessagingProviderDescriptor)
   | ({ kind: "address" } & AddressProviderDescriptor)
-  | ({ kind: "sms" | "email" | "tax" | "translation" | "ai" | "push" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
+  | ({ kind: "sms" | "email" } & MessageSenderProviderDescriptor)
+  | ({ kind: "tax" | "translation" | "ai" | "push" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
 
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat

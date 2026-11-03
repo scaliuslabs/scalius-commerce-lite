@@ -310,5 +310,17 @@
   "from": "600d697d672275b0",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_PRODUCT_MODULE_EMBEDS: an existing signature changed or gained a required member.",
   "reason": "Unreleased: STOREFRONT_PRODUCT_MODULE_EMBEDS was added after v2.0.0-beta.2 in this same wave; it is in no tag and not in the public export (only on the private origin), so no app can depend on it. `details` is renamed `description`, the module's theme id."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "600d697d672275b0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive, not a break: an sms or email provider declaration gains the optional boolean dedupesOnIdempotencyKey (absent means false: an uncertain send is not repeated). Every manifest that was accepted still is, and the manifest JSON Schema seal passes it as growth. The SDK declaration check compares a union or an array of declaration types as a whole, so it cannot see through them to the new optional member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "600d697d672275b0",
+  "change": "sdk.packages/shared/src/plugins/providers/descriptors.d.ts#TypeAliasDeclaration:PluginProviderDeclaration: an existing signature changed or gained a required member.",
+  "reason": "Additive, not a break: the sms and email members of the declaration union gain the optional boolean dedupesOnIdempotencyKey (absent means false: an uncertain send is not repeated), so they are split from the union members of the kinds that gain nothing. Every declaration that was valid still is; the SDK declaration check compares a union as a whole."
  }
 ]

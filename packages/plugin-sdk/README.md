@@ -461,7 +461,7 @@ Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, ope
 
 ### SMS, email and courier history
 
-- **SMS and email.** Implement `send`. Every send port uses the same names: `to` (the recipient), `text` (plain text) and `idempotencyKey`; SMS is `send({ to, text, idempotencyKey? })`, email adds `subject` and `html`. Never send twice for one `idempotencyKey`. Answer `{ success, providerRef?, rawStatus?, retryable? }`. Set `retryable: false` for errors a retry cannot fix.
+- **SMS and email.** Implement `send`. Every send port uses the same names: `to` (the recipient), `text` (plain text) and `idempotencyKey`; SMS is `send({ to, text, idempotencyKey? })`, email adds `subject` and `html`. Never send twice for one `idempotencyKey`. Answer `{ success, providerRef?, rawStatus?, retryable? }`. Set `retryable: false` for errors a retry cannot fix. When a send fails after the message may already have gone (`ProviderError("retryable", …, { uncertain: true })`, e.g. a timeout), the platform sends it again only if the provider's declaration sets `dedupesOnIdempotencyKey: true`, your promise that a repeat under the same `idempotencyKey` is applied once (the gateway dedupes on it, or you do). Left out, such a failure is final and the message is not repeated.
 - **Courier history.** Implement `check({ phone, orderId? })`: the parcels courier networks booked, delivered and cancelled for the phone. The merchant reads the answer on the order page as advice. It never blocks automatically. An app that must stop fulfilment handles `order.created` and calls `ctx.orders.hold`. A general order-risk port (`risk`) is planned as beta; until then `ctx.orders.assessRisk` records an app's risk assessment.
 
 ### Service ports

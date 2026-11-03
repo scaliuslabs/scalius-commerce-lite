@@ -6,7 +6,7 @@ import {
   type NotificationSubjectType,
   type OutboxNotificationType,
 } from "./notification-types";
-import { sha256Hex } from "@scalius/shared/hash";
+import { sha256Hex, sha256HexSync } from "@scalius/shared/hash";
 
 export type OrderNotificationDeliveryChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -95,10 +95,15 @@ export function buildOrderNotificationDeliveryReceiptKey(options: {
   return `${options.outboxId}:${options.channel}:${options.recipientHash}`;
 }
 
+/**
+ * The provider's client reference for one send (GenNet's `csms_id`: at most
+ * 20 alphanumerics): a digest of the whole outbox row, channel and recipient,
+ * so a retried send keeps one reference and a second recipient or channel of
+ * the same row never shares it. Cutting the joined ids instead would keep only
+ * the outbox id.
+ */
 export function createProviderClientReference(target: Pick<OrderNotificationDeliveryTarget, "outboxId" | "channel" | "recipientHash">): string {
-  return `${target.outboxId}${target.channel}${target.recipientHash}`
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 20);
+  return sha256HexSync(`${target.outboxId}\n${target.channel}\n${target.recipientHash}`).slice(0, 20);
 }
 
 export async function claimOrderNotificationDeliveryReceipt(

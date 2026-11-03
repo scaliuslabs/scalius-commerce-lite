@@ -21,8 +21,9 @@ export const NOTIFY_FIXTURE_MANIFEST = {
   settings: [{ key: "api_key", label: "API key", type: "secret", required: true }],
   objects: { sent: { name: "Sent messages", fields: [{ key: "answer", name: "Answer", type: "json" }] } },
   providers: {
-    sms: [{ id: "texts", name: "Acme Texts", operations: ["testConnection"] }],
-    email: [{ id: "mail", name: "Acme Mail" }],
+    // The fixture applies a send once per key (its own objects), so it says so.
+    sms: [{ id: "texts", name: "Acme Texts", operations: ["testConnection"], dedupesOnIdempotencyKey: true }],
+    email: [{ id: "mail", name: "Acme Mail", dedupesOnIdempotencyKey: true }],
     courier_history: [{ id: "radar", name: "Acme Radar", operations: ["testConnection"] }],
   },
 } as const;

@@ -914,6 +914,9 @@
           "environmentSetting": {
            "type": "string",
            "pattern": "^[a-z][a-z0-9_]{0,47}$"
+          },
+          "dedupesOnIdempotencyKey": {
+           "type": "boolean"
           }
          },
          "required": [
@@ -962,6 +965,9 @@
           "environmentSetting": {
            "type": "string",
            "pattern": "^[a-z][a-z0-9_]{0,47}$"
+          },
+          "dedupesOnIdempotencyKey": {
+           "type": "boolean"
           }
          },
          "required": [
