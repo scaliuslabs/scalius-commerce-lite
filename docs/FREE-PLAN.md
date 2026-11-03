@@ -26,7 +26,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | --- | --- | --- |
 | Worker CPU (`limits.cpu_ms`) | not set (fixed 10 ms) | 30,000 ms |
 | New password hash | PBKDF2-SHA256, 30,000 iterations | scrypt N=16384, r=16, p=1 |
-| Rows per drain: events, deliveries, notifications, payment events | 2, 2, 1, 1 | 50, 25, 20, 10 |
+| Rows per drain: events, deliveries (after a write), notifications, payment events | 20, 4 (2), 1, 1 | 50, 25 (25), 20, 10 |
 | Recommendation rotation per run | 4 products | 32 products |
 | Maintenance jobs (the sweep rotation) | one a minute: each job every 23 minutes | every job every 15 minutes |
 | Expired reservations released per run | 4 | 50 |

@@ -11,7 +11,8 @@
 // next drain reclaims, and every target is idempotent by event id. Event
 // triggers only enqueue topics with demand, so an unused store has no rows.
 
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import { eventOutbox, type EventOutboxRow } from "@scalius/database/schema";
 import {
   EVENTS_API_VERSION,
@@ -32,6 +33,9 @@ export type EventDelivery =
   | { type: "webhooks.deliver"; deliveryId: string }
   | { type: "plugins.deliver"; deliveryId: string };
 
+/** A delivery a fan-out recorded, with the event it is for. */
+export type FannedOutDelivery = EventDelivery & { eventId: string };
+
 /** One event as targets see it: the stored facts parsed against the catalog. */
 export interface OutboxEvent<T extends EventTopic = EventTopic> {
   id: string;
@@ -45,15 +49,19 @@ export interface OutboxEvent<T extends EventTopic = EventTopic> {
 
 /**
  * A fan-out target: webhooks and app subscribers. `fanOut` records the
- * target's own durable work for the event (idempotent by event id, so a
- * redelivered event adds nothing) and returns the deliveries still waiting.
+ * target's own durable work for one drain's events (idempotent by event id,
+ * so a redelivered event adds nothing) and returns the deliveries still
+ * waiting. It reads its subscribers once for all the events, whatever their
+ * number.
  */
 export interface EventFanOutTarget {
   readonly name: string;
   /** Whether this delivery target currently has subscribers. */
   hasSubscribers(db: Database): Promise<boolean>;
-  fanOut(db: Database, event: OutboxEvent): Promise<EventDelivery[]>;
+  fanOut(db: Database, events: readonly OutboxEvent[]): Promise<FannedOutDelivery[]>;
 }
+
+type SQLiteBatchItem = BatchItem<"sqlite">;
 
 const PROCESSING_LEASE_SECONDS = 5 * 60;
 export const MAX_EVENT_DISPATCH_ATTEMPTS = 8;
@@ -134,9 +142,11 @@ export interface EventFlushResult {
 }
 
 /**
- * Dispatches up to `limit` due outbox rows, oldest first: each is claimed,
- * fanned out to the targets and marked dispatched (or failed with backoff).
- * Runs after a request that wrote an evented table and on every tick.
+ * Dispatches up to `limit` due outbox rows, oldest first, in a fixed number of
+ * round trips whatever the count: one statement claims them all, each target
+ * fans the claimed events out at once, and one batch marks them dispatched
+ * (or failed with backoff). Runs after a request that wrote an evented table
+ * and on every tick.
  */
 export async function dispatchPendingEvents(options: {
   db: Database;
@@ -148,30 +158,11 @@ export async function dispatchPendingEvents(options: {
    */
   onFlushed?: (events: OutboxEvent[]) => void | Promise<void>;
 }): Promise<EventFlushResult> {
-  const result: EventFlushResult = { scanned: 0, dispatched: 0, failed: 0, skipped: 0, deliveries: [] };
-  const flushed: OutboxEvent[] = [];
-  const report = async () => {
-    if (!options.onFlushed || flushed.length === 0) return;
-    try {
-      await options.onFlushed(flushed);
-    } catch (error) {
-      console.warn("[events] Flush observer failed:", normalizeError(error));
-    }
-  };
   const limit = Math.max(1, Math.min(options.limit ?? EVENT_FLUSH_BATCH_SIZE, MAX_EVENT_FLUSH_LIMIT));
-  const { db } = options;
-
-  const dueRows = await db
-    .select({ id: eventOutbox.id })
-    .from(eventOutbox)
-    .where(sql`${eventOutbox.id} IN (${dueEventIds(limit)})`)
-    .orderBy(asc(eventOutbox.nextAttemptAt), asc(eventOutbox.id))
-    .all();
-  result.scanned = dueRows.length;
-  if (dueRows.length === 0) return result;
-
-  for (const { id } of dueRows) {
-    const outcome = await processEventDispatch({ db, eventId: id, targets: options.targets });
+  const outcomes = await claimAndDispatch(options.db, sql`${eventOutbox.id} IN (${dueEventIds(limit)})`, options.targets);
+  const result: EventFlushResult = { scanned: outcomes.length, dispatched: 0, failed: 0, skipped: 0, deliveries: [] };
+  const flushed: OutboxEvent[] = [];
+  for (const outcome of outcomes) {
     if (outcome.status === "dispatched") {
       result.dispatched += 1;
       result.deliveries.push(...outcome.deliveries);
@@ -183,7 +174,13 @@ export async function dispatchPendingEvents(options: {
       console.warn(`[events] Dispatch of ${outcome.eventId} ${outcome.status}: ${outcome.reason}`);
     }
   }
-  await report();
+  if (options.onFlushed && flushed.length > 0) {
+    try {
+      await options.onFlushed(flushed);
+    } catch (error) {
+      console.warn("[events] Flush observer failed:", normalizeError(error));
+    }
+  }
   return result;
 }
 
@@ -210,8 +207,8 @@ export type EventDispatchOutcome =
 
 /**
  * Claims one row, lets every target record its work and marks the row
- * dispatched. A target failure retries the whole event with backoff; targets
- * are idempotent, so the retry only adds what is missing.
+ * dispatched. A target failure retries the event with backoff; targets are
+ * idempotent, so the retry only adds what is missing.
  */
 export async function processEventDispatch(options: {
   db: Database;
@@ -219,8 +216,26 @@ export async function processEventDispatch(options: {
   targets: readonly EventFanOutTarget[];
 }): Promise<EventDispatchOutcome> {
   const { db, eventId } = options;
+  const [outcome] = await claimAndDispatch(db, eq(eventOutbox.id, eventId), options.targets);
+  if (outcome) return outcome;
+  const existing = await db.select({ status: eventOutbox.status }).from(eventOutbox).where(eq(eventOutbox.id, eventId)).get();
+  if (!existing) return { status: "skipped", eventId, reason: "missing" };
+  return { status: "skipped", eventId, reason: existing.status === "dispatched" ? "already_dispatched" : "busy" };
+}
+
+/**
+ * The drain's three steps over the claimable rows `which` selects. A target
+ * failure fails every event of the drain (each retries with its own backoff,
+ * and the retry adds only what is missing); an unreadable row is
+ * dead-lettered alone.
+ */
+async function claimAndDispatch(
+  db: Database,
+  which: SQL,
+  targets: readonly EventFanOutTarget[],
+): Promise<Array<Exclude<EventDispatchOutcome, { status: "skipped" }>>> {
   const claimId = `evc_${crypto.randomUUID().replace(/-/g, "")}`;
-  const rows = await db
+  const claimed = await db
     .update(eventOutbox)
     .set({
       status: "processing",
@@ -229,62 +244,90 @@ export async function processEventDispatch(options: {
       attempts: sql`${eventOutbox.attempts} + 1`,
       updatedAt: sql`unixepoch()`,
     })
-    .where(and(eq(eventOutbox.id, eventId), claimableCondition()))
+    // The claim re-checks each row (a concurrent drain cannot take it twice).
+    // As a CASE it is no index's range, so SQLite seeks the chosen ids by key
+    // instead of walking every due row.
+    .where(and(which, sql`(CASE WHEN ${claimableCondition()} THEN 1 ELSE 0 END) = 1`))
     .returning();
-  const row = rows[0];
-  if (!row) {
-    const existing = await db.select({ status: eventOutbox.status }).from(eventOutbox).where(eq(eventOutbox.id, eventId)).get();
-    if (!existing) return { status: "skipped", eventId, reason: "missing" };
-    return { status: "skipped", eventId, reason: existing.status === "dispatched" ? "already_dispatched" : "busy" };
+  if (claimed.length === 0) return [];
+  const rows = claimed.sort((a, b) => Number(a.nextAttemptAt) - Number(b.nextAttemptAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  const readable: Array<{ row: EventOutboxRow; event: OutboxEvent }> = [];
+  const unreadable: EventOutboxRow[] = [];
+  for (const row of rows) {
+    const event = toOutboxEvent(row);
+    if (event) readable.push({ row, event });
+    else unreadable.push(row);
   }
 
-  const event = toOutboxEvent(row);
-  if (!event) {
-    await markEventDeadLettered(db, eventId, claimId, "unreadable_event: topic, resource or facts do not match the catalog");
-    return { status: "dead_lettered", eventId, reason: "unreadable_event" };
-  }
-
-  const deliveries: EventDelivery[] = [];
-  try {
-    for (const target of options.targets) {
-      deliveries.push(...await target.fanOut(db, event));
+  const deliveries = new Map<string, EventDelivery[]>();
+  let failure: string | null = null;
+  if (readable.length > 0) {
+    try {
+      const events = readable.map(({ event }) => event);
+      for (const target of targets) {
+        for (const delivery of await target.fanOut(db, events)) {
+          const { eventId, ...message } = delivery;
+          deliveries.set(eventId, [...(deliveries.get(eventId) ?? []), message as EventDelivery]);
+        }
+      }
+    } catch (error) {
+      failure = normalizeError(error);
     }
-  } catch (error) {
-    const reason = normalizeError(error);
-    if (row.attempts >= MAX_EVENT_DISPATCH_ATTEMPTS) {
-      await markEventDeadLettered(db, eventId, claimId, `event_attempt_limit_reached: ${reason}`);
-      return { status: "dead_lettered", eventId, reason };
-    }
-    await db
-      .update(eventOutbox)
-      .set({
-        status: "failed",
-        claimId: null,
-        claimExpiresAt: null,
-        lastError: reason,
-        nextAttemptAt: sql`unixepoch() + ${eventDispatchRetryDelaySeconds(row.attempts)}`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(eq(eventOutbox.id, eventId), eq(eventOutbox.claimId, claimId)));
-    return { status: "failed", eventId, reason };
   }
 
-  await db
-    .update(eventOutbox)
-    .set({
-      status: "dispatched",
-      claimId: null,
-      claimExpiresAt: null,
-      lastError: null,
-      dispatchedAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(eq(eventOutbox.id, eventId), eq(eventOutbox.claimId, claimId)));
-  return { status: "dispatched", eventId, event, deliveries };
+  const ofClaim = (id: string) => and(eq(eventOutbox.id, id), eq(eventOutbox.claimId, claimId));
+  const outcomes: Array<Exclude<EventDispatchOutcome, { status: "skipped" }>> = [];
+  const statements: SQLiteBatchItem[] = [];
+  for (const row of unreadable) {
+    statements.push(deadLetterStatement(db, ofClaim(row.id), "unreadable_event: topic, resource or facts do not match the catalog"));
+    outcomes.push({ status: "dead_lettered", eventId: row.id, reason: "unreadable_event" });
+  }
+  if (failure === null) {
+    if (readable.length > 0) {
+      const ids = JSON.stringify(readable.map(({ row }) => row.id));
+      statements.push(db
+        .update(eventOutbox)
+        .set({
+          status: "dispatched",
+          claimId: null,
+          claimExpiresAt: null,
+          lastError: null,
+          dispatchedAt: sql`unixepoch()`,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, eq(eventOutbox.claimId, claimId))));
+    }
+    for (const { row, event } of readable) {
+      outcomes.push({ status: "dispatched", eventId: row.id, event, deliveries: deliveries.get(row.id) ?? [] });
+    }
+  } else {
+    for (const { row } of readable) {
+      if (row.attempts >= MAX_EVENT_DISPATCH_ATTEMPTS) {
+        statements.push(deadLetterStatement(db, ofClaim(row.id), `event_attempt_limit_reached: ${failure}`));
+        outcomes.push({ status: "dead_lettered", eventId: row.id, reason: failure });
+        continue;
+      }
+      statements.push(db
+        .update(eventOutbox)
+        .set({
+          status: "failed",
+          claimId: null,
+          claimExpiresAt: null,
+          lastError: failure,
+          nextAttemptAt: sql`unixepoch() + ${eventDispatchRetryDelaySeconds(row.attempts)}`,
+          updatedAt: sql`unixepoch()`,
+        })
+        .where(ofClaim(row.id)));
+      outcomes.push({ status: "failed", eventId: row.id, reason: failure });
+    }
+  }
+  if (statements.length > 0) await safeBatch(db, statements as [SQLiteBatchItem, ...SQLiteBatchItem[]]);
+  return outcomes;
 }
 
-async function markEventDeadLettered(db: Database, eventId: string, claimId: string, reason: string): Promise<void> {
-  await db
+function deadLetterStatement(db: Database, where: SQL | undefined, reason: string): SQLiteBatchItem {
+  return db
     .update(eventOutbox)
     .set({
       status: "dead_lettered",
@@ -294,7 +337,7 @@ async function markEventDeadLettered(db: Database, eventId: string, claimId: str
       nextAttemptAt: DEAD_LETTER_NEXT_ATTEMPT_AT,
       updatedAt: sql`unixepoch()`,
     })
-    .where(and(eq(eventOutbox.id, eventId), eq(eventOutbox.claimId, claimId)));
+    .where(where);
 }
 
 // ── Admin reads ───────────────────────────────────────────────────────────

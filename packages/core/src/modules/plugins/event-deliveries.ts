@@ -34,7 +34,8 @@
 // has due events, and nothing else.
 
 import type { Database } from "@scalius/database/client";
-import { chunkInsertRowsForD1 } from "@scalius/database/client";
+import { safeBatch } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import {
   pluginEventDeliveries,
   type PluginEventDeliveryRow,
@@ -43,12 +44,11 @@ import {
 import { topicMatchesAnyFilter } from "@scalius/shared/events";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
-import type { EventDelivery, EventFanOutTarget } from "../events";
+import type { EventFanOutTarget, FannedOutDelivery } from "../events";
 import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
-import { hasApprovedEventPlugins, listApprovedEventPlugins, getActivePluginInstallation } from "./registry";
-import { inJsonArray } from "../../utils/in-json-array";
+import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; the same 7 waits over about 22.6 hours as webhooks. */
@@ -84,46 +84,56 @@ function normalizeError(error: unknown): string {
 export const pluginEventFanOutTarget: EventFanOutTarget = {
   name: "plugins",
   hasSubscribers: (db) => hasApprovedEventPlugins(db),
-  async fanOut(db, event) {
-    const subscribers = await listApprovedEventPlugins(db, event.topic, event);
-    // The approved grant decides, and a plugin first approved after the event never receives it.
-    const eligible = subscribers.filter(({ installation }) =>
-      installation.grant !== null
-      && topicMatchesAnyFilter(event.topic, installation.grant.events));
-    if (eligible.length === 0) return [];
+  async fanOut(db, events) {
+    // One read of the drain's subscribers, one round trip for their rows.
+    const subscribers = await listApprovedEventPluginsForEvents(db, events);
     const nowMs = Date.now();
-    const rows = eligible.map(({ installation }, index) => ({
-      id: newPluginDeliveryId(nowMs + index),
-      pluginId: installation.pluginId,
-      eventId: event.id,
-      topic: event.topic,
-      resourceType: event.resourceType,
-      resourceId: event.resourceId,
-    }));
-    for (const chunk of chunkInsertRowsForD1(rows, (row) => db.insert(pluginEventDeliveries).values(row))) {
-      await db.insert(pluginEventDeliveries).values(chunk).onConflictDoNothing();
+    const rows: Array<{ d: string; p: string; e: string; t: string; rt: string; r: string }> = [];
+    const held: Array<{ p: string; e: string }> = [];
+    for (const event of events) {
+      // The approved grant decides, and a plugin first approved after the event never receives it.
+      for (const { installation } of subscribers.get(event.id) ?? []) {
+        if (installation.grant === null || !topicMatchesAnyFilter(event.topic, installation.grant.events)) continue;
+        rows.push({
+          d: newPluginDeliveryId(nowMs + rows.length),
+          p: installation.pluginId,
+          e: event.id,
+          t: event.topic,
+          rt: event.resourceType,
+          r: event.resourceId,
+        });
+        // An app that is not running keeps the event until it runs again.
+        if (installation.status !== "active") held.push({ p: installation.pluginId, e: event.id });
+      }
     }
-    // An app that is not running keeps the event until it runs again.
-    const held = eligible.filter(({ installation }) => installation.status !== "active").map(({ installation }) => installation.pluginId);
-    if (held.length > 0) {
-      await db.update(pluginEventDeliveries).set({ nextAttemptAt: HELD_UNTIL, lastError: HELD_REASON }).where(and(
-        eq(pluginEventDeliveries.eventId, event.id),
-        inJsonArray(pluginEventDeliveries.pluginId, held),
+    if (rows.length === 0) return [];
+    const eventIds = JSON.stringify([...new Set(rows.map((row) => row.e))]);
+    const results = await safeBatch(db, [
+      // Every column, in the table's order (an INSERT ... SELECT names them all).
+      db.insert(pluginEventDeliveries).select(sql`
+        SELECT CAST(json_extract(value, '$.d') AS TEXT), CAST(json_extract(value, '$.p') AS TEXT), CAST(json_extract(value, '$.e') AS TEXT),
+          CAST(json_extract(value, '$.t') AS TEXT), CAST(json_extract(value, '$.rt') AS TEXT), CAST(json_extract(value, '$.r') AS TEXT),
+          'pending', 0, unixepoch(), NULL, NULL, NULL, NULL, NULL, NULL, NULL, unixepoch(), unixepoch()
+        FROM json_each(${JSON.stringify(rows)}) WHERE 1 = 1`).onConflictDoNothing() as unknown as BatchItem<"sqlite">,
+      ...(held.length > 0 ? [db.update(pluginEventDeliveries).set({ nextAttemptAt: HELD_UNTIL, lastError: HELD_REASON }).where(and(
+        sql`${pluginEventDeliveries.eventId} IN (SELECT CAST(value AS TEXT) FROM json_each(${eventIds}))`,
+        sql`EXISTS (SELECT 1 FROM json_each(${JSON.stringify(held)}) AS held_pair
+          WHERE CAST(json_extract(held_pair.value, '$.p') AS TEXT) = ${pluginEventDeliveries.pluginId}
+            AND CAST(json_extract(held_pair.value, '$.e') AS TEXT) = ${pluginEventDeliveries.eventId})`,
         eq(pluginEventDeliveries.status, "pending"),
         eq(pluginEventDeliveries.attempts, 0),
-      ));
-    }
-    // A redelivered event re-sends only deliveries still waiting (never the held ones).
-    const pending = await db
-      .select({ id: pluginEventDeliveries.id })
-      .from(pluginEventDeliveries)
-      .where(and(
-        eq(pluginEventDeliveries.eventId, event.id),
-        eq(pluginEventDeliveries.status, "pending"),
-        lt(pluginEventDeliveries.nextAttemptAt, HELD_UNTIL),
-      ))
-      .all();
-    return pending.map((row): EventDelivery => ({ type: "plugins.deliver", deliveryId: row.id }));
+      ))] : []),
+      // A redelivered event re-sends only deliveries still waiting (never the held ones).
+      db.select({ id: pluginEventDeliveries.id, eventId: pluginEventDeliveries.eventId })
+        .from(pluginEventDeliveries)
+        .where(and(
+          sql`${pluginEventDeliveries.eventId} IN (SELECT CAST(value AS TEXT) FROM json_each(${eventIds}))`,
+          eq(pluginEventDeliveries.status, "pending"),
+          lt(pluginEventDeliveries.nextAttemptAt, HELD_UNTIL),
+        )),
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    const pending = results[results.length - 1] as Array<{ id: string; eventId: string }>;
+    return pending.map((row): FannedOutDelivery => ({ type: "plugins.deliver", deliveryId: row.id, eventId: row.eventId }));
   },
 };
 
