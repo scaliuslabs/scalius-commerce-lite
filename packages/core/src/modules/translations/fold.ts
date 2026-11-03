@@ -75,15 +75,32 @@ function presenceRowsCondition(scope: TranslationScope, alias: string): SQL {
 /**
  * The translations of one resource row a presence resolves, as JSON text
  * (`[{"l":locale,"m":market,"f":"<fields JSON>"}]`), or NULL without any.
- * Declares `tr:locales`; the reader declares the resource ids it resolves
+ * With `keys` only those fields are folded (a card's name, not its
+ * description): the same chain for them, a fraction of the bytes. Declares
+ * `tr:locales`; the reader declares the resource ids it resolves
  * (`declareTranslated`).
  */
-export function translationRowsSql(scope: TranslationScope, type: TranslatableResourceType, column: SQLWrapper): SQL<string | null> {
+export function translationRowsSql(
+  scope: TranslationScope,
+  type: TranslatableResourceType,
+  column: SQLWrapper,
+  keys?: readonly string[],
+): SQL<string | null> {
   deps.translationLocales();
   const id = qualifiedReference(column);
-  return sql<string | null>`(SELECT '[' || group_concat(json_object('l', tr_row.locale, 'm', tr_row.market_id, 'f', tr_row.fields), ',') || ']'
+  return sql<string | null>`(SELECT '[' || group_concat(json_object('l', tr_row.locale, 'm', tr_row.market_id, 'f', ${foldedFields(keys)}), ',') || ']'
     FROM translations AS tr_row
     WHERE tr_row.resource_type = ${typeLiteral(type)} AND tr_row.resource_id = ${id} AND ${presenceRowsCondition(scope, "tr_row")})`;
+}
+
+const FIELD_KEY = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
+/** The folded `f`: the whole fields text, or an object of the named fields (literal keys: no bound parameter). */
+function foldedFields(keys: readonly string[] | undefined): SQL {
+  if (!keys) return sql`tr_row.fields`;
+  const unique = [...new Set(keys)];
+  if (unique.length === 0 || unique.some((key) => !FIELD_KEY.test(key))) throw new Error("Translation fold keys are field names.");
+  return sql.raw(`json_object(${unique.map((key) => `'${key}', json_extract(tr_row.fields, '$.${key}')`).join(", ")})`);
 }
 
 /**

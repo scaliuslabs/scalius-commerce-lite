@@ -135,9 +135,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             ...(translation ? {
                 trRows: productTranslationRowsSql(translation, products.id),
                 trSlug: localizedSlugSql(translation, "product", products.id),
-                categoryTrRows: translationRowsSql(translation, "category", categories.id),
+                categoryTrRows: translationRowsSql(translation, "category", categories.id, Object.values(CATEGORY_PAGE_FIELDS)),
                 categoryTrSlug: localizedSlugSql(translation, "category", categories.id),
-                brandTrRows: translationRowsSql(translation, "brand", brands.id),
+                brandTrRows: translationRowsSql(translation, "brand", brands.id, ["name"]),
                 brandTrSlug: localizedSlugSql(translation, "brand", brands.id),
             } : {}),
             discountType: products.discountType,
