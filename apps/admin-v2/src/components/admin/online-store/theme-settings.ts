@@ -103,27 +103,14 @@ export function themeColorSets(theme: StorefrontThemeDocument): StorefrontThemeC
  */
 function withDarkColorsStored(theme: StorefrontThemeDocument, tokens: Partial<StorefrontThemeTokens>): StorefrontThemeDocument {
   const next = { ...theme.tokens, ...tokens };
-  const darkColors = next.darkColors ?? (storefrontThemeShowsDarkColors(next) ? madeDarkColors(next.colors) : null);
+  const darkColors = next.darkColors ?? (storefrontThemeShowsDarkColors(next) ? storefrontDarkPalette(next.colors) : null);
   return { ...theme, tokens: { ...next, darkColors } };
-}
-
-/**
- * Dark colours this editor made from the colours, by identity: they still
- * count as made while a light colour is half typed (not yet #rrggbb).
- */
-const MADE_DARK_COLORS = new WeakSet<object>();
-
-function madeDarkColors(colors: StorefrontThemeTokens["colors"]): StorefrontThemeTokens["colors"] {
-  const dark = storefrontDarkPalette(colors);
-  MADE_DARK_COLORS.add(dark);
-  return dark;
 }
 
 /** Whether the dark colours are the ones made from the colours: they follow the colours until the merchant edits them. */
 export function darkColorsFollowColors(theme: StorefrontThemeDocument): boolean {
   const dark = theme.tokens.darkColors;
-  return dark !== null && (MADE_DARK_COLORS.has(dark)
-    || (allThemeColorsValid(theme.tokens.colors) && storefrontDarkColorsAreMade(theme.tokens.colors, dark)));
+  return dark !== null && storefrontDarkColorsAreMade(theme.tokens.colors, dark);
 }
 
 export function setColorScheme(theme: StorefrontThemeDocument, colorScheme: StorefrontColorScheme): StorefrontThemeDocument {
@@ -158,15 +145,16 @@ export function cardForBackground(theme: StorefrontThemeDocument, background: st
 }
 
 /**
- * The document with one role's colour set on every token of that role, in
- * one colour set. The dark colours' card keeps its own step from their page.
+ * The document with one role's colour (a complete #rrggbb: the fields commit
+ * nothing else) set on every token of that role, in one colour set. The dark
+ * colours' card keeps its own step from their page.
  */
 export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string, set: StorefrontThemeColorSet = "colors"): StorefrontThemeDocument {
   const current = theme.tokens[set];
   if (!current) return theme;
   const colors = { ...current };
   if (role === "background") {
-    const card = set === "colors" || !isStorefrontThemeHexColor(value) || !isStorefrontThemeHexColor(current.background)
+    const card = set === "colors"
       ? cardForBackground(theme, value)
       : channelsHex(hexChannels(value).map((channel, index) => channel + hexChannels(current.card)[index]! - hexChannels(current.background)[index]!));
     colors.background = value;
@@ -177,7 +165,7 @@ export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, v
   }
   // Dark colours made from the colours follow a light colour edit; ones the merchant edited stay.
   const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
-    ? madeDarkColors(colors as StorefrontThemeTokens["colors"])
+    ? storefrontDarkPalette(colors)
     : theme.tokens.darkColors;
   return { ...theme, tokens: { ...theme.tokens, darkColors, [set]: colors } };
 }
@@ -332,7 +320,7 @@ export function darkColorsEdited(theme: StorefrontThemeDocument): boolean {
 
 /** The document with its dark colours made again from its colours. */
 export function regenerateDarkColors(theme: StorefrontThemeDocument): StorefrontThemeDocument {
-  return { ...theme, tokens: { ...theme.tokens, darkColors: madeDarkColors(theme.tokens.colors) } };
+  return { ...theme, tokens: { ...theme.tokens, darkColors: storefrontDarkPalette(theme.tokens.colors) } };
 }
 
 /**
@@ -403,18 +391,7 @@ export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
 
 /** An app template applied to the document (`applyStorefrontAppTemplate`): its look, skins and homepage sections. */
 export function applyAppTemplate(template: AppTemplateEntry, current: StorefrontThemeDocument): StorefrontThemeDocument {
-  return withFollowingDarkColors(current, applyStorefrontAppTemplate(current, template.key, template.theme));
-}
-
-/**
- * A look applied over a draft whose dark colours still follow its colours
- * (made by this editor, a light colour perhaps half typed): the kept dark
- * colours are made again from the look's colours, never left stale.
- */
-function withFollowingDarkColors(current: StorefrontThemeDocument | null, applied: StorefrontThemeDocument): StorefrontThemeDocument {
-  const kept = applied.tokens.darkColors;
-  if (!current || kept === null || !darkColorsFollowColors(current) || !sameFormValue(kept, current.tokens.darkColors)) return applied;
-  return { ...applied, tokens: { ...applied.tokens, darkColors: madeDarkColors(applied.tokens.colors) } };
+  return applyStorefrontAppTemplate(current, template.key, template.theme);
 }
 
 /** Each template's complete document, for previews and matching. */
@@ -435,7 +412,7 @@ export function selectedTemplate(theme: StorefrontThemeDocument): StorefrontTemp
  * slides, chosen categories and collections, and what `/` shows.
  */
 export function applyTemplate(id: StorefrontTemplateId, current: StorefrontThemeDocument | null): StorefrontThemeDocument {
-  return withFollowingDarkColors(current, storefrontThemeWithContent(storefrontTemplateTheme(id), current));
+  return storefrontThemeWithContent(storefrontTemplateTheme(id), current);
 }
 
 // ─── Typography ───────────────────────────────────────────────────────────
