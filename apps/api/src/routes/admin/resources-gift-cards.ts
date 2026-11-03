@@ -186,18 +186,12 @@ function appLimitRefusal(c: Context, pluginId: string | undefined, limitMinor: n
 }
 
 const giftCardId = z.object({ id: z.string().min(4).max(80) });
-/**
- * The durable key of an issue or adjustment. The sealed app API keeps the
- * header optional for apps (a keyless app call acts as it always did, with a
- * fresh key); any other caller (staff, an agent, MCP, the CLI) must send one,
- * so its retry after a lost response never issues or moves value twice.
- */
-async function valueRequestKey(c: Context, operationId: string, key: string | undefined): Promise<string> {
-  if (!key && !c.get("pluginPrincipal")) {
-    throw new ValidationError("Send an Idempotency-Key header: issuing or moving gift-card value is never repeated by a retry.");
-  }
-  return scopedRequestKey(c, operationId, key);
-}
+/** Issuing or moving value: the key is required, so a retry after a lost response never issues twice. */
+const valueKeyHeaders = z.object({
+  "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].unwrap().openapi({
+    description: "Required: one key makes one change; a repeat returns the first.",
+  }),
+});
 const expectedRevision = z.number().int().positive().openapi({ description: "The card's `revision` you read; a card changed since is refused with 409." });
 const giftCardEnvelope = successEnvelope(z.object({ giftCard: GiftCardResource }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
@@ -259,7 +253,7 @@ app.openapi(createRoute({
   summary: "Issue a gift card",
   description: "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. An app's `notify` reaches only the owning customer's own contact (set `customerId`, no recipient email or phone), and what one app issues and tops up per UTC date stays within the store's limit (403 `app_gift_card_limit`, Gift cards > Settings). Send an Idempotency-Key: a repeat returns the first card.",
   request: {
-    headers: idempotencyKeyHeaderSchema,
+    headers: valueKeyHeaders,
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
@@ -282,7 +276,6 @@ app.openapi(createRoute({
 }), async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  const requestKey = await valueRequestKey(c, "dashboard.resources.gift_cards.create", c.req.valid("header")["idempotency-key"]);
   const actorUserId = actorId(c);
   const [currency, settings] = await Promise.all([readStoreCurrency(db), readGiftCardSettings(db)]);
   if (!settings.ok) throw new ServiceUnavailableError("Gift-card settings can't be read right now. Try again.");
@@ -309,7 +302,7 @@ app.openapi(createRoute({
     : [];
   let outboxId: string | null = null;
   const result = await issueManualGiftCard(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
-    requestKey,
+    requestKey: await scopedRequestKey(c, "dashboard.resources.gift_cards.create", c.req.valid("header")["idempotency-key"]),
     amountMinor: body.amountMinor,
     currencyCode: currency.code,
     expiresAt,
@@ -344,7 +337,7 @@ app.openapi(createRoute({
   description: "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. An app adds value only to cards in the store currency, within its limit per UTC date (403 `app_gift_card_limit`). Send an Idempotency-Key: a repeat moves the balance once.",
   request: {
     params: giftCardId,
-    headers: idempotencyKeyHeaderSchema,
+    headers: valueKeyHeaders,
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
@@ -362,7 +355,6 @@ app.openapi(createRoute({
   const db = c.get("db");
   const { id } = c.req.valid("param");
   const body = c.req.valid("json");
-  const requestKey = await valueRequestKey(c, "dashboard.resources.gift_cards.adjust", c.req.valid("header")["idempotency-key"]);
   const [card, store] = await Promise.all([getStaffGiftCardSummary(db, id), readStoreCurrency(db)]);
   assertIncrement(body.amountMinor, card.currencyCode, priceIncrementForCurrency(store, card.currencyCode), "amountMinor");
   // An app's top-up counts toward its daily limit, kept in the store currency.
@@ -380,7 +372,7 @@ app.openapi(createRoute({
     giftCardId: id,
     amountMinor: body.amountMinor,
     reason: body.reason,
-    requestKey,
+    requestKey: await scopedRequestKey(c, "dashboard.resources.gift_cards.adjust", c.req.valid("header")["idempotency-key"]),
     actorUserId: actorId(c),
     expectedVersion: body.expectedRevision,
     ...(limit ? { extraStatements: appValueStatements(c, limit.pluginId, body.amountMinor, limit.limitMinor) } : {}),
