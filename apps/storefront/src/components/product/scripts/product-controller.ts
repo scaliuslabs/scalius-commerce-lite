@@ -907,12 +907,17 @@ function updateVariantImage() {
 
 let warranty: { box: HTMLElement; byVariant: Record<string, string | null> } | null = null;
 
-/** Reads the warranty rows' SKU map once per page (`warranty`); a broken one shows the rows as drawn. */
+/**
+ * Reads the warranty rows' SKU map once per page (`warranty`). Without one
+ * (every SKU shares one warranty: WarrantyRow.astro) or with a broken one,
+ * the rows stay as drawn.
+ */
 function readWarranty() {
   const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
-  if (!box) return null;
+  const map = box?.dataset.sxWarrantyByVariant;
+  if (!box || !map) return null;
   try {
-    return { box, byVariant: JSON.parse(box.dataset.sxWarrantyByVariant ?? "{}") as Record<string, string | null> };
+    return { box, byVariant: JSON.parse(map) as Record<string, string | null> };
   } catch {
     return null;
   }

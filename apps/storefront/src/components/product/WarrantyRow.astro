@@ -6,9 +6,11 @@
 //
 // A SKU inherits the product's warranty, has its own, or none. The row is
 // drawn once per warranty the page's SKUs have; the chosen SKU's shows, the
-// others are `hidden`. `data-sx-warranty-by-variant` on the wrapper maps each
-// variant id to its row's `data-sx-warranty-id` (null: no row), so the buy form
-// shows the chosen SKU's row when the buyer picks another. The markers are
+// others are `hidden`. When the SKUs differ, `data-sx-warranty-by-variant` on
+// the wrapper maps each variant id to its row's `data-sx-warranty-id` (null: no
+// row), so the buy form shows the chosen SKU's row when the buyer picks
+// another; when every SKU shares one warranty there is no map (its one row
+// stays as drawn, whatever the choice). The markers are
 // host-only (`data-sx-*`: app markup in the buy box never carries them).
 //
 // Mount (ProductBuyBox.astro, in ProductSummary's `after-actions` slot):
@@ -40,11 +42,13 @@ const shownId = initialVariantId !== null && initialVariantId in perSku.byVarian
   : sharedIds.size === 1 ? [...sharedIds][0] ?? null : null;
 const rows: Array<{ id: string; warranty: ProductWarrantyView; hidden: boolean }> =
   [...perSku.byId].map(([id, warranty]) => ({ id, warranty, hidden: id !== shownId }));
+// Every SKU with the same warranty: one row for every choice, no map to swap by.
+const byVariant = sharedIds.size > 1 ? JSON.stringify(perSku.byVariant) : undefined;
 const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(warrantyTerms(warranty), copy);
 ---
 
 {rows.length > 0 && (
-  <div data-sx-warranty-rows data-sx-warranty-by-variant={JSON.stringify(perSku.byVariant)}>
+  <div data-sx-warranty-rows data-sx-warranty-by-variant={byVariant}>
   {rows.map(({ id, warranty, hidden }) => (
   <details class="group mt-3 rounded-lg border border-border bg-card" data-sx-warranty-row data-sx-warranty-id={id} hidden={hidden}>
     <summary class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
