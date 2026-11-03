@@ -6,6 +6,7 @@ import { getRuntimeStorefrontUrl } from "./api/runtime";
 import { serverPagePath } from "./server-presence";
 import { normalizeAbsoluteStorefrontOriginUrl } from "./storefront-origin";
 import { parseSitemapPage, SITEMAP_PAGE_SIZE, type SitemapPageOptions } from "@scalius/shared/sitemap-pagination";
+import { isSitemapAfterToken } from "@scalius/shared/public-cursor";
 
 export interface SitemapUrl {
   loc: string;
@@ -20,15 +21,25 @@ export interface SitemapIndexEntry {
 /** Catalog XML shares one bounded read, query validation and empty-page contract. */
 export async function paginatedSitemapResponse<T extends { updatedAt: string | null }>(
   url: URL,
-  readPage: (options: SitemapPageOptions) => Promise<{ data: T[] } | null>,
+  readPage: (options: SitemapPageOptions & { after?: string }) => Promise<{ data: T[] } | "not_found" | null>,
   resourcePath: (row: T) => string,
   unavailableMessage: string,
+  /** Pages after the first start at the signed `after` the index lists (the product sitemap). */
+  options: { boundaries?: boolean } = {},
 ): Promise<Response> {
   const page = parseSitemapPage(url.searchParams.get("page"));
   if (page === null) return new Response("Invalid page parameter", { status: 400 });
+  let after: string | undefined;
+  if (options.boundaries && page > 1) {
+    // A page the index never listed is not found, before any read.
+    const value = url.searchParams.get("after");
+    if (!value || !isSitemapAfterToken(value)) return new Response("Page not found", { status: 404 });
+    after = value;
+  }
   try {
     const baseUrl = getBaseUrl();
-    const response = await readPage({ page, limit: SITEMAP_PAGE_SIZE });
+    const response = await readPage({ page, limit: SITEMAP_PAGE_SIZE, ...(after ? { after } : {}) });
+    if (response === "not_found") return new Response("Page not found", { status: 404 });
     if (!response) return xmlDataUnavailableResponse(unavailableMessage);
     if (page > 1 && response.data.length === 0) return new Response("Page not found", { status: 404 });
     return new Response(generateSitemap(response.data.map((row) => ({

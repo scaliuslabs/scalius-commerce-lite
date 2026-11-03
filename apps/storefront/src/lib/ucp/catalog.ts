@@ -3,6 +3,7 @@ import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { AGENTS_CHANNEL_ID } from "@scalius/shared/sales-channels";
+import { isPublicFeedCursor } from "@scalius/shared/public-cursor";
 import { getLayoutData, type CurrencyData, type LayoutData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
 import { renderForPresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -937,8 +938,7 @@ function parsePagination(value: unknown) {
   const cursorValue = pagination.cursor;
   if (cursorValue !== undefined && (
     typeof cursorValue !== "string" ||
-    cursorValue.length > 512 ||
-    !/^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/.test(cursorValue)
+    !isPublicFeedCursor(cursorValue)
   )) {
     return { valid: false as const, limit };
   }

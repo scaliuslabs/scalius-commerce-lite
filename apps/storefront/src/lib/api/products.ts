@@ -249,7 +249,7 @@ export interface FeedProductPage {
 type SitemapProductListPayload = {
   products?: SitemapProduct[];
   data?: SitemapProduct[];
-  pagination?: PaginatedResponse<SitemapProduct>["pagination"];
+  pagination?: unknown;
 };
 
 type OptionalFeedProductsSdk = {
@@ -311,7 +311,7 @@ function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | nu
 
 function normalizeSitemapProductListPayload(
   payload: unknown,
-): PaginatedResponse<SitemapProduct> | null {
+): { data: SitemapProduct[]; pagination: unknown } | null {
   const candidate =
     unwrapData<SitemapProductListPayload>(payload) ??
     unwrapEnvelope<SitemapProductListPayload>(payload) ??
@@ -496,33 +496,74 @@ export async function getFeedProducts(
   );
 }
 
+/**
+ * One page of the product sitemap. A page after the first needs the `after`
+ * the sitemap index listed for it; the API refuses any other ("not_found":
+ * the page was never advertised).
+ */
 export async function getSitemapProducts(
-  options: Pick<ProductListOptions, "page" | "limit"> = {},
-): Promise<PaginatedResponse<SitemapProduct> | null> {
-  const normalizedOptions = normalizeProductListOptions(options);
-  const queryString = buildCanonicalQueryString(normalizedOptions, {
-    defaultParams: { page: 1, limit: 100 },
-  });
-  const cacheKey = `sitemap_products_${queryString || "default"}`;
+  options: { page?: number; limit?: number; after?: string } = {},
+): Promise<{ data: SitemapProduct[] } | "not_found" | null> {
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 100;
+  const after = options.after;
+  const cacheKey = `sitemap_products_page=${page}&limit=${limit}${after ? `&after=${after}` : ""}`;
 
   return withEdgeCache(
     cacheKey,
     async () => {
       try {
-        const { data, error } = await getApiV1ProductsSitemap({
+        const { data, error, response } = await getApiV1ProductsSitemap({
           client: getConfiguredSdkClient(),
-          query: {
-            page: normalizedOptions.page,
-            limit: normalizedOptions.limit,
-          },
+          query: { page, limit, ...(after ? { after } : {}) },
         });
         if (error) {
+          if (response?.status === 400) return "not_found" as const;
           console.error("Error fetching sitemap products:", error);
           return null;
         }
-        return normalizeSitemapProductListPayload(data);
+        const payload = normalizeSitemapProductListPayload(data);
+        return payload ? { data: payload.data } : null;
       } catch (error: unknown) {
         console.error("Error fetching sitemap products:", error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
+  );
+}
+
+/** The sitemap index's product read: how many pages, and the `after` of each page after the first. */
+export interface SitemapProductOutline {
+  total: number;
+  totalPages: number;
+  pages: Array<{ page: number; after: string }>;
+}
+
+export async function getSitemapProductsOutline(limit: number): Promise<SitemapProductOutline | null> {
+  return withEdgeCache(
+    `sitemap_products_outline_limit=${limit}`,
+    async () => {
+      try {
+        const { data, error } = await getApiV1ProductsSitemap({
+          client: getConfiguredSdkClient(),
+          query: { limit, outline: "true" },
+        });
+        if (error) {
+          console.error("Error fetching the sitemap product outline:", error);
+          return null;
+        }
+        const pagination = (unwrapData<SitemapProductListPayload>(data) ?? unwrapEnvelope<SitemapProductListPayload>(data))?.pagination as
+          | { total?: unknown; totalPages?: unknown; pages?: unknown }
+          | undefined;
+        if (!pagination || typeof pagination.total !== "number" || typeof pagination.totalPages !== "number" || !Array.isArray(pagination.pages)) {
+          return null;
+        }
+        const pages = pagination.pages.filter((entry): entry is { page: number; after: string } =>
+          Boolean(entry) && typeof (entry as { page?: unknown }).page === "number" && typeof (entry as { after?: unknown }).after === "string");
+        return { total: pagination.total, totalPages: pagination.totalPages, pages };
+      } catch (error: unknown) {
+        console.error("Error fetching the sitemap product outline:", error);
         return null;
       }
     },

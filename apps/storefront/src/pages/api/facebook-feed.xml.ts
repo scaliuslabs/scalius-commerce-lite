@@ -2,7 +2,9 @@
  * Product Feed Endpoint
  * Generates XML RSS 2.0 feeds for the canonical Google/Base catalog feed
  * and the Facebook/Meta compatibility catalog feed.
- * Supports bounded product continuation for large catalogs (?cursor=...&limit=1000)
+ * Supports bounded product continuation for large catalogs (?cursor=...&limit=1000).
+ * A request reads at most the plan's `feedProductsPerRequest` products, and a
+ * cursor is accepted only when the API signed it (`@scalius/shared/public-cursor`).
  */
 
 import type { APIRoute, APIContext } from "astro";
@@ -14,6 +16,7 @@ import type { ShippingMethod } from "@/lib/api/types";
 import { shippingMethodsForProfile, shippingMethodsForUnitPrice, splitDeliveryRates } from "@/lib/delivery-facts";
 import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
 import { formatCatalogFeedAmount } from "@scalius/shared/catalog-feed-money";
+import { isPublicFeedCursor } from "@scalius/shared/public-cursor";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getRuntimePresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { resolveMediaUrl } from "@/lib/media-url";
@@ -33,6 +36,7 @@ import {
 export const prerender = false;
 
 const DEFAULT_LIMIT = 1000;
+/** The largest `limit` the URL may spell; the plan's `feedProductsPerRequest` then bounds what is read. */
 const MAX_LIMIT = 5000;
 const API_FEED_PAGE_SIZE = 100;
 const FEED_XML_HEADERS = {
@@ -358,6 +362,18 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
     format === "meta" ? "Facebook product feed" : "Product catalog feed";
 
   return async ({ url }: APIContext) => {
+    // The query is checked before any read: a refused request costs nothing.
+    if (url.searchParams.has("page")) {
+      return new Response("Page pagination is retired; follow the opaque cursor continuation link.", { status: 400 });
+    }
+    const cursor = url.searchParams.get("cursor")?.trim() || undefined;
+    const requestedLimit = parsePositiveIntegerParam(url.searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT);
+    if (requestedLimit === null) {
+      return new Response("Invalid limit parameter", { status: 400 });
+    }
+    if (cursor && !isPublicFeedCursor(cursor)) {
+      return new Response("Invalid cursor parameter", { status: 400 });
+    }
     try {
       let baseUrl: string;
       try {
@@ -389,24 +405,6 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         });
       }
 
-      if (url.searchParams.has("page")) {
-        return new Response("Page pagination is retired; follow the opaque cursor continuation link.", { status: 400 });
-      }
-      const cursor = url.searchParams.get("cursor")?.trim() || undefined;
-      const limitParam = url.searchParams.get("limit");
-      const limit = parsePositiveIntegerParam(
-        limitParam,
-        DEFAULT_LIMIT,
-        MAX_LIMIT,
-      );
-
-      if (limit === null) {
-        return new Response("Invalid limit parameter", { status: 400 });
-      }
-      if (cursor && (cursor.length > 512 || !/^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/.test(cursor))) {
-        return new Response("Invalid cursor parameter", { status: 400 });
-      }
-
       const [layoutData, shippingMethods] = await Promise.all([
         getLayoutData(),
         getShippingMethods(),
@@ -417,6 +415,12 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         );
       }
       setRuntimeImageCdnPolicy(layoutData.media);
+      // One request reads at most the plan's products, whatever `limit` asks.
+      const planCap = layoutData.platform?.feedProductsPerRequest;
+      const limit = Math.min(
+        requestedLimit,
+        typeof planCap === "number" && Number.isSafeInteger(planCap) && planCap > 0 ? planCap : DEFAULT_LIMIT,
+      );
       const currencyCode = layoutData.currency?.code ?? "BDT";
       // Feed prices are what checkout charges: at the store's increment.
       const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, layoutData.currency?.priceIncrementMinor);
@@ -450,8 +454,8 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
 
       const headers: Record<string, string> = { ...FEED_XML_HEADERS };
       if (feedWindow.cursor) {
-        const continuationUrl = new URL(url);
-        continuationUrl.searchParams.delete("page");
+        // Only the continuation's own parameters: nothing else from the request is echoed.
+        const continuationUrl = new URL(url.pathname, url.origin);
         continuationUrl.searchParams.set("cursor", feedWindow.cursor);
         continuationUrl.searchParams.set("limit", String(limit));
         headers.Link = `<${continuationUrl.toString()}>; rel="next"`;

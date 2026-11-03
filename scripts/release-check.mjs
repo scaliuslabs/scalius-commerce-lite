@@ -755,8 +755,13 @@ export async function checkSitemapChildren(locs, { storefrontOrigin, verifySitem
     const child = parts.at(-1);
     const validPresence = parts.length === 1 || (parts.length === 2 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(parts[0]));
     const query = [...url.searchParams];
-    const validQuery = query.length === 0 || (query.length === 1 && query[0][0] === "page"
-      && /^[1-9]\d*$/.test(query[0][1]) && Number.isSafeInteger(Number(query[0][1])));
+    const validPage = (entry) => entry?.[0] === "page" && /^[1-9]\d*$/.test(entry[1]) && Number.isSafeInteger(Number(entry[1]));
+    // A later product sitemap page also carries the signed boundary it starts after.
+    const validAfter = (entry) => child === "sitemap-products.xml" && entry?.[0] === "after"
+      && /^[0-9a-z]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(entry[1]) && Number(query[0]?.[1]) > 1;
+    const validQuery = query.length === 0
+      || (query.length === 1 && validPage(query[0]) && !(child === "sitemap-products.xml" && Number(query[0][1]) > 1))
+      || (query.length === 2 && validPage(query[0]) && validAfter(query[1]));
     if (!isSameOrigin(loc, storefrontOrigin) || url.username || url.password || url.hash
       || !validPresence || !childNames.has(child) || !validQuery) {
       throw new Error("Sitemap index advertises an invalid child sitemap URL.");
@@ -949,7 +954,7 @@ export function evaluateProductFeedXml(
 
 export const evaluateFacebookFeedXml = evaluateProductFeedXml;
 
-const FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
+const FEED_CURSOR_PATTERN = /^feed-v2\.[0-9a-z]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/;
 
 /**
  * Validate the feed-owned continuation rather than synthesizing offset pages.
@@ -1015,7 +1020,7 @@ export function evaluateFeedContinuationLink(
 
   const cursorValues = continuation.searchParams.getAll("cursor");
   if (cursorValues.length !== 1 || !FEED_CURSOR_PATTERN.test(cursorValues[0] ?? "")) {
-    errors.push("feed continuation URL must include exactly one opaque feed-v1 cursor.");
+    errors.push("feed continuation URL must include exactly one opaque feed-v2 cursor.");
   }
   if (initial) {
     const expectedLimit = initial.searchParams.get("limit");

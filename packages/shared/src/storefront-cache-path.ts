@@ -72,6 +72,51 @@ export function isStorefrontTrackingQueryParam(key: string): boolean {
  */
 const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["variant", "size", "color"] as const;
 
+/**
+ * Discovery files (feeds, sitemaps, robots, llms.txt, the UCP profile) read a
+ * fixed set of query parameters, or none, with their defaults. Every other
+ * parameter is dropped from their cache key and from the request their
+ * render sees, so an unknown parameter can neither split the cache (each
+ * variant is the canonical file's entry) nor reach a render. Unlike a page,
+ * a discovery file has no functional parameter beyond these.
+ */
+const DISCOVERY_QUERY_PARAMS: ReadonlyArray<{
+  readonly path: RegExp;
+  readonly params: Readonly<Record<string, string | null>>;
+}> = [
+  // Catalogue feeds: the signed continuation, the window size (default 1000),
+  // and the retired `page`, kept so the route can refuse it explicitly.
+  { path: /^\/api\/(?:product|facebook)-feed\.xml$/, params: { cursor: null, limit: "1000", page: null } },
+  // The product sitemap's later pages carry their signed boundary.
+  { path: /^\/sitemap-products\.xml$/, params: { page: "1", after: null } },
+  { path: /^\/sitemap-(?:categories|brands|collections)\.xml$/, params: { page: "1" } },
+  {
+    path: /^\/(?:sitemap\.xml|sitemap\.xsl|sitemap-static\.xml|sitemap-pages\.xml|sitemap-articles\.xml|robots\.txt|llms\.txt|blog\/feed\.xml|\.well-known\/ucp)$/,
+    params: {},
+  },
+];
+
+/**
+ * The parameters a discovery file reads, each with its default (`null`: no
+ * default), or null when `pathname` is not a discovery file.
+ */
+export function storefrontDiscoveryQueryParams(
+  pathname: string,
+): Readonly<Record<string, string | null>> | null {
+  return DISCOVERY_QUERY_PARAMS.find((entry) => entry.path.test(pathname))?.params ?? null;
+}
+
+/**
+ * Whether a parameter never reaches the cache key or the render of the page
+ * at `pathname`: an ad-click or campaign parameter anywhere, and any
+ * parameter a discovery file does not read.
+ */
+export function isStorefrontCacheIgnoredParam(pathname: string, key: string): boolean {
+  if (isStorefrontTrackingQueryParam(key)) return true;
+  const discovery = storefrontDiscoveryQueryParams(pathname);
+  return discovery !== null && !Object.hasOwn(discovery, key);
+}
+
 export function normalizeStorefrontCacheQueryValue(
   key: string,
   value: string,
@@ -95,6 +140,12 @@ function appendSortedParams(
 function getHtmlPathDefaults(
   pathname: string,
 ): Record<string, string | number> {
+  const discovery = storefrontDiscoveryQueryParams(pathname);
+  if (discovery) {
+    return Object.fromEntries(
+      Object.entries(discovery).filter((entry): entry is [string, string] => entry[1] !== null),
+    );
+  }
   if (
     /^\/categories\/[^/]+$/.test(pathname) ||
     /^\/collections\/[^/]+$/.test(pathname) ||
@@ -110,7 +161,7 @@ function getIgnoredParams(pathname: string): (key: string) => boolean {
   const productParams = /^\/products\/[^/]+$/.test(pathname)
     ? new Set<string>(PRODUCT_HTML_IGNORED_QUERY_PARAMS)
     : null;
-  return (key) => isStorefrontTrackingQueryParam(key) || Boolean(productParams?.has(key));
+  return (key) => isStorefrontCacheIgnoredParam(pathname, key) || Boolean(productParams?.has(key));
 }
 
 export function canonicalizeStorefrontHtmlCachePath(
