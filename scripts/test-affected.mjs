@@ -17,7 +17,11 @@
  *    (read with fs into the migrated images), the cache-dependency and trigger
  *    generators, the plugin manifest/ABI, the generated contracts, and the
  *    rulebook's scenario tables and drivers.
- * A change to the test setup itself runs everything. The selection then runs
+ * A change to the test setup itself runs everything. A lockfile or workspace
+ * `package.json` change selects the tests of the changed packages and of the
+ * packages that link them (`scripts/lockfile-impact.mjs`); only an unreadable
+ * lockfile, a change to the root dependencies or the root `package.json` runs
+ * everything. The selection then runs
  * through `scripts/test-runner.mjs`, so the serial files keep their own pass.
  * Suites under their own Vitest config (`tests/invariants/`) are not collected
  * here: CI runs the ones a rule cites through `node rules/cli.mjs impact` and
@@ -28,14 +32,20 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { importerNames, lockImpact, parseLock, testsOfImporters, withDependents } from "./lockfile-impact.mjs";
+
 const root = resolve(import.meta.dirname, "..");
 
-/** Changes that invalidate every selection: the runner, its config and setup, dependencies. */
+/**
+ * Changes that invalidate every selection: the runner, its config and setup, the
+ * root manifest. The lockfile and workspace manifests are not here: they select
+ * by package (`dependencySelection`), and `forceRerunTriggers` in
+ * vitest.config.ts keeps Vitest from running everything for a `package.json`.
+ */
 export const RUN_EVERYTHING = [
   /^vitest\.config\.ts$/,
   /^scripts\/test-(passes|runner|affected)\.mjs$/,
   /^package\.json$/,
-  /^pnpm-lock\.yaml$/,
   /^packages\/database\/src\/testing\/migrated-image-setup\.ts$/,
   /^apps\/storefront\/scripts\/test-build-id-setup\.mjs$/,
 ];
@@ -135,11 +145,43 @@ export function changedFiles(base) {
   return [...new Set([...diff.split("\n"), ...untracked.split("\n")].filter(Boolean))];
 }
 
+/**
+ * The tests of the packages a lockfile or workspace `package.json` change
+ * reaches. `lock` carries the lockfile text at the base (`base`) and now
+ * (`head`); without the head the packages are unknown and everything runs.
+ * Returns undefined when no dependency file changed.
+ */
+export function dependencySelection(changed, testFiles, lock = {}) {
+  const lockChanged = changed.includes("pnpm-lock.yaml");
+  const head = parseLock(lock.head);
+  const names = head ? importerNames(head) : [];
+  const manifests = names.filter((name) => name !== "." && changed.includes(`${name}/package.json`));
+  const stray = changed.some((file) => /^(?:apps|packages|plugins)\/[^/]+\/package\.json$/.test(file) && !names.includes(file.slice(0, -"/package.json".length)));
+  if (!lockChanged && manifests.length === 0 && !stray) return undefined;
+  const rule = lockChanged ? "pnpm lockfile" : "workspace package.json";
+  if (!head) return { all: true, files: [], rule, reason: "the lockfile could not be read" };
+  if (stray) return { all: true, files: [], rule, reason: "a workspace package.json is not in the lockfile" };
+  const importers = new Set(manifests);
+  if (lockChanged) {
+    const impact = lockImpact(lock.base, lock.head);
+    if (impact.all) return { all: true, files: [], rule, reason: impact.reason };
+    if (impact.rootDirect) return { all: true, files: [], rule, reason: "a root dependency changed" };
+    for (const name of impact.importers) importers.add(name);
+  }
+  return { all: false, files: testsOfImporters(withDependents(importers, head), names, testFiles), rule };
+}
+
 /** The rule-selected test files, or "all" when the test setup itself changed. */
-export function ruleSelection(changed, testFiles) {
+export function ruleSelection(changed, testFiles, options = {}) {
   if (changed.some((file) => RUN_EVERYTHING.some((pattern) => pattern.test(file)))) return { all: true, files: [], rules: ["test setup"] };
   const files = new Set();
   const rules = [];
+  const dependencies = dependencySelection(changed, testFiles, options.lock);
+  if (dependencies?.all) return { all: true, files: [], rules: [`dependencies: ${dependencies.reason}`] };
+  if (dependencies) {
+    rules.push(dependencies.rule);
+    for (const file of dependencies.files) files.add(file);
+  }
   for (const rule of PATH_RULES) {
     if (!changed.some((file) => rule.when.some((pattern) => pattern.test(file)))) continue;
     rules.push(rule.name);
@@ -150,6 +192,13 @@ export function ruleSelection(changed, testFiles) {
   // A changed test file always runs.
   for (const file of changed) if (TEST_FILE.test(file) && testFiles.includes(file)) files.add(file);
   return { all: false, files: [...files], rules };
+}
+
+/** The lockfile at the base and now, read only when a dependency file changed. */
+function lockTexts(base, changed) {
+  if (!changed.some((file) => file === "pnpm-lock.yaml" || /(^|\/)package\.json$/.test(file))) return {};
+  const path = join(root, "pnpm-lock.yaml");
+  return { head: existsSync(path) ? readFileSync(path, "utf8") : undefined, base: git(["show", `${base}:pnpm-lock.yaml`]) };
 }
 
 function vitestBin() {
@@ -203,7 +252,7 @@ async function main() {
 
   const changed = changedFiles(base);
   const testFiles = (git(["ls-files", "--cached", "--others", "--exclude-standard"]) ?? "").split("\n").filter((file) => TEST_FILE.test(file));
-  const rules = ruleSelection(changed, testFiles);
+  const rules = ruleSelection(changed, testFiles, { lock: lockTexts(base, changed) });
   const runner = [join(root, "scripts/test-runner.mjs")];
 
   if (rules.all) {
