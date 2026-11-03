@@ -261,6 +261,12 @@ body {
   display: none !important;
 }
 
+/* The store's switch after a header skin that places no slot waits until the
+   head script has put it in the skin's <header>: it never shifts the page. */
+[data-storefront-header] > [data-sx-host-color-scheme-toggle]:not([data-sx-placed]) {
+  display: none !important;
+}
+
 /* One keyboard focus indicator for every control (WCAG 2.4.7). It is
    unlayered on purpose so it wins over `outline-none` utilities and no
    control can drop its focus ring by accident. Text fields keep their own

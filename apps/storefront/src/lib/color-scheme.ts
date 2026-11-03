@@ -15,7 +15,8 @@
  *   it adds to a header skin) yields to one a header or footer skin, or an
  *   app in their slots, drew: a page shows one (`data-color-scheme-switch-yields`
  *   then frees the room the header kept for it). One drawn after a skin
- *   that places no slot moves into the skin's `<header>` (its landmark).
+ *   that places no slot stays hidden until it is in the skin's `<header>`
+ *   (its landmark), so it never shifts the page.
  *
  * It is its own script, and a failure inside it is swallowed: nothing else
  * on the page waits on it. Without JavaScript the theme's scheme stands
@@ -62,7 +63,7 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
         + 'if(o)r.setAttribute("data-color-scheme-switch-yields","");'
         + 'document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
         + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d||h.parentElement!==d)return;'
-        + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h)})});'
+        + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h);h.setAttribute("data-sx-placed","")})});'
       : "",
     toggle
       ? 'document.addEventListener("click",function(e){var b=e.target instanceof Element?e.target.closest("[data-color-scheme-toggle]"):null;'
