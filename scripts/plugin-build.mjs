@@ -434,7 +434,7 @@ export async function packStorefront(contract, manifest, source) {
       } catch {
         // Markup the storefront would show nothing of is not this check's to name.
       }
-      if (oversized.length > 0) fail(`${result.id} gives the island(s) ${oversized.map((name) => name || "(unnamed)").join(", ")} props over ${limits.islandPropsBytes} bytes (islandPropsBytes): the storefront leaves them out and the island mounts with none. Pass less, or load the rest with context.fetchApp.`);
+      if (oversized.length > 0) fail(`${result.id} gives the island(s) ${oversized.join(", ")} props over ${limits.islandPropsBytes} bytes (islandPropsBytes): the storefront leaves them out and the island mounts with none. Pass less, or load the rest with context.fetchApp.`);
       if (job?.kind === "component") {
         // A component embeds nothing: the storefront drops what it places.
         const dropped = contract.splitStorefrontEmbeds(result.html, contract.storefrontEmbedRule("component")).dropped;

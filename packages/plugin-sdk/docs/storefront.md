@@ -136,7 +136,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 
   | Name | Draws | Renders when |
   | --- | --- | --- |
-  | `details` | The store's details tabs: the description, the merchant's extra tabs and the key features (when the buy form does not list them). A skin that places it does not draw `descriptionHtml` itself. | The product has any of them |
+  | `details` | The store's details tabs: the description, the merchant's extra tabs and the key features (when the buy form does not list them). A skin that places it does not draw `descriptionHtml` itself. | The product has any of them, even where the theme's template lists no details module |
   | `spec_table` | The specification table | The product has specifications |
   | `key_attributes` | The key-spec highlights | The table has more rows than key specs, and the theme's buy box lists no facts column |
   | `about_bullets` | "About this item": the key features | The theme's buy box does not list the features (`<BuyForm />` does then) |

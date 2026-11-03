@@ -629,9 +629,11 @@ const productEmbeds: EmbedRenderers = {
   recommendations: () => recommendations.products.length > 0
     ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode } }
     : null,
+  // A placed details module draws whenever it has something, even where the
+  // template lists none: the skin that places it draws no description itself.
   "product_module": ({ data }) => {
     const module = productModuleOf(data.name);
-    return module && drawnModules.includes(module)
+    return module && (drawnModules.includes(module) || (module === "description" && detailsContent))
       ? { component: ProductPageModule as EmbedRender["component"], props: moduleProps(module) }
       : null;
   },

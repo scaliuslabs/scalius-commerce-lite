@@ -146,7 +146,8 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * - `details`: the store's details tabs as the page draws them: the
  *   description, the merchant's extra tabs and the key features (when the
  *   buy form does not list them). A skin that places it does not draw
- *   `descriptionHtml` itself.
+ *   `descriptionHtml` itself; it draws whenever the product has any of
+ *   them, even where the template lists no details module.
  * - `spec_table`: the specification table; `key_attributes`: its key-spec
  *   highlights (only when the table has more rows than key specs and the
  *   theme's buy box lists no facts column).

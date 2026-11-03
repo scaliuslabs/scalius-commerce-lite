@@ -60,7 +60,7 @@ export function storefrontShown(html: string, pluginId: string): { html: string;
 function islandPropsIssues(html: string): string[] {
   const result = sanitizePluginHtml(html, { pluginId: "app.check" });
   if (!result.ok) return [];
-  return result.oversizedProps.map((island) => `The island ${island ? `"${island}"` : "(unnamed)"} gets no props: its data-props is over ${STOREFRONT_COMPONENT_LIMITS.islandPropsBytes} bytes (islandPropsBytes). Pass less, or load the rest from the app's routes with context.fetchApp.`);
+  return result.oversizedProps.map((island) => `The island ${island} gets no props: its data-props is over ${STOREFRONT_COMPONENT_LIMITS.islandPropsBytes} bytes (islandPropsBytes). Pass less, or load the rest from the app's routes with context.fetchApp.`);
 }
 
 /** Assert declared header capabilities without requiring search, nav or account. */
@@ -88,7 +88,7 @@ const SAMPLE_SPECIFICATIONS: StorefrontSpecification[] = [
 
 /** A card's key specs and its fact lines, written from the same rows as the store writes them. */
 function cardKeySpecs(specifications: readonly StorefrontSpecification[]): Pick<StorefrontProductCard, "facts" | "keySpecs"> {
-  const keySpecs = specifications.filter((row) => row.keySpec).slice(0, 3).map(({ label, value, unit }) => ({ label, value, unit }));
+  const keySpecs = specifications.filter((row) => row.keySpec).slice(0, 4).map(({ label, value, unit }) => ({ label, value, unit }));
   return { facts: keySpecs.map((row) => `${row.label}: ${row.value}`), keySpecs };
 }
 
@@ -460,7 +460,14 @@ export function fixtureStore(name: FixtureStoreName): FixtureStore {
 export function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[] {
   const split = splitStorefrontEmbeds(html, storefrontEmbedRule(target));
   const issues = split.missing.map((kind) => `A ${target} skin must place <scalius-embed kind="${kind}"> (the SDK's ${kind === "buy_form" ? "<BuyForm />" : kind}); without it the store draws its own.`);
-  if (split.dropped > 0) issues.push(`${split.dropped} embed(s) render nothing here: ${target} allows ${Object.keys(storefrontEmbedRule(target).allowed).join(", ") || "none"}.`);
+  if (split.dropped > 0) {
+    const rule = storefrontEmbedRule(target);
+    const named = [
+      ...(rule.slots ? [`slot names ${rule.slots.join(", ")}`] : []),
+      ...(rule.productModules ? [`product_module names ${rule.productModules.join(", ")}`] : []),
+    ];
+    issues.push(`${split.dropped} embed(s) render nothing here: ${target} allows ${Object.keys(rule.allowed).join(", ") || "none"}${named.length ? ` (${named.join("; ")}, each once)` : ""}.`);
+  }
   issues.push(...islandPropsIssues(html));
   return issues;
 }
