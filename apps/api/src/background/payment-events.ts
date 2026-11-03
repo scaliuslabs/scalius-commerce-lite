@@ -22,11 +22,8 @@ import {
 import { processExistingMetaPurchaseOutboxForOrder } from "@scalius/core/integrations/meta/purchase-outbox";
 import { processTrackingDeliveriesForOrder } from "@scalius/core/integrations/tracking/deliveries";
 import type { NotificationSender } from "@scalius/core/modules/notifications";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { sendOrderBalancePaidNotification, sendOrderCreatedNotification } from "../utils/order-notifications";
 import {
   claimDuePaymentEvent,
   listDuePaymentEvents,
@@ -176,43 +173,35 @@ async function applyPaymentEvent(
         }
         throw new Error(`${provider} payment confirmation failed for order ${event.orderId}: ${result.error ?? "unknown error"}`);
       }
-      if (!result.alreadyProcessed) {
-        const paymentType = result.paymentType ?? event.paymentType ?? "full";
-        if (paymentType === "balance") {
-          await sendOrderBalancePaidNotification({
-            db,
-            send,
-            orderId: event.orderId,
-            source: `payment-${provider}-balance-paid`,
-            amount: fromMinor(event.amountMinor ?? 0, getDecimalPlaces(currency)),
-            gateway: provider,
-          });
-        } else {
-          await sendOrderCreatedNotification({ db, send, orderId: event.orderId, source: `payment-${provider}-confirmed` });
-        }
-        ctx.waitUntil(processExistingMetaPurchaseOutboxForOrder({
-          db,
-          orderId: event.orderId,
-          source: `payment-${provider}-confirmed`,
-          storefrontUrl: env.STOREFRONT_URL,
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-        }).catch((error: unknown) => {
-          console.error(`[payments] Meta Purchase CAPI side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
+      // Every attempt sends what the payment's batch committed, a retry after
+      // that batch (alreadyProcessed) included: the buyer's message, the Meta
+      // purchase claim and the tracking rows waiting for the payment. Each is
+      // deduped by its own row, so a repeat sends nothing twice.
+      if (result.notificationOutboxId) await send([result.notificationOutboxId]);
+      ctx.waitUntil(processExistingMetaPurchaseOutboxForOrder({
+        db,
+        orderId: event.orderId,
+        source: `payment-${provider}-confirmed`,
+        storefrontUrl: env.STOREFRONT_URL,
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      }).catch((error: unknown) => {
+        console.error(`[payments] Meta Purchase CAPI side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
+      }));
+      // GA4 and TikTok purchases waiting for this payment (audit spec S4).
+      ctx.waitUntil(processTrackingDeliveriesForOrder(db, event.orderId, {
+        storefrontUrl: env.STOREFRONT_URL,
+        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        paymentConfirmed: true,
+      }).catch((error: unknown) => {
+        console.error(`[payments] Server tracking side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
+      }));
+      // The fast path of automatic fulfilment, for the attempt that landed the
+      // money; the scheduled sweep hands over any settled order this misses.
+      // Nothing ships for an order whose stock could not be reserved again.
+      if (!result.alreadyProcessed && !result.inventoryShortfall) {
+        ctx.waitUntil(runOrderAutoFulfil(db, env, ctx, event.orderId).catch((error: unknown) => {
+          console.warn(`[payments] Automatic fulfilment of ${event.orderId} failed; the scheduled sweep retries:`, error instanceof Error ? error.name : "error");
         }));
-        // GA4 and TikTok purchases waiting for this payment (audit spec S4).
-        ctx.waitUntil(processTrackingDeliveriesForOrder(db, event.orderId, {
-          storefrontUrl: env.STOREFRONT_URL,
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-          paymentConfirmed: true,
-        }).catch((error: unknown) => {
-          console.error(`[payments] Server tracking side effect failed for confirmed ${provider} order ${event.orderId}:`, error instanceof Error ? error.name : "error");
-        }));
-        // Nothing ships for an order whose stock could not be reserved again.
-        if (!result.inventoryShortfall) {
-          ctx.waitUntil(runOrderAutoFulfil(db, env, ctx, event.orderId).catch((error: unknown) => {
-            console.warn(`[payments] Automatic fulfilment of ${event.orderId} failed; the scheduled sweep retries:`, error instanceof Error ? error.name : "error");
-          }));
-        }
       }
       if (result.inventoryShortfall) {
         console.warn(`[payments] ${provider} payment confirmed for order ${event.orderId}, but its released stock could not be reserved again`);
@@ -246,9 +235,8 @@ async function applyPaymentEvent(
         }
         throw new Error(`${provider} authorization failed for order ${event.orderId}: ${result.error ?? "unknown error"}`);
       }
-      if (result.placed) {
-        await sendOrderCreatedNotification({ db, send, orderId: event.orderId, source: `payment-${provider}-authorized` });
-      }
+      // The placement message the batch committed, on a retry too.
+      if (result.notificationOutboxId) await send([result.notificationOutboxId]);
       if (result.inventoryShortfall) {
         return { status: "manual_reconciliation", result: { ...refs, outcome: "authorized_stock_unavailable" } };
       }

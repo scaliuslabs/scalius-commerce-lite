@@ -51,6 +51,8 @@ export {
   buildOrderBalancePaidNotificationDedupeKey,
   buildOrderCreatedNotificationDedupeKey,
   orderCreatedNotificationOutboxId,
+  orderBalancePaidNotificationOutboxId,
+  buildOrderNotificationOutboxInsertWhen,
   buildOrderReadyForPickupNotificationDedupeKey,
   buildManualOrderNotificationResendDedupeKey,
   buildOrderNotificationOutboxInsert,
