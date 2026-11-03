@@ -5,7 +5,7 @@
 // section's collections, and what `/` shows. Choosing another template keeps
 // it (`storefrontThemeWithContent`), and "does this still match a template"
 // compares looks only (`storefrontThemeLook`).
-import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
+import { DEFAULT_STOREFRONT_THEME_BRAND, STOREFRONT_BRAND_IMAGE_KEYS } from "./brand";
 import { storefrontVariantSpec } from "./blocks";
 import { emptyStorefrontPageTemplates } from "./pages";
 import type { StorefrontThemeDocument } from "./document";
@@ -143,7 +143,7 @@ function sectionMediaReferences(section: StorefrontSection, at: string): Storefr
  * and what the dashboard previews. Not capped (the homepage read is).
  */
 export function storefrontThemeMediaReferences(theme: StorefrontThemeDocument): StorefrontThemeMediaReference[] {
-  const brand = (["logo", "footerLogo", "favicon"] as const).flatMap((key) =>
+  const brand = STOREFRONT_BRAND_IMAGE_KEYS.flatMap((key) =>
     theme.brand[key] ? [{ path: `brand.${key}`, mediaId: theme.brand[key]! }] : []);
   return [
     ...brand,
@@ -202,7 +202,7 @@ function sectionWithoutMedia(section: StorefrontSection, missing: ReadonlySet<st
 export function storefrontThemeWithoutMedia(theme: StorefrontThemeDocument, missing: ReadonlySet<string>): StorefrontThemeDocument {
   if (missing.size === 0) return theme;
   const brand = { ...theme.brand };
-  for (const key of ["logo", "footerLogo", "favicon"] as const) {
+  for (const key of STOREFRONT_BRAND_IMAGE_KEYS) {
     if (brand[key] && missing.has(brand[key]!)) brand[key] = null;
   }
   return {

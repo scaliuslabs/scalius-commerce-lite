@@ -14,8 +14,11 @@ interface Props {
 }
 
 const { layoutData, copy } = Astro.props;
-const { brand } = await resolveRequestTheme(Astro, layoutData);
+const { theme, brand } = await resolveRequestTheme(Astro, layoutData);
 const logoSrc = brand.logo?.url ?? "";
+// Dark pages show the dark logo (CSS picks it: a hidden lazy image never loads).
+const darkLogoSrc = brand.darkLogo?.url ?? "";
+const darkFirst = theme.tokens.colorScheme === "dark";
 const merchantName = resolveStoreName(layoutData?.business) || copy.pageTitle;
 ---
 
@@ -33,11 +36,25 @@ const merchantName = resolveStoreName(layoutData?.business) || copy.pageTitle;
             alt={merchantName}
             width="120"
             height="48"
-            class="h-8 w-auto max-w-40 object-contain sm:h-9 sm:max-w-48"
+            class:list={["h-8 w-auto max-w-40 object-contain sm:h-9 sm:max-w-48", darkLogoSrc && "dark:hidden"]}
+            loading={darkLogoSrc && darkFirst ? "lazy" : undefined}
             decoding="async"
           />
         ) : (
-          <span class="text-base font-semibold text-foreground">{merchantName}</span>
+          <span class:list={["text-base font-semibold text-foreground", darkLogoSrc && "dark:hidden"]}>{merchantName}</span>
+        )
+      }
+      {
+        darkLogoSrc && (
+          <img
+            src={mediaImageUrl(darkLogoSrc, 320)}
+            alt={merchantName}
+            width="120"
+            height="48"
+            class="hidden h-8 w-auto max-w-40 object-contain dark:block sm:h-9 sm:max-w-48"
+            loading={darkFirst ? undefined : "lazy"}
+            decoding="async"
+          />
         )
       }
     </a>

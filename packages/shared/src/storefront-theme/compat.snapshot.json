@@ -2277,6 +2277,16 @@
       "maximum": 240,
       "multipleOf": 10
      },
+     "darkLogo": {
+      "anyOf": [
+       {
+        "$ref": "#/$defs/__schema6"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "footerLogo": {
       "anyOf": [
        {
@@ -2301,6 +2311,7 @@
     "required": [
      "logo",
      "logoWidth",
+     "darkLogo",
      "footerLogo",
      "favicon"
     ],

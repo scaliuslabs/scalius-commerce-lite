@@ -80,7 +80,7 @@ export function everySectionTheme() {
   };
   // A product homepage: the homepage read follows the product's buyer state.
   theme.pages.homeMode = { kind: "product", productId: "p_linen" };
-  theme.brand = { logo: "media_logo", logoWidth: 180, footerLogo: "media_story", favicon: "media_side" };
+  theme.brand = { logo: "media_logo", logoWidth: 180, darkLogo: null, footerLogo: "media_story", favicon: "media_side" };
   theme.blocks.topBar = { variant: "utility", settings: { text: "Free delivery in Dhaka", link: "/shipping-policy" } };
   theme.blocks.footer = { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, tagline: "Handmade", about: "Since 1978", copyright: "Test Store Ltd" } } as typeof theme.blocks.footer;
   return theme;

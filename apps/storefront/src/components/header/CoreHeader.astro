@@ -68,13 +68,15 @@ const {
   navigationStyle,
 } = Astro.props;
 
-const { resolved, brand, preview, language } = await currentRequestTheme(Astro.locals);
+const { theme, resolved, brand, preview, language } = await currentRequestTheme(Astro.locals);
 const { topBar, header, desktopNav, mobileNav, navigation } = resolved.blocks;
 const copy = storefrontCopy(language).chrome;
 
 // The theme's logo with the store name as its alt text (the text logo without one).
 const logo: HeaderLogo = {
   src: brand.logo?.url ?? "",
+  darkSrc: brand.darkLogo?.url ?? "",
+  darkFirst: theme.tokens.colorScheme === "dark",
   alt: storeName || copy.home,
   width: normalizeHeaderLogoWidth(resolved.brand.logoWidth),
 };

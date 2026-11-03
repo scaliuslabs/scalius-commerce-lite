@@ -60,10 +60,11 @@
    "colorSchemeToggle": true
   },
   "brand": {
-   "logo": null,
+   "logo": "media_logo",
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": "media_dark_logo"
   },
   "blocks": {
    "topBar": {
@@ -368,7 +369,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -679,7 +681,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -984,7 +987,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {

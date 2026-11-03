@@ -120,7 +120,7 @@ function layout(entry: GalleryEntry) {
     ...(markets(entry) ? { markets: markets(entry) } : {}),
     theme,
     ...(entry.scenario.noor ? { appExtensions: entry.scenario.noor === "active" ? [NOOR_EXTENSION] : [] } : {}),
-    brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, footerLogo: null, favicon: null },
+    brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, darkLogo: null, footerLogo: null, favicon: null },
     storeShape: galleryStoreShape(entry),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,
     seo: { socialImage: "", returnPolicy: { enabled: true, category: "finite", returnWindowDays: 7, returnFees: "free" } },

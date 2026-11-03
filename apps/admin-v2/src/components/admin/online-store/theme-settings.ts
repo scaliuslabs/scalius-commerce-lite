@@ -282,6 +282,11 @@ export function themeColorProblem(theme: StorefrontThemeDocument): { set: Storef
   return null;
 }
 
+/** Dark pages can show while the header logo has no dark version: it may not show on them. */
+export function darkLogoMissing(theme: StorefrontThemeDocument): boolean {
+  return themeColorSets(theme).includes("darkColors") && theme.brand.logo !== null && theme.brand.darkLogo === null;
+}
+
 /** Whether the dark colours differ from the ones made from the colours (the merchant edited them). */
 export function darkColorsEdited(theme: StorefrontThemeDocument): boolean {
   return theme.tokens.darkColors !== null && !sameFormValue(theme.tokens.darkColors, storefrontDarkPalette(theme.tokens.colors));
@@ -318,6 +323,7 @@ export function themeDraftInvalid(theme: StorefrontThemeDocument): boolean {
 export const THEME_FIELD_IDS = {
   logo: "theme-brand-logo",
   logoWidth: "theme-logo-width",
+  darkLogo: "theme-brand-dark-logo",
   footerLogo: "theme-brand-footer-logo",
   favicon: "theme-brand-favicon",
   homeProduct: "theme-home-product",

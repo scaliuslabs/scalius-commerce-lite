@@ -1855,6 +1855,12 @@
                 "minimum": 80,
                 "maximum": 240
               },
+              "darkLogo": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 1,
+                "maxLength": 64
+              },
               "footerLogo": {
                 "type": "string",
                 "nullable": true,
@@ -1871,6 +1877,7 @@
             "required": [
               "logo",
               "logoWidth",
+              "darkLogo",
               "footerLogo",
               "favicon"
             ],
@@ -35800,6 +35807,36 @@
                                 "height"
                               ]
                             },
+                            "darkLogo": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "alt": {
+                                  "type": "string"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "url",
+                                "alt",
+                                "width",
+                                "height"
+                              ]
+                            },
                             "footerLogo": {
                               "type": "object",
                               "nullable": true,
@@ -35863,6 +35900,7 @@
                           },
                           "required": [
                             "logo",
+                            "darkLogo",
                             "footerLogo",
                             "favicon"
                           ]
@@ -37111,6 +37149,36 @@
                                 "height"
                               ]
                             },
+                            "darkLogo": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "alt": {
+                                  "type": "string"
+                                },
+                                "width": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "url",
+                                "alt",
+                                "width",
+                                "height"
+                              ]
+                            },
                             "footerLogo": {
                               "type": "object",
                               "nullable": true,
@@ -37174,6 +37242,7 @@
                           },
                           "required": [
                             "logo",
+                            "darkLogo",
                             "footerLogo",
                             "favicon"
                           ]

@@ -43,7 +43,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -216,7 +217,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -386,7 +388,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -577,7 +580,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -753,7 +757,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {
@@ -931,7 +936,8 @@
    "logo": null,
    "logoWidth": 180,
    "footerLogo": null,
-   "favicon": null
+   "favicon": null,
+   "darkLogo": null
   },
   "blocks": {
    "topBar": {

@@ -11,6 +11,7 @@ import type { safeBatch } from "@scalius/database/client";
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import {
   EMPTY_STOREFRONT_BRAND_ASSETS,
+  STOREFRONT_BRAND_IMAGE_KEYS,
 
   storefrontBrandAssets,
   storefrontThemeBrandMediaIds,
@@ -89,7 +90,6 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
     };
 }
 
-const BRAND_MEDIA_PATHS = ["$.brand.logo", "$.brand.footerLogo", "$.brand.favicon"] as const;
 /** Media ids are generated (`media_...`); this one names no row. */
 const NO_BRAND_MEDIA_ID = "none";
 
@@ -103,7 +103,7 @@ function storedThemeMediaIds(value: string | null | undefined): { brand: string[
         const stored = JSON.parse(value ?? "null") as { brand?: Record<string, unknown>; apps?: { skins?: unknown } } | null;
         const brand = stored?.brand ?? {};
         return {
-            brand: [...new Set(["logo", "footerLogo", "favicon"].map((key) => brand[key]).filter((id): id is string => typeof id === "string" && id !== ""))],
+            brand: [...new Set(STOREFRONT_BRAND_IMAGE_KEYS.map((key) => brand[key]).filter((id): id is string => typeof id === "string" && id !== ""))],
             skins: storefrontThemeSkinMediaCandidates(stored?.apps?.skins),
         };
     } catch {
@@ -121,8 +121,12 @@ function storedThemeMediaIds(value: string | null | undefined): { brand: string[
  * schema says which of them it shows).
  */
 export function planPublishedThemeBrandMedia(db: Database) {
-    const brandIds = BRAND_MEDIA_PATHS.map((path) => sql`
-        SELECT json_extract(${themeSettings.colors}, ${path}) FROM ${themeSettings} WHERE ${themeSettings.id} = 'default'`);
+    // The brand's images (its text values: every one is a media id; the logo
+    // width is a number), one compound term.
+    const brandIds = sql`
+        SELECT CAST(brand_image.value AS TEXT)
+        FROM ${themeSettings}, json_each(${themeSettings.colors}, '$.brand') AS brand_image
+        WHERE ${themeSettings.id} = 'default' AND brand_image.type = 'text'`;
     // The unit skins' top-level values (each bounded by its schema), one
     // compound term (D1 caps compound SELECTs at 5): only real media ids match.
     const skinIds = sql`
@@ -130,7 +134,7 @@ export function planPublishedThemeBrandMedia(db: Database) {
         FROM ${themeSettings}, json_each(${themeSettings.colors}, '$.apps.skins') AS skin_unit, json_each(skin_unit.value, '$.values') AS skin_value
         WHERE ${themeSettings.id} = 'default' AND skin_value.type = 'text'`;
     const statement = db.select(homeMediaColumns).from(media).where(and(
-        sql`${media.id} IN (${sql.join([...brandIds, skinIds], sql` UNION ALL `)})`,
+        sql`${media.id} IN (${sql.join([brandIds, skinIds], sql` UNION ALL `)})`,
         notInArray(media.status, ["deleting", "deleted"]),
     ));
     return {

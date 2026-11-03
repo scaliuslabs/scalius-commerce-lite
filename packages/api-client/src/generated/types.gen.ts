@@ -494,6 +494,7 @@ export type StorefrontThemeDocument = {
     brand: {
         logo: string | null;
         logoWidth: number;
+        darkLogo: string | null;
         footerLogo: string | null;
         favicon: string | null;
     };
@@ -8776,6 +8777,13 @@ export type GetApiV1StorefrontLayoutResponses = {
                     width: number | null;
                     height: number | null;
                 } | null;
+                darkLogo: {
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
                 footerLogo: {
                     id: string;
                     url: string;
@@ -9134,6 +9142,13 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
             theme: StorefrontThemeDocument;
             brand: {
                 logo: {
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+                darkLogo: {
                     id: string;
                     url: string;
                     alt: string;

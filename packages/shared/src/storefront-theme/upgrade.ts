@@ -80,14 +80,17 @@ function snakeCoreNames(document: Json): Json {
 }
 
 /**
- * Version 12 → 13: the tokens name a colour scheme. A stored theme keeps the
- * colours its buyers saw: the light scheme, no dark colours, no switch.
+ * Version 12 → 13: the tokens name a colour scheme and the brand a logo for
+ * dark pages. A stored theme keeps what its buyers saw: the light scheme, no
+ * dark colours, no switch, no dark logo.
  */
 function lightColorScheme(document: Json): Json {
-  const tokens = document.tokens;
-  return isRecord(tokens)
-    ? { ...document, tokens: { ...tokens, colorScheme: "light", darkColors: null, colorSchemeToggle: false } }
-    : document;
+  const { tokens, brand } = document;
+  return {
+    ...document,
+    ...(isRecord(tokens) ? { tokens: { ...tokens, colorScheme: "light", darkColors: null, colorSchemeToggle: false } } : {}),
+    ...(isRecord(brand) ? { brand: { ...brand, darkLogo: null } } : {}),
+  };
 }
 
 /**
@@ -104,9 +107,10 @@ function lightColorScheme(document: Json): Json {
  *   (`usp-strip` → `usp_strip`) and every `apps.skins` unit
  *   (`product-card` → `product_card`) reads with its hyphens as underscores,
  *   as the storefront protocol names them (skin targets, `section:<type>`).
- * - 12 → 13: tokens gain `colorScheme`, `darkColors` and `colorSchemeToggle`;
- *   a stored theme (or an app template's tokens) reads as the light scheme
- *   with no dark colours and no switch, so its pages paint exactly as before.
+ * - 12 → 13: tokens gain `colorScheme`, `darkColors` and `colorSchemeToggle`,
+ *   the brand `darkLogo`; a stored theme (or an app template's tokens) reads
+ *   as the light scheme with no dark colours, no switch and no dark logo, so
+ *   its pages paint exactly as before.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,

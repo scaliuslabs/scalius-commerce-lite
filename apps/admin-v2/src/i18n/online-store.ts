@@ -137,6 +137,7 @@ const onlineStoreCopy = defineMessages({
     darkColorsRegenerateDescription: "Your changes to the dark colors are replaced with new ones made from your light colors.",
     logo: "Logo",
     headerLogo: "Header logo",
+    darkLogo: "Logo for dark pages",
     logoWidth: "Logo width: {width}px",
     footerLogo: "Footer logo",
     favicon: "Browser tab icon",
@@ -326,6 +327,8 @@ const onlineStoreCopy = defineMessages({
 
     // Theme content: brand, top bar, footer words, what `/` shows, section content
     headerLogoHelp: "Without a logo, your store name shows in text.",
+    darkLogoHelp: "Optional, a light logo for dark pages. Without one, dark pages show your header logo.",
+    darkLogoMissing: "Your store shows dark pages. Add a logo for dark pages if your header logo is dark, or it may not show on them.",
     footerLogoHelp: "Optional, for example a light logo for a dark footer. Without one, the footer shows your store name.",
     topBar: "Bar above the header",
     topBar_none: "None",
@@ -538,6 +541,7 @@ const onlineStoreCopy = defineMessages({
     darkColorsRegenerateDescription: "গাঢ় রঙে আপনার পরিবর্তনগুলোর বদলে হালকা রং থেকে নতুন রং তৈরি হবে।",
     logo: "লোগো",
     headerLogo: "হেডারের লোগো",
+    darkLogo: "গাঢ় পেজের লোগো",
     logoWidth: "লোগোর প্রস্থ: {width}px",
     footerLogo: "ফুটারের লোগো",
     favicon: "ব্রাউজার ট্যাবের আইকন",
@@ -725,6 +729,8 @@ const onlineStoreCopy = defineMessages({
     footer: "ফুটার",
 
     headerLogoHelp: "লোগো না থাকলে স্টোরের নাম লেখা হিসেবে দেখাবে।",
+    darkLogoHelp: "ঐচ্ছিক, গাঢ় পেজের জন্য হালকা রঙের লোগো। না থাকলে গাঢ় পেজে হেডারের লোগো দেখাবে।",
+    darkLogoMissing: "আপনার স্টোরে গাঢ় পেজ দেখায়। হেডারের লোগো গাঢ় রঙের হলে গাঢ় পেজের জন্য একটি লোগো দিন, নইলে সেখানে তা নাও দেখা যেতে পারে।",
     footerLogoHelp: "ঐচ্ছিক, যেমন গাঢ় ফুটারের জন্য হালকা রঙের লোগো। না থাকলে ফুটারে স্টোরের নাম দেখাবে।",
     topBar: "হেডারের উপরের বার",
     topBar_none: "কোনোটি নয়",

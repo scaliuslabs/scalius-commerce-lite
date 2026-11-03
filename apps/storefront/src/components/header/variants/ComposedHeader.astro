@@ -63,6 +63,7 @@ const copy = storefrontCopy(language).chrome;
 const logoWidth = normalizeHeaderLogoWidth(logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 const logoSrcSet = mediaImageSrcSet(logo.src);
+const darkLogoSrcSet = logo.darkSrc ? mediaImageSrcSet(logo.darkSrc) : undefined;
 const inlineMenu = hasMenu && menuPlacement === "inline";
 const menuRow = hasMenu && menuPlacement === "row";
 const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
@@ -133,14 +134,30 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
               srcset={logoSrcSet}
               sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
               alt={logo.alt}
-              class="hdr-logo-image"
+              class:list={["hdr-logo-image", logo.darkSrc && "dark:hidden"]}
               width={240}
               height={80}
-              loading="eager"
+              loading={logo.darkSrc && logo.darkFirst ? "lazy" : "eager"}
               decoding="async"
             />
           ) : (
-            <span class="hdr-logo-text">{logo.alt}</span>
+            <span class:list={["hdr-logo-text", logo.darkSrc && "dark:hidden"]}>{logo.alt}</span>
+          )
+        }
+        {/* Dark pages show the dark logo (CSS picks it: a hidden lazy image never loads). */}
+        {
+          logo.darkSrc && (
+            <img
+              src={mediaImageUrl(logo.darkSrc, 320)}
+              srcset={darkLogoSrcSet}
+              sizes={darkLogoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
+              alt={logo.alt}
+              class="hdr-logo-image hidden dark:block"
+              width={240}
+              height={80}
+              loading={logo.darkFirst ? "eager" : "lazy"}
+              decoding="async"
+            />
           )
         }
       </a>
