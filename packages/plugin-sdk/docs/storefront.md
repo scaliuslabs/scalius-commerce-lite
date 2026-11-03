@@ -300,6 +300,8 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 
 `<scalius-embed kind="…">` hands a spot in your markup back to the store, which renders its own interactive piece there with its own data, rules, words and scripts. The SDK components write the tags. Each render allows its own kinds and counts; any other embed renders nothing.
 
+Place embeds and slots outside your own `<a>`, `<button>` and `<form>`: one inside them renders nothing, because the store's piece holds its own links, buttons and form. A card skin that wraps the whole card in a link loses `product_card.badges` and `product_card.meta`; put the link on the title or image instead. `checkSkinHtml`, `pnpm plugin validate` and `pack` report it.
+
 The store adds kinds, module names and error codes over time: `StorefrontEmbedKind`, `StorefrontProductModuleEmbed` and the product error codes are unions read from lists that only grow. Never switch over one exhaustively (a `Record<StorefrontEmbedKind, …>` or a `never` check stops compiling when the list grows); handle the values you know and ignore the rest.
 
 | Kind (SDK) | Where | Renders |
