@@ -272,6 +272,7 @@ function optionAriaLabel(
 
 <div
   data-product-summary
+  data-sx-product-summary
   data-sticky-column
   data-cta-layout={look.cta.layout}
   data-facts-column={factsColumn ? "" : undefined}
@@ -455,7 +456,7 @@ function optionAriaLabel(
           formatMoney={formatPrice}
         />
       ) : (
-        <form id={buyFormId} method="post" action={`/buy/${encodeURIComponent(product.slug)}`} data-product-buy-form>
+        <form id={buyFormId} method="post" action={`/buy/${encodeURIComponent(product.slug)}`} data-product-buy-form data-sx-buy-form>
           <input type="hidden" name="variant" value={initialSelectedVariant?.id ?? ""} />
         </form>
       )}

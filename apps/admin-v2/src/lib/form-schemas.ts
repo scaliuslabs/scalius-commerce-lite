@@ -141,6 +141,8 @@ export type CategoryFormValues = z.output<typeof categoryFormSchema>;
 export const pageFormSchema = z
   .object({
     id: z.string().optional(),
+    /** The address the saved page had when it was opened: keeping it is never refused, even if a route has since claimed it. */
+    savedSlug: z.string().optional(),
     revision: z.number().int().min(1).optional(),
     contentType: z.enum(["page", "article"]).default("page"),
     title: z
@@ -201,7 +203,8 @@ export const pageFormSchema = z
       value.contentType === "article"
         ? `/blog/${value.slug}`
         : `/${value.slug}`;
-    if (value.slug !== "" && !isValidResourceCanonicalPath(resourceKind, publicPath)) {
+    const keepsSavedAddress = value.id !== undefined && value.slug === value.savedSlug;
+    if (value.slug !== "" && !keepsSavedAddress && !isValidResourceCanonicalPath(resourceKind, publicPath)) {
       context.addIssue({
         code: "custom",
         path: ["slug"],

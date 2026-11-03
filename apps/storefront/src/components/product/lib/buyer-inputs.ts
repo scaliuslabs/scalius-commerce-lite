@@ -265,9 +265,10 @@ export type PostedBuyerInputs =
 const VARIANT_FIELDS = new Set<string>(Object.values(BUY_FORM_VARIANT_FIELDS));
 
 /**
- * Reads the no-JavaScript form body: the SKU (`BUY_FORM_VARIANT_FIELDS`, each
- * at most once: the pressed button's, else the picker's, else the form's,
- * whatever their order in the body), `quantity`, `purchaseOption` (empty:
+ * Reads the no-JavaScript form body: the SKU (`BUY_FORM_VARIANT_FIELDS`: the
+ * pressed button's, else the picker's, else the form's last, whatever their
+ * order in the body; a repeated button or picker field refuses it),
+ * `quantity`, `purchaseOption` (empty:
  * one-time; a malformed one refuses the body) and bounded `property.<key>`
  * fields (at most 10, each at most 1,000 characters). Anything else in the
  * body is ignored.
@@ -281,7 +282,10 @@ export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryVa
   for (const [name, entry] of entries) {
     if (typeof entry !== "string") return { ok: false };
     if (VARIANT_FIELDS.has(name)) {
-      if (variants.has(name)) return { ok: false };
+      // A page from the build before the picker had its own name posts
+      // `variant` twice (the form's, then the picker's): its last one is the
+      // buyer's. The newer fields come once from a real page.
+      if (variants.has(name) && name !== BUY_FORM_VARIANT_FIELDS.form) return { ok: false };
       variants.set(name, entry.trim().slice(0, 128) || null);
       continue;
     }

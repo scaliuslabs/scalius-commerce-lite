@@ -3,8 +3,13 @@
 // no-JavaScript picker and a product_main skin's `buyVariant` buttons sit
 // outside it and join it with `form=`.
 
-/** The buy form's id. */
-export const BUY_FORM_ID = "product-buy-form";
+/**
+ * The buy form's id. No app markup can carry it: an app's ids start with
+ * `<app name>-` (lowercase letters, digits and hyphens), and this id has an
+ * underscore before its first hyphen, so no app form or element can take
+ * over the `form=` association of the form's parts.
+ */
+export const BUY_FORM_ID = "sx_buy-form";
 
 /**
  * The SKU fields a buy form post can carry. The POST handler reads them by

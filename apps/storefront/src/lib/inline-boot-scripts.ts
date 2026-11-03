@@ -53,3 +53,17 @@ export const VARIANT_PREPAINT_SCRIPT =
   '(()=>{try{if(!new URLSearchParams(location.search).get("variant"))return;' +
   'const d=document.documentElement;d.dataset.variantPending="";' +
   'setTimeout(()=>{delete d.dataset.variantPending},3e3)}catch{}})();';
+
+/**
+ * SKIN_CHOICE_PREPAINT_SCRIPT: the host draws a product_main skin's choice
+ * controls (`chooseVariant`) with the SKU the page opens on chosen. Run right
+ * after the skin's markup (lib/extensions/purchase-controls.ts), it moves
+ * that mark to the SKU a `?variant=<sku id>` link names before the first
+ * paint, as VARIANT_PREPAINT_SCRIPT holds the form's own parts;
+ * product-controller.ts then keeps it current.
+ */
+export const SKIN_CHOICE_PREPAINT_SCRIPT =
+  '(()=>{try{const v=new URLSearchParams(location.search).get("variant");if(!v)return;' +
+  'for(const e of document.querySelectorAll("[data-sx-bound][data-choose-variant]")){const s=e.dataset.chooseVariant===v;' +
+  'e.dataset.state=s?"selected":"unselected";if(e.tagName==="BUTTON")e.setAttribute("aria-pressed",String(s));' +
+  'else if(s)e.setAttribute("aria-current","true");else e.removeAttribute("aria-current")}}catch{}})();';
