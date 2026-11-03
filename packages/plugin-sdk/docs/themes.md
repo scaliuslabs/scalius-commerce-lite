@@ -37,7 +37,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 | --- | --- | --- |
 | The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` and `context.store.darkLogo` (every part) | A wordmark, your app's name, the header's markup |
 | Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
-| The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="details" />` in a product skin | Moving the store's markup with an island |
+| The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="description" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
 | Core routes | `data.routes` (`home`, `search`, `cart`, `account`, `orders`, `trackOrder`; footer `newsletter`) | Page paths such as `/about` |
 | Products | A `products` or `product` setting, a section's product source, each card's own `url` | `/products/<slug>` |
