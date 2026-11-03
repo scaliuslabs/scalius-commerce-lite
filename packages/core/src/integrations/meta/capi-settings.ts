@@ -1,7 +1,7 @@
 import { type Database } from "@scalius/database/client";
 import { metaConversionsLogs } from "@scalius/database/schema";
 import { metaConversionsDocument, type MetaConversionsSettings } from "../../modules/settings";
-import { eq, lt } from "drizzle-orm";
+import { eq, inArray, lt, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 
 const SAFE_META_LOG_PAYLOAD_UNAVAILABLE = JSON.stringify({ available: false });
@@ -249,7 +249,49 @@ export async function getCapiSettings(
 }
 
 /**
- * Logs a CAPI event to the database and triggers lazy cleanup.
+ * One success in this many is logged for a browser event (a deterministic
+ * sample of its event id). Purchase events (bounded by orders) and staff test
+ * events are logged in full, and so is every failure.
+ */
+export const CAPI_SUCCESS_LOG_SAMPLE = 100;
+
+/** Event ids the server mints for orders and staff tests: every one of their successes is logged. */
+function isFullyLoggedEventId(eventId: string): boolean {
+    return eventId.startsWith("Purchase:") || eventId.startsWith("Test:");
+}
+
+/** FNV-1a of the event id: the same id always gets the same answer, retries included. */
+function sampledEventId(eventId: string): boolean {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < eventId.length; index += 1) {
+        hash ^= eventId.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0) % CAPI_SUCCESS_LOG_SAMPLE === 0;
+}
+
+/**
+ * Whether a success is logged: an anonymous browser event writes a log row
+ * for one success in CAPI_SUCCESS_LOG_SAMPLE only, so page views cost no D1
+ * writes (Workers Free allows 100,000 rows written a day).
+ */
+export function shouldLogCapiSuccess(eventId: string): boolean {
+    return isFullyLoggedEventId(eventId) || sampledEventId(eventId);
+}
+
+/**
+ * How many events one success row stands for in a count (tracking health):
+ * a sampled browser success stands for CAPI_SUCCESS_LOG_SAMPLE, the rest for one.
+ */
+export function capiSuccessWeightSql(eventIdColumn: SQL | AnyColumn): SQL {
+    return sql`(case when substr(${eventIdColumn}, 1, 9) = 'Purchase:' or substr(${eventIdColumn}, 1, 5) = 'Test:' then 1 else ${sql.raw(String(CAPI_SUCCESS_LOG_SAMPLE))} end)`;
+}
+
+/**
+ * Logs a CAPI event: every failure, and a sample of browser successes
+ * (`shouldLogCapiSuccess`). It never deletes: expired rows go in the
+ * maintenance sweep (`purgeExpiredCapiLogs`), a bounded delete, not a
+ * whole-table delete on every event.
  */
 export async function logCapiEvent(
     db: Database,
@@ -262,8 +304,10 @@ export async function logCapiEvent(
         errorMessage?: string;
         eventTime: number;
     },
-    retentionHours: number = 12
+    /** Unused: retention is the maintenance sweep's (callers may still pass it). */
+    _retentionHours?: number,
 ): Promise<void> {
+    if (logData.status === "success" && !shouldLogCapiSuccess(logData.eventId)) return;
     try {
         const { eventTime } = logData;
         const safeLogData = {
@@ -304,11 +348,6 @@ export async function logCapiEvent(
                 })
                 .where(eq(metaConversionsLogs.eventId, logData.eventId));
         }
-
-        // Fire-and-forget: cleanup is best-effort and non-critical.
-        // Not awaited intentionally — the caller should not wait for cleanup
-        // to complete before returning. Errors are caught inside performLogCleanup.
-        void performLogCleanup(db, retentionHours);
     } catch {
         console.error("Failed to write to Meta CAPI log");
     }
@@ -325,8 +364,33 @@ export async function getCapiEventLog(
         .get();
 }
 
+/** Expired log rows one sweep run deletes at most (Paid; Free scales it). */
+export const CAPI_LOG_PURGE_LIMIT = 200;
+
 /**
- * Performs automatic log cleanup based on configurable retention period.
+ * Deletes up to `limit` log rows older than the store's retention
+ * (`logRetentionDays`) through the `created_at` range: the maintenance
+ * sweep's bounded share. Returns the rows deleted.
+ */
+export async function purgeExpiredCapiLogs(
+    db: Database,
+    options: { nowSeconds: number; limit: number },
+): Promise<number> {
+    const { logRetentionDays } = await metaConversionsDocument.read(db);
+    const days = Math.max(1, Math.min(365, Math.floor(Number(logRetentionDays) || 30)));
+    const cutoff = new Date((options.nowSeconds - days * 86_400) * 1000);
+    const expired = db.select({ id: metaConversionsLogs.id }).from(metaConversionsLogs)
+        .where(lt(metaConversionsLogs.createdAt, cutoff))
+        .limit(Math.max(1, Math.floor(options.limit)));
+    const deleted = await db.delete(metaConversionsLogs)
+        .where(inArray(metaConversionsLogs.id, expired))
+        .returning({ id: metaConversionsLogs.id });
+    return deleted.length;
+}
+
+/**
+ * Deletes every log row older than the retention at once: the staff's manual
+ * cleanup only, never a buyer's request.
  */
 export async function performLogCleanup(db: Database, retentionHours: number): Promise<void> {
     try {

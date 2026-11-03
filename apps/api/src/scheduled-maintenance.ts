@@ -16,6 +16,7 @@ import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
+import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integrations/meta/capi-settings";
 import { planTrackingSweep } from "@scalius/core/integrations/tracking/deliveries";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -614,7 +615,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Retention of settled events and deliveries, after the dispatch sweep.
     name: "event_outbox_retention",
-    async run({ db, timed }) {
+    async run({ db, timed, runContext }) {
       const { runScheduledEventRetention } = await import("./events/dispatch");
       const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
       if (pruned.events > 0 || pruned.deliveries > 0 || pruned.pluginDeliveries > 0) {
@@ -623,6 +624,13 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `prunedPluginDeliveries=${pruned.pluginDeliveries}`,
         );
       }
+      // Meta CAPI logs past the store's retention: a bounded share a run (a
+      // browser event never deletes).
+      const capiLogs = await timed("meta_capi_log_retention", () => purgeExpiredCapiLogs(db, {
+        nowSeconds: Math.floor(tickDate(runContext).getTime() / 1000),
+        limit: scaled(CAPI_LOG_PURGE_LIMIT),
+      }));
+      if (capiLogs > 0) console.log(`[scheduled] Meta CAPI log retention: deleted=${capiLogs}`);
     },
   },
   {
