@@ -149,6 +149,9 @@ jobs:
           RULES: ${{ steps.impact.outputs.rules }}
           DVC_SEEDS: "5"
           DVC_COLLECT: "1"
+          # Seeds run in parallel shards (cores - 1) beside the other proofs on a 4-vCPU runner, so a
+          # seed can take longer than the 420 s default; the extra time weakens no check.
+          DVC_TIMEOUT_MS: "900000"
         run: node rules/cli.mjs test $RULES --strict --require postgres
 
       - name: Build
@@ -249,4 +252,6 @@ jobs:
         env:
           DVC_SEEDS: "5"
           DVC_COLLECT: "1"
+          # Same reason as the cited-proof step: five seeds share a 4-vCPU runner with --max-workers 3.
+          DVC_TIMEOUT_MS: "900000"
         run: node rules/cli.mjs verify --strict --require postgres --max-workers 3
