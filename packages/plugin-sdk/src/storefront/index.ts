@@ -79,8 +79,10 @@ export type {
   StorefrontProductGridSkinSettings,
   StorefrontProductList,
   StorefrontProductModuleEmbed,
+  StorefrontProductError,
   StorefrontProductPage,
   StorefrontProductSlot,
+  StorefrontProductState,
   StorefrontProductRailSkinSettings,
   StorefrontProductTabsSkinSettings,
   StorefrontPromotionEnd,
@@ -99,3 +101,5 @@ export type {
   StorefrontUspStripSkinSettings,
   StorefrontUtilityCardsSkinSettings,
 } from "@scalius/shared/plugins/storefront-protocol";
+// The buy form's refusal codes (`context.product.state().error`): only ever added to, at the end.
+export { STOREFRONT_PRODUCT_ERRORS } from "@scalius/shared/plugins/storefront-protocol";
