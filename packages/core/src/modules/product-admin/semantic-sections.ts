@@ -575,6 +575,8 @@ export async function getProductSemanticSection(
         discountType: productVariants.discountType,
         discountBps: productVariants.discountBps,
         discountAmountMinor: productVariants.discountAmountMinor,
+        warrantyMode: productVariants.warrantyMode,
+        warrantyPolicyId: productVariants.warrantyPolicyId,
         storeCurrencyCode: storeCurrencyCodeSql(),
     }).from(productVariants).where(and(
         eq(productVariants.productId, productId),

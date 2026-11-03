@@ -102,6 +102,8 @@ const SERVER_FIELDS: Record<string, DraftIssueField> = {
   discountPercentage: "discount",
   discountAmount: "discount",
   imageId: "photo",
+  warrantyMode: "warranty",
+  warrantyPolicyId: "warranty",
 };
 
 

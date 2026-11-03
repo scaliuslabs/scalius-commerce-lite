@@ -73,11 +73,14 @@ type ConstrainableSku = {
   discountAmount?: number | null;
   compareAt?: number | null;
   fulfillmentKind?: "physical" | "digital" | "service";
+  warrantyMode?: "inherit" | "policy" | "none";
+  warrantyPolicyId?: string | null;
 };
 
 /**
  * A SKU as the kind allows it to be saved: a gift card's SKU is untracked,
- * undiscounted and digital (the API refuses anything else), and a digital
+ * undiscounted, digital and on the product's warranty (the API refuses or
+ * resets anything else), and a digital
  * SKU carries no typed quantity. `keepStock` keeps a saved SKU's recorded
  * quantity so a save never writes stock; new rows start at 0. Returns the
  * same object when nothing changes, so memoised rows keep their identity.
@@ -98,6 +101,10 @@ export function constrainSkuForKind<T extends ConstrainableSku>(sku: T, rules: P
   }
   if (rules.forcedFulfillmentKind && sku.fulfillmentKind !== undefined && sku.fulfillmentKind !== rules.forcedFulfillmentKind) {
     patch.fulfillmentKind = rules.forcedFulfillmentKind;
+  }
+  if (rules.giftCard && sku.warrantyMode !== undefined && sku.warrantyMode !== "inherit") {
+    patch.warrantyMode = "inherit";
+    patch.warrantyPolicyId = null;
   }
   return Object.keys(patch).length === 0 ? sku : { ...sku, ...patch };
 }

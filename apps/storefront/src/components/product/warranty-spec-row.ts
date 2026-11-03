@@ -2,7 +2,7 @@
 // product's `warranty` (the policy's current terms, from GET /products/{slug});
 // `warrantySpecRow` is the specification table's "Warranty" row. Until the
 // spec table lands (templates), the row renders in the classic description tab.
-import type { Product } from "@/lib/api";
+import type { Product, ProductVariant } from "@/lib/api";
 import {
   warrantySummaryText,
   type WarrantyCopy,
@@ -22,7 +22,31 @@ export interface ProductWarrantyView {
 
 /** The product's warranty, or null when it has none (or the field is malformed). */
 export function productWarranty(product: Product): ProductWarrantyView | null {
-  const value = (product as Product & { warranty?: unknown }).warranty;
+  return parseWarranty(product.warranty);
+}
+
+/**
+ * Each SKU's effective warranty (it inherits the product's, has its own, or
+ * none): the page's `warranties` by id, and each variant's `warrantyId`.
+ */
+export function skuWarranties(product: Product, variants: readonly ProductVariant[]): {
+  byId: Map<string, ProductWarrantyView>;
+  byVariant: Record<string, string | null>;
+} {
+  const byId = new Map<string, ProductWarrantyView>();
+  for (const entry of product.warranties ?? []) {
+    const warranty = parseWarranty(entry);
+    if (warranty) byId.set(entry.id, warranty);
+  }
+  const byVariant: Record<string, string | null> = {};
+  for (const variant of variants) {
+    const id = variant.warrantyId ?? null;
+    byVariant[variant.id] = id !== null && byId.has(id) ? id : null;
+  }
+  return { byId, byVariant };
+}
+
+function parseWarranty(value: unknown): ProductWarrantyView | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<ProductWarrantyView>;
   const duration = raw.duration;

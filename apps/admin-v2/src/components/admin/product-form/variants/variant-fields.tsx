@@ -5,6 +5,8 @@ import React from "react";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useShownAfter } from "@/components/admin/data-table/use-shown-after";
 import { NumberInput } from "@/components/ui/number-input";
 import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
@@ -23,6 +25,16 @@ import { productVariantMessages } from "~/i18n/product-variants";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
 import { isDigitalSku, useProductKindRules } from "../product-kind-rules";
 import type { DraftIssueField, DraftVariant } from "./option-matrix-editor-model";
+
+// The policy list loads only when a variant's details open (the products/new bundle stays in budget).
+const VariantWarrantyField = React.lazy(() =>
+  import("./VariantWarrantyField").then((module) => ({ default: module.VariantWarrantyField })));
+
+/** The warranty field's place while it loads: a skeleton only after 300ms, then for at least 300ms (L3). */
+export function WarrantyFieldPending() {
+  const shown = useShownAfter(true);
+  return shown ? <Skeleton className="h-9 w-full" /> : <div className="h-9" aria-hidden="true" />;
+}
 
 /** The message a field shows, if the current (or server's) problem is about it. */
 export type IssueFor = (variantId: string | undefined, field: DraftIssueField) => string | undefined;
@@ -263,7 +275,7 @@ function CostField({ cost, name, readOnly = false }: { cost: SkuCostField; name:
   );
 }
 
-export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, onChange, cost }: {
+export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, onChange, cost, warranty = false }: {
   readOnly?: boolean;
   variant: DraftVariant;
   name: string;
@@ -271,6 +283,8 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   onChange: (patch: Partial<DraftVariant>) => void;
   /** Cost per item, where the page edits costs (not for gift cards). */
   cost?: SkuCostField | null;
+  /** The variant's own warranty choice: only a product with variants offers it (not gift cards). */
+  warranty?: boolean;
 }) {
   const t = useMessages(productVariantMessages);
   const weightUnit = useWeightUnit();
@@ -280,6 +294,11 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
   const kindRules = useProductKindRules();
   const { showDiscount, showWeight, showInventory, giftCard } = kindRules;
+  const warrantyField = warranty && !giftCard ? (
+    <React.Suspense fallback={<WarrantyFieldPending />}>
+      <VariantWarrantyField readOnly={readOnly} variant={variant} name={name} error={errorOf("warranty")} onChange={onChange} />
+    </React.Suspense>
+  ) : null;
   if (readOnly) {
     const barcodeNames = { ean13: "EAN-13", upc: "UPC", isbn: "ISBN", gtin: "GTIN", code128: "Code 128", custom: t("barcodeCustom") };
     return (
@@ -292,6 +311,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
           <ReadOnlyValue label={t("barcodeType")} value={variant.barcodeType ? barcodeNames[variant.barcodeType] : t("noBarcode")} />
           {showWeight ? <ReadOnlyValue label={t("weightGrams")} value={variant.weight === null ? null : formatWeight(variant.weight, weightUnit)} /> : null}
           {showInventory ? <ReadOnlyValue label={t("trackQuantity")} value={t(variant.trackInventory ? "quantityTracked" : "notTracked")} /> : null}
+          {warrantyField}
         </FieldRow>
       </div>
     );
@@ -350,6 +370,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
             />
         </Field>
       ) : null}
+      {warrantyField}
     </FieldRow>
       {/* A digital SKU's tracking follows its licence keys (the quantity cell says which). */}
       {showInventory && !isDigitalSku(kindRules, variant) ? (

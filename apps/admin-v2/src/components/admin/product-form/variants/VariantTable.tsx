@@ -758,6 +758,7 @@ const VariantRow = React.memo(function VariantRow({
             issueFor={issueFor}
             onChange={change}
             cost={cost === undefined ? null : { value: cost, customerPays, onChange: (next) => onCostChange(variant.id, next) }}
+            warranty
           />
           {/* Apps' cards for this saved SKU (`resource=variant`), inside the variant card. */}
           {customData ? <fieldset disabled={readOnly} className="min-w-0"><AppResourceCards target="variant" id={variant.id} inline className="mt-3 space-y-3" /></fieldset> : null}

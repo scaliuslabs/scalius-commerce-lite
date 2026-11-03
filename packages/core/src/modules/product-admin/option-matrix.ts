@@ -38,10 +38,13 @@ import {
   MAX_PRODUCT_OPTION_COMBINATIONS,
   normalizeOptionIdentity,
   planDigitalSkuWrites,
+  addSkuWarrantyIssues,
   skuStockSchema,
+  skuWarrantyInputShape,
   skuWeightSchema,
   STOCK_CHANGED_MESSAGE,
 } from "../products";
+import { planMatrixSkuWarranties } from "./warranty";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -95,6 +98,8 @@ const matrixVariantInputSchema = z.object({
     discountAmount: catalogMoneySchema.nullable(),
     /** Omit to keep a saved row's kind (new rows are physical). */
     fulfillmentKind: editableFulfillmentKindSchema.optional(),
+    /** Omit both to keep a saved row's warranty (new rows inherit the product's). */
+    ...skuWarrantyInputShape,
 });
 
 const productOptionMatrixBaseSchema = z.object({
@@ -264,6 +269,7 @@ function validateOptionMatrix(
         ) {
             ctx.addIssue({ code: "custom", message: "A flat discount cannot exceed the SKU price.", path: ["variants", variantIndex, "discountAmount"] });
         }
+        addSkuWarrantyIssues(variant, ctx, ["variants", variantIndex]);
     });
 
     input.options.forEach((option, optionIndex) => {
@@ -533,6 +539,8 @@ export async function planProductOptionMatrix(
         fieldPrefix?: string;
         /** The product's image associations after this save, when the same batch changes them. */
         attachedImages?: ReadonlyMap<string, { status: SkuImageStatus }>;
+        /** Whether the product is a gift card after this save (its SKUs keep the product's warranty). */
+        isGiftCard: boolean;
     },
 ): Promise<ProductOptionMatrixPlan> {
     const { adminUserId, fieldPrefix = "" } = context;
@@ -690,6 +698,14 @@ export async function planProductOptionMatrix(
         ...activeVariantById,
         ...restoredVariantById,
     ]);
+    // A restored combination's SKU is new to the merchant, like a new row:
+    // only a live saved SKU has a warranty to keep.
+    const plannedWarranties = await planMatrixSkuWarranties(db, normalizedVariants.map((variant, index) => ({
+        input: variant,
+        savedPolicyId: activeVariantById.has(variant.id) ? activeVariantById.get(variant.id)!.warrantyPolicyId : undefined,
+        field: `${fieldPrefix}variants.${index}.warrantyPolicyId`,
+    })), context.isGiftCard);
+    const warrantyByVariantId = new Map(normalizedVariants.map((variant, index) => [variant.id, plannedWarranties[index]]));
 
     // A digital SKU's stock is its licence keys: new digital rows start at 0,
     // saved digital rows keep their stock, rows turning digital hold none, and
@@ -1013,8 +1029,9 @@ export async function planProductOptionMatrix(
             discountType: variant.discountType,
             discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
             discountAmountMinor: variant.discountType === "flat" ? toStoreMinor(variant.discountAmount ?? 0, currency) : 0,
-            // Omitted keeps a saved row's kind.
+            // Omitted keeps a saved row's kind and warranty (planMatrixSkuWarranties).
             ...(variant.fulfillmentKind !== undefined ? { fulfillmentKind: variant.fulfillmentKind } : {}),
+            ...warrantyByVariantId.get(variant.id),
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {
@@ -1156,12 +1173,16 @@ export async function saveProductOptionMatrix(
     adminUserId?: string,
 ): Promise<{ aggregateRevision: number }> {
     const { expectedAggregateRevision, ...input } = parseProductOptionMatrix(rawInput);
-    const product = await db.select({ id: products.id, isActive: products.isActive })
+    const product = await db.select({ id: products.id, isActive: products.isActive, isGiftCard: products.isGiftCard })
         .from(products)
         .where(and(eq(products.id, productId), isNull(products.deletedAt)))
         .get();
     if (!product) throw new NotFoundError("Product not found");
-    const plan = await planProductOptionMatrix(db, productId, input, { isActive: product.isActive, adminUserId });
+    const plan = await planProductOptionMatrix(db, productId, input, {
+        isActive: product.isActive,
+        adminUserId,
+        isGiftCard: product.isGiftCard === true,
+    });
     const { aggregateRevision } = await commitProductOptionMatrixPlan(db, productId, expectedAggregateRevision, plan);
     return { aggregateRevision };
 }

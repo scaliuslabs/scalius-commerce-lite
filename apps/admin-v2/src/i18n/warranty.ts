@@ -70,6 +70,10 @@ export const warrantyMessages = defineMessages({
     noPolicies: "No policies match",
     managePolicies: "Manage policies",
     archivedPolicy: "{name} (archived)",
+    // A variant's warranty (the variant table's details)
+    skuWarrantyFor: "Warranty for {name}",
+    sameAsProduct: "Same as product ({policy})",
+    skuArchivedHelp: "Archived: this variant sells without a warranty until you choose another.",
     // Summary line
     "summary.brand": "{duration} brand warranty",
     "summary.store": "{duration} store warranty",
@@ -184,6 +188,9 @@ export const warrantyMessages = defineMessages({
     noPolicies: "কোনো পলিসি মেলেনি",
     managePolicies: "পলিসি পরিচালনা",
     archivedPolicy: "{name} (আর্কাইভ করা)",
+    skuWarrantyFor: "{name}-এর ওয়ারেন্টি",
+    sameAsProduct: "প্রোডাক্টের মতো ({policy})",
+    skuArchivedHelp: "আর্কাইভ করা: অন্য পলিসি বেছে না নেওয়া পর্যন্ত এই ভ্যারিয়েন্ট ওয়ারেন্টি ছাড়া বিক্রি হবে।",
     "summary.brand": "{duration} ব্র্যান্ড ওয়ারেন্টি",
     "summary.store": "{duration} স্টোর ওয়ারেন্টি",
     "summary.replacement": "{days} দিনের রিপ্লেসমেন্ট",
