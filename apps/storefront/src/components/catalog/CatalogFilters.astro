@@ -475,6 +475,16 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
       </button>
     )}
 
+    {bar && (
+      // Without JavaScript "More filters" cannot open, so the bar shows every group (native listing and embed alike).
+      <noscript>
+        <style>
+          .catalog-filter-form[data-placement="bar"] [data-bar-overflow] { display: block !important; }
+          [data-catalog-bar-more] { display: none !important; }
+        </style>
+      </noscript>
+    )}
+
     {hasActiveFilters && !drawer && (
       <a href={resetPath} class="catalog-filter-clear">{copy.clearAll}</a>
     )}

@@ -292,5 +292,11 @@
   "from": "30133e20c46aac41",
   "change": "storefront/testing fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): type is now a StorefrontSkinnableSection and settings a Partial of its sealed projection; the result is the full projection, typed by it.",
   "reason": "Pre-lock (black-box platform M4): the fixture returned settings {} for every section, contradicting the sealed StorefrontSectionSkinSettings the host fills completely, so correctly typed skins failed validate."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "45518b090628cdc6",
+  "change": "storefront.STOREFRONT_COMPONENT_LIMITS.islandPropsBytes: a new limit was added.",
+  "reason": "It relaxes a bound rather than adding one: an island's data-props was held to the 2,000-character cap of every attribute (at most 6,000 UTF-8 bytes) and is now bounded on its own at 16 KiB of JSON, still inside htmlBytes. Every props value that passed before still passes (html.test.ts pins the 16 KiB boundary), and an oversized one is now named instead of dropped silently."
  }
 ]

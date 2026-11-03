@@ -4,16 +4,36 @@
 // the homepage. A fixed part's own structure is the document's
 // `blocks.product` and `blocks.listing` (modules, toolbar pieces, filters).
 import { z } from "zod";
-import { isValidResourceCanonicalPath } from "../seo-canonical";
+import { MARKET_SUBFOLDER_PATTERN } from "../markets";
 import { STOREFRONT_MAX_SECTIONS, storefrontSectionListSchema } from "./sections";
 
 export const STOREFRONT_MAX_LANDING_PAGES = 20;
 export const STOREFRONT_LANDING_TITLE_MAX = 120;
 export const STOREFRONT_LANDING_DESCRIPTION_MAX = 320;
 
-/** A landing page's URL handle: one lowercase CMS-style segment, never a reserved route. */
+/**
+ * The handles no landing page has ever been allowed, whatever the storefront
+ * reserves today. Frozen: a name added to `STOREFRONT_ROUTE_SEGMENTS` later must
+ * not be added here, or a stored document that holds it would stop reading.
+ */
+const LANDING_HANDLES_NEVER_VALID: ReadonlySet<string> = new Set([
+  "404", "500", "account", "admin", "api", "apps", "blog", "brands", "buy", "cart", "categories", "checkout",
+  "collections", "health", "localization", "newsletter", "order-success", "pages", "payment-recovery", "products",
+  "search", "track-order",
+]);
+
+/**
+ * A landing page's URL handle: one lowercase CMS-style segment, never a market
+ * subfolder or one of the frozen names above. The page lives at
+ * `/pages/<handle>`, so a top-level route cannot collide with it and the
+ * storefront's route list does not apply: a stored document keeps every
+ * handle it was saved with.
+ */
 export const storefrontLandingSlugSchema = z.string().min(1).max(100)
-  .refine((slug) => isValidResourceCanonicalPath("page", `/${slug}`) && slug !== "pages", "Use a non-reserved lowercase URL handle.");
+  .refine(
+    (slug) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) && !MARKET_SUBFOLDER_PATTERN.test(slug) && !LANDING_HANDLES_NEVER_VALID.has(slug),
+    "Use a non-reserved lowercase URL handle.",
+  );
 
 /** A landing page whose sections are `sections` (the document's own section list schema). */
 export function storefrontLandingPageSchemaOf<Sections extends typeof storefrontSectionListSchema>(sections: Sections) {

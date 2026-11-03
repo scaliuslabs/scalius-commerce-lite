@@ -1,10 +1,12 @@
 ---
 // The listing's own pieces a listing_main skin places
 // (`<scalius-embed kind="filters | toolbar | pagination">`): the filters (a
-// GET form that works without JavaScript, open beside the skin's results),
-// the sort and page-size controls, and the page links. Same data, rules,
-// words and scripts as the core listing (CatalogListing.astro); paging is
-// always numbered links, so crawlers reach every product.
+// form that works without JavaScript), the sort and page-size controls, and
+// the page links. Same data, rules, words and scripts as the core listing
+// (CatalogListing.astro); paging is always numbered links, so crawlers reach
+// every product. The filters follow the merchant's placement, a sidebar or a
+// bar of dropdowns (catalogEmbeddedFilters); a drawer sits as a sidebar, and
+// below 64rem the form stays inline (no sheet).
 import type { ComponentProps } from "astro/types";
 import CatalogBandTools from "./CatalogBandTools.astro";
 import CatalogFilters from "./CatalogFilters.astro";
@@ -18,7 +20,7 @@ import {
   countActiveProductListFilters,
 } from "@/lib/product-list-query";
 import { catalogFacetGroups, catalogFacetValueCounts, catalogRatingRows, showsCatalogPriceFilter, visibleCatalogFacets } from "@/lib/catalog-filters";
-import { catalogListingControls, catalogListingPresentation, catalogSortOptions } from "@/lib/catalog-listing";
+import { catalogEmbeddedFilters, catalogListingControls, catalogListingPresentation, catalogSortOptions } from "@/lib/catalog-listing";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { pageLanguage } from "@/lib/store-time-zone";
@@ -50,7 +52,7 @@ const controls = catalogListingControls({
 });
 const pageUrl = (page: number) =>
   buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });
-const presentation = catalogListingPresentation(resolved, listingTemplate).filters;
+const presentation = catalogEmbeddedFilters(catalogListingPresentation(resolved, listingTemplate).filters);
 const groups = kind === "filters"
   ? catalogFacetGroups(shownFacets, {
     valuesInHtml: STOREFRONT_FILTER_VALUES_IN_HTML,
@@ -60,7 +62,7 @@ const groups = kind === "filters"
 ---
 
 {kind === "filters" && controls.filters && (
-  <div id="filter-section" data-catalog-embed="filters" data-placement="sidebar">
+  <div id="filter-section" data-catalog-embed="filters" data-placement={presentation.placement} style={presentation.styleVars || undefined}>
     <CatalogFilters
       groups={groups}
       priceRange={priceRange}
@@ -76,7 +78,7 @@ const groups = kind === "filters"
       countEndpoint={countEndpoint}
       currencySymbol={currencySymbol}
       currencyCode={currencyCode}
-      presentation={{ ...presentation, placement: "sidebar" }}
+      presentation={presentation}
       ratingRows={ratingRows}
     />
   </div>

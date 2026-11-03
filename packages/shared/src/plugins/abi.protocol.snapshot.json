@@ -11577,6 +11577,22 @@
    }
   }
  },
+ "providerRequired": {
+  "payment": [
+   "createSession",
+   "verifyWebhook"
+  ],
+  "courier": [
+   "createShipment",
+   "trackShipment"
+  ],
+  "sms": [
+   "send"
+  ],
+  "courier_history": [
+   "check"
+  ]
+ },
  "ui": {
   "document": {
    "$schema": "https://json-schema.org/draft/2020-12/schema",

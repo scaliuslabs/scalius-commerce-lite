@@ -60,6 +60,7 @@ import { productGalleryItems } from "@/components/product/lib/gallery-media";
 import { publicSpecificationRows } from "@/components/product/lib/product-page-modules";
 import { objectFieldViews } from "@/lib/object-fields";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
+import { MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
 import { navigationFromCategoryTree, pruneNavigation, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
 import { phoneNavigation } from "@/components/header/phone-navigation";
 import { hasSeveralMarkets, marketCountryOptions, selectedMarketCountry } from "@/lib/market-selector";
@@ -379,7 +380,8 @@ export function storefrontFieldValues(fields: readonly StorefrontCustomField[] |
 
 const BAND_ORDER: readonly BuyerAvailabilityBand[] = ["in_stock", "untracked", "low_stock"];
 const PRODUCT_PAGE_MEDIA_MAX = 20;
-const PRODUCT_PAGE_VARIANTS_MAX = 100;
+// Every SKU the catalog allows, so a skin's SKU controls can cover each one.
+const PRODUCT_PAGE_VARIANTS_MAX = MAX_PRODUCT_OPTION_COMBINATIONS;
 
 /** The product page's projection (`StorefrontProductPage`): what a product_main skin and product blocks get. */
 export function productPageData(input: {

@@ -1,7 +1,30 @@
 const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
 
-export const PRIVATE_STOREFRONT_PATHNAME_RE =
-  /^\/(?:account|buy|cart|checkout|newsletter|order-success|payment-recovery|theme-preview|track-order)(?:\/|$)/;
+/**
+ * The buyer's own pages: each shows or takes something that belongs to one
+ * buyer (a session, receipt proof, order, claim, address, gift-card code, OTP
+ * or payment state) or is a step of a buyer's session. This one list decides
+ * what is never stored for another buyer (`isUncachedPrivateStorefrontPathname`),
+ * never prefetched, and never touched by app code (`storefrontAppPage`). A new
+ * page of that kind is added here; `private-pages.test.ts` fails until every
+ * page under `src/pages` is on this list or declared public.
+ */
+export const PRIVATE_STOREFRONT_ROOTS = [
+  "account",
+  "agent",
+  "buy",
+  "cart",
+  "checkout",
+  "gift-card-balance",
+  "newsletter",
+  "order-success",
+  "payment-recovery",
+  "theme-preview",
+  "track-order",
+  "warranty-claims",
+] as const;
+
+const PRIVATE_STOREFRONT_PATHNAME_RE = new RegExp(`^/(?:${PRIVATE_STOREFRONT_ROOTS.join("|")})(?:/|$)`);
 
 export function isPrivateStorefrontPathname(pathname: string): boolean {
   return PRIVATE_STOREFRONT_PATHNAME_RE.test(pathname);

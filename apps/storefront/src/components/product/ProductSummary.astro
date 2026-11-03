@@ -29,6 +29,7 @@ import {
 } from "./lib/product-actions";
 import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
+import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "./lib/buy-form";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -73,6 +74,12 @@ interface Props {
   detailsFeatures?: boolean;
   /** False leaves out the product title (a product_main skin that draws its own `<h1>`). */
   title?: boolean;
+  /**
+   * False leaves out the option buttons: a product_main skin's own SKU
+   * controls choose every buyable SKU (the host checked that,
+   * lib/extensions/purchase-controls.ts). The no-JavaScript picker stays.
+   */
+  nativeOptions?: boolean;
 }
 
 const {
@@ -95,6 +102,7 @@ const {
   details = true,
   detailsFeatures = true,
   title = true,
+  nativeOptions = true,
 } = Astro.props;
 
 const { language } = await currentRequestTheme(Astro.locals);
@@ -149,7 +157,7 @@ const actionPresentation = purchaseBlocked
 // The buy area is always a real form posting to /buy/<slug> (safe before
 // hydration and without JavaScript); buyer inputs add their fields to it.
 const buyerInputFields = customizationUnavailable ? [] : (product.customization?.fields ?? []);
-const buyFormId = "product-buy-form";
+const buyFormId = BUY_FORM_ID;
 const hasBuyerInputs = buyerInputFields.length > 0;
 // Without JavaScript the option buttons cannot choose a SKU; a plain select of
 // the buyer's purchasable combinations does, in the same form.
@@ -294,7 +302,7 @@ function optionAriaLabel(
         <slot name="after-title" />
       </div>
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
-      <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1" data-buy-part="price">
         <div class="buy-box-price-fact">
           <p class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
             {showsStartingPrice
@@ -350,7 +358,7 @@ function optionAriaLabel(
     <div class="space-y-3 pt-1 lg:pt-2">
       <div id="variant-unavailable-query-notice" class="hidden rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert"></div>
 
-      {options.length > 0 && <div class="variant-option-panels">
+      {options.length > 0 && nativeOptions && <div class="variant-option-panels" data-buy-part="options">
         {options.map((option) => {
           const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
           const pricedOptions = new Map(option.values.flatMap((value) => {
@@ -461,7 +469,7 @@ function optionAriaLabel(
         <noscript>
           <style is:inline>.variant-option-panels{display:none}</style>
           <label for="product-variant-noscript" class="mb-1 block text-sm font-medium text-foreground">{options.map((option) => option.name).join(" / ")}</label>
-          <select id="product-variant-noscript" name="variant" form={buyFormId} class="block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground">
+          <select id="product-variant-noscript" name={BUY_FORM_VARIANT_FIELDS.picker} form={buyFormId} class="block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground">
             {noScriptVariants.map((variant) => (
               <option value={variant.id} selected={variant.id === initialSelectedVariant?.id}>{variant.label}</option>
             ))}
@@ -487,7 +495,7 @@ function optionAriaLabel(
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
       )}
-      <div hidden={allSoldOut}>
+      <div hidden={allSoldOut} data-buy-part="quantity">
         <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
           <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.decreaseQuantity}><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
@@ -497,8 +505,11 @@ function optionAriaLabel(
         <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
       </div>
 
-      <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
-      <div class="buy-box-ctas flex gap-2 pt-1">
+      {/* The purchase's messages: the choice for screen readers, and a refused add's problem (product-controller.ts). */}
+      <div class="space-y-2" data-buy-part="status" data-state="idle">
+        <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+      </div>
+      <div class="buy-box-ctas flex gap-2 pt-1" data-buy-part="actions" data-state={actionPresentation.addToCart.disabled ? "unavailable" : "ready"}>
         <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
           <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
@@ -591,6 +602,10 @@ function optionAriaLabel(
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+  }
+  /* The status takes room only while it shows a problem (its screen reader line takes none). */
+  [data-buy-part="status"][data-state="idle"]:not(.\#) {
+    display: contents;
   }
   .buy-box-ctas:not(.\#) > button:not(.\#) {
     font-size: var(--theme-text-sm, 0.875rem);

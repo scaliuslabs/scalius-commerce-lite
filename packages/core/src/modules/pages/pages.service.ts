@@ -755,9 +755,15 @@ export async function updatePage(
     }
   }
 
+  // A saved page keeps its address when a route later claims it: only a new or
+  // changed slug is checked, so the page stays editable.
+  const slugChanges = data.slug !== undefined && data.slug !== existing.slug;
   const nextSlug = data.slug ?? existing.slug;
-  assertSlugNotReservedByDashboard(existing.contentType, nextSlug, authority);
+  if (slugChanges) {
+    assertSlugNotReservedByDashboard(existing.contentType, nextSlug, authority);
+  }
   if (
+    slugChanges &&
     !isValidContentEntryPath(
       existing.contentType,
       contentEntryPath(existing.contentType, nextSlug),
@@ -772,6 +778,7 @@ export async function updatePage(
   if (
     data.canonicalPath !== undefined &&
     data.canonicalPath !== null &&
+    data.canonicalPath !== existing.canonicalPath &&
     !isValidContentEntryPath(existing.contentType, data.canonicalPath)
   ) {
     throw new ValidationError(

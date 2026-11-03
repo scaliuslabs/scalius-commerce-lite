@@ -40,6 +40,8 @@ import { ExtensionHost } from "./host";
 import { storefrontIncidentReporter } from "./incidents";
 import { storeLogo, storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
+import { bindPurchaseControls } from "./purchase-controls";
+import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 
 export { ExtensionHost } from "./host";
 
@@ -231,7 +233,11 @@ export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   const html = await host.render(skin.extension, {
     kind: "skin", target: skin.target, component: skin.component, settings: skin.settings, ...ask,
   } as never, { jsonLd });
-  return appMarkup(skin.extension, skin.target, html);
+  const markup = appMarkup(skin.extension, skin.target, html);
+  // A product page skin's SKU controls join the store's buy form.
+  return markup && skin.target === "product_main"
+    ? bindPurchaseControls(markup, (ask as unknown as { data: StorefrontProductPage }).data.product)
+    : markup;
 }
 
 /** A component that fills a slot, with its settings resolved. */

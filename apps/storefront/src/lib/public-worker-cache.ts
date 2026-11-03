@@ -19,6 +19,7 @@ import {
   requestBypassesPublicStorefrontCache,
   toPublicCacheRequest,
 } from "@/lib/cache-policy";
+import { STOREFRONT_ROUTE_SEGMENTS } from "@scalius/shared/storefront-route-segments";
 import { applyBrowserCachePolicyForPublicResponse } from "@/lib/public-discovery-cache";
 import {
   CACHE_FRONTIER_DELTA_MS,
@@ -58,31 +59,6 @@ export const PAGE_DEPENDENCY_HEADERS = {
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
-
-const RESERVED_TOP_LEVEL_PATHS = new Set([
-  "account",
-  "apps",
-  "api",
-  "blog",
-  "brands",
-  "buy",
-  "cart",
-  "categories",
-  "checkout",
-  "collections",
-  "health",
-  "newsletter",
-  "order-success",
-  "payment-recovery",
-  "products",
-  "track-order",
-  "robots.txt",
-  "search",
-  "sitemap.xml",
-  "sitemap.xsl",
-  "theme-preview",
-  "ucp",
-]);
 
 export interface PublicStorefrontCachePolicy {
   canonicalUrl: string;
@@ -178,7 +154,8 @@ function isCmsPagePath(pathname: string): boolean {
   return (
     segments.length === 1 &&
     !segments[0]!.includes(".") &&
-    !RESERVED_TOP_LEVEL_PATHS.has(segments[0]!)
+    // A static route wins over the CMS page of the same slug.
+    !STOREFRONT_ROUTE_SEGMENTS.has(segments[0]!)
   );
 }
 
@@ -196,7 +173,7 @@ function isPublicCachePath(pathname: string): boolean {
     // The category index and the header's whole menu panels (a partial).
     /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
     /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
-    /^\/search\/?$/.test(pathname) ||
+    /^\/(?:search|compare)\/?$/.test(pathname) ||
     /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) ||
     pathname === "/blog/feed.xml" ||
     pathname === "/llms.txt" ||
@@ -223,7 +200,7 @@ export function isLayoutBatchedPagePath(pathname: string): boolean {
     /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
     /^\/(?:products|categories|brands|collections)\/[^/]+\/?$/.test(pathname) ||
     /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
-    /^\/(?:search|cart|checkout)\/?$/.test(pathname) ||
+    /^\/(?:search|compare|cart|checkout)\/?$/.test(pathname) ||
     /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) && !pathname.endsWith(".xml") ||
     isCmsPagePath(pathname)
   );
