@@ -188,9 +188,14 @@ export function createInvalidator(queryClient: QueryClient, delayMs = 250, optio
       timer ??= setTimeout(flush, delayMs);
     },
     dispose() {
+      // A trailing dashboard refetch the window still owed runs now: its
+      // notices already marked the queries stale, and nothing else would
+      // refetch them while they stay on screen.
+      const owedRefetch = dashboardTimer !== null && !isHidden();
       disposed = true;
       if (timer) clearTimeout(timer);
       if (dashboardTimer) clearTimeout(dashboardTimer);
+      if (owedRefetch) void queryClient.invalidateQueries({ refetchType: "active", predicate: dashboardPredicate });
       timer = null;
       dashboardTimer = null;
       pending = [];
