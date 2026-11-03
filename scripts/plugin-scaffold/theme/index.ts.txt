@@ -51,7 +51,7 @@ export const manifest = defineManifest({
       name: "__TITLE__",
       description: "The header, footer and product card, a row of the newest products and the store's popular products.",
       // The theme document version these values are written for; stores upgrade them from here.
-      themeVersion: 12,
+      themeVersion: 13,
       theme: {
         apps: {
           skins: {
