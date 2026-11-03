@@ -20,7 +20,6 @@ import WarrantyRow from "./WarrantyRow.astro";
 import ProductFeatureList from "./modules/ProductFeatureList.astro";
 import ReviewsSummary from "./reviews/ReviewsSummary.astro";
 import { buyBoxFeatures } from "./lib/product-page-modules";
-import { initialVariantPresentation } from "./lib/variant-state-machine";
 
 type SummaryProps = ComponentProps<typeof ProductSummary>;
 
@@ -39,12 +38,12 @@ interface Props {
   fulfilment: ProductFulfilment;
   deliveryFacts: DeliveryFact[];
   canPurchaseAny: boolean;
+  /** The SKU the page opens with (the page's opening choice); null when it names none. Its warranty row shows. */
+  openingVariantId: string | null;
 }
 
-const { summary, reviewCopy, features, emi, contactLinks, contactCopy, blockData, fulfilment, deliveryFacts, canPurchaseAny } = Astro.props;
+const { summary, reviewCopy, features, emi, contactLinks, contactCopy, blockData, fulfilment, deliveryFacts, canPurchaseAny, openingVariantId } = Astro.props;
 const { product } = summary;
-// The warranty row opens on the SKU the page opens with (each SKU has its own warranty).
-const warrantyVariantId = initialVariantPresentation(summary.options, summary.variants).stockVariant?.id ?? null;
 ---
 
 <ProductSummary {...summary} projection={blockData()}>
@@ -72,5 +71,5 @@ const warrantyVariantId = initialVariantPresentation(summary.options, summary.va
   <AppSlot slot="after-actions" name="product.buy_box.after" data={blockData} />
   <DigitalPromise slot="after-actions" product={product} fulfilment={fulfilment} />
   {canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}
-  <WarrantyRow slot="after-actions" product={product} variants={summary.variants} initialVariantId={warrantyVariantId} copy={summary.actionCopy} />
+  <WarrantyRow slot="after-actions" product={product} variants={summary.variants} initialVariantId={openingVariantId} copy={summary.actionCopy} />
 </ProductSummary>

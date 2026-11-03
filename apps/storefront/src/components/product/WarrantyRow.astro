@@ -17,7 +17,7 @@ import Icon from "@/components/icons/Icon.astro";
 import type { Product, ProductVariant } from "@/lib/api";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { pickWarrantyCopy, warrantySummaryText } from "@/lib/account-warranties";
-import { productWarrantyTerms, skuWarranties, type ProductWarrantyView } from "./warranty-spec-row";
+import { skuWarranties, warrantyTerms, type ProductWarrantyView } from "./sku-warranties";
 
 export interface Props {
   product: Product;
@@ -40,7 +40,7 @@ const shownId = initialVariantId !== null && initialVariantId in perSku.byVarian
   : sharedIds.size === 1 ? [...sharedIds][0] ?? null : null;
 const rows: Array<{ id: string; warranty: ProductWarrantyView; hidden: boolean }> =
   [...perSku.byId].map(([id, warranty]) => ({ id, warranty, hidden: id !== shownId }));
-const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(productWarrantyTerms(warranty), copy);
+const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(warrantyTerms(warranty), copy);
 ---
 
 {rows.length > 0 && (
