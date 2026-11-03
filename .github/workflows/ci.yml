@@ -143,8 +143,12 @@ jobs:
         # The proofs of every rule the change can break, invariants and scenarios included,
         # under their own configs: a skip, a flake or a missing PostgreSQL run fails.
         if: ${{ steps.impact.outputs.rules != '' }}
+        # The cache proofs run the five-seed collecting DVC gate AGENTS.md requires; the
+        # variables are inert for every other proof.
         env:
           RULES: ${{ steps.impact.outputs.rules }}
+          DVC_SEEDS: "5"
+          DVC_COLLECT: "1"
         run: node rules/cli.mjs test $RULES --strict --require postgres
 
       - name: Build
@@ -239,4 +243,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify every rule
+        # Five seeds with collection: the DVC gate AGENTS.md requires, run weekly in full.
+        env:
+          DVC_SEEDS: "5"
+          DVC_COLLECT: "1"
         run: node rules/cli.mjs verify --strict --require postgres --max-workers 3
