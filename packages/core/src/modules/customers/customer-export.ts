@@ -7,9 +7,10 @@ import type { Database } from "@scalius/database/client";
 import { customerAddresses, customerMarketingConsents, customerOrderStats, customers, orders } from "@scalius/database/schema";
 import { MARKETING_CHANNELS, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { fromMinor } from "@scalius/shared/money";
-import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
+import { inJsonArray } from "../../utils/in-json-array";
 import { customerKind } from "./customer-identity";
 import { currentMarketingContactSql } from "./customer-segments";
 import { listTagsForCustomers } from "./customer-tags";
@@ -74,9 +75,11 @@ export async function buildCustomerCsvExport(
 
     while (!limited) {
         const conditions: (SQL | undefined)[] = [
-            isNull(customers.deletedAt),
+            // With ids, the id list leads: a bare `deleted_at IS NULL` would let the planner walk every live customer.
+            ids ? sql`+${customers.deletedAt} IS NULL` : isNull(customers.deletedAt),
             ...customerListFilterSql(input.filters),
-            ids ? inArray(customers.id, ids) : undefined,
+            // One bound value: 100 ids plus the page, consent and cursor binds would pass D1's 100-parameter cap.
+            ids ? inJsonArray(customers.id, ids) : undefined,
             afterId ? sql`${customers.id} > ${afterId}` : undefined,
         ];
         const page = await db.select({
