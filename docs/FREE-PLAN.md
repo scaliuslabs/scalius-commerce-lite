@@ -61,7 +61,7 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 
 Paid raises these to 30 s of CPU as configured, 1,000 D1 queries and 10,000 subrequests per invocation. The Paid daily quotas are (unverified).
 
-**Database size.** A Scalius store is one database, so the 500 MB cap is per store. A write that would grow a Free database past it fails; the dashboard and the API do not show the database size or warn before the cap (`docs/platform/FEATURE-ROADMAP.md` lists it as open). The tables that grow without a retention sweep are `checkout_attempts`, `notification_outbox`, `order_receipts` and `order_review_requests`. Moving to Paid raises the cap to 10 GB, and the SQLite-to-PostgreSQL path (`docs/DATABASE-PORTABILITY.md`) is the exit past that. Checked 2026-11-03 against Cloudflare's D1 limits page (`developers.cloudflare.com/d1/platform/limits/`, read through a page summariser, not a raw copy): 500 MB Free and 10 GB Paid per database, 10 databases and 5 GB per Free account. The 2026-10-03 date above still covers the other rows.
+**Database size.** A Scalius store is one database, so the 500 MB cap is per store. A write that would grow a Free database past it fails; the dashboard and the API do not show the database size or warn before the cap (`docs/platform/FEATURE-ROADMAP.md` lists it as open). The per-order tables that only grow (`checkout_attempts`, `notification_outbox`, `order_receipts` and `order_review_requests`) have a retention sweep (Background work, below). Moving to Paid raises the cap to 10 GB, and the SQLite-to-PostgreSQL path (`docs/DATABASE-PORTABILITY.md`) is the exit past that. Checked 2026-11-03 against Cloudflare's D1 limits page (`developers.cloudflare.com/d1/platform/limits/`, read through a page summariser, not a raw copy): 500 MB Free and 10 GB Paid per database, 10 databases and 5 GB per Free account. The 2026-10-03 date above still covers the other rows.
 
 ## Measuring
 
@@ -122,6 +122,8 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Projection rebuild | `system_kv` `catalog:projections:rebuild-cursor` (a lap: position, end, mode) | the first chunks | each drain continues the lap; a new request keeps its position and moves its end, so the lap never restarts |
 | Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |
 | Image renditions | media rows with `variant_width` NULL (pending) | none: no Worker renders images | an open dashboard tab renders them in the background |
+
+History that only grows is deleted once nothing reads it: the `event_outbox_retention` job also purges Meta CAPI logs past their retention, checkout attempts 30 days after their order, receipt proofs a day after they expire, sent notifications after 180 days and finished review requests after a year, a bounded share a run (`packages/core/src/modules/orders/history-retention.ts`).
 
 Rules:
 

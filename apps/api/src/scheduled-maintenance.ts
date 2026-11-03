@@ -10,6 +10,8 @@ import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
+  ORDER_HISTORY_RETENTION_LIMIT,
+  pruneOrderHistory,
 } from "@scalius/core/modules/orders";
 import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
@@ -631,6 +633,21 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         limit: scaled(CAPI_LOG_PURGE_LIMIT),
       }));
       if (capiLogs > 0) console.log(`[scheduled] Meta CAPI log retention: deleted=${capiLogs}`);
+      // Per-order history past every window that reads it (checkout replays,
+      // receipts, notification dedupe, review requests): one round trip.
+      const cursor = await readMaintenanceCursor(db, "order-history");
+      const history = await timed("order_history_retention", () => pruneOrderHistory(db, {
+        nowSeconds: Math.floor(tickDate(runContext).getTime() / 1000),
+        limit: scaled(ORDER_HISTORY_RETENTION_LIMIT),
+        checkoutCursor: cursor.value.checkoutAttempts,
+      }));
+      await cursor.save({ checkoutAttempts: history.checkoutCursor });
+      if (history.checkoutAttempts + history.receipts + history.notifications + history.reviewRequests > 0) {
+        console.log(
+          `[scheduled] Order history retention: checkoutAttempts=${history.checkoutAttempts}, receipts=${history.receipts}, ` +
+            `notifications=${history.notifications}, reviewRequests=${history.reviewRequests}`,
+        );
+      }
     },
   },
   {

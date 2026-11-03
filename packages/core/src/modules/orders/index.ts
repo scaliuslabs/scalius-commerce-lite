@@ -32,6 +32,7 @@ export * from "./timeline";
 export * from "./invoices/service";
 export * from "./lookup";
 export * from "./stale-incomplete";
+export * from "./history-retention";
 export * from "./status/claim";
 export * from "./invoices/printable-artifact";
 export * from "./fulfilment-reads";
