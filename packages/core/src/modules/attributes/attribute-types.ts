@@ -37,6 +37,7 @@ import {
 } from "./projection-refresh";
 import { formatNumber } from "@scalius/shared/locale-format";
 import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
+import { numberDisplayWithUnitInForce } from "./number-display";
 
 /** Distinct values an enum conversion may create. */
 export const MAX_ENUM_CONVERSION_VALUES = 2_000;
@@ -105,21 +106,25 @@ function naturalOrder(left: string, right: string): number {
 }
 
 /**
- * A number attribute's unit changed: each value's display text becomes its
- * number with the new unit (`formatAttributeNumber`, here in SQL), so the
- * value carries exactly the unit the attribute names. Only rows in another
- * shape are written, 90 products per batch with their revision bump and
- * projection refresh. Returns how many products were rewritten.
+ * Rewrites a number attribute's values whose display text is not their
+ * number (`formatAttributeNumber`, here in SQL) with `unit`: a given unit (the
+ * pass before a unit switch), or `"in force"`, the unit the attribute names
+ * when each chunk's statement runs (the pass after it), so two unit changes
+ * or a write racing one always end with text and unit agreeing. Only rows in
+ * another shape are written, 90 products per batch with their revision bump
+ * and projection refresh. Returns how many products were rewritten.
  */
 export async function rewriteNumberDisplays(
     db: Database,
     attributeId: string,
-    unit: string | null,
+    unit: string | null | "in force",
     refresh: CatalogProjectionRefresh,
 ): Promise<number> {
     const v = productAttributeValues;
     const number = canonicalAttributeNumberSql(sql`${v.valueNumber}`);
-    const display = unit ? sql`${number} || ' ' || ${unit}` : number;
+    const display = unit === "in force"
+        ? numberDisplayWithUnitInForce(sql`${v.valueNumber}`, sql`${v.attributeId}`)
+        : unit ? sql`${number} || ' ' || ${unit}` : number;
     const stale = and(eq(v.attributeId, attributeId), sql`${v.valueNumber} IS NOT NULL`, sql`${v.value} <> ${display}`)!;
     return forEachAttributeProductChunk(db, stale, (productIds) => [
         db.update(v).set({ value: display }).where(and(stale, sql`${v.productId} IN ${jsonIdSet(productIds)}`)),
@@ -181,7 +186,8 @@ export async function convertAttributeValueType(
             await db.update(productAttributes)
                 .set({ unit, facetDisplay, updatedAt: sql`unixepoch()` })
                 .where(and(eq(productAttributes.id, attribute.id), isNull(productAttributes.deletedAt)));
-            result.converted += await rewriteNumberDisplays(db, attribute.id, unit, refresh);
+            // The unit in force now: another unit change may have switched it after this one.
+            result.converted += await rewriteNumberDisplays(db, attribute.id, "in force", refresh);
             result.changed = true;
         }
         if (result.converted > 0) result.changed = true;

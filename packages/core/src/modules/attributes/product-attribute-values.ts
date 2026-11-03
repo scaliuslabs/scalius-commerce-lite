@@ -22,7 +22,7 @@ import { encodeAttributeValue } from "./attribute-value-codec";
 import { attributeValueInsertStatement, type NewAttributeValueRow } from "./attribute-definition";
 import { newAttributeValueId } from "./attribute-values";
 import type { AttributeBatchItem } from "./projection-refresh";
-import { canonicalAttributeNumberSql } from "../../utils/attribute-number-sql";
+import { numberDisplayWithUnitInForce } from "./number-display";
 
 /** Attributes one product may carry (one statement's worth of rows). */
 export const MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS = 90;
@@ -165,9 +165,10 @@ export async function prepareProductAttributeValueRows(
     // number's text is written with the unit in force when the batch commits,
     // so a save racing a unit change never stores the unit it replaced.
     const payload = JSON.stringify(rows);
-    const numberText = sql`${canonicalAttributeNumberSql(sql`CAST(json_extract(entry.value, '$.n') AS DOUBLE PRECISION)`)}
-        || COALESCE(' ' || (SELECT number_attribute.unit FROM ${productAttributes} AS number_attribute
-            WHERE number_attribute.id = CAST(json_extract(entry.value, '$.a') AS TEXT)), '')`;
+    const numberText = numberDisplayWithUnitInForce(
+        sql`CAST(json_extract(entry.value, '$.n') AS DOUBLE PRECISION)`,
+        sql`CAST(json_extract(entry.value, '$.a') AS TEXT)`,
+    );
     const enumValue = (column: "id" | "value") => sql`(
         SELECT enum_value.${sql.raw(column)} FROM ${attributeValues} AS enum_value
         WHERE enum_value.attribute_id = CAST(json_extract(entry.value, '$.a') AS TEXT)

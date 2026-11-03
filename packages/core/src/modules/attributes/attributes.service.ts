@@ -37,6 +37,7 @@ import {
 import { encodeAttributeValue } from "./attribute-value-codec";
 import { attributeValueInsertStatement, readLiveAttributeDefinition } from "./attribute-definition";
 import { convertAttributeValueType } from "./attribute-types";
+import { numberDisplayWithUnitInForce } from "./number-display";
 import { assertLiveAttributeGroup } from "./attribute-groups";
 import {
     createAttributeValueRow,
@@ -1129,9 +1130,14 @@ export async function renameAttributeValue(
             .run();
     }
     const match = productValueTextMatch(attributeId, source);
+    // A number's text takes the unit in force when each chunk commits, so a
+    // rename that races a unit change never writes the unit it replaced.
+    const value = attribute.valueType === "number" && encoded.valueNumber !== null
+        ? numberDisplayWithUnitInForce(sql`CAST(${encoded.valueNumber} AS DOUBLE PRECISION)`, sql`${attributeId}`)
+        : encoded.value;
     await forEachAttributeProductChunk(db, match, (productIds) => [
         db.update(productAttributeValues)
-            .set({ value: encoded.value, valueNumber: encoded.valueNumber })
+            .set({ value, valueNumber: encoded.valueNumber })
             .where(and(match, sql`${productAttributeValues.productId} IN ${jsonIdSet(productIds)}`)),
         productRevisionBumpStatement(db, productIds),
         ...refresh(productIds),
