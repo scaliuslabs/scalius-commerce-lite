@@ -735,7 +735,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 191,
     name: "0191_erased_customers_frozen",
-    sourceSha256: "956e9c8f86d24b652b8ea4170ee9a6efa450a2cc22d002092c3359fb41a269d5",
+    sourceSha256: "6d92b9941222bea0e2fcb7ba3c7845eb1e3b7f65ee1c1abaa436559b70f6934a",
   },
 ] as const;
 

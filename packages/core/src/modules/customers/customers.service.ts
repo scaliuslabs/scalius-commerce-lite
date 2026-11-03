@@ -41,7 +41,7 @@ import {
 } from "../../utils/keyset";
 import { type Database, getDatabaseProviderForClient, safeBatch } from "@scalius/database/client";
 import { customerNotErasedGuard, erasedCustomerConflict, isCustomerErasedError } from "./erased-guard";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { customerAuthDocument, validateCustomerPhoneCountry } from "../settings";
 import { customerAddressColumns, listCustomerAddresses, resolveAddress } from "./addresses";
 
@@ -664,14 +664,32 @@ function historyFromLiveRow(
     }).from(customers).where(and(eq(customers.id, customerId), condition)));
 }
 
-/** Runs a staff batch on one customer: an erasure that committed first answers 409. */
-async function writeUnlessErased(db: Database, customerId: string, statements: unknown[]): Promise<void> {
+type GuardedRecord = { erasedAt: Date | null; deletedAt: Date | null; mergedIntoCustomerId: string | null };
+
+/**
+ * Runs a staff batch on one customer whose guard failed or passed. A failed
+ * guard is read back: an erasure that committed first answers 409, a record
+ * deleted since the read 404, and anything else `settle` decides (it returns
+ * when the write is already done, or throws its own answer).
+ */
+async function writeUnlessErased(
+    db: Database,
+    customerId: string,
+    statements: unknown[],
+    settle?: (current: GuardedRecord) => void,
+): Promise<void> {
     try {
         await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
     } catch (error) {
         if (!isCustomerErasedError(error)) throw error;
-        const current = await db.select({ erasedAt: customers.erasedAt }).from(customers).where(eq(customers.id, customerId)).get();
-        if (current?.erasedAt) throw erasedCustomerConflict();
+        const current = await db.select({
+            erasedAt: customers.erasedAt,
+            deletedAt: customers.deletedAt,
+            mergedIntoCustomerId: customers.mergedIntoCustomerId,
+        }).from(customers).where(eq(customers.id, customerId)).get();
+        if (!current) throw new NotFoundError("Customer not found");
+        if (current.erasedAt) throw erasedCustomerConflict();
+        if (settle) return settle(current);
         throw error;
     }
 }
@@ -726,7 +744,14 @@ export async function restoreCustomer(db: Database, id: string, actorId: string 
         customerNotErasedGuard(db, id, sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`),
         db.update(customers).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
         historyFromLiveRow(db, id, "restored", actorId, live),
-    ]);
+    ], (current) => {
+        // Another restore committed first: nothing left to do.
+        if (!current.deletedAt) return;
+        if (current.mergedIntoCustomerId) {
+            throw new ValidationError("This guest record was merged into an account and can't be restored.");
+        }
+        throw new ConflictError("The customer changed while it was being restored. Please try again.");
+    });
 }
 
 /**

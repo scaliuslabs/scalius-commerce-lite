@@ -19102,19 +19102,6 @@ export type GetApiV1ProductsBySlugResponses = {
                     nextCursor: string | null;
                 } | null;
                 /**
-                 * The product's warranty policy (its current terms); null without one.
-                 */
-                warranty: {
-                    name: string;
-                    provider: 'brand' | 'store';
-                    duration: {
-                        value: number;
-                        unit: 'days' | 'months' | 'years';
-                    };
-                    replacementDays: number | null;
-                    terms: string | null;
-                } | null;
-                /**
                  * Every warranty a SKU of this page has, each once: a variant's `warrantyId` names one (a SKU inherits the product's, has its own, or none).
                  */
                 warranties: Array<{
@@ -35528,6 +35515,10 @@ export type PutApiV1AdminCustomersByIdErrors = {
      */
     404: ErrorResponse;
     /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -35579,6 +35570,39 @@ export type PostApiV1AdminCustomersByIdRestoreData = {
     query?: never;
     url: '/api/v1/admin/customers/{id}/restore';
 };
+
+export type PostApiV1AdminCustomersByIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdRestoreError = PostApiV1AdminCustomersByIdRestoreErrors[keyof PostApiV1AdminCustomersByIdRestoreErrors];
 
 export type PostApiV1AdminCustomersByIdRestoreResponses = {
     /**
@@ -58346,6 +58370,7 @@ export type PostApiV1AdminOrdersData = {
             reference?: string | null;
         };
         expectedTotal?: number;
+        abandonedCheckoutId?: string | null;
     };
     headers?: {
         /**

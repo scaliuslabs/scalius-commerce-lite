@@ -41,7 +41,7 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { appListQuerySchema, appListValuesSchema, planAppList } from "../../plugins/list-columns";
 
 import { ok, created, noContent } from "../../utils/api-response";
-import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, noContentResponse, errorResponses } from "../../schemas/responses";
+import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, noContentResponse, errorResponses, conflictResponse } from "../../schemas/responses";
 import { customerAddressSchema, customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
 import { relatedObjectsProjection, withRelatedObjects } from "./related-objects";
 import { relatedObjectRecordSchema } from "../../schemas/related-objects";
@@ -354,6 +354,8 @@ const updateCustomerRoute = createRoute({
     responses: {
         200: { description: "The customer as updated", content: { "application/json": { schema: customerEnvelope } } },
         ...errorResponses,
+        // The customer's data was erased: the record keeps no personal data.
+        409: conflictResponse,
     }
 });
 
@@ -424,6 +426,9 @@ const restoreCustomerRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        ...errorResponses,
+        // The customer's data was erased (an erased record is never restored).
+        409: conflictResponse,
     }
 });
 

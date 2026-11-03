@@ -76,4 +76,30 @@ FOR EACH ROW
 WHEN (NEW."name" IS DISTINCT FROM '[erased]' OR NEW."email" IS NOT NULL OR NEW."phone" IS DISTINCT FROM '')
 EXECUTE FUNCTION scalius_compat."customer_history_erased_owner_blocked_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (191, '0191_erased_customers_frozen', '956e9c8f86d24b652b8ea4170ee9a6efa450a2cc22d002092c3359fb41a269d5');
+CREATE TRIGGER "customer_addresses_erased_owner_moved"
+BEFORE UPDATE OF "customer_id" ON "customer_addresses"
+FOR EACH ROW
+WHEN (NEW."customer_id" IS DISTINCT FROM OLD."customer_id")
+EXECUTE FUNCTION scalius_compat."customer_erased_owner_blocked_fn"();
+CREATE TRIGGER "customer_identities_erased_owner_moved"
+BEFORE UPDATE OF "customer_id" ON "customer_identities"
+FOR EACH ROW
+WHEN (NEW."customer_id" IS DISTINCT FROM OLD."customer_id")
+EXECUTE FUNCTION scalius_compat."customer_erased_owner_blocked_fn"();
+CREATE TRIGGER "customer_marketing_consents_erased_owner_moved"
+BEFORE UPDATE OF "customer_id" ON "customer_marketing_consents"
+FOR EACH ROW
+WHEN (NEW."customer_id" IS DISTINCT FROM OLD."customer_id")
+EXECUTE FUNCTION scalius_compat."customer_erased_owner_blocked_fn"();
+CREATE TRIGGER "customer_marketing_consent_events_erased_owner_moved"
+BEFORE UPDATE OF "customer_id" ON "customer_marketing_consent_events"
+FOR EACH ROW
+WHEN (NEW."customer_id" IS DISTINCT FROM OLD."customer_id")
+EXECUTE FUNCTION scalius_compat."customer_erased_owner_blocked_fn"();
+CREATE TRIGGER "customer_history_erased_owner_changed"
+BEFORE UPDATE OF "customer_id", "name", "email", "phone" ON "customer_history"
+FOR EACH ROW
+WHEN (NEW."name" IS DISTINCT FROM '[erased]' OR NEW."email" IS NOT NULL OR NEW."phone" IS DISTINCT FROM '')
+EXECUTE FUNCTION scalius_compat."customer_history_erased_owner_blocked_fn"();
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (191, '0191_erased_customers_frozen', '6d92b9941222bea0e2fcb7ba3c7845eb1e3b7f65ee1c1abaa436559b70f6934a');

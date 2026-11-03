@@ -7,9 +7,10 @@
 --     erased (name '[erased]', no email, no phone, no proofs or sign-in
 --     time, no tax registration number, still retired and erased);
 --     counters and timestamps may still change.
---   *_erased_owner_blocked: no address, sign-in identity, marketing consent
---     or consent log entry is written for an erased record, and no history
---     entry with its contact.
+--   *_erased_owner_blocked / *_erased_owner_moved / *_owner_changed: no
+--     address, sign-in identity, marketing consent or consent log entry is
+--     written for an erased record or moved onto it, and no history entry
+--     with its contact is written or rewritten for it.
 -- The erasure batch erases the record before it writes its own history
 -- entry, so the scrub itself passes. Guards live in each trigger's WHEN
 -- clause and every body is one RAISE (remote D1 rejects a body with
@@ -75,4 +76,40 @@ BEGIN
   SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (191, '0191_erased_customers_frozen', '956e9c8f86d24b652b8ea4170ee9a6efa450a2cc22d002092c3359fb41a269d5');
+CREATE TRIGGER `customer_addresses_erased_owner_moved`
+BEFORE UPDATE OF `customer_id` ON `customer_addresses`
+WHEN NEW.`customer_id` IS NOT OLD.`customer_id` AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `erased_at` IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `customer_identities_erased_owner_moved`
+BEFORE UPDATE OF `customer_id` ON `customer_identities`
+WHEN NEW.`customer_id` IS NOT OLD.`customer_id` AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `erased_at` IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `customer_marketing_consents_erased_owner_moved`
+BEFORE UPDATE OF `customer_id` ON `customer_marketing_consents`
+WHEN NEW.`customer_id` IS NOT OLD.`customer_id` AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `erased_at` IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `customer_marketing_consent_events_erased_owner_moved`
+BEFORE UPDATE OF `customer_id` ON `customer_marketing_consent_events`
+WHEN NEW.`customer_id` IS NOT OLD.`customer_id` AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `erased_at` IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `customer_history_erased_owner_changed`
+BEFORE UPDATE OF `customer_id`, `name`, `email`, `phone` ON `customer_history`
+WHEN (NEW.`name` IS NOT '[erased]' OR NEW.`email` IS NOT NULL OR NEW.`phone` IS NOT '')
+  AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `erased_at` IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
+END;
+--> statement-breakpoint
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (191, '0191_erased_customers_frozen', '6d92b9941222bea0e2fcb7ba3c7845eb1e3b7f65ee1c1abaa436559b70f6934a');
