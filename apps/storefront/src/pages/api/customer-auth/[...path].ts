@@ -15,6 +15,7 @@ import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { appendRewrittenCustomerAuthSetCookies } from "@/lib/customer-auth-proxy-cookies";
+import { OWN_CSP_MARKER } from "@/lib/middleware-helper/own-csp";
 
 export const prerender = false;
 
@@ -81,6 +82,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
       if (lk === "transfer-encoding") continue;
 
       if (lk === "set-cookie") continue;
+      // Only this storefront's own code may mark a policy as its own.
+      if (lk === OWN_CSP_MARKER.toLowerCase()) continue;
 
       responseHeaders.append(key, value);
     }
