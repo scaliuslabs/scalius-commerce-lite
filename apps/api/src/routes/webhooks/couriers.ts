@@ -67,6 +67,25 @@ function accepted(c: Context, reply: CourierWebhookReply | undefined, fallback: 
   return c.json(reply.body ?? fallback, reply.status as 200, reply.headers ?? {});
 }
 
+/** Seconds a courier waits before resending a push whose first delivery is still being applied. */
+export const COURIER_PUSH_IN_FLIGHT_RETRY_SECONDS = 60;
+
+/**
+ * A resend while the first delivery's claim is still being applied: nothing
+ * durable would replay it if that attempt died, so the courier must come back
+ * (a stale claim is reclaimed after its lease). A failed row this request
+ * could not reclaim was just reclaimed by another. Only an applied event is
+ * a duplicate.
+ */
+function inFlight(c: Context, status: string | undefined): Response | null {
+  if (status !== "processing" && status !== "retrying" && status !== "failed") return null;
+  return c.json(
+    { error: "This event is still being applied. Send it again shortly." },
+    503,
+    { "Retry-After": String(COURIER_PUSH_IN_FLIGHT_RETRY_SECONDS) },
+  );
+}
+
 const confirmedExisting = sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, '$.unknownOutcomeResolution.outcome') END = 'confirmed_existing'`;
 
 /**
@@ -176,7 +195,9 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       result: { externalId },
     });
     const eventId = claim.id;
-    if (!claim.claimed) return accepted(c, reply, { received: true, duplicate: true });
+    if (!claim.claimed) {
+      return inFlight(c, claim.existing?.status) ?? accepted(c, reply, { received: true, duplicate: true });
+    }
     try {
       await db.update(deliveryShipments).set({
         lastChecked: new Date(),
@@ -206,7 +227,8 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   });
   const eventId = claim.id;
   if (!claim.claimed) {
-    return accepted(c, reply, { received: true, duplicate: true, status: claim.existing?.status ?? "unknown" });
+    return inFlight(c, claim.existing?.status)
+      ?? accepted(c, reply, { received: true, duplicate: true, status: claim.existing?.status ?? "unknown" });
   }
 
   try {
