@@ -24,6 +24,7 @@ import {
   storefrontBlockSwitch,
   storefrontBlockValue,
   storefrontDarkColorsAreMade,
+  storefrontThemeColorsAreDark,
   storefrontDarkPalette,
   storefrontTemplateTheme,
   storefrontThemeShowsDarkColors,
@@ -285,7 +286,20 @@ export function themeColorProblem(theme: StorefrontThemeDocument): { set: Storef
 
 /** Dark pages can show while the header logo has no dark version: it may not show on them. */
 export function darkLogoMissing(theme: StorefrontThemeDocument): boolean {
-  return themeColorSets(theme).includes("darkColors") && theme.brand.logo !== null && theme.brand.darkLogo === null;
+  return themeColorSets(theme).includes("darkColors") && !storefrontThemeColorsAreDark(theme.tokens.colors)
+    && theme.brand.logo !== null && theme.brand.darkLogo === null;
+}
+
+/** The colours are dark themselves and the store shows no dark pages: the logo for dark pages never shows. */
+export function darkLogoUnused(theme: StorefrontThemeDocument): boolean {
+  return storefrontThemeColorsAreDark(theme.tokens.colors) && !themeColorSets(theme).includes("darkColors");
+}
+
+/** Dark pages show, but their colours are the colours (dark themselves): the scheme and the switch change nothing. */
+export function sameDarkPages(theme: StorefrontThemeDocument): boolean {
+  const { colors, darkColors } = theme.tokens;
+  return themeColorSets(theme).includes("darkColors") && darkColors !== null && storefrontThemeColorsAreDark(colors)
+    && STOREFRONT_THEME_COLOR_KEYS.every((key) => colors[key] === darkColors[key]);
 }
 
 /** Whether the dark colours differ from the ones made from the colours (the merchant edited them). */

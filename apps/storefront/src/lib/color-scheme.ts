@@ -48,7 +48,8 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
         + "});"
       : "",
     stored ? `window.addEventListener("storage",function(e){if(e.key===${key}){c=v(e.newValue);a()}});` : "",
-    stored ? 'window.addEventListener("pageshow",function(e){if(e.persisted){s();a()}});' : "",
+    // A page restored from the back/forward cache missed changes while frozen.
+    remember ? `window.addEventListener("pageshow",function(e){if(e.persisted){${stored ? "s();" : ""}a()}});` : "",
     "}catch(e){}})();",
   ].join("");
 }

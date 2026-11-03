@@ -34,6 +34,7 @@ import { SchemaSettingsForm } from "./schema-form/SchemaSettingsForm";
 import {
   COLOR_ROLE_TOKEN,
   colorFieldId,
+  sameDarkPages,
   darkColorsEdited,
   regenerateDarkColors,
   themeColorSetProblem,
@@ -165,6 +166,9 @@ function ColorSetFields({ theme, set, setDraft }: { theme: Theme; set: Storefron
   );
 }
 
+/** "Setting to fix" requests that already opened their tab. */
+const SHOWN_REVEALS = new WeakSet<object>();
+
 /**
  * The colour scheme (light, dark or the shopper's device), the shoppers'
  * switch, and the colours: one set, or the colours and the dark colours on
@@ -183,7 +187,10 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
   const showRef = useRef(show);
   showRef.current = show;
   useEffect(() => {
-    if (reveal?.group === "colors" && reveal.colorSet) showRef.current(reveal.colorSet);
+    // Once per request: the group mounting again later keeps the merchant's own tab.
+    if (reveal?.group !== "colors" || !reveal.colorSet || SHOWN_REVEALS.has(reveal)) return;
+    SHOWN_REVEALS.add(reveal);
+    showRef.current(reveal.colorSet);
   }, [reveal]);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const regenerate = () => {
@@ -224,6 +231,7 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
           />
         )}
       />
+      {sameDarkPages(theme) ? <p className="text-body text-muted-foreground">{t("darkColorsSameAsColors")}</p> : null}
       {sets.length > 1 ? (
         <Tabs value={shown} onValueChange={(value) => show(value as StorefrontThemeColorSet)}>
           <TabsList aria-label={t("colorSets")}>
