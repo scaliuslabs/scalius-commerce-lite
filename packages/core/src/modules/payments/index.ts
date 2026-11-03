@@ -43,6 +43,7 @@ export type {
 } from "./gateway-settings";
 
 export { recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
+export { prepareCODCollection, isCODCollectionConflictError, type PreparedCODCollection } from "./cod";
 export { recordOrderPayment, type RecordedPaymentLine, type RecordOrderPaymentInput, type RecordOrderPaymentResult } from "./recorded-payment";
 
 // --- Payment processing ---
