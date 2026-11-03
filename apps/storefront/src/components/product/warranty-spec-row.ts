@@ -22,31 +22,26 @@ export interface ProductWarrantyView {
 
 /** The product's warranty, or null when it has none (or the field is malformed). */
 export function productWarranty(product: Product): ProductWarrantyView | null {
-  return parseWarranty((product as Product & { warranty?: unknown }).warranty);
+  return parseWarranty(product.warranty);
 }
 
 /**
  * Each SKU's effective warranty (it inherits the product's, has its own, or
  * none): the page's `warranties` by id, and each variant's `warrantyId`.
- * Null when the page carries no SKU warranties (an older API): the product's
- * warranty then stands for every SKU.
  */
 export function skuWarranties(product: Product, variants: readonly ProductVariant[]): {
   byId: Map<string, ProductWarrantyView>;
   byVariant: Record<string, string | null>;
-} | null {
-  const list = (product as Product & { warranties?: unknown }).warranties;
-  if (!Array.isArray(list)) return null;
+} {
   const byId = new Map<string, ProductWarrantyView>();
-  for (const entry of list) {
-    const id = entry && typeof entry === "object" ? (entry as { id?: unknown }).id : null;
+  for (const entry of product.warranties ?? []) {
     const warranty = parseWarranty(entry);
-    if (typeof id === "string" && warranty) byId.set(id, warranty);
+    if (warranty) byId.set(entry.id, warranty);
   }
   const byVariant: Record<string, string | null> = {};
   for (const variant of variants) {
-    const id = (variant as ProductVariant & { warrantyId?: unknown }).warrantyId;
-    byVariant[variant.id] = typeof id === "string" && byId.has(id) ? id : null;
+    const id = variant.warrantyId ?? null;
+    byVariant[variant.id] = id !== null && byId.has(id) ? id : null;
   }
   return { byId, byVariant };
 }

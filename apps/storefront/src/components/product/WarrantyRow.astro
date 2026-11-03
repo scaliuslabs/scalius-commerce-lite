@@ -16,7 +16,7 @@ import Icon from "@/components/icons/Icon.astro";
 import type { Product, ProductVariant } from "@/lib/api";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { pickWarrantyCopy, warrantySummaryText } from "@/lib/account-warranties";
-import { productWarranty, productWarrantyTerms, skuWarranties, type ProductWarrantyView } from "./warranty-spec-row";
+import { productWarrantyTerms, skuWarranties, type ProductWarrantyView } from "./warranty-spec-row";
 
 export interface Props {
   product: Product;
@@ -31,26 +31,21 @@ export interface Props {
 const { product, variants = [], initialVariantId = null, copy: pageCopy } = Astro.props;
 const copy = pickWarrantyCopy(pageCopy, ENGLISH_CHECKOUT_LANGUAGE_DATA);
 const perSku = skuWarranties(product, variants);
-// Without a chosen SKU, the warranty every SKU shares (none when they differ).
-const sharedId = (() => {
-  if (!perSku) return null;
-  const ids = new Set(Object.values(perSku.byVariant));
-  return ids.size === 1 ? [...ids][0] ?? null : null;
-})();
-const shownId = perSku
-  ? (initialVariantId !== null && initialVariantId in perSku.byVariant ? perSku.byVariant[initialVariantId] ?? null : sharedId)
-  : null;
-const productOwn = productWarranty(product);
-const rows: Array<{ id: string | null; warranty: ProductWarrantyView; hidden: boolean }> = perSku
-  ? [...perSku.byId].map(([id, warranty]) => ({ id, warranty, hidden: id !== shownId }))
-  : productOwn ? [{ id: null, warranty: productOwn, hidden: false }] : [];
+// Without a chosen SKU, the warranty every SKU shares (none when they differ);
+// product-controller.ts keeps it the chosen SKU's.
+const sharedIds = new Set(Object.values(perSku.byVariant));
+const shownId = initialVariantId !== null && initialVariantId in perSku.byVariant
+  ? perSku.byVariant[initialVariantId] ?? null
+  : sharedIds.size === 1 ? [...sharedIds][0] ?? null : null;
+const rows: Array<{ id: string; warranty: ProductWarrantyView; hidden: boolean }> =
+  [...perSku.byId].map(([id, warranty]) => ({ id, warranty, hidden: id !== shownId }));
 const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(productWarrantyTerms(warranty), copy);
 ---
 
 {rows.length > 0 && (
-  <div data-warranty-rows data-warranty-by-variant={perSku ? JSON.stringify(perSku.byVariant) : undefined}>
+  <div data-warranty-rows data-warranty-by-variant={JSON.stringify(perSku.byVariant)}>
   {rows.map(({ id, warranty, hidden }) => (
-  <details class="group mt-3 rounded-lg border border-border bg-card" data-warranty-row data-warranty-id={id ?? undefined} hidden={hidden}>
+  <details class="group mt-3 rounded-lg border border-border bg-card" data-warranty-row data-warranty-id={id} hidden={hidden}>
     <summary class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
       <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
         <Icon name="shield-check" class="size-4" aria-hidden="true" />

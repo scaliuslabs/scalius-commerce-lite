@@ -484,6 +484,7 @@ function refresh(revealSelection = false) {
     updateStockAndActions();
     updatePrice();
     updateVariantImage();
+    updateWarrantyRows();
     publish();
   });
 }
@@ -780,6 +781,29 @@ function updateVariantImage() {
       },
     }),
   );
+}
+
+/**
+ * The buy box's warranty row (WarrantyRow.astro): the chosen SKU's warranty,
+ * or, with no SKU chosen, the one every SKU of the choice so far shares.
+ * SKUs of one product may each have their own, or none.
+ */
+function updateWarrantyRows() {
+  const box = cache.summary?.querySelector<HTMLElement>("[data-warranty-rows]");
+  if (!box) return;
+  let byVariant: Record<string, string | null>;
+  try {
+    byVariant = JSON.parse(box.dataset.warrantyByVariant ?? "{}") as Record<string, string | null>;
+  } catch {
+    return;
+  }
+  const exact = state.unavailableRequestedVariant ?? exactVariant();
+  const candidates = exact ? [exact] : filterVariantsBySelection(state.variants, state.selection);
+  const ids = new Set(candidates.map((variant) => byVariant[variant.id] ?? null));
+  const shown = ids.size === 1 ? [...ids][0] ?? null : null;
+  for (const row of box.querySelectorAll<HTMLElement>("[data-warranty-row]")) {
+    row.hidden = shown === null || row.dataset.warrantyId !== shown;
+  }
 }
 
 function selectedCartOptions(variant: Variant): CartItemOption[] {
