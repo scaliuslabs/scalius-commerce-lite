@@ -19,6 +19,7 @@ import type { StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney }
 import { toMinor } from "@scalius/shared/money";
 import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { productContext } from "./product-context";
+import { DEFERRED_REVEAL_EVENT } from "./deferred-reveal";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 
 type CartSummary = { count: number; total: StorefrontMoney };
@@ -300,6 +301,8 @@ export function createDeferredElement(): CustomElementConstructor {
       if (!template) return;
       template.replaceWith(template.content);
       this.dataset.revealed = "";
+      // The store's own scripts bring what entered up to date (a skin's SKU controls).
+      this.dispatchEvent(new CustomEvent(DEFERRED_REVEAL_EVENT, { bubbles: true }));
     }
   };
 }

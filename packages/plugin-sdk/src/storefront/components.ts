@@ -246,11 +246,14 @@ type ProductPageVariant = Pick<StorefrontProductPage["product"]["variants"][numb
  * Attributes of a control that chooses one SKU in the store's buy form
  * (product_main skins): every option of it at once, through the form's own
  * selection, so price, stock, buttons, gallery and `context.product` follow.
- * Write it on an `<a>`: the host makes it a link to the product with that
- * SKU (`?variant=`, which the page opens on), so it works before the store's
- * script binds it; on a `<button>` it works with JavaScript only. The host keeps `data-state` (`selected`,
- * `unselected`), `aria-pressed` (a button) or `aria-current` (a link) and
- * `data-availability` (`available`, `sold-out`) current.
+ * It needs JavaScript. Write it on an `<a>`: the host makes it a link to
+ * the product with that SKU (`?variant=`), which the store's script opens
+ * on, so a press before the script has bound it still lands on the SKU.
+ * Without JavaScript the link only opens the same page, where the buy
+ * form's own picker chooses (a `buyVariant` button still buys). The host
+ * draws the SKU the page opens on chosen and keeps `data-state`
+ * (`selected`, `unselected`), `aria-pressed` (a button) or `aria-current`
+ * (a link) and `data-availability` (`available`, `sold-out`) current.
  *
  *   <a {...chooseVariant(variant)}>{variant.title}</a>
  */
@@ -265,8 +268,9 @@ export function chooseVariant(variant: ProductPageVariant): Attributes {
  * its checks, buyer inputs, purchase options and quantity; a problem shows
  * in the form, which takes focus. Without JavaScript it is a submit button
  * of the form posting its SKU. The host owns `type`, `disabled`, `hidden`
- * and `aria-busy`: off while the SKU is sold out (a `"buy"` button gone),
- * busy while it adds, gone while the buyer edits a cart line.
+ * and `aria-busy`: off while the SKU is sold out or the product cannot be
+ * bought here, as the form's own buttons (a `"buy"` button then gone), busy
+ * while it adds, gone while the buyer edits a cart line.
  *
  *   <button {...buyVariant(variant, "add")}>Add</button>
  */

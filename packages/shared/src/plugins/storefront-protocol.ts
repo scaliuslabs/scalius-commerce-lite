@@ -499,11 +499,11 @@ export interface StorefrontProductPage {
     rating: { average: number; count: number } | null;
     /** The merchant's option axes, in order, with their values. */
     options: Array<{ name: string; values: Array<{ label: string; swatch: string | null }> }>;
-    /** The buyer's SKUs (all of them, up to the catalog's 150; sold-out ones `available: false`), each with its value of every option, in option order. */
     /** The SKU code of a product without options (its one SKU); null otherwise or without one. Absent from older stores. */
     sku?: string | null;
     /** Instalments (EMI) available for this product; null when none applies. Absent from older stores. */
     installments?: StorefrontInstallments | null;
+    /** The buyer's SKUs (all of them, up to the catalog's 150; sold-out ones `available: false`), each with its value of every option, in option order. */
     variants: Array<{
       id: string;
       /** The merchant's SKU code (a "Product code"); null without one. Absent from older stores. */
@@ -540,11 +540,21 @@ export interface StorefrontBuyerInput {
 }
 
 /**
- * Why the buy form refused the buyer's last add or Buy now, as it says so
- * beside its buttons: `option_required` (an option is not chosen yet),
- * `input_invalid` (a buyer input is missing or too long), `unavailable` (the
- * chosen SKU is sold out, or no SKU has that choice), `quantity_limit` (more
- * than one order line holds) or `failed` (anything else; try again).
+ * Why the buy form refused the buyer's last add or Buy now
+ * (`StorefrontProductState.error`), as the form says so:
+ *
+ * - `option_required`: an option is not chosen yet; the form asks for it
+ *   under that option, until the buyer chooses it.
+ * - `input_invalid`: a buyer input is missing or too long; the form says so
+ *   under the field, until the buyer fixes the last one.
+ * - `unavailable`: the chosen SKU is sold out, or no SKU has that choice.
+ * - `quantity_limit`: the quantity is more than one cart line may hold.
+ * - `failed`: anything else (the cart could not be saved, the store refused
+ *   the line); the buyer can try again.
+ *
+ * The last three go as soon as the buyer changes the SKU, quantity, an
+ * answer or the purchase option. Codes are only ever added, never renamed
+ * or removed: treat a code you do not know as `failed`.
  */
 export type StorefrontProductError = "option_required" | "input_invalid" | "unavailable" | "quantity_limit" | "failed";
 
@@ -561,7 +571,7 @@ export interface StorefrontProductState {
   available?: boolean;
   /** An add or Buy now is in flight; the form takes no other until it ends. Absent from older stores. */
   busy?: boolean;
-  /** Why the form refused the last add or Buy now, while it still says so; null otherwise. Absent from older stores. */
+  /** Why the form refused the last add or Buy now, while it still says so (`StorefrontProductError`: treat an unknown code as `failed`); null otherwise. Absent from older stores. */
   error?: StorefrontProductError | null;
 }
 

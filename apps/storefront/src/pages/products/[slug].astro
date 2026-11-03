@@ -541,7 +541,10 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
 });
 const productMainSkin = await appSkin(Astro.locals, Astro.url, "product_main");
 const productMainMarkup = productMainSkin
-  ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() })
+  ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() }, {
+      blocked: product.customizationUnavailable === true || onlinePaymentUnavailable,
+      opening: buyerInitialPresentation.selectedVariant?.id ?? null,
+    })
   : null;
 const skinEmbeds = productMainMarkup?.embeds ?? new Set<string>();
 // A skin owns the description: the details module keeps only what the skin
@@ -778,6 +781,7 @@ const productCategoryAnalytics = productCategory
   <div
     class="min-h-screen bg-background product-container"
     id="product-container"
+    data-sx-product-container
     data-product-id={product.id}
     data-product-slug={product.slug}
     data-product-name={product.name}
