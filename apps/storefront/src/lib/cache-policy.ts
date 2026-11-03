@@ -5,9 +5,11 @@ const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
  * buyer (a session, receipt proof, order, claim, address, gift-card code, OTP
  * or payment state) or is a step of a buyer's session. This one list decides
  * what is never stored for another buyer (`isUncachedPrivateStorefrontPathname`),
- * never prefetched, and never touched by app code (`storefrontAppPage`). A new
- * page of that kind is added here; `private-pages.test.ts` fails until every
- * page under `src/pages` is on this list or declared public.
+ * never prefetched, and never touched by app code (`storefrontAppPage`). The
+ * one exception is `theme-preview`: private for caching and prefetch, but the
+ * merchant's own editor canvas, where app code does run. `/compare` is public.
+ * A new page of that kind is added here; `private-pages.test.ts` fails until
+ * every page under `src/pages` is on this list or declared public.
  */
 export const PRIVATE_STOREFRONT_ROOTS = [
   "account",
