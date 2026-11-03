@@ -6,8 +6,8 @@
  * the units app skins draw and the one-product homepage).
  */
 import { createContext, useContext } from "react";
-import { isStorefrontThemeHexColor, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
-import { COLOR_FIELD_IDS, COLOR_ROLE_TOKEN, THEME_FIELD_IDS, themeContrastProblems, type ColorRole } from "./theme-settings";
+import type { StorefrontThemeColorSet, StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+import { THEME_FIELD_IDS, colorFieldId, themeColorProblem } from "./theme-settings";
 
 /** The groups of the Theme settings tab that hold fields which can be invalid. */
 export type ThemeSettingsGroup = "colors" | "logo" | "productCards";
@@ -23,14 +23,11 @@ export type ProblemTarget =
   | { kind: "part"; part: "announcement" | "header" | "footer" | "page"; fieldId: string | null }
   | { kind: "theme" };
 
-const ROLES = Object.keys(COLOR_FIELD_IDS) as ColorRole[];
-
 /** The editor target of a held-back theme part (`tokens`, `brand`, `block:…`, `app:…`, `homeMode`). */
 export function themeProblemTarget(theme: StorefrontThemeDocument, part: string): ProblemTarget {
   if (part === "tokens") {
-    const bad = ROLES.find((role) => !isStorefrontThemeHexColor(theme.tokens.colors[COLOR_ROLE_TOKEN[role]] ?? ""));
-    const role = bad ?? themeContrastProblems(theme)[0]?.role;
-    return { kind: "group", group: "colors", fieldId: role ? COLOR_FIELD_IDS[role] : null };
+    const problem = themeColorProblem(theme);
+    return { kind: "group", group: "colors", fieldId: problem?.role ? colorFieldId(problem.role, problem.set) : null };
   }
   if (part === "brand") return { kind: "group", group: "logo", fieldId: THEME_FIELD_IDS.logo };
   if (part === "block:card" || part === "app:productCard") return { kind: "group", group: "productCards", fieldId: null };
@@ -44,3 +41,12 @@ export function themeProblemTarget(theme: StorefrontThemeDocument, part: string)
 /** The request the Theme settings panel reads (a group opens when it is named). */
 export const ThemeRevealContext = createContext<ThemeRevealRequest | null>(null);
 export const useThemeReveal = () => useContext(ThemeRevealContext);
+
+/**
+ * The colour set the editor's canvas shows: the one the Colours group edits
+ * (the theme editor provides it; elsewhere the group keeps its own).
+ */
+export const PreviewColorSetContext = createContext<{
+  set: StorefrontThemeColorSet;
+  setSet: (set: StorefrontThemeColorSet) => void;
+} | null>(null);

@@ -19,8 +19,7 @@ import {
   invalidAppSkins,
   sectionSkinInvalid,
   productAppBlocksInvalid,
-  themeContrastProblems,
-  allThemeColorsValid,
+  themeColorProblem,
   type AppBlockEntry,
   type AppSkinEntry,
   type AppSkinUnit,
@@ -160,7 +159,7 @@ function withSavedPart(working: Theme, saved: Theme, part: DraftPart): Theme | n
 /** The parts the platform's own checks reject (beyond the schema): readable colours, a usable announcement link, apps' values. */
 function checkedParts(theme: Theme, apps: DraftApps): DraftPart[] {
   const parts: DraftPart[] = [];
-  if (!allThemeColorsValid(theme.tokens.colors) || themeContrastProblems(theme).length > 0) parts.push("tokens");
+  if (themeColorProblem(theme)) parts.push("tokens");
   if (announcementLinkInvalid(theme)) parts.push("block:topBar");
   if (homeProductMissing(theme)) parts.push("homeMode");
   if (productAppBlocksInvalid(theme, apps.blocks)) parts.push("block:product.apps");
