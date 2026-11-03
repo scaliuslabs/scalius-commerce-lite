@@ -220,14 +220,15 @@ type SkinAsk<Target extends StorefrontSkinTarget> = Extract<StorefrontSkinJob, {
  * or null when core draws the unit (the skin drew nothing, failed, was
  * late, or misses a required embed). App JSON-LD stays out of product and
  * listing pages: their structured data is core's alone. A product_main
- * skin's SKU controls are bound to the buy form with `purchase`.
+ * skin's SKU controls are bound to the buy form with `purchase`, which a
+ * product page must pass (without it every buy button is drawn off).
  */
 export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   locals: object,
   url: URL,
   skin: AppSkin & { target: Target },
   ask: SkinAsk<Target>,
-  purchase?: PurchasePage,
+  ...purchase: Target extends "product_main" ? [purchase: PurchasePage] : []
 ): Promise<AppMarkup | null> {
   const { host } = await requestExtensions(locals, url);
   const jsonLd = skin.target !== "product_main" && skin.target !== "listing_main";
@@ -237,7 +238,7 @@ export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   const markup = appMarkup(skin.extension, skin.target, html);
   // A product page skin's SKU controls join the store's buy form.
   return markup && skin.target === "product_main"
-    ? bindPurchaseControls(markup, (ask as unknown as { data: StorefrontProductPage }).data.product, purchase ?? { blocked: false, opening: null })
+    ? bindPurchaseControls(markup, (ask as unknown as { data: StorefrontProductPage }).data.product, (purchase as PurchasePage[])[0] ?? { blocked: true, opening: null })
     : markup;
 }
 

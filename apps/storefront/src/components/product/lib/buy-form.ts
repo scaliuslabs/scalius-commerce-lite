@@ -2,14 +2,14 @@
 // to `/buy/<slug>`. Its quantity, buttons, purchase options, the
 // no-JavaScript picker and a product_main skin's `buyVariant` buttons sit
 // outside it and join it with `form=`.
-import { HOST_ID_PREFIX } from "@scalius/shared/plugins/host-id";
 
 /**
- * The buy form's id, under the host's id prefix (`HOST_ID_PREFIX`), which
- * app markup can never carry: no app form or element can take over the
- * `form=` association of the form's parts.
+ * The buy form's id. No app markup can carry it: an app's ids start with
+ * `<app name>-` (lowercase letters, digits and hyphens), and this id has an
+ * underscore before its first hyphen, so no app form or element can take
+ * over the `form=` association of the form's parts.
  */
-export const BUY_FORM_ID = `${HOST_ID_PREFIX}buy-form`;
+export const BUY_FORM_ID = "sx_buy-form";
 
 /**
  * The SKU fields a buy form post can carry. The POST handler reads them by

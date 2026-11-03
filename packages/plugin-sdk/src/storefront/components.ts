@@ -258,8 +258,9 @@ export function chooseVariant(variant: ProductPageVariant): Attributes {
  * its checks, buyer inputs, purchase options and quantity; a problem shows
  * in the form, which takes focus. Without JavaScript it is a submit button
  * of the form posting its SKU. The host owns `type`, `disabled`, `hidden`
- * and `aria-busy`: off while the SKU is sold out (a `"buy"` button gone),
- * busy while it adds, gone while the buyer edits a cart line.
+ * and `aria-busy`: off while the SKU is sold out or the product cannot be
+ * bought here, as the form's own buttons (a `"buy"` button then gone), busy
+ * while it adds, gone while the buyer edits a cart line.
  *
  *   <button {...buyVariant(variant, "add")}>Add</button>
  */

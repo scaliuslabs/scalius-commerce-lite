@@ -150,9 +150,17 @@ export function validateSelection(
   return { valid: true, variant: resolved };
 }
 
-/** The SKUs the buy form drew (`root`: its container; the gallery reads them page-wide). */
-export function loadVariantsFromDOM(root: ParentNode = document): Variant[] {
-  const element = root.querySelector("#product-variants-data");
+/**
+ * The buy form's container, found by its host-only marker (the sanitizer
+ * strips `data-sx-*` from app markup): app markup never feeds the SKUs.
+ */
+function buyFormContainer(): ParentNode | null {
+  return document.querySelector("[data-sx-product-summary]");
+}
+
+/** The SKUs the buy form drew (`root`: its container). */
+export function loadVariantsFromDOM(root: ParentNode | null = buyFormContainer()): Variant[] {
+  const element = root?.querySelector("#product-variants-data");
   if (!element?.textContent) return [];
   try {
     const value = JSON.parse(element.textContent);
@@ -162,8 +170,8 @@ export function loadVariantsFromDOM(root: ParentNode = document): Variant[] {
   }
 }
 
-export function loadOptionsFromDOM(root: ParentNode = document): ProductOptionDefinition[] {
-  const element = root.querySelector("#product-options-data");
+export function loadOptionsFromDOM(root: ParentNode | null = buyFormContainer()): ProductOptionDefinition[] {
+  const element = root?.querySelector("#product-options-data");
   if (!element?.textContent) return [];
   try {
     const value = JSON.parse(element.textContent);

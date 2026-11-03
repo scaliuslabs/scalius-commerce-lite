@@ -50,6 +50,7 @@ import { initBuyerInputs, type BuyerInputsController } from "./buyer-inputs-cont
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
 import { publishProductState } from "@/scripts/product-context";
+import { DEFERRED_REVEAL_EVENT } from "@/scripts/deferred-reveal";
 import type { StorefrontProductError, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
 
 // The buy form's one authority: its option buttons, a product_main skin's
@@ -64,8 +65,6 @@ import type { StorefrontProductError, StorefrontProductState } from "@scalius/sh
 /** A skin's SKU controls the host bound (lib/extensions/purchase-controls.ts); only the host writes `data-sx-*`. */
 const CHOOSE_CONTROL = "[data-sx-bound][data-choose-variant]";
 const BUY_CONTROL = "[data-sx-bound][data-buy-variant]";
-/** Deferred markup entered the page (scripts/app-components.ts). */
-const DEFERRED_REVEAL_EVENT = "scalius-deferred-reveal";
 
 const state = {
   variants: [] as Variant[],
@@ -126,7 +125,7 @@ function number(value?: string) {
 }
 
 export function init() {
-  cache.container = document.getElementById("product-container");
+  cache.container = document.querySelector<HTMLElement>("[data-sx-product-container]");
   const summary = document.querySelector<HTMLElement>("[data-sx-product-summary]");
   if (!cache.container || !summary) return;
   cache.summary = summary;
@@ -1021,8 +1020,9 @@ async function addSelected(redirect: boolean, focusProblem: boolean) {
 
 /**
  * A problem with the purchase stays next to the buttons, in the form's
- * status, until the next try. `focus` moves focus to it (the buyer pressed
- * a skin's button elsewhere on the page).
+ * status, until the next try or until the buyer changes what they would
+ * buy (`dropRefusal`). `focus` moves focus to it (the buyer pressed a skin's
+ * button elsewhere on the page).
  */
 function showError(message: string, error: StorefrontProductError, focus = false) {
   cache.summary?.querySelector("[data-product-action-error]")?.remove();

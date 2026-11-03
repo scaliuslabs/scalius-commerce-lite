@@ -27,6 +27,7 @@
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "@/components/product/lib/buy-form";
+import { SKIN_CHOICE_PREPAINT_SCRIPT } from "@/lib/inline-boot-scripts";
 import type { AppMarkup } from "./index";
 
 const CONTROL_TAG = /<(a|button)\b([^<>]*)>/g;
@@ -35,8 +36,8 @@ const BOUND = "data-sx-bound";
 /** What the host writes on a bound control: the app's own values of these go. */
 const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "disabled", "aria-pressed", "aria-current", "data-state", "data-availability"]);
 
-/** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice. */
-const DEFAULT_SUBMIT = `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true" ${BOUND}></button>`;
+/** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice (off, as the form's own, where nothing can be bought). */
+const defaultSubmit = (blocked: boolean) => `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true"${blocked ? " disabled" : ""} ${BOUND}></button>`;
 
 function decode(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
@@ -62,6 +63,7 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   const covered = new Set<string>();
   let formPlaced = false;
   let buttonsBeforeForm = false;
+  let choicesBound = false;
 
   const bindTag = (whole: string, tag: string, rest: string): string => {
     const attributes = [...rest.matchAll(ATTRIBUTE)].map(([, name, value]): [string, string | null] => [name!, value === undefined ? null : decode(value)]);
@@ -99,13 +101,15 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
         [BOUND, null],
       ]);
     }
+    choicesBound = true;
     // The SKU the page opens on is drawn chosen, before any script.
     const selected = variant.id === page.opening;
     const kind: Array<[string, string]> = tag === "a"
       ? [["href", `${product.url}?variant=${encodeURIComponent(variant.id)}`], ...(selected ? [["aria-current", "true"] as [string, string]] : [])]
       : [["type", "button"], ["aria-pressed", String(selected)]];
     return write(tag, [
-      ...kept,
+      // A choice never also buys: an <a> would buy with JavaScript and only choose without.
+      ...kept.filter(([name]) => name !== "data-buy-variant" && name !== "data-buy-intent"),
       ...kind,
       ["data-state", selected ? "selected" : "unselected"],
       availability,
@@ -126,12 +130,14 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   const coversEveryBuyableSku = covered.size > 0 && product.variants.every((variant) => !variant.available || covered.has(variant.id));
   const bound = parts.map((part) => {
     if (part.kind !== "embed" || part.embed !== "buy_form" || part.data.options !== "false" || coversEveryBuyableSku) return part;
-    if (!optionsWarnings.has(markup.pluginId) && optionsWarnings.size < 200) {
+    if (product.options.length > 0 && !optionsWarnings.has(markup.pluginId) && optionsWarnings.size < 200) {
       optionsWarnings.add(markup.pluginId);
       console.warn(`[Storefront components] ${markup.pluginId} product_main skin asks for <BuyForm options={false} /> without a chooseVariant or buyVariant control for every buyable SKU: the store draws the options.`);
     }
     return { ...part, data: Object.fromEntries(Object.entries(part.data).filter(([name]) => name !== "options")) };
   });
-  if (buttonsBeforeForm) bound.unshift({ kind: "html", html: DEFAULT_SUBMIT });
+  if (buttonsBeforeForm) bound.unshift({ kind: "html", html: defaultSubmit(page.blocked) });
+  // A `?variant=` link's SKU is drawn chosen before the first paint.
+  if (choicesBound) bound.push({ kind: "html", html: `<script>${SKIN_CHOICE_PREPAINT_SCRIPT}</script>` });
   return { ...markup, parts: bound };
 }
