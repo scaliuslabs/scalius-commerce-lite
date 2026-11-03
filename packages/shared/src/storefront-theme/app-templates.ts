@@ -14,7 +14,7 @@ import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
-import type { StorefrontThemeDocument } from "./document";
+import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import {
   resolveStorefrontHandles,
@@ -202,13 +202,13 @@ export function applyStorefrontAppTemplate(
       return kept && kept.type === section.type ? kept : section;
     })
     : document.pages.home;
-  return {
+  return storefrontThemeWithReadableDarkColors({
     ...document,
     tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
     blocks: { ...document.blocks, ...(template.blocks ?? {}) },
     apps: { ...(template.apps ?? {}), template: key },
     pages: { ...document.pages, home },
-  };
+  });
 }
 
 /**

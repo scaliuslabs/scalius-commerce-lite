@@ -10,7 +10,7 @@ import { DEFAULT_STOREFRONT_THEME_BRAND, STOREFRONT_BRAND_IMAGE_KEYS } from "./b
 import { storefrontVariantSpec } from "./blocks";
 import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontTokensKeepingColorScheme } from "./tokens";
 import { emptyStorefrontPageTemplates } from "./pages";
-import type { StorefrontThemeDocument } from "./document";
+import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSection, type StorefrontSectionType } from "./sections";
 
 /** Block settings that are the merchant's words, by slot. */
@@ -80,7 +80,7 @@ export function storefrontThemeWithContent(
     return withSectionContent(section, match);
   });
   const { translations: _look, ...look } = target;
-  return {
+  return storefrontThemeWithReadableDarkColors({
     ...look,
     // The colour scheme is the merchant's (a look that shows its own dark colours brings them); a bare look has none.
     tokens: source ? storefrontTokensKeepingColorScheme(target.tokens, source.tokens) : { ...target.tokens, ...STOREFRONT_LIGHT_COLOR_SCHEME },
@@ -100,7 +100,7 @@ export function storefrontThemeWithContent(
       // The merchant's sections around the fixed parts are content too.
       templates: source ? structuredClone(source.pages.templates) : emptyStorefrontPageTemplates(),
     },
-  };
+  });
 }
 
 /** The document's look: everything but its content (content reset to empty). */

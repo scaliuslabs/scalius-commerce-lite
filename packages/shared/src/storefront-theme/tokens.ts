@@ -492,17 +492,25 @@ export function storefrontThemeShowsDarkColors(tokens: Pick<StorefrontThemeToken
 /** The light scheme with no dark colours and no switch: a look that leaves the scheme to the merchant. */
 export const STOREFRONT_LIGHT_COLOR_SCHEME = { colorScheme: "light", darkColors: null, colorSchemeToggle: false } as const satisfies Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle">;
 
+/** Whether dark colours are the ones made from these colours (the merchant has not edited them). */
+export function storefrontDarkColorsAreMade(colors: StorefrontThemeColors, darkColors: StorefrontThemeColors): boolean {
+  const made = storefrontDarkPalette(colors);
+  return STOREFRONT_THEME_COLOR_KEYS.every((key) => made[key] === darkColors[key]);
+}
+
+type SchemeTokens = Pick<StorefrontThemeTokens, "colors" | "colorScheme" | "darkColors" | "colorSchemeToggle">;
+
 /**
  * A look's tokens (a template's) over the store's: the merchant's colour
- * scheme, dark colours and switch stay, unless the look shows dark colours
- * of its own.
+ * scheme and switch stay, unless the look shows dark colours of its own.
+ * Dark colours the merchant edited stay too; ones made from the old
+ * colours are made again from the look's, so dark pages follow the new look.
  */
-export function storefrontTokensKeepingColorScheme<Tokens extends Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle">>(
-  look: Tokens,
-  current: Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle"> | null,
-): Tokens {
+export function storefrontTokensKeepingColorScheme<Tokens extends SchemeTokens>(look: Tokens, current: SchemeTokens | null): Tokens {
   if (!current || storefrontThemeShowsDarkColors(look)) return look;
-  return { ...look, colorScheme: current.colorScheme, darkColors: current.darkColors, colorSchemeToggle: current.colorSchemeToggle };
+  const edited = current.darkColors !== null && !storefrontDarkColorsAreMade(current.colors, current.darkColors);
+  const darkColors = edited ? current.darkColors : current.darkColors && storefrontDarkPalette(look.colors);
+  return { ...look, colorScheme: current.colorScheme, darkColors, colorSchemeToggle: current.colorSchemeToggle };
 }
 
 /** The rule every authored theme (a document, an app template) meets: dark colours whenever buyers can see them. */

@@ -23,6 +23,7 @@ import {
   resolveStorefrontTheme,
   storefrontBlockSwitch,
   storefrontBlockValue,
+  storefrontDarkColorsAreMade,
   storefrontDarkPalette,
   storefrontTemplateTheme,
   storefrontThemeShowsDarkColors,
@@ -289,7 +290,7 @@ export function darkLogoMissing(theme: StorefrontThemeDocument): boolean {
 
 /** Whether the dark colours differ from the ones made from the colours (the merchant edited them). */
 export function darkColorsEdited(theme: StorefrontThemeDocument): boolean {
-  return theme.tokens.darkColors !== null && !sameFormValue(theme.tokens.darkColors, storefrontDarkPalette(theme.tokens.colors));
+  return theme.tokens.darkColors !== null && !storefrontDarkColorsAreMade(theme.tokens.colors, theme.tokens.darkColors);
 }
 
 /** The document with its dark colours made again from its colours. */

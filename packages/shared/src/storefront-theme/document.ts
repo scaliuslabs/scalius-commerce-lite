@@ -31,6 +31,7 @@ import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefro
 import {
   buildStorefrontTokenCss,
   storefrontDarkColorsMissing,
+  storefrontDarkPalette,
   storefrontThemeShowsDarkColors,
   storefrontThemeTokensSchema,
   type StorefrontThemeColorSet,
@@ -90,6 +91,22 @@ export function listStorefrontThemeDocumentContrastProblems(document: {
   const colors = document.tokens[set];
   if (!colors) return [];
   return listStorefrontThemeContrastProblems(colors, storefrontThemeContrastPairs(document.blocks), document.tokens.headerTone);
+}
+
+/**
+ * The document with dark colours buyers can read: dark colours a new look's
+ * blocks or header tone leave below the rules are made again from the
+ * colours, so applying a template never opens a draft with a setting to fix.
+ */
+export function storefrontThemeWithReadableDarkColors<Document extends {
+  tokens: Pick<StorefrontThemeTokens, "colors" | "headerTone" | "colorScheme" | "darkColors" | "colorSchemeToggle">;
+  blocks: StorefrontThemeBlocks;
+}>(document: Document): Document {
+  const { darkColors } = document.tokens;
+  if (!darkColors || !storefrontThemeShowsDarkColors(document.tokens)) return document;
+  const readable = listStorefrontThemeDocumentContrastProblems(document, "darkColors").length === 0
+    && listStorefrontThemeSemanticColorProblems(darkColors).length === 0;
+  return readable ? document : { ...document, tokens: { ...document.tokens, darkColors: storefrontDarkPalette(document.tokens.colors) } };
 }
 
 /** The colour token behind a contrast role in one colour set (header roles follow the header tone). */
