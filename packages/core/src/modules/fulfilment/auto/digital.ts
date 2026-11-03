@@ -12,6 +12,8 @@
 import { DIGITAL_KEYS_EXHAUSTED, planDigitalDelivery } from "../../digital";
 import { buildNotificationOutboxInsert } from "../../notifications";
 import type { AutoFulfiller } from "../registry";
+import { safeBatch } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 
 /** The delivery message for one fulfilment; a retried batch keeps one row. */
 export function digitalDeliveredDedupeKey(orderId: string, fulfillmentId: string): string {
@@ -33,9 +35,9 @@ export const digitalFulfiller: AutoFulfiller = {
                 data: { reason: "nothing_ready", orderItemId },
             })),
         ];
-        // Raised now, whatever the batch does: the owed lines wait for staff.
-        for (const alert of alerts) {
-            await buildNotificationOutboxInsert(db, {
+        // Raised now in one round trip, whatever the handover batch does: the owed lines wait for staff.
+        if (alerts.length > 0) {
+            await safeBatch(db, alerts.map((alert) => buildNotificationOutboxInsert(db, {
                 subjectType: "order",
                 subjectId: context.orderId,
                 audience: "staff",
@@ -43,7 +45,7 @@ export const digitalFulfiller: AutoFulfiller = {
                 dedupeKey: alert.dedupeKey,
                 source: "auto_fulfil",
                 data: alert.data,
-            }).statement.run();
+            }).statement as unknown as BatchItem<"sqlite">));
         }
         const owedReason = plan.shortLines.length > 0
             ? `${DIGITAL_KEYS_EXHAUSTED}: not enough licence keys for ${plan.shortLines.length} digital line(s)`

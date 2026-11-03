@@ -66,13 +66,17 @@ function refundedLineQuantitySql() {
         WHERE ${qualifiedColumn(orderWithheldUnits.orderItemId)} = ${qualifiedColumn(orderItems.id)})`;
 }
 
-/** A failed refund can restore owed units, including an entire line omitted from preparation. */
+/**
+ * A failed refund can restore owed units, including an entire line omitted
+ * from preparation; and a concurrent handover of the same units (whose
+ * request key may differ) moves the handed-over quantity. Either refuses.
+ */
 function autoLineObligationsUnchangedCondition(
     orderId: string,
     type: FulfillmentType,
-    lines: readonly { id: string; quantity: number; refundedQuantity: number }[],
+    lines: readonly { id: string; quantity: number; refundedQuantity: number; fulfilledQuantity: number }[],
 ) {
-    const snapshot = JSON.stringify(lines.map(({ id, quantity, refundedQuantity }) => ({ id, quantity, refundedQuantity })));
+    const snapshot = JSON.stringify(lines.map(({ id, quantity, refundedQuantity, fulfilledQuantity }) => ({ id, quantity, refundedQuantity, fulfilledQuantity })));
     return sql`(SELECT count(*) FROM ${orderItems}
         WHERE ${orderItems.orderId} = ${orderId} AND ${orderItems.fulfillmentType} = ${type}) = ${lines.length}
         AND NOT EXISTS (SELECT 1 FROM json_each(${snapshot}) AS expected
@@ -81,6 +85,7 @@ function autoLineObligationsUnchangedCondition(
                   AND ${orderItems.fulfillmentType} = ${type}
                   AND ${orderItems.id} = json_extract(expected.value, '$.id')
                   AND ${orderItems.quantity} = CAST(json_extract(expected.value, '$.quantity') AS INTEGER)
+                  AND ${orderItems.fulfilledQuantity} = CAST(json_extract(expected.value, '$.fulfilledQuantity') AS INTEGER)
                   AND ${refundedLineQuantitySql()} = CAST(json_extract(expected.value, '$.refundedQuantity') AS INTEGER)))`;
 }
 

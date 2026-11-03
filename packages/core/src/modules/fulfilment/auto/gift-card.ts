@@ -10,6 +10,7 @@
 // reserved `_gc_` line properties and is a delivery target only; without one
 // the card belongs to the order's account owner.
 import type { BatchItem } from "drizzle-orm/batch";
+import { safeBatch } from "@scalius/database/client";
 import { eq } from "drizzle-orm";
 import { orderItems, orders } from "@scalius/database/schema";
 import {
@@ -87,6 +88,7 @@ export const giftCardFulfiller: AutoFulfiller = {
         const statements: BatchItem<"sqlite">[] = [];
         const deliveredLineIds: string[] = [];
         const noValue: string[] = [];
+        const alerts: BatchItem<"sqlite">[] = [];
         const day = new Date().toISOString().slice(0, 10);
         for (const line of context.lines) {
             const item = itemById.get(line.orderItemId);
@@ -96,7 +98,7 @@ export const giftCardFulfiller: AutoFulfiller = {
             if (!Number.isSafeInteger(valueMinor) || valueMinor <= 0) {
                 // This line stays owed (staff alerted once a day); the others are issued.
                 noValue.push(line.orderItemId);
-                await buildNotificationOutboxInsert(db, {
+                alerts.push(buildNotificationOutboxInsert(db, {
                     subjectType: "order",
                     subjectId: context.orderId,
                     audience: "staff",
@@ -104,7 +106,7 @@ export const giftCardFulfiller: AutoFulfiller = {
                     dedupeKey: `gift_card_no_value:${line.orderItemId}:${day}`,
                     source: "auto_fulfil",
                     data: { reason: "gift_card_no_value", orderItemId: line.orderItemId },
-                }).statement.run();
+                }).statement as unknown as BatchItem<"sqlite">);
                 continue;
             }
             deliveredLineIds.push(line.orderItemId);
@@ -154,6 +156,8 @@ export const giftCardFulfiller: AutoFulfiller = {
                 }
             }
         }
+        // The owed lines' alerts in one round trip, whatever the handover batch does.
+        if (alerts.length > 0) await safeBatch(db, alerts);
         return {
             statements,
             deliveredLineIds,
