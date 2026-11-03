@@ -73,23 +73,25 @@ const COMMON_THIRD_PARTY_DOMAINS = [
 ];
 
 /**
- * The card payment providers whose fields load on store pages (Stripe: its
- * script, the card and 3-D Secure frames on js.stripe.com and its
- * subdomains, its API). The one list for scripts, frames and connections of
- * every page that takes a card: the page policy and the continuations'
+ * The card payment providers' sources, per directive, as Stripe documents
+ * them for Stripe.js (docs.stripe.com/security/guide, "Content Security
+ * Policy"): its script and frames on js.stripe.com and its subdomains, the
+ * 3-D Secure and redirect frame on hooks.stripe.com, its API. The one list
+ * of every page that takes a card: the page policy and the continuations'
  * strict policy (`cardPageCsp`).
  */
-export const PAYMENT_PROVIDER_CSP_SOURCES = [
-  "https://js.stripe.com",
-  "https://*.stripe.com",
-] as const;
+export const PAYMENT_PROVIDER_CSP_SOURCES = {
+  script: ["https://js.stripe.com", "https://*.js.stripe.com"],
+  frame: ["https://js.stripe.com", "https://*.js.stripe.com", "https://hooks.stripe.com"],
+  connect: ["https://api.stripe.com"],
+} as const satisfies Record<"script" | "frame" | "connect", readonly string[]>;
 
 // Generate script-src directives
 function getScriptSrcDirectives(additionalDomains: string[]): string[] {
   return [
     ...ESSENTIAL_SCRIPT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
-    ...PAYMENT_PROVIDER_CSP_SOURCES,
+    ...PAYMENT_PROVIDER_CSP_SOURCES.script,
     ...additionalDomains,
   ];
 }
@@ -102,7 +104,7 @@ function getConnectSrcDirectives(
   const directives = [
     ...ESSENTIAL_CONNECT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
-    ...PAYMENT_PROVIDER_CSP_SOURCES,
+    ...PAYMENT_PROVIDER_CSP_SOURCES.connect,
     ...additionalDomains,
   ];
 
@@ -118,7 +120,7 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
     ...ESSENTIAL_FRAME_SRC,
     "https://*.google.com", // For Google services like reCAPTCHA
     "https://*.facebook.com", // For Facebook UI elements or login iframes
-    ...PAYMENT_PROVIDER_CSP_SOURCES, // card fields and 3-D Secure frames
+    ...PAYMENT_PROVIDER_CSP_SOURCES.frame, // card fields and 3-D Secure frames
     "https://www.youtube-nocookie.com", // Merchant-authored YouTube embeds
     "https://player.vimeo.com", // Merchant-authored Vimeo embeds
     ...additionalDomains,
@@ -132,12 +134,13 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
  * scheme's), no framing, no other origin.
  */
 export function cardPageCsp(scriptSource: string | null): string {
-  const payment = PAYMENT_PROVIDER_CSP_SOURCES.join(" ");
+  const payment = (directive: keyof typeof PAYMENT_PROVIDER_CSP_SOURCES) => PAYMENT_PROVIDER_CSP_SOURCES[directive].join(" ");
   return [
     "default-src 'self'",
-    `script-src 'self'${scriptSource ? ` ${scriptSource}` : ""} ${payment}`,
-    `connect-src 'self' ${payment}`,
-    `frame-src ${payment}`,
+    `script-src 'self'${scriptSource ? ` ${scriptSource}` : ""} ${payment("script")}`,
+    `connect-src 'self' ${payment("connect")}`,
+    `frame-src ${payment("frame")}`,
+    "object-src 'none'",
     "img-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
     "form-action 'self'",
