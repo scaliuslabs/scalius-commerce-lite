@@ -150,11 +150,9 @@ function staleAsset() {
 
 type BuyerInputField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
-/** The buy form's buyer-input fields (`property.<key>`). */
+/** The buy form's buyer-input fields (`property.<key>`; only its inputs, text areas and selects carry such names). */
 function buyerInputFields(): BuyerInputField[] {
-  return Array.from(cache.form?.elements ?? []).filter((field): field is BuyerInputField =>
-    (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement)
-    && field.name.startsWith(BUYER_INPUT_FIELD_PREFIX));
+  return (Array.from(cache.form?.elements ?? []) as BuyerInputField[]).filter((field) => field.name?.startsWith(BUYER_INPUT_FIELD_PREFIX));
 }
 
 /** A field's answer as the cart line keeps it: a ticked box is "true", an empty one "". */
@@ -249,8 +247,7 @@ export function init() {
   // first frame, and its answers fill the fields the buyer has not touched.
   // The buyer inputs are the buy form itself (ProductBuyerInputs.astro), never a look-alike.
   const buyerForm = cache.form?.hasAttribute("data-buyer-inputs") ? cache.form : null;
-  const productId = cache.container.dataset.productId;
-  state.edit = buyerForm && productId ? readCartLineEdit(productId) : null;
+  state.edit = readEdit();
   prefilled.clear();
   if (buyerForm && state.edit) prefillEdit(buyerForm, state.edit);
   // The inputs' own script loads only for a product that has them.
@@ -265,7 +262,7 @@ export function init() {
   bindOptions();
   bindActions();
   loadExtras();
-  window.addEventListener("pageshow", restoreFromHistory);
+  window.addEventListener("pageshow", restoreFromHistory, { signal: extrasBinding!.signal });
   for (const input of purchaseOptionInputs()) input.addEventListener("change", changed);
   refresh(true);
   // The pre-paint hold of a `?variant=` link (VARIANT_PREPAINT_SCRIPT) ends in
@@ -1017,15 +1014,22 @@ function endAdd() {
 }
 
 /**
- * A page restored from the back/forward cache after the form was posted the
- * no-JavaScript way is still busy from that post: the buyer came back to buy
- * again, so the form takes presses again.
+ * A page restored from the back/forward cache is the page as it was left,
+ * but the cart may have moved on: a native post's busy state ends (the buyer
+ * came back to buy again), and the cart line being edited is read again, as
+ * an update the buyer finished (in the cart, Back) leaves none to update.
  */
 function restoreFromHistory(event: PageTransitionEvent) {
-  if (!event.persisted || !state.adding) return;
+  if (!event.persisted) return;
   endAdd();
-  updateActionsState();
-  publish();
+  state.edit = readEdit();
+  refresh();
+}
+
+/** The cart line being edited ("Edit" in the cart): products with buyer inputs only. */
+function readEdit(): CartLineEdit | null {
+  const productId = cache.container?.dataset.productId;
+  return cache.form?.hasAttribute("data-buyer-inputs") && productId ? readCartLineEdit(productId) : null;
 }
 
 /** Adds the SKU `selection` names; true when the form was posted the no-JavaScript way instead. */
