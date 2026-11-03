@@ -14,7 +14,11 @@ import {
   orders,
 } from "@scalius/database/schema";
 import { readReviewSettings } from "../settings";
-import { buildNotificationOutboxInsert } from "../notifications";
+import {
+  buildNotificationOutboxInsert,
+  DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
+  getNotificationChannels,
+} from "../notifications";
 import {
   DAY_SECONDS,
   nowSeconds,
@@ -42,11 +46,34 @@ function openReviewableLineExists(now: number) {
 }
 
 /**
+ * The sender's channel test (sendResolvedNotification) as a predicate on the
+ * joined order: an email channel needs the order's email, an SMS channel its
+ * phone. With neither reachable the request would only record skipped
+ * deliveries, so the sweep skips it without an outbox row.
+ */
+async function reachableOrderContact(db: Database) {
+  let channels: readonly string[] = DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS.review_request ?? ["email"];
+  try {
+    channels = (await getNotificationChannels(db)).review_request ?? channels;
+  } catch {
+    // The sender falls back to the defaults too.
+  }
+  const email = channels.includes("email")
+    ? sql`trim(coalesce(${orders.customerEmail}, '')) <> ''`
+    : sql`0 = 1`;
+  const phone = channels.includes("sms")
+    ? sql`trim(coalesce(${orders.customerPhone}, '')) <> ''`
+    : sql`0 = 1`;
+  return sql`(${email} OR ${phone})`;
+}
+
+/**
  * Turns due review requests into `review_request` outbox rows (subject the
  * order, dedupe `order:<id>:review_request`), one batch per 50 orders. Due
- * orders with nothing left to review, and every due order while reviews or
- * requests are off, are marked `skipped` (terminal: one request per order).
- * Unreadable settings leave every row scheduled for the next run.
+ * orders with nothing left to review or no contact a configured channel can
+ * reach, and every due order while reviews or requests are off, are marked
+ * `skipped` (terminal: one request per order). Unreadable settings leave
+ * every row scheduled for the next run.
  */
 export async function sweepReviewRequests(
   db: Database,
@@ -58,11 +85,12 @@ export async function sweepReviewRequests(
   const limit = Math.max(1, Math.min(SWEEP_LIMIT_MAX, options.limit ?? SWEEP_LIMIT_MAX));
   const dueBefore = now - settings.value.requestDelayDays * DAY_SECONDS;
   const requestsOn = settings.value.enabled && settings.value.requestsEnabled;
+  const reachable = requestsOn ? await reachableOrderContact(db) : sql`0 = 1`;
 
   const due = await db
     .select({
       orderId: orderReviewRequests.orderId,
-      askable: sql<number>`CASE WHEN ${orders.id} IS NOT NULL AND ${openReviewableLineExists(now)} THEN 1 ELSE 0 END`,
+      askable: sql<number>`CASE WHEN ${orders.id} IS NOT NULL AND ${reachable} AND ${openReviewableLineExists(now)} THEN 1 ELSE 0 END`,
     })
     .from(orderReviewRequests)
     .leftJoin(orders, eq(orders.id, orderReviewRequests.orderId))
