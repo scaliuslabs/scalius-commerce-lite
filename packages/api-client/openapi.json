@@ -1493,7 +1493,7 @@
           "version": {
             "type": "number",
             "enum": [
-              12
+              13
             ]
           },
           "template": {
@@ -1612,6 +1612,121 @@
                 ],
                 "additionalProperties": false
               },
+              "colorScheme": {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "dark",
+                  "system"
+                ]
+              },
+              "darkColors": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "background": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "card": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "card-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "popover": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "popover-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "primary": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "primary-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "secondary": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "secondary-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "muted": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "muted-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "accent": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "accent-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "destructive": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "destructive-foreground": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "border": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "input": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  },
+                  "ring": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-f]{6}$"
+                  }
+                },
+                "required": [
+                  "background",
+                  "foreground",
+                  "card",
+                  "card-foreground",
+                  "popover",
+                  "popover-foreground",
+                  "primary",
+                  "primary-foreground",
+                  "secondary",
+                  "secondary-foreground",
+                  "muted",
+                  "muted-foreground",
+                  "accent",
+                  "accent-foreground",
+                  "destructive",
+                  "destructive-foreground",
+                  "border",
+                  "input",
+                  "ring"
+                ],
+                "additionalProperties": false
+              },
+              "colorSchemeToggle": {
+                "type": "boolean"
+              },
               "typography": {
                 "type": "string",
                 "enum": [
@@ -1709,6 +1824,9 @@
             },
             "required": [
               "colors",
+              "colorScheme",
+              "darkColors",
+              "colorSchemeToggle",
               "typography",
               "typeScale",
               "headingCase",
