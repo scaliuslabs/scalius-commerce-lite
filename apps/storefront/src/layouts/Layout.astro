@@ -46,9 +46,6 @@ import {
 } from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import {
-  appendClearThemePreviewCookies,
-} from "@/lib/theme-preview-cookie";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
 import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
@@ -145,7 +142,6 @@ const {
   resolved: resolvedTheme,
   layout: themeLayout,
   brand: themeBrand,
-  previewToken: themePreviewToken,
   preview: themePreview,
   language: themeLanguage,
 } = await resolveRequestTheme(Astro, layoutData);
@@ -164,15 +160,6 @@ const themeEditorBridge = isThemePreview && !libraryPreview
 const themePreviewBar = showsThemePreviewBar(isThemePreview, Astro.request)
   ? themePreviewBarCopy(layoutData?.storefrontCopy?.languageCode)
   : null;
-if (themePreviewToken) {
-  Astro.response.headers.set(
-    "Cache-Control",
-    "private, no-cache, no-store, must-revalidate",
-  );
-  if (!themePreview) {
-    appendClearThemePreviewCookies(Astro.response.headers);
-  }
-}
 
 const storeAnalyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics
   ? []

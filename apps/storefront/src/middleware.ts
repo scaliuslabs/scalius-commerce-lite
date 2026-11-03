@@ -42,7 +42,7 @@ import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
 import { currentRequestTheme, pageRendersDegradedTheme, resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import { themeAppConnectHosts } from "@/lib/extensions/stylesheets";
-import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+import { appendClearThemePreviewCookies, readThemePreviewCookie, THEME_PREVIEW_COOKIE_NAME } from "@/lib/theme-preview-cookie";
 import { catalogRedirectBeforeReads } from "@/lib/listing-url-redirect";
 import { presenceOfRenderRequest } from "@/lib/market-presence";
 
@@ -55,7 +55,10 @@ interface PreviewFramingLocals {
  * Who besides the storefront may frame this page: the dashboard (Platform
  * settings), only when the HTML rendered a valid theme preview. A request
  * without the preview cookie (every buyer's) is never even checked; with
- * one, the page's own preview resolution is reused.
+ * one, the page's own preview resolution is reused. A page drawn under a
+ * preview whose session ended (expired or revoked) drops the cookie here: a
+ * layout cannot, as a streamed page's headers leave before it renders. The
+ * response is already private (the cookie bypasses the shared cache).
  */
 async function themePreviewFrameAncestors(
   context: { request: Request; locals: object },
@@ -65,13 +68,21 @@ async function themePreviewFrameAncestors(
   if (!response.headers.get("Content-Type")?.toLowerCase().includes("text/html")) return [];
   try {
     const theme = await resolveRequestTheme(context, await getLayoutData());
-    if (!theme.preview) return [];
+    if (!theme.preview) {
+      if (!setsThemePreviewCookie(response.headers)) appendClearThemePreviewCookies(response.headers);
+      return [];
+    }
     (context.locals as PreviewFramingLocals).themePreviewRender = true;
     const dashboard = themeEditorOrigin(getRuntimeDashboardUrl());
     return dashboard ? [dashboard] : [];
   } catch {
     return [];
   }
+}
+
+/** The page already set or cleared the preview cookie itself (`/theme-preview`). */
+function setsThemePreviewCookie(headers: Headers): boolean {
+  return headers.getSetCookie().some((cookie) => cookie.startsWith(`${THEME_PREVIEW_COOKIE_NAME}=`));
 }
 
 function getEnv(): Env | null {
