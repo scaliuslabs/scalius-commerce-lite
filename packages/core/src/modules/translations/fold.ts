@@ -31,6 +31,7 @@ import {
 } from "@scalius/shared/translations";
 import { isLanguageSubfolder, isMarketSubfolder } from "@scalius/shared/markets";
 import { deps } from "../../cache-deps";
+import { qualifiedReference } from "../../utils/qualified-column";
 
 /** A presence read's translation scope: the subfolder and its locale. */
 export interface TranslationScope {
@@ -77,8 +78,9 @@ function presenceRowsCondition(scope: TranslationScope, alias: string): SQL {
  * Declares `tr:locales`; the reader declares the resource ids it resolves
  * (`declareTranslated`).
  */
-export function translationRowsSql(scope: TranslationScope, type: TranslatableResourceType, id: SQLWrapper): SQL<string | null> {
+export function translationRowsSql(scope: TranslationScope, type: TranslatableResourceType, column: SQLWrapper): SQL<string | null> {
   deps.translationLocales();
+  const id = qualifiedReference(column);
   return sql<string | null>`(SELECT '[' || group_concat(json_object('l', tr_row.locale, 'm', tr_row.market_id, 'f', tr_row.fields), ',') || ']'
     FROM translations AS tr_row
     WHERE tr_row.resource_type = ${typeLiteral(type)} AND tr_row.resource_id = ${id} AND ${presenceRowsCondition(scope, "tr_row")})`;
@@ -89,8 +91,9 @@ export function translationRowsSql(scope: TranslationScope, type: TranslatableRe
  * presence resolves, in one JSON text (`t` type, `i` id), for the product
  * page's first statement.
  */
-export function productTranslationRowsSql(scope: TranslationScope, productId: SQLWrapper): SQL<string | null> {
+export function productTranslationRowsSql(scope: TranslationScope, column: SQLWrapper): SQL<string | null> {
   deps.translationLocales();
+  const productId = qualifiedReference(column);
   return sql<string | null>`(SELECT '[' || group_concat(json_object('t', tr_row.resource_type, 'i', tr_row.resource_id, 'l', tr_row.locale, 'm', tr_row.market_id, 'f', tr_row.fields), ',') || ']'
     FROM (
       SELECT * FROM translations AS tr_own WHERE tr_own.resource_type = 'product' AND tr_own.resource_id = ${productId}
@@ -108,7 +111,8 @@ export function productTranslationRowsSql(scope: TranslationScope, productId: SQ
 }
 
 /** The presence-locale handle of one resource row, or NULL. */
-export function localizedSlugSql(scope: TranslationScope, type: TranslatableResourceType, id: SQLWrapper): SQL<string | null> {
+export function localizedSlugSql(scope: TranslationScope, type: TranslatableResourceType, column: SQLWrapper): SQL<string | null> {
+  const id = qualifiedReference(column);
   return sql<string | null>`(SELECT tr_slug.slug FROM localized_slugs AS tr_slug
     WHERE tr_slug.resource_type = ${typeLiteral(type)} AND tr_slug.resource_id = ${id} AND tr_slug.locale = ${localeLiteral(scope)})`;
 }
@@ -119,7 +123,8 @@ export function localizedSlugSql(scope: TranslationScope, type: TranslatableReso
  * Handles are ASCII words and dashes and locales two letters, so the list is
  * unambiguous. The reader declares the resource's `tr:` key.
  */
-export function localizedSlugsSql(type: TranslatableResourceType, id: SQLWrapper): SQL<string | null> {
+export function localizedSlugsSql(type: TranslatableResourceType, column: SQLWrapper): SQL<string | null> {
+  const id = qualifiedReference(column);
   return sql<string | null>`(SELECT group_concat(tr_alt.locale || ':' || tr_alt.slug, ',') FROM localized_slugs AS tr_alt
     WHERE tr_alt.resource_type = ${typeLiteral(type)} AND tr_alt.resource_id = ${id})`;
 }
