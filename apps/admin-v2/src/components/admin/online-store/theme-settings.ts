@@ -259,20 +259,37 @@ export function themeContrastProblems(theme: StorefrontThemeDocument, set: Store
 }
 
 /**
- * The first colour field to fix: a colour that is not #rrggbb, then a pair
- * below AA, in the colours and then the dark colours buyers can see. Null
- * when every colour buyers see is valid and readable.
+ * The first field of one colour set to fix: a colour that is not #rrggbb,
+ * then a pair below AA (`role` null: a colour no field shows, or the set is
+ * missing). Null when the set is valid and readable, or buyers cannot see it.
  */
+export function themeColorSetProblem(theme: StorefrontThemeDocument, set: StorefrontThemeColorSet): { role: ColorRole | null } | null {
+  if (!themeColorSets(theme).includes(set)) return null;
+  const colors = theme.tokens[set];
+  if (!colors) return { role: null };
+  const bad = (Object.keys(COLOR_ROLE_TOKEN) as ColorRole[]).find((role) => !isStorefrontThemeHexColor(colors[COLOR_ROLE_TOKEN[role]] ?? ""));
+  if (bad || !allThemeColorsValid(colors)) return { role: bad ?? null };
+  const problem = themeContrastProblems(theme, set)[0];
+  return problem ? { role: problem.role } : null;
+}
+
+/** The first colour field to fix, in the colours and then the dark colours buyers can see; null when there is none. */
 export function themeColorProblem(theme: StorefrontThemeDocument): { set: StorefrontThemeColorSet; role: ColorRole | null } | null {
   for (const set of themeColorSets(theme)) {
-    const colors = theme.tokens[set];
-    if (!colors) return { set, role: null };
-    const bad = (Object.keys(COLOR_ROLE_TOKEN) as ColorRole[]).find((role) => !isStorefrontThemeHexColor(colors[COLOR_ROLE_TOKEN[role]] ?? ""));
-    if (bad || !allThemeColorsValid(colors)) return { set, role: bad ?? null };
-    const problem = themeContrastProblems(theme, set)[0];
-    if (problem) return { set, role: problem.role };
+    const problem = themeColorSetProblem(theme, set);
+    if (problem) return { set, ...problem };
   }
   return null;
+}
+
+/** Whether the dark colours differ from the ones made from the colours (the merchant edited them). */
+export function darkColorsEdited(theme: StorefrontThemeDocument): boolean {
+  return theme.tokens.darkColors !== null && !sameFormValue(theme.tokens.darkColors, storefrontDarkPalette(theme.tokens.colors));
+}
+
+/** The document with its dark colours made again from its colours. */
+export function regenerateDarkColors(theme: StorefrontThemeDocument): StorefrontThemeDocument {
+  return { ...theme, tokens: { ...theme.tokens, darkColors: storefrontDarkPalette(theme.tokens.colors) } };
 }
 
 /** The announcement link as typed: null (none) or canonical, else not usable yet. */

@@ -5,7 +5,7 @@
  */
 import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import { SettingBindingScope } from "./schema-form/binding-context";
-import { useContext, useState, type CSSProperties } from "react";
+import { useContext, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   STOREFRONT_COLOR_SCHEMES,
   STOREFRONT_THEME_MIN_CONTRAST,
@@ -34,6 +34,9 @@ import { SchemaSettingsForm } from "./schema-form/SchemaSettingsForm";
 import {
   COLOR_ROLE_TOKEN,
   colorFieldId,
+  darkColorsEdited,
+  regenerateDarkColors,
+  themeColorSetProblem,
   setColorScheme,
   setColorSchemeToggle,
   setThemeColor,
@@ -45,6 +48,8 @@ import {
 } from "./theme-settings";
 import { PreviewColorSetContext, useThemeReveal } from "./theme-reveal";
 import { ChoiceField, Field } from "~/components/ui/field";
+import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 
 export { useFitReason } from "./use-fit-reason";
 
@@ -173,6 +178,19 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
   const sets = themeColorSets(theme);
   const shown = sets.includes(preview?.set ?? ownSet) ? preview?.set ?? ownSet : "colors";
   const show = (set: StorefrontThemeColorSet) => (preview ? preview.setSet(set) : setOwnSet(set));
+  // "Setting to fix" opens the tab of the colour set its field is in.
+  const reveal = useThemeReveal();
+  const showRef = useRef(show);
+  showRef.current = show;
+  useEffect(() => {
+    if (reveal?.group === "colors" && reveal.colorSet) showRef.current(reveal.colorSet);
+  }, [reveal]);
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const regenerate = () => {
+    setConfirmRegenerate(false);
+    setDraft((current) => regenerateDarkColors(current));
+  };
+  const darkProblem = themeColorSetProblem(theme, "darkColors") !== null;
   const scheme = (value: StorefrontColorScheme) => {
     setDraft((current) => setColorScheme(current, value));
     // The canvas follows the choice: dark shows the dark colours, light the colours.
@@ -210,7 +228,15 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
         <Tabs value={shown} onValueChange={(value) => show(value as StorefrontThemeColorSet)}>
           <TabsList aria-label={t("colorSets")}>
             <TabsTrigger value="colors">{t("colorSet_colors")}</TabsTrigger>
-            <TabsTrigger value="darkColors">{t("colorSet_darkColors")}</TabsTrigger>
+            <TabsTrigger value="darkColors">
+              {t("colorSet_darkColors")}
+              {darkProblem ? (
+                <>
+                  <span aria-hidden="true" className="size-2 rounded-full bg-destructive" />
+                  <span className="sr-only">{t("colorSetNeedsFix")}</span>
+                </>
+              ) : null}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="colors">
             <ColorSetFields theme={theme} set="colors" setDraft={setDraft} />
@@ -218,6 +244,22 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
           <TabsContent value="darkColors" className="space-y-4">
             <p className="text-body text-muted-foreground">{t("darkColorsHelp")}</p>
             <ColorSetFields theme={theme} set="darkColors" setDraft={setDraft} />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!darkColorsEdited(theme)}
+              onClick={() => setConfirmRegenerate(true)}
+            >
+              {t("darkColorsRegenerate")}
+            </Button>
+            <ConfirmDialog
+              open={confirmRegenerate}
+              onOpenChange={setConfirmRegenerate}
+              title={t("darkColorsRegenerateTitle")}
+              description={t("darkColorsRegenerateDescription")}
+              confirmLabel={t("darkColorsRegenerate")}
+              onConfirm={regenerate}
+            />
           </TabsContent>
         </Tabs>
       ) : (

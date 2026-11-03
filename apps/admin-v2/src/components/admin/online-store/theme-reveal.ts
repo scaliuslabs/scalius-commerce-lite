@@ -14,12 +14,14 @@ export type ThemeSettingsGroup = "colors" | "logo" | "productCards";
 
 export interface ThemeRevealRequest {
   group: ThemeSettingsGroup;
+  /** The colour set whose field to show (the Colours group opens its tab). */
+  colorSet?: StorefrontThemeColorSet;
   /** Changes on every click, so the same group opens again after it was closed. */
   nonce: number;
 }
 
 export type ProblemTarget =
-  | { kind: "group"; group: ThemeSettingsGroup; fieldId: string | null }
+  | { kind: "group"; group: ThemeSettingsGroup; fieldId: string | null; colorSet?: StorefrontThemeColorSet }
   | { kind: "part"; part: "announcement" | "header" | "footer" | "page"; fieldId: string | null }
   | { kind: "theme" };
 
@@ -27,7 +29,7 @@ export type ProblemTarget =
 export function themeProblemTarget(theme: StorefrontThemeDocument, part: string): ProblemTarget {
   if (part === "tokens") {
     const problem = themeColorProblem(theme);
-    return { kind: "group", group: "colors", fieldId: problem?.role ? colorFieldId(problem.role, problem.set) : null };
+    return { kind: "group", group: "colors", fieldId: problem?.role ? colorFieldId(problem.role, problem.set) : null, colorSet: problem?.set ?? "colors" };
   }
   if (part === "brand") return { kind: "group", group: "logo", fieldId: THEME_FIELD_IDS.logo };
   if (part === "block:card" || part === "app:productCard") return { kind: "group", group: "productCards", fieldId: null };

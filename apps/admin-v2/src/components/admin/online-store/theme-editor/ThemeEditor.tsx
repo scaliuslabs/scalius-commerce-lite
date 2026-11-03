@@ -605,7 +605,7 @@ export function ThemeEditor({ workspace, refetch }: {
         setSelected(null);
         setTab("theme");
         if (!desktop) setDrawerOpen(true);
-        if (target.kind === "group") setThemeReveal({ group: target.group, nonce: Date.now() });
+        if (target.kind === "group") setThemeReveal({ group: target.group, colorSet: target.colorSet, nonce: Date.now() });
       }
       if (target.kind !== "theme" && target.fieldId) focusWhenShown(target.fieldId);
       return;
