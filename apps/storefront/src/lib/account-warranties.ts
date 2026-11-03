@@ -7,6 +7,7 @@ import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatAccountDate } from "@/lib/account-format";
+import { formatCount } from "@/lib/store-time-zone";
 
 export const WARRANTY_COPY_KEYS = [
   "warrantyBrandText",
@@ -99,7 +100,7 @@ export function warrantyDurationText(value: number, unit: WarrantyDurationUnit, 
     : unit === "months"
       ? [copy.warrantyMonthText, copy.warrantyMonthsText]
       : [copy.warrantyDayText, copy.warrantyDaysText];
-  return value === 1 ? one : formatCheckoutLanguageText(many, { count: value });
+  return value === 1 ? one : formatCheckoutLanguageText(many, { count: formatCount(value) });
 }
 
 /** "1 year brand warranty · 7-day replacement". */
@@ -110,7 +111,7 @@ export function warrantySummaryText(terms: WarrantyTerms, copy: WarrantyCopy): s
     { duration },
   );
   return terms.replacementDays && terms.replacementDays > 0
-    ? `${warranty} · ${formatCheckoutLanguageText(copy.warrantyReplacementText, { days: terms.replacementDays })}`
+    ? `${warranty} · ${formatCheckoutLanguageText(copy.warrantyReplacementText, { days: formatCount(terms.replacementDays) })}`
     : warranty;
 }
 
@@ -131,8 +132,8 @@ export function warrantyTimeLeftText(expiresAt: string, now: number, copy: Warra
   const days = Math.ceil((end - now) / DAY_MS);
   if (days <= 1) return copy.warrantyDayLeftText;
   // Two months or more read in months (never "1 months").
-  if (days < 62) return formatCheckoutLanguageText(copy.warrantyDaysLeftText, { count: days });
-  return formatCheckoutLanguageText(copy.warrantyMonthsLeftText, { count: Math.floor(days / 30.44) });
+  if (days < 62) return formatCheckoutLanguageText(copy.warrantyDaysLeftText, { count: formatCount(days) });
+  return formatCheckoutLanguageText(copy.warrantyMonthsLeftText, { count: formatCount(Math.floor(days / 30.44)) });
 }
 
 function day(iso: string): string {

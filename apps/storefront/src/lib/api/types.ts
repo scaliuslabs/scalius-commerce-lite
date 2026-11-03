@@ -316,8 +316,6 @@ export interface Product {
   contentBlocks?: ProductPageContentBlock[];
   /** Product page only: the ready files those blocks name (a missing file is absent). */
   contentBlockMedia?: ProductPageBlockMedia[];
-  /** Product page only: the warranty policy's current terms; null without one. */
-  warranty?: ProductWarranty | null;
   /** Product page only: every warranty a SKU of the page has, each once (a variant's `warrantyId`). */
   warranties?: Array<ProductWarranty & { id: string }>;
   /** Product page only: storefront-visible custom fields, in the merchant's order. */

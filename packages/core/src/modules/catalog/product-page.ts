@@ -171,7 +171,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             },
             // Review stats come with the row (a PK join on the projection).
             ...reviewStatsSelection(),
-            // The product's live warranty policy (Wave B §5): its current terms.
+            // The product's live warranty policy (Wave B §5): what its inheriting SKUs sell with.
             warranty: {
                 id: warrantyPolicies.id,
                 name: warrantyPolicies.name,
@@ -587,8 +587,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             customFields: foreign ? customFieldsInMarket(content.customFields, pageMarket!) : content.customFields,
             /** Published reviews (summary and the first page); null when the store's reviews are off. */
             reviews,
-            /** The product's warranty policy (its current terms); null without one. */
-            warranty: warranty?.id ? presentWarranty(warranty) : null,
             /** Every warranty a SKU of this page has (its `warrantyId`), each once. */
             warranties: [...warranties].map(([id, view]) => ({ id, ...view })),
             // EMI plans are the shop currency's bank offers: none in another currency.

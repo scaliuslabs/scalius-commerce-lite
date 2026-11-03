@@ -122,6 +122,16 @@ const CATEGORY_NAMES: Record<string, string> = {
   bags: "Bags", "smart-home": "Smart home", kids: "Kids", accessories: "Accessories",
 };
 
+/** The brand warranty the gallery's specification products sell under. */
+const GALLERY_WARRANTY = {
+  id: "wrp_gallery_brand",
+  name: "Official warranty",
+  provider: "brand" as const,
+  duration: { value: 1, unit: "years" as const },
+  replacementDays: 7,
+  terms: "Covers manufacturing defects. Physical and liquid damage are not covered.",
+};
+
 function seedFor(index: number): ProductSeed {
   return SEEDS[index % SEEDS.length]!;
 }
@@ -405,6 +415,8 @@ export function productDetail(scenario: ProductScenario | number, flags: { bangl
     discountPercentage: card.discountPercentage,
     discountAmount: card.discountAmount,
     fulfillmentKind: "physical",
+    // Products with specifications sell under the brand's warranty (every SKU inherits it).
+    warrantyId: seed.specs ? GALLERY_WARRANTY.id : null,
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
     deletedAt: null,
@@ -426,7 +438,7 @@ export function productDetail(scenario: ProductScenario | number, flags: { bangl
     noIndex: false,
     productCondition: "new",
     pageTemplate: null,
-    warranty: seed.specs ? { name: "Official warranty", provider: "brand", duration: { value: 1, unit: "years" }, replacementDays: 7, terms: "Covers manufacturing defects. Physical and liquid damage are not covered." } : null,
+    warranties: seed.specs ? [GALLERY_WARRANTY] : [],
     emi: seed.price > 20000 ? { provider: "City Bank", months: 12, monthly: Math.round(seed.price / 12), monthlyMinor: Math.round(seed.price / 12) * 100 } : null,
     bundles: index === SCENARIO_SEED.simple ? [{ quantity: 2, discountType: "percentage", discountPercentage: 10, price: null, label: "Buy 2, save 10%", isActive: true }] : [],
     offers: [],

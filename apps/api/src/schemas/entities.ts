@@ -10,6 +10,7 @@ import { orderBillingAddressShape } from "./billing-address";
 import { protectedField as pii } from "./protected";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
+import { SKU_WARRANTY_MODES } from "@scalius/core/modules/products";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
 import { ORDER_CHANNELS, ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import {
@@ -144,7 +145,7 @@ export const productVariantSchema = z.object({
   /** physical (shipped or picked up), digital, or service (performed, no delivery). */
   fulfillmentKind: fulfillmentKindSchema.optional(),
   /** inherit (the product's warranty), policy (warrantyPolicyId) or none. */
-  warrantyMode: z.enum(["inherit", "policy", "none"]).optional(),
+  warrantyMode: z.enum(SKU_WARRANTY_MODES).optional(),
   /** The SKU's own warranty policy (wrp_…), exactly when warrantyMode is policy. */
   warrantyPolicyId: z.string().nullable().optional(),
   createdAt: optionalTimestampSchema,

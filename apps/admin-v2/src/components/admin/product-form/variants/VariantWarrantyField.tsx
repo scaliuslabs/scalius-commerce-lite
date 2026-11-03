@@ -12,7 +12,8 @@ import { warrantyPoliciesQueryOptions, type WarrantyPolicy } from "../../warrant
 import { warrantySummary } from "../../warranty/warranty-format";
 import type { ProductFormValues } from "../types";
 import type { DraftVariant } from "./option-matrix-editor-model";
-import { WarrantyFieldPending } from "./variant-fields";
+import { useWarrantyFieldPending } from "./variant-fields";
+import { InlineError } from "../../states/InlineError";
 
 const INHERIT = "inherit";
 const NONE = "none";
@@ -38,14 +39,18 @@ function WithProductPolicy({ control, ...props }: FieldProps & { control: Contro
 
 function WarrantySelect({ readOnly, variant, name, error, onChange, productPolicyId }: FieldProps & { productPolicyId: string | null }) {
   const t = useMessages(warrantyMessages);
-  const { data: policies, isError, isPending } = useQuery(warrantyPoliciesQueryOptions(true));
+  const { data: policies, isError, isPending, error: loadError, refetch } = useQuery(warrantyPoliciesQueryOptions(true));
   // Names come from the list: nothing reads "unavailable" before it arrives.
-  if (isPending) return <WarrantyFieldPending />;
+  const pending = useWarrantyFieldPending(isPending);
+  if (pending) return pending;
+  if (isError) {
+    return <InlineError title={t("loadFailed")} error={loadError} onRetry={() => void refetch()} />;
+  }
   const list = policies ?? [];
   const policyName = (id: string | null) => {
     if (!id) return t("none");
     const policy = list.find((candidate) => candidate.id === id);
-    if (!policy) return t(isError ? "loadFailed" : "policyUnavailable");
+    if (!policy) return t("policyUnavailable");
     return policy.archivedAt ? t("archivedPolicy", { name: policy.name }) : policy.name;
   };
   const mode = variant.warrantyMode ?? "inherit";
