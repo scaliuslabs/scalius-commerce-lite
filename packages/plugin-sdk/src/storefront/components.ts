@@ -223,7 +223,9 @@ export function accountLink(): Attributes {
  * The buyer's light or dark switch: a native `<button type="button">` the
  * store flips the colour scheme with and remembers on the buyer's device.
  * It shows only where the theme offers the switch (and JavaScript runs);
- * style its two states on `:root[data-color-scheme="dark"]`.
+ * style its two states on `:root[data-color-scheme="dark"]`. The store keeps
+ * it `aria-pressed` while dark colours show: give it one stable name
+ * ("Dark colours"), not one that flips.
  */
 export function colorSchemeToggle(): Attributes {
   return { "data-color-scheme-toggle": "" };

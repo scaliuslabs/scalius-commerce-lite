@@ -9,8 +9,11 @@
  *   storage) wins, `data-color-scheme-switch` shows the switches, and a click
  *   on any `[data-color-scheme-toggle]` (the core header's, or a skin's
  *   `colorSchemeToggle()`) flips the scheme and remembers it; other tabs, and
- *   a page restored from the back/forward cache, follow. The switch the store
- *   adds to a header skin yields to one the skin or an app drew there.
+ *   a page restored from the back/forward cache, follow. Every switch is
+ *   `aria-pressed` while dark colours show, so its new state is announced
+ *   under one stable name. The switch the store adds to a header skin
+ *   yields to one the skin or an app drew there, and one drawn after a skin
+ *   that places no slot moves into the skin's `<header>` (its landmark).
  *
  * It is its own script, and a failure inside it is swallowed: nothing else
  * on the page waits on it. Without JavaScript the theme's scheme stands
@@ -37,15 +40,22 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     "(function(){try{",
     'var r=document.documentElement,t=r.getAttribute("data-color-scheme"),m=window.matchMedia("(prefers-color-scheme: dark)"),c=null;',
     'function v(x){return x==="light"||x==="dark"?x:null}',
-    'function a(){r.setAttribute("data-color-scheme",c||(t==="system"?(m.matches?"dark":"light"):t))}',
+    toggle
+      ? 'function p(){var d=r.getAttribute("data-color-scheme")==="dark"?"true":"false";'
+        + 'document.querySelectorAll("[data-color-scheme-toggle]").forEach(function(b){b.setAttribute("aria-pressed",d)})}'
+      : "",
+    `function a(){r.setAttribute("data-color-scheme",c||(t==="system"?(m.matches?"dark":"light"):t))${toggle ? ";p()" : ""}}`,
     stored ? `function s(){try{c=v(localStorage.getItem(${key}))}catch(e){}}s();` : "",
     "a();",
     remember ? 'if(t==="system")m.addEventListener("change",a);' : "",
     toggle ? 'r.setAttribute("data-color-scheme-switch","");' : "",
-    // One switch per header: the host's yields to one a skin or an app drew there (the CSS rule's fallback without :has()).
+    // Once the page is read: every switch says its state; one switch per header (the host's yields to one a
+    // skin or an app drew there: the CSS rule's fallback without :has()), and the host's sits in the header's landmark.
     toggle
-      ? 'document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
-        + 'var d=h.closest("[data-storefront-header]");if(d&&d.querySelector("[data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])"))h.hidden=true})});'
+      ? 'document.addEventListener("DOMContentLoaded",function(){p();document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
+        + 'var d=h.closest("[data-storefront-header]");if(!d)return;'
+        + 'if(d.querySelector("[data-color-scheme-toggle]:not([data-sx-host-color-scheme-toggle])")){h.hidden=true;return}'
+        + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h)})});'
       : "",
     toggle
       ? 'document.addEventListener("click",function(e){var b=e.target instanceof Element?e.target.closest("[data-color-scheme-toggle]"):null;'
