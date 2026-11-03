@@ -30,9 +30,14 @@ import type { DraftIssueField, DraftVariant } from "./option-matrix-editor-model
 const VariantWarrantyField = React.lazy(() =>
   import("./VariantWarrantyField").then((module) => ({ default: module.VariantWarrantyField })));
 
-/** The warranty field's place while it loads: a skeleton only after 300ms, then for at least 300ms (L3). */
-export function WarrantyFieldPending() {
-  const shown = useShownAfter(true);
+/**
+ * The warranty field's place while its policies load (L3): nothing for the
+ * first 300ms, then a skeleton that stays at least 300ms. `pending` is the
+ * wait; the caller keeps showing this while it returns true.
+ */
+export function useWarrantyFieldPending(pending: boolean): React.ReactNode | null {
+  const shown = useShownAfter(pending);
+  if (!pending && !shown) return null;
   return shown ? <Skeleton className="h-9 w-full" /> : <div className="h-9" aria-hidden="true" />;
 }
 
@@ -295,7 +300,8 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   const kindRules = useProductKindRules();
   const { showDiscount, showWeight, showInventory, giftCard } = kindRules;
   const warrantyField = warranty && !giftCard ? (
-    <React.Suspense fallback={<WarrantyFieldPending />}>
+    // The field's code is small and loads fast: its place stays empty meanwhile.
+    <React.Suspense fallback={<div className="h-9" aria-hidden="true" />}>
       <VariantWarrantyField readOnly={readOnly} variant={variant} name={name} error={errorOf("warranty")} onChange={onChange} />
     </React.Suspense>
   ) : null;
