@@ -1,6 +1,7 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
-import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { hasOrderEvent, recordOrderEvent } from "../timeline";
+import { buildBatchGuard, chunkForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
+import { buildOrderEventInsert, orderEventIdForRequest, type OrderEventKind } from "../timeline";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
@@ -10,6 +11,7 @@ import {
 import {
     orders,
     orderItems,
+    orderEvents,
     codTracking,
     deliveryShipments,
     CodStatus,
@@ -20,13 +22,24 @@ import {
     ShipmentStatus,
     orderPayments,
 } from "@scalius/database/schema";
-import { applyInventoryForStatusChangeWithImpact } from "../../inventory";
 import {
+    applyInventoryForStatusChangeWithImpact,
+    isOrderInventoryConflictError,
+    prepareInventoryForStatusChange,
+} from "../../inventory";
+import {
+  ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
+  ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,
+  SHIPMENT_CLAIM_CONFLICT_MESSAGE,
+  activePaymentSessionAttemptExistsCondition,
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
+  hasActiveShipmentClaim,
   noActivePaymentSessionAttemptForOrderIdCondition,
+  noActiveRefundAttemptForOrderColumnCondition,
   noActiveRefundAttemptForOrderIdCondition,
+  noActiveShipmentClaimCondition,
   validateTransition,
 } from "../../order-kernel";
 import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
@@ -38,22 +51,29 @@ import {
 } from "@scalius/shared/order-state";
 import {
   assertOrderPaymentCurrency,
+  isCODCollectionConflictError,
   type OrderCurrencySnapshot,
   resolveOrderCurrencySnapshot,
 } from "../../payments";
 import type { StatusUpdateResult } from "../types";
-import { buildOrderStatusNotificationDedupeKey, type OrderNotificationType } from "../../notifications";
-import { rollbackOrderStatusIfInventoryUnchanged } from "./claim";
+import {
+    buildOrderNotificationOutboxInsert,
+    buildOrderStatusNotificationDedupeKey,
+    type OrderNotificationType,
+} from "../../notifications";
 import { assertGenericAdminOrderStatusTransition } from "./policy";
-import { assertOrderNotOnHold } from "../holds";
+import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../holds";
+import { inJsonArray } from "../../../utils/in-json-array";
 
+type SQLiteBatchItem = BatchItem<"sqlite">;
+
+/** Brings an order's stock in line with `status` (its own batch); the SKUs whose buyer availability changed. */
 export async function reconcileInventoryForStatus(
     db: Database,
     orderId: string,
     status: string,
 ): Promise<string[]> {
     const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, status);
-    await db.update(orders).set({ inventoryAction: impact.inventoryAction }).where(eq(orders.id, orderId));
     return impact.availabilityTransitionVariantIds;
 }
 
@@ -269,7 +289,12 @@ export async function markManualDeliveryEvidence(
     db: Database,
     orderId: string,
 ): Promise<void> {
-    await db.update(deliveryShipments).set({
+    await safeBatch(db, [manualDeliveryEvidenceUpdate(db, orderId)] as never);
+}
+
+/** `markManualDeliveryEvidence` as a statement for the delivered status's own batch. */
+export function manualDeliveryEvidenceUpdate(db: Database, orderId: string): SQLiteBatchItem {
+    return db.update(deliveryShipments).set({
         status: ShipmentStatus.DELIVERED,
         rawStatus: ShipmentStatus.DELIVERED,
         updatedAt: sql`unixepoch()`,
@@ -284,7 +309,7 @@ export async function markManualDeliveryEvidence(
             ${ShipmentStatus.CANCELLED},
             ${ShipmentStatus.FAILED}
         )`,
-    ));
+    )) as SQLiteBatchItem;
 }
 
 export async function getRecordedCodCollection(
@@ -364,8 +389,9 @@ export async function updateOrderStatus(
     orderId: string,
     status: string,
     data?: { trackingId?: string; expectedVersion?: number },
+    record: Pick<OrderStatusChangeOptions, "event" | "notify"> = {},
 ): Promise<StatusUpdateResult> {
-    return applyOrderStatusChange(db, orderId, status, data, { generic: true });
+    return applyOrderStatusChange(db, orderId, status, data, { generic: true, ...record });
 }
 
 export async function applyOrderStatusChange(
@@ -373,21 +399,74 @@ export async function applyOrderStatusChange(
     orderId: string,
     status: string,
     data: { trackingId?: string; expectedVersion?: number } | undefined,
-    options: {
-        generic: boolean;
-        /**
-         * Delivered before the cash is in: a cash on delivery parcel your own
-         * rider handed over, whose cash the rider or courier remits later.
-         * The order stays unpaid ("Due on delivery") until Collect cash.
-         */
-        codCashPending?: boolean;
-    },
+    options: OrderStatusChangeOptions,
 ): Promise<StatusUpdateResult> {
     const nextStatus = normalizeOrderStatus(status);
     if (!nextStatus) {
         throw new ValidationError("Unknown order status.");
     }
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await attemptOrderStatusChange(db, orderId, nextStatus, data, options);
+        } catch (error: unknown) {
+            if (!(error instanceof StockMovedDuringStatusChange)) throw error;
+            if (attempt >= MAX_STATUS_CHANGE_ATTEMPTS) {
+                throw new ConflictError("Stock for this order changed while it was being updated. Try again.");
+            }
+            await new Promise((resolve) => setTimeout(resolve, 25 * 2 ** attempt));
+        }
+    }
+}
 
+/** The status batch lost a race on stock (not on the order): prepare it again. */
+class StockMovedDuringStatusChange extends Error {}
+
+const ORDER_STATUS_CONFLICT = "order_status_conflict";
+const MAX_STATUS_CHANGE_ATTEMPTS = 3;
+const ORDER_CHANGED_MESSAGE = "This order changed. Reload to see the latest.";
+
+/** What a status command writes with the change, in the same batch. */
+export interface OrderStatusChangeOptions {
+    generic: boolean;
+    /**
+     * Delivered before the cash is in: a cash on delivery parcel your own
+     * rider handed over, whose cash the rider or courier remits later.
+     * The order stays unpaid ("Due on delivery") until Collect cash.
+     */
+    codCashPending?: boolean;
+    /**
+     * Writes that come first in the batch and that the change depends on (a
+     * cash collection, prepared for each attempt; null when already written):
+     * `nextVersion` is the order's version once they ran. The money checks
+     * then leave the money to them.
+     */
+    before?: () => Promise<{ statements: SQLiteBatchItem[]; nextVersion: number } | null>;
+    /** The timeline line of the change. Without a request key its id comes from the new version. */
+    event?: {
+        kind?: Exclude<OrderEventKind, "placed">;
+        actorId?: string | null;
+        body?: string | null;
+        data?: Record<string, unknown>;
+        requestKey?: string;
+    };
+    /** The customer message of the change, by `source`; a type and key override the status's own. */
+    notify?: {
+        source: string;
+        notificationType?: OrderNotificationType;
+        dedupeKey?: string;
+        data?: Record<string, unknown>;
+    };
+    /** Write the event and message even when the status is unchanged (what `before` wrote is the news). */
+    announceUnchanged?: boolean;
+}
+
+async function attemptOrderStatusChange(
+    db: Database,
+    orderId: string,
+    nextStatus: NonNullable<ReturnType<typeof normalizeOrderStatus>>,
+    data: { trackingId?: string; expectedVersion?: number } | undefined,
+    options: OrderStatusChangeOptions,
+): Promise<StatusUpdateResult> {
     const existingOrder = await db.select({
         status: orders.status,
         requiresShipping: orders.requiresShipping,
@@ -408,13 +487,14 @@ export async function applyOrderStatusChange(
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+        throw new ConflictError(ORDER_CHANGED_MESSAGE);
     }
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
         throw new ValidationError("Order has an unknown current status.");
     }
-    if (options.generic && currentStatus !== nextStatus) {
+    const changed = currentStatus !== nextStatus;
+    if (options.generic && changed) {
         assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
         // A held order waits for staff review; cancelling it stays possible.
         if (nextStatus !== OrderStatus.CANCELLED) await assertOrderNotOnHold(db, orderId);
@@ -427,9 +507,12 @@ export async function applyOrderStatusChange(
     // Only recorded terms open this: a missing value keeps the money-due guard.
     const onTerms = typeof existingOrder.paymentTermsDays === "number";
     const deliveredOnTerms = nextStatus === OrderStatus.DELIVERED && onTerms;
-    const deliveredBeforeCash = nextStatus === OrderStatus.DELIVERED && options.codCashPending === true
-        && existingOrder.paymentMethod === PaymentMethod.COD;
-    if (nextStatus === OrderStatus.DELIVERED && currentStatus !== nextStatus) {
+    const deliveredBeforeCash = nextStatus === OrderStatus.DELIVERED && (
+        (options.codCashPending === true && existingOrder.paymentMethod === PaymentMethod.COD)
+        // The cash is recorded in this same batch (Collect cash).
+        || options.before !== undefined
+    );
+    if (nextStatus === OrderStatus.DELIVERED && changed) {
         // Delivered only once every line that is handed over by a real
         // action was (F7); digital and gift-card lines never block.
         await assertOrderLinesHandedOver(db, orderId, existingOrder.requiresShipping);
@@ -462,56 +545,35 @@ export async function applyOrderStatusChange(
             }
         }
     }
-    if (currentStatus === nextStatus) {
-        const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
-            db,
-            orderId,
-            nextStatus,
-        );
-        if (nextStatus === OrderStatus.CANCELLED) {
-            // Repair: a cancel whose gift-card release did not land gives them back now.
-            const tenders = await giftCardOnlyTenders(db, orderId, existingOrder);
-            if (tenders) {
-                await releaseCancelledOrderGiftCards(db, orderId, {
-                    version: existingOrder.version,
-                    paidAmountMinor: existingOrder.paidAmountMinor,
-                }, tenders);
-            }
-        }
-        if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
-            await markManualDeliveryEvidence(db, orderId);
-        }
-        return {
-            message: "Status unchanged; inventory reconciled",
-            availabilityTransitionVariantIds,
-        };
-    }
-
-    // Validate the status transition before applying any side effects
-    validateTransition("order", currentStatus, nextStatus);
 
     // Paid only by gift cards (no gateway or cash taken): cancelling gives
     // them back. Any other money goes through the refund flow first.
     let giftCardTenders: HeldGiftCardTender[] | null = null;
-    if (nextStatus === OrderStatus.CANCELLED) {
-        await assertNothingHandedOver(db, orderId);
-        giftCardTenders = await giftCardOnlyTenders(db, orderId, existingOrder);
-        if (!giftCardTenders) {
-            await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
+    if (changed) {
+        // Validate the status transition before applying any side effects
+        validateTransition("order", currentStatus, nextStatus);
+        if (nextStatus === OrderStatus.CANCELLED) {
+            await assertNothingHandedOver(db, orderId);
+            giftCardTenders = await giftCardOnlyTenders(db, orderId, existingOrder);
+            if (!giftCardTenders) {
+                await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
+            }
         }
     }
 
-    // Optimistic locking: CAS update FIRST — only proceed with side effects
-    // if we win the version check. This prevents the race condition where two
-    // concurrent callers (e.g. admin + webhook) both apply inventory before
-    // either detects the conflict.
-    const result = await db.update(orders).set({
-        status: nextStatus,
-        version: existingOrder.version + 1,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
+    const before = options.before ? await options.before() : null;
+    const baseVersion = before?.nextVersion ?? existingOrder.version;
+    const newVersion = changed ? baseVersion + 1 : baseVersion;
+    const inventory = await prepareInventoryForStatusChange(db, orderId, nextStatus);
+    // The change took effect: every dependent write below is conditioned on it.
+    const landed = sql`EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${newVersion} AND ${orders.status} = ${nextStatus}
+    )`;
+    const statements: SQLiteBatchItem[] = [...(before?.statements ?? [])];
+    const casCondition = and(
         eq(orders.id, orderId),
-        eq(orders.version, existingOrder.version),
+        eq(orders.version, baseVersion),
         noActiveRefundAttemptForOrderIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         ...(nextStatus === OrderStatus.CANCELLED
@@ -522,73 +584,114 @@ export async function applyOrderStatusChange(
                 nothingSentCondition(orderId),
             ]
             : []),
-    )).returning({ id: orders.id });
-
-    if (result.length === 0) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+    )!;
+    if (changed) {
+        // The status CAS, its stock, its delivery evidence, timeline line and
+        // customer message are one batch: they commit together or not at all.
+        statements.push(db.update(orders).set({
+            status: nextStatus,
+            version: newVersion,
+            updatedAt: sql`unixepoch()`,
+        }).where(casCondition) as SQLiteBatchItem);
     }
-
-    // CAS succeeded. If inventory reconciliation fails before the order's
-    // inventoryAction changes, roll back the buyer-visible status so operators
-    // do not see a completed transition with stale stock counters.
-    let availabilityTransitionVariantIds: string[];
-    try {
-        availabilityTransitionVariantIds = await reconcileInventoryForStatus(
-            db,
-            orderId,
-            nextStatus,
-        );
-    } catch (error: unknown) {
-        await rollbackOrderStatusIfInventoryUnchanged(db, {
-            orderId,
-            previousStatus: currentStatus,
-            claimedStatus: nextStatus,
-            claimedVersion: existingOrder.version + 1,
-            previousInventoryAction: existingOrder.inventoryAction as string,
-        });
-        throw error;
-    }
-    if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
-        await markManualDeliveryEvidence(db, orderId);
-    }
-    if (giftCardTenders) {
-        // After the stock is back (a failed stock step rolls the status back,
-        // and a gift card given back cannot be taken again). If this fails,
-        // cancelling again repairs it (the unchanged-status path above).
-        await releaseCancelledOrderGiftCards(db, orderId, {
-            version: existingOrder.version + 1,
-            paidAmountMinor: existingOrder.paidAmountMinor,
-        }, giftCardTenders);
-    }
+    statements.push(buildBatchGuard(db, landed, ORDER_STATUS_CONFLICT), ...inventory.statements);
+    if (isDeliveredOrCompleted) statements.push(manualDeliveryEvidenceUpdate(db, orderId));
 
     // Build notification payload if the new status warrants one
-    const notificationType = NOTIFICATION_STATUSES[nextStatus];
+    const notificationType = options.notify?.notificationType ?? (changed ? NOTIFICATION_STATUSES[nextStatus] : undefined);
     const notification = notificationType
         ? {
             orderId,
             customerEmail: existingOrder.customerEmail ?? undefined,
             customerName: existingOrder.customerName,
             notificationType,
-            dedupeKey: buildOrderStatusNotificationDedupeKey({
+            dedupeKey: options.notify?.dedupeKey ?? buildOrderStatusNotificationDedupeKey({
                 orderId,
                 notificationType,
                 previousStatus: currentStatus,
                 newStatus: nextStatus,
-                version: existingOrder.version + 1,
+                version: newVersion,
             }),
             previousStatus: currentStatus,
             newStatus: nextStatus,
-            version: existingOrder.version + 1,
+            version: newVersion,
             ...(nextStatus === OrderStatus.SHIPPED && data?.trackingId
                 ? { trackingId: data.trackingId }
                 : {}),
         }
         : undefined;
+    const announce = changed || options.announceUnchanged === true;
+    if (announce && options.event) {
+        const kind = options.event.kind ?? "status_changed";
+        statements.push(buildOrderEventInsert(db, {
+            id: await orderEventIdForRequest(orderId, kind, options.event.requestKey ?? `status:v${newVersion}`),
+            orderId,
+            kind,
+            actorId: options.event.actorId ?? null,
+            body: options.event.body ?? null,
+            // A status line always names the move; other kinds carry their own facts.
+            data: kind === "status_changed"
+                ? { from: currentStatus, to: nextStatus, ...options.event.data }
+                : options.event.data ?? null,
+        }, landed) as SQLiteBatchItem);
+    }
+    const outboxIds: string[] = [];
+    if (announce && options.notify && notification) {
+        const outbox = buildOrderNotificationOutboxInsert(db, {
+            orderId,
+            notificationType: notification.notificationType,
+            dedupeKey: notification.dedupeKey,
+            source: options.notify.source,
+            data: options.notify.data ?? (notification.trackingId ? { trackingId: notification.trackingId } : undefined),
+        }, landed);
+        statements.push(outbox.statement as SQLiteBatchItem);
+        outboxIds.push(outbox.outboxId);
+    }
+
+    try {
+        await safeBatch(db, statements as never);
+    } catch (error: unknown) {
+        const refusal = inventory.translateError(error);
+        if (refusal) throw refusal;
+        if (!isBatchGuardError(error, ORDER_STATUS_CONFLICT) && !isOrderInventoryConflictError(error)) {
+            if (isCODCollectionConflictError(error)) throw new ConflictError(ORDER_CHANGED_MESSAGE);
+            throw error;
+        }
+        // Which race: the order itself under a change or a caller's version (a
+        // conflict, as the CAS always was), or only stock (prepare again).
+        const [now, casHolds] = await safeBatch(db, [
+            db.select({ version: orders.version }).from(orders).where(eq(orders.id, orderId)),
+            db.select({ id: orders.id }).from(orders).where(casCondition),
+        ] as const);
+        if (!now[0]) throw new NotFoundError("Order not found");
+        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
+            throw new ConflictError(ORDER_CHANGED_MESSAGE);
+        }
+        if (data?.expectedVersion !== undefined && now[0].version !== data.expectedVersion) {
+            throw new ConflictError(ORDER_CHANGED_MESSAGE);
+        }
+        throw new StockMovedDuringStatusChange();
+    }
+    await inventory.afterCommit();
+
+    if (nextStatus === OrderStatus.CANCELLED) {
+        // After the stock is back: a gift card given back cannot be taken
+        // again. When this fails, cancelling again or the stale-order sweep
+        // gives them back (the unchanged-status path and its self-heal).
+        const tenders = giftCardTenders ?? (changed ? null : await giftCardOnlyTenders(db, orderId, existingOrder));
+        if (tenders) {
+            await releaseCancelledOrderGiftCards(db, orderId, {
+                version: newVersion,
+                paidAmountMinor: existingOrder.paidAmountMinor,
+            }, tenders);
+        }
+    }
 
     return {
-        message: "Order status updated successfully",
-        notification,
-        availabilityTransitionVariantIds,
+        message: changed ? "Order status updated successfully" : "Status unchanged; inventory reconciled",
+        ...(changed || options.announceUnchanged ? { notification } : {}),
+        ...(outboxIds.length > 0 ? { outboxIds } : {}),
+        availabilityTransitionVariantIds: inventory.availabilityTransitionVariantIds,
     };
 }
 
@@ -660,43 +763,162 @@ export interface BulkOrderActionResult {
     error?: string;
 }
 
+/** Orders whose confirm statements share one batch (three statements each). */
+const BULK_CONFIRM_BATCH_ORDERS = 30;
+const OUTER_ORDER_ID = sql.raw('"orders"."id"');
+
 /**
  * Confirms each new order in the selection (the phone-confirmation queue).
  * Orders past that stage are reported as skipped, never changed. With a
  * request key, running the same selection again (double click, retry) reports
  * the orders it already confirmed as done instead of failed.
+ *
+ * Each order's status CAS, its timeline line and its customer message
+ * (`outboxId`, for the caller's sender) commit in one batch, so a death or a
+ * cut-off after the commit can lose neither, and a replay finds them all.
+ * One read covers the whole selection; the writes go in batches of
+ * BULK_CONFIRM_BATCH_ORDERS orders.
  */
 export async function bulkConfirmOrders(
     db: Database,
     orderIds: readonly string[],
-    options: { requestKey?: string; actorId?: string | null } = {},
-) {
-    const results: Array<BulkOrderActionResult & { update?: StatusUpdateResult }> = [];
+    options: { requestKey?: string; actorId?: string | null; source?: string } = {},
+): Promise<Array<BulkOrderActionResult & { outboxId?: string }>> {
+    const ids = [...new Set(orderIds)];
     const eventKey = options.requestKey ? `bulk-confirm:${options.requestKey}` : null;
-    for (const orderId of orderIds) {
-        try {
-            const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
-            if (!order) throw new NotFoundError("Order not found");
-            if (eventKey && await hasOrderEvent(db, orderId, "status_changed", eventKey)) {
-                results.push({ orderId, success: true });
-                continue;
+    const source = options.source ?? "orders-bulk-confirm";
+    const eventIds = new Map<string, string>();
+    for (const orderId of ids) {
+        eventIds.set(orderId, await orderEventIdForRequest(orderId, "status_changed", eventKey ?? `bulk-confirm:${orderId}`));
+    }
+    const rows: Array<{
+        id: string;
+        status: string;
+        version: number;
+        inventoryAction: string;
+        shipmentClaimId: string | null;
+        shipmentClaimExpiresAt: number | null;
+        onHold: number;
+        refundActive: number;
+        paymentSetupActive: number;
+    }> = [];
+    const replayed = new Set<string>();
+    for (const slice of chunkForD1(ids)) {
+        const [orderRows, eventRows] = await safeBatch(db, [
+            db.select({
+                id: orders.id,
+                status: orders.status,
+                version: orders.version,
+                inventoryAction: orders.inventoryAction,
+                shipmentClaimId: orders.shipmentClaimId,
+                shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+                onHold: sql<number>`NOT (${noOpenOrderHoldCondition(OUTER_ORDER_ID)})`,
+                refundActive: sql<number>`NOT (${noActiveRefundAttemptForOrderColumnCondition(OUTER_ORDER_ID)})`,
+                paymentSetupActive: sql<number>`${activePaymentSessionAttemptExistsCondition(OUTER_ORDER_ID)}`,
+            }).from(orders).where(inJsonArray(orders.id, slice)),
+            db.select({ id: orderEvents.id }).from(orderEvents)
+                .where(inJsonArray(orderEvents.id, eventKey ? slice.map((orderId) => eventIds.get(orderId)!) : [])),
+        ] as const);
+        rows.push(...(orderRows as typeof rows));
+        const done = new Set((eventRows as Array<{ id: string }>).map((row) => row.id));
+        for (const orderId of slice) if (done.has(eventIds.get(orderId)!)) replayed.add(orderId);
+    }
+    const byId = new Map(rows.map((row) => [row.id, row]));
+
+    const results = new Map<string, BulkOrderActionResult & { outboxId?: string }>();
+    const fail = (orderId: string, error: string) => results.set(orderId, { orderId, success: false, error });
+    const pending: Array<{ orderId: string; statements: SQLiteBatchItem[]; outboxId: string }> = [];
+    for (const orderId of ids) {
+        const order = byId.get(orderId);
+        if (!order) { fail(orderId, "Order not found"); continue; }
+        // The confirm with this key already committed, with its line and message.
+        if (replayed.has(orderId)) { results.set(orderId, { orderId, success: true }); continue; }
+        if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.PROCESSING) {
+            fail(orderId, "Only new orders can be confirmed.");
+            continue;
+        }
+        if (hasActiveShipmentClaim(order)) { fail(orderId, SHIPMENT_CLAIM_CONFLICT_MESSAGE); continue; }
+        if (Number(order.refundActive)) { fail(orderId, ORDER_REFUND_MUTATION_BLOCKED_MESSAGE); continue; }
+        if (Number(order.paymentSetupActive)) { fail(orderId, ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE); continue; }
+        if (Number(order.onHold)) { fail(orderId, "This order is on hold for review. Release the hold first."); continue; }
+        if (order.inventoryAction === "restored") {
+            // Its stock must be reserved again: the status kernel does that in the confirm's batch.
+            try {
+                const update = await applyOrderStatusChange(db, orderId, OrderStatus.CONFIRMED, { expectedVersion: order.version }, {
+                    generic: true,
+                    event: { actorId: options.actorId ?? null, requestKey: eventKey ?? undefined, data: { from: order.status, to: OrderStatus.CONFIRMED } },
+                    notify: { source },
+                });
+                results.set(orderId, { orderId, success: true, outboxId: update.outboxIds?.[0] });
+            } catch (error: unknown) {
+                fail(orderId, error instanceof Error ? error.message : "Couldn't confirm this order.");
             }
-            if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.PROCESSING) {
-                results.push({ orderId, success: false, error: "Only new orders can be confirmed." });
-                continue;
-            }
-            const update = await updateOrderStatus(db, orderId, OrderStatus.CONFIRMED);
-            await recordOrderEvent(db, {
+            continue;
+        }
+        const version = order.version + 1;
+        const landed = sql`EXISTS (
+            SELECT 1 FROM ${orders}
+            WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${version} AND ${orders.status} = ${OrderStatus.CONFIRMED}
+        )`;
+        const notificationType = NOTIFICATION_STATUSES[OrderStatus.CONFIRMED]!;
+        const outbox = buildOrderNotificationOutboxInsert(db, {
+            orderId,
+            notificationType,
+            dedupeKey: buildOrderStatusNotificationDedupeKey({
                 orderId,
-                kind: "status_changed",
-                actorId: options.actorId ?? null,
-                requestKey: eventKey,
-                data: { from: order.status, to: OrderStatus.CONFIRMED },
+                notificationType,
+                previousStatus: order.status,
+                newStatus: OrderStatus.CONFIRMED,
+                version,
+            }),
+            source,
+        }, landed);
+        pending.push({
+            orderId,
+            outboxId: outbox.outboxId,
+            statements: [
+                db.update(orders).set({
+                    status: OrderStatus.CONFIRMED,
+                    version,
+                    updatedAt: sql`unixepoch()`,
+                }).where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, order.version),
+                    eq(orders.status, order.status),
+                    eq(orders.inventoryAction, order.inventoryAction),
+                    noActiveShipmentClaimCondition(),
+                    noActiveRefundAttemptForOrderIdCondition(orderId),
+                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
+                    noOpenOrderHoldCondition(orderId),
+                )).returning({ id: orders.id }) as SQLiteBatchItem,
+                buildOrderEventInsert(db, {
+                    id: eventKey ? eventIds.get(orderId)! : await orderEventIdForRequest(orderId, "status_changed", `status:v${version}`),
+                    orderId,
+                    kind: "status_changed",
+                    actorId: options.actorId ?? null,
+                    data: { from: order.status, to: OrderStatus.CONFIRMED },
+                }, landed) as SQLiteBatchItem,
+                outbox.statement as SQLiteBatchItem,
+            ],
+        });
+    }
+
+    for (let offset = 0; offset < pending.length; offset += BULK_CONFIRM_BATCH_ORDERS) {
+        const slice = pending.slice(offset, offset + BULK_CONFIRM_BATCH_ORDERS);
+        try {
+            const written = await safeBatch(db, slice.flatMap((entry) => entry.statements) as never) as unknown[];
+            slice.forEach((entry, index) => {
+                const claimed = written[index * 3] as Array<{ id: string }> | undefined;
+                if ((claimed?.length ?? 0) > 0) {
+                    results.set(entry.orderId, { orderId: entry.orderId, success: true, outboxId: entry.outboxId });
+                } else {
+                    fail(entry.orderId, ORDER_CHANGED_MESSAGE);
+                }
             });
-            results.push({ orderId, success: true, update });
         } catch (error: unknown) {
-            results.push({ orderId, success: false, error: error instanceof Error ? error.message : "Couldn't confirm this order." });
+            console.error("[orders.bulk-confirm] a confirm batch failed", error instanceof Error ? error.message : "unknown");
+            for (const entry of slice) fail(entry.orderId, "Couldn't confirm this order. Try again.");
         }
     }
-    return results;
+    return ids.map((orderId) => results.get(orderId)!);
 }

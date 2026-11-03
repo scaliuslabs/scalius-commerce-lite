@@ -4,9 +4,10 @@
 
 import type { Database } from "@scalius/database/client";
 import { notificationDeliveryReceipts, notificationOutbox } from "@scalius/database/schema";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { OrderNotificationType } from "./notification-types";
 import {
+    buildNotificationOutboxInsertWhen,
     createNotificationOutboxInsertValues,
     parseNotificationPayload,
     recordAndSendNotification,
@@ -136,6 +137,11 @@ function orderNotificationInput(input: OrderNotificationInput): NotificationInpu
 /** Insert values for an order notification row (for callers that write it in their own batch). */
 export function createOrderNotificationOutboxInsertValues(input: OrderNotificationInput): NotificationOutboxInsert {
     return createNotificationOutboxInsertValues(orderNotificationInput(input));
+}
+
+/** An order notification row written in the caller's batch only when `landed` holds (see `buildNotificationOutboxInsertWhen`). */
+export function buildOrderNotificationOutboxInsert(db: Database, input: OrderNotificationInput, landed: SQL) {
+    return buildNotificationOutboxInsertWhen(db, orderNotificationInput(input), landed);
 }
 
 export async function recordAndSendOrderNotification(options: {

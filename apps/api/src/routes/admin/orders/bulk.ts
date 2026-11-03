@@ -20,10 +20,7 @@ import { successEnvelope, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { requestCourierProviders } from "../../../plugins/providers/courier";
 
-import {
-    sendOrderNotification,
-    sendOrderNotificationsForStatus,
-} from "../../../utils/order-notifications";
+import { sendOrderNotificationsForStatus } from "../../../utils/order-notifications";
 import {
     adminWriteErrorResponses,
     type AdminRouteContext,
@@ -232,6 +229,7 @@ const bulkConfirmRoute = createRoute({
     path: "/bulk-confirm",
     tags: ["Admin - Orders"],
     summary: "Confirm several new orders",
+    description: "Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done.",
     request: {
         body: { content: { "application/json": { schema: z.object({ orderIds: bulkOrderIdsSchema, requestKey: bulkRequestKeySchema }) } } },
     },
@@ -246,21 +244,13 @@ app.openapi(bulkConfirmRoute, async (c) => {
     const { orderIds, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     const results = await bulkConfirmOrders(db, orderIds, { requestKey, actorId: user?.id ?? null });
-    for (const result of results) {
-        if (!result.success || !result.update) continue;
-        const notification = result.update.notification;
-        if (notification) {
-            await sendOrderNotification({
-                db,
-                send: notificationSender(c),
-                orderId: notification.orderId,
-                notificationType: notification.notificationType,
-                dedupeKey: notification.dedupeKey ?? `order_status:${result.orderId}:${notification.notificationType}`,
-                source: "orders-bulk-confirm",
-            });
-        }
-    }
-    return ok(c, { results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })) });
+    // The messages committed with their orders; one bounded sender takes them
+    // after the response, and the scheduled drain sends whatever it leaves.
+    const outboxIds = results.flatMap((result) => result.outboxId ? [result.outboxId] : []);
+    if (outboxIds.length > 0) await notificationSender(c)(outboxIds);
+    return ok(c, {
+        results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })),
+    });
 });
 
 const bulkFulfillRoute = createRoute({
