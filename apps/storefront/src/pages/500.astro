@@ -14,8 +14,14 @@ const language = storefrontLanguage(pageLanguage());
 const copy = pagesCopy(language).unavailable;
 // The store's theme when this request resolved it before failing (no new
 // read: that may be what failed); the default theme otherwise.
+// The error page never fails on the theme: without one it draws no theme.
 const requestTheme = await currentRequestTheme(Astro.locals).catch(() => null);
-const paint = requestTheme ? themePaint(requestTheme.theme, requestTheme.resolved) : null;
+let paint: ReturnType<typeof themePaint> | null = null;
+try {
+  paint = requestTheme ? themePaint(requestTheme.theme, requestTheme.resolved) : null;
+} catch {
+  paint = null;
+}
 ---
 
 <html lang={language} data-color-scheme={paint?.colorScheme?.scheme}>
