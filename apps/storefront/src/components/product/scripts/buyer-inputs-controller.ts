@@ -25,14 +25,12 @@ export interface BuyerInputsController {
   /** Shows a message under every field that needs one and focuses the first. */
   validate(): BuyerInputsValidation;
   prefill(values: readonly LinePropertyInput[]): void;
-  /** Keeps the form's `variant` field on the chosen SKU (the no-JavaScript POST reads it). */
-  setVariant(variantId: string | null): void;
 }
 
 type FieldControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
-function readJson<T>(root: Document, id: string): T | null {
-  const text = root.getElementById(id)?.textContent;
+function readJson<T>(root: ParentNode, id: string): T | null {
+  const text = root.querySelector(`#${id}`)?.textContent;
   if (!text) return null;
   try {
     return JSON.parse(text) as T;
@@ -41,7 +39,7 @@ function readJson<T>(root: Document, id: string): T | null {
   }
 }
 
-export function initBuyerInputs(root: Document, onChange: () => void): BuyerInputsController | null {
+export function initBuyerInputs(root: ParentNode, onChange: () => void): BuyerInputsController | null {
   const form = root.querySelector<HTMLFormElement>("form[data-buyer-inputs]");
   const fields = readJson<ProductCustomizationField[]>(root, "product-customization-data");
   const copy = readJson<BuyerInputCopy>(root, "product-customization-copy");
@@ -49,7 +47,6 @@ export function initBuyerInputs(root: Document, onChange: () => void): BuyerInpu
   if (!form || !schema || !copy) return null;
   // Our own messages replace the browser's bubbles once the script runs.
   form.noValidate = true;
-  const variantInput = form.querySelector<HTMLInputElement>("[data-buyer-inputs-variant]");
 
   const control = (key: string) =>
     form.elements.namedItem(`${BUYER_INPUT_FIELD_PREFIX}${key}`) as FieldControl | null;
@@ -135,9 +132,6 @@ export function initBuyerInputs(root: Document, onChange: () => void): BuyerInpu
         updateCounter(field.key);
       }
       onChange();
-    },
-    setVariant(variantId) {
-      if (variantInput) variantInput.value = variantId ?? "";
     },
   };
 }

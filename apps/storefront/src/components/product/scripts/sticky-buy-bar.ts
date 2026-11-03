@@ -14,11 +14,12 @@ type BoundBar = HTMLElement & { __stickyBuyCleanup?: () => void };
  */
 export function bindStickyBuyBar(bar: BoundBar, root: Document): void {
   bar.__stickyBuyCleanup?.();
+  // The buy form's own parts, never a skin's look-alike markup.
   const actions = root.getElementById("product-actions");
-  const main = root.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]');
+  const main = actions?.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]');
   const action = bar.querySelector<HTMLButtonElement>("[data-sticky-buy-action]");
   const price = bar.querySelector<HTMLElement>("[data-sticky-buy-price]");
-  const mainPrice = root.querySelector<HTMLElement>(".product-price");
+  const mainPrice = actions?.querySelector<HTMLElement>(".product-price");
   if (!actions || !main || !action || !price) return;
 
   const sync = () => {

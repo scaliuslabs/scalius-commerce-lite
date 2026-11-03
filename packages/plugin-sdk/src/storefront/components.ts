@@ -11,6 +11,7 @@ import type {
   StorefrontIslandHydration,
   StorefrontMoney,
   StorefrontProductCard,
+  StorefrontProductPage,
   StorefrontRenderContext,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { EMPTY_HTML, escapeHtml, raw, renderChild, type Html, type Renderable } from "./html";
@@ -228,6 +229,41 @@ export function openCart(): Attributes {
   return { "data-cart-open": "" };
 }
 
+/** A SKU of the product page (`data.product.variants`). */
+type ProductPageVariant = Pick<StorefrontProductPage["product"]["variants"][number], "id">;
+
+/**
+ * Attributes of a control that chooses one SKU in the store's buy form
+ * (product_main skins): every option of it at once, through the form's own
+ * selection, so price, stock, buttons, gallery and `context.product` follow.
+ * Write it on an `<a>`: the host makes it a link to the product with that
+ * SKU (`?variant=`, which the page opens on), so it works before the store's
+ * script binds it; on a `<button>` it works with JavaScript only. The host keeps `data-state` (`selected`,
+ * `unselected`), `aria-pressed` (a button) or `aria-current` (a link) and
+ * `data-availability` (`available`, `sold-out`) current.
+ *
+ *   <a {...chooseVariant(variant)}>{variant.title}</a>
+ */
+export function chooseVariant(variant: ProductPageVariant): Attributes {
+  return { "data-choose-variant": variant.id };
+}
+
+/**
+ * Attributes of a `<button>` that adds one SKU to the cart (`"add"`) or buys
+ * it now (`"buy"`) through the store's buy form (product_main skins): it
+ * chooses the SKU, then runs the form's own Add to cart or Buy now, with
+ * its checks, buyer inputs, purchase options and quantity; a problem shows
+ * in the form, which takes focus. Without JavaScript it is a submit button
+ * of the form posting its SKU. The host owns `type`, `disabled`, `hidden`
+ * and `aria-busy`: off while the SKU is sold out (a `"buy"` button gone),
+ * busy while it adds, gone while the buyer edits a cart line.
+ *
+ *   <button {...buyVariant(variant, "add")}>Add</button>
+ */
+export function buyVariant(variant: ProductPageVariant, action: "add" | "buy"): Attributes {
+  return { "data-buy-variant": variant.id, "data-buy-intent": action };
+}
+
 /** The cart's item count, kept current in the browser (empty while the cart is). */
 export function CartCount(props: { class?: string }): Html {
   return raw(`<span data-scalius-cart-count${props.class ? ` class="${escapeHtml(props.class)}"` : ""} aria-live="polite"></span>`);
@@ -261,16 +297,29 @@ function embed(kind: StorefrontEmbedKind, data: Attributes = {}): Html {
 export interface BuyFormProps {
   /** False leaves out the form's product title (draw your own `<h1>`). */
   title?: boolean;
+  /**
+   * False leaves out the form's option buttons, when your `chooseVariant` or
+   * `buyVariant` controls cover every SKU that can be bought; otherwise the
+   * store draws them anyway, so no buyer is stuck. Buyer inputs, purchase
+   * options, quantity, messages and the form's own buttons always stay.
+   */
+  options?: boolean;
 }
 
 /**
  * The store's buy form (product_main skins, required, exactly one): price,
  * options, buyer inputs, quantity and the buy buttons, kept current as the
  * buyer chooses. A real form, so it works before hydration. Without it the
- * store draws its own product page instead of the skin.
+ * store draws its own product page instead of the skin. Style its parts
+ * through `[data-buy-part]` (`price`, `options`, `inputs`,
+ * `purchase-options`, `quantity`, `actions`, `status`) and their
+ * `data-state`; the names hold, their nesting may change.
  */
 export function BuyForm(props: BuyFormProps = {}): Html {
-  return embed("buy_form", { title: props.title === false ? "false" : undefined });
+  return embed("buy_form", {
+    title: props.title === false ? "false" : undefined,
+    options: props.options === false ? "false" : undefined,
+  });
 }
 
 /** The product's reviews and review form (product_main skins); the store's own module below then stays out. */
