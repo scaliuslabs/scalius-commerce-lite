@@ -242,11 +242,12 @@ function redirectBeforeReads(request: Request, url: URL, routePattern: string): 
 }
 
 const transportSecurityMiddleware = defineMiddleware(
-  async ({ request, locals }, next) => {
+  async ({ request, locals, url }, next) => {
     const redirect = redirectPlaintextRequest(request);
     if (redirect) return redirect;
 
-    const pathname = new URL(request.url).pathname;
+    // The same path the page policy reads (Astro's `url.pathname`), so both framing answers agree.
+    const pathname = url.pathname;
     const privateRelay = isBrowserContinuationRelayPathname(pathname);
     const response = await next();
     // The editor's relay and a preview render state their framing in CSP frame-ancestors.
