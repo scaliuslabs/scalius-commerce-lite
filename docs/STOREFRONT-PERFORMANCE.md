@@ -55,7 +55,17 @@ Code: `apps/api/src/routes/storefront.ts`, `apps/api/src/storefront-batch.ts`, `
 
 ### API placement
 
-`apps/api/wrangler.jsonc` sets `"placement": { "region": "aws:ap-east-1" }`, so the API fetch handler runs beside the D1 primary (Hong Kong), not beside the visitor. A render reads D1 in several dependent waves, and from a distant data center each wave costs a full database round trip (about 200 ms from Europe, 1-5 ms beside it). If the database moves, read `served_by_colo` from `wrangler d1 execute <db> --remote --json --command "SELECT 1"` and change the region.
+`apps/api/wrangler.jsonc` sets `"placement": { "region": "aws:ap-east-1" }`, so the API fetch handler runs beside the D1 primary (Hong Kong), not beside the visitor. A render reads D1 in several dependent waves, and from a distant data center each wave costs a full database round trip (about 200 ms from Europe, 1-5 ms beside it). The storefront Worker stays unplaced, so cached pages are still served at the visitor's edge.
+
+**The deploy does not change the placement.** The committed value is the demo database's. A store whose database is elsewhere sets its own value by hand before it deploys, and `pnpm check:env` does not check it. Deploy cannot choose one: the only place the database's location shows is `served_by_colo` in the output of `wrangler d1 execute <db> --remote --json --command "SELECT 1"`, which names a Cloudflare data center (for example `HKG`), not the cloud region `placement.region` takes, and no table maps one to the other. Deploy runs neither command, so reading the location would add a Wrangler call and a mapping to maintain. Smart Placement (`mode: "smart"`) needs no location but takes up to 15 minutes of traffic from several data centers to settle.
+
+| Database | Set in `apps/api/wrangler.jsonc` (exactly one placement key) |
+| --- | --- |
+| D1 | `"placement": { "region": "<provider>:<region>" }` for the cloud region nearest the colo that `served_by_colo` reports (for example `aws:ap-east-1` for `HKG`) |
+| Turso (HTTP) | `"placement": { "hostname": "<database host>" }` |
+| PostgreSQL (TCP) | `"placement": { "host": "<host>:<port>" }` (Cloudflare marks host placement experimental) |
+
+For a Paid or sandbox deploy, edit the committed file: the generated `wrangler.deploy.gen.json` copies it. Cloudflare's placement page (checked 2026-11-03) says `mode`, `region`, `host` and `hostname` are mutually exclusive and that probing does not work for replicated or anycast targets.
 
 ## Page cache
 
