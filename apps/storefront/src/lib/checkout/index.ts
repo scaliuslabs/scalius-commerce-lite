@@ -930,12 +930,14 @@ export function renderOrderSummaryDetails(
       "flex justify-between px-2 text-xs text-muted-foreground",
     );
   } else if (
-    isManualCodDepositRequired(
+    selectedMethod === "cod"
+    && isManualCodDepositRequired(
       config,
       quote.totalAmount,
       quoteLineTypes(quote),
       config.currency?.code,
       quote.currencyCode,
+      quote.decimalPlaces,
     )
   ) {
     const deposit = manualCodDepositAmount(config, quote.totalAmount, quote.decimalPlaces);
@@ -1024,6 +1026,7 @@ function eligibleCheckoutGateways(): CheckoutConfig["gateways"] {
       quoteLineTypes(currentQuote),
       currentConfig.currency?.code,
       currentQuote.currencyCode,
+      currentQuote.decimalPlaces,
     )
     && !hasGiftCardTender(currentQuote);
   const codExcluded = currentConfig.codDeposit?.enabled
@@ -1072,6 +1075,7 @@ function paymentActionLabel(methodId: string): string {
       quoteLineTypes(authoritativeTaxQuote),
       checkoutConfig.currency?.code,
       authoritativeTaxQuote.currencyCode,
+      authoritativeTaxQuote.decimalPlaces,
     );
     if (isManualCodDeposit) return checkoutCopy.codDepositRequiredText;
     return checkoutCopy.placeOrderText;

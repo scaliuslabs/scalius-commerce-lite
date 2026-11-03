@@ -668,7 +668,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                     </p>
                   )}
                   {order.paymentPlan.contactSnapshot.socialLinks.map((link) => (
-                    <p class="text-sm text-muted-foreground" key={link.id}>
+                    <p class="text-sm text-muted-foreground">
                       <span class="font-medium">{link.label}:</span> <a href={link.url} class="text-primary underline underline-offset-2">{link.label}</a>
                     </p>
                   ))}

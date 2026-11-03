@@ -21,7 +21,7 @@ CREATE TABLE `__new_payment_plans` (
 	CONSTRAINT "payment_plans_percent_range" CHECK(("__new_payment_plans"."percent" IS NULL) OR ("__new_payment_plans"."percent" BETWEEN 1 AND 99))
 );
 --> statement-breakpoint
-INSERT INTO `__new_payment_plans`("id", "order_id", "total_amount_minor", "deposit_amount_minor", "balance_due_minor", "deposit_paid_at", "balance_paid_at", "balance_due_date", "status", "kind", "instructions", "percent", "contact_snapshot", "cancelled_at", "created_at", "updated_at") SELECT "id", "order_id", "total_amount_minor", "deposit_amount_minor", "balance_due_minor", "deposit_paid_at", "balance_paid_at", "balance_due_date", "status", "kind", "instructions", "percent", "contact_snapshot", "cancelled_at", "created_at", "updated_at" FROM `payment_plans`;--> statement-breakpoint
+INSERT INTO `__new_payment_plans`("id", "order_id", "total_amount_minor", "deposit_amount_minor", "balance_due_minor", "deposit_paid_at", "balance_paid_at", "balance_due_date", "status", "created_at", "updated_at") SELECT "id", "order_id", "total_amount_minor", "deposit_amount_minor", "balance_due_minor", "deposit_paid_at", "balance_paid_at", "balance_due_date", "status", "created_at", "updated_at" FROM `payment_plans`;--> statement-breakpoint
 DROP TABLE `payment_plans`;--> statement-breakpoint
 ALTER TABLE `__new_payment_plans` RENAME TO `payment_plans`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint

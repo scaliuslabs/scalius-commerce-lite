@@ -1726,7 +1726,8 @@ export async function processRefund(
         : null;
     await assignAllocationSettlements(db, allocations, storeCredit?.giftCardId ?? null);
     const hasManualCodAllocation = allocations.some(
-        (allocation) => allocationSettlementMode(allocation) === "manual_external",
+        (allocation) => allocationSettlementMode(allocation) === "manual_external"
+            && allocation.sourcePayment.paymentType === "deposit",
     );
     if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
         throw new ValidationError(

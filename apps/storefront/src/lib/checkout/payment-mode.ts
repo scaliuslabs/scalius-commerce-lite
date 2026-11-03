@@ -51,15 +51,17 @@ export function isManualCodDepositRequired(
   lineTypes: readonly (FulfillmentType | null)[],
   storeCurrencyCode: string,
   orderCurrencyCode: string,
+  decimalPlaces: number,
 ): boolean {
   const cd = config.codDeposit;
   if (!cd?.enabled) return false;
   if (!allowsCashOnDelivery(lineTypes)) return false;
   if (orderCurrencyCode !== storeCurrencyCode) return false;
-  const deposit = cd.mode === "fixed"
-    ? Number(cd.amount)
-    : Math.min(totalAmount - 1, Math.ceil(totalAmount * Number(cd.percent) / 100));
-  return Number.isFinite(deposit) && deposit > 0 && deposit < totalAmount;
+  const totalMinor = Math.round(totalAmount * 10 ** decimalPlaces);
+  const depositMinor = cd.mode === "fixed"
+    ? Math.round(Number(cd.amount) * 10 ** decimalPlaces)
+    : Math.min(totalMinor - 1, Math.ceil(totalMinor * Number(cd.percent) / 100));
+  return Number.isFinite(depositMinor) && depositMinor > 0 && depositMinor < totalMinor;
 }
 
 /**
@@ -74,10 +76,11 @@ export function manualCodDepositAmount(
 ): number | null {
   const cd = config.codDeposit;
   if (!cd?.enabled) return null;
+  const totalMinor = Math.round(totalAmount * 10 ** decimalPlaces);
   const minor = cd.mode === "fixed"
     ? Math.round(Number(cd.amount) * 10 ** decimalPlaces)
-    : Math.min(totalAmount - 1, Math.ceil(totalAmount * Number(cd.percent) / 100));
-  return Number.isFinite(minor) && minor > 0 && minor < totalAmount
+    : Math.min(totalMinor - 1, Math.ceil(totalMinor * Number(cd.percent) / 100));
+  return Number.isFinite(minor) && minor > 0 && minor < totalMinor
     ? minor / 10 ** decimalPlaces
     : null;
 }

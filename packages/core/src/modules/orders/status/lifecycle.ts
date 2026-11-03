@@ -504,7 +504,9 @@ export async function applyOrderStatusChange(
 
     // A manual COD deposit order cannot enter a fulfilment-eligible state until
     // staff have verified the deposit (plan is `deposit_paid` or `completed`).
-    if (existingOrder.paymentMethod === PaymentMethod.COD) {
+    // Cancellation remains possible: a pending or cancelled plan does not block
+    // cancelling the order itself.
+    if (existingOrder.paymentMethod === PaymentMethod.COD && nextStatus !== OrderStatus.CANCELLED) {
         await assertManualCodDepositVerified(db, orderId);
     }
 
