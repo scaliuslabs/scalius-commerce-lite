@@ -12,6 +12,7 @@ import { warrantyPoliciesQueryOptions, type WarrantyPolicy } from "../../warrant
 import { warrantySummary } from "../../warranty/warranty-format";
 import type { ProductFormValues } from "../types";
 import type { DraftVariant } from "./option-matrix-editor-model";
+import { WarrantyFieldPending } from "./variant-fields";
 
 const INHERIT = "inherit";
 const NONE = "none";
@@ -37,7 +38,9 @@ function WithProductPolicy({ control, ...props }: FieldProps & { control: Contro
 
 function WarrantySelect({ readOnly, variant, name, error, onChange, productPolicyId }: FieldProps & { productPolicyId: string | null }) {
   const t = useMessages(warrantyMessages);
-  const { data: policies, isError } = useQuery(warrantyPoliciesQueryOptions(true));
+  const { data: policies, isError, isPending } = useQuery(warrantyPoliciesQueryOptions(true));
+  // Names come from the list: nothing reads "unavailable" before it arrives.
+  if (isPending) return <WarrantyFieldPending />;
   const list = policies ?? [];
   const policyName = (id: string | null) => {
     if (!id) return t("none");

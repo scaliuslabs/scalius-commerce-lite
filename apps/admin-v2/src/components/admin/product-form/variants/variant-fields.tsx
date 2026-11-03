@@ -6,6 +6,7 @@ import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useShownAfter } from "@/components/admin/data-table/use-shown-after";
 import { NumberInput } from "@/components/ui/number-input";
 import { Field, FieldRow, ReadOnlyValue } from "~/components/ui/field";
 import { CostInput, MoneyInput } from "@/components/admin/shared/MoneyInput";
@@ -28,6 +29,12 @@ import type { DraftIssueField, DraftVariant } from "./option-matrix-editor-model
 // The policy list loads only when a variant's details open (the products/new bundle stays in budget).
 const VariantWarrantyField = React.lazy(() =>
   import("./VariantWarrantyField").then((module) => ({ default: module.VariantWarrantyField })));
+
+/** The warranty field's place while it loads: a skeleton only after 300ms, then for at least 300ms (L3). */
+export function WarrantyFieldPending() {
+  const shown = useShownAfter(true);
+  return shown ? <Skeleton className="h-9 w-full" /> : <div className="h-9" aria-hidden="true" />;
+}
 
 /** The message a field shows, if the current (or server's) problem is about it. */
 export type IssueFor = (variantId: string | undefined, field: DraftIssueField) => string | undefined;
@@ -288,7 +295,7 @@ export function AdvancedSkuFields({ readOnly = false, variant, name, issueFor, o
   const kindRules = useProductKindRules();
   const { showDiscount, showWeight, showInventory, giftCard } = kindRules;
   const warrantyField = warranty && !giftCard ? (
-    <React.Suspense fallback={<Skeleton className="h-9 w-full" />}>
+    <React.Suspense fallback={<WarrantyFieldPending />}>
       <VariantWarrantyField readOnly={readOnly} variant={variant} name={name} error={errorOf("warranty")} onChange={onChange} />
     </React.Suspense>
   ) : null;
