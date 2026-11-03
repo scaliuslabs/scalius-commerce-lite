@@ -22,7 +22,8 @@
 //   area, locality, postal code, Bangladesh place ids) stays for tax and
 //   reporting; tracking signals (IP, user agent, click ids) are deleted and
 //   delivery match signals cleared; abandoned checkouts of those orders, or
-//   whose stored or typed phone or typed email is any contact on record,
+//   whose stored or typed phone or typed email is one of the buyer's own
+//   contacts (never a recipient's phone),
 //   are deleted;
 // - reviews on those orders: the display name becomes the fallback name;
 // - conversations of the customer and of those orders: the buyer's message
@@ -189,9 +190,11 @@ function resultOf(base: Omit<EraseCustomerResult, "pending" | "complete">, pendi
 /**
  * The checkout snapshots that name the buyer: those of their orders (an
  * archived hosted-payment order keeps its order id), and those whose stored
- * or typed phone or typed email is any contact on record: the records',
- * their address book's, their orders' and their marketing consents'. Read
- * inside the statement, before the rest of the batch scrubs those contacts.
+ * or typed phone or typed email is one of the buyer's own contacts: the
+ * records', their marketing consents' and their orders' own contact phone,
+ * WhatsApp and email. A recipient's phone (address book, an order's shipping
+ * or billing phone) is someone else's: their own checkouts stay. Read inside
+ * the statement, before the rest of the batch scrubs those contacts.
  * Snapshots live at most 30 days (abandoned/cleanup.ts), so the scan of
  * their JSON is bounded.
  */
@@ -200,9 +203,8 @@ function abandonedCheckoutsOfBuyer(scope: ErasureScope): SQL {
   // Separate IN tests, not one UNION: D1 allows five terms in a compound SELECT.
   const phoneOnRecord = (phone: SQL): SQL => sql`(${phone} <> ${NO_PHONE} AND (
     ${phone} IN (SELECT ${customers.phone} FROM ${customers} WHERE ${inIds(customers.id)})
-    OR ${phone} IN (SELECT ${customerAddresses.phoneE164} FROM ${customerAddresses} WHERE ${inIds(customerAddresses.customerId)})
     OR ${phone} IN (SELECT ${customerMarketingConsents.contact} FROM ${customerMarketingConsents} WHERE ${inIds(customerMarketingConsents.customerId)} AND ${customerMarketingConsents.channel} IN ('sms', 'whatsapp'))
-    OR EXISTS (SELECT 1 FROM ${orders} WHERE ${theirOrders} AND ${phone} IN (${orders.customerPhone}, ${orders.customerWhatsapp}, ${orders.shippingPhone}, ${orders.billingPhone}))
+    OR EXISTS (SELECT 1 FROM ${orders} WHERE ${theirOrders} AND ${phone} IN (${orders.customerPhone}, ${orders.customerWhatsapp}))
   ))`;
   const emailOnRecord = (email: SQL): SQL => sql`(${email} <> '' AND (
     ${email} IN (SELECT lower(trim(${customers.email})) FROM ${customers} WHERE ${inIds(customers.id)})
@@ -323,21 +325,26 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
 }
 
 /**
- * A repeat erasure: the scrub runs again (it repairs a record that regained
- * data and changes nothing on one that did not), the buyer's images are
- * enqueued again and failed tasks become due now.
+ * A repeat erasure. First the work outside the database resumes, whatever
+ * else holds: the buyer's images are enqueued again and failed tasks become
+ * due now. Then the scrub runs again (it repairs a record that regained data
+ * and changes nothing on one that did not), unless an order of the record is
+ * in progress: then the scrub is refused like a first erasure.
  */
 async function resumeErasure(db: Database, subjectId: string): Promise<EraseCustomerResult> {
   const scope = await erasureScope(db, subjectId);
+  await safeBatch(db, [
+    enqueueFileTasks(db, subjectId, scope),
+    db.update(customerErasureTasks)
+      .set({ nextAttemptAt: sql`unixepoch()` })
+      .where(and(eq(customerErasureTasks.customerId, subjectId), isNotNull(customerErasureTasks.lastError))) as unknown as SQLiteBatchItem,
+  ]);
   const open = await readBlockingOrder(db, scope);
   if (open) throw refusal(open);
   try {
     await safeBatch(db, [
       buildBatchGuard(db, sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${scope.blockingOrder})`, ORDER_OPEN_GUARD),
       ...scrubStatements(db, subjectId, scope),
-      db.update(customerErasureTasks)
-        .set({ nextAttemptAt: sql`unixepoch()` })
-        .where(and(eq(customerErasureTasks.customerId, subjectId), isNotNull(customerErasureTasks.lastError))) as unknown as SQLiteBatchItem,
     ] as Parameters<typeof safeBatch>[1]);
   } catch (error) {
     if (!isBatchGuardError(error, ORDER_OPEN_GUARD)) throw error;
