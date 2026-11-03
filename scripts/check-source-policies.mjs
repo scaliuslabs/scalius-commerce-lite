@@ -414,6 +414,14 @@ export const policies = [
     sample: 'console.warn("gift card redeem failed", code);',
   },
   {
+    rule: "an outbound request URL never interpolates a secret into its query string (access_token, api_key, apikey, token)",
+    why: "a query string lands in provider and proxy access logs, error reports and traces; send the credential in an Authorization header (packages/core/src/integrations/meta/conversions-api.ts, whatsapp.ts). A URL fragment (#token=) is never sent, so it is outside this check",
+    paths: ["apps/api/src", "apps/admin-v2/src", storefront, "packages/core/src", "packages/shared/src", "packages/plugin-sdk/src", "packages/cli/src", "plugins"],
+    optionalPaths: ["plugins", "packages/cli/src"],
+    forbid: [/[?&](?:access_token|api_key|apikey|token)=\$\{/i],
+    sample: "const url = `https://graph.facebook.com/v1/${id}/events?access_token=${accessToken}`;",
+  },
+  {
     rule: "production code never calls the legacy multi-SKU stock helpers",
     why: "deductMultiple/releaseMultiple/restoreDeductedMultiple bypass the ledger-v2 stockVersion CAS batch",
     paths: ["apps/api/src", "packages/core/src"],
