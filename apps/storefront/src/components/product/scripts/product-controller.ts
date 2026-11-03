@@ -494,12 +494,12 @@ function loadExtras() {
       skinControls.sync();
       pending?.click();
     }, (error: unknown) => {
-      // Their script is gone (a deploy): the press goes the native way (a
-      // link opens, a buy button posts its own SKU), and the page's
-      // stale-asset recovery hears the failure.
+      // Their script is gone (a deploy): a held press goes the native way (a
+      // link opens, a buy button posts its own SKU), the one navigation;
+      // with none held, the page's stale-asset recovery hears the failure.
       document.removeEventListener("click", hold, { capture: true });
-      pending?.click();
-      throw error;
+      if (pending) pending.click();
+      else throw error;
     });
   }
   if (cache.summary && document.querySelector("[data-sx-app]")) {
@@ -923,11 +923,20 @@ async function add(redirect: boolean, source: HTMLElement | null = null) {
 async function addSelected(redirect: boolean, focusProblem: boolean) {
   if (!cache.container || !state.productPricing) return;
   const fail = (message: string, error: StorefrontProductError) => showError(message, error, focusProblem);
-  // A product's buyer inputs work first; when their script failed to load,
-  // nothing is added (the answers and surcharges would be lost; they stay
-  // in the form for the next try).
-  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false)))
-    return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
+  // A product's buyer inputs work first. When their script failed to load
+  // (some browsers then refuse it for the life of the page), the form goes
+  // the no-JavaScript way: it posts every answer, the chosen SKU and the
+  // quantity, and the store checks and prices them. A cart line being
+  // edited cannot be replaced that way, so its update is refused instead
+  // (the answers stay in the form).
+  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false))) {
+    if (state.edit || !cache.form) return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
+    const field = cache.form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
+    const chosen = exactVariant();
+    if (field && chosen) field.value = chosen.id;
+    // Not requestSubmit: that comes back to this script's own submit handler.
+    return HTMLFormElement.prototype.submit.call(cache.form);
+  }
   const validation = validateSelection(
     state.selection,
     state.options,
