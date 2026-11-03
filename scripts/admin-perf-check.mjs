@@ -322,7 +322,9 @@ export function createBrotliCache({ file, compress = brotliSize, keep = 4000, br
     save() {
       if (!file) return;
       const sizes = {};
-      const older = Object.keys(stored).filter((key) => !used.has(key)).slice(-Math.max(0, keep - used.size));
+      // slice(-0) would keep everything, so a full budget keeps no earlier entry explicitly.
+      const room = Math.max(0, keep - used.size);
+      const older = room === 0 ? [] : Object.keys(stored).filter((key) => !used.has(key)).slice(-room);
       for (const key of older) sizes[key] = stored[key];
       for (const [key, bytes] of used) sizes[key] = bytes;
       mkdirSync(dirname(file), { recursive: true });
