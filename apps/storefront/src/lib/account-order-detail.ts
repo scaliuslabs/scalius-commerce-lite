@@ -36,6 +36,7 @@ import { getProductImageUrl } from "@/lib/product-media";
 import { appGatewayName, getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
 import { CheckoutBuyerMessage, CheckoutCopyError, checkoutFailureText } from "@/lib/checkout/error-messages";
 import { stripeErrorCopyKey, type StripeError } from "@/lib/checkout/stripe-error";
+import { followColorScheme, stripeCardStyle } from "@/lib/stripe-card-style";
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -86,10 +87,11 @@ interface StripeCardElement {
   mount(selector: string): void;
   on(event: string, handler: (e: { error?: StripeError }) => void): void;
   unmount?(): void;
+  update?(options: { style: ReturnType<typeof stripeCardStyle> }): void;
 }
 
 interface StripeInstance {
-  elements(): { create(type: "card", options?: { style?: Record<string, Record<string, string>> }): StripeCardElement };
+  elements(): { create(type: "card", options?: { style?: ReturnType<typeof stripeCardStyle> }): StripeCardElement };
   confirmCardPayment(
     clientSecret: string,
     data: { payment_method: { card: StripeCardElement } },
@@ -126,6 +128,8 @@ let supportLoading = false;
 let selectedSupportType: CustomerOrderSupportRequestType | null = null;
 let stripeInstance: StripeInstance | null = null;
 let stripeCard: StripeCardElement | null = null;
+/** Stops restyling the mounted card when the colour scheme changes. */
+let stopFollowingScheme: (() => void) | null = null;
 let stripeClientSecret: string | null = null;
 let stripeOrderId: string | null = null;
 let stripeScript: Promise<void> | null = null;
@@ -224,6 +228,8 @@ function recoveryButtonLabel(gateway: string): string {
 
 function resetStripe(): void {
   stripeCard?.unmount?.();
+  stopFollowingScheme?.();
+  stopFollowingScheme = null;
   stripeInstance = null;
   stripeCard = null;
   stripeClientSecret = null;
@@ -308,10 +314,11 @@ async function prepareStripe(session: CustomerOrderPaymentSession): Promise<void
   stripeOrderId = currentDetail?.order.id ?? null;
   if (!stripeCard) {
     stripeInstance = detailWindow.Stripe(stripe.publishableKey);
-    stripeCard = stripeInstance.elements().create("card", {
-      style: { base: { fontSize: "15px", color: "#111", fontFamily: "sans-serif" }, invalid: { color: "#e53e3e" } },
-    });
+    // The page's colours where the card mounts, again whenever the colour scheme changes.
+    const styled = byId("accountStripeCardElement") ?? document.body;
+    stripeCard = stripeInstance.elements().create("card", { style: stripeCardStyle(styled, "15px") });
     stripeCard.mount("#accountStripeCardElement");
+    stopFollowingScheme = followColorScheme(styled, "15px", stripeCard);
     // Stripe's own message is in Stripe's language: the field to check is the page's copy.
     stripeCard.on("change", (event) => setStripeError(event.error ? copy[stripeErrorCopyKey(event.error, "cardDetailsIncompleteText")] : null));
   }
