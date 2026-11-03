@@ -50,20 +50,17 @@ export function themePaint(theme: StorefrontThemeDocument, resolved: ResolvedSto
   const tokens = theme.tokens;
   const productGrid = productGridSpec(layout.grid, tokens.imageRatio);
   const fluidGrid = productGridFluidCss(productGrid);
-  // Colours that are dark themselves (a dark palette) ask for the browser's dark
-  // controls and name their ink surface (a light palette's is the text colour,
-  // the CSS default, so its paint stays exactly as it was).
-  const darkPalette = storefrontThemeColorsAreDark(tokens.colors);
-  const ink = darkPalette ? buildStorefrontColorCss(tokens.colors, tokens.headerTone) : null;
+  // The colours' tokens exactly as before colour schemes (the ink surface is the
+  // text colour, the CSS default); colours that are dark themselves only ask
+  // for the browser's dark controls.
   const light = declarations({
     ...buildStorefrontThemeTokens(theme),
     "theme-card-min-tablet": productGrid.cardMin.tablet,
     "theme-card-min-desktop": productGrid.cardMin.desktop,
     "grid-card-min-fluid": fluidGrid.cardMin,
     "grid-gap-fluid": fluidGrid.gap,
-    ...(ink ? { "theme-ink": ink["theme-ink"], "theme-ink-foreground": ink["theme-ink-foreground"] } : {}),
   });
-  let css = `:root, .site-root { ${darkPalette ? "color-scheme: dark; " : ""}${light}; }`;
+  let css = `:root, .site-root { ${storefrontThemeColorsAreDark(tokens.colors) ? "color-scheme: dark; " : ""}${light}; }`;
   const darkColors = storefrontThemeShowsDarkColors(tokens) ? tokens.darkColors : null;
   if (darkColors) {
     const colors = buildStorefrontColorCss(darkColors, tokens.headerTone);
