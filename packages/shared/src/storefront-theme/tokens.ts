@@ -489,6 +489,27 @@ export function storefrontThemeShowsDarkColors(tokens: Pick<StorefrontThemeToken
   return tokens.colorScheme !== "light" || tokens.colorSchemeToggle;
 }
 
+/** The light scheme with no dark colours and no switch: a look that leaves the scheme to the merchant. */
+export const STOREFRONT_LIGHT_COLOR_SCHEME = { colorScheme: "light", darkColors: null, colorSchemeToggle: false } as const satisfies Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle">;
+
+/**
+ * A look's tokens (a template's) over the store's: the merchant's colour
+ * scheme, dark colours and switch stay, unless the look shows dark colours
+ * of its own.
+ */
+export function storefrontTokensKeepingColorScheme<Tokens extends Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle">>(
+  look: Tokens,
+  current: Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle"> | null,
+): Tokens {
+  if (!current || storefrontThemeShowsDarkColors(look)) return look;
+  return { ...look, colorScheme: current.colorScheme, darkColors: current.darkColors, colorSchemeToggle: current.colorSchemeToggle };
+}
+
+/** The rule every authored theme (a document, an app template) meets: dark colours whenever buyers can see them. */
+export function storefrontDarkColorsMissing(tokens: Pick<StorefrontThemeTokens, "colorScheme" | "darkColors" | "colorSchemeToggle">): boolean {
+  return storefrontThemeShowsDarkColors(tokens) && !tokens.darkColors;
+}
+
 // ─── CSS ──────────────────────────────────────────────────────────────────
 
 /**

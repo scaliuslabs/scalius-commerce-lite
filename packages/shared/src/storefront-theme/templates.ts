@@ -28,6 +28,7 @@ import {
   type StorefrontSectionType,
 } from "./sections";
 import {
+  STOREFRONT_LIGHT_COLOR_SCHEME,
   STOREFRONT_THEME_PALETTES,
   type StorefrontThemePaletteKey,
   type StorefrontThemeTokens,
@@ -338,9 +339,7 @@ export function storefrontTemplateTheme(
     tokens: {
       ...structuredClone(template.tokens),
       colors: { ...STOREFRONT_THEME_PALETTES[palette] },
-      colorScheme: "light",
-      darkColors: null,
-      colorSchemeToggle: false,
+      ...STOREFRONT_LIGHT_COLOR_SCHEME,
     } as StorefrontThemeTokens,
     brand: { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: structuredClone(template.blocks) as StorefrontThemeBlocks,

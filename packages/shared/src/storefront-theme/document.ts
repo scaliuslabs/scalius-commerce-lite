@@ -30,6 +30,7 @@ import { storefrontSettingBindingsSchema } from "./bindings";
 import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf, storefrontPageTemplateSchemaOf, storefrontPageTemplatesSchemaOf } from "./pages";
 import {
   buildStorefrontTokenCss,
+  storefrontDarkColorsMissing,
   storefrontThemeShowsDarkColors,
   storefrontThemeTokensSchema,
   type StorefrontThemeColorSet,
@@ -169,7 +170,7 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
   }).strict().superRefine((value, context) => {
     // The dark colours meet the same rules as the colours while buyers can see them.
     const sets: StorefrontThemeColorSet[] = storefrontThemeShowsDarkColors(value.tokens) ? ["colors", "darkColors"] : ["colors"];
-    if (sets.includes("darkColors") && !value.tokens.darkColors) {
+    if (storefrontDarkColorsMissing(value.tokens)) {
       context.addIssue({ code: "custom", path: ["tokens", "darkColors"], message: "A dark or device colour scheme, or the buyer's switch, needs the dark colours." });
     }
     for (const set of sets) {
