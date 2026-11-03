@@ -278,9 +278,10 @@ function isCustomerContactConstraintError(error: unknown): boolean {
  * archived effective policy is NULL: an archived own policy never falls back
  * to the product's. The SKU row binds one value (its id); its policy column
  * is set exactly in `policy` mode (CHECK), so COALESCE picks the effective
- * one. An expanded bundle's lines are its components, so each freezes its
- * component SKU's warranty; a line an order amendment adds freezes the same
- * way. The tables carry their own aliases, so the subquery reads the same in
+ * one. A gift card freezes none, whatever a row saved before gift cards
+ * cleared their policy still names. An expanded bundle's lines are its
+ * components, so each freezes its component SKU's warranty; a line an order
+ * amendment adds freezes the same way. The tables carry their own aliases, so the subquery reads the same in
  * a multi-row insert and as a field of any select (whose own table renders
  * its columns unqualified). The warranty is not price-relevant, so it is
  * outside any authority fence.
@@ -294,6 +295,7 @@ export function currentWarrantyRevisionSql(variantId: string) {
           ON warranty_policy.id = COALESCE(warranty_sku.warranty_policy_id, warranty_product.warranty_policy_id)
         WHERE warranty_sku.id = ${variantId}
           AND warranty_sku.warranty_mode <> 'none'
+          AND warranty_product.is_gift_card = 0
           AND warranty_policy.archived_at IS NULL
     )`;
 }
