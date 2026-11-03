@@ -32,6 +32,7 @@ import {
   type StorefrontSkinnableSection,
   type StorefrontSkinTarget,
   type StorefrontSkinUnit,
+  type StorefrontSpecification,
   type StorefrontTile,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
@@ -78,6 +79,19 @@ export function fixtureContext(overrides: Partial<StorefrontRenderContext> = {})
   };
 }
 
+/** The sample product's specifications, as the store's table lists them (a number's value carries its unit). */
+const SAMPLE_SPECIFICATIONS: StorefrontSpecification[] = [
+  { group: "Fabric", label: "Material", value: "Linen", unit: null, keySpec: true },
+  { group: "Fabric", label: "Weight", value: "180 gsm", unit: "gsm", keySpec: true },
+  { group: "Fit", label: "Sleeve", value: "Long", unit: null, keySpec: false },
+];
+
+/** A card's key specs and its fact lines, written from the same rows as the store writes them. */
+function cardKeySpecs(specifications: readonly StorefrontSpecification[]): Pick<StorefrontProductCard, "facts" | "keySpecs"> {
+  const keySpecs = specifications.filter((row) => row.keySpec).slice(0, 3).map(({ label, value, unit }) => ({ label, value, unit }));
+  return { facts: keySpecs.map((row) => `${row.label}: ${row.value}`), keySpecs };
+}
+
 export function fixtureProductCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontProductCard {
   return {
     id: "prod_1",
@@ -93,8 +107,7 @@ export function fixtureProductCard(overrides: Partial<StorefrontProductCard> = {
     rating: { average: 4.6, count: 12 },
     quickAdd: true,
     needsOptions: false,
-    facts: [],
-    keySpecs: [],
+    ...cardKeySpecs(SAMPLE_SPECIFICATIONS),
     fields: {},
     ...overrides,
   };
@@ -152,6 +165,7 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       ],
       fields: {},
       breadcrumbs: [{ title: "Home", url: "/" }, { title: "Shirts", url: "/categories/shirts" }, { title: card.title, url: card.url }],
+      specifications: SAMPLE_SPECIFICATIONS,
       ...overrides,
     },
   };
@@ -296,7 +310,7 @@ const SAMPLE_STORE: FixtureStore = {
 function bareCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontProductCard {
   return fixtureProductCard({
     id: "prod_bare", title: "Untitled product", url: "/products/untitled-product",
-    compareAt: null, percentOff: null, image: null, hoverImage: null, rating: null, quickAdd: true, ...overrides,
+    compareAt: null, percentOff: null, image: null, hoverImage: null, rating: null, quickAdd: true, facts: [], keySpecs: [], ...overrides,
   });
 }
 
@@ -322,7 +336,7 @@ const EMPTY_STORE: FixtureStore = {
         id: card.id, title: card.title, url: card.url, brand: null, descriptionHtml: "", media: [],
         price: card.price, compareAt: null, priceVaries: false, availability: "in_stock", rating: null,
         options: [], variants: [{ id: "sku_bare", title: card.title, options: [], price: card.price, compareAt: null, available: true, image: null }],
-        fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: card.title, url: card.url }],
+        fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: card.title, url: card.url }], specifications: [],
         ...overrides,
       },
     };
@@ -350,11 +364,19 @@ const otherImage = (name: string, alt: string): StorefrontImage => ({
 });
 const OTHER_LOGO: StorefrontImage = { url: "https://media.example.com/harbor/logo.png", srcset: "https://media.example.com/harbor/logo.png 320w", width: 320, height: 96, alt: "Harbor & Pine" };
 
+const OTHER_SPECIFICATIONS: StorefrontSpecification[] = [
+  { group: "Size", label: "Diameter", value: "10 in", unit: "in", keySpec: true },
+  { group: "Size", label: "Weight", value: "5.1 lb", unit: "lb", keySpec: false },
+  { group: "Care", label: "Material", value: "Cast iron", unit: null, keySpec: true },
+  { group: "Care", label: "Oven safe to", value: "500 °F", unit: "°F", keySpec: true },
+];
+
 function otherCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontProductCard {
   return fixtureProductCard({
     id: "prod_skillet", title: "Cast-iron skillet", url: "/products/cast-iron-skillet",
     price: usd(4800), compareAt: null, percentOff: null, priceVaries: true,
     image: otherImage("skillet", "Cast-iron skillet"), rating: { average: 4.9, count: 312 }, quickAdd: false, needsOptions: true,
+    ...cardKeySpecs(OTHER_SPECIFICATIONS),
     ...overrides,
   });
 }
@@ -362,8 +384,8 @@ function otherCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontPr
 function otherCards(): StorefrontProductCard[] {
   return [
     otherCard(),
-    otherCard({ id: "prod_board", title: "End-grain cutting board, walnut", url: "/products/walnut-board", price: usd(7200), compareAt: usd(9000), percentOff: 20, priceVaries: false, image: otherImage("board", "Walnut cutting board"), quickAdd: true, needsOptions: false }),
-    otherCard({ id: "prod_kettle", title: "Enamel kettle", url: "/products/enamel-kettle", price: usd(3900), priceVaries: false, image: otherImage("kettle", "Enamel kettle"), rating: null, soldOut: true, quickAdd: false, needsOptions: false }),
+    otherCard({ id: "prod_board", title: "End-grain cutting board, walnut", url: "/products/walnut-board", price: usd(7200), compareAt: usd(9000), percentOff: 20, priceVaries: false, image: otherImage("board", "Walnut cutting board"), quickAdd: true, needsOptions: false, facts: [], keySpecs: [] }),
+    otherCard({ id: "prod_kettle", title: "Enamel kettle", url: "/products/enamel-kettle", price: usd(3900), priceVaries: false, image: otherImage("kettle", "Enamel kettle"), rating: null, soldOut: true, quickAdd: false, needsOptions: false, facts: [], keySpecs: [] }),
   ];
 }
 
@@ -398,7 +420,7 @@ const OTHER_STORE: FixtureStore = {
           { id: "sku_10", title: "10 in", options: ["10 in"], price: usd(4800), compareAt: null, available: true, image: null },
           { id: "sku_12", title: "12 in", options: ["12 in"], price: usd(5800), compareAt: null, available: true, image: null },
         ],
-        fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: "Kitchen", url: "/categories/kitchen" }, { title: card.title, url: card.url }],
+        fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: "Kitchen", url: "/categories/kitchen" }, { title: card.title, url: card.url }], specifications: OTHER_SPECIFICATIONS,
         ...overrides,
       },
     };
