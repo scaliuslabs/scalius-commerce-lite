@@ -78,14 +78,16 @@ export function useOrderBulkRun() {
           outcome.succeeded.push(...part.succeeded);
           outcome.failures.push(...part.failures);
           // An order the server neither answered nor left for later is not done: say so.
-          outcome.failures.push(...unansweredBulkOrders(sent, response)
-            .map((orderId) => ({ orderId, error: t("bulkFailedGeneric") })));
+          const unanswered = unansweredBulkOrders(sent, response);
+          outcome.failures.push(...unanswered.map((orderId) => ({ orderId, error: t("bulkFailedGeneric") })));
           const after = queueAfterBulkResponse(sent, next, response);
           if (after) {
             queue = after;
           } else {
-            // Nothing handled and nothing failed: report the orders instead of asking again.
-            outcome.failures.push(...sent.map((orderId) => ({ orderId, error: t("bulkRequestFailed") })));
+            // Nothing handled: report what it left for later instead of asking again (once per order).
+            const reported = new Set([...response.results.map((result) => result.orderId), ...unanswered]);
+            outcome.failures.push(...sent.filter((orderId) => !reported.has(orderId))
+              .map((orderId) => ({ orderId, error: t("bulkRequestFailed") })));
             queue = next;
           }
         } catch (error) {

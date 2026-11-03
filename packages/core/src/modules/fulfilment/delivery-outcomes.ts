@@ -306,6 +306,9 @@ async function markOrderReturnedToSender(db: Database, orderId: string, actorId:
         ] as never);
     } catch (error: unknown) {
         if (isBatchGuardError(error, RETURNED_TO_SENDER_CONFLICT)) {
+            // A repeat (double click) that lost to the first: it is returned, as asked.
+            const now = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+            if (now?.status === OrderStatus.RETURNED) return [];
             throw new ConflictError("This order changed. Reload to see the latest.");
         }
         throw error;

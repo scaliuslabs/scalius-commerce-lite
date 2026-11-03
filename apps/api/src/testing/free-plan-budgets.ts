@@ -75,6 +75,11 @@
  * Paid) is one read and one batch per 30 orders, its messages handed to the
  * plan's bounded sender: 14 calls on Free, 187 on Paid (20 deliveries).
  *
+ * Bulk confirm with a stock repair (2026-11-04): 29 new orders and one
+ * restored order, whose stock is reserved again through the full status
+ * change after the cheap batches: 26 calls on Free (of 50), 197 on Paid.
+ * Paid bulk-confirm rowsRead 255 -> 256 (one row of run-to-run noise).
+ *
  * Payment webhook (2026-10-24): +2 statements, no call. The event claim
  * checks the event's legacy key in its own insert batch (exact event ids,
  * one round trip), and the batch that lands a payment closes the
@@ -125,6 +130,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-product-save": { d1Calls: 24, d1Statements: 39, externalFetches: 0, rowsWritten: 549, rowsRead: 161, fullScans: 29 },
     "order-status-change": { d1Calls: 36, d1Statements: 43, externalFetches: 0, rowsWritten: 17, rowsRead: 1286, fullScans: 5 },
     "bulk-confirm": { d1Calls: 14, d1Statements: 104, externalFetches: 0, rowsWritten: 322, rowsRead: 70, fullScans: 0 },
+    "bulk-confirm-repair": { d1Calls: 26, d1Statements: 122, externalFetches: 0, rowsWritten: 325, rowsRead: 85, fullScans: 5 },
     "order-refund": { d1Calls: 42, d1Statements: 48, externalFetches: 0, rowsWritten: 22, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
     "cron-idle": { d1Calls: 19, d1Statements: 20, externalFetches: 0, rowsWritten: 117, rowsRead: 7556, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 15.79 },
@@ -159,7 +165,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 38, d1Statements: 60, externalFetches: 0, rowsWritten: 1254, rowsRead: 345, fullScans: 57 },
     "order-status-change": { d1Calls: 36, d1Statements: 43, externalFetches: 0, rowsWritten: 17, rowsRead: 1286, fullScans: 5 },
-    "bulk-confirm": { d1Calls: 187, d1Statements: 455, externalFetches: 0, rowsWritten: 1051, rowsRead: 255, fullScans: 0 },
+    "bulk-confirm": { d1Calls: 187, d1Statements: 455, externalFetches: 0, rowsWritten: 1051, rowsRead: 256, fullScans: 0 },
+    "bulk-confirm-repair": { d1Calls: 197, d1Statements: 293, externalFetches: 0, rowsWritten: 425, rowsRead: 145, fullScans: 5 },
     "order-refund": { d1Calls: 42, d1Statements: 48, externalFetches: 0, rowsWritten: 22, rowsRead: 1292, fullScans: 6 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
     "cron-idle": { d1Calls: 57, d1Statements: 63, externalFetches: 0, rowsWritten: 175, rowsRead: 7992, fullScans: 27, meanRowsWritten: 0, meanRowsRead: 30.1 },
