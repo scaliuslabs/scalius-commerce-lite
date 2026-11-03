@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     createVariantSchema,
+    SKU_WARRANTY_MODES,
     updateVariantSchema,
 } from "@scalius/core/modules/products";
 import {
@@ -239,7 +240,7 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
             discountType: z.enum(["percentage", "flat"]).nullable(),
             discountPercentage: z.number().nullable(),
             discountAmount: z.number().nullable(),
-            warrantyMode: z.enum(["inherit", "policy", "none"]),
+            warrantyMode: z.enum(SKU_WARRANTY_MODES),
             warrantyPolicyId: z.string().nullable(),
         })).max(10),
         ...semanticPageSchema,
