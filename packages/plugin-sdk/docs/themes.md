@@ -35,7 +35,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 | You need | Read it from | Never |
 | --- | --- | --- |
-| The store's name and logo | `data.store.name`, `data.store.logo` (header and footer), `data.store.footerLogo`, `context.store.name` | A wordmark, your app's name |
+| The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name` | A wordmark, your app's name |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
 | Core routes | `data.routes` (`home`, `search`, `cart`, `account`, `orders`, `trackOrder`; footer `newsletter`) | Page paths such as `/about` |
 | Products | A `products` or `product` setting, a section's product source, each card's own `url` | `/products/<slug>` |
@@ -50,7 +50,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 ### 1. The store's name and logo come from the projection
 
-Every header and footer skin gets `data.store`: `name`, `logo` (`StorefrontImage | null`), `logoWidth` and, in the footer, `footerLogo`, `phone`, `email`, `address` and `social`. Draw the logo when there is one and the name when there is not.
+Every header and footer skin gets `data.store`: `name`, `logo` (`StorefrontImage | null`), `darkLogo` (the logo for dark pages, or `null`), `logoWidth` and, in the footer, `footerLogo`, `phone`, `email`, `address` and `social`. Draw the logo when there is one and the name when there is not. When there is a `darkLogo`, draw both and show it instead of `logo` under `:root[data-color-scheme="dark"]` (give it `loading="lazy"`: a hidden image never loads).
 
 Wrong: every store that installs the theme shows your wordmark.
 
@@ -130,7 +130,7 @@ A store that just installed your theme may have no products, categories, collect
 | In the projection | On a new store |
 | --- | --- |
 | `data.menu`, `data.categories`, footer `data.menus`, `data.policies`, `data.store.social` | `[]` |
-| `data.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
+| `data.store.logo`, `darkLogo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
 | A `products` setting, a section's `products.cards`, a listing's `cards` | `[]` |
 | An `image` setting | `null` |
 | A card's `image`, `hoverImage`, `compareAt`, `rating` | `null` |

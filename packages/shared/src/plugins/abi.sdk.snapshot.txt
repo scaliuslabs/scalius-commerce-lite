@@ -4154,6 +4154,7 @@ export interface StorefrontStoreInfo {
     name: string;
     url: string;
     logo: StorefrontImage | null;
+    darkLogo?: StorefrontImage | null;
     logoWidth: number;
 }
 export interface StorefrontHeaderData {

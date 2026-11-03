@@ -351,6 +351,12 @@ export interface StorefrontStoreInfo {
   /** The store's own home URL (`/` on the storefront origin). */
   url: string;
   logo: StorefrontImage | null;
+  /**
+   * The logo for dark pages: show it instead of `logo` while the store paints
+   * its dark colours (`:root[data-color-scheme="dark"]`). Null or absent: `logo`
+   * everywhere.
+   */
+  darkLogo?: StorefrontImage | null;
   /** The logo width on computers, in CSS pixels. */
   logoWidth: number;
 }
