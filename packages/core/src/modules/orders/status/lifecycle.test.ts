@@ -186,3 +186,42 @@ describe("applyOrderStatusChange — CANCELLED exemption (Fix C)", () => {
     expect(mockedAssertManualCodDepositVerified).not.toHaveBeenCalled();
   });
 });
+
+describe("reconcileInventoryForStatus — inventory recovery path (Fix A mandatory verification)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("calls applyInventoryForStatusChangeWithImpact and updates order inventoryAction", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    mockedApplyInventory.mockResolvedValue({
+      inventoryAction: "none",
+      availabilityTransitionVariantIds: ["variant_1", "variant_2"],
+    });
+
+    const db = createAppDb(createOrderMock({ status: OrderStatus.CANCELLED }));
+
+    const result = await (await import("../status/lifecycle")).reconcileInventoryForStatus(
+      db,
+      "order_1",
+      OrderStatus.CANCELLED,
+    );
+
+    expect(mockedApplyInventory).toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
+    expect(result).toEqual(["variant_1", "variant_2"]);
+  });
+
+  it("propagates inventory release failure for subsequent retry", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    const releaseError = new Error("Insufficient stock to release");
+    mockedApplyInventory.mockRejectedValue(releaseError);
+
+    const db = createAppDb(createOrderMock({ status: OrderStatus.CANCELLED }));
+
+    await expect(
+      (await import("../status/lifecycle")).reconcileInventoryForStatus(db, "order_1", OrderStatus.CANCELLED),
+    ).rejects.toThrow("Insufficient stock to release");
+  });
+});
