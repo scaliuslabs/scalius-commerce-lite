@@ -1102,10 +1102,12 @@ async function applyFailedPayment(
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
+        // Bound to the order id itself: a bare outer column would render
+        // unqualified and bind to the plan's own `id` inside the subquery.
         paymentPlanStatus: sql<string | null>`(
           SELECT ${paymentPlans.status}
           FROM ${paymentPlans}
-          WHERE ${paymentPlans.orderId} = ${orders.id}
+          WHERE ${paymentPlans.orderId} = ${orderId}
           LIMIT 1
         )`,
       })
