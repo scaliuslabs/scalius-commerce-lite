@@ -1061,30 +1061,31 @@ async function findPresetRow(db: Database, attributeId: string, value: string) {
         .get();
 }
 
-/** Product value rows of the attribute whose text matches `value` (normalised). */
 /**
- * A number rename's rows and text. Rows are found by their stored number
- * (its canonical text, the facet key), not by their display text, so a row a
- * concurrent unit change already rewrote is still renamed; the old number is
- * the display text's number (`<canonical number>[ <unit>]`), whatever unit it
- * names. The new text takes the unit in force when each chunk commits, with
- * the new number bound once.
+ * A number attribute's value rows holding the number a display text names,
+ * found by their stored number (its canonical text, the facet key), not by
+ * their display text, so a row a concurrent unit change already rewrote is
+ * still found. The number is the text's first token (`<canonical number>[
+ * <unit>]`), whatever unit it names; null when the text holds no number.
  */
-function numberRename(attributeId: string, source: string, target: number | null): { match: SQL; value: SQL } {
-    const oldNumber = parseAttributeNumber(source.trim().split(/\s+/, 1)[0] ?? "");
-    if (oldNumber === null || target === null) throw new ValidationError(`"${source}" is not a number.`, { field: "oldValue" });
+function productValueNumberMatch(attributeId: string, value: string): SQL | null {
+    const number = parseAttributeNumber(value.trim().split(/\s+/, 1)[0] ?? "");
+    if (number === null) return null;
     const v = productAttributeValues;
-    return {
-        match: and(
-            eq(v.attributeId, attributeId),
-            sql`${v.valueNumber} IS NOT NULL`,
-            sql`${canonicalAttributeNumberSql(sql`${v.valueNumber}`)} = ${canonicalAttributeNumber(oldNumber)}`,
-        )!,
-        value: sql`(SELECT ${numberDisplayWithUnitInForce(sql`renamed.number`, sql`${v.attributeId}`)}
-            FROM (SELECT CAST(${target} AS DOUBLE PRECISION) AS number) AS renamed)`,
-    };
+    return and(
+        eq(v.attributeId, attributeId),
+        sql`${v.valueNumber} IS NOT NULL`,
+        sql`${canonicalAttributeNumberSql(sql`${v.valueNumber}`)} = ${canonicalAttributeNumber(number)}`,
+    )!;
 }
 
+/** A renamed number's text: the new number, bound once, with the unit in force when the statement runs. */
+function renamedNumberText(number: number): SQL {
+    return sql`(SELECT ${numberDisplayWithUnitInForce(sql`renamed.number`, sql`${productAttributeValues.attributeId}`)}
+        FROM (SELECT CAST(${number} AS DOUBLE PRECISION) AS number) AS renamed)`;
+}
+
+/** Product value rows of the attribute whose text matches `value` (normalised). */
 function productValueTextMatch(attributeId: string, value: string): SQL {
     return and(
         eq(productAttributeValues.attributeId, attributeId),
@@ -1092,21 +1093,26 @@ function productValueTextMatch(attributeId: string, value: string): SQL {
     )!;
 }
 
-async function productValueTextUsed(db: Database, attributeId: string, value: string): Promise<boolean> {
+/** Whether any product value row matches (one bounded read). */
+async function productValueUsed(db: Database, match: SQL): Promise<boolean> {
     const row = await db
         .select({ id: productAttributeValues.id })
         .from(productAttributeValues)
-        .where(productValueTextMatch(attributeId, value))
+        .where(match)
         .limit(1)
         .get();
     return row !== undefined;
+}
+
+async function productValueTextUsed(db: Database, attributeId: string, value: string): Promise<boolean> {
+    return productValueUsed(db, productValueTextMatch(attributeId, value));
 }
 
 /**
  * Renames a value across every product (and its preset). Enum values are
  * renamed on their attribute_values row and the products naming it follow;
  * text and yes/no values are rewritten by matching text, numbers by their
- * stored number (`numberRename`). Products are
+ * stored number (`productValueNumberMatch`). Products are
  * rewritten 90 per batch, each batch with their revision bump and projection
  * refresh.
  */
@@ -1121,7 +1127,10 @@ export async function renameAttributeValue(
     const source = requireExistingAttributeValue(oldValue).trim();
     const target = normalizeAttributeValue(newValue);
     const preset = await findPresetRow(db, attributeId, source);
-    const sourceUsed = await productValueTextUsed(db, attributeId, source);
+    // A number's rows by their stored number: they still count after a unit change rewrote their text.
+    const numberMatch = attribute.valueType === "number" ? productValueNumberMatch(attributeId, source) : null;
+    const sourceMatch = numberMatch ?? productValueTextMatch(attributeId, source);
+    const sourceUsed = await productValueUsed(db, sourceMatch);
     if (!preset && !sourceUsed) {
         throw new NotFoundError(`Attribute value "${oldValue.trim()}" no longer exists`);
     }
@@ -1156,9 +1165,8 @@ export async function renameAttributeValue(
             .where(and(eq(attributeValues.id, preset.id), isNull(attributeValues.deletedAt)))
             .run();
     }
-    const number = attribute.valueType === "number" ? numberRename(attributeId, source, encoded.valueNumber) : null;
-    const match = number?.match ?? productValueTextMatch(attributeId, source);
-    const value = number?.value ?? encoded.value;
+    const match = sourceMatch;
+    const value = numberMatch && encoded.valueNumber !== null ? renamedNumberText(encoded.valueNumber) : encoded.value;
     await forEachAttributeProductChunk(db, match, (productIds) => [
         db.update(productAttributeValues)
             .set({ value, valueNumber: encoded.valueNumber })
