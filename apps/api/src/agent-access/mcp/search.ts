@@ -11,6 +11,7 @@ import { isConfirmGated } from "./confirm";
 import { isMcpOperationExposure } from "./operations";
 import { jsonBytes } from "./shape";
 import { resolveAuthorizedWorkflow, type AuthorizedWorkflowPlan } from "./workflows";
+import { AGENT_WORKFLOW_CONTROL_GUARDS } from "../workflows/controls";
 import { searchAgentWorkflows } from "../workflows/resolver";
 
 export const SEARCH_DEFAULT_LIMIT = 6;
@@ -35,8 +36,10 @@ export interface SearchHit {
   disposition?: string;
   code?: string;
   safePlan?: Record<string, unknown> | null;
-  /** Control hits only: the router's advice. The server does not enforce it. */
+  /** Control hits only: the router's advice. No server code reads the control. */
   guidance?: true;
+  /** Control hits only: the rule the control states is also enforced by server code. */
+  enforced?: true;
 }
 
 const STOPWORDS = new Set([
@@ -171,6 +174,30 @@ function fallbackHit(source: string, operationIds: readonly string[], score: num
   return operation ? operationHit(operation, score) : null;
 }
 
+/**
+ * A control passes through as advice: no server path reads the control itself, so the hit
+ * says `guidance`. A control whose rule the server also enforces elsewhere says `enforced`
+ * instead (AGENT_WORKFLOW_CONTROL_GUARDS names the code).
+ */
+export function controlHit(resolution: {
+  disposition: string;
+  classification: { controlId: string; code: string; reason: string };
+  safePlan: AuthorizedWorkflowPlan | null;
+}): SearchHit {
+  const enforced = resolution.classification.controlId in AGENT_WORKFLOW_CONTROL_GUARDS;
+  return {
+    id: resolution.classification.controlId,
+    kind: "control",
+    title: clip(resolution.classification.code),
+    summary: clip(resolution.classification.reason),
+    score: 1,
+    ...(enforced ? { enforced: true as const } : { guidance: true as const }),
+    disposition: resolution.disposition,
+    code: resolution.classification.code,
+    safePlan: resolution.safePlan ? compactPlan(resolution.safePlan) : null,
+  };
+}
+
 async function workflowHits(query: string, surface: AgentResource, principal: AgentPrincipal) {
   const resolution = await resolveAuthorizedWorkflow({ prompt: query, surface, principal });
   const hits: SearchHit[] = [];
@@ -208,18 +235,7 @@ async function workflowHits(query: string, surface: AgentResource, principal: Ag
       });
     }
   } else if (resolution.kind === "control") {
-    // Controls pass through unchanged as advice: no server path reads them, so the hit says so.
-    hits.push({
-      id: resolution.classification.controlId,
-      kind: "control",
-      title: clip(resolution.classification.code),
-      summary: clip(resolution.classification.reason),
-      score: 1,
-      guidance: true,
-      disposition: resolution.disposition,
-      code: resolution.classification.code,
-      safePlan: resolution.safePlan ? compactPlan(resolution.safePlan) : null,
-    });
+    hits.push(controlHit(resolution));
   }
   return { hits, notes };
 }

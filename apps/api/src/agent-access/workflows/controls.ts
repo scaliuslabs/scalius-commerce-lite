@@ -1038,3 +1038,19 @@ export const AGENT_WORKFLOW_CONTROLS = [
     ],
   },
 ] as const satisfies readonly AgentWorkflowControl[];
+
+/**
+ * The controls whose stated rule the server also enforces, with the code that does. The
+ * controls themselves are phrase-matched router advice that no server path reads; only
+ * these may say "never" or "forbidden" (controls-guards.test.ts holds every other control
+ * to advice wording and checks that each guard named here exists).
+ */
+export const AGENT_WORKFLOW_CONTROL_GUARDS: Readonly<Record<string, readonly { file: string; symbol: string; test?: string }[]>> = {
+  "dashboard.product-hard-delete-guard": [{ file: "packages/core/src/modules/product-admin/lifecycle.ts", symbol: "buildPermanentDeleteReferenceGuard", test: "packages/core/src/modules/product-admin/lifecycle-delete.test.ts" }],
+  "dashboard.phone-required-invariant": [{ file: "packages/shared/src/customer-auth-policy.ts", symbol: "orderContactNeeds", test: "packages/shared/src/customer-auth-policy.test.ts" }],
+  "dashboard.no-payment-guess": [{ file: "packages/core/src/modules/checkout/readiness.ts", symbol: "getCheckoutReadiness", test: "packages/core/src/modules/checkout/config.test.ts" }],
+  "dashboard.locked-currency-force": [{ file: "packages/core/src/modules/settings/site-settings.service.ts", symbol: "isCurrencyCodeLocked" }],
+  "dashboard.no-secret-reveal": [{ file: "apps/api/src/routes/admin/settings/payments.ts", symbol: "maskedSecret", test: "apps/api/src/routes/admin/settings/payments.test.ts" }],
+  "storefront.no-exact-stock": [{ file: "packages/shared/src/buyer-availability.ts", symbol: "resolveBuyerAvailabilityBand", test: "packages/shared/src/buyer-availability.test.ts" }],
+  "storefront.no-receipt-proof-url": [{ file: "packages/core/src/modules/orders/receipts.ts", symbol: "validateOrderReceiptProof", test: "packages/core/src/modules/orders/receipts.test.ts" }],
+};
