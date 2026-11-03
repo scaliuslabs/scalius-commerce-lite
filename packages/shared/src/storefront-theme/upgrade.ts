@@ -235,7 +235,10 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
       throw failure(error, `The upgrade from version ${version}`);
     }
   }
-  return upgradeSectionLists(document, chain);
+  // Version 13 first shipped (in this wave's own builds) with the kebab-case
+  // module ids; the same mapping reads those stored documents and templates
+  // too. It is idempotent: snake_case ids pass through untouched.
+  return upgradeSectionLists(snakeProductModules(document), chain);
 }
 
 /** A stored document read through the chain: the current document and the version it was stored at. */
