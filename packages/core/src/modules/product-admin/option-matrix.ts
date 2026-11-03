@@ -776,7 +776,7 @@ export async function planProductOptionMatrix(
     const skuCollisions = await db.select({ id: productVariants.id, sku: productVariants.sku })
         .from(productVariants)
         .where(sql`lower(trim(${productVariants.sku})) IN (
-            SELECT CAST(value AS TEXT)
+            SELECT value
             FROM json_each(${JSON.stringify([...finalSkuOwner.keys()])})
         )`);
     for (const row of skuCollisions) {

@@ -435,6 +435,13 @@ export const policies = [
     sample: "conditions.push(like(products.name, `%${search}%`));",
   },
   {
+    rule: "a lower()/trim() expression matched against a json_each() list reads bare values, never SELECT CAST(value AS TEXT)",
+    why: "SQLite uses an expression index (lower(trim(email)), the SKU and barcode identities) for `expr IN (SELECT value FROM json_each(?))` but scans the table once the list is CAST: a customer import read every customer per chunk (store-transfer/customer-import.ts); json_each values of a string list are already TEXT on every provider",
+    paths: ["apps/api/src", "packages/core/src", "packages/database/src"],
+    forbid: [/\b(?:lower|trim|upper)\((?:[^()]|\([^()]*\))*\)\s*IN\s*\(\s*SELECT\s+CAST\(\s*value\s+AS\s+TEXT\s*\)/i],
+    sample: "sql`lower(trim(${customers.email})) IN (SELECT CAST(value AS TEXT) FROM json_each(${emails}))`",
+  },
+  {
     rule: "request-scoped state never lives in known module globals",
     why: "Workers reuse isolates across requests and merchants; cached auth/clients/URLs leak between them",
     paths: [

@@ -21,7 +21,7 @@
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
 import { CUSTOMER_ADDRESS_ID_PREFIX, customerAddresses, customerHistory, customerTagLinks, customers, firstCustomerAddressId } from "@scalius/database/schema";
-import { and, isNull, sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, MARKETING_CONTACT_CHANNELS } from "@scalius/shared/customer-marketing";
@@ -104,12 +104,15 @@ async function readExisting(db: Database, items: readonly CustomerImportItem[]) 
   };
   const [phoneRows, emailRows] = await Promise.all([
     db.select(columns).from(customers).where(and(
-      sql`${customers.phone} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(phones)}))`,
-      isNull(customers.deletedAt),
+      sql`${customers.phone} IN (SELECT value FROM json_each(${JSON.stringify(phones)}))`,
+      // `+`: a live-customer filter, never the index (without statistics SQLite
+      // would walk every live customer on the deleted_at index instead).
+      sql`+${customers.deletedAt} IS NULL`,
     )),
     emails.length === 0 ? [] : db.select(columns).from(customers).where(and(
-      sql`lower(trim(${customers.email})) IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(emails)}))`,
-      isNull(customers.deletedAt),
+      // A bare `value`: a CAST on the right-hand side keeps SQLite off the expression index.
+      sql`lower(trim(${customers.email})) IN (SELECT value FROM json_each(${JSON.stringify(emails)}))`,
+      sql`+${customers.deletedAt} IS NULL`,
     )),
   ]);
   const byPhone = new Map<string, Existing>();
