@@ -27,6 +27,7 @@ import {
   selectActiveProductBundleRows,
   selectProductPageContentBlockRows,
   storeEmiSettingsSql,
+  type SkuWarrantyMode,
 } from "../products";
 import {
     products,
@@ -317,7 +318,22 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
         // A presence page's market list prices ride on the SKU rows (none at the root).
         ...(pricing ? { listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { presence: pricing.presence }) } : {}),
+        // The SKU's warranty (0189): its mode, and its own live policy's current terms.
+        warrantyMode: productVariants.warrantyMode,
+        ownWarranty: {
+            id: warrantyPolicies.id,
+            name: warrantyPolicies.name,
+            provider: warrantyPolicies.provider,
+            durationValue: warrantyPolicies.durationValue,
+            durationUnit: warrantyPolicies.durationUnit,
+            replacementDays: warrantyPolicies.replacementDays,
+            terms: warrantyPolicies.terms,
+        },
     }).from(productVariants)
+        .leftJoin(warrantyPolicies, and(
+            eq(warrantyPolicies.id, productVariants.warrantyPolicyId),
+            isNull(warrantyPolicies.archivedAt),
+        ))
         .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
         .orderBy(productVariants.createdAt, productVariants.id)
         .all();
@@ -450,7 +466,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     deps.mediaItems(content.blocks.mediaIds);
     deps.anyAttribute();
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; listPrices?: string | null; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; listPrices?: string | null; warrantyMode: SkuWarrantyMode; ownWarranty: WarrantyRow | null; }
     // The page's market: its SKUs, "from" price and EMI line in its prices
     // (a neutral market and the root keep the rows as read).
     const pageMarket = await pageMarketPromise;
@@ -492,9 +508,20 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         variant.isDefault !== true && Boolean(variant.optionCombinationKey?.trim()),
     );
 
+    // Each SKU's effective warranty: its own live policy, none, or the product's.
+    // The page lists each policy once (`warranties`); a SKU names one by id.
+    const warranties = new Map<string, ReturnType<typeof presentWarranty>>();
+    const effectiveWarrantyId = (variant: Pick<VariantResult, "warrantyMode" | "ownWarranty">): string | null => {
+        const row = variant.warrantyMode === "none" ? null : variant.warrantyMode === "policy" ? variant.ownWarranty : warranty;
+        if (!row?.id) return null;
+        if (!warranties.has(row.id)) warranties.set(row.id, presentWarranty(row));
+        return row.id;
+    };
+
     const formattedVariants = typedVariants.map((variant) => {
+        const { warrantyMode: _warrantyMode, ownWarranty: _ownWarranty, ...sku } = variant;
         const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(
-            presentCatalogPrice(variant, decimalPlaces),
+            presentCatalogPrice(sku, decimalPlaces),
         ));
         const variantImage = resolveSkuImageRepresentation(mediaItems, v.imageId);
         return {
@@ -508,6 +535,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                 : content.variantCustomFields.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
+            /** This SKU's effective warranty (an id in `product.warranties`); null without one. */
+            warrantyId: effectiveWarrantyId(variant),
         };
     });
     const productPrice = presentCatalogPrice(pricedProduct, decimalPlaces);
@@ -557,15 +586,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             /** Published reviews (summary and the first page); null when the store's reviews are off. */
             reviews,
             /** The product's warranty policy (its current terms); null without one. */
-            warranty: warranty?.id
-                ? {
-                    name: warranty.name,
-                    provider: warranty.provider,
-                    duration: { value: warranty.durationValue, unit: warranty.durationUnit },
-                    replacementDays: warranty.replacementDays,
-                    terms: warranty.terms,
-                }
-                : null,
+            warranty: warranty?.id ? presentWarranty(warranty) : null,
+            /** Every warranty a SKU of this page has (its `warrantyId`), each once. */
+            warranties: [...warranties].map(([id, view]) => ({ id, ...view })),
             // EMI plans are the shop currency's bank offers: none in another currency.
             emi: foreign ? null : productEmiOffer({
                 emiEligible: emiEligible === true,
@@ -579,6 +602,27 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         media: publicMedia,
         variants: formattedVariants,
         recommendations,
+    };
+}
+
+type WarrantyRow = {
+    id: string | null;
+    name: string | null;
+    provider: string | null;
+    durationValue: number | null;
+    durationUnit: string | null;
+    replacementDays: number | null;
+    terms: string | null;
+};
+
+/** A live policy's buyer-facing terms, as the product page shows them. */
+function presentWarranty(row: WarrantyRow) {
+    return {
+        name: row.name ?? "",
+        provider: row.provider,
+        duration: { value: row.durationValue, unit: row.durationUnit },
+        replacementDays: row.replacementDays,
+        terms: row.terms,
     };
 }
 

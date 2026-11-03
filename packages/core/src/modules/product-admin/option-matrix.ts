@@ -38,10 +38,14 @@ import {
   MAX_PRODUCT_OPTION_COMBINATIONS,
   normalizeOptionIdentity,
   planDigitalSkuWrites,
+  addSkuWarrantyIssues,
   skuStockSchema,
+  skuWarrantyColumns,
+  skuWarrantyInputShape,
   skuWeightSchema,
   STOCK_CHANGED_MESSAGE,
 } from "../products";
+import { assertLiveSkuWarrantyPolicies } from "./warranty";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -95,6 +99,8 @@ const matrixVariantInputSchema = z.object({
     discountAmount: catalogMoneySchema.nullable(),
     /** Omit to keep a saved row's kind (new rows are physical). */
     fulfillmentKind: editableFulfillmentKindSchema.optional(),
+    /** Omit both to keep a saved row's warranty (new rows inherit the product's). */
+    ...skuWarrantyInputShape,
 });
 
 const productOptionMatrixBaseSchema = z.object({
@@ -264,6 +270,7 @@ function validateOptionMatrix(
         ) {
             ctx.addIssue({ code: "custom", message: "A flat discount cannot exceed the SKU price.", path: ["variants", variantIndex, "discountAmount"] });
         }
+        addSkuWarrantyIssues(variant, ctx, ["variants", variantIndex]);
     });
 
     input.options.forEach((option, optionIndex) => {
@@ -690,6 +697,11 @@ export async function planProductOptionMatrix(
         ...activeVariantById,
         ...restoredVariantById,
     ]);
+    await assertLiveSkuWarrantyPolicies(db, normalizedVariants.map((variant, index) => ({
+        policyId: variant.warrantyPolicyId,
+        savedPolicyId: variantById.get(variant.id)?.warrantyPolicyId ?? null,
+        field: `${fieldPrefix}variants.${index}.warrantyPolicyId`,
+    })));
 
     // A digital SKU's stock is its licence keys: new digital rows start at 0,
     // saved digital rows keep their stock, rows turning digital hold none, and
@@ -1013,8 +1025,9 @@ export async function planProductOptionMatrix(
             discountType: variant.discountType,
             discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
             discountAmountMinor: variant.discountType === "flat" ? toStoreMinor(variant.discountAmount ?? 0, currency) : 0,
-            // Omitted keeps a saved row's kind.
+            // Omitted keeps a saved row's kind and warranty.
             ...(variant.fulfillmentKind !== undefined ? { fulfillmentKind: variant.fulfillmentKind } : {}),
+            ...skuWarrantyColumns(variant),
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {

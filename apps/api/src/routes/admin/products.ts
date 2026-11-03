@@ -239,6 +239,8 @@ const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
             discountType: z.enum(["percentage", "flat"]).nullable(),
             discountPercentage: z.number().nullable(),
             discountAmount: z.number().nullable(),
+            warrantyMode: z.enum(["inherit", "policy", "none"]),
+            warrantyPolicyId: z.string().nullable(),
         })).max(10),
         ...semanticPageSchema,
     }),

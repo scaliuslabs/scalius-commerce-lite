@@ -380,6 +380,8 @@ const productDetailVariantSchema = z.object({
   /** physical (shipped or picked up), digital, or service (performed, no delivery). */
   fulfillmentKind: fulfillmentKindSchema,
   customFields: storefrontCustomFieldsSchema,
+  /** This SKU's effective warranty: an id in the product's `warranties`, or null without one. */
+  warrantyId: z.string().nullable(),
   createdAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
 });
@@ -550,6 +552,7 @@ const productSectionTextSchema = z.object({
 
 const productSectionVariantSchema = productDetailVariantSchema.omit({
   customFields: true,
+  warrantyId: true,
   stock: true,
   reservedStock: true,
   lowStockThreshold: true,

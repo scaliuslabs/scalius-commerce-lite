@@ -19056,6 +19056,20 @@ export type GetApiV1ProductsBySlugResponses = {
                     terms: string | null;
                 } | null;
                 /**
+                 * Every warranty a SKU of this page has, each once: a variant's `warrantyId` names one (a SKU inherits the product's, has its own, or none).
+                 */
+                warranties: Array<{
+                    name: string;
+                    provider: 'brand' | 'store';
+                    duration: {
+                        value: number;
+                        unit: 'days' | 'months' | 'years';
+                    };
+                    replacementDays: number | null;
+                    terms: string | null;
+                    id: string;
+                }>;
+                /**
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
                 customFields: Array<StorefrontCustomField>;
@@ -19152,6 +19166,7 @@ export type GetApiV1ProductsBySlugResponses = {
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
                 customFields: Array<StorefrontCustomField>;
+                warrantyId: string | null;
                 createdAt: string | null;
                 deletedAt: string | null;
             }>;
@@ -60736,6 +60751,8 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                      * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                      */
                     fulfillmentKind?: 'physical' | 'digital' | 'service';
+                    warrantyMode?: 'inherit' | 'policy' | 'none';
+                    warrantyPolicyId?: string | null;
                     createdAt?: string | number;
                     updatedAt?: string | number;
                     deletedAt?: NullableTimestamp;
@@ -63207,6 +63224,14 @@ export type PostApiV1AdminProductsData = {
                  */
                 fulfillmentKind?: 'physical' | 'digital' | 'service';
                 /**
+                 * inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits).
+                 */
+                warrantyMode?: 'inherit' | 'policy' | 'none';
+                /**
+                 * The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy.
+                 */
+                warrantyPolicyId?: string | null;
+                /**
                  * Cost per item in major units of the store currency. Omit or null for none.
                  */
                 cost?: number | null;
@@ -64374,6 +64399,8 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 discountType: 'percentage' | 'flat' | null;
                 discountPercentage: number | null;
                 discountAmount: number | null;
+                warrantyMode: 'inherit' | 'policy' | 'none';
+                warrantyPolicyId: string | null;
             }>;
             total: number;
             offset: number;
@@ -64741,6 +64768,8 @@ export type GetApiV1AdminProductsByIdResponses = {
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                  */
                 fulfillmentKind?: 'physical' | 'digital' | 'service';
+                warrantyMode?: 'inherit' | 'policy' | 'none';
+                warrantyPolicyId?: string | null;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: NullableTimestamp;
@@ -64919,6 +64948,14 @@ export type PutApiV1AdminProductsByIdData = {
                  * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
                  */
                 fulfillmentKind?: 'physical' | 'digital' | 'service';
+                /**
+                 * inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits).
+                 */
+                warrantyMode?: 'inherit' | 'policy' | 'none';
+                /**
+                 * The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy.
+                 */
+                warrantyPolicyId?: string | null;
             }>;
         };
         /**
@@ -65255,6 +65292,8 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
                  */
                 fulfillmentKind?: 'physical' | 'digital' | 'service';
+                warrantyMode?: 'inherit' | 'policy' | 'none';
+                warrantyPolicyId?: string | null;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: NullableTimestamp;
@@ -65288,6 +65327,14 @@ export type PostApiV1AdminProductsByIdVariantsData = {
          * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
         fulfillmentKind?: 'physical' | 'digital' | 'service';
+        /**
+         * inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits).
+         */
+        warrantyMode?: 'inherit' | 'policy' | 'none';
+        /**
+         * The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy.
+         */
+        warrantyPolicyId?: string | null;
         expectedAggregateRevision: number;
     };
     path: {
@@ -65374,6 +65421,8 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
              * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
              */
             fulfillmentKind?: 'physical' | 'digital' | 'service';
+            warrantyMode?: 'inherit' | 'policy' | 'none';
+            warrantyPolicyId?: string | null;
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: NullableTimestamp;
@@ -65479,6 +65528,14 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
          */
         fulfillmentKind?: 'physical' | 'digital' | 'service';
         /**
+         * inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits).
+         */
+        warrantyMode?: 'inherit' | 'policy' | 'none';
+        /**
+         * The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy.
+         */
+        warrantyPolicyId?: string | null;
+        /**
          * The SKU stockVersion the new quantity was based on. Required with stock.
          */
         expectedStockVersion?: number;
@@ -65569,6 +65626,8 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
              * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
              */
             fulfillmentKind?: 'physical' | 'digital' | 'service';
+            warrantyMode?: 'inherit' | 'policy' | 'none';
+            warrantyPolicyId?: string | null;
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: NullableTimestamp;
@@ -65620,6 +65679,14 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
              * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
             fulfillmentKind?: 'physical' | 'digital' | 'service';
+            /**
+             * inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits).
+             */
+            warrantyMode?: 'inherit' | 'policy' | 'none';
+            /**
+             * The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy.
+             */
+            warrantyPolicyId?: string | null;
         }>;
         expectedAggregateRevision: number;
     };

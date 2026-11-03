@@ -17,6 +17,7 @@ import {
     MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
 import { editableFulfillmentKindSchema } from "./customization-schema";
+import { addSkuWarrantyIssues, skuWarrantyInputShape } from "./sku-warranty";
 import type { CustomizationView } from "./customization";
 import { formatUnit } from "@scalius/shared/locale-words";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
@@ -73,11 +74,12 @@ const variantMutationSchema = z.object({
     discountAmount: catalogMoneySchema.nullable().optional(),
     /** Omit to keep (a new SKU is physical). */
     fulfillmentKind: editableFulfillmentKindSchema.optional(),
+    ...skuWarrantyInputShape,
 });
 
 export const createVariantSchema = variantMutationSchema.extend({
     expectedAggregateRevision: expectedProductAggregateRevisionSchema,
-});
+}).superRefine((value, context) => addSkuWarrantyIssues(value, context));
 
 /** Shown whenever a quantity edit was based on stock that has since changed. */
 export const STOCK_CHANGED_MESSAGE = "Stock changed since you opened this product. Reload to see the latest.";
@@ -98,7 +100,7 @@ export const updateVariantSchema = variantMutationSchema.extend({
 }).refine((value) => value.stock === undefined || value.expectedStockVersion !== undefined, {
     message: "Send expectedStockVersion with stock.",
     path: ["expectedStockVersion"],
-});
+}).superRefine((value, context) => addSkuWarrantyIssues(value, context));
 
 // ─────────────────────────────────────────
 // Types

@@ -114,7 +114,7 @@ export type ProductUpdateComposition = Pick<UpdateProductInput, "optionMatrix" |
 export type SimpleSkuDraft = Pick<DraftVariant, "sku" | "trackInventory" | "stock" | "barcode" | "barcodeType" | "weight">;
 
 /** A field the editor marks when a draft can't be saved. */
-export type DraftIssueField = "sku" | "price" | "stock" | "barcode" | "discount" | "photo" | "weight" | "cost";
+export type DraftIssueField = "sku" | "price" | "stock" | "barcode" | "discount" | "photo" | "weight" | "cost" | "warranty";
 
 /**
  * Why a draft can't be saved, placed on the field that needs the change:
@@ -129,7 +129,7 @@ export interface DraftIssue {
 }
 
 /** Fields shown only after a row is expanded ("More fields"). */
-export const ADVANCED_FIELDS: ReadonlySet<DraftIssueField> = new Set(["sku", "discount", "barcode", "weight", "cost"]);
+export const ADVANCED_FIELDS: ReadonlySet<DraftIssueField> = new Set(["sku", "discount", "barcode", "weight", "cost", "warranty"]);
 
 function checkNumber(value: number | null, max: number, integer: boolean): ProductVariantMessageKey | null {
   if (value === null) return null;
@@ -311,6 +311,7 @@ export function initialVariants(variants: ProductVariant[], saleOf: SaleOf = exa
       barcode: variant.barcode ?? null,
       barcodeType: (variant.barcodeType as DraftVariant["barcodeType"]) ?? null,
       ...(variant.fulfillmentKind ? { fulfillmentKind: variant.fulfillmentKind } : {}),
+      ...(variant.warrantyMode ? { warrantyMode: variant.warrantyMode, warrantyPolicyId: variant.warrantyPolicyId ?? null } : {}),
     }));
 }
 
@@ -407,6 +408,10 @@ export function materializeVariants(
       barcode: keepsSimpleBarcode ? seed.barcode! : null,
       barcodeType: keepsSimpleBarcode ? seed.barcodeType ?? null : null,
       ...(shared("fulfillmentKind") ? { fulfillmentKind: shared("fulfillmentKind") } : {}),
+      // The warranty moves as a pair, like the price.
+      ...(shared("warrantyMode") && shared("warrantyPolicyId") !== undefined
+        ? { warrantyMode: shared("warrantyMode"), warrantyPolicyId: shared("warrantyPolicyId") }
+        : {}),
     };
   });
 }

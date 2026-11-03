@@ -26,6 +26,7 @@ import {
   productContentBlockInputListSchema,
   skuStockSchema,
   skuWeightSchema,
+  warrantyPolicyIdSchema,
 } from "../products";
 import { createProductOptionMatrixSchema, productOptionMatrixBodySchema } from "./option-matrix";
 import { unitCostAmountSchema } from "../inventory";
@@ -134,14 +135,6 @@ export const createProductMediaInputSchema = z.array(z.object({
     }));
 });
 
-/** A warranty policy id; the write checks it exists and is not archived. */
-export const productWarrantyPolicyIdSchema = z
-    .string()
-    .trim()
-    .min(1)
-    .max(80)
-    .regex(/^wrp_[A-Za-z0-9_-]+$/u, "Choose a warranty policy from the list.");
-
 /** Shared attribute schema used in create and update */
 const productAttributeSchema = z.array(
     z.object({
@@ -228,7 +221,7 @@ const productBaseSchema = z.object({
     isGiftCard: z.boolean().optional()
         .describe("Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep."),
     /** A live warranty policy (wrp_…); null removes it. Omit to keep. */
-    warrantyPolicyId: productWarrantyPolicyIdSchema.nullable().optional()
+    warrantyPolicyId: warrantyPolicyIdSchema.nullable().optional()
         .describe("A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it."),
 });
 

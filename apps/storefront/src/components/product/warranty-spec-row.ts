@@ -2,7 +2,7 @@
 // product's `warranty` (the policy's current terms, from GET /products/{slug});
 // `warrantySpecRow` is the specification table's "Warranty" row. Until the
 // spec table lands (templates), the row renders in the classic description tab.
-import type { Product } from "@/lib/api";
+import type { Product, ProductVariant } from "@/lib/api";
 import {
   warrantySummaryText,
   type WarrantyCopy,
@@ -22,7 +22,36 @@ export interface ProductWarrantyView {
 
 /** The product's warranty, or null when it has none (or the field is malformed). */
 export function productWarranty(product: Product): ProductWarrantyView | null {
-  const value = (product as Product & { warranty?: unknown }).warranty;
+  return parseWarranty((product as Product & { warranty?: unknown }).warranty);
+}
+
+/**
+ * Each SKU's effective warranty (it inherits the product's, has its own, or
+ * none): the page's `warranties` by id, and each variant's `warrantyId`.
+ * Null when the page carries no SKU warranties (an older API): the product's
+ * warranty then stands for every SKU.
+ */
+export function skuWarranties(product: Product, variants: readonly ProductVariant[]): {
+  byId: Map<string, ProductWarrantyView>;
+  byVariant: Record<string, string | null>;
+} | null {
+  const list = (product as Product & { warranties?: unknown }).warranties;
+  if (!Array.isArray(list)) return null;
+  const byId = new Map<string, ProductWarrantyView>();
+  for (const entry of list) {
+    const id = entry && typeof entry === "object" ? (entry as { id?: unknown }).id : null;
+    const warranty = parseWarranty(entry);
+    if (typeof id === "string" && warranty) byId.set(id, warranty);
+  }
+  const byVariant: Record<string, string | null> = {};
+  for (const variant of variants) {
+    const id = (variant as ProductVariant & { warrantyId?: unknown }).warrantyId;
+    byVariant[variant.id] = typeof id === "string" && byId.has(id) ? id : null;
+  }
+  return { byId, byVariant };
+}
+
+function parseWarranty(value: unknown): ProductWarrantyView | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<ProductWarrantyView>;
   const duration = raw.duration;

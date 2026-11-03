@@ -10,7 +10,6 @@ import {
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
-    warrantyPolicies,
     taxClasses,
     customFieldDefinitions,
     customFieldValues,
@@ -54,6 +53,7 @@ import {
   toStoredCustomizationSchema,
   productChannelChoiceStatement,
   buildUrlRedirectStatements,
+  skuWarrantyColumns,
   productPath,
 } from "../products";
 import { storeCurrencyCodeSql, toStoreMinor } from "../settings";
@@ -70,6 +70,7 @@ import {
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
 import { optionMatrixBatchConflict, planProductOptionMatrix } from "./option-matrix";
+import { assertLiveSkuWarrantyPolicies, assertLiveWarrantyPolicy, liveWarrantyPolicyIds } from "./warranty";
 import {
     resolveNewVariantBarcode,
     rethrowProductVariantIdentityConstraint,
@@ -109,27 +110,6 @@ async function assertLiveBrand(db: Database, brandId: string | null | undefined)
     if (!brand) {
         throw new ValidationError("That brand is unavailable or in trash. Choose another brand.", { field: "brandId" });
     }
-}
-
-/**
- * A warranty policy a product may point at: it exists and is not archived.
- * Not part of the checkout authority fence: commit freezes whatever revision
- * is current, and a warranty never changes the price.
- */
-async function assertLiveWarrantyPolicy(db: Database, policyId: string | null | undefined): Promise<void> {
-    if (!policyId) return;
-    if (!await isLiveWarrantyPolicy(db, policyId)) {
-        throw new ValidationError("That warranty policy is unavailable or archived. Choose another policy.", { field: "warrantyPolicyId" });
-    }
-}
-
-async function isLiveWarrantyPolicy(db: Database, policyId: string): Promise<boolean> {
-    const policy = await db
-        .select({ id: warrantyPolicies.id })
-        .from(warrantyPolicies)
-        .where(and(eq(warrantyPolicies.id, policyId), isNull(warrantyPolicies.archivedAt)))
-        .get();
-    return Boolean(policy);
 }
 
 export function defaultVariantValues(productId: string, priceMinor: number) {
@@ -468,6 +448,10 @@ export async function createProduct(
     const attributeRows = await prepareProductAttributeValueRows(db, productId, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
     await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
+    await assertLiveSkuWarrantyPolicies(db, (data.optionMatrix?.variants ?? []).map((variant, index) => ({
+        policyId: variant.warrantyPolicyId,
+        field: `optionMatrix.variants.${index}.warrantyPolicyId`,
+    })));
 
     await assertSkusFree(db, data.optionMatrix
         ? data.optionMatrix.variants.map((variant, index) => ({ sku: variant.sku, field: `optionMatrix.variants.${index}.sku` }))
@@ -623,6 +607,7 @@ export async function createProduct(
                     ? toStoreMinor(matrixVariant.discountAmount ?? 0, currency)
                     : 0,
                 costMinor: costMinorOf(matrixVariant.cost, currency),
+                ...skuWarrantyColumns(matrixVariant),
                 version: 1,
                 stockVersion: 1,
                 allowPreorder: false,
@@ -1501,6 +1486,12 @@ export async function duplicateProduct(
     }));
     const liveVariants = source.variants.filter((variant) => !variant.deletedAt);
     const optionVariants = liveVariants.filter((variant) => !variant.isDefault);
+    // A copy keeps live warranties; an archived one is not offered to new
+    // products, and a SKU whose own policy is archived already sells without one.
+    const livePolicies = await liveWarrantyPolicyIds(db, [
+        ...(source.warrantyPolicyId ? [source.warrantyPolicyId] : []),
+        ...optionVariants.flatMap((variant) => variant.warrantyPolicyId ? [variant.warrantyPolicyId] : []),
+    ]);
     const skus = await freeCopySkus(db, liveVariants.map((variant) => variant.sku));
     const skuOf = new Map(liveVariants.map((variant, index) => [variant.id, skus[index]!]));
 
@@ -1515,8 +1506,7 @@ export async function duplicateProduct(
         price: source.price,
         categoryId: source.categoryId,
         brandId: source.brandId,
-        // A copy keeps a live warranty; an archived one is not offered to new products.
-        warrantyPolicyId: source.warrantyPolicyId && await isLiveWarrantyPolicy(db, source.warrantyPolicyId)
+        warrantyPolicyId: source.warrantyPolicyId && livePolicies.has(source.warrantyPolicyId)
             ? source.warrantyPolicyId
             : null,
         isActive: false,
@@ -1566,6 +1556,9 @@ export async function duplicateProduct(
                         discountPercentage: variant.discountType === "flat" ? null : variant.discountPercentage,
                         discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
                         fulfillmentKind: variant.fulfillmentKind,
+                        ...(variant.warrantyMode === "policy" && !livePolicies.has(variant.warrantyPolicyId ?? "")
+                            ? { warrantyMode: "none" as const, warrantyPolicyId: null }
+                            : { warrantyMode: variant.warrantyMode, warrantyPolicyId: variant.warrantyPolicyId }),
                     })),
                 },
             }

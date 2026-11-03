@@ -143,6 +143,10 @@ export const productVariantSchema = z.object({
   barcodeType: z.string().nullable().optional(),
   /** physical (shipped or picked up), digital, or service (performed, no delivery). */
   fulfillmentKind: fulfillmentKindSchema.optional(),
+  /** inherit (the product's warranty), policy (warrantyPolicyId) or none. */
+  warrantyMode: z.enum(["inherit", "policy", "none"]).optional(),
+  /** The SKU's own warranty policy (wrp_…), exactly when warrantyMode is policy. */
+  warrantyPolicyId: z.string().nullable().optional(),
   createdAt: optionalTimestampSchema,
   updatedAt: optionalTimestampSchema,
   deletedAt: optionalNullableTimestampSchema,
