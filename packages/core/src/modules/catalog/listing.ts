@@ -73,6 +73,7 @@ import {
     deps,
     type ListingDependencySet,
 } from "./declare-deps";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 
@@ -798,7 +799,7 @@ async function readStorefrontCatalogResults(
                                 ON listing_child.descendant_id = child_link.ancestor_id
                                AND listing_child.ancestor_id = ${subtreeParentId}
                                AND listing_child.depth = 1
-                            WHERE child_link.descendant_id = ${categories.id}
+                            WHERE child_link.descendant_id = ${qualifiedColumn(categories.id)}
                             LIMIT 1
                         )`
                         : sql<string | null>`NULL`,

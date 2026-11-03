@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { orders, orderPayments, PaymentRecordStatus, refundAttempts } from "@scalius/database/schema";
 import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { ConflictError } from "@scalius/core/errors";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
   "pending",
@@ -48,7 +49,12 @@ export function noActiveRefundAttemptForOrderIdCondition(orderId: string): SQL {
   )`;
 }
 
-export function noActiveRefundAttemptForOrderColumnCondition(orderIdColumn: SQL = sql`${orders.id}`): SQL {
+/**
+ * No active refund for the order row the caller names (default: the `orders`
+ * row of the statement), always qualified: a bare column would bind to the
+ * subquery's own `order_id`/`id` when this lands in a single-table select list.
+ */
+export function noActiveRefundAttemptForOrderColumnCondition(orderIdColumn: SQL = qualifiedColumn(orders.id)): SQL {
   return sql`NOT EXISTS (
     SELECT 1 FROM ${refundAttempts}
     WHERE ${refundAttempts.orderId} = ${orderIdColumn}
