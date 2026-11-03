@@ -216,7 +216,16 @@ export function isOrderInventoryConflictError(error: unknown): boolean {
         || isDuplicateTransitionMovementClaimError(error);
 }
 
-type InventoryPhase = { operation: StrictMovementOperation; entries: ReservationEntry[] };
+type InventoryPhase = {
+    operation: StrictMovementOperation;
+    entries: ReservationEntry[];
+    /**
+     * Units whose licence keys went to the buyer: consumed where the order
+     * ships from (or the default location), with no shelf-coverage check, as
+     * a cancel or refund that used to release them must not be refused.
+     */
+    consumesKeys?: true;
+};
 
 function unchangedInventory(inventoryAction: InventoryAction): PreparedInventoryStatusChange {
     return {
@@ -269,9 +278,9 @@ export async function prepareInventoryForStatusChange(
     if (needsRestore && currentAction === "reserved") {
         const lines = await getOrderInventoryLines(db, order);
         return prepareStrictInventoryPhases(db, order, "restored", [
-            { operation: "deduct", entries: keyedEntries(lines) },
+            { operation: "deduct", entries: keyedEntries(lines), consumesKeys: true },
             { operation: "release", entries: unkeyedEntries(lines) },
-        ]);
+        ], assignedKeyCount(lines));
     }
 
     if (needsRestore && currentAction === "deducted") {
@@ -284,7 +293,7 @@ export async function prepareInventoryForStatusChange(
         const lines = await getOrderInventoryLines(db, order);
         return prepareStrictInventoryPhases(db, order, "restored", [
             { operation: "restore", entries: unkeyedEntries(lines) },
-        ]);
+        ], assignedKeyCount(lines));
     }
 
     if (needsDeduct && currentAction === "reserved") {
@@ -314,19 +323,31 @@ function unkeyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[
         : []);
 }
 
+/** The keys handed out for the order's lines when it was read: the split between kept and returned units. */
+function assignedKeyCount(lines: readonly OrderInventoryLine[]): number {
+    return lines.reduce((total, line) => total + line.assigned, 0);
+}
+
 function inventoryChangeGuard(
     db: Database,
     order: InventoryTransitionOrder,
     inventoryAction: InventoryAction,
     movementIds: readonly string[],
+    assignedKeys: number | null = null,
 ): SQLiteBatchItem {
+    // A key assigned since the read would change which units come back.
+    const keysUnchanged = assignedKeys === null ? sql`1 = 1` : sql`(
+        SELECT count(*) FROM ${digitalLicenceKeys}
+        WHERE ${digitalLicenceKeys.orderItemId} IN (SELECT ${orderItems.id} FROM ${orderItems} WHERE ${orderItems.orderId} = ${order.id})
+          AND ${digitalLicenceKeys.status} <> 'available'
+    ) = ${assignedKeys}`;
     return buildBatchGuard(db, sql`EXISTS (
         SELECT 1 FROM ${orders}
         WHERE ${orders.id} = ${order.id} AND ${orders.inventoryAction} = ${inventoryAction}
     ) AND (
         SELECT count(*) FROM ${inventoryMovements}
         WHERE ${inJsonArray(inventoryMovements.id, movementIds)}
-    ) = ${movementIds.length}`, ORDER_INVENTORY_CONFLICT);
+    ) = ${movementIds.length} AND ${keysUnchanged}`, ORDER_INVENTORY_CONFLICT);
 }
 
 async function prepareStrictInventoryPhases(
@@ -334,6 +355,7 @@ async function prepareStrictInventoryPhases(
     order: InventoryTransitionOrder,
     inventoryAction: InventoryAction,
     phases: readonly InventoryPhase[],
+    assignedKeys: number | null = null,
 ): Promise<PreparedInventoryStatusChange> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const movementStatements: SQLiteBatchItem[] = [];
@@ -384,14 +406,16 @@ async function prepareStrictInventoryPhases(
             continue;
         }
 
-        const deductLocation = operation === "deduct"
-            ? await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId)
-            : null;
-        if (deductLocation) deductLocationName = deductLocation.name;
+        const deductLocation = operation !== "deduct"
+            ? null
+            : phase.consumesKeys
+                ? await resolveActiveInventoryLocation(db, await resolveRestoreFallbackLocation(db, order.fulfillmentLocationId))
+                : await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
+        if (deductLocation && !phase.consumesKeys) deductLocationName = deductLocation.name;
         const claims = await buildTransitionMovementClaims(
             db, order, operation, entries, variants, pool, identities, null, deductLocation,
         );
-        if (deductLocation && pool === "regular") {
+        if (deductLocation && pool === "regular" && !phase.consumesKeys) {
             await assertInventoryLocationCovers(db, deductLocation, entries);
         }
         claims.forEach((claim, index) => {
@@ -424,7 +448,7 @@ async function prepareStrictInventoryPhases(
             // Buyer state reads the counters this batch just wrote.
             ...(movementStatements.length > 0 ? catalogBuyerStateRefreshStatementsForSkus(db, variantIds) : []),
             buildInventoryActionUpdate(db, order, inventoryAction),
-            inventoryChangeGuard(db, order, inventoryAction, movementIds),
+            inventoryChangeGuard(db, order, inventoryAction, movementIds, assignedKeys),
         ],
         availabilityTransitionVariantIds,
         afterCommit: () => checkLowStockForTransitionEntries(
@@ -1690,6 +1714,8 @@ type OrderInventoryLine = {
     entry: ReservationEntry;
     /** Units whose licence key was handed to the buyer: their keys never return to the pool. */
     keyed: number;
+    /** The line's assigned keys as read (before capping at its quantity). */
+    assigned: number;
 };
 
 /** The order's stock-tracked lines, each with the units its assigned licence keys took. */
@@ -1714,10 +1740,14 @@ async function getOrderInventoryLines(
     const pool = normalizeInventoryPool(order.inventoryPool);
     return items
         .filter((item) => item.variantId !== null && item.inventoryTracked)
-        .map((item) => ({
-            entry: { variantId: item.variantId as string, quantity: item.quantity, pool },
-            keyed: Math.min(item.quantity, Math.max(0, Number(item.keyed) || 0)),
-        }));
+        .map((item) => {
+            const assigned = Math.max(0, Number(item.keyed) || 0);
+            return {
+                entry: { variantId: item.variantId as string, quantity: item.quantity, pool },
+                keyed: Math.min(item.quantity, assigned),
+                assigned,
+            };
+        });
 }
 
 function normalizeInventoryPool(inventoryPool: string): InventoryPoolName {
