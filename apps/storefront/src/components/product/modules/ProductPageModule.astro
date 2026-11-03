@@ -14,12 +14,11 @@ import ProductDetails from "../ProductDetails.astro";
 import RelatedProducts from "../RelatedProducts.astro";
 import ProductReviews from "../reviews/ProductReviews.astro";
 import type { ReviewCopy } from "../reviews/review-format";
-import { renderedContentBlocks, type RenderedProductModule } from "../lib/product-page-modules";
+import { PRODUCT_MODULE_DETAIL_ANCHORS as ANCHOR, renderedContentBlocks, type RenderedProductModule } from "../lib/product-page-modules";
 import ProductModule from "./ProductModule.astro";
 import ProductSpecTable from "./ProductSpecTable.astro";
 import ProductFeatureList from "./ProductFeatureList.astro";
 import ProductContentBlocks from "./ProductContentBlocks.astro";
-import ProductWarrantyModule from "./ProductWarrantyModule.astro";
 import ProductCompareSimilar from "./ProductCompareSimilar.astro";
 import ProductPolicies from "./ProductPolicies.astro";
 import ProductRecentlyViewed from "./ProductRecentlyViewed.astro";
@@ -52,33 +51,33 @@ const {
 ---
 
 <ThemeEditorMark id={mark}>
-  {module === "compare-similar" && (
+  {module === "compare_similar" && (
     <ProductCompareSimilar title={words.compareSimilar} productId={product.id} products={similarProducts} currencySymbol={currencySymbol} currencyCode={currencyCode} />
   )}
   {module === "policies" && <ProductPolicies title={words.storePolicies} policies={policies} />}
-  {module === "recently-viewed" && <ProductRecentlyViewed title={words.recentlyViewed} slug={product.slug} />}
+  {module === "recently_viewed" && <ProductRecentlyViewed title={words.recentlyViewed} slug={product.slug} />}
   {module === "description" && (
-    <ProductModule id="description">
+    <ProductModule id={ANCHOR.description}>
       <ProductDetails product={product} features={detailsFeatures} description={description} />
     </ProductModule>
   )}
-  {module === "about-bullets" && (
-    <ProductModule id="about" title={copy.productAboutItemText}>
+  {module === "about_bullets" && (
+    <ProductModule id={ANCHOR.about_bullets} title={copy.productAboutItemText}>
       <ProductFeatureList features={product.features ?? []} variant="bullets" />
     </ProductModule>
   )}
-  {module === "key-attributes" && (
-    <ProductModule id="highlights" title={copy.productHighlightsText}>
+  {module === "key_attributes" && (
+    <ProductModule id={ANCHOR.key_attributes} title={copy.productHighlightsText}>
       <div class="max-w-3xl"><ProductSpecTable rows={keySpecificationRows} /></div>
     </ProductModule>
   )}
-  {module === "spec-table" && (
-    <ProductModule id="specifications" title={copy.productSpecificationsText}>
+  {module === "spec_table" && (
+    <ProductModule id={ANCHOR.spec_table} title={copy.productSpecificationsText}>
       <div class="max-w-4xl"><ProductSpecTable rows={specificationRows} /></div>
     </ProductModule>
   )}
-  {module === "content-blocks" && (
-    <ProductModule id="content">
+  {module === "content_blocks" && (
+    <ProductModule id={ANCHOR.content_blocks}>
       <ProductContentBlocks
         blocks={renderedContentBlocks(product)}
         media={product.contentBlockMedia ?? []}
@@ -87,7 +86,6 @@ const {
       />
     </ProductModule>
   )}
-  {module === "warranty" && <ProductWarrantyModule product={product} />}
   {module === "reviews" && (
     <ProductReviews product={product} copy={reviews.copy} formCopy={reviews.formCopy} language={reviews.language} storeName={reviews.storeName} />
   )}

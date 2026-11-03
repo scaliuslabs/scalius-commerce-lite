@@ -190,7 +190,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "thumbs-left",
         buyBox: ["classic", { cta: "stack" }],
-        below: ["description", "content-blocks", "policies", "reviews", "related"],
+        below: ["description", "content_blocks", "policies", "reviews", "related"],
         sticky: NO_STICKY,
       },
       footer: ["columns"],
@@ -234,7 +234,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       product: {
         gallery: "thumbs-left",
         buyBox: ["marketplace-3col"],
-        below: ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "related"],
+        below: ["about_bullets", "key_attributes", "spec_table", "description", "reviews", "related"],
         sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "none" },
       },
       footer: ["directory"],
@@ -299,7 +299,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
         links: "tabs",
       },
       // One photo over a thumbnail strip: the buy button stays near the top.
-      product: { gallery: "thumbs-below", buyBox: ["classic", { cta: "stack", whatsapp: true }], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
+      product: { gallery: "thumbs-below", buyBox: ["classic", { cta: "stack", whatsapp: true }], below: ["content_blocks", "description", "reviews"], sticky: BUY_BAR },
       footer: ["columns"],
     }),
     // A landing page opens on its offer: the hero, the store's own delivery

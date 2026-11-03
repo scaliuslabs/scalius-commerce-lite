@@ -48,6 +48,8 @@ export {
   accountLink, asset, buyVariant, chooseVariant, colorSchemeToggle, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut,
 } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
+/** The product modules `<ProductModule name="…" />` can place: the theme's own module ids. */
+export { STOREFRONT_PRODUCT_MODULE_EMBEDS } from "@scalius/shared/plugins/storefront-protocol";
 export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
 export type {
   StorefrontBannerMosaicSkinSettings,

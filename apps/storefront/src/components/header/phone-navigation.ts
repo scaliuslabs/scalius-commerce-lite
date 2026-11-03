@@ -26,6 +26,6 @@ export function phoneNavigation(blocks: {
     menu: variant === "drill-in-drawer" || (tabBar && settings.drawer === "drill-in") ? "drill" : "accordion",
     tabBar,
     ...(tabBar && Array.isArray(settings.tabs) ? { tabs: settings.tabs as Tab[] } : {}),
-    compare: blocks.product.below.includes("compare-similar"),
+    compare: blocks.product.below.includes("compare_similar"),
   };
 }

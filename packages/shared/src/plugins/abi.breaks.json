@@ -298,5 +298,17 @@
   "from": "45518b090628cdc6",
   "change": "storefront.STOREFRONT_COMPONENT_LIMITS.islandPropsBytes: a new limit was added.",
   "reason": "It relaxes a bound rather than adding one: an island's data-props was held to the 2,000-character cap of every attribute (at most 6,000 UTF-8 bytes) and is now bounded on its own at 16 KiB of JSON, still inside htmlBytes. Every props value that passed before still passes (html.test.ts pins the 16 KiB boundary), and an oversized one is now named instead of dropped silently."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "a6dbeb7a67326113",
+  "change": "storefront.STOREFRONT_PRODUCT_MODULE_EMBEDS: \"details\" was removed.",
+  "reason": "Pre-lock (API review M1, one vocabulary): a placeable product module's name is the theme's own module id; the details tabs module is `description`, as blocks.product.below names it (theme document v13 renames the stored module ids to snake_case)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "600d697d672275b0",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_PRODUCT_MODULE_EMBEDS: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock (API review M1, one vocabulary): a placeable product module's name is the theme's own module id; the details tabs module is `description`, as blocks.product.below names it (theme document v13 renames the stored module ids to snake_case)."
  }
 ]

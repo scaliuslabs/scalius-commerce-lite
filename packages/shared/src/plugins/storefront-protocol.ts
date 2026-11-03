@@ -146,7 +146,7 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * The product page's modules a product_main skin may place
  * (`product_module` embeds), the modules of the theme's product template
  * (Online store -> Theme):
- * - `details`: the store's details tabs as the page draws them: the
+ * - `description`: the store's details tabs as the page draws them: the
  *   description, the merchant's extra tabs and the key features (when the
  *   buy form does not list them). A skin that places it does not draw
  *   `descriptionHtml` itself; it draws whenever the product has any of
@@ -161,11 +161,11 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  *
  * Each renders only where the template has it and the product has something
  * for it, else nothing. Reviews and related products have their own embeds.
- * The warranty is part of `<BuyForm />` (the template's warranty module draws
- * nothing of its own), so it is not a module here.
+ * Each name is the theme's own module id (`blocks.product.below`). The
+ * warranty is part of `<BuyForm />`, never a module.
  */
 export const STOREFRONT_PRODUCT_MODULE_EMBEDS = [
-  "details", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed",
+  "description", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed",
 ] as const;
 export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMBEDS)[number];
 

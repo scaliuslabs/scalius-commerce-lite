@@ -362,7 +362,7 @@ export function Gallery(): Html {
 }
 
 export interface ProductModuleProps {
-  /** One of the product page's modules (`STOREFRONT_PRODUCT_MODULE_EMBEDS`): `spec_table`, `details`, `content_blocks`, … */
+  /** One of the product page's modules (`STOREFRONT_PRODUCT_MODULE_EMBEDS`, the theme's module ids): `spec_table`, `description`, `content_blocks`, … */
   name: StorefrontProductModuleEmbed;
 }
 
@@ -373,7 +373,7 @@ export interface ProductModuleProps {
  * them below the fold (its words, sanitizing and scripts); the store's
  * module below then stays out. Each name renders once; a module the theme's
  * template leaves out, or the product has nothing for, renders nothing.
- * `details` carries the description: do not draw `descriptionHtml` as well.
+ * `description` carries the details tabs: do not draw `descriptionHtml` as well.
  *
  *   <aside class="acme-pdp-facts"><ProductModule name="spec_table" /></aside>
  */

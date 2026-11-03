@@ -39,6 +39,7 @@ import {
   KEY_ATTRIBUTES_MAX,
   compareSimilarProducts,
   descriptionInInfoColumn,
+  detailAnchorId as firstDetailAnchorId,
   featuresPlacement,
   productPageModules,
   publicSpecificationRows,
@@ -544,14 +545,7 @@ const drawnModules = pageModules.filter((module) => module !== "description" || 
 const shownModules = drawnModules.filter((module) => !placedModules.has(module)
   && !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
 // The anchor bar links only modules the page draws.
-const detailAnchorIds: Record<string, string> = {
-  "about-bullets": "about",
-  "key-attributes": "highlights",
-  "spec-table": "specifications",
-  description: "description",
-  "content-blocks": "content",
-};
-const detailAnchorId = drawnModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
+const detailAnchorId = firstDetailAnchorId(drawnModules);
 const exploreAnchorId = drawnModules.includes("related") && recommendations.products.length > 0 ? "related-products" : null;
 const reviewsAnchorId = drawnModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const appsBelow = (await appSlotComponents(Astro.locals, Astro.url, "product.below")).length > 0;

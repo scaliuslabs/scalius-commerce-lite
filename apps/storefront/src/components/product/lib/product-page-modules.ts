@@ -4,7 +4,7 @@
  * dropped modules the store has no data for; this drops the ones this
  * product has no data for, so nothing renders an empty box. Every module
  * reads data the page already has (the product read and its
- * recommendations, the layout's policies); `recently-viewed` is this
+ * recommendations, the layout's policies); `recently_viewed` is this
  * browser's own list and shows nothing until the browser has one.
  */
 import {
@@ -32,6 +32,27 @@ export function compareSimilarProducts(
   return recommendations.products
     .filter((candidate) => candidate.id !== product.id && candidate.categoryId === product.categoryId)
     .slice(0, COMPARE_SIMILAR_MAX);
+}
+
+/**
+ * The page anchor (the module's element id) of each module the anchor bar's
+ * Details link can lead to, in no particular order: the one map the module
+ * renderer (ProductPageModule.astro) and the page's anchor bar share.
+ */
+export const PRODUCT_MODULE_DETAIL_ANCHORS = {
+  about_bullets: "about",
+  key_attributes: "highlights",
+  spec_table: "specifications",
+  description: "description",
+  content_blocks: "content",
+} as const satisfies Partial<Record<StorefrontProductModule, string>>;
+
+/** The anchor the Details link leads to: the first drawn module that has one. */
+export function detailAnchorId(drawn: readonly StorefrontProductModule[]): string | null {
+  for (const module of drawn) {
+    if (Object.hasOwn(PRODUCT_MODULE_DETAIL_ANCHORS, module)) return PRODUCT_MODULE_DETAIL_ANCHORS[module as keyof typeof PRODUCT_MODULE_DETAIL_ANCHORS];
+  }
+  return null;
 }
 
 /** Most key-spec rows the key-attributes table shows (Amazon's top table). */
@@ -70,19 +91,18 @@ export function productPageModules(
   const attributes = publicSpecificationRows(product.attributes ?? []);
   const has: Record<StorefrontProductModule, boolean> = {
     description: hasDescription(product) && !descriptionInInfoColumn(context.look),
-    "spec-table": attributes.length > 0,
+    spec_table: attributes.length > 0,
     // Highlights add nothing the spec table or the buy box's own facts column already lists: they show only above a longer table.
-    "key-attributes": context.look.facts !== "column" && attributes.some((row) => row.keySpec) && attributes.length > attributes.filter((row) => row.keySpec).length,
+    key_attributes: context.look.facts !== "column" && attributes.some((row) => row.keySpec) && attributes.length > attributes.filter((row) => row.keySpec).length,
     // The buy box already lists the features when its look carries them.
-    "about-bullets": (product.features?.length ?? 0) > 0 && context.look.features === "none",
-    "content-blocks": renderedContentBlocks(product).length > 0,
-    "compare-similar": (context.similar ?? 0) > 0,
-    warranty: Boolean(product.warranty),
+    about_bullets: (product.features?.length ?? 0) > 0 && context.look.features === "none",
+    content_blocks: renderedContentBlocks(product).length > 0,
+    compare_similar: (context.similar ?? 0) > 0,
     reviews: Boolean(product.reviews),
     policies: (context.policies ?? 0) > 0,
     related: context.hasRelated,
     // Filled from this browser's list after parsing; hidden while empty.
-    "recently-viewed": true,
+    recently_viewed: true,
   };
   return below.filter((module) => has[module]);
 }
@@ -101,7 +121,7 @@ export function featuresPlacement(
   look: StorefrontBuyBoxLook,
 ): "buy-box" | "about" | "description" {
   if (look.features !== "none") return "buy-box";
-  return modules.includes("about-bullets") ? "about" : "description";
+  return modules.includes("about_bullets") ? "about" : "description";
 }
 
 /** Specification rows grouped by attribute group, in the order they arrive. */

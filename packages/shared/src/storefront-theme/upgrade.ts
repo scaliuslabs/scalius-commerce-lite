@@ -79,15 +79,37 @@ function snakeCoreNames(document: Json): Json {
   return next;
 }
 
+/** The product modules version 12 wrote kebab-case; `warranty` drew nothing (the buy box shows it) and goes. */
+const V12_PRODUCT_MODULES: Readonly<Record<string, string | null>> = {
+  "key-attributes": "key_attributes", "about-bullets": "about_bullets", "spec-table": "spec_table",
+  "content-blocks": "content_blocks", "compare-similar": "compare_similar", "recently-viewed": "recently_viewed",
+  warranty: null,
+};
+
+/** A (partial) document's product modules under their one snake_case name. */
+function snakeProductModules(document: Json): Json {
+  const blocks = document.blocks;
+  const product = isRecord(blocks) ? blocks.product : undefined;
+  if (!isRecord(blocks) || !isRecord(product) || !Array.isArray(product.below)) return document;
+  const below = product.below.flatMap((module: unknown) => {
+    if (typeof module !== "string" || !Object.hasOwn(V12_PRODUCT_MODULES, module)) return [module];
+    const name = V12_PRODUCT_MODULES[module];
+    return name === null ? [] : [name];
+  });
+  return { ...document, blocks: { ...blocks, product: { ...product, below } } };
+}
+
 /**
  * Version 12 → 13: the tokens name a colour scheme and the brand a logo for
- * dark pages. A stored theme keeps what its buyers saw: the light scheme, no
- * dark colours, no switch, no dark logo.
+ * dark pages (a stored theme keeps what its buyers saw: the light scheme, no
+ * dark colours, no switch, no dark logo), and the product modules take their
+ * snake_case names.
  */
 function lightColorScheme(document: Json): Json {
-  const { tokens, brand } = document;
+  const next = snakeProductModules(document);
+  const { tokens, brand } = next;
   return {
-    ...document,
+    ...next,
     ...(isRecord(tokens) ? { tokens: { ...tokens, colorScheme: "light", darkColors: null, colorSchemeToggle: false } } : {}),
     ...(isRecord(brand) ? { brand: { ...brand, darkLogo: null } } : {}),
   };
@@ -110,7 +132,9 @@ function lightColorScheme(document: Json): Json {
  * - 12 → 13: tokens gain `colorScheme`, `darkColors` and `colorSchemeToggle`,
  *   the brand `darkLogo`; a stored theme (or an app template's tokens) reads
  *   as the light scheme with no dark colours, no switch and no dark logo, so
- *   its pages paint exactly as before.
+ *   its pages paint exactly as before; `blocks.product.below` names its
+ *   modules in snake_case (`spec-table` → `spec_table`) and drops `warranty`,
+ *   which drew nothing.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,

@@ -592,38 +592,40 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
 };
 
 /**
- * Modules below the product fold, in page order. The fit rule drops a
- * module the store has no data for; the product page then leaves out a
- * module this product has no data for, so nothing renders an empty box.
- * `reviews` needs no published review: its zero state carries "Write a
- * review", so a store's first review can be written. `spec-table` needs no
+ * Modules below the product fold, in page order, by their one name (the
+ * snake_case the storefront protocol uses: a skin places
+ * `<ProductModule name="spec_table" />` with the same name). The fit rule
+ * drops a module the store has no data for; the product page then leaves
+ * out a module this product has no data for, so nothing renders an empty
+ * box. `reviews` needs no published review: its zero state carries "Write a
+ * review", so a store's first review can be written. `spec_table` needs no
  * key spec: any attribute value is a specification row. Each module's data
- * is already in the product page's batch (or, for `recently-viewed`, in
+ * is already in the product page's batch (or, for `recently_viewed`, in
  * this browser):
- * - `compare-similar`: recommended products of the same category, beside
+ * - `compare_similar`: recommended products of the same category, beside
  *   this one, with a link into `/compare` (key specs side by side);
  * - `policies`: the store's published policy pages;
- * - `recently-viewed`: this browser's list (nothing without JavaScript).
- * Customer questions wait for a question model and are not a module yet.
+ * - `recently_viewed`: this browser's list (nothing without JavaScript).
+ * The warranty is part of the buy box, not a module. Customer questions wait
+ * for a question model and are not a module yet.
  */
 export const STOREFRONT_PRODUCT_MODULES = {
-  "key-attributes": { requires: [has("hasKeySpecs")] },
-  "about-bullets": { requires: [] },
-  "spec-table": { requires: [] },
+  key_attributes: { requires: [has("hasKeySpecs")] },
+  about_bullets: { requires: [] },
+  spec_table: { requires: [] },
   description: { requires: [] },
-  "content-blocks": { requires: [has("hasContentBlocks")] },
-  "compare-similar": { requires: [has("hasKeySpecs")] },
-  warranty: { requires: [] },
+  content_blocks: { requires: [has("hasContentBlocks")] },
+  compare_similar: { requires: [has("hasKeySpecs")] },
   reviews: { requires: [] },
   policies: { requires: [] },
   related: { requires: [] },
-  "recently-viewed": { requires: [] },
+  recently_viewed: { requires: [] },
 } as const satisfies Record<string, { requires: readonly FitCondition[] }>;
 
 /**
  * Content-block types the product page renders (outside the description
  * tabs). Core's store shape counts only these (`hasContentBlocks`), so the
- * `content-blocks` module fits exactly when a public product can show one.
+ * `content_blocks` module fits exactly when a public product can show one.
  */
 export const STOREFRONT_RENDERED_CONTENT_BLOCK_TYPES = ["rich-text", "feature-list", "faq", "video", "statement"] as const;
 

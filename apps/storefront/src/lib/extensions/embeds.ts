@@ -7,7 +7,7 @@
 // store's own component, scripts and words. A kind the page gives no
 // renderer, or whose renderer answers null, renders nothing.
 
-import type { StorefrontEmbedKind, StorefrontProductModuleEmbed } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_PRODUCT_MODULE_EMBEDS, type StorefrontEmbedKind, type StorefrontProductModuleEmbed } from "@scalius/shared/plugins/storefront-protocol";
 import type { StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import type { StorefrontProductModule } from "@scalius/shared/storefront-theme";
 
@@ -26,25 +26,9 @@ export interface EmbedPlacement {
 
 export type EmbedRenderers = Partial<Record<StorefrontEmbedKind, (embed: EmbedPlacement) => EmbedRender | null>>;
 
-/**
- * The one table from a placeable product module's public name
- * (`STOREFRONT_PRODUCT_MODULE_EMBEDS`) to the theme's module id (the
- * template's module list and the page's renderer).
- */
-export const PRODUCT_MODULE_EMBED_IDS = {
-  details: "description",
-  "spec_table": "spec-table",
-  "key_attributes": "key-attributes",
-  "about_bullets": "about-bullets",
-  "content_blocks": "content-blocks",
-  "compare_similar": "compare-similar",
-  policies: "policies",
-  "recently_viewed": "recently-viewed",
-} as const satisfies Record<StorefrontProductModuleEmbed, StorefrontProductModule>;
-
-/** The theme module a `product_module` embed names; null for any other name. */
+/** The theme module a `product_module` embed names (the names are the module ids); null for any other name. */
 export function productModuleOf(name: string | undefined): StorefrontProductModule | null {
-  return name && Object.hasOwn(PRODUCT_MODULE_EMBED_IDS, name) ? PRODUCT_MODULE_EMBED_IDS[name as StorefrontProductModuleEmbed] : null;
+  return name && (STOREFRONT_PRODUCT_MODULE_EMBEDS as readonly string[]).includes(name) ? name as StorefrontProductModuleEmbed : null;
 }
 
 /** The theme modules a markup's `product_module` embeds place: the page draws those there, not again below. */
