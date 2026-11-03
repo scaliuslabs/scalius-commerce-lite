@@ -43,6 +43,12 @@ export interface RequestTheme {
   /** The cookie's token, when the request carries one (valid or not). */
   previewToken: string | null;
   preview: ThemePreviewData | null;
+  /**
+   * The API answered that the cookie's session is over (expired, revoked or
+   * unknown): the only case that drops the cookie. False with no cookie, a
+   * live preview, or no answer (the cookie is kept for the next request).
+   */
+  previewEnded: boolean;
   /** The store's language for the storefront's own words (lib/storefront-copy.ts). */
   language: StorefrontLanguage;
   bindingContext: SettingBindingContext;
@@ -167,7 +173,7 @@ export function readSkinMedia(value: unknown, theme: StorefrontThemeDocument): R
 export function requestThemeFor(
   theme: StorefrontThemeDocument,
   shape: StoreShape = EMPTY_STORE_SHAPE,
-  options: { previewToken?: string | null; preview?: ThemePreviewData | null; brand?: unknown; skinMedia?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean } = {},
+  options: { previewToken?: string | null; preview?: ThemePreviewData | null; previewEnded?: boolean; brand?: unknown; skinMedia?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean } = {},
 ): RequestTheme {
   const bindingContext = { language: storefrontLanguage(options.languageCode), ...options.bindings };
   theme = boundTheme(theme, bindingContext);
@@ -180,6 +186,7 @@ export function requestThemeFor(
     skinMedia: readSkinMedia(options.skinMedia, theme),
     previewToken: options.previewToken ?? null,
     preview: options.preview ?? null,
+    previewEnded: options.previewEnded ?? false,
     language: storefrontLanguage(options.languageCode),
     bindingContext,
     shape,
@@ -195,7 +202,8 @@ export function resolveRequestTheme(
   const locals = astro.locals as ThemeLocals;
   locals.storefrontTheme ??= (async () => {
     const previewToken = readThemePreviewCookie(astro.request.headers.get("cookie")) || null;
-    const preview = previewToken ? await resolveThemePreview(previewToken) : null;
+    const resolution = previewToken ? await resolveThemePreview(previewToken) : null;
+    const preview = resolution?.state === "live" ? resolution.preview : null;
     // A live preview renders the draft and its brand images; its validation
     // failing renders the default (without images), never the published
     // theme under a preview banner.
@@ -207,6 +215,7 @@ export function resolveRequestTheme(
         degraded: read.degraded,
         previewToken,
         preview,
+        previewEnded: resolution?.state === "ended",
         brand: preview ? preview.brand : layoutData?.brand,
         skinMedia: preview ? preview.skinMedia : layoutData?.skinMedia,
         languageCode: layoutData?.storefrontCopy?.languageCode,

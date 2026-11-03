@@ -56,9 +56,11 @@ interface PreviewFramingLocals {
  * settings), only when the HTML rendered a valid theme preview. A request
  * without the preview cookie (every buyer's) is never even checked; with
  * one, the page's own preview resolution is reused. A page drawn under a
- * preview whose session ended (expired or revoked) drops the cookie here: a
- * layout cannot, as a streamed page's headers leave before it renders. The
- * response is already private (the cookie bypasses the shared cache).
+ * preview the API says has ended (expired, revoked or unknown) drops the
+ * cookie here: a layout cannot, as a streamed page's headers leave before it
+ * renders. Without an answer (a timeout, 429 or 5xx) the cookie stays and the
+ * next page asks again. Either way the response is private (the cookie
+ * bypasses the shared cache).
  */
 async function themePreviewFrameAncestors(
   context: { request: Request; locals: object },
@@ -69,7 +71,7 @@ async function themePreviewFrameAncestors(
   try {
     const theme = await resolveRequestTheme(context, await getLayoutData());
     if (!theme.preview) {
-      if (!setsThemePreviewCookie(response.headers)) appendClearThemePreviewCookies(response.headers);
+      if (theme.previewEnded && !setsThemePreviewCookie(response.headers)) appendClearThemePreviewCookies(response.headers);
       return [];
     }
     (context.locals as PreviewFramingLocals).themePreviewRender = true;

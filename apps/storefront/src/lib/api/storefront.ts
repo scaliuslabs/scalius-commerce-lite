@@ -404,11 +404,26 @@ export async function getThemePreviewHomepageSections(
   }
 }
 
+/**
+ * What the API says of a preview cookie's session. `ended` is a definite
+ * answer (the API knows no live session for it: expired, revoked or never
+ * issued), the only one that may drop the cookie. `unavailable` is no answer
+ * (a timeout, network error, 429, 5xx or unreadable body): the cookie is kept
+ * and the next request asks again, so one blip never ends a merchant's preview.
+ */
+export type ThemePreviewResolution =
+  | { state: "live"; preview: ThemePreviewData }
+  | { state: "ended" }
+  | { state: "unavailable" };
+
+const THEME_PREVIEW_ENDED: ThemePreviewResolution = { state: "ended" };
+const THEME_PREVIEW_UNAVAILABLE: ThemePreviewResolution = { state: "unavailable" };
+
 export async function resolveThemePreview(
   token: string,
-): Promise<ThemePreviewData | null> {
+): Promise<ThemePreviewResolution> {
   const normalizedToken = token.trim();
-  if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
+  if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return THEME_PREVIEW_ENDED;
   try {
     const response = await apiFetch(
       "/storefront/theme-preview/resolve",
@@ -422,11 +437,12 @@ export async function resolveThemePreview(
     );
     if (!response.ok) {
       await response.body?.cancel();
-      return null;
+      // The resolve route answers 404 for a session it does not hold.
+      return response.status === 404 ? THEME_PREVIEW_ENDED : THEME_PREVIEW_UNAVAILABLE;
     }
-    const payload = await response.json() as unknown;
-    return unwrapEnvelope<ThemePreviewData>(payload);
+    const preview = unwrapEnvelope<ThemePreviewData>(await response.json() as unknown);
+    return preview ? { state: "live", preview } : THEME_PREVIEW_UNAVAILABLE;
   } catch {
-    return null;
+    return THEME_PREVIEW_UNAVAILABLE;
   }
 }
