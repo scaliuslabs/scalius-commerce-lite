@@ -143,6 +143,11 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_product_variants_band_old: "0169_fk_indexes_and_trigger_guards",
   // A collection's handle (0170) is a visible column of its row.
   cdep_collections_upd: "0170_collection_slugs_and_theme_permission",
+  // A SKU's warranty (0189) is a visible column of its row, and a policy
+  // edit reaches the products whose SKUs name it.
+  cdep_product_variants_upd: "0189_variant_warranty",
+  cdep_warranty_policies_sku_upd: "0189_variant_warranty",
+  cdep_warranty_policies_sku_upd_old: "0189_variant_warranty",
 };
 
 /**
@@ -155,6 +160,8 @@ export const CACHE_DEP_ADDED_BASELINE_TRIGGERS: ReadonlySet<string> = new Set([
   "cdep_product_variants_chstock_old",
   "cdep_products_price_order",
   "cdep_products_price_order_old",
+  "cdep_warranty_policies_sku_upd",
+  "cdep_warranty_policies_sku_upd_old",
 ]);
 
 /**
@@ -192,6 +199,15 @@ export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string
   shipping_methods: [
     "id", "name", "fee_minor", "description", "is_active", "sort_order", "created_at", "updated_at",
     "deleted_at", "zone_id", "free_over_minor", "pickup_address", "pickup_hours", "kind",
+  ],
+  // 0189 adds the SKU's warranty. 0109's cost_minor is listed because the
+  // noise list names it; as noise it changes no rendered guard.
+  product_variants: [
+    "id", "product_id", "option_combination_key", "image_id", "weight", "sku", "price_minor", "cost_minor", "stock",
+    "reserved_stock", "preorder_stock", "is_default", "track_inventory", "version", "stock_version",
+    "low_stock_threshold", "allow_preorder", "preorder_date", "preorder_message", "allow_backorder",
+    "backorder_limit", "tax_class_id", "tax_classification_version", "discount_bps", "discount_type",
+    "discount_amount_minor", "barcode", "barcode_type", "fulfillment_kind", "created_at", "updated_at", "deleted_at",
   ],
   products: [
     "id", "name", "description", "price_minor", "category_id", "slug", "meta_title", "meta_description",

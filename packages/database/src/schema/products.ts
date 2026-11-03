@@ -294,6 +294,17 @@ export const productVariants = sqliteTable("product_variants", {
     fulfillmentKind: text("fulfillment_kind", { enum: ["physical", "digital", "service"] })
         .notNull()
         .default("physical"),
+    /**
+     * The SKU's warranty (0189): `inherit` the product's policy, its own
+     * `policy`, or `none`. Checkout freezes the effective policy's current
+     * revision onto the order line; an archived own policy freezes none.
+     */
+    warrantyMode: text("warranty_mode", { enum: ["inherit", "policy", "none"] })
+        .notNull()
+        .default("inherit"),
+    /** The SKU's own warranty policy, set exactly when `warranty_mode` is `policy`. */
+    warrantyPolicyId: text("warranty_policy_id")
+        .references(() => warrantyPolicies.id, { onDelete: "restrict" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -303,6 +314,15 @@ export const productVariants = sqliteTable("product_variants", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     check("product_variants_fulfillment_kind_check", sql`${table.fulfillmentKind} IN ('physical', 'digital', 'service')`),
+    check("product_variants_warranty_mode_check", sql`${table.warrantyMode} IN ('inherit', 'policy', 'none')`),
+    check(
+        "product_variants_warranty_policy_check",
+        sql`(${table.warrantyMode} = 'policy') = (${table.warrantyPolicyId} IS NOT NULL)`,
+    ),
+    // A policy edit reaches the products whose SKUs name it (cache rule, policy counts).
+    index("product_variants_warranty_policy_idx")
+        .on(table.warrantyPolicyId)
+        .where(sql`${table.warrantyPolicyId} IS NOT NULL`),
     // A product's live (tracked) SKUs: more key columns than the store-wide
     // track_inventory index, so SQLite (no statistics) picks it per product (0128).
     // No product_variants index carries stock or reserved_stock: a reservation rewrites no index entry.

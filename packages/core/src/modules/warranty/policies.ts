@@ -9,7 +9,7 @@ import { trimTrailingCharacters } from "@scalius/shared/text-scan";
 
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch, chunkForD1 } from "@scalius/database/client";
-import { products, warrantyPolicies, warrantyPolicyRevisions } from "@scalius/database/schema";
+import { products, productVariants, warrantyPolicies, warrantyPolicyRevisions } from "@scalius/database/schema";
 import {
   WARRANTY_LIMITS,
   isWarrantyDurationUnit,
@@ -139,17 +139,37 @@ const policySelect = {
   updatedAt: warrantyPolicies.updatedAt,
 };
 
-/** Live products per policy (the partial index on `products.warranty_policy_id`). */
+/**
+ * Live products per policy: products that name it, plus products that name
+ * another (or none) but have a live SKU that names it (the partial indexes on
+ * both `warranty_policy_id` columns).
+ */
 async function productCounts(db: Database, policyIds: readonly string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
+  const add = (policyId: string | null, count: number) => {
+    if (policyId) counts.set(policyId, (counts.get(policyId) ?? 0) + (Number(count) || 0));
+  };
   for (const chunk of chunkForD1(policyIds)) {
-    const rows = await db
+    const direct = await db
       .select({ policyId: products.warrantyPolicyId, count: sql<number>`count(*)` })
       .from(products)
       .where(and(inArray(products.warrantyPolicyId, chunk), isNull(products.deletedAt)))
       .groupBy(products.warrantyPolicyId)
       .all();
-    for (const row of rows) if (row.policyId) counts.set(row.policyId, Number(row.count) || 0);
+    for (const row of direct) add(row.policyId, row.count);
+    const throughSkus = await db
+      .select({ policyId: productVariants.warrantyPolicyId, count: sql<number>`count(DISTINCT ${productVariants.productId})` })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(and(
+        inArray(productVariants.warrantyPolicyId, chunk),
+        isNull(productVariants.deletedAt),
+        isNull(products.deletedAt),
+        sql`(${products.warrantyPolicyId} IS NULL OR ${products.warrantyPolicyId} <> ${productVariants.warrantyPolicyId})`,
+      ))
+      .groupBy(productVariants.warrantyPolicyId)
+      .all();
+    for (const row of throughSkus) add(row.policyId, row.count);
   }
   return counts;
 }

@@ -14,3 +14,4 @@ export * from "./aggregate-revision";
 export * from "./tax-classification";
 export * from "./bulk-edit";
 export * from "./sku-writes";
+export * from "./warranty";

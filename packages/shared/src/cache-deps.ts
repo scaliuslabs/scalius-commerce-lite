@@ -556,7 +556,7 @@ const CACHE_DEP_TABLE_RULES = {
   product_variants: {
     kinds: ["p", "lm", "lo"],
     noise: ["stock", "reserved_stock", "stock_version", "version", "updated_at", "tax_classification_version", "cost_minor"],
-    note: "Raw stock (and updated_at, which every stock write sets) is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not. The unit cost (0109) is staff-only and never read by a public route. `lm:shape`: SKU existence for the layout's store-shape counts.",
+    note: "Raw stock (and updated_at, which every stock write sets) is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not. The unit cost (0109) is staff-only and never read by a public route. The SKU's warranty mode and own policy (0189) are visible: the product page shows each SKU's effective warranty. `lm:shape`: SKU existence for the layout's store-shape counts.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [p("product_id"), SHAPE] },
       { name: "del", event: "delete", image: "old", keys: [p("product_id"), SHAPE] },
@@ -654,8 +654,14 @@ const CACHE_DEP_TABLE_RULES = {
   warranty_policies: {
     kinds: ["p"],
     noise: ["version", "current_revision_id", ...TIMESTAMPS],
-    note: "The product page shows its live policy's current terms; a policy edit advances every product that points at it (policy edits are rare).",
-    rules: everyChange([{ prefix: "p:", rows: "SELECT warranty_product.id AS ref FROM products AS warranty_product WHERE warranty_product.warranty_policy_id = R.id" }]),
+    note: "The product page shows its live policy's current terms; a policy edit advances every product that points at it, directly or through a SKU's own policy (0189; policy edits are rare). A SKU can name only an existing policy, so an insert or delete reaches no SKU.",
+    rules: [
+      ...everyChange([{ prefix: "p:", rows: "SELECT warranty_product.id AS ref FROM products AS warranty_product WHERE warranty_product.warranty_policy_id = R.id" }]),
+      {
+        name: "sku_upd", event: "update", image: "new", changed: "visible",
+        keys: [{ prefix: "p:", rows: "SELECT warranty_sku.product_id AS ref FROM product_variants AS warranty_sku WHERE warranty_sku.warranty_policy_id = R.id" }],
+      },
+    ],
   },
 
   // --- Catalogue structure ------------------------------------------------------

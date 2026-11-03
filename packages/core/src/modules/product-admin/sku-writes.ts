@@ -48,6 +48,7 @@ type MatrixVariant = ProductOptionMatrixBody["variants"][number];
 
 type MatrixDraft = {
     isActive: boolean;
+    isGiftCard: boolean;
     decimalPlaces: number;
     options: MatrixOption[];
     variants: MatrixVariant[];
@@ -77,7 +78,7 @@ function matrixRow(row: VariantRow, selectedOptionValueIds: string[], decimalPla
 /** The product's options and live option SKUs as the matrix input the editor would send. */
 async function readMatrixDraft(db: Database, productId: string): Promise<MatrixDraft> {
     const [product, optionsByProduct, rows, currency] = await Promise.all([
-        db.select({ isActive: products.isActive }).from(products).where(eq(products.id, productId)).get(),
+        db.select({ isActive: products.isActive, isGiftCard: products.isGiftCard }).from(products).where(eq(products.id, productId)).get(),
         loadProductOptions(db, [productId]),
         db.select().from(productVariants)
             .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
@@ -96,6 +97,7 @@ async function readMatrixDraft(db: Database, productId: string): Promise<MatrixD
     const selections = await loadVariantSelectedOptions(db, optionRows.map((row) => row.id));
     return {
         isActive: product.isActive,
+        isGiftCard: product.isGiftCard === true,
         decimalPlaces: currency.decimalPlaces,
         options,
         variants: optionRows.map((row) => matrixRow(
@@ -164,7 +166,7 @@ async function planMatrix(db: Database, productId: string, draft: MatrixDraft, v
             issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
         });
     }
-    return planProductOptionMatrix(db, productId, parsed.data, { isActive: draft.isActive });
+    return planProductOptionMatrix(db, productId, parsed.data, { isActive: draft.isActive, isGiftCard: draft.isGiftCard });
 }
 
 function assertSellablePrice(isActive: boolean, priceMinor: number | undefined): void {

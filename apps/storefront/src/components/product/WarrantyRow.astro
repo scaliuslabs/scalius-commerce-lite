@@ -4,34 +4,55 @@
 // terms in place (a `details` element, so it works without JavaScript): the
 // policy's name, its terms and how a claim works. Nothing without a policy.
 //
-// Mount (products/[slug].astro, in ProductSummary's `after-actions` slot):
-//   <WarrantyRow slot="after-actions" product={product} copy={productPageCopy} />
+// A SKU inherits the product's warranty, has its own, or none. The row is
+// drawn once per warranty the page's SKUs have; the chosen SKU's shows, the
+// others are `hidden`. `data-sx-warranty-by-variant` on the wrapper maps each
+// variant id to its row's `data-sx-warranty-id` (null: no row), so the buy form
+// shows the chosen SKU's row when the buyer picks another. The markers are
+// host-only (`data-sx-*`: app markup in the buy box never carries them).
+//
+// Mount (ProductBuyBox.astro, in ProductSummary's `after-actions` slot):
+//   <WarrantyRow slot="after-actions" product={product} variants={variants} initialVariantId={id} copy={copy} />
 import Icon from "@/components/icons/Icon.astro";
-import type { Product } from "@/lib/api";
+import type { Product, ProductVariant } from "@/lib/api";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { pickWarrantyCopy, warrantySummaryText } from "@/lib/account-warranties";
-import { productWarranty, productWarrantyTerms } from "./warranty-spec-row";
+import { productWarrantyTerms, skuWarranties, type ProductWarrantyView } from "./warranty-spec-row";
 
 export interface Props {
   product: Product;
+  /** The page's SKUs, each with its effective warranty. */
+  variants?: readonly ProductVariant[];
+  /** The SKU the page opens with; null when the opening choice names none. */
+  initialVariantId?: string | null;
   /** The page's resolved checkout-language copy (English when absent). */
   copy?: Partial<CheckoutLanguageData>;
 }
 
-const { product, copy: pageCopy } = Astro.props;
-const warranty = productWarranty(product);
+const { product, variants = [], initialVariantId = null, copy: pageCopy } = Astro.props;
 const copy = pickWarrantyCopy(pageCopy, ENGLISH_CHECKOUT_LANGUAGE_DATA);
-const summary = warranty ? warrantySummaryText(productWarrantyTerms(warranty), copy) : "";
+const perSku = skuWarranties(product, variants);
+// Without a chosen SKU, the warranty every SKU shares (none when they differ);
+// product-controller.ts keeps it the chosen SKU's.
+const sharedIds = new Set(Object.values(perSku.byVariant));
+const shownId = initialVariantId !== null && initialVariantId in perSku.byVariant
+  ? perSku.byVariant[initialVariantId] ?? null
+  : sharedIds.size === 1 ? [...sharedIds][0] ?? null : null;
+const rows: Array<{ id: string; warranty: ProductWarrantyView; hidden: boolean }> =
+  [...perSku.byId].map(([id, warranty]) => ({ id, warranty, hidden: id !== shownId }));
+const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(productWarrantyTerms(warranty), copy);
 ---
 
-{warranty && (
-  <details class="group mt-3 rounded-lg border border-border bg-card" data-warranty-row>
+{rows.length > 0 && (
+  <div data-sx-warranty-rows data-sx-warranty-by-variant={JSON.stringify(perSku.byVariant)}>
+  {rows.map(({ id, warranty, hidden }) => (
+  <details class="group mt-3 rounded-lg border border-border bg-card" data-sx-warranty-row data-sx-warranty-id={id} hidden={hidden}>
     <summary class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
       <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
         <Icon name="shield-check" class="size-4" aria-hidden="true" />
       </span>
       <span class="min-w-0 flex-1">
-        <span class="block text-sm font-semibold text-foreground">{summary}</span>
+        <span class="block text-sm font-semibold text-foreground">{summaryOf(warranty)}</span>
         <span class="block text-sm leading-relaxed text-muted-foreground">{copy.warrantyTermsText}</span>
       </span>
       <Icon name="chevron-down" class="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -42,4 +63,6 @@ const summary = warranty ? warrantySummaryText(productWarrantyTerms(warranty), c
       <p class="text-muted-foreground">{copy.warrantyHowToClaimText}</p>
     </div>
   </details>
+  ))}
+  </div>
 )}

@@ -6,11 +6,13 @@
 // buy form, so an app never writes `form=` or a handler:
 //
 // - a choice link gets the product URL with that SKU (`?variant=`); a choice
-//   button stays a plain button. product-controller.ts chooses the whole SKU.
+//   button stays a plain button. The SKU the page opens on is drawn chosen.
+//   product-controller.ts chooses the whole SKU.
 // - a buy button becomes a submit button of the buy form posting its own SKU
 //   (`variant.button`, which the POST handler prefers to the form's), so it
 //   buys without JavaScript too; it is off (Buy now: gone) while that SKU is
-//   sold out. product-controller.ts chooses the SKU, then runs the form's add.
+//   sold out or nothing can be bought here, and never also a choice.
+//   product-controller.ts chooses the SKU, then runs the form's add.
 // - `data-sx-bound` marks what the host bound: the sanitizer strips every
 //   `data-sx-*` an app writes, so markup elsewhere (a slot component, an
 //   island's own markup) never gets the behaviour.
@@ -25,6 +27,7 @@
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "@/components/product/lib/buy-form";
+import { SKIN_CHOICE_PREPAINT_SCRIPT } from "@/lib/inline-boot-scripts";
 import type { AppMarkup } from "./index";
 
 const CONTROL_TAG = /<(a|button)\b([^<>]*)>/g;
@@ -33,8 +36,8 @@ const BOUND = "data-sx-bound";
 /** What the host writes on a bound control: the app's own values of these go. */
 const HOST_ATTRIBUTES = new Set(["href", "type", "name", "value", "form", "disabled", "aria-pressed", "aria-current", "data-state", "data-availability"]);
 
-/** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice. */
-const DEFAULT_SUBMIT = `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true" ${BOUND}></button>`;
+/** Ahead of skin buttons in the buy form's tree order: Enter submits the buyer's choice (off, as the form's own, where nothing can be bought). */
+const defaultSubmit = (blocked: boolean) => `<button type="submit" form="${BUY_FORM_ID}" class="sr-only" tabindex="-1" aria-hidden="true"${blocked ? " disabled" : ""} ${BOUND}></button>`;
 
 function decode(value: string): string {
   return value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
@@ -44,12 +47,23 @@ function write(tag: string, attributes: ReadonlyArray<[string, string | null]>):
   return `<${tag}${attributes.map(([name, value]) => (value === null ? ` ${name}` : ` ${name}="${escapeHtml(value)}"`)).join("")}>`;
 }
 
+/** What the page knows of buying here that the projection does not say. */
+export interface PurchasePage {
+  /** Nothing can be bought here (broken buyer inputs, or paid only online where checkout takes no online payment): every buy button is off, as the form's own. */
+  blocked: boolean;
+  /** The SKU the page opens on (`initialVariantPresentation`): its choice control is drawn chosen. */
+  opening: string | null;
+}
+
+const optionsWarnings = new Set<string>();
+
 /** The skin's markup with its SKU controls bound to the buy form, and its `options={false}` honoured only when they cover every buyable SKU. */
-export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProductPage["product"]): AppMarkup {
+export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProductPage["product"], page: PurchasePage): AppMarkup {
   const variants = new Map(product.variants.map((variant) => [variant.id, variant]));
   const covered = new Set<string>();
   let formPlaced = false;
   let buttonsBeforeForm = false;
+  let choicesBound = false;
 
   const bindTag = (whole: string, tag: string, rest: string): string => {
     const attributes = [...rest.matchAll(ATTRIBUTE)].map(([, name, value]): [string, string | null] => [name!, value === undefined ? null : decode(value)]);
@@ -68,12 +82,15 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
       if (!formPlaced) buttonsBeforeForm = true;
       const intent = read("data-buy-intent") === "buy" ? "buy" : "add";
       const flags: Array<[string, null]> = [];
-      // As the form's own buttons: off while sold out, and Buy now gone then.
-      if (!variant.available) flags.push(["disabled", null]);
-      if (!variant.available && intent === "buy") flags.push(["hidden", null]);
+      // As the form's own buttons: off while sold out or while nothing can
+      // be bought here, and Buy now gone then.
+      const off = !variant.available || page.blocked;
+      if (off) flags.push(["disabled", null]);
+      if (off && intent === "buy") flags.push(["hidden", null]);
       return write(tag, [
-        // The host shows and hides a buy button (sold out, a cart line being edited).
-        ...kept.filter(([name]) => name !== "data-buy-intent" && name !== "hidden"),
+        // The host shows and hides a buy button (sold out, a cart line being
+        // edited); a buy button is never also a choice: it buys.
+        ...kept.filter(([name]) => name !== "data-buy-intent" && name !== "hidden" && name !== "data-choose-variant"),
         ["data-buy-intent", intent],
         ["type", "submit"],
         ["form", BUY_FORM_ID],
@@ -84,12 +101,17 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
         [BOUND, null],
       ]);
     }
+    choicesBound = true;
+    // The SKU the page opens on is drawn chosen, before any script.
+    const selected = variant.id === page.opening;
+    const kind: Array<[string, string]> = tag === "a"
+      ? [["href", `${product.url}?variant=${encodeURIComponent(variant.id)}`], ...(selected ? [["aria-current", "true"] as [string, string]] : [])]
+      : [["type", "button"], ["aria-pressed", String(selected)]];
     return write(tag, [
-      ...kept,
-      tag === "a"
-        ? ["href", `${product.url}?variant=${encodeURIComponent(variant.id)}`]
-        : ["type", "button"],
-      ["data-state", "unselected"],
+      // A choice never also buys: an <a> would buy with JavaScript and only choose without.
+      ...kept.filter(([name]) => name !== "data-buy-variant" && name !== "data-buy-intent"),
+      ...kind,
+      ["data-state", selected ? "selected" : "unselected"],
       availability,
       [BOUND, null],
     ]);
@@ -104,11 +126,18 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
     return { ...part, html: part.html.replace(CONTROL_TAG, bindTag) };
   });
 
-  const coversEveryBuyableSku = product.variants.every((variant) => !variant.available || covered.has(variant.id));
+  // Every SKU that can be bought has a control (and the skin has some).
+  const coversEveryBuyableSku = covered.size > 0 && product.variants.every((variant) => !variant.available || covered.has(variant.id));
   const bound = parts.map((part) => {
     if (part.kind !== "embed" || part.embed !== "buy_form" || part.data.options !== "false" || coversEveryBuyableSku) return part;
+    if (product.options.length > 0 && !optionsWarnings.has(markup.pluginId) && optionsWarnings.size < 200) {
+      optionsWarnings.add(markup.pluginId);
+      console.warn(`[Storefront components] ${markup.pluginId} product_main skin asks for <BuyForm options={false} /> without a chooseVariant or buyVariant control for every buyable SKU: the store draws the options.`);
+    }
     return { ...part, data: Object.fromEntries(Object.entries(part.data).filter(([name]) => name !== "options")) };
   });
-  if (buttonsBeforeForm) bound.unshift({ kind: "html", html: DEFAULT_SUBMIT });
+  if (buttonsBeforeForm) bound.unshift({ kind: "html", html: defaultSubmit(page.blocked) });
+  // A `?variant=` link's SKU is drawn chosen before the first paint.
+  if (choicesBound) bound.push({ kind: "html", html: `<script>${SKIN_CHOICE_PREPAINT_SCRIPT}</script>` });
   return { ...markup, parts: bound };
 }

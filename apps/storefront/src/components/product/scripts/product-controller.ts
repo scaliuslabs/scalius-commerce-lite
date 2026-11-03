@@ -50,13 +50,17 @@ import { initBuyerInputs, type BuyerInputsController } from "./buyer-inputs-cont
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
 import { publishProductState } from "@/scripts/product-context";
+import { DEFERRED_REVEAL_EVENT } from "@/scripts/deferred-reveal";
 import type { StorefrontProductError, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
 
 // The buy form's one authority: its option buttons, a product_main skin's
 // bound SKU controls (`chooseVariant`, `buyVariant`) and app islands
 // (`context.product`) all go through this controller's selection and add.
-// Every lookup of the form's parts stays inside `[data-product-summary]`, so
-// a skin's own `.product-price` or `[data-action]` is never taken over.
+// Every part of the form is looked up inside its container, which carries
+// a host-only marker (`data-sx-product-summary`; the sanitizer strips every
+// `data-sx-*` from app markup), so a skin's own `.product-price`,
+// `[data-action]` or look-alike container is never taken over. The product's
+// facts come from the page's `#product-container`, which wraps the skin.
 
 /** A skin's SKU controls the host bound (lib/extensions/purchase-controls.ts); only the host writes `data-sx-*`. */
 const CHOOSE_CONTROL = "[data-sx-bound][data-choose-variant]";
@@ -121,11 +125,11 @@ function number(value?: string) {
 }
 
 export function init() {
-  cache.container = document.getElementById("product-container");
-  const summary = document.querySelector<HTMLElement>("[data-product-summary]");
+  cache.container = document.querySelector<HTMLElement>("[data-sx-product-container]");
+  const summary = document.querySelector<HTMLElement>("[data-sx-product-summary]");
   if (!cache.container || !summary) return;
   cache.summary = summary;
-  cache.form = summary.querySelector<HTMLFormElement>("form[data-product-buy-form]");
+  cache.form = summary.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
   cache.actions = summary.querySelector<HTMLElement>("#product-actions");
   cache.quantity = summary.querySelector<HTMLInputElement>("#quantity");
   cache.optionButtons = Array.from(
@@ -149,8 +153,8 @@ export function init() {
   );
   cache.discountBadge = summary.querySelector(".discount-badge");
 
-  state.variants = loadVariantsFromDOM();
-  state.options = loadOptionsFromDOM();
+  state.variants = loadVariantsFromDOM(summary);
+  state.options = loadOptionsFromDOM(summary);
   state.productPricing = {
     basePrice: number(cache.container.dataset.productOriginalPrice),
     discountType: parseDiscountType(
@@ -197,6 +201,7 @@ export function init() {
     // Editing an answer takes its message away; the problem ends with the last one.
     const shown = state.buyerInputs?.form.querySelector("[data-buyer-input-error]:not(.hidden)");
     if (state.error === "input_invalid" && !shown) state.error = null;
+    dropRefusal();
     refresh();
   });
   state.edit = null;
@@ -214,7 +219,7 @@ export function init() {
   bindOptions();
   bindActions();
   bindSkinControls();
-  for (const input of purchaseOptionInputs()) input.addEventListener("change", publish);
+  for (const input of purchaseOptionInputs()) input.addEventListener("change", changed);
   refresh(true);
   // The pre-paint hold of a `?variant=` link (VARIANT_PREPAINT_SCRIPT) ends in
   // the frame that paints the linked SKU.
@@ -288,16 +293,32 @@ function initQuantity() {
   const update = (delta: number) => {
     input.value = String(readQuantity() + delta);
     readQuantity();
-    publish();
+    changed();
   };
   cache.summary?.querySelector("#quantity-minus")?.addEventListener("click", () => update(-1));
   cache.summary?.querySelector("#quantity-plus")?.addEventListener("click", () => update(1));
   input.addEventListener("change", () => {
     readQuantity();
-    publish();
+    changed();
   });
   // Typing: the field is read as the buyer types, corrected when they leave it.
-  input.addEventListener("input", publish);
+  input.addEventListener("input", changed);
+}
+
+/**
+ * The buyer changed what they would buy (the SKU, quantity, an answer or the
+ * purchase option): a refused add's message (`unavailable`, `quantity_limit`,
+ * `failed`) no longer applies and goes. A missing option or answer stays
+ * until the buyer gives it. Callers publish (a choice: in its frame).
+ */
+function dropRefusal() {
+  if (state.error === "unavailable" || state.error === "quantity_limit" || state.error === "failed") withdrawError();
+}
+
+/** A change islands hear at once (the quantity, the purchase option). */
+function changed() {
+  dropRefusal();
+  publish();
 }
 
 /**
@@ -309,6 +330,7 @@ function applySelection(selection: VariantSelection, announcement: string, chose
   state.hasVariantSelectionInteraction = true;
   state.unavailableRequestedVariant = null;
   for (const definitionId of chosen) showMissingOption(definitionId, "");
+  dropRefusal();
   state.selection = selection;
   if (cache.announcer && announcement)
     cache.announcer.textContent = formatCheckoutLanguageText(
@@ -410,28 +432,40 @@ let skinControls: AbortController | null = null;
  * choice goes through the same selection as the option buttons, a buy
  * button chooses its SKU, then runs the form's own add or Buy now (its
  * checks, buyer inputs, purchase option and one-at-a-time guard), with any
- * problem shown in the form.
+ * problem shown in the form. The nearest bound control is the one pressed:
+ * a buy button inside a choice card buys.
  */
 function bindSkinControls() {
   skinControls?.abort();
   skinControls = new AbortController();
+  const { signal } = skinControls;
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>(BUY_CONTROL);
     const choice = event.target.closest<HTMLElement>(CHOOSE_CONTROL);
-    if (choice) {
-      // A new tab or window follows the link itself.
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (button && (!choice || choice.contains(button))) {
       event.preventDefault();
-      chooseVariant(choice.dataset.chooseVariant ?? "");
+      // While a cart line is edited, the form's "Update cart" is the only way to buy.
+      if (button.disabled || state.adding || state.purchaseBlocked || state.edit) return;
+      if (!chooseVariant(button.dataset.buyVariant ?? "")) return;
+      // Taken now, so a second press is refused; the add starts after the
+      // frame that shows the chosen SKU (and tells islands), so nothing of
+      // it is published before the page shows its SKU.
+      state.adding = true;
+      requestAnimationFrame(() => {
+        state.adding = false;
+        void add(button.dataset.buyIntent === "buy", button);
+      });
       return;
     }
-    const button = event.target.closest<HTMLButtonElement>(BUY_CONTROL);
-    if (!button) return;
+    if (!choice) return;
+    // A new tab or window follows the link itself.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    if (button.disabled || state.adding || state.purchaseBlocked) return;
-    if (!chooseVariant(button.dataset.buyVariant ?? "")) return;
-    void add(button.dataset.buyIntent === "buy", button);
-  }, { signal: skinControls.signal });
+    chooseVariant(choice.dataset.chooseVariant ?? "");
+  }, { signal });
+  // Controls in deferred markup enter the page later: they take the form's state then.
+  document.addEventListener(DEFERRED_REVEAL_EVENT, updateSkinControls, { signal });
 }
 
 /** Keeps the skin's SKU controls in step with the form: the choice, stock, and an edit of a cart line. */
@@ -484,6 +518,7 @@ function refresh(revealSelection = false) {
     updateStockAndActions();
     updatePrice();
     updateVariantImage();
+    updateWarrantyRows();
     publish();
   });
 }
@@ -782,6 +817,29 @@ function updateVariantImage() {
   );
 }
 
+/**
+ * The buy box's warranty row (WarrantyRow.astro): the chosen SKU's warranty,
+ * or, with no SKU chosen, the one every SKU of the choice so far shares.
+ * SKUs of one product may each have their own, or none.
+ */
+function updateWarrantyRows() {
+  const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
+  if (!box) return;
+  let byVariant: Record<string, string | null>;
+  try {
+    byVariant = JSON.parse(box.dataset.sxWarrantyByVariant ?? "{}") as Record<string, string | null>;
+  } catch {
+    return;
+  }
+  const exact = state.unavailableRequestedVariant ?? exactVariant();
+  const candidates = exact ? [exact] : filterVariantsBySelection(state.variants, state.selection);
+  const ids = new Set(candidates.map((variant) => byVariant[variant.id] ?? null));
+  const shown = ids.size === 1 ? [...ids][0] ?? null : null;
+  for (const row of box.querySelectorAll<HTMLElement>("[data-sx-warranty-row]")) {
+    row.hidden = shown === null || row.dataset.sxWarrantyId !== shown;
+  }
+}
+
 function selectedCartOptions(variant: Variant): CartItemOption[] {
   return variant.selectedOptions.map((option) => ({
     name: option.name,
@@ -795,7 +853,8 @@ let missingOption: string | null = null;
 /**
  * "Choose a Size" under the option the buyer has not picked yet; in the
  * form's status instead when the form leaves its options out (a skin
- * chooses the SKU). An empty message takes it away.
+ * chooses the SKU). An empty message takes it away (a choice: its frame
+ * publishes that).
  */
 function showMissingOption(definitionId: string, message: string, focus = false) {
   const group = cache.summary?.querySelector<HTMLElement>(
@@ -809,7 +868,7 @@ function showMissingOption(definitionId: string, message: string, focus = false)
     }
     if (missingOption === definitionId) {
       missingOption = null;
-      if (state.error === "option_required") clearError();
+      if (state.error === "option_required") withdrawError();
     }
     return;
   }
@@ -831,9 +890,7 @@ async function add(redirect: boolean, source: HTMLElement | null = null) {
   if (state.adding || state.purchaseBlocked) return;
   state.adding = true;
   // A new try: the last one's message goes.
-  cache.summary?.querySelector("[data-product-action-error]")?.remove();
-  state.error = null;
-  if (cache.statusPart) cache.statusPart.dataset.state = "idle";
+  withdrawError();
   updateActionsState();
   publish();
   // Busy while the line is added, so a slow phone shows the press took.
@@ -987,8 +1044,9 @@ async function addSelected(redirect: boolean, focusProblem: boolean) {
 
 /**
  * A problem with the purchase stays next to the buttons, in the form's
- * status, until the next try. `focus` moves focus to it (the buyer pressed
- * a skin's button elsewhere on the page).
+ * status, until the next try or until the buyer changes what they would
+ * buy (`dropRefusal`). `focus` moves focus to it (the buyer pressed a skin's
+ * button elsewhere on the page).
  */
 function showError(message: string, error: StorefrontProductError, focus = false) {
   cache.summary?.querySelector("[data-product-action-error]")?.remove();
@@ -1006,8 +1064,9 @@ function showError(message: string, error: StorefrontProductError, focus = false
   if (focus) element.focus();
 }
 
-function clearError() {
+/** The form says no problem any more; the caller publishes. */
+function withdrawError() {
   cache.summary?.querySelector("[data-product-action-error]")?.remove();
   if (cache.statusPart) cache.statusPart.dataset.state = "idle";
-  setError(null);
+  state.error = null;
 }

@@ -320,6 +320,8 @@ export interface Product {
   contentBlockMedia?: ProductPageBlockMedia[];
   /** Product page only: the warranty policy's current terms; null without one. */
   warranty?: ProductWarranty | null;
+  /** Product page only: every warranty a SKU of the page has, each once (a variant's `warrantyId`). */
+  warranties?: Array<ProductWarranty & { id: string }>;
   /** Product page only: storefront-visible custom fields, in the merchant's order. */
   customFields?: StorefrontCustomField[];
 }
@@ -435,6 +437,8 @@ export interface ProductVariant {
   discountAmount: number | null;
   /** physical (shipped or picked up), digital, or service (performed, no delivery). */
   fulfillmentKind?: FulfillmentKind;
+  /** Product page only: this SKU's warranty, an id in the product's `warranties`; null without one. */
+  warrantyId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

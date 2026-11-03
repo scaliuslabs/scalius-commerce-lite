@@ -1324,6 +1324,13 @@
       "when": 1792770000000,
       "tag": "0188_platform_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "6",
+      "when": 1792780000000,
+      "tag": "0189_variant_warranty",
+      "breakpoints": true
     }
   ]
 }

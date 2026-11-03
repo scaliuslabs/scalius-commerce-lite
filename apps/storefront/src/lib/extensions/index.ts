@@ -40,7 +40,7 @@ import { ExtensionHost } from "./host";
 import { storefrontIncidentReporter } from "./incidents";
 import { storeLogo, storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
-import { bindPurchaseControls } from "./purchase-controls";
+import { bindPurchaseControls, type PurchasePage } from "./purchase-controls";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 
 export { ExtensionHost } from "./host";
@@ -220,13 +220,16 @@ type SkinAsk<Target extends StorefrontSkinTarget> = Extract<StorefrontSkinJob, {
  * Draws a skin with its unit's projection: its markup cut at its embeds,
  * or null when core draws the unit (the skin drew nothing, failed, was
  * late, or misses a required embed). App JSON-LD stays out of product and
- * listing pages: their structured data is core's alone.
+ * listing pages: their structured data is core's alone. A product_main
+ * skin's SKU controls are bound to the buy form with `purchase`, which a
+ * product page must pass (without it every buy button is drawn off).
  */
 export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   locals: object,
   url: URL,
   skin: AppSkin & { target: Target },
   ask: SkinAsk<Target>,
+  ...purchase: Target extends "product_main" ? [purchase: PurchasePage] : []
 ): Promise<AppMarkup | null> {
   const { host } = await requestExtensions(locals, url);
   const jsonLd = skin.target !== "product_main" && skin.target !== "listing_main";
@@ -236,7 +239,7 @@ export async function renderAppSkin<Target extends StorefrontSkinTarget>(
   const markup = appMarkup(skin.extension, skin.target, html);
   // A product page skin's SKU controls join the store's buy form.
   return markup && skin.target === "product_main"
-    ? bindPurchaseControls(markup, (ask as unknown as { data: StorefrontProductPage }).data.product)
+    ? bindPurchaseControls(markup, (ask as unknown as { data: StorefrontProductPage }).data.product, (purchase as PurchasePage[])[0] ?? { blocked: true, opening: null })
     : markup;
 }
 

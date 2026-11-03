@@ -50,6 +50,7 @@ import type {
 } from "../validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { recordOrderEvent } from "../timeline";
+import { currentWarrantyRevisionSql } from "../commit-order";
 import { resolveOrderCurrencySnapshot } from "../../payments";
 import { validateCustomerPhoneCountry } from "../../settings";
 import type { TaxQuote, TaxQuoteCustomer } from "../../tax/browser";
@@ -643,6 +644,8 @@ export async function confirmManualOrderAmendment(
                     properties: preparedItem.item.properties,
                     propertiesPriceMinor: preparedItem.item.propertiesPriceMinor,
                     baseUnitPriceMinor: preparedItem.item.baseUnitPriceMinor,
+                    // An added line freezes its SKU's effective warranty, as at checkout.
+                    warrantyRevisionId: currentWarrantyRevisionSql(preparedItem.item.variantId),
                     createdAt: sql`unixepoch()`,
                 }),
                 db.insert(orderItemTaxSnapshots).values({

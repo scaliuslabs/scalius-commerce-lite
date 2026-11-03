@@ -15,7 +15,7 @@ type BoundBar = HTMLElement & { __stickyBuyCleanup?: () => void };
 export function bindStickyBuyBar(bar: BoundBar, root: Document): void {
   bar.__stickyBuyCleanup?.();
   // The buy form's own parts, never a skin's look-alike markup.
-  const actions = root.getElementById("product-actions");
+  const actions = root.querySelector<HTMLElement>("[data-sx-product-summary] #product-actions");
   const main = actions?.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]');
   const action = bar.querySelector<HTMLButtonElement>("[data-sticky-buy-action]");
   const price = bar.querySelector<HTMLElement>("[data-sticky-buy-price]");

@@ -51,18 +51,24 @@ const productReviewsShape = z.object({
 
 export const productReviewsSchema = productReviewsShape.openapi("ProductReviews");
 
+/** A live warranty policy's current terms, as the product page shows them. */
+const productPageWarrantyShape = z.object({
+  name: z.string(),
+  provider: z.enum(["brand", "store"]),
+  duration: z.object({ value: z.number().int().positive(), unit: z.enum(["days", "months", "years"]) }),
+  replacementDays: z.number().int().nonnegative().nullable(),
+  terms: z.string().nullable(),
+});
+
 /** Spread into the product page's product object. */
 export const productPageReviewFields = {
   reviews: productReviewsShape.nullable().openapi({
     description: "Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.",
   }),
-  warranty: z.object({
-    name: z.string(),
-    provider: z.enum(["brand", "store"]),
-    duration: z.object({ value: z.number().int().positive(), unit: z.enum(["days", "months", "years"]) }),
-    replacementDays: z.number().int().nonnegative().nullable(),
-    terms: z.string().nullable(),
-  }).nullable().openapi({ description: "The product's warranty policy (its current terms); null without one." }),
+  warranty: productPageWarrantyShape.nullable().openapi({ description: "The product's warranty policy (its current terms); null without one." }),
+  warranties: z.array(productPageWarrantyShape.extend({ id: z.string() })).openapi({
+    description: "Every warranty a SKU of this page has, each once: a variant's `warrantyId` names one (a SKU inherits the product's, has its own, or none).",
+  }),
 };
 
 // ── Buyer ─────────────────────────────────────────────────────────────────

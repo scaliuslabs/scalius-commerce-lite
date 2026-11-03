@@ -71758,6 +71758,67 @@
                               ],
                               "description": "The product's warranty policy (its current terms); null without one."
                             },
+                            "warranties": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string",
+                                    "enum": [
+                                      "brand",
+                                      "store"
+                                    ]
+                                  },
+                                  "duration": {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "exclusiveMinimum": true
+                                      },
+                                      "unit": {
+                                        "type": "string",
+                                        "enum": [
+                                          "days",
+                                          "months",
+                                          "years"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "value",
+                                      "unit"
+                                    ]
+                                  },
+                                  "replacementDays": {
+                                    "type": "integer",
+                                    "nullable": true,
+                                    "minimum": 0
+                                  },
+                                  "terms": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "id": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "provider",
+                                  "duration",
+                                  "replacementDays",
+                                  "terms",
+                                  "id"
+                                ]
+                              },
+                              "description": "Every warranty a SKU of this page has, each once: a variant's `warrantyId` names one (a SKU inherits the product's, has its own, or none)."
+                            },
                             "customFields": {
                               "type": "array",
                               "items": {
@@ -71891,6 +71952,7 @@
                             "emi",
                             "reviews",
                             "warranty",
+                            "warranties",
                             "customFields",
                             "offers"
                           ]
@@ -72178,6 +72240,10 @@
                                 },
                                 "description": "Storefront-visible custom fields with a value, in the merchant's order."
                               },
+                              "warrantyId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -72211,6 +72277,7 @@
                               "discountAmount",
                               "fulfillmentKind",
                               "customFields",
+                              "warrantyId",
                               "createdAt",
                               "deletedAt"
                             ]
@@ -215638,6 +215705,18 @@
                                       ],
                                       "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                                     },
+                                    "warrantyMode": {
+                                      "type": "string",
+                                      "enum": [
+                                        "inherit",
+                                        "policy",
+                                        "none"
+                                      ]
+                                    },
+                                    "warrantyPolicyId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
                                     "createdAt": {
                                       "anyOf": [
                                         {
@@ -224397,6 +224476,23 @@
                               ],
                               "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                             },
+                            "warrantyMode": {
+                              "type": "string",
+                              "enum": [
+                                "inherit",
+                                "policy",
+                                "none"
+                              ],
+                              "description": "inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits)."
+                            },
+                            "warrantyPolicyId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 80,
+                              "pattern": "^wrp_[A-Za-z0-9_-]+$",
+                              "description": "The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy."
+                            },
                             "cost": {
                               "type": "number",
                               "nullable": true,
@@ -228273,6 +228369,18 @@
                                   "discountAmount": {
                                     "type": "number",
                                     "nullable": true
+                                  },
+                                  "warrantyMode": {
+                                    "type": "string",
+                                    "enum": [
+                                      "inherit",
+                                      "policy",
+                                      "none"
+                                    ]
+                                  },
+                                  "warrantyPolicyId": {
+                                    "type": "string",
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -228289,7 +228397,9 @@
                                   "barcodeType",
                                   "discountType",
                                   "discountPercentage",
-                                  "discountAmount"
+                                  "discountAmount",
+                                  "warrantyMode",
+                                  "warrantyPolicyId"
                                 ]
                               },
                               "maxItems": 10
@@ -229675,6 +229785,18 @@
                                 ],
                                 "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
+                              "warrantyMode": {
+                                "type": "string",
+                                "enum": [
+                                  "inherit",
+                                  "policy",
+                                  "none"
+                                ]
+                              },
+                              "warrantyPolicyId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -230475,6 +230597,23 @@
                                 "service"
                               ],
                               "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                            },
+                            "warrantyMode": {
+                              "type": "string",
+                              "enum": [
+                                "inherit",
+                                "policy",
+                                "none"
+                              ],
+                              "description": "inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits)."
+                            },
+                            "warrantyPolicyId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1,
+                              "maxLength": 80,
+                              "pattern": "^wrp_[A-Za-z0-9_-]+$",
+                              "description": "The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy."
                             }
                           },
                           "required": [
@@ -231542,6 +231681,23 @@
                     ],
                     "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                   },
+                  "warrantyMode": {
+                    "type": "string",
+                    "enum": [
+                      "inherit",
+                      "policy",
+                      "none"
+                    ],
+                    "description": "inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits)."
+                  },
+                  "warrantyPolicyId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^wrp_[A-Za-z0-9_-]+$",
+                    "description": "The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy."
+                  },
                   "expectedAggregateRevision": {
                     "type": "integer",
                     "minimum": 1
@@ -231714,6 +231870,18 @@
                             "service"
                           ],
                           "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                        },
+                        "warrantyMode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "policy",
+                            "none"
+                          ]
+                        },
+                        "warrantyPolicyId": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "createdAt": {
                           "anyOf": [
@@ -232051,6 +232219,18 @@
                                 ],
                                 "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
+                              "warrantyMode": {
+                                "type": "string",
+                                "enum": [
+                                  "inherit",
+                                  "policy",
+                                  "none"
+                                ]
+                              },
+                              "warrantyPolicyId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -232332,6 +232512,23 @@
                     ],
                     "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
                   },
+                  "warrantyMode": {
+                    "type": "string",
+                    "enum": [
+                      "inherit",
+                      "policy",
+                      "none"
+                    ],
+                    "description": "inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits)."
+                  },
+                  "warrantyPolicyId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^wrp_[A-Za-z0-9_-]+$",
+                    "description": "The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy."
+                  },
                   "expectedStockVersion": {
                     "type": "integer",
                     "minimum": 0,
@@ -232508,6 +232705,18 @@
                             "service"
                           ],
                           "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                        },
+                        "warrantyMode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "policy",
+                            "none"
+                          ]
+                        },
+                        "warrantyPolicyId": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "createdAt": {
                           "anyOf": [
@@ -233039,6 +233248,23 @@
                             "service"
                           ],
                           "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                        },
+                        "warrantyMode": {
+                          "type": "string",
+                          "enum": [
+                            "inherit",
+                            "policy",
+                            "none"
+                          ],
+                          "description": "inherit: the product's warranty; policy: warrantyPolicyId; none: no warranty. Omit to keep (a new SKU inherits)."
+                        },
+                        "warrantyPolicyId": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 1,
+                          "maxLength": 80,
+                          "pattern": "^wrp_[A-Za-z0-9_-]+$",
+                          "description": "The SKU's own live warranty policy (wrp_…), exactly when warrantyMode is policy."
                         }
                       },
                       "required": [

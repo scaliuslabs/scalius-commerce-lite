@@ -31,6 +31,7 @@ import {
   productVariantBarcodeIdentityIn,
   readStoreDecimalPlaces,
   resolveSelectedOptionValueIds,
+  skuWarrantyColumns,
   STOCK_CHANGED_MESSAGE,
   updateVariantSchema,
 } from "../products";
@@ -48,6 +49,7 @@ import {
     executeProductAggregateMutationBatch as executeProductAggregateMutationBatchRaw,
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
+import { assertLiveSkuWarrantyPolicies, assertSkuWarrantyAllowed, productIsGiftCard } from "./warranty";
 
 export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);
@@ -530,6 +532,10 @@ export async function createVariant(
     await assertSelectableVariantImage(db, productId, data.imageId);
 
     await assertSkuKeyFree(db, sku, skuKey);
+    if (data.warrantyMode !== undefined && data.warrantyMode !== "inherit") {
+        assertSkuWarrantyAllowed(data, { isDefault: false, isGiftCard: await productIsGiftCard(db, productId), field: "warrantyMode" });
+    }
+    await assertLiveSkuWarrantyPolicies(db, [{ policyId: data.warrantyPolicyId, field: "warrantyPolicyId" }]);
 
     const variantValues = {
         id: variantId,
@@ -546,6 +552,7 @@ export async function createVariant(
         isDefault: false,
         trackInventory: data.trackInventory ?? true,
         fulfillmentKind: data.fulfillmentKind ?? "physical",
+        ...skuWarrantyColumns(data),
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
         discountType: data.discountType || "percentage",
@@ -704,6 +711,7 @@ export async function planVariantUpdate(
             stockVersion: productVariants.stockVersion,
             trackInventory: productVariants.trackInventory,
             fulfillmentKind: productVariants.fulfillmentKind,
+            warrantyPolicyId: productVariants.warrantyPolicyId,
             sku: productVariants.sku,
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
@@ -744,6 +752,18 @@ export async function planVariantUpdate(
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
     await assertSkuKeyFree(db, sku, skuKey, variantId, `${fieldPrefix}sku`);
+    if (data.warrantyMode !== undefined && data.warrantyMode !== "inherit") {
+        assertSkuWarrantyAllowed(data, {
+            isDefault: existingIsSimpleSku,
+            isGiftCard: await productIsGiftCard(db, productId),
+            field: `${fieldPrefix}warrantyMode`,
+        });
+    }
+    await assertLiveSkuWarrantyPolicies(db, [{
+        policyId: data.warrantyPolicyId,
+        savedPolicyId: existingVariant.warrantyPolicyId,
+        field: `${fieldPrefix}warrantyPolicyId`,
+    }]);
 
     const barcodeIdentity = normalizeVariantBarcode(
         data.barcode === undefined ? existingVariant.barcode : data.barcode,
@@ -777,8 +797,9 @@ export async function planVariantUpdate(
         sku,
         priceMinor: simpleProductPricing?.priceMinor ?? toStoreMinor(data.price, currency),
         trackInventory: data.trackInventory ?? existingVariant.trackInventory,
-        // Omitted keeps the SKU's kind.
+        // Omitted keeps the SKU's kind and warranty.
         ...(data.fulfillmentKind !== undefined ? { fulfillmentKind: data.fulfillmentKind } : {}),
+        ...skuWarrantyColumns(data),
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
         discountType: existingIsSimpleSku ? "percentage" : data.discountType || "percentage",
