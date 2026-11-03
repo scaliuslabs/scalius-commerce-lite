@@ -10369,7 +10369,7 @@
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards/{id}/adjust",
    "risk": "financial",
-   "idempotency": "required",
+   "idempotency": "supported",
    "revision": "required",
    "scopes": [
     "write_gift_cards"
@@ -10466,7 +10466,7 @@
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards",
    "risk": "financial",
-   "idempotency": "required",
+   "idempotency": "supported",
    "revision": "none",
    "scopes": [
     "write_gift_cards"

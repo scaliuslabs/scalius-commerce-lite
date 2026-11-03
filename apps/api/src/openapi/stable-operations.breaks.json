@@ -3022,17 +3022,5 @@
   "from": "05bdd3bbeb566674",
   "change": "variants.update input body.priceMinor: maximum tightened to 9000000000000.",
   "reason": "Pre-lock (audit I7): one money ceiling. Every stable *Minor input is bounded by MAX_MINOR_AMOUNT (9,000,000,000,000 minor units, @scalius/shared/money), the amount money is stored and computed in; the advertised Number.MAX_SAFE_INTEGER was never accepted (toMinor and the line, tax and promotion math refuse more), so an app learns the true bound from the contract instead of an undocumented 400."
- },
- {
-  "snapshot": "stable-operations.snapshot.json",
-  "from": "bf21f576de943a41",
-  "change": "gift_cards.adjust: idempotency is now required.",
-  "reason": "Pre-lock money fix (audit item 39): an adjustment without a key took a fresh random request key, so a retry after a lost response moved the balance twice (an app re-reading the revision before retrying passes the revision check). Every operation that moves money or issues value requires its Idempotency-Key, as refunds, charges, captures, voids and recorded payments already do."
- },
- {
-  "snapshot": "stable-operations.snapshot.json",
-  "from": "bf21f576de943a41",
-  "change": "gift_cards.create: idempotency is now required.",
-  "reason": "Pre-lock money fix (audit item 39): a create without a key took a fresh random request key, so a retry after a lost response issued a second live card. Every operation that moves money or issues value requires its Idempotency-Key, as refunds, charges, captures, voids and recorded payments already do."
  }
 ]

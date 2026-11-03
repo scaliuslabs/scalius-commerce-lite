@@ -144,9 +144,10 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // Sensitive write_gift_cards. The code never leaves the store.
   "dashboard.resources.gift_cards.list": { uncurated: true },
   "dashboard.resources.gift_cards.get": { uncurated: true },
-  // Issuing or moving value requires the key: without one a retry issued again.
-  "dashboard.resources.gift_cards.create": storedValue({ idempotency: "required" }),
-  "dashboard.resources.gift_cards.adjust": storedValue({ idempotency: "required", revision: "required" }),
+  // Sealed app API: the key stays optional for apps (`supported`); every
+  // other caller must send one (routes/admin/resources-gift-cards.ts).
+  "dashboard.resources.gift_cards.create": storedValue(),
+  "dashboard.resources.gift_cards.adjust": storedValue({ revision: "required" }),
   "dashboard.resources.gift_cards.update": storedValue({ revision: "required" }),
   // An app's own webhook subscriptions (routes/admin/resources-webhooks.ts):
   // apps only (write_webhooks), within their approved hosts, topics and
