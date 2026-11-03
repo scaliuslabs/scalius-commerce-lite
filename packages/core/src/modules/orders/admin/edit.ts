@@ -1,5 +1,5 @@
 // Editing an order's customer and delivery details.
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { orders, customerAddresses, customers, deliveryShipments, firstCustomerAddressId, FulfillmentStatus } from "@scalius/database/schema";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { customerAddressColumns, guestRecordForContact, resolveAddress } from "../../customers";
@@ -11,6 +11,8 @@ import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/err
 import { validateCustomerPhoneCountry } from "../../settings";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 import { type SQLiteBatchItem, OPEN_ORDER_STATUSES, updateCustomerStatsService } from "./shared";
+
+const ORDER_DETAILS_GUARD_MARKER = "order_details_conflict";
 
 const ORDER_DETAIL_FIELDS = [
     "customerName",
@@ -110,7 +112,20 @@ export async function updateOrderDetails(
     }
 
     const resultingVersion = order.version + 1;
-    const statements: SQLiteBatchItem[] = [];
+    // The edit's own predicate, proven first: a change landing after the pre-read refuses
+    // the batch before it creates a customer or an address no order will point at.
+    const editable = and(
+        eq(orders.id, orderId),
+        eq(orders.version, order.version),
+        isNull(orders.archivedAt),
+        inArray(orders.status, [...OPEN_ORDER_STATUSES]),
+        eq(orders.fulfillmentStatus, FulfillmentStatus.PENDING),
+        isNull(orders.shipmentClaimId),
+        sql`NOT EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.orderId} = ${orderId})`,
+    );
+    const statements: SQLiteBatchItem[] = [
+        buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${editable})`, ORDER_DETAILS_GUARD_MARKER),
+    ];
     if (newCustomerId) {
         statements.push(db.insert(customers).values({
             id: newCustomerId,
@@ -139,16 +154,16 @@ export async function updateOrderDetails(
         customerId,
         version: resultingVersion,
         updatedAt: sql`unixepoch()`,
-    }).where(and(
-        eq(orders.id, orderId),
-        eq(orders.version, order.version),
-        isNull(orders.archivedAt),
-        inArray(orders.status, [...OPEN_ORDER_STATUSES]),
-        eq(orders.fulfillmentStatus, FulfillmentStatus.PENDING),
-        isNull(orders.shipmentClaimId),
-        sql`NOT EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.orderId} = ${orderId})`,
-    )).returning({ id: orders.id }));
-    const results = await safeBatch(db, statements as never) as unknown[][];
+    }).where(editable).returning({ id: orders.id }));
+    let results: unknown[][];
+    try {
+        results = await safeBatch(db, statements as never) as unknown[][];
+    } catch (error) {
+        if (isBatchGuardError(error, ORDER_DETAILS_GUARD_MARKER)) {
+            throw new ConflictError("This order changed. Reload to see the latest.");
+        }
+        throw error;
+    }
     if ((results.at(-1) ?? []).length === 0) {
         throw new ConflictError("This order changed. Reload to see the latest.");
     }
