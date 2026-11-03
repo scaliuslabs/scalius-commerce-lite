@@ -59,7 +59,7 @@ export function assertHeaderContract(html: string, options: StorefrontHeaderChec
 
 export function fixtureContext(overrides: Partial<StorefrontRenderContext> = {}): StorefrontRenderContext {
   return {
-    store: { name: "Acme Store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka" },
+    store: { name: "Acme Store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka", logo: null },
     page: { kind: "home", path: "/" },
     assets: "/_x/acme.theme/0123456789abcdef/",
     preview: false,
@@ -300,7 +300,7 @@ const emptySectionResolver: CoreSectionResolver = {
 const EMPTY_STORE: FixtureStore = {
   name: "empty",
   description: "A new store: no products, categories, menus, logo, policies or contact details.",
-  context: (overrides) => fixtureContext({ store: { name: "New Store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka" }, ...overrides }),
+  context: (overrides) => fixtureContext({ store: { name: "New Store", currency: "BDT", locale: "en-BD", language: "en", timeZone: "Asia/Dhaka", logo: null }, ...overrides }),
   productCards: () => [],
   image: () => null,
   productPage: (overrides) => {
@@ -371,7 +371,7 @@ const otherSectionResolver: CoreSectionResolver = {
 const OTHER_STORE: FixtureStore = {
   name: "other",
   description: "Another shop: Harbor & Pine, kitchenware, a logo, prices in USD.",
-  context: (overrides) => fixtureContext({ store: { name: "Harbor & Pine", currency: "USD", locale: "en-US", language: "en", timeZone: "America/New_York" }, ...overrides }),
+  context: (overrides) => fixtureContext({ store: { name: "Harbor & Pine", currency: "USD", locale: "en-US", language: "en", timeZone: "America/New_York", logo: OTHER_LOGO }, ...overrides }),
   productCards: otherCards,
   image: () => otherImage("hero", "Kitchen shelf"),
   productPage: (overrides) => {

@@ -17094,9 +17094,20 @@
    "pagination",
    "order_form",
    "gallery",
-   "slot"
+   "slot",
+   "module"
   ],
   "STOREFRONT_EMBED_TAG": "scalius-embed",
+  "STOREFRONT_PRODUCT_MODULE_EMBEDS": [
+   "description",
+   "spec-table",
+   "key-attributes",
+   "about-bullets",
+   "content-blocks",
+   "compare-similar",
+   "policies",
+   "recently-viewed"
+  ],
   "STOREFRONT_DEFERRED_TAG": "scalius-deferred",
   "STOREFRONT_DEFERRED_HYDRATION": [
    "idle",

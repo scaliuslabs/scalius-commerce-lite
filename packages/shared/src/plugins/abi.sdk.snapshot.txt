@@ -798,7 +798,7 @@ export declare class PluginPlatformError extends Error {
 export declare function invokePluginDefinition(module: unknown, invocation: PluginInvocation, seed: PluginContextSeed, bridge: PluginRuntimeBridge | null): Promise<PluginInvocationResult>;
 
 // packages/plugin-sdk/src/storefront/components.d.ts
-import type { StorefrontComponentSlot, StorefrontDeferredHydration, StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontComponentSlot, StorefrontDeferredHydration, StorefrontImage, StorefrontIslandHydration, StorefrontMoney, StorefrontProductCard, StorefrontProductModuleEmbed, StorefrontRenderContext } from "@scalius/shared/plugins/storefront-protocol";
 import { type Html, type Renderable } from "./html";
 type Attributes = Record<string, string | number | boolean | null | undefined>;
 export interface ImageProps {
@@ -852,6 +852,10 @@ export declare function BuyForm(props?: BuyFormProps): Html;
 export declare function Reviews(): Html;
 export declare function Recommendations(): Html;
 export declare function Gallery(): Html;
+export interface ProductModuleProps {
+    name: StorefrontProductModuleEmbed;
+}
+export declare function ProductModule(props: ProductModuleProps): Html;
 export declare function Filters(): Html;
 export declare function Toolbar(): Html;
 export declare function Pagination(): Html;
@@ -962,10 +966,10 @@ export { componentFor, defineStorefront, storefrontDefinitionOf } from "./define
 export type { AppComponent, ComponentProps, ComponentPropsFor, FooterComponent, FooterProps, HeaderComponent, HeaderProps, LayoutSlotComponentProps, ListingMainComponent, ListingMainProps, PageComponentProps, ProductCardComponent, ProductCardProps, ProductCardSlotComponentProps, ProductMainComponent, ProductMainProps, ProductSlotComponentProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontComponentTargetName, StorefrontDefinition, StorefrontLayoutSlot, StorefrontModuleDefinition, } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut, } from "./components";
+export { BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, ProductModule, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
-export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
-export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeferredHydration, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
+export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
+export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeferredHydration, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductModuleEmbed, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecification, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
 
 // packages/plugin-sdk/src/storefront/island.d.ts
 import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
@@ -4065,9 +4069,11 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
 export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot"];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "module"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
+export declare const STOREFRONT_PRODUCT_MODULE_EMBEDS: readonly ["description", "spec-table", "key-attributes", "about-bullets", "content-blocks", "compare-similar", "policies", "recently-viewed"];
+export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMBEDS)[number];
 export declare const STOREFRONT_DEFERRED_TAG = "scalius-deferred";
 export declare const STOREFRONT_DEFERRED_HYDRATION: readonly ["idle", "visible", "interaction"];
 export type StorefrontDeferredHydration = (typeof STOREFRONT_DEFERRED_HYDRATION)[number];
@@ -4076,6 +4082,7 @@ export interface StorefrontEmbedRule {
     required: readonly StorefrontEmbedKind[];
     appended: readonly StorefrontEmbedKind[];
     slots?: readonly StorefrontComponentSlot[];
+    modules?: readonly StorefrontProductModuleEmbed[];
 }
 export declare function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule;
 export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];
@@ -4287,7 +4294,15 @@ export interface StorefrontProductPage {
         fields: StorefrontFieldValues;
         breadcrumbs: StorefrontLink[];
         buyerInputs?: StorefrontBuyerInput[];
+        specifications?: StorefrontSpecification[];
     };
+}
+export interface StorefrontSpecification {
+    group: string | null;
+    label: string;
+    value: string;
+    unit: string | null;
+    keySpec: boolean;
 }
 export interface StorefrontBuyerInput {
     key: string;
@@ -4594,6 +4609,7 @@ export interface StorefrontRenderContext {
         locale: string;
         language: string;
         timeZone: string;
+        logo?: StorefrontImage | null;
     };
     page: {
         kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other";

@@ -44,11 +44,11 @@ export type {
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
 export {
-  BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, Recommendations, Reviews, Slot, Toolbar,
+  BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, ProductModule, Recommendations, Reviews, Slot, Toolbar,
   accountLink, asset, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut,
 } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
-export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, SlotProps } from "./components";
+export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
 export type {
   StorefrontBannerMosaicSkinSettings,
   StorefrontBannerSkinSettings,
@@ -78,6 +78,7 @@ export type {
   StorefrontProductCardData,
   StorefrontProductGridSkinSettings,
   StorefrontProductList,
+  StorefrontProductModuleEmbed,
   StorefrontProductPage,
   StorefrontProductSlot,
   StorefrontProductRailSkinSettings,
@@ -91,6 +92,7 @@ export type {
   StorefrontShopBySkinSettings,
   StorefrontSkinnableSection,
   StorefrontSkinTarget,
+  StorefrontSpecification,
   StorefrontSpecificationsSkinSettings,
   StorefrontStoreInfo,
   StorefrontTile,

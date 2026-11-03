@@ -8,6 +8,7 @@
 // renderer, or whose renderer answers null, renders nothing.
 
 import type { StorefrontEmbedKind } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 
 /** A core component and its props: what one embed renders. */
 export interface EmbedRender {
@@ -23,6 +24,11 @@ export interface EmbedPlacement {
 }
 
 export type EmbedRenderers = Partial<Record<StorefrontEmbedKind, (embed: EmbedPlacement) => EmbedRender | null>>;
+
+/** The names the markup's embeds of a named kind place (`slot`, `module`): the page draws those there, not again elsewhere. */
+export function placedEmbedNames(parts: readonly StorefrontMarkupPart[], kind: "slot" | "module"): Set<string> {
+  return new Set(parts.flatMap((part) => part.kind === "embed" && part.embed === kind && part.data.name ? [part.data.name] : []));
+}
 
 const PRODUCT_ID = /^[A-Za-z0-9][A-Za-z0-9_:-]{0,127}$/;
 

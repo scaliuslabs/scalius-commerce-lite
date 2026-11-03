@@ -38,7 +38,7 @@ import { markPageUnproven } from "@/lib/page-dependencies";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { ExtensionHost } from "./host";
 import { storefrontIncidentReporter } from "./incidents";
-import { storefrontImageOf } from "./data";
+import { storeLogo, storefrontImageOf } from "./data";
 import type { ExtensionRuntime } from "./loaders";
 
 export { ExtensionHost } from "./host";
@@ -114,6 +114,7 @@ export function requestExtensions(locals: object, url: URL): Promise<RequestExte
           locale: dateLocale(language, storeRegion()),
           language,
           timeZone: storeTimeZone(),
+          logo: storeLogo(theme, page.storeName || null),
         },
         page: { kind: pageKind(path), path },
         assets: "",

@@ -292,5 +292,11 @@
   "from": "30133e20c46aac41",
   "change": "storefront/testing fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): type is now a StorefrontSkinnableSection and settings a Partial of its sealed projection; the result is the full projection, typed by it.",
   "reason": "Pre-lock (black-box platform M4): the fixture returned settings {} for every section, contradicting the sealed StorefrontSectionSkinSettings the host fills completely, so correctly typed skins failed validate."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "e7c041faf10e78c8",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_EMBED_KINDS: an existing signature changed or gained a required member.",
+  "reason": "Additive embed kind `module` (a product_main skin places one of the product page's own modules, issue #1): the readonly tuple's declared type gains one member at its end. Apps write embed kinds into markup and never receive one; the storefront drops a kind a render does not allow, so no existing app changes behaviour."
  }
 ]

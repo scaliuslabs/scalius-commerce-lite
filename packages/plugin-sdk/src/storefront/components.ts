@@ -11,6 +11,7 @@ import type {
   StorefrontIslandHydration,
   StorefrontMoney,
   StorefrontProductCard,
+  StorefrontProductModuleEmbed,
   StorefrontRenderContext,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { EMPTY_HTML, escapeHtml, raw, renderChild, type Html, type Renderable } from "./html";
@@ -291,6 +292,25 @@ export function Recommendations(): Html {
  */
 export function Gallery(): Html {
   return embed("gallery");
+}
+
+export interface ProductModuleProps {
+  /** One of the product page's modules (`STOREFRONT_PRODUCT_MODULE_EMBEDS`): `spec-table`, `description`, `content-blocks`, … */
+  name: StorefrontProductModuleEmbed;
+}
+
+/**
+ * One of the store's own product-page modules, in place (product_main
+ * skins): the specification table, the details tabs, the content blocks and
+ * the rest of `STOREFRONT_PRODUCT_MODULE_EMBEDS`, drawn as the store draws
+ * them below the fold (its words, sanitizing and scripts); the store's
+ * module below then stays out. Each name renders once; a module the theme's
+ * template leaves out, or the product has nothing for, renders nothing.
+ *
+ *   <aside class="acme-pdp-facts"><ProductModule name="spec-table" /></aside>
+ */
+export function ProductModule(props: ProductModuleProps): Html {
+  return embed("module", { name: props.name });
 }
 
 /** The listing's filters, a GET form that works without JavaScript (listing_main skins). */

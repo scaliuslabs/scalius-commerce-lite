@@ -1,0 +1,108 @@
+---
+// One module of the product page (Theme -> Product page -> modules), drawn
+// where the page puts it: below the fold in the template's order, or in
+// place where a product_main skin places it (`<scalius-embed kind="module">`,
+// STOREFRONT_PRODUCT_MODULE_EMBEDS). One renderer for both, so a placed
+// module shows the same rows, words, sanitizing and scripts. In the theme
+// editor's preview its mark selects the module.
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { Product, ProductRecommendations } from "@/lib/api";
+import type { CatalogCopy } from "@/lib/catalog-copy";
+import type { ReviewFormCopy } from "@/lib/account-reviews";
+import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
+import ProductDetails from "../ProductDetails.astro";
+import RelatedProducts from "../RelatedProducts.astro";
+import ProductReviews from "../reviews/ProductReviews.astro";
+import type { ReviewCopy } from "../reviews/review-format";
+import { renderedContentBlocks, type RenderedProductModule } from "../lib/product-page-modules";
+import ProductModule from "./ProductModule.astro";
+import ProductSpecTable from "./ProductSpecTable.astro";
+import ProductFeatureList from "./ProductFeatureList.astro";
+import ProductContentBlocks from "./ProductContentBlocks.astro";
+import ProductWarrantyModule from "./ProductWarrantyModule.astro";
+import ProductCompareSimilar from "./ProductCompareSimilar.astro";
+import ProductPolicies from "./ProductPolicies.astro";
+import ProductRecentlyViewed from "./ProductRecentlyViewed.astro";
+
+interface Props {
+  module: RenderedProductModule;
+  /** The theme editor's mark (preview only). */
+  mark: string | null;
+  product: Product;
+  /** An app skin draws the main part, and the description with it. */
+  skinned: boolean;
+  /** The key features open the details tabs. */
+  detailsFeatures: boolean;
+  specificationRows: NonNullable<Product["attributes"]>;
+  keySpecificationRows: NonNullable<Product["attributes"]>;
+  similarProducts: Product[];
+  policies: ReadonlyArray<{ title: string; path: string }>;
+  recommendations: ProductRecommendations;
+  currencySymbol: string;
+  currencyCode: string;
+  copy: CheckoutLanguageData;
+  words: CatalogCopy["product"];
+  reviews: { copy: ReviewCopy; formCopy: ReviewFormCopy; language: string; storeName: string | null };
+}
+
+const {
+  module, mark, product, skinned, detailsFeatures, specificationRows, keySpecificationRows, similarProducts, policies,
+  recommendations, currencySymbol, currencyCode, copy, words, reviews,
+} = Astro.props;
+---
+
+<ThemeEditorMark id={mark}>
+  {module === "compare-similar" && (
+    <ProductCompareSimilar title={words.compareSimilar} productId={product.id} products={similarProducts} currencySymbol={currencySymbol} currencyCode={currencyCode} />
+  )}
+  {module === "policies" && <ProductPolicies title={words.storePolicies} policies={policies} />}
+  {module === "recently-viewed" && <ProductRecentlyViewed title={words.recentlyViewed} slug={product.slug} />}
+  {module === "description" && (
+    <ProductModule id="description">
+      <ProductDetails product={product} features={detailsFeatures} description={!skinned} />
+    </ProductModule>
+  )}
+  {module === "about-bullets" && (
+    <ProductModule id="about" title={copy.productAboutItemText}>
+      <ProductFeatureList features={product.features ?? []} variant="bullets" />
+    </ProductModule>
+  )}
+  {module === "key-attributes" && (
+    <ProductModule id="highlights" title={copy.productHighlightsText}>
+      <div class="max-w-3xl"><ProductSpecTable rows={keySpecificationRows} /></div>
+    </ProductModule>
+  )}
+  {module === "spec-table" && (
+    <ProductModule id="specifications" title={copy.productSpecificationsText}>
+      <div class="max-w-4xl"><ProductSpecTable rows={specificationRows} /></div>
+    </ProductModule>
+  )}
+  {module === "content-blocks" && (
+    <ProductModule id="content">
+      <ProductContentBlocks
+        blocks={renderedContentBlocks(product)}
+        media={product.contentBlockMedia ?? []}
+        playVideoLabel={copy.productPlayVideoText}
+        productName={product.name}
+      />
+    </ProductModule>
+  )}
+  {module === "warranty" && <ProductWarrantyModule product={product} />}
+  {module === "reviews" && (
+    <ProductReviews product={product} copy={reviews.copy} formCopy={reviews.formCopy} language={reviews.language} storeName={reviews.storeName} />
+  )}
+  {module === "related" && <RelatedProducts recommendations={recommendations} currencySymbol={currencySymbol} currencyCode={currencyCode} />}
+</ThemeEditorMark>
+
+<style is:global>
+  /* Placed in a skin, a module takes the skin's column: no page gutters or rule of its own. */
+  .site-root [data-sx-embed="module"] .sf-container {
+    max-inline-size: none;
+    padding-inline: 0;
+  }
+
+  .site-root [data-sx-embed="module"] .product-module {
+    border-block-start: 0;
+    padding-block: 0;
+  }
+</style>

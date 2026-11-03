@@ -57,6 +57,7 @@ import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import { productCardModel, type ProductCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { productGalleryItems } from "@/components/product/lib/gallery-media";
+import { publicSpecificationRows } from "@/components/product/lib/product-page-modules";
 import { objectFieldViews } from "@/lib/object-fields";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import { navigationFromCategoryTree, pruneNavigation, sourceNavigation, type NavigationSource } from "@/components/header/nav-tree";
@@ -146,6 +147,12 @@ export function storefrontImageOf(asset: { url: string; alt?: string | null; wid
   };
 }
 
+/** The store's logo as apps get it (the header's, and the render context's): no alt text of its own is the store's name. */
+export function storeLogo(theme: Pick<RequestTheme, "brand">, storeName: string | null): StorefrontImage | null {
+  const logo = theme.brand.logo;
+  return storefrontImageOf(logo ? { ...logo, alt: logo.alt || storeName } : null);
+}
+
 /** A header's search scopes at most (a department select). */
 const HEADER_SEARCH_SCOPES_MAX = 40;
 
@@ -157,7 +164,7 @@ export function headerData(input: {
   page?: StorefrontHeaderData["page"];
   market?: StorefrontHeaderMarket;
 }): StorefrontHeaderData {
-  const { resolved, brand } = input.theme;
+  const { resolved } = input.theme;
   const nodes = input.categoryTree?.nodes ?? [];
   const topBar = resolved.blocks.topBar;
   const settings = topBar.settings as { text?: unknown; link?: unknown };
@@ -170,7 +177,7 @@ export function headerData(input: {
     store: {
       name: input.storeName?.trim() || "Store",
       url: "/",
-      logo: storefrontImageOf(brand.logo ? { ...brand.logo, alt: brand.logo.alt || input.storeName } : null),
+      logo: storeLogo(input.theme, input.storeName),
       logoWidth: resolved.brand.logoWidth,
     },
     menu: menuItems(sourceNavigation(resolved.blocks.navigation.source as NavigationSource, input.navigation, nodes)),
@@ -448,6 +455,14 @@ export function productPageData(input: {
         required: field.required,
         maxLength: field.maxLength,
         options: field.options.map((option) => ({ value: option.value, label: option.label })),
+      })),
+      // The specification table's rows (its filter and order), unformatted.
+      specifications: publicSpecificationRows(product.attributes ?? []).map((row) => ({
+        group: row.group,
+        label: row.name,
+        value: row.value,
+        unit: row.unit,
+        keySpec: row.keySpec,
       })),
     },
   };

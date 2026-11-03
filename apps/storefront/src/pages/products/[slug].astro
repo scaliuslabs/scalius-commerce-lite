@@ -13,7 +13,7 @@ import AppComponent from "@/components/apps/AppComponent.astro";
 import AppSlot from "@/components/apps/AppSlot.astro";
 import { appSkin, appSlotComponents, renderAppSkin } from "@/lib/extensions";
 import { productPageData } from "@/lib/extensions/data";
-import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
+import { placedEmbedNames, type EmbedRender, type EmbedRenderers } from "@/lib/extensions/embeds";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
@@ -34,15 +34,7 @@ import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import RecentlyViewedRecord from "@/components/homepage/RecentlyViewedRecord.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
 import ProductReviews from "@/components/product/reviews/ProductReviews.astro";
-import ProductModule from "@/components/product/modules/ProductModule.astro";
-import ProductSpecTable from "@/components/product/modules/ProductSpecTable.astro";
-import ProductFeatureList from "@/components/product/modules/ProductFeatureList.astro";
-import ProductContentBlocks from "@/components/product/modules/ProductContentBlocks.astro";
-import ProductWarrantyModule from "@/components/product/modules/ProductWarrantyModule.astro";
-import ProductCompareSimilar from "@/components/product/modules/ProductCompareSimilar.astro";
-import ProductPolicies from "@/components/product/modules/ProductPolicies.astro";
-import ProductRecentlyViewed from "@/components/product/modules/ProductRecentlyViewed.astro";
-import ProductDetails from "@/components/product/ProductDetails.astro";
+import ProductPageModule from "@/components/product/modules/ProductPageModule.astro";
 import {
   KEY_ATTRIBUTES_MAX,
   compareSimilarProducts,
@@ -50,7 +42,7 @@ import {
   featuresPlacement,
   productPageModules,
   publicSpecificationRows,
-  renderedContentBlocks,
+  type RenderedProductModule,
 } from "@/components/product/lib/product-page-modules";
 import { reviewStructuredData } from "@/lib/review-structured-data";
 import { pickReviewCopy, readProductReviews } from "@/components/product/reviews/review-format";
@@ -165,30 +157,10 @@ const contactLinks = themeLayout.buyBox.whatsapp
   : [];
 const buyBoxShowsEmi = themeLayout.buyBox.emi;
 
-// Modules the product has data for, in the template's order (a module with
-// nothing to show is left out); the description stays in the buy box on
-// classic and Dawn. Every module reads data this page already has.
 const similarProducts = compareSimilarProducts({ id: product.id, categoryId: category?.id ?? product.categoryId ?? null }, recommendations);
 const storePolicies = layoutData.policies ?? [];
-const pageModules = productPageModules(resolvedTheme.blocks.product.below, product, {
-  look: buyBoxLook,
-  hasRelated: recommendations.products.length > 0,
-  similar: similarProducts.length,
-  policies: storePolicies.length,
-});
 const sticky = resolvedTheme.blocks.product.sticky;
-const detailAnchorIds: Record<string, string> = {
-  "about-bullets": "about",
-  "key-attributes": "highlights",
-  "spec-table": "specifications",
-  description: "description",
-  "content-blocks": "content",
-};
-const detailAnchorId = pageModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
-const exploreAnchorId = pageModules.includes("related") && recommendations.products.length > 0 ? "related-products" : null;
-const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const detailsInBuyBox = descriptionInInfoColumn(buyBoxLook);
-const featuresAt = featuresPlacement(pageModules, buyBoxLook);
 const specificationRows = publicSpecificationRows(product.attributes ?? []);
 const keySpecificationRows = specificationRows.filter((row) => row.keySpec).slice(0, KEY_ATTRIBUTES_MAX);
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -544,12 +516,36 @@ const productMainMarkup = productMainSkin
   ? await renderAppSkin(Astro.locals, Astro.url, productMainSkin, { data: productPageProjection() })
   : null;
 const skinEmbeds = productMainMarkup?.embeds ?? new Set<string>();
+
+// Modules the product has data for, in the template's order (a module with
+// nothing to show is left out); the description stays in the buy box on
+// classic and Dawn, but a skin's buy form draws no details, so with a skin
+// the details module carries them. Every module reads data this page already has.
+const pageModules = productPageModules(resolvedTheme.blocks.product.below, product, {
+  look: productMainMarkup ? { ...buyBoxLook, details: "below" } : buyBoxLook,
+  hasRelated: recommendations.products.length > 0,
+  similar: similarProducts.length,
+  policies: storePolicies.length,
+});
+const detailAnchorIds: Record<string, string> = {
+  "about-bullets": "about",
+  "key-attributes": "highlights",
+  "spec-table": "specifications",
+  description: "description",
+  "content-blocks": "content",
+};
+const detailAnchorId = pageModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
+const exploreAnchorId = pageModules.includes("related") && recommendations.products.length > 0 ? "related-products" : null;
+const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
+const featuresAt = featuresPlacement(pageModules, buyBoxLook);
 // A skin owns the description: the details module keeps only what the skin
 // does not draw (key features placed there and the extra tabs), else it goes.
 const detailsBeyondDescription = (product.additionalInfo?.length ?? 0) > 0 || (featuresAt === "description" && (product.features?.length ?? 0) > 0);
-const shownModules = pageModules.filter((module) =>
-  !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations"))
-  && !(module === "description" && productMainMarkup && !detailsBeyondDescription));
+const drawnModules = pageModules.filter((module) => !(module === "description" && productMainMarkup && !detailsBeyondDescription));
+// A module the skin places draws there and not again below.
+const placedModules = productMainMarkup ? placedEmbedNames(productMainMarkup.parts, "module") : new Set<string>();
+const shownModules = drawnModules.filter((module) => !placedModules.has(module)
+  && !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
 const appsBelow = (await appSlotComponents(Astro.locals, Astro.url, "product.below")).length > 0;
 const buyBox = {
   summary: {
@@ -581,8 +577,27 @@ const buyBox = {
   deliveryFacts,
   canPurchaseAny: buyerStockSummary.canPurchaseAny,
 };
+// One of the template's modules, below the fold or where a skin places it.
+const moduleProps = (module: RenderedProductModule) => ({
+  module,
+  mark: editorMarks ? themeEditorModuleMark(module) : null,
+  product,
+  skinned: productMainMarkup !== null,
+  detailsFeatures: featuresAt === "description",
+  specificationRows,
+  keySpecificationRows,
+  similarProducts,
+  policies: storePolicies,
+  recommendations,
+  currencySymbol,
+  currencyCode,
+  copy: productPageCopy,
+  words: productWords,
+  reviews: { copy: reviewCopy, formCopy: reviewFormCopy, language: reviewLanguage, storeName: sellerSchemaName },
+});
 // What a product_main skin's embeds render: the store's own buy box (the
-// skin owns the description), gallery, reviews and related products.
+// skin owns the description), gallery, reviews, related products and the
+// template's modules it places.
 const productGalleryProps = {
   product,
   media,
@@ -608,6 +623,9 @@ const productEmbeds: EmbedRenderers = {
   }),
   recommendations: () => recommendations.products.length > 0
     ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode } }
+    : null,
+  module: ({ data }) => drawnModules.includes(data.name as RenderedProductModule)
+    ? { component: ProductPageModule as EmbedRender["component"], props: moduleProps(data.name as RenderedProductModule) }
     : null,
 };
 
@@ -843,71 +861,7 @@ const productCategoryAnalytics = productCategory
     />
 
     {/* The template's modules below the fold, in its order (each a preview mark in the theme editor). */}
-    {shownModules.map((module) => <ThemeEditorMark id={editorMarks ? themeEditorModuleMark(module) : null}>{(() => {
-      switch (module) {
-        case "compare-similar":
-          return (
-            <ProductCompareSimilar
-              title={productWords.compareSimilar}
-              productId={product.id}
-              products={similarProducts}
-              currencySymbol={currencySymbol}
-              currencyCode={currencyCode}
-            />
-          );
-        case "policies":
-          return <ProductPolicies title={productWords.storePolicies} policies={storePolicies} />;
-        case "recently-viewed":
-          return <ProductRecentlyViewed title={productWords.recentlyViewed} slug={product.slug} />;
-        case "description":
-          return (
-            <ProductModule id="description">
-              <ProductDetails product={product} features={featuresAt === "description"} description={!productMainMarkup} />
-            </ProductModule>
-          );
-        case "about-bullets":
-          return (
-            <ProductModule id="about" title={productPageCopy.productAboutItemText}>
-              <ProductFeatureList features={product.features ?? []} variant="bullets" />
-            </ProductModule>
-          );
-        case "key-attributes":
-          return (
-            <ProductModule id="highlights" title={productPageCopy.productHighlightsText}>
-              <div class="max-w-3xl"><ProductSpecTable rows={keySpecificationRows} /></div>
-            </ProductModule>
-          );
-        case "spec-table":
-          return (
-            <ProductModule id="specifications" title={productPageCopy.productSpecificationsText}>
-              <div class="max-w-4xl"><ProductSpecTable rows={specificationRows} /></div>
-            </ProductModule>
-          );
-        case "content-blocks":
-          return (
-            <ProductModule id="content">
-              <ProductContentBlocks
-                blocks={renderedContentBlocks(product)}
-                media={product.contentBlockMedia ?? []}
-                playVideoLabel={productPageCopy.productPlayVideoText}
-                productName={product.name}
-              />
-            </ProductModule>
-          );
-        case "warranty":
-          return <ProductWarrantyModule product={product} />;
-        case "reviews":
-          return <ProductReviews product={product} copy={reviewCopy} formCopy={reviewFormCopy} language={reviewLanguage} storeName={sellerSchemaName} />;
-        case "related":
-          return (
-            <RelatedProducts
-              recommendations={recommendations}
-              currencySymbol={currencySymbol}
-              currencyCode={currencyCode}
-            />
-          );
-      }
-    })()}</ThemeEditorMark>)}
+    {shownModules.map((module) => <ProductPageModule {...moduleProps(module)} />)}
 
     {/* Installed apps' blocks after the template's modules. */}
     <ThemeEditorMark id={editorMarks && appsBelow ? THEME_EDITOR_MARKS.productApps : null}>
