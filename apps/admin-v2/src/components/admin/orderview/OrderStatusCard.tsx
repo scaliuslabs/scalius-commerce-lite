@@ -36,6 +36,8 @@ export function statusBlockText(
       return t("statusBlock.cashFirst");
     case "money_due":
       return t("statusBlock.moneyDue");
+    case "deposit_not_verified":
+      return t("statusBlock.depositNotVerified");
   }
 }
 
@@ -83,8 +85,20 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
   const status = order.status.toLowerCase();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+  // A manual COD deposit plan that is still pending (never verified) or cancelled (refunded)
+  // blocks progression to any fulfilment-eligible status.
+  const planStatus = order.paymentPlan?.status;
+  const hasUnverifiedManualDeposit =
+    order.paymentMethod === "cod"
+    && planStatus !== null
+    && planStatus !== undefined
+    && ["pending", "cancelled"].includes(planStatus);
   // Only changes without side effects are offered; one that can't be chosen says why, right in the menu.
-  const options = getAdminOrderStatusOptions(status, { ...order, unitsWithCourier: unitsWithCourier(order) });
+  const options = getAdminOrderStatusOptions(status, {
+    ...order,
+    unitsWithCourier: unitsWithCourier(order),
+    hasUnverifiedManualDeposit,
+  });
   const blocked = new Map(options.filter((option) => option.block).map((option) => [option.status as string, option.block!]));
   const cancelBlock = blocked.get("cancelled");
   const changeable = !statusLocked(order, canChangeStatus) && options.length > 0;

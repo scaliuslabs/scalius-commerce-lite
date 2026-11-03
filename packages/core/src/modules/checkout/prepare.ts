@@ -44,13 +44,21 @@ import {
     PaymentStatus,
     OrderStatus,
     FulfillmentStatus,
+    PaymentPlanStatus,
+    paymentPlans,
 } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { readStoreCurrency } from "../markets";
 import { resolveAddressWithLocation, type ResolvedAddress } from "../customers";
-import { checkoutDocument } from "../settings";
+import {
+    checkoutDocument,
+    businessDocument,
+    whatsappDocument,
+    customerAuthDocument,
+} from "../settings";
 import { ValidationError } from "@scalius/core/errors";
 import {
   orderBillingAddressColumns,
@@ -184,6 +192,16 @@ export interface StorefrontCheckoutPolicySnapshot {
      * refused, so no caller can skip the eligibility check.
      */
     paymentTermsDays?: number | null;
+    /** Manual COD deposit: when enabled, COD buyers pay a deposit offline before fulfilment. */
+    codDepositEnabled: boolean;
+    /** "fixed" = codDepositAmount in major units; "percentage" = codDepositPercent of the order total. */
+    codDepositMode: "fixed" | "percentage";
+    /** Fixed-mode deposit amount in major units (e.g. 500.00 BDT). */
+    codDepositAmount: number;
+    /** Percentage-mode deposit: whole percent 1-99 of the order total. */
+    codDepositPercent: number;
+    /** Merchant-authored payment instructions snapshotted at order placement. */
+    codDepositInstructions: string;
 }
 
 const STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF = Symbol("scalius.storefrontDeliveryPreflightResult");
@@ -1030,7 +1048,37 @@ export async function createStorefrontOrder(
     // The deposit plan's balance is cash on delivery: it applies only where
     // cash fits every line, so a download or a gift card is paid in full
     // online and delivered at once (isDepositPaymentRequired).
-    const depositApplies = isPartialEnabled && !deferred && allowsCashOnDelivery;
+    const codDepositSettings = checkoutPolicySnapshot ?? {
+        codDepositEnabled: false,
+        codDepositMode: "fixed",
+        codDepositAmount: 0,
+        codDepositPercent: 0,
+        codDepositInstructions: "",
+    };
+    // Manual COD deposit: COD buyers pay a deposit offline before fulfilment.
+    // Disjoint from the online advance (partialPaymentEnabled): gateway orders
+    // take the online advance, COD orders take the manual deposit.
+    let depositMinor = 0;
+    const manualDepositApplies = codDepositSettings.codDepositEnabled
+        && paymentMethod === PaymentMethod.COD
+        && !deferred
+        && allowsCashOnDelivery
+        && !giftCardsApplied
+        && taxQuote.currencyCode === requestCurrency.code;
+    if (manualDepositApplies) {
+        if (codDepositSettings.codDepositMode === "fixed") {
+            depositMinor = toMinor(codDepositSettings.codDepositAmount, requestCurrency.decimalPlaces);
+        } else {
+            depositMinor = Math.min(taxQuote.totalMinor - 1, Math.ceil(taxQuote.totalMinor * codDepositSettings.codDepositPercent / 100));
+        }
+        // The deposit must leave a balance for COD collection; otherwise COD
+        // is unavailable for this order (never silently degraded to plain COD).
+        if (depositMinor >= taxQuote.totalMinor) {
+            throw new ValidationError("Cash on delivery is unavailable for this order: the deposit must be less than the order total.");
+        }
+    }
+    const onlineDepositApplies = isPartialEnabled && !deferred && allowsCashOnDelivery && paymentMethod !== PaymentMethod.COD;
+    const depositApplies = manualDepositApplies || onlineDepositApplies;
     if (paymentMethod === PaymentMethod.COD) {
         // Cash on delivery collects cash amounts (whole taka in BDT): an
         // amount due it cannot collect exactly is refused before the commit.
@@ -1039,10 +1087,15 @@ export async function createStorefrontOrder(
         if (cashIssue) throw new ValidationError(cashIssue, { reason: CASH_ON_DELIVERY_AMOUNT_REASON });
     }
 
-    if (isPartialEnabled && paymentMethod === PaymentMethod.COD) {
-        throw new ValidationError(giftCardsApplied
-            ? "This store takes an advance payment online. Pay the rest online, or cover the whole order with gift cards."
-            : "Advance deposit is required. COD cannot be selected for the full amount directly.");
+    if (paymentMethod === PaymentMethod.COD && !manualDepositApplies) {
+        if (codDepositSettings.codDepositEnabled) {
+            throw new ValidationError("Cash on delivery is unavailable for this order.");
+        }
+        if (isPartialEnabled) {
+            throw new ValidationError(giftCardsApplied
+                ? "This store takes an advance payment online. Pay the rest online, or cover the whole order with gift cards."
+                : "Advance deposit is required. COD cannot be selected for the full amount directly.");
+        }
     }
     const requiresCashCollection = paymentMethod === PaymentMethod.COD || (!giftCardsApplied && isDepositPaymentRequired({
         partialPaymentEnabled: depositApplies,
@@ -1079,6 +1132,36 @@ export async function createStorefrontOrder(
     // ------------------------------------------------------------------
     // Build Commit Payload
     // ------------------------------------------------------------------
+    // Order-time contact snapshot for manual COD deposit plans: what the
+    // buyer was told at placement (the plan, not the live setting, is the
+    // authority after settings changes).
+    let contactSnapshot: string | null = null;
+    if (manualDepositApplies) {
+        const [business, whatsapp, customerAuth] = await Promise.all([
+            businessDocument.read(storefrontDb),
+            whatsappDocument.read(storefrontDb),
+            customerAuthDocument.read(storefrontDb),
+        ]);
+        let whatsappUrl: string | null = null;
+        if (customerAuth?.whatsapp === "same_as_phone" && business?.phone) {
+            whatsappUrl = `https://wa.me/${business.phone}`;
+        } else if (customerAuth?.whatsapp === "separate" && business?.socialLinks) {
+            whatsappUrl = business.socialLinks
+                .find((s) => s.label.toLowerCase() === "whatsapp")?.url ?? null;
+        }
+        contactSnapshot = JSON.stringify({
+            phone: business?.phone ?? null,
+            email: business?.email ?? null,
+            whatsappUrl,
+            socialLinks: (business?.socialLinks ?? []).map((s) => ({
+                id: s.id,
+                label: s.label,
+                url: s.url,
+                iconUrl: s.iconUrl ?? null,
+            })),
+        });
+    }
+
     const orderId = identity?.orderId ?? generateOrderId();
     // The rate this order keeps: its market's, locked for the market's minutes
     // from now; the quote and the order price at the same rate (the authority
@@ -1196,6 +1279,14 @@ export async function createStorefrontOrder(
             : {}),
         requestUrl,
         taxQuote,
+        ...(manualDepositApplies ? {
+            codDeposit: {
+                amountMinor: depositMinor,
+                instructions: codDepositSettings.codDepositInstructions || null,
+                percent: codDepositSettings.codDepositMode === "percentage" ? codDepositSettings.codDepositPercent : null,
+                contactSnapshot,
+            },
+        } : {}),
     };
 
     return {

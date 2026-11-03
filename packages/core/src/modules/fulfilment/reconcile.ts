@@ -5,6 +5,7 @@ import {
     deliveryShipments,
     OrderStatus,
     ShipmentStatus,
+    PaymentMethod,
 } from "@scalius/database/schema";
 import {
   type CourierProvidersSource,
@@ -18,6 +19,7 @@ import {
   noActiveRefundAttemptForOrderIdCondition,
   validateTransition,
 } from "../order-kernel";
+import { assertManualCodDepositVerified } from "../payments";
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
@@ -125,6 +127,7 @@ async function readUnknownShipmentResolutionTarget(
         version: orders.version,
         fulfillmentStatus: orders.fulfillmentStatus,
         shipmentClaimId: orders.shipmentClaimId,
+        paymentMethod: orders.paymentMethod,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
 
@@ -466,6 +469,7 @@ export async function reconcileOrderShipment(
             version: orders.version,
             fulfillmentStatus: orders.fulfillmentStatus,
             shipmentClaimId: orders.shipmentClaimId,
+            paymentMethod: orders.paymentMethod,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -488,6 +492,12 @@ export async function reconcileOrderShipment(
         let orderStatusChanged = false;
         if (targetOrderStatus !== order.status) {
             validateTransition("order", order.status, targetOrderStatus);
+            // A manual COD deposit order cannot move to a fulfilment-eligible state
+            // until staff verify the deposit.
+            if ((targetOrderStatus === "shipped" || targetOrderStatus === "delivered" || targetOrderStatus === "confirmed")
+                && order.paymentMethod === PaymentMethod.COD) {
+                await assertManualCodDepositVerified(db, orderId);
+            }
             const statusResult = await db
                 .update(orders)
                 .set({

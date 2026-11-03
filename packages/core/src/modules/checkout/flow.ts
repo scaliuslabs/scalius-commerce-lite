@@ -23,6 +23,7 @@ export function isCheckoutGatewayUsableForFlow(options: {
     checkoutMode: string | null | undefined;
     partialPaymentEnabled: boolean;
     partialPaymentAmount: unknown;
+    codDepositEnabled: boolean;
 }): boolean {
     const checkoutMode = options.checkoutMode ?? "all";
 
@@ -33,7 +34,8 @@ export function isCheckoutGatewayUsableForFlow(options: {
     if (options.gatewayId === COD_PAYMENT_METHOD && checkoutMode === "gateways_only") return false;
     if (options.gatewayId !== COD_PAYMENT_METHOD && checkoutMode === "guest_cod_only") return false;
 
-    if (options.partialPaymentEnabled) {
+    if (options.partialPaymentEnabled && !options.codDepositEnabled) {
+        // Online advance: COD excluded; only online gateways may take the deposit.
         if (!isPositiveDepositAmount(options.partialPaymentAmount)) return false;
         return isOnlinePaymentMethod(options.gatewayId);
     }
@@ -45,6 +47,10 @@ export function getCheckoutFlowValidationIssues(options: {
     checkoutMode: string | null | undefined;
     partialPaymentEnabled: boolean;
     partialPaymentAmount: unknown;
+    codDepositEnabled?: boolean;
+    codDepositMode?: "fixed" | "percentage";
+    codDepositAmount?: number;
+    codDepositPercent?: number;
     availablePaymentMethods?: readonly string[];
     /** The request's gateways, for their amount limits; built-in ones alone by default. */
     paymentProviders?: PaymentProviders;
@@ -88,6 +94,27 @@ export function getCheckoutFlowValidationIssues(options: {
     }
     if (availablePaymentMethods && !hasOnlineGateway) {
         issues.push("Partial payment needs at least one enabled and configured online payment gateway.");
+    }
+
+    // Manual COD deposit validation.
+    if (options.codDepositEnabled) {
+        if (!hasCod) {
+            issues.push("Cash on delivery deposit requires Cash on Delivery to be enabled.");
+        }
+        if (checkoutMode === "gateways_only") {
+            issues.push("Cash on delivery deposit is not available in Online Gateways Only mode.");
+        }
+        const amount = options.codDepositAmount ?? 0;
+        const percent = options.codDepositPercent ?? 0;
+        if (options.codDepositMode === "fixed") {
+            if (!Number.isFinite(amount) || amount <= 0) {
+                issues.push("Cash on delivery deposit amount must be greater than zero.");
+            }
+        } else {
+            if (!Number.isInteger(percent) || percent < 1 || percent > 99) {
+                issues.push("Cash on delivery deposit percentage must be a whole number between 1 and 99.");
+            }
+        }
     }
 
     return issues;

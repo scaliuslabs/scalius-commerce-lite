@@ -15,6 +15,7 @@ export interface StorefrontCheckoutSettingsSnapshot {
   checkoutMode: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;
+  codDepositEnabled: boolean;
 }
 
 export function assertStorefrontCheckoutPolicy(
@@ -33,6 +34,7 @@ export function assertStorefrontCheckoutPolicy(
     checkoutMode: checkoutSettings.checkoutMode,
     partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+    codDepositEnabled: checkoutSettings.codDepositEnabled,
   };
 
   try {
@@ -59,6 +61,7 @@ export function assertStorefrontCheckoutPolicy(
     checkoutMode: snapshot.checkoutMode,
     partialPaymentEnabled: snapshot.partialPaymentEnabled,
     partialPaymentAmount: snapshot.partialPaymentAmount,
+    codDepositEnabled: snapshot.codDepositEnabled,
   })) {
     throw new ValidationError(
       `${providers.label(paymentMethod)} is not available for the current checkout settings.`,

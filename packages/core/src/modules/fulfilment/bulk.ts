@@ -5,7 +5,9 @@ import {
     deliveryShipments,
     OrderStatus,
     ShipmentStatus,
+    PaymentMethod,
 } from "@scalius/database/schema";
+import { assertManualCodDepositVerified } from "../payments";
 import {
   type CourierProvidersSource,
   createShipment,
@@ -150,6 +152,7 @@ export async function bulkShipOrders(
                 version: orders.version,
                 shipmentClaimId: orders.shipmentClaimId,
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+                paymentMethod: orders.paymentMethod,
             }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError(`Order ${orderId} not found`);
             await assertNoActiveRefundAttempt(db, orderId, {
@@ -187,6 +190,10 @@ export async function bulkShipOrders(
             }
             validateTransition("order", order.status, OrderStatus.SHIPPED);
             await assertOrderNotOnHold(db, orderId);
+            // A manual COD deposit order cannot be shipped until staff verify the deposit.
+            if (order.paymentMethod === PaymentMethod.COD) {
+                await assertManualCodDepositVerified(db, orderId);
+            }
 
             const claimId = createShipmentClaimId();
             const claimResult = await db.update(orders).set({

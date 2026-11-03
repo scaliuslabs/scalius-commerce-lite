@@ -14,6 +14,7 @@ export interface CheckoutFlowSettings {
   checkoutMode: "guest_cod_only" | "gateways_only" | "all";
   partialPaymentEnabled: boolean;
   partialPaymentAmount: number;
+  codDepositEnabled: boolean;
 }
 
 export async function assertGatewaySelectedForCheckout(
@@ -34,6 +35,7 @@ export async function assertGatewaySelectedForCheckout(
     checkoutMode: settings.checkoutMode,
     partialPaymentEnabled: settings.partialPaymentEnabled,
     partialPaymentAmount: settings.partialPaymentAmount,
+    codDepositEnabled: settings.codDepositEnabled,
   };
 
   if (!isCheckoutGatewayUsableForFlow({
@@ -41,6 +43,7 @@ export async function assertGatewaySelectedForCheckout(
     checkoutMode: checkoutSettings.checkoutMode,
     partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+    codDepositEnabled: checkoutSettings.codDepositEnabled,
   })) {
     throw new ServiceUnavailableError(`${providers.label(method)} gateway is not available for the current checkout settings.`);
   }

@@ -202,6 +202,7 @@ function assertGiftCardCheckoutPolicy(
     checkoutMode: authority.checkoutSettings.checkoutMode,
     partialPaymentEnabled: authority.checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: authority.checkoutSettings.partialPaymentAmount,
+    codDepositEnabled: authority.checkoutSettings.codDepositEnabled,
   };
 }
 
@@ -641,6 +642,11 @@ app.openapi(createOrderRoute, async (c) => {
         shippingCountries: checkoutAuthority.shippingCountries,
         requireFullBillingAddress: checkoutAuthority.checkoutSettings.requireFullBillingAddress,
         paymentTermsDays: deferredTerms?.days ?? null,
+        codDepositEnabled: checkoutAuthority.checkoutSettings.codDepositEnabled,
+        codDepositMode: checkoutAuthority.checkoutSettings.codDepositMode,
+        codDepositAmount: checkoutAuthority.checkoutSettings.codDepositAmount,
+        codDepositPercent: checkoutAuthority.checkoutSettings.codDepositPercent,
+        codDepositInstructions: checkoutAuthority.checkoutSettings.codDepositInstructions,
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },

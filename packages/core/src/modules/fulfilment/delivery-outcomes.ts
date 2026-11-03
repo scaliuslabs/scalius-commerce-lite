@@ -7,6 +7,7 @@ import {
     OrderStatus,
     FulfillmentStatus,
     ShipmentStatus,
+    PaymentMethod,
 } from "@scalius/database/schema";
 import {
   markCODReturned,
@@ -26,6 +27,7 @@ import {
 } from "../order-kernel";
 import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { assertManualCodDepositVerified } from "../payments";
 import { fromMinor } from "@scalius/shared/money";
 import {
   applyOrderStatusChange,
@@ -56,6 +58,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         inventoryAction: orders.inventoryAction,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        paymentMethod: orders.paymentMethod,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     const currency = resolveOrderCurrencySnapshot(order);
@@ -119,6 +122,10 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             };
             if (currentStatus !== OrderStatus.DELIVERED) {
                 validateTransition("order", currentStatus, OrderStatus.DELIVERED);
+                // A manual COD deposit order cannot be delivered until staff verify the deposit.
+                if (order.paymentMethod === PaymentMethod.COD) {
+                    await assertManualCodDepositVerified(db, orderId);
+                }
                 // Cash at the counter or the service delivers the order only
                 // once every line was handed over (F7).
                 await assertOrderLinesHandedOver(db, orderId, order.requiresShipping);

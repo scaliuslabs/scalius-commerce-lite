@@ -17,6 +17,8 @@ import {
     orderDiscountAllocations,
     notificationOutbox,
     OrderStatus,
+    paymentPlans,
+    PaymentPlanStatus,
     promotionRedemptions,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -540,6 +542,20 @@ export async function commitStorefrontOrderPayload(
                     ...checkoutOrderFacts(db, payload, customer, appliedPromotion),
                     ...(attemptPlan?.writesAfterOrder ?? []),
                     ...(agentPlan?.writesAfterOrder ?? []),
+                    ...(payload.codDeposit ? [
+                        db.insert(paymentPlans).values({
+                            id: `plan_${nanoid()}`,
+                            orderId: payload.orderData.id,
+                            totalAmountMinor: payload.orderData.totalAmountMinor,
+                            depositAmountMinor: payload.codDeposit.amountMinor,
+                            balanceDueMinor: payload.orderData.totalAmountMinor - payload.codDeposit.amountMinor,
+                            kind: "manual",
+                            instructions: payload.codDeposit.instructions,
+                            percent: payload.codDeposit.percent,
+                            contactSnapshot: payload.codDeposit.contactSnapshot,
+                            status: PaymentPlanStatus.PENDING,
+                        }),
+                    ] : []),
                 ],
             };
         },

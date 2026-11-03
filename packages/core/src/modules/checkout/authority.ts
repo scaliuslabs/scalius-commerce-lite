@@ -134,6 +134,16 @@ export interface StorefrontCheckoutSettingsAuthority {
     partialPaymentAmount: number;
     /** Settings → Checkout: every order asks for a full billing address. */
     requireFullBillingAddress: boolean;
+    /** Manual COD deposit: when enabled, COD buyers pay a deposit offline before fulfilment. */
+    codDepositEnabled: boolean;
+    /** "fixed" = codDepositAmount in major units; "percentage" = codDepositPercent of the order total. */
+    codDepositMode: "fixed" | "percentage";
+    /** Fixed-mode deposit amount in major units (e.g. 500.00 BDT). */
+    codDepositAmount: number;
+    /** Percentage-mode deposit: whole percent 1-99 of the order total. */
+    codDepositPercent: number;
+    /** Merchant-authored payment instructions snapshotted at order placement. */
+    codDepositInstructions: string;
 }
 
 /** The shop currency document and the backup market's price increment every checkout prices at. */
@@ -491,6 +501,11 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                 partialPaymentEnabled: site.partialPaymentEnabled,
                                 partialPaymentAmount: site.partialPaymentAmount,
                                 requireFullBillingAddress: site.requireFullBillingAddress,
+                                codDepositEnabled: site.codDepositEnabled,
+                                codDepositMode: site.codDepositMode,
+                                codDepositAmount: site.codDepositAmount,
+                                codDepositPercent: site.codDepositPercent,
+                                codDepositInstructions: site.codDepositInstructions,
                             },
                             allowedCountries,
                             shippingCountries,

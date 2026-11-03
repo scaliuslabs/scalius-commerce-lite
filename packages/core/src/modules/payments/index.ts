@@ -44,6 +44,7 @@ export type {
 
 export { recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 export { recordOrderPayment, type RecordedPaymentLine, type RecordOrderPaymentInput, type RecordOrderPaymentResult } from "./recorded-payment";
+export { assertManualCodDepositVerified } from "./manual-cod-deposit";
 
 // --- Payment processing ---
 export { processPaymentConfirmed, processPaymentFailed, type PaymentFailureEvent } from "./process-payment";

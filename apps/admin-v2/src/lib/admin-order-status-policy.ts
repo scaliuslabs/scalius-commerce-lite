@@ -78,6 +78,8 @@ export interface AdminOrderStatusFacts extends AdminOrderPaymentState {
   /** Units handed to a courier; unknown on list rows, which only know the fulfillment state. */
   unitsWithCourier?: number | null;
   fulfillmentStatus?: string | null;
+  /** A manual COD deposit plan that is still pending (never verified) or cancelled (refunded). */
+  hasUnverifiedManualDeposit?: boolean | null;
 }
 
 /**
@@ -89,7 +91,8 @@ export type AdminOrderStatusBlock =
   | { code: "cancel_needs_refund" }
   | { code: "with_courier"; units: number | null }
   | { code: "cash_not_collected" }
-  | { code: "money_due" };
+  | { code: "money_due" }
+  | { code: "deposit_not_verified" };
 
 export function getAdminOrderStatusBlock(
   status: string,
@@ -105,6 +108,9 @@ export function getAdminOrderStatusBlock(
   if (next === "completed") {
     const settled = ["paid", "partially_refunded"].includes(facts.paymentStatus ?? "") && !((facts.balanceDue ?? 0) > 0);
     if (!settled) return { code: facts.paymentMethod === "cod" ? "cash_not_collected" : "money_due" };
+  }
+  if (facts.hasUnverifiedManualDeposit && ["confirmed", "processing", "shipped", "delivered", "completed"].includes(next)) {
+    return { code: "deposit_not_verified" };
   }
   return null;
 }

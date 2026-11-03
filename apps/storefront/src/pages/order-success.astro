@@ -635,6 +635,47 @@ const orderRecommendations = order && showsSuccessHero && !statusView
             >
           </div>
           {receiptPaymentTerms && <p class="text-end text-sm font-medium" data-payment-terms>{receiptPaymentTerms}</p>}
+          {order.paymentPlan?.kind === "manual" && (
+            <div class="mt-3 rounded-lg border border-border bg-muted/50 p-3">
+              <p class="font-medium text-foreground" data-manual-cod-deposit-status>
+                {order.paymentPlan.status === "pending"
+                  ? copy.codDepositRequiredText
+                  : order.paymentPlan.status === "deposit_paid"
+                    ? copy.codDepositReceivedText
+                    : copy.codDepositCancelledText}
+              </p>
+              {order.paymentPlan.instructions && (
+                <p class="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words" data-manual-cod-deposit-instructions>
+                  {order.paymentPlan.instructions}
+                </p>
+              )}
+              {order.paymentPlan.contactSnapshot && (
+                <div class="mt-2 text-sm">
+                  <p class="font-medium text-foreground">{copy.contactStoreText}</p>
+                  {order.paymentPlan.contactSnapshot.phone && (
+                    <p class="text-sm text-muted-foreground">
+                      <span class="font-medium">{copy.contactPhoneText}</span> {formatBdMobile(order.paymentPlan.contactSnapshot.phone)}
+                    </p>
+                  )}
+                  {order.paymentPlan.contactSnapshot.email && (
+                    <p class="text-sm text-muted-foreground">
+                      <span class="font-medium">{copy.contactEmailText}</span> {order.paymentPlan.contactSnapshot.email}
+                    </p>
+                  )}
+                  {order.paymentPlan.contactSnapshot.whatsappUrl && (
+                    <p class="text-sm text-muted-foreground">
+                      <span class="font-medium">{copy.contactWhatsappText}</span> <a href={order.paymentPlan.contactSnapshot.whatsappUrl} class="text-primary underline underline-offset-2">{order.paymentPlan.contactSnapshot.whatsappUrl}</a>
+                    </p>
+                  )}
+                  {order.paymentPlan.contactSnapshot.socialLinks.map((link) => (
+                    <p class="text-sm text-muted-foreground" key={link.id}>
+                      <span class="font-medium">{link.label}:</span> <a href={link.url} class="text-primary underline underline-offset-2">{link.label}</a>
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {receiptMoney && receiptDiscounts && (
             <div class="space-y-3 border-t border-border pt-4">
               <div class="flex justify-between gap-4">

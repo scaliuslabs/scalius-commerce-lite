@@ -707,6 +707,16 @@ export interface StorefrontOrderCommitPayload {
     }>;
     requestUrl: string;
     taxQuote: TaxQuote;
+    /**
+     * Manual COD deposit plan to create with the order (PENDING, kind="manual").
+     * Present only when the COD order requires a manual deposit before fulfilment.
+     */
+    codDeposit?: {
+        amountMinor: number;
+        instructions: string | null;
+        percent: number | null;
+        contactSnapshot: string | null;
+    } | null;
 }
 
 // ─────────────────────────────────────────

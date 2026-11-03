@@ -97,6 +97,14 @@ const checkoutConfigSchema = z.object({
     channels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
     label: z.object({ en: z.string().max(200), bn: z.string().max(200) }),
   }),
+  /** Manual COD deposit: when enabled, COD buyers pay a deposit offline before fulfilment. */
+  codDeposit: z.object({
+    enabled: z.boolean(),
+    mode: z.enum(["fixed", "percentage"]),
+    amount: z.number().min(0),
+    percent: z.number().min(0).max(99),
+    instructions: z.string(),
+  }),
 });
 
 // ─── GET /config ─────────────────────────────────────────────────────────────

@@ -65,6 +65,10 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
         checkoutMode: checkoutSettings.checkoutMode,
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+        codDepositEnabled: checkoutSettings.codDepositEnabled,
+        codDepositMode: checkoutSettings.codDepositMode,
+        codDepositAmount: checkoutSettings.codDepositAmount,
+        codDepositPercent: checkoutSettings.codDepositPercent,
         availablePaymentMethods: nextPaymentMethods,
         paymentProviders: providers,
         currencyCode: currencySettings.currencyCode,
@@ -266,6 +270,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             checkoutMode: checkoutSettings?.checkoutMode ?? "all",
             partialPaymentEnabled: checkoutSettings?.partialPaymentEnabled ?? false,
             partialPaymentAmount: checkoutSettings?.partialPaymentAmount ?? 0,
+            codDepositEnabled: checkoutSettings?.codDepositEnabled ?? false,
         }),
     );
     const flowDefaultMethod = flowActiveMethods.includes(activeConfig.defaultMethod)
@@ -409,6 +414,10 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         checkoutMode: checkoutSettings.checkoutMode,
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+        codDepositEnabled: checkoutSettings.codDepositEnabled,
+        codDepositMode: checkoutSettings.codDepositMode,
+        codDepositAmount: checkoutSettings.codDepositAmount,
+        codDepositPercent: checkoutSettings.codDepositPercent,
         availablePaymentMethods: usableMethods,
         paymentProviders: providers,
         currencyCode: currencySettings.currencyCode,
@@ -421,6 +430,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         checkoutMode: checkoutSettings.checkoutMode,
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         partialPaymentAmount: checkoutSettings.partialPaymentAmount,
+        codDepositEnabled: checkoutSettings.codDepositEnabled,
     })) {
         throw new ValidationError("Default method is hidden by the current checkout flow settings.");
     }

@@ -6,6 +6,7 @@ import {
   createCustomerOrderSupportRequest,
   getCustomerOrderDetail,
   getCustomerSession,
+  type ContactSnapshot,
   type CustomerOrderDetail,
   type CustomerOrderPaymentSession,
   type CustomerOrderShipment,
@@ -726,6 +727,26 @@ function renderDelivery(detail: AccountOrderDetail): void {
   }
 }
 
+/** Renders the contact snapshot the buyer was shown at order placement: phone, WhatsApp, email, social links. */
+function renderManualCodDepositContact(snapshot: ContactSnapshot): string {
+  const parts: string[] = [];
+  if (snapshot.phone) {
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">Phone:</span> ${escapeHtml(formatBdMobile(snapshot.phone))}</p>`);
+  }
+  if (snapshot.email) {
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">Email:</span> ${escapeHtml(snapshot.email)}</p>`);
+  }
+  if (snapshot.whatsappUrl) {
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">WhatsApp:</span> <a href="${escapeHtml(snapshot.whatsappUrl)}" class="text-primary underline underline-offset-2">${escapeHtml(snapshot.whatsappUrl)}</a></p>`);
+  }
+  for (const link of snapshot.socialLinks ?? []) {
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${escapeHtml(link.label)}:</span> <a href="${escapeHtml(link.url)}" class="text-primary underline underline-offset-2">${escapeHtml(link.label)}</a></p>`);
+  }
+  return parts.length > 0
+    ? `<div class="mt-2 text-sm"><p class="font-medium text-foreground">Contact the store</p>${parts.join("")}</div>`
+    : "";
+}
+
 function renderPayment(detail: AccountOrderDetail): void {
   const { order } = detail;
   // "Gift card + Cash on delivery" and "৳800 due on delivery" when cards paid part.
@@ -754,6 +775,20 @@ function renderPayment(detail: AccountOrderDetail): void {
       line.balanceDue > 0 && order.paidAmount > 0 && !paidByGiftCards ? `<p class="text-muted-foreground">${escapeHtml(words.paid(money(order.paidAmount)))}</p>` : "",
       detail.cod?.collectedAmount ? `<p class="text-muted-foreground">${escapeHtml(words.collected(money(detail.cod.collectedAmount)))}</p>` : "",
       detail.paymentPlan ? `<p class="text-muted-foreground">${escapeHtml(words.advance(money(detail.paymentPlan.depositAmount)))}</p>` : "",
+      // Manual COD deposit: status, merchant instructions, and the contact the buyer was told to use.
+      detail.paymentPlan?.kind === "manual" ? `
+        <div class="mt-3 rounded-lg border border-border bg-muted/50 p-3">
+          <p class="font-medium text-foreground" data-manual-cod-deposit-status>${escapeHtml(
+            detail.paymentPlan.status === "pending"
+              ? copy.codDepositRequiredText ?? "Deposit required before dispatch"
+              : detail.paymentPlan.status === "deposit_paid"
+                ? "Deposit received — your order is being prepared"
+                : "Deposit cancelled"
+          )}</p>
+          ${detail.paymentPlan.instructions ? `<p class="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words" data-manual-cod-deposit-instructions>${escapeHtml(detail.paymentPlan.instructions)}</p>` : ""}
+          ${detail.paymentPlan.contactSnapshot ? renderManualCodDepositContact(detail.paymentPlan.contactSnapshot) : ""}
+        </div>
+      ` : "",
       refunds,
     ].join("");
   }

@@ -15,9 +15,11 @@ import {
     orderRefunds,
     refundAttempts,
     giftCards,
+    paymentPlans,
     PaymentStatus,
     OrderStatus,
     PaymentRecordStatus,
+    PaymentPlanStatus,
     type OrderPayment,
 } from "@scalius/database/schema";
 import {
@@ -924,6 +926,31 @@ export async function finalizeAcceptedRefundAttemptIds(
             throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
         }
 
+        // A manual COD deposit plan must be cancelled when its deposit is
+        // refunded — otherwise the fulfilment guard would still see a paid
+        // deposit and allow fulfilment of an order whose deposit came back.
+        const plan = await db
+            .select({
+                id: paymentPlans.id,
+                status: paymentPlans.status,
+                kind: paymentPlans.kind,
+            })
+            .from(paymentPlans)
+            .where(eq(paymentPlans.orderId, orderId))
+            .get();
+        if (plan && plan.kind === "manual" && plan.status === PaymentPlanStatus.DEPOSIT_PAID) {
+            await db.update(paymentPlans)
+                .set({
+                    status: PaymentPlanStatus.CANCELLED,
+                    cancelledAt: sql`unixepoch()`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(paymentPlans.id, plan.id),
+                    eq(paymentPlans.status, PaymentPlanStatus.DEPOSIT_PAID),
+                ));
+        }
+
         if (shouldReleaseInventory) {
             const impact = await applyInventoryForStatusChangeWithImpact(
                 db,
@@ -1704,6 +1731,14 @@ export async function processRefund(
     if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
         throw new ValidationError(
             "Confirm that the customer has already received the refund by hand (cash or transfer) before recording it.",
+        );
+    }
+    // A manual COD deposit can only be refunded in full — a partial refund would
+    // leave the order's deposit plan in an ambiguous state. Refund the full
+    // deposit instead.
+    if (hasManualCodAllocation && refundAmount < order.paidAmountMinor) {
+        throw new ValidationError(
+            "Partial refunds of a manual COD deposit are not supported. Refund the full deposit instead.",
         );
     }
     const refundRequestHash = await buildRefundRequestHash({

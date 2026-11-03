@@ -81,6 +81,14 @@ export interface CheckoutConfig {
         channels: Array<"email" | "sms" | "whatsapp">;
         label: { en: string; bn: string };
     };
+    /** Manual COD deposit: when enabled, COD buyers pay a deposit offline before fulfilment. */
+    codDeposit: {
+        enabled: boolean;
+        mode: "fixed" | "percentage";
+        amount: number;
+        percent: number;
+        instructions: string;
+    };
     /** The market of the requested presence (MARKETS-DESIGN D4); absent when none was asked for. */
     market?: PresenceMarket;
 }
@@ -183,6 +191,13 @@ export async function getCheckoutConfig(
             unavailable: true,
             unavailableMessage: CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
             marketingConsent,
+            codDeposit: {
+                enabled: checkout.codDepositEnabled,
+                mode: checkout.codDepositMode,
+                amount: checkout.codDepositAmount,
+                percent: checkout.codDepositPercent,
+                instructions: checkout.codDepositInstructions,
+            },
             ...(market === undefined ? {} : { market }),
         };
     }
@@ -196,7 +211,7 @@ export async function getCheckoutConfig(
     const gateways: Array<Record<string, unknown>> = [];
     for (const methodId of activePaymentMethods.enabledMethods) {
         if (providers.currencyIssue(methodId, localCurrencyCode) !== null) continue;
-        if (!isCheckoutGatewayUsableForFlow({ gatewayId: methodId, checkoutMode, partialPaymentEnabled, partialPaymentAmount })) continue;
+        if (!isCheckoutGatewayUsableForFlow({ gatewayId: methodId, checkoutMode, partialPaymentEnabled, partialPaymentAmount, codDepositEnabled: checkout.codDepositEnabled })) continue;
         // A method that serves only some shipping countries says which:
         // checkout hides it for a delivery elsewhere (cash on delivery: BD).
         const countries = providers.countries(methodId);
@@ -273,6 +288,13 @@ export async function getCheckoutConfig(
             ? "Checkout is temporarily unavailable while the merchant finishes payment setup."
             : undefined,
         marketingConsent,
+        codDeposit: {
+            enabled: checkout.codDepositEnabled,
+            mode: checkout.codDepositMode,
+            amount: checkout.codDepositAmount,
+            percent: checkout.codDepositPercent,
+            instructions: checkout.codDepositInstructions,
+        },
         ...(market === undefined ? {} : { market }),
     };
 }

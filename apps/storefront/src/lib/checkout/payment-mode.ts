@@ -1,6 +1,7 @@
 import { isDepositPaymentRequired } from "@scalius/shared/checkout-payment";
 export { isDepositPaymentRequired } from "@scalius/shared/checkout-payment";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
+import { allowsCashOnDelivery } from "@scalius/shared/fulfilment";
 import type { CheckoutConfig } from "./types";
 import { CheckoutCopyError } from "./error-messages";
 
@@ -21,7 +22,7 @@ export function resolveExplicitCheckoutPaymentRequest(
 }
 
 export function resolveCheckoutPaymentRequest(
-  config: Pick<CheckoutConfig, "partialPaymentEnabled" | "partialPaymentAmount">,
+  config: Pick<CheckoutConfig, "partialPaymentEnabled" | "partialPaymentAmount" | "codDeposit">,
   totalAmount: number,
   /** The quoted lines' types: a download or a gift card is paid in full (no deposit plan). */
   lineTypes: readonly (FulfillmentType | null)[],
@@ -32,4 +33,51 @@ export function resolveCheckoutPaymentRequest(
   }
 
   return { paymentType: "full" };
+}
+
+/**
+ * Whether a COD order on this cart requires a manual deposit before dispatch.
+ * The deposit is collected offline (bank transfer, mobile wallet, cash at
+ * counter), not charged online: the order is placed with `paymentMethod: "cod"`
+ * and `paymentType: "full"`; staff verify the deposit in the admin.
+ *
+ * Eligible only when all of: physical lines (`allowsCashOnDelivery`), no gift
+ * cards (handled by the caller), order currency === store currency, and the
+ * configured deposit is strictly less than the order total.
+ */
+export function isManualCodDepositRequired(
+  config: Pick<CheckoutConfig, "codDeposit">,
+  totalAmount: number,
+  lineTypes: readonly (FulfillmentType | null)[],
+  storeCurrencyCode: string,
+  orderCurrencyCode: string,
+): boolean {
+  const cd = config.codDeposit;
+  if (!cd?.enabled) return false;
+  if (!allowsCashOnDelivery(lineTypes)) return false;
+  if (orderCurrencyCode !== storeCurrencyCode) return false;
+  const deposit = cd.mode === "fixed"
+    ? Number(cd.amount)
+    : Math.min(totalAmount - 1, Math.ceil(totalAmount * Number(cd.percent) / 100));
+  return Number.isFinite(deposit) && deposit > 0 && deposit < totalAmount;
+}
+
+/**
+ * The deposit amount in major units for a manual COD deposit order, or null
+ * when no manual deposit applies. Fixed mode uses `amount` as-is; percentage
+ * mode rounds up in minor units and clamps so the deposit stays below total.
+ */
+export function manualCodDepositAmount(
+  config: Pick<CheckoutConfig, "codDeposit">,
+  totalAmount: number,
+  decimalPlaces: number,
+): number | null {
+  const cd = config.codDeposit;
+  if (!cd?.enabled) return null;
+  const minor = cd.mode === "fixed"
+    ? Math.round(Number(cd.amount) * 10 ** decimalPlaces)
+    : Math.min(totalAmount - 1, Math.ceil(totalAmount * Number(cd.percent) / 100));
+  return Number.isFinite(minor) && minor > 0 && minor < totalAmount
+    ? minor / 10 ** decimalPlaces
+    : null;
 }

@@ -1229,13 +1229,26 @@ export const paymentPlans = sqliteTable("payment_plans", {
     balanceDueDate: text("balance_due_date"),
     /** Valid: pending | deposit_paid | completed | cancelled (see PaymentPlanStatus enum) */
     status: text("status").notNull().default(PaymentPlanStatus.PENDING),
+    /** `online` = gateway advance (existing path); `manual` = staff-recorded COD deposit */
+    kind: text("kind").notNull().default("online"),
+    /** Order-time snapshot of `codDepositInstructions` for manual COD deposit plans */
+    instructions: text("instructions"),
+    /** Percentage basis (1-99) for percentage-mode manual COD deposits; null in fixed mode */
+    percent: integer("percent"),
+    /** JSON snapshot of business contact (phone/WhatsApp/email/social links) at order placement */
+    contactSnapshot: text("contact_snapshot"),
+    /** Set when a manual plan is cancelled on deposit refund; null otherwise */
+    cancelledAt: integer("cancelled_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    check("payment_plans_kind_check", sql`${table.kind} IN ('online', 'manual')`),
+    check("payment_plans_percent_range", sql`(${table.percent} IS NULL) OR (${table.percent} BETWEEN 1 AND 99)`),
+]);
 
 export const codTracking = sqliteTable("cod_tracking", {
     id: text("id").primaryKey(),

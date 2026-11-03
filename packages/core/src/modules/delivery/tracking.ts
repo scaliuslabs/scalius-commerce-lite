@@ -1,4 +1,4 @@
-import { deliveryShipments, orders, ShipmentStatus } from "@scalius/database/schema";
+import { deliveryShipments, orders, ShipmentStatus, PaymentMethod } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../order-kernel";
 import type { Database } from "@scalius/database/client";
 import { markShipmentReconciliationRequired } from "./delivery.service";
+import { assertManualCodDepositVerified } from "../payments";
 
 function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
   if (!metadata) return {};
@@ -142,6 +143,7 @@ export async function updateOrderStatusFromShipment(
         customerEmail: orders.customerEmail,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        paymentMethod: orders.paymentMethod,
       })
       .from(orders)
       .where(eq(orders.id, shipment.orderId));
@@ -224,6 +226,11 @@ export async function updateOrderStatusFromShipment(
       // CAS update FIRST: only proceed with inventory if we win the version check.
       // This prevents orphaned inventory changes when two concurrent callers
       // (e.g. admin + webhook) both apply inventory before either detects the conflict.
+      // A manual COD deposit order cannot move to a fulfilment-eligible state
+      // until staff verify the deposit.
+      if (newOrderStatus === "shipped" || newOrderStatus === "delivered" || newOrderStatus === "confirmed") {
+        await assertManualCodDepositVerified(db, order.id);
+      }
       const result = await db
         .update(orders)
         .set({

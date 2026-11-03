@@ -11744,6 +11744,13 @@ export type GetApiV1CheckoutConfigResponses = {
                     bn: string;
                 };
             };
+            codDeposit: {
+                enabled: boolean;
+                mode: 'fixed' | 'percentage';
+                amount: number;
+                percent: number;
+                instructions: string;
+            };
         };
     };
 };
@@ -25655,6 +25662,10 @@ export type PostApiV1AdminResourcesOrdersByIdPaymentsData = {
          * The order `revision` you read; a different one is refused with 409.
          */
         expectedRevision?: number;
+        /**
+         * `"deposit"` when recording a manual COD deposit. Staff only.
+         */
+        paymentType?: 'deposit';
     };
     headers?: {
         /**
@@ -50144,6 +50155,11 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
             requireFullBillingAddress: boolean;
+            codDepositEnabled: boolean;
+            codDepositMode: 'fixed' | 'percentage';
+            codDepositAmount: number;
+            codDepositPercent: number;
+            codDepositInstructions: string;
             revision: number;
         };
     };
@@ -50159,6 +50175,11 @@ export type PutApiV1AdminSettingsCheckoutFlowData = {
         partialPaymentAmount: number;
         autoFulfilMode?: 'after_payment' | 'after_confirmation';
         requireFullBillingAddress?: boolean;
+        codDepositEnabled?: boolean;
+        codDepositMode?: 'fixed' | 'percentage';
+        codDepositAmount?: number;
+        codDepositPercent?: number;
+        codDepositInstructions?: string;
         expectedRevision: number;
     };
     path?: never;
@@ -50212,6 +50233,11 @@ export type PutApiV1AdminSettingsCheckoutFlowResponses = {
             partialPaymentAmount: number;
             autoFulfilMode: 'after_payment' | 'after_confirmation';
             requireFullBillingAddress: boolean;
+            codDepositEnabled: boolean;
+            codDepositMode: 'fixed' | 'percentage';
+            codDepositAmount: number;
+            codDepositPercent: number;
+            codDepositInstructions: string;
             revision: number;
         };
     };

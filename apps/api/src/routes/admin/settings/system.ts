@@ -316,6 +316,16 @@ const checkoutFlowSettingsSchema = z.object({
      * postal code the country requires.
      */
     requireFullBillingAddress: z.boolean(),
+    /** Manual COD deposit: when enabled, COD buyers pay a deposit offline before fulfilment. */
+    codDepositEnabled: z.boolean(),
+    /** "fixed" = `codDepositAmount` in major units; "percentage" = `codDepositPercent` of the order total. */
+    codDepositMode: z.enum(["fixed", "percentage"]),
+    /** Fixed-mode deposit amount in major units. */
+    codDepositAmount: z.number(),
+    /** Percentage-mode deposit: whole percent 1-99 of the order total. */
+    codDepositPercent: z.number(),
+    /** Merchant-authored payment instructions shown to the buyer; snapshotted at order placement. */
+    codDepositInstructions: z.string(),
     revision: z.number().int().nonnegative(),
 });
 
@@ -343,11 +353,21 @@ app.openapi(getCheckoutFlowRoute, async (c) => {
 });
 
 const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
-    .omit({ revision: true, autoFulfilMode: true, requireFullBillingAddress: true })
+    .omit({ revision: true, autoFulfilMode: true, requireFullBillingAddress: true, codDepositEnabled: true, codDepositMode: true, codDepositAmount: true, codDepositPercent: true, codDepositInstructions: true })
     .extend({
         autoFulfilMode: checkoutFlowSettingsSchema.shape.autoFulfilMode.optional(),
         /** Omitted: keep the saved choice. */
         requireFullBillingAddress: checkoutFlowSettingsSchema.shape.requireFullBillingAddress.optional(),
+        /** Omitted: keep the saved choice. */
+        codDepositEnabled: checkoutFlowSettingsSchema.shape.codDepositEnabled.optional(),
+        /** Omitted: keep the saved choice. */
+        codDepositMode: checkoutFlowSettingsSchema.shape.codDepositMode.optional(),
+        /** Omitted: keep the saved choice. */
+        codDepositAmount: checkoutFlowSettingsSchema.shape.codDepositAmount.optional(),
+        /** Omitted: keep the saved choice. */
+        codDepositPercent: checkoutFlowSettingsSchema.shape.codDepositPercent.optional(),
+        /** Omitted: keep the saved choice. */
+        codDepositInstructions: checkoutFlowSettingsSchema.shape.codDepositInstructions.optional(),
         expectedRevision: z.number().int().nonnegative(),
     })
     .strict();

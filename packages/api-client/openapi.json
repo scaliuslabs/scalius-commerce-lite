@@ -45424,6 +45424,40 @@
                             "channels",
                             "label"
                           ]
+                        },
+                        "codDeposit": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "fixed",
+                                "percentage"
+                              ]
+                            },
+                            "amount": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "percent": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 99
+                            },
+                            "instructions": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "enabled",
+                            "mode",
+                            "amount",
+                            "percent",
+                            "instructions"
+                          ]
                         }
                       },
                       "required": [
@@ -45440,7 +45474,8 @@
                         "checkoutReadiness",
                         "unavailable",
                         "market",
-                        "marketingConsent"
+                        "marketingConsent",
+                        "codDeposit"
                       ]
                     }
                   },
@@ -98228,6 +98263,13 @@
                     "type": "integer",
                     "minimum": 1,
                     "description": "The order `revision` you read; a different one is refused with 409."
+                  },
+                  "paymentType": {
+                    "type": "string",
+                    "enum": [
+                      "deposit"
+                    ],
+                    "description": "`\"deposit\"` when recording a manual COD deposit. Staff only."
                   }
                 },
                 "required": [
@@ -178001,6 +178043,25 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "codDepositEnabled": {
+                          "type": "boolean"
+                        },
+                        "codDepositMode": {
+                          "type": "string",
+                          "enum": [
+                            "fixed",
+                            "percentage"
+                          ]
+                        },
+                        "codDepositAmount": {
+                          "type": "number"
+                        },
+                        "codDepositPercent": {
+                          "type": "number"
+                        },
+                        "codDepositInstructions": {
+                          "type": "string"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -178013,6 +178074,11 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "codDepositEnabled",
+                        "codDepositMode",
+                        "codDepositAmount",
+                        "codDepositPercent",
+                        "codDepositInstructions",
                         "revision"
                       ]
                     }
@@ -178160,6 +178226,25 @@
                   "requireFullBillingAddress": {
                     "type": "boolean"
                   },
+                  "codDepositEnabled": {
+                    "type": "boolean"
+                  },
+                  "codDepositMode": {
+                    "type": "string",
+                    "enum": [
+                      "fixed",
+                      "percentage"
+                    ]
+                  },
+                  "codDepositAmount": {
+                    "type": "number"
+                  },
+                  "codDepositPercent": {
+                    "type": "number"
+                  },
+                  "codDepositInstructions": {
+                    "type": "string"
+                  },
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 0
@@ -178221,6 +178306,25 @@
                         "requireFullBillingAddress": {
                           "type": "boolean"
                         },
+                        "codDepositEnabled": {
+                          "type": "boolean"
+                        },
+                        "codDepositMode": {
+                          "type": "string",
+                          "enum": [
+                            "fixed",
+                            "percentage"
+                          ]
+                        },
+                        "codDepositAmount": {
+                          "type": "number"
+                        },
+                        "codDepositPercent": {
+                          "type": "number"
+                        },
+                        "codDepositInstructions": {
+                          "type": "string"
+                        },
                         "revision": {
                           "type": "integer",
                           "minimum": 0
@@ -178233,6 +178337,11 @@
                         "partialPaymentAmount",
                         "autoFulfilMode",
                         "requireFullBillingAddress",
+                        "codDepositEnabled",
+                        "codDepositMode",
+                        "codDepositAmount",
+                        "codDepositPercent",
+                        "codDepositInstructions",
                         "revision"
                       ]
                     }

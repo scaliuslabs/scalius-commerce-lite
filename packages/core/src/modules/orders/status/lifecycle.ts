@@ -1,6 +1,7 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { hasOrderEvent, recordOrderEvent } from "../timeline";
+import { assertManualCodDepositVerified } from "../../payments";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
@@ -499,6 +500,12 @@ export async function applyOrderStatusChange(
         if (!giftCardTenders) {
             await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
         }
+    }
+
+    // A manual COD deposit order cannot enter a fulfilment-eligible state until
+    // staff have verified the deposit (plan is `deposit_paid` or `completed`).
+    if (existingOrder.paymentMethod === PaymentMethod.COD) {
+        await assertManualCodDepositVerified(db, orderId);
     }
 
     // Optimistic locking: CAS update FIRST — only proceed with side effects

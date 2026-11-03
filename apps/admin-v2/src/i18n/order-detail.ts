@@ -162,6 +162,14 @@ export const orderDetailMessages = defineMessages({
     "cod.reason.wrong_address": "Wrong address",
     "cod.reason.other": "Other",
 
+    "codDeposit.title": "Cash on delivery deposit",
+    "codDeposit.required": "Deposit required before dispatch",
+    "codDeposit.requiredHelp": "Collect {amount} from the customer before this order can be sent.",
+    "codDeposit.recordDeposit": "Record deposit",
+    "codDeposit.received": "Deposit received",
+
+    "statusBlock.depositNotVerified": "The deposit must be recorded before this order can move on.",
+
     "review.title": "Payment flagged for review",
     "review.reason": "{method} flagged this payment: {reason}",
     "review.help": "The money was received and the order is on hold. Check the order with the buyer before you ship or hand anything over, then release the hold.",
@@ -528,6 +536,14 @@ export const orderDetailMessages = defineMessages({
     "cod.reason.no_cash": "টাকা ছিল না",
     "cod.reason.wrong_address": "ভুল ঠিকানা",
     "cod.reason.other": "অন্যান্য",
+
+    "codDeposit.title": "ক্যাশ অন ডেলিভারি ডিপোজিট",
+    "codDeposit.required": "ডিসপাচের আগে ডিপোজিট প্রয়োজন",
+    "codDeposit.requiredHelp": "অর্ডার পাঠানোর আগে গ্রাহকের কাছ থেকে {amount} সংগ্রহ করুন।",
+    "codDeposit.recordDeposit": "ডিপোজিট রেকর্ড করুন",
+    "codDeposit.received": "ডিপোজিট পাওয়া গেছে",
+
+    "statusBlock.depositNotVerified": "অর্ডার এগিয়ে নেওয়ার আগে ডিপোজিট রেকর্ড করতে হবে।",
 
     "review.title": "পেমেন্টটি রিভিউর জন্য চিহ্নিত",
     "review.reason": "{method} এই পেমেন্টটি চিহ্নিত করেছে: {reason}",

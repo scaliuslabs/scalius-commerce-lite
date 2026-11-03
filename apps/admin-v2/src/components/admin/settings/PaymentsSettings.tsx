@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Checkbox } from "~/components/ui/checkbox";
 import { ChoiceField } from "~/components/ui/field";
+import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
@@ -118,6 +119,11 @@ export function useCheckoutFlowForm(isValid: (draft: CheckoutFlow) => boolean, l
           partialPaymentAmount: draft.partialPaymentAmount,
           requireFullBillingAddress: draft.requireFullBillingAddress,
           autoFulfilMode: draft.autoFulfilMode,
+          codDepositEnabled: draft.codDepositEnabled,
+          codDepositMode: draft.codDepositMode,
+          codDepositAmount: draft.codDepositAmount,
+          codDepositPercent: draft.codDepositPercent,
+          codDepositInstructions: draft.codDepositInstructions,
           expectedRevision,
         },
       })),
@@ -741,6 +747,10 @@ function PaymentOptionsFields() {
       activeOnlineMethodCount: online.length,
       advanceLimits,
       wholeTaka,
+      codDepositEnabled: draft.codDepositEnabled,
+      codDepositMode: draft.codDepositMode,
+      codDepositAmount: draft.codDepositAmount,
+      codDepositPercent: draft.codDepositPercent,
     });
   const { values, setValue, isLoaded, isLoadError, refetch } = useCheckoutFlowForm((draft) => issuesFor(draft).length === 0, t("optionsTitle"));
   if (isLoadError) return <InlineError title={t("loadFlow")} onRetry={() => void refetch()} />;
@@ -815,6 +825,85 @@ function PaymentOptionsFields() {
       {issues.map((issue) => (
         <p key={issue} role="alert" className="text-body text-destructive">{t(issue, limits)}</p>
       ))}
+      {/* Manual COD deposit: optional, independent of the online advance. */}
+      <div className="border-t border-border pt-4">
+        <ChoiceField
+          id="cod-deposit"
+          label={t("codDeposit")}
+          help={t("codDepositHelp")}
+          control={
+            <Checkbox
+              id="cod-deposit"
+              checked={values.codDepositEnabled === true}
+              disabled={!canEdit}
+              aria-describedby="cod-deposit-help"
+              onCheckedChange={(checked) => setValue("codDepositEnabled", checked === true)}
+            />
+          }
+        />
+        {values.codDepositEnabled && (
+          <>
+            <SettingsField id="cod-deposit-mode" label={t("codDepositMode")}>
+              <RadioGroup
+                value={values.codDepositMode ?? "fixed"}
+                disabled={!canEdit}
+                onValueChange={(mode) => setValue("codDepositMode", mode as "fixed" | "percentage")}
+              >
+                <label key="fixed" className="flex items-start gap-2 py-1 text-body">
+                  <span className="flex h-lh items-center"><RadioGroupItem value="fixed"/></span>
+                  <span>
+                    <span className="block font-medium">{t("codDepositModeFixed")}</span>
+                    <span className="block text-muted-foreground">{t("codDepositModeFixedHelp")}</span>
+                  </span>
+                </label>
+                <label key="percentage" className="flex items-start gap-2 py-1 text-body">
+                  <span className="flex h-lh items-center"><RadioGroupItem value="percentage"/></span>
+                  <span>
+                    <span className="block font-medium">{t("codDepositModePercentage")}</span>
+                    <span className="block text-muted-foreground">{t("codDepositModePercentageHelp")}</span>
+                  </span>
+                </label>
+              </RadioGroup>
+            </SettingsField>
+            {values.codDepositMode === "fixed" ? (
+              <SettingsField id="cod-deposit-amount" label={t("codDepositAmount")} help={t("codDepositAmountHelp")}>
+                <MoneyInput
+                  id="cod-deposit-amount"
+                  currencyCode={currencyCode}
+                  className="max-w-40"
+                  value={Number.isFinite(values.codDepositAmount) ? values.codDepositAmount : null}
+                  disabled={!canEdit}
+                  aria-invalid={issues.includes("codDepositAmountInvalid")}
+                  onValueChange={(amount) => setValue("codDepositAmount", amount ?? Number.NaN)}
+                />
+              </SettingsField>
+            ) : (
+              <SettingsField id="cod-deposit-percent" label={t("codDepositPercent")} help={t("codDepositPercentHelp")}>
+                <Input
+                  id="cod-deposit-percent"
+                  type="number"
+                  min={1}
+                  max={99}
+                  className="max-w-40"
+                  value={Number.isFinite(values.codDepositPercent) ? String(values.codDepositPercent) : ""}
+                  disabled={!canEdit}
+                  aria-invalid={issues.includes("codDepositPercentInvalid")}
+                  onChange={(event) => setValue("codDepositPercent", Number(event.target.value) || Number.NaN)}
+                />
+              </SettingsField>
+            )}
+            <SettingsField id="cod-deposit-instructions" label={t("codDepositInstructions")} help={t("codDepositInstructionsHelp")}>
+              <Textarea
+                id="cod-deposit-instructions"
+                value={values.codDepositInstructions ?? ""}
+                disabled={!canEdit}
+                rows={3}
+                onChange={(event) => setValue("codDepositInstructions", event.target.value)}
+              />
+            </SettingsField>
+          </>
+        )}
+      </div>
     </section>
   );
 }

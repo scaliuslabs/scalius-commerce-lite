@@ -14,8 +14,10 @@ import type { BatchItem } from "drizzle-orm/batch";
 import {
   orders,
   orderPayments,
+  paymentPlans,
   OrderStatus,
   PaymentRecordStatus,
+  PaymentPlanStatus,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -43,6 +45,12 @@ export interface RecordOrderPaymentInput {
   requestKey: string;
   /** The order version the caller saw; a different one is refused (409) and nothing is recorded. */
   expectedVersion?: number;
+  /**
+   * `"deposit"` when recording a manual COD deposit against a pending manual
+   * payment plan. When absent, the type is inferred as `"full"` or `"balance"`
+   * as before.
+   */
+  paymentType?: "deposit";
   /**
    * The order timeline's line for this payment, written in the payment's own
    * batch (the orders module builds it: `buildOrderEventInsert`, keyed by the
@@ -126,7 +134,7 @@ export async function recordOrderPayment(
   };
   const paymentId = await recordedPaymentId(input.orderId, requestKey);
 
-  const [order, existing] = await Promise.all([
+  const [order, existing, plan] = await Promise.all([
     db.select({
       id: orders.id,
       status: orders.status,
@@ -145,6 +153,13 @@ export async function recordOrderPayment(
       status: orderPayments.status,
       metadata: orderPayments.metadata,
     }).from(orderPayments).where(eq(orderPayments.id, paymentId)).get(),
+    db.select({
+      id: paymentPlans.id,
+      status: paymentPlans.status,
+      kind: paymentPlans.kind,
+      depositAmountMinor: paymentPlans.depositAmountMinor,
+      balanceDueMinor: paymentPlans.balanceDueMinor,
+    }).from(paymentPlans).where(eq(paymentPlans.orderId, input.orderId)).get(),
   ]);
   if (!order || order.deletedAt) throw new NotFoundError("Order not found");
 
@@ -165,7 +180,27 @@ export async function recordOrderPayment(
   if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
     throw new ConflictError("This order changed. Reload it and record the payment again.");
   }
-  if (order.paymentTermsDays === null) {
+
+  // Manual COD deposit branch: staff record the exact deposit against a
+  // pending manual-kind plan. This path is independent of net terms — the
+  // order has no invoice, and the deposit is paid offline (bank transfer,
+  // mobile wallet, cash at counter).
+  let isDeposit = false;
+  if (input.paymentType === "deposit"
+      && plan
+      && plan.kind === "manual"
+      && plan.status === PaymentPlanStatus.PENDING) {
+    isDeposit = true;
+    if (input.amountMinor !== plan.depositAmountMinor) {
+      throw new ValidationError("The deposit amount must equal the required deposit exactly.", {
+        depositAmountMinor: plan.depositAmountMinor,
+      });
+    }
+    const expectedBalance = Math.max(0, order.totalAmountMinor - input.amountMinor);
+    if (plan.balanceDueMinor !== expectedBalance) {
+      throw new ValidationError("The deposit plan's balance does not match the order total.");
+    }
+  } else if (order.paymentTermsDays === null) {
     throw new ValidationError("Payments are recorded here only for invoice (net terms) orders. Record cash on delivery with Collect cash.");
   }
   if (CLOSED_STATUSES.has(order.status)) {
@@ -186,7 +221,9 @@ export async function recordOrderPayment(
     paymentAmountMinor: input.amountMinor,
   });
   const nextVersion = order.version + 1;
-  const paymentType = order.paidAmountMinor === 0 && next.balanceDueMinor === 0 ? "full" : "balance";
+  const paymentType = isDeposit
+    ? "deposit"
+    : (order.paidAmountMinor === 0 && next.balanceDueMinor === 0 ? "full" : "balance");
   // Holds only if this batch claimed the order: its own payment row exists
   // and the order moved to exactly this payment's state.
   const landed = sql`EXISTS (
@@ -250,6 +287,17 @@ export async function recordOrderPayment(
       orderUnchanged,
       sql`EXISTS (SELECT 1 FROM ${orderPayments} WHERE ${orderPayments.id} = ${paymentId} AND ${orderPayments.amountMinor} = ${input.amountMinor})`,
     )) as unknown as SQLiteBatchItem,
+    ...(isDeposit && plan ? [
+      db.update(paymentPlans).set({
+        status: PaymentPlanStatus.DEPOSIT_PAID,
+        depositPaidAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      }).where(and(
+        eq(paymentPlans.id, plan.id),
+        eq(paymentPlans.orderId, order.id),
+        eq(paymentPlans.status, PaymentPlanStatus.PENDING),
+      )) as unknown as SQLiteBatchItem,
+    ] : []),
     ...(timelineLine ? [timelineLine as SQLiteBatchItem] : []),
     ...(reviewHold ? [reviewHold as SQLiteBatchItem] : []),
     buildBatchGuard(db, landed, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem,

@@ -844,6 +844,18 @@ export interface OrderReceipt extends OrderFulfilmentFacts {
   status: string;
   paymentMethod: string | null;
   paymentStatus: string;
+  /** The order's payment plan, when one exists (online advance or manual COD deposit). */
+  paymentPlan: {
+    /** "online" (gateway advance) or "manual" (staff-recorded COD deposit). */
+    kind: string | null;
+    status: string;
+    depositAmount: number;
+    balanceDue: number;
+    /** Merchant-authored payment instructions, snapshotted at order placement. */
+    instructions: string | null;
+    /** Order-time snapshot of the store's contact details. */
+    contactSnapshot: OrderReceiptContactSnapshot | null;
+  } | null;
   /** An invoice's terms: paid later by `dueAt`; null or absent when the order is not paid by invoice. */
   paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
   paidAmount: number;
@@ -870,6 +882,19 @@ export interface OrderReceiptTracking {
     courierName: string | null;
     trackingId: string | null;
     trackingUrl: string | null;
+  }>;
+}
+
+/** A snapshot of the store's contact details taken when the order was placed. */
+export interface OrderReceiptContactSnapshot {
+  phone: string | null;
+  email: string | null;
+  whatsappUrl: string | null;
+  socialLinks: Array<{
+    id: string;
+    label: string;
+    url: string;
+    iconUrl: string | null;
   }>;
 }
 

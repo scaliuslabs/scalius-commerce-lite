@@ -125,6 +125,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordSession, setRecordSession] = useState(0);
   const recordLoaded = useOpenedOnce(recordOpen);
+  const [recordDepositOpen, setRecordDepositOpen] = useState(false);
+  const [recordDepositSession, setRecordDepositSession] = useState(0);
+  const recordDepositLoaded = useOpenedOnce(recordDepositOpen);
   const terms = order.paymentTerms ?? null;
 
   // Payment history is optional: a failed read stays inside this card.
@@ -393,6 +396,34 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           </section>
         ) : null}
 
+        {/* Manual COD deposit: show status and let staff record the deposit. */}
+        {isCOD && plan ? (
+          <section className="space-y-2" aria-label={t("codDeposit.title")} data-cod-deposit>
+            {plan.status === "pending" ? (
+              <>
+                <p className="font-medium text-muted-foreground">{t("codDeposit.required")}</p>
+                <p className="text-caption text-muted-foreground">
+                  {t("codDeposit.requiredHelp", { amount: money(plan.depositAmount) })}
+                </p>
+                {canRecordPayment && !isRefundLocked ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRecordDepositSession((session) => session + 1);
+                      setRecordDepositOpen(true);
+                    }}
+                  >
+                    {t("codDeposit.recordDeposit")}
+                  </Button>
+                ) : null}
+              </>
+            ) : plan.status === "deposit_paid" ? (
+              <p className="font-medium">{t("codDeposit.received")}</p>
+            ) : null}
+          </section>
+        ) : null}
+
         {isHydrated && paymentsQuery.isError ? (
           <InlineError title={t("history.failed")} error={paymentsQuery.error} onRetry={refetchPayments} />
         ) : null}
@@ -638,6 +669,23 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             decimalPlaces={order.currencyDecimalPlaces ?? 2}
             balanceDue={presentation.amountDue}
             money={money}
+          />
+        </Suspense>
+      ) : null}
+      {recordDepositLoaded && isCOD && plan && plan.status === "pending" ? (
+        <Suspense fallback={null}>
+          <RecordPaymentDialog
+            key={recordDepositSession}
+            open={recordDepositOpen}
+            onClose={() => setRecordDepositOpen(false)}
+            orderId={order.id}
+            orderVersion={order.version}
+            currencyCode={order.currencyCode ?? ""}
+            decimalPlaces={order.currencyDecimalPlaces ?? 2}
+            balanceDue={plan.balanceDue}
+            money={money}
+            isDeposit
+            depositAmount={plan.depositAmount}
           />
         </Suspense>
       ) : null}

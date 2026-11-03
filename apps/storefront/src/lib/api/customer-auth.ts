@@ -517,10 +517,29 @@ export interface CustomerOrderDetailPaymentPlan {
   balanceDue: number;
   balanceDueDate: string | null;
   status: string;
+  /** "online" (gateway advance) or "manual" (staff-recorded COD deposit). */
+  kind: string | null;
+  /** Merchant-authored payment instructions, snapshotted at order placement. */
+  instructions: string | null;
+  /** Order-time snapshot of the store's contact details (phone, WhatsApp, email, social links). */
+  contactSnapshot: ContactSnapshot | null;
   depositPaidAt: string | null;
   balancePaidAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+/** A snapshot of the store's contact details taken when the order was placed. */
+export interface ContactSnapshot {
+  phone: string | null;
+  email: string | null;
+  whatsappUrl: string | null;
+  socialLinks: Array<{
+    id: string;
+    label: string;
+    url: string;
+    iconUrl: string | null;
+  }>;
 }
 
 export interface CustomerOrderDetailCod {

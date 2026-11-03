@@ -8,7 +8,11 @@ export type CheckoutFlowIssue =
     | "advanceRange"
     | "wholeTaka"
     | "codWithAdvance"
-    | "advanceNeedsOnline";
+    | "advanceNeedsOnline"
+    | "codDepositNeedsCod"
+    | "codDepositNotInGatewaysOnly"
+    | "codDepositAmountInvalid"
+    | "codDepositPercentInvalid";
 
 /**
  * A provider's charge limits in major units (`GET /admin/settings/payment-methods`
@@ -34,6 +38,11 @@ export interface CheckoutFlowPreviewOptions {
     advanceLimits?: readonly AdvanceAmountLimit[];
     /** The store prices in whole units (a BDT store's default): the advance has no paisa. */
     wholeTaka?: boolean;
+    /** Manual COD deposit settings. */
+    codDepositEnabled?: boolean;
+    codDepositMode?: "fixed" | "percentage";
+    codDepositAmount?: number;
+    codDepositPercent?: number;
 }
 
 /** The first offered method's limit the advance falls outside, or null. */
@@ -66,7 +75,21 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
     if (options.checkoutMode === "guest_cod_only" && !options.codEnabled) issues.push("codOff");
     if (options.checkoutMode === "gateways_only" && options.activeOnlineMethodCount === 0) issues.push("noOnline");
 
-    if (!options.partialPaymentEnabled) return issues;
+    if (!options.partialPaymentEnabled) {
+        // Manual COD deposit validation is independent of the online advance.
+        if (options.codDepositEnabled) {
+            if (!options.codEnabled) issues.push("codDepositNeedsCod");
+            if (options.checkoutMode === "gateways_only") issues.push("codDepositNotInGatewaysOnly");
+            if (options.codDepositMode === "fixed") {
+                const amount = options.codDepositAmount ?? 0;
+                if (!Number.isFinite(amount) || amount <= 0) issues.push("codDepositAmountInvalid");
+            } else {
+                const percent = options.codDepositPercent ?? 0;
+                if (!Number.isInteger(percent) || percent < 1 || percent > 99) issues.push("codDepositPercentInvalid");
+            }
+        }
+        return issues;
+    }
 
     const amountIssue = getCheckoutAdvancePaymentAmountIssue(options.partialPaymentAmount, {
         advanceLimits: options.advanceLimits,
@@ -75,5 +98,18 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
     if (amountIssue) issues.push(amountIssue);
     if (options.checkoutMode === "guest_cod_only") issues.push("codWithAdvance");
     if (options.activeOnlineMethodCount === 0) issues.push("advanceNeedsOnline");
+
+    if (options.codDepositEnabled) {
+        if (!options.codEnabled) issues.push("codDepositNeedsCod");
+        if (options.checkoutMode === "gateways_only") issues.push("codDepositNotInGatewaysOnly");
+        if (options.codDepositMode === "fixed") {
+            const amount = options.codDepositAmount ?? 0;
+            if (!Number.isFinite(amount) || amount <= 0) issues.push("codDepositAmountInvalid");
+        } else {
+            const percent = options.codDepositPercent ?? 0;
+            if (!Number.isInteger(percent) || percent < 1 || percent > 99) issues.push("codDepositPercentInvalid");
+        }
+    }
+
     return issues;
 }

@@ -284,6 +284,22 @@ export interface CheckoutFlowSettings {
    * country plus the region and postal code its rules require.
    */
   requireFullBillingAddress: boolean;
+  /**
+   * Manual COD deposit: when enabled, COD buyers must pay a deposit offline
+   * (bank transfer, mobile wallet, cash at counter) before fulfilment. Staff
+   * verify receipt in the admin dashboard; the remaining balance is collected
+   * via COD on delivery. Independent of the online advance
+   * (`partialPaymentEnabled`).
+   */
+  codDepositEnabled: boolean;
+  /** "fixed" = `codDepositAmount` in major units; "percentage" = `codDepositPercent` of the order total. */
+  codDepositMode: "fixed" | "percentage";
+  /** Fixed-mode deposit amount in major units (e.g. 500.00 BDT). */
+  codDepositAmount: number;
+  /** Percentage-mode deposit: whole percent 1-99 of the order total. */
+  codDepositPercent: number;
+  /** Merchant-authored payment instructions shown to the buyer; snapshotted at order placement. */
+  codDepositInstructions: string;
 }
 
 export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
@@ -295,6 +311,11 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentAmount: z.number(),
     autoFulfilMode: z.enum(AUTO_FULFIL_MODES),
     requireFullBillingAddress: z.boolean(),
+    codDepositEnabled: z.boolean(),
+    codDepositMode: z.enum(["fixed", "percentage"]),
+    codDepositAmount: z.number(),
+    codDepositPercent: z.number(),
+    codDepositInstructions: z.string(),
   }),
   defaults: {
     guestCheckoutEnabled: true,
@@ -303,6 +324,11 @@ export const checkoutDocument = defineSettingsDocument<CheckoutFlowSettings>({
     partialPaymentAmount: 0,
     autoFulfilMode: "after_payment",
     requireFullBillingAddress: false,
+    codDepositEnabled: false,
+    codDepositMode: "fixed",
+    codDepositAmount: 0,
+    codDepositPercent: 0,
+    codDepositInstructions: "",
   },
 });
 
