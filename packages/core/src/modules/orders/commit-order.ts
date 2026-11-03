@@ -12,6 +12,7 @@ import {
     orderItemTaxSnapshots,
     orders,
     orderTaxSnapshots,
+    productVariants,
     products,
     warrantyPolicies,
 } from "@scalius/database/schema";
@@ -50,7 +51,7 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 type ReservationPool = "regular" | "preorder" | "backorder";
 
 // Bound values per order line (the constant columns are SQL literals, the
-// warranty lookup binds the product id once more); the D1 limit is 100 per
+// warranty lookup binds the SKU id once more); the D1 limit is 100 per
 // statement, so 5 rows a statement (95 values).
 export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
@@ -273,17 +274,26 @@ function isCustomerContactConstraintError(error: unknown): boolean {
 }
 
 /**
- * The product's warranty as bought: its policy's current revision, read in
- * the commit batch itself (no round trip) so the line freezes whatever is
- * current at commit (design §5.1). No policy or an archived one is NULL.
- * The warranty is not price-relevant, so it is outside any authority fence.
+ * The line's warranty as bought: the current revision of its SKU's effective
+ * policy, read in the commit batch itself (no round trip) so the line freezes
+ * whatever is current at commit (design §5.1). A SKU in `policy` mode uses its
+ * own policy, `none` has no warranty and `inherit` uses its product's. An
+ * archived effective policy is NULL: an archived own policy never falls back
+ * to the product's. The SKU row binds one value (its id); its policy column
+ * is set exactly in `policy` mode (CHECK), so COALESCE picks the effective
+ * one. An expanded bundle's lines are its components, so each freezes its
+ * component SKU's warranty. The warranty is not price-relevant, so it is
+ * outside any authority fence.
  */
-function currentWarrantyRevisionSql(productId: string) {
+function currentWarrantyRevisionSql(variantId: string) {
     return sql<string | null>`(
         SELECT ${warrantyPolicies.currentRevisionId}
-        FROM ${products}
-        JOIN ${warrantyPolicies} ON ${warrantyPolicies.id} = ${products.warrantyPolicyId}
-        WHERE ${products.id} = ${productId}
+        FROM ${productVariants}
+        JOIN ${products} ON ${products.id} = ${productVariants.productId}
+        JOIN ${warrantyPolicies}
+          ON ${warrantyPolicies.id} = COALESCE(${productVariants.warrantyPolicyId}, ${products.warrantyPolicyId})
+        WHERE ${productVariants.id} = ${variantId}
+          AND ${productVariants.warrantyMode} <> 'none'
           AND ${warrantyPolicies.archivedAt} IS NULL
     )`;
 }
@@ -450,7 +460,7 @@ function orderRowStatements(db: Database, plan: OrderPlan, customer: OrderCustom
             propertiesPriceMinor: line.propertiesPriceMinor ?? 0,
             baseUnitPriceMinor: line.baseUnitPriceMinor
                 ?? line.unitPriceMinor - (line.propertiesPriceMinor ?? 0),
-            warrantyRevisionId: currentWarrantyRevisionSql(line.productId),
+            warrantyRevisionId: currentWarrantyRevisionSql(line.variantId),
             createdAt: sql`unixepoch()`,
         }));
         for (const chunk of chunkRowsForD1(itemRows, ORDER_ITEM_INSERT_PARAMETERS_PER_ROW)) {
