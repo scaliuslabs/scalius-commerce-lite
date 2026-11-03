@@ -8,6 +8,8 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { themePaint } from "@/lib/theme-paint";
 import { colorSchemeBootScript, colorSchemeScriptSource } from "@/lib/color-scheme";
 import ThemeHead from "@/components/ThemeHead.astro";
+import { cardPageCsp } from "@/lib/middleware-helper/csp-handler";
+import { setOwnCsp } from "@/lib/middleware-helper/own-csp";
 
 export const prerender = false;
 
@@ -28,10 +30,8 @@ const colorSchemeSource = await colorSchemeScriptSource(colorSchemeBootScript(pa
 Astro.response.headers.set("Cache-Control", "private, no-store");
 Astro.response.headers.set("Referrer-Policy", "no-referrer");
 Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
-Astro.response.headers.set(
-  "Content-Security-Policy",
-  `default-src 'self'; script-src 'self'${colorSchemeSource ? ` ${colorSchemeSource}` : ""} https://js.stripe.com; connect-src 'self' https://api.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
-);
+// The card page's own strict policy, which the middleware keeps.
+setOwnCsp(Astro.response.headers, cardPageCsp(colorSchemeSource));
 
 if (!validContinuationId) Astro.response.status = 404;
 ---

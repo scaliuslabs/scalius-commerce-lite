@@ -11,6 +11,7 @@
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { seedRuntimeStoreLanguage } from "@/lib/api/runtime";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { ownCspHeaders } from "@/lib/middleware-helper/own-csp";
 import {
   normalizeConversationBody,
   normalizeConversationSubject,
@@ -251,7 +252,7 @@ export async function proxyConversationAttachment(
     "Content-Disposition": "inline",
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'none'; sandbox",
+    ...ownCspHeaders("default-src 'none'; sandbox"),
     "Cross-Origin-Resource-Policy": "same-origin",
   });
   const length = response.headers.get("Content-Length");
