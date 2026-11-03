@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
-import { recordOrderEvent } from "@scalius/core/modules/orders";
 import type { Database } from "@scalius/database/client";
 import {
     PartialRefundProcessedError,
@@ -105,36 +104,11 @@ const adminRefundRecoveryErrorResponses = {
     404: errorResponses[404],
 } as const;
 
-async function notifyRefundResult(options: {
-    db: Database;
-    send: NotificationSender | undefined;
-    orderId: string;
-    result: {
-        gateway: string;
-        refundId?: string;
-        refundNotification?: {
-            notificationType: "order_refunded" | "order_partially_refunded";
-            dedupeKey: string;
-            amount: number;
-            refundId?: string;
-        };
-        storeCredit?: { last4: string };
-    };
-    source: string;
-}) {
-    const notification = options.result.refundNotification;
-    if (!notification) return;
-    await notifyRefundFact({
-        db: options.db,
-        send: options.send,
-        orderId: options.orderId,
-        gateway: options.result.gateway,
-        notification,
-        storeCreditLast4: options.result.storeCredit?.last4,
-        source: options.source,
-    });
-}
-
+/**
+ * Records (idempotently, by its dedupe key) and sends one refund notice. A
+ * completed refund's row already exists (its finalization committed it), so
+ * this only sends it; a `refund_processing` or `refund_failed` notice is new.
+ */
 async function notifyRefundFact(options: {
     db: Database;
     send: NotificationSender | undefined;
@@ -225,32 +199,22 @@ async function recordReconciledRefundAttemptSideEffects(options: {
     return { notificationCount, sideEffectErrors };
 }
 
-async function recordDirectRefundSideEffects(options: {
-    db: Database;
+/**
+ * Hands the notices a refund committed to the sender. A failure leaves them
+ * due for the scheduled drain, never lost.
+ */
+async function sendCommittedRefundNotices(options: {
     send: NotificationSender | undefined;
-    orderId: string;
-    result: RefundServiceResult;
+    outboxIds: readonly string[];
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
-    let notificationCount = 0;
-    let sideEffectErrors = 0;
-
-    if (options.result.refundNotification) {
-        try {
-            await notifyRefundResult({
-                db: options.db,
-                send: options.send,
-                orderId: options.orderId,
-                result: options.result,
-                source: "orders-refund",
-            });
-            notificationCount += 1;
-        } catch (error: unknown) {
-            sideEffectErrors += 1;
-            console.error("[orders-refund] Direct refund notification failed after local commit:", error);
-        }
+    if (options.outboxIds.length === 0 || !options.send) return { notificationCount: options.outboxIds.length, sideEffectErrors: 0 };
+    try {
+        await options.send(options.outboxIds);
+        return { notificationCount: options.outboxIds.length, sideEffectErrors: 0 };
+    } catch (error: unknown) {
+        console.error("[orders-refund] Refund notice send failed after local commit:", error instanceof Error ? error.name : "error");
+        return { notificationCount: 0, sideEffectErrors: 1 };
     }
-
-    return { notificationCount, sideEffectErrors };
 }
 
 /**
@@ -269,11 +233,13 @@ async function sendStoreCreditNotification(options: {
 
 export function publicRefundResult<T extends {
     refundNotification?: unknown;
+    notificationOutboxIds?: unknown;
     availabilityTransitionVariantIds?: unknown;
     storeCredit?: { giftCardId: string; last4: string; amount: number; amountMinor: number; notificationOutboxId?: string };
-}>(result: T): Omit<T, "refundNotification" | "availabilityTransitionVariantIds"> {
+}>(result: T): Omit<T, "refundNotification" | "notificationOutboxIds" | "availabilityTransitionVariantIds"> {
     const {
         refundNotification: _refundNotification,
+        notificationOutboxIds: _outboxIds,
         availabilityTransitionVariantIds: _cacheSignal,
         ...publicResult
     } = result;
@@ -368,34 +334,15 @@ export async function executeOrderRefund(
     }
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     if (result.replayed) {
-        // A repeated click: the first request already logged, notified and refreshed.
+        // A repeated click: the first request committed the timeline line and
+        // the notice with the refund; the scheduled drain sends a notice it
+        // didn't get to.
         return { result, notificationCount: 0, sideEffectErrors: 0 };
     }
-    if (result.amount > 0) {
-        await recordOrderEvent(db, {
-            orderId: request.orderId,
-            kind: "refund_recorded",
-            actorId: request.actorUserId ?? null,
-            body: request.reason.trim() || null,
-            requestKey: request.requestKey,
-            data: {
-                amount: result.amount,
-                full: result.isFullRefund,
-                ...(request.lines?.length ? { lines: request.lines.length } : {}),
-                // Ids and last 4 only: the code never enters the timeline.
-                ...(result.storeCredit ? {
-                    settlement: "store_credit",
-                    giftCardId: result.storeCredit.giftCardId,
-                    giftCardLast4: result.storeCredit.last4,
-                } : {}),
-            },
-        });
-    }
-    const sideEffects = await recordDirectRefundSideEffects({
-        db,
+    // The refund's own batch wrote its timeline line and the notice's outbox row: send it now.
+    const sideEffects = await sendCommittedRefundNotices({
         send: notificationSender(c),
-        orderId: request.orderId,
-        result,
+        outboxIds: result.notificationOutboxIds ?? [],
     });
     const storeCreditSideEffects = await sendStoreCreditNotification({
         db,

@@ -6,15 +6,18 @@
 import { inJsonArray } from "../../utils/in-json-array";
 import { orderPricePolicy, readGiftCardSettings, toStoreMinor } from "../settings";
 import { readStoreCurrency } from "../markets";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, sql, desc, and, isNull } from "drizzle-orm";
 import {
     orders,
+    orderEvents,
     orderItems,
     orderPayments,
     orderRefundLines,
     orderRefunds,
     refundAttempts,
     giftCards,
+    notificationOutbox,
+    user,
     PaymentStatus,
     OrderStatus,
     PaymentRecordStatus,
@@ -50,7 +53,7 @@ import {
     resolveOrderCurrencySnapshot,
     type OrderCurrencySnapshot,
 } from "./order-currency";
-import { buildNotificationOutboxInsert, type OrderNotificationType } from "../notifications";
+import { buildNotificationOutboxInsert, createOrderNotificationOutboxInsertValues, type OrderNotificationType } from "../notifications";
 import { readPromotionRefundSnapshot } from "../promotions";
 import {
     GIFT_CARD_PAYMENT_METHOD,
@@ -69,6 +72,7 @@ import {
     giftCardPurchaseState,
     planGiftCardClawback,
     releaseGiftCardClawbackOfFailedRefund,
+    type GiftCardPurchaseState,
 } from "./refund-gift-card-clawback";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
@@ -162,12 +166,15 @@ export interface RefundResult {
     error?: string;
     /** Internal cache signal; API responses must not expose this field. */
     availabilityTransitionVariantIds: string[];
+    /** Internal: the customer's notice, committed with the refund (its outbox row exists). */
     refundNotification?: {
         notificationType: RefundCompletionNotificationType;
         dedupeKey: string;
         amount: number;
         refundId?: string;
     };
+    /** Internal: the outbox rows the refund committed, for the sender. API responses omit it. */
+    notificationOutboxIds?: string[];
 }
 
 export type RefundCompletionNotificationType = Extract<
@@ -487,14 +494,6 @@ function buildRefundReference(orderId: string, sourcePaymentId: string, claimVer
     return `REF${suffix}`.slice(0, 30);
 }
 
-function buildFullRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
-    return `refund:${orderId}:${refundGroupId}:full`;
-}
-
-function buildPartialRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
-    return `refund:${orderId}:${refundGroupId}:partial`;
-}
-
 function buildRefundStateNotificationDedupeKey(
     orderId: string,
     refundGroupId: string,
@@ -724,7 +723,10 @@ function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean)
 export interface FinalizeAcceptedRefundAttemptsResult {
     orderIds: string[];
     finalizedAttemptIds: string[];
+    /** The notices this finalization committed (their outbox rows exist; recording them again is a no-op). */
     refundNotifications: RefundNotificationFact[];
+    /** Their outbox rows, for the caller to hand to the sender (the scheduled drain sends them otherwise). */
+    notificationOutboxIds: string[];
     availabilityTransitionVariantIds: string[];
 }
 
@@ -797,9 +799,32 @@ export function computePaymentStateFromLedger(params: {
     };
 }
 
+/** The `refund_recorded` timeline line of the attempts a finalization announces: one id per set, so a re-run adds nothing. */
+async function refundRecordedEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {
+    const key = `refund-attempts:${[...attemptIds].sort().join(",")}`;
+    return `oev_k${(await sha256Hex(`order-event\0${orderId}\0refund_recorded\0${key}`)).slice(0, 32)}`;
+}
+
+/** The outbox row of a refund's customer notice, fixed by its dedupe key so any caller can send it by id. */
+export async function refundNotificationOutboxId(dedupeKey: string): Promise<string> {
+    return `ono_refund_${(await sha256Hex(dedupeKey)).slice(0, 32)}`;
+}
+
+/**
+ * Settles accepted refund attempts: the refund payments become refunded and
+ * the order's money and status follow, in one batch guarded on the order's
+ * version that also writes, for the attempts no earlier finalization
+ * announced (`refunded_at` still empty), the order's `refund_recorded`
+ * timeline line and the customer's notice outbox row. Every path that settles
+ * a refund (the request, the reconciliation sweep, staff's check, an import
+ * from the provider) runs it, so each gets the line and the notice exactly
+ * once, and a re-run after a crash (before the attempts read refunded) writes
+ * neither again. `actorUserId` is the staff member the line names.
+ */
 export async function finalizeAcceptedRefundAttemptIds(
     db: Database,
     attemptIds: string[],
+    options: { actorUserId?: string | null } = {},
 ): Promise<FinalizeAcceptedRefundAttemptsResult> {
     const uniqueAttemptIds = [...new Set(attemptIds.filter(Boolean))];
     if (uniqueAttemptIds.length === 0) {
@@ -807,6 +832,7 @@ export async function finalizeAcceptedRefundAttemptIds(
             orderIds: [],
             finalizedAttemptIds: [],
             refundNotifications: [],
+            notificationOutboxIds: [],
             availabilityTransitionVariantIds: [],
         };
     }
@@ -815,10 +841,15 @@ export async function finalizeAcceptedRefundAttemptIds(
         .select({
             id: refundAttempts.id,
             orderId: refundAttempts.orderId,
+            refundGroupId: refundAttempts.refundGroupId,
             refundPaymentId: refundAttempts.refundPaymentId,
             providerRefundId: refundAttempts.providerRefundId,
             amountMinor: refundAttempts.amountMinor,
             currency: refundAttempts.currency,
+            gateway: refundAttempts.gateway,
+            reason: refundAttempts.reason,
+            metadata: refundAttempts.metadata,
+            refundedAt: refundAttempts.refundedAt,
         })
         .from(refundAttempts)
         .where(inJsonArray(refundAttempts.id, uniqueAttemptIds));
@@ -893,14 +924,10 @@ export async function finalizeAcceptedRefundAttemptIds(
         });
     }
 
-    await db.update(orderPayments).set({
-        status: PaymentRecordStatus.REFUNDED,
-        updatedAt: sql`unixepoch()`,
-    }).where(inJsonArray(orderPayments.id, refundPaymentIds));
-
     const finalizedOrderIds = new Set<string>();
     const finalizedAttemptIds: string[] = [];
     const refundNotifications: RefundNotificationFact[] = [];
+    const notificationOutboxIds: string[] = [];
     const availabilityTransitionVariantIds = new Set<string>();
 
     for (const orderId of new Set(attempts.map((attempt) => attempt.orderId))) {
@@ -919,20 +946,51 @@ export async function finalizeAcceptedRefundAttemptIds(
             paymentState.isFullRefund &&
             (nextOrderStatus === OrderStatus.CANCELLED || order.status === OrderStatus.CANCELLED);
 
-        const updateResult = await db.update(orders).set({
-            paidAmountMinor: paymentState.paidAmountMinor,
-            balanceDueMinor: paymentState.balanceDueMinor,
-            paymentStatus: paymentState.paymentStatus,
-            ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orders.id, orderId),
-            eq(orders.version, order.version),
-        )).returning({ id: orders.id });
+        // The attempts this finalization announces: an earlier one that
+        // committed its batch (and stopped before marking them refunded)
+        // already wrote their line and notice.
+        const announced = orderAttempts.filter((attempt) => !attempt.refundedAt);
+        const announcement = announced.length > 0
+            ? await buildRefundAnnouncement(db, {
+                orderId,
+                attempts: announced,
+                isFullRefund: paymentState.isFullRefund,
+                currency,
+                actorUserId: options.actorUserId ?? null,
+            })
+            : null;
 
-        if (updateResult.length === 0) {
-            throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
+        try {
+            await db.batch([
+                buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`, REFUND_FINALIZE_CONFLICT),
+                db.update(orderPayments).set({
+                    status: PaymentRecordStatus.REFUNDED,
+                    updatedAt: sql`unixepoch()`,
+                }).where(inJsonArray(orderPayments.id, orderAttempts.map((attempt) => attempt.refundPaymentId))),
+                db.update(orders).set({
+                    paidAmountMinor: paymentState.paidAmountMinor,
+                    balanceDueMinor: paymentState.balanceDueMinor,
+                    paymentStatus: paymentState.paymentStatus,
+                    ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
+                    version: sql`${orders.version} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                }).where(and(
+                    eq(orders.id, orderId),
+                    eq(orders.version, order.version),
+                )),
+                ...(announcement ? [
+                    // Marks them announced: a re-run after a crash writes neither again.
+                    db.update(refundAttempts).set({ refundedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                        .where(and(inJsonArray(refundAttempts.id, announced.map((attempt) => attempt.id)), isNull(refundAttempts.refundedAt))),
+                    ...announcement.statements,
+                ] : []),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+            ] as any);
+        } catch (error: unknown) {
+            if (isBatchGuardError(error, REFUND_FINALIZE_CONFLICT)) {
+                throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
+            }
+            throw error;
         }
 
         if (shouldReleaseInventory) {
@@ -947,31 +1005,17 @@ export async function finalizeAcceptedRefundAttemptIds(
         }
 
         finalizedOrderIds.add(orderId);
-        const notificationAttemptIds = orderAttempts.map((attempt) => attempt.id);
-        const notificationRefundIds = orderAttempts
-            .map((attempt) => attempt.providerRefundId)
-            .filter((refundId): refundId is string => Boolean(refundId));
-        refundNotifications.push({
-            orderId,
-            notificationType: paymentState.isFullRefund ? "order_refunded" : "order_partially_refunded",
-            dedupeKey: buildReconciledRefundNotificationDedupeKey(
-                orderId,
-                notificationAttemptIds,
-                paymentState.isFullRefund,
-            ),
-            amount: fromMinor(
-                orderAttempts.reduce((sum, attempt) => sum + attempt.amountMinor, 0),
-                currency.decimalPlaces,
-            ),
-            refundId: notificationRefundIds.join(",") || undefined,
-        });
+        if (announcement) {
+            refundNotifications.push(announcement.notification);
+            notificationOutboxIds.push(announcement.outboxId);
+        }
     }
 
     await db.update(refundAttempts).set({
         status: "refunded",
         claimId: null,
         claimExpiresAt: null,
-        refundedAt: sql`unixepoch()`,
+        refundedAt: sql`coalesce(${refundAttempts.refundedAt}, unixepoch())`,
         updatedAt: sql`unixepoch()`,
     }).where(inJsonArray(refundAttempts.id, uniqueAttemptIds));
     finalizedAttemptIds.push(...uniqueAttemptIds);
@@ -980,7 +1024,85 @@ export async function finalizeAcceptedRefundAttemptIds(
         orderIds: [...finalizedOrderIds],
         finalizedAttemptIds,
         refundNotifications,
+        notificationOutboxIds,
         availabilityTransitionVariantIds: [...availabilityTransitionVariantIds],
+    };
+}
+
+/** Batch-guard marker: the order moved since finalization read it. */
+const REFUND_FINALIZE_CONFLICT = "refund_finalize_conflict";
+
+/**
+ * The timeline line and the customer's notice for refund attempts a
+ * finalization announces, as statements for its batch. Ids and last 4 only:
+ * a store-credit card's code never enters either.
+ */
+async function buildRefundAnnouncement(
+    db: Database,
+    input: {
+        orderId: string;
+        attempts: ReadonlyArray<{ id: string; amountMinor: number; providerRefundId: string | null; gateway: string; reason: string | null; metadata: string | null }>;
+        isFullRefund: boolean;
+        currency: OrderCurrencySnapshot;
+        actorUserId: string | null;
+    },
+): Promise<{ statements: unknown[]; notification: RefundCompletionNotificationFact; outboxId: string }> {
+    const attemptIds = input.attempts.map((attempt) => attempt.id);
+    const amountMinor = input.attempts.reduce((sum, attempt) => sum + attempt.amountMinor, 0);
+    const amount = fromMinor(amountMinor, input.currency.decimalPlaces);
+    const refundId = input.attempts.map((attempt) => attempt.providerRefundId).filter(Boolean).join(",") || undefined;
+    const gateways = [...new Set(input.attempts.map((attempt) => attempt.gateway))];
+    const storeCreditAttemptIds = input.attempts
+        .filter((attempt) => parseRefundMetadata(attempt.metadata).settlementMode === "store_credit")
+        .map((attempt) => attempt.id);
+    const storeCredit = storeCreditAttemptIds.length > 0
+        ? await db.select({ id: giftCards.id, last4: giftCards.codeLast4 }).from(giftCards)
+            .where(and(eq(giftCards.source, "refund"), inJsonArray(giftCards.sourceRefundAttemptId, storeCreditAttemptIds)))
+            .get()
+        : undefined;
+    const notificationType: RefundCompletionNotificationType = input.isFullRefund ? "order_refunded" : "order_partially_refunded";
+    const dedupeKey = buildReconciledRefundNotificationDedupeKey(input.orderId, attemptIds, input.isFullRefund);
+    const outboxId = await refundNotificationOutboxId(dedupeKey);
+    const outbox = {
+        ...createOrderNotificationOutboxInsertValues({
+            orderId: input.orderId,
+            notificationType,
+            dedupeKey,
+            source: "refund-finalized",
+            data: {
+                amount,
+                ...(gateways.length === 1 ? { gateway: gateways[0] } : {}),
+                ...(refundId ? { refundId } : {}),
+                ...(storeCredit ? { settlement: "store_credit", storeCreditLast4: storeCredit.last4 } : {}),
+            },
+        }),
+        id: outboxId,
+    };
+    const reason = input.attempts.find((attempt) => attempt.reason?.trim())?.reason?.trim() ?? null;
+    const eventData = JSON.stringify({
+        amount,
+        full: input.isFullRefund,
+        ...(storeCredit ? { settlement: "store_credit", giftCardId: storeCredit.id, giftCardLast4: storeCredit.last4 } : {}),
+    });
+    // A staff account only; an agent, app or the sweep records no name.
+    const actor = input.actorUserId
+        ? sql`(SELECT ${user.id} FROM ${user} WHERE ${user.id} = ${input.actorUserId})`
+        : null;
+    return {
+        statements: [
+            db.insert(orderEvents).values({
+                id: await refundRecordedEventId(input.orderId, attemptIds),
+                orderId: input.orderId,
+                kind: "refund_recorded",
+                body: reason,
+                data: eventData,
+                actorId: actor,
+                createdAt: sql`unixepoch()`,
+            }).onConflictDoNothing({ target: orderEvents.id }),
+            db.insert(notificationOutbox).values(outbox).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
+        ],
+        notification: { orderId: input.orderId, notificationType, dedupeKey, amount, ...(refundId ? { refundId } : {}) },
+        outboxId,
     };
 }
 
@@ -1356,25 +1478,6 @@ function getCompletedRefundIds(allocations: CompletedRefundAllocation[]): string
     return allocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined;
 }
 
-function buildDirectRefundNotificationFact(params: {
-    orderId: string;
-    refundGroupId: string;
-    amountMinor: number;
-    isFullRefund: boolean;
-    refundId?: string;
-    currency: OrderCurrencySnapshot;
-}): RefundCompletionNotificationFact {
-    return {
-        orderId: params.orderId,
-        notificationType: params.isFullRefund ? "order_refunded" : "order_partially_refunded",
-        dedupeKey: params.isFullRefund
-            ? buildFullRefundNotificationDedupeKey(params.orderId, params.refundGroupId)
-            : buildPartialRefundNotificationDedupeKey(params.orderId, params.refundGroupId),
-        amount: fromMinor(params.amountMinor, params.currency.decimalPlaces),
-        refundId: params.refundId,
-    };
-}
-
 function buildRefundStateNotificationFact(params: {
     orderId: string;
     refundGroupId: string;
@@ -1552,6 +1655,8 @@ export async function processRefund(
             customerEmail: orders.customerEmail,
             customerPhone: orders.customerPhone,
             accountOwnerCustomerId: orders.accountOwnerCustomerId,
+            // The order id is bound as a value: an outer column would bind to the line's own id here.
+            buysGiftCards: sql<number>`EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${params.orderId} AND ${orderItems.fulfillmentType} = 'gift_card')`,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -1585,17 +1690,23 @@ export async function processRefund(
     // Validate the complete ledger before any local mutation or provider call.
     // A wrong-currency failed/pending row would otherwise surface only during
     // finalization, after inventory repair or an external refund was accepted.
-    // The gift cards the order bought ride the same read (one call): a refund
-    // takes their unspent value back (refund-gift-card-clawback.ts).
-    const [paymentLedgerRows, giftCardItems, giftCardRefundedUnits, purchasedCards, purchasedCardsSpent] = await db.batch([
-        db
-            .select()
-            .from(orderPayments)
-            .where(eq(orderPayments.orderId, params.orderId))
-            // Newest first, id breaking a same-second tie: the refund order `listRefundSources()` previews.
-            .orderBy(desc(orderPayments.createdAt), desc(orderPayments.id)),
-        ...giftCardPurchaseReads(db, params.orderId),
-    ]);
+    // An order that bought gift cards reads them with its ledger (one call): a
+    // refund takes their unspent value back (refund-gift-card-clawback.ts).
+    const ledgerRead = db
+        .select()
+        .from(orderPayments)
+        .where(eq(orderPayments.orderId, params.orderId))
+        // Newest first, id breaking a same-second tie: the refund order `listRefundSources()` previews.
+        .orderBy(desc(orderPayments.createdAt), desc(orderPayments.id));
+    let paymentLedgerRows: Awaited<typeof ledgerRead>;
+    let giftCardState: GiftCardPurchaseState = { lines: [], cards: [] };
+    if (order.buysGiftCards) {
+        const [ledger, items, refundedUnits, cards, spent] = await db.batch([ledgerRead, ...giftCardPurchaseReads(db, params.orderId)]);
+        paymentLedgerRows = ledger;
+        giftCardState = giftCardPurchaseState(items, refundedUnits, cards, spent);
+    } else {
+        paymentLedgerRows = await ledgerRead;
+    }
     for (const payment of paymentLedgerRows) {
         assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
     }
@@ -1662,7 +1773,7 @@ export async function processRefund(
     // Gift cards the order bought: the refund takes back their unspent value,
     // and never gives back value the buyer already spent from them.
     const giftCardClawback = planGiftCardClawback({
-        state: giftCardPurchaseState(giftCardItems, giftCardRefundedUnits, purchasedCards, purchasedCardsSpent),
+        state: giftCardState,
         refundLines,
         receivedMinor: paymentLedgerRows.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
         refundedBeforeMinor: paymentLedgerRows.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
@@ -1970,6 +2081,7 @@ export async function processRefund(
                 finalizedResult = await finalizeAcceptedRefundAttemptIds(
                     db,
                     completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
+                    { actorUserId: params.actorUserId ?? null },
                 );
             } catch (finalizeError: unknown) {
                 await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
@@ -2029,27 +2141,19 @@ export async function processRefund(
         throw error;
     }
 
-    let availabilityTransitionVariantIds: string[];
+    let finalized: FinalizeAcceptedRefundAttemptsResult;
     try {
-        const finalizedResult = await finalizeAcceptedRefundAttemptIds(
+        // Its batch writes the timeline line and the customer's notice with the money.
+        finalized = await finalizeAcceptedRefundAttemptIds(
             db,
             completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
+            { actorUserId: params.actorUserId ?? null },
         );
-        availabilityTransitionVariantIds =
-            finalizedResult.availabilityTransitionVariantIds;
     } catch (finalizeError: unknown) {
         await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
         throw finalizeError;
     }
-
-    const refundNotification = buildDirectRefundNotificationFact({
-        orderId: params.orderId,
-        refundGroupId,
-        amountMinor: refundAmount,
-        isFullRefund,
-        refundId: getCompletedRefundIds(completedAllocations),
-        currency,
-    });
+    const refundNotification = finalized.refundNotifications[0] as RefundCompletionNotificationFact | undefined;
     const storeCreditCard = storeCredit
         ? await db.select({ last4: giftCards.codeLast4 }).from(giftCards).where(eq(giftCards.id, storeCredit.giftCardId)).get()
         : undefined;
@@ -2078,12 +2182,15 @@ export async function processRefund(
                 amountMinor: giftCardClawback.clawbacks.reduce((sum, clawback) => sum + clawback.amountMinor, 0),
             },
         } : {}),
-        availabilityTransitionVariantIds,
-        refundNotification: {
-            notificationType: refundNotification.notificationType,
-            dedupeKey: refundNotification.dedupeKey,
-            amount: refundNotification.amount,
-            refundId: refundNotification.refundId,
-        },
+        availabilityTransitionVariantIds: finalized.availabilityTransitionVariantIds,
+        notificationOutboxIds: finalized.notificationOutboxIds,
+        ...(refundNotification ? {
+            refundNotification: {
+                notificationType: refundNotification.notificationType,
+                dedupeKey: refundNotification.dedupeKey,
+                amount: refundNotification.amount,
+                refundId: refundNotification.refundId,
+            },
+        } : {}),
     };
 }

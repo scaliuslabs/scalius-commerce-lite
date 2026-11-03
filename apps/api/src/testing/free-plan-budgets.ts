@@ -17,6 +17,11 @@
  * calls, the commit and its after-response work together; with the queue it
  * was 40 (13 for the commit, the rest in the queue consumer).
  *
+ * Refund announcement (2026-11-03): the settlement batch also carries its
+ * guard, the announced marker, the timeline line and the notice's outbox row
+ * (the route no longer writes them in calls of their own): 53 → 57
+ * statements, no new call. Full scans 6 → 7: the notice's delivery reads
+ * the settings table's revision (a configuration-sized table).
  * Status/refund (2026-10-15): 32/41 calls with RBAC warm, 38/47 in isolation
  * with a cold marker. Both retain a 50-call cap; other counters cover both runs.
  * Earlier 71/80 counts included the next run's setup.
