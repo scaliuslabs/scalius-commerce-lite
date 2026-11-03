@@ -535,18 +535,22 @@ export interface StorefrontBuyerInput {
 
 /**
  * Why the buy form refused the buyer's last add or Buy now
- * (`StorefrontProductState.error`), each with what the form shows. Like the
- * app error codes, a code is only ever added, never renamed or removed:
- * treat a code you do not know as `failed`.
+ * (`StorefrontProductState.error`), as the form says so:
+ *
+ * - `option_required`: an option is not chosen yet; the form asks for it
+ *   under that option, until the buyer chooses it.
+ * - `input_invalid`: a buyer input is missing or too long; the form says so
+ *   under the field, until the buyer fixes the last one.
+ * - `unavailable`: the chosen SKU is sold out, or no SKU has that choice.
+ * - `quantity_limit`: the quantity is more than one cart line may hold.
+ * - `failed`: anything else (the cart could not be saved, the store refused
+ *   the line); the buyer can try again.
+ *
+ * The last three go as soon as the buyer changes the SKU, quantity, an
+ * answer or the purchase option. Codes are only ever added, never renamed
+ * or removed: treat a code you do not know as `failed`.
  */
-export const STOREFRONT_PRODUCT_ERRORS = {
-  option_required: "An option is not chosen yet; the form asks for it under that option. Gone once the buyer chooses it.",
-  input_invalid: "A buyer input is missing or too long; the form says so under the field. Gone once the buyer fixes the last one.",
-  unavailable: "The chosen SKU is sold out, or no SKU has that choice. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.",
-  quantity_limit: "More than one order line holds. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.",
-  failed: "Anything else (the cart could not be saved, the store refused the line); try again. Gone once the buyer changes the SKU, quantity, an answer or the purchase option.",
-} as const;
-export type StorefrontProductError = keyof typeof STOREFRONT_PRODUCT_ERRORS;
+export type StorefrontProductError = "option_required" | "input_invalid" | "unavailable" | "quantity_limit" | "failed";
 
 /** The buy form as the buyer has it now (`context.product`). */
 export interface StorefrontProductState {
@@ -561,7 +565,7 @@ export interface StorefrontProductState {
   available?: boolean;
   /** An add or Buy now is in flight; the form takes no other until it ends. Absent from older stores. */
   busy?: boolean;
-  /** Why the form refused the last add or Buy now, while it still says so (`STOREFRONT_PRODUCT_ERRORS`; an unknown code reads as `failed`); null otherwise. Absent from older stores. */
+  /** Why the form refused the last add or Buy now, while it still says so (`StorefrontProductError`: treat an unknown code as `failed`); null otherwise. Absent from older stores. */
   error?: StorefrontProductError | null;
 }
 
