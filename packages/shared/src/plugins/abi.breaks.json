@@ -292,29 +292,5 @@
   "from": "30133e20c46aac41",
   "change": "storefront/testing fixtureSectionSkinData(type: string, settings?: Record<string, unknown>): type is now a StorefrontSkinnableSection and settings a Partial of its sealed projection; the result is the full projection, typed by it.",
   "reason": "Pre-lock (black-box platform M4): the fixture returned settings {} for every section, contradicting the sealed StorefrontSectionSkinSettings the host fills completely, so correctly typed skins failed validate."
- },
- {
-  "snapshot": "./abi.sdk.snapshot.txt",
-  "from": "e7c041faf10e78c8",
-  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_EMBED_KINDS: an existing signature changed or gained a required member.",
-  "reason": "Additive embed kind `module` (a product_main skin places one of the product page's own modules, issue #1): the readonly tuple's declared type gains one member at its end. Apps write embed kinds into markup and never receive one; the storefront drops a kind a render does not allow, so no existing app changes behaviour."
- },
- {
-  "snapshot": "./abi.protocol.snapshot.json",
-  "from": "a4b7830b72c96e48",
-  "change": "storefront.STOREFRONT_COMPONENT_LIMITS: the constant value changed.",
-  "reason": "Additive bound islandPropsBytes (16 KiB, issue #1): an island's data-props had only the generic 2,000-character attribute cap and was dropped silently. Every existing bound keeps its value; props that passed before still pass."
- },
- {
-  "snapshot": "./abi.sdk.snapshot.txt",
-  "from": "0ba3065da623a0f1",
-  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_COMPONENT_LIMITS: an existing signature changed or gained a required member.",
-  "reason": "The same additive bound islandPropsBytes: the constant's declared type gains one readonly member; no member is removed or retyped."
- },
- {
-  "snapshot": "./abi.sdk.snapshot.txt",
-  "from": "0ba3065da623a0f1",
-  "change": "sdk.packages/plugin-sdk/src/storefront/testing.d.ts#FunctionDeclaration:storefrontShown: an existing signature changed or gained a required member.",
-  "reason": "storefrontShown's result gains an optional oversizedProps (issue #1), present only when an island's props are over islandPropsBytes, so a test asserting the old exact result still passes whenever its markup passed before."
  }
 ]

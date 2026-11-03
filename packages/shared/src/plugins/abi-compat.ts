@@ -11,8 +11,9 @@
 // - nothing an app names disappears: a stable port or its operation, a
 //   function point, an event topic or its resource type, a scope, an error
 //   code (or its status), a
-//   storefront constant or a member of one of its lists, and no stable port
-//   goes back to beta.
+//   storefront constant, a member of one of its lists or a key of one of its
+//   objects (a list and an object may grow), and no stable port goes back to
+//   beta.
 //
 // A break is accepted only by an entry in `abi.breaks.json` naming the exact
 // change and the fingerprint of the snapshot it breaks from, so `vitest -u`
@@ -50,23 +51,31 @@ export function manifestBreakingChanges(before: unknown, after: unknown): string
   return schemaBreaks("manifest", record(before).schema, record(after).schema, "request");
 }
 
-/** Storefront constants: none disappears and no list loses a member. */
+function isObject(value: unknown): value is Json {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** One constant's value: a list keeps every member, an object keeps every key and its value (both may grow), anything else stays equal. */
+function constantValueBreaks(path: string, was: unknown, now: unknown): string[] {
+  if (Array.isArray(was) && Array.isArray(now)) {
+    const kept = new Set(now.map((value) => JSON.stringify(value)));
+    return was.filter((value) => !kept.has(JSON.stringify(value))).map((value) => `${path}: ${JSON.stringify(value)} was removed.`);
+  }
+  if (isObject(was) && isObject(now)) {
+    return Object.entries(was).flatMap(([key, value]) => key in now
+      ? constantValueBreaks(`${path}.${key}`, value, now[key])
+      : [`${path}.${key}: the key was removed.`]);
+  }
+  return JSON.stringify(was) === JSON.stringify(now) ? [] : [`${path}: the constant value changed.`];
+}
+
+/** Storefront constants: none disappears, no list loses a member and no object loses a key or changes one. */
 function constantBreaks(before: unknown, after: unknown): string[] {
   const problems: string[] = [];
   const now = record(after);
   for (const [name, was] of Object.entries(record(before))) {
-    if (!(name in now)) {
-      problems.push(`storefront.${name}: the constant was removed.`);
-      continue;
-    }
-    if (Array.isArray(was) && Array.isArray(now[name])) {
-      const kept = new Set((now[name] as unknown[]).map((value) => JSON.stringify(value)));
-      for (const value of was) {
-        if (!kept.has(JSON.stringify(value))) problems.push(`storefront.${name}: ${JSON.stringify(value)} was removed.`);
-      }
-    } else if (JSON.stringify(was) !== JSON.stringify(now[name])) {
-      problems.push(`storefront.${name}: the constant value changed.`);
-    }
+    if (!(name in now)) problems.push(`storefront.${name}: the constant was removed.`);
+    else problems.push(...constantValueBreaks(`storefront.${name}`, was, now[name]));
   }
   return problems;
 }
