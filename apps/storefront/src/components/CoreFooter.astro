@@ -135,11 +135,12 @@ const TONES: Record<string, string | undefined> = { muted: "muted", header: "hea
     --border: color-mix(in srgb, var(--theme-header-foreground) 20%, transparent);
   }
 
+  /* Ink: the darker of text and page (dark colours keep a dark footer). */
   footer[data-footer-tone="ink"] {
-    --secondary: var(--foreground);
-    --secondary-foreground: var(--background);
-    --primary-foreground: var(--background);
-    --border: color-mix(in srgb, var(--background) 20%, transparent);
+    --secondary: var(--theme-ink, var(--foreground));
+    --secondary-foreground: var(--theme-ink-foreground, var(--background));
+    --primary-foreground: var(--theme-ink-foreground, var(--background));
+    --border: color-mix(in srgb, var(--theme-ink-foreground, var(--background)) 20%, transparent);
   }
 
   footer[data-footer-tone="muted"] {

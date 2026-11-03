@@ -31,7 +31,7 @@ export type AccountTone = "success" | "danger" | "warning" | "neutral";
 const TONES: Record<AccountTone, string> = {
   success: "bg-primary/10 text-primary-ink",
   danger: "bg-destructive/10 text-destructive",
-  warning: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  warning: "bg-warning/15 text-foreground",
   neutral: "bg-muted text-foreground",
 };
 

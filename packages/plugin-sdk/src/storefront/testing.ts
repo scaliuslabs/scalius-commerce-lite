@@ -115,7 +115,7 @@ export function fixtureProductCard(overrides: Partial<StorefrontProductCard> = {
 
 export function fixtureHeaderData(overrides: Partial<StorefrontHeaderData> = {}): StorefrontHeaderData {
   return {
-    store: { name: "Acme Store", url: "/", logo: null, logoWidth: 140 },
+    store: { name: "Acme Store", url: "/", logo: null, darkLogo: null, logoWidth: 140 },
     menu: [
       { title: "New in", url: "/collections/new", children: [] },
       { title: "Women", url: "/categories/women", children: [{ title: "Dresses", url: "/categories/dresses", children: [] }] },
@@ -131,7 +131,7 @@ export function fixtureHeaderData(overrides: Partial<StorefrontHeaderData> = {})
 export function fixtureFooterData(overrides: Partial<StorefrontFooterData> = {}): StorefrontFooterData {
   return {
     store: {
-      name: "Acme Store", url: "/", logo: null, logoWidth: 140, footerLogo: null,
+      name: "Acme Store", url: "/", logo: null, darkLogo: null, logoWidth: 140, footerLogo: null,
       phone: "+8801700000000", email: "hello@acme.example", address: "Dhaka", social: [{ network: "facebook", url: "https://facebook.com/acme" }],
     },
     menus: [{ title: "Help", items: [{ title: "Shipping", url: "/pages/shipping", children: [] }] }],
@@ -343,9 +343,9 @@ const EMPTY_STORE: FixtureStore = {
   },
   skinData: (target) => {
     switch (target) {
-      case "header": return fixtureHeaderData({ store: { name: "New Store", url: "/", logo: null, logoWidth: 140 }, menu: [], categories: [], announcement: null, searchScopes: [] });
+      case "header": return fixtureHeaderData({ store: { name: "New Store", url: "/", logo: null, darkLogo: null, logoWidth: 140 }, menu: [], categories: [], announcement: null, searchScopes: [] });
       case "footer": return fixtureFooterData({
-        store: { name: "New Store", url: "/", logo: null, logoWidth: 140, footerLogo: null, phone: null, email: null, address: null, social: [] },
+        store: { name: "New Store", url: "/", logo: null, darkLogo: null, logoWidth: 140, footerLogo: null, phone: null, email: null, address: null, social: [] },
         menus: [], policies: [], newsletter: false,
       });
       case "product_card": return { product: bareCard(), position: 0, aboveFold: true };
@@ -363,6 +363,8 @@ const otherImage = (name: string, alt: string): StorefrontImage => ({
   width: 1280, height: 1280, alt,
 });
 const OTHER_LOGO: StorefrontImage = { url: "https://media.example.com/harbor/logo.png", srcset: "https://media.example.com/harbor/logo.png 320w", width: 320, height: 96, alt: "Harbor & Pine" };
+/** Its light version, for dark pages. */
+const OTHER_DARK_LOGO: StorefrontImage = { url: "https://media.example.com/harbor/logo-light.png", srcset: "https://media.example.com/harbor/logo-light.png 320w", width: 320, height: 96, alt: "Harbor & Pine" };
 
 const OTHER_SPECIFICATIONS: StorefrontSpecification[] = [
   { group: "Size", label: "Diameter", value: "10 in", unit: "in", keySpec: true },
@@ -428,13 +430,13 @@ const OTHER_STORE: FixtureStore = {
   skinData: (target) => {
     switch (target) {
       case "header": return fixtureHeaderData({
-        store: { name: "Harbor & Pine", url: "/", logo: OTHER_LOGO, logoWidth: 180 },
+        store: { name: "Harbor & Pine", url: "/", logo: OTHER_LOGO, darkLogo: OTHER_DARK_LOGO, logoWidth: 180 },
         menu: [{ title: "Kitchen", url: "/categories/kitchen", children: [] }, { title: "Garden", url: "/categories/garden", children: [] }, { title: "Journal", url: "/blog", children: [] }],
         categories: [{ title: "Kitchen", url: "/categories/kitchen", children: [] }, { title: "Garden", url: "/categories/garden", children: [] }],
         announcement: { text: "Free shipping over $75", url: "/categories/kitchen" },
       });
       case "footer": return fixtureFooterData({
-        store: { name: "Harbor & Pine", url: "/", logo: OTHER_LOGO, logoWidth: 180, footerLogo: null, phone: "+1 207 555 0142", email: "hello@harborpine.example", address: "Portland, Maine", social: [{ network: "instagram", url: "https://instagram.com/harborpine" }] },
+        store: { name: "Harbor & Pine", url: "/", logo: OTHER_LOGO, darkLogo: OTHER_DARK_LOGO, logoWidth: 180, footerLogo: null, phone: "+1 207 555 0142", email: "hello@harborpine.example", address: "Portland, Maine", social: [{ network: "instagram", url: "https://instagram.com/harborpine" }] },
         menus: [{ title: "Shop", items: [{ title: "Kitchen", url: "/categories/kitchen", children: [] }] }],
         policies: [{ title: "Returns", url: "/policies/returns" }],
       });

@@ -29,6 +29,7 @@ import {
   storefrontSettingAt,
   type StorefrontPlatformSection,
   type StorefrontSection,
+  type StorefrontThemeColorSet,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { presencePath as presencePathOf } from "@scalius/shared/markets";
@@ -61,7 +62,7 @@ import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previ
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
 import { appBlocksByKey, appSkinsByKey, resolveThemeForStore, toggleProductModule, withSectionSkin } from "../theme-settings";
-import { themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
+import { PreviewColorSetContext, themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
 import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
@@ -316,6 +317,9 @@ export function ThemeEditor({ workspace, refetch }: {
   const [connectedAt, setConnectedAt] = useState(0);
   const [revealErrors, setRevealErrors] = useState(false);
   const [themeReveal, setThemeReveal] = useState<ThemeRevealRequest | null>(null);
+  // The colours the canvas shows: the set the Colours group edits (a dark theme opens on its dark colours).
+  const [previewColorSet, setPreviewColorSet] = useState<StorefrontThemeColorSet>(() => (theme.tokens.colorScheme === "dark" ? "darkColors" : "colors"));
+  const previewColors = useMemo(() => ({ set: previewColorSet, setSet: setPreviewColorSet }), [previewColorSet]);
   const select = useCallback((id: string | null, from: "tree" | "preview" | "other" = "other") => {
     setSelected(id);
     setSelectedField(null);
@@ -366,6 +370,7 @@ export function ThemeEditor({ workspace, refetch }: {
     presence: presence || null,
     marks: preview.marks,
     appSections,
+    colorSet: previewColorSet,
     onNeedSave: draft.saveSoon,
   });
   // Selecting from the tree brings the part into view only when it is outside it (P8).
@@ -600,7 +605,7 @@ export function ThemeEditor({ workspace, refetch }: {
         setSelected(null);
         setTab("theme");
         if (!desktop) setDrawerOpen(true);
-        if (target.kind === "group") setThemeReveal({ group: target.group, nonce: Date.now() });
+        if (target.kind === "group") setThemeReveal({ group: target.group, colorSet: target.colorSet, nonce: Date.now() });
       }
       if (target.kind !== "theme" && target.fieldId) focusWhenShown(target.fieldId);
       return;
@@ -848,7 +853,9 @@ export function ThemeEditor({ workspace, refetch }: {
       <TabsContent value="theme" className="mt-0 min-h-0 flex-1 overflow-y-auto">
         <fieldset disabled={!editable} className="min-w-0">
           <Suspense fallback={null}>
-            <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} apps={workspace.apps} setDraft={setDraft} reveal={themeReveal} />
+            <PreviewColorSetContext.Provider value={previewColors}>
+              <ThemeSettingsPanel theme={theme} resolved={resolved} media={media} apps={workspace.apps} setDraft={setDraft} reveal={themeReveal} />
+            </PreviewColorSetContext.Provider>
           </Suspense>
         </fieldset>
       </TabsContent>

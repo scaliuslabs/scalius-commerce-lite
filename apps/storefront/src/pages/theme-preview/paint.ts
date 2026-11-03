@@ -1,5 +1,5 @@
 // The theme editor's preview-only paint route: what an unsaved document
-// paints (tokens, card and type attributes, font faces), so the editor's
+// paints (tokens, card and type attributes, font faces, colour scheme), so the editor's
 // frame shows a colour, font or density edit without a reload. Checks and
 // headers: lib/theme-preview-post.ts.
 import type { APIRoute } from "astro";
@@ -20,6 +20,7 @@ export const ALL: APIRoute = async (context) => {
     css: paint.css,
     attributes: paint.attributes,
     fonts: paint.fonts.css,
+    colorScheme: paint.colorScheme?.scheme ?? null,
   }), {
     status: 200,
     headers: { ...THEME_PREVIEW_ROUTE_HEADERS, "Content-Type": "application/json; charset=utf-8" },

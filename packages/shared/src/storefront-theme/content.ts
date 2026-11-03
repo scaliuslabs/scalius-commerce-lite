@@ -1,14 +1,16 @@
 // The merchant's own content inside a theme document, as opposed to its
-// look: the brand (logo, footer logo, tab icon, logo width), the
+// look: the brand (logo, its dark version, footer logo, tab icon, logo
+// width), the colour scheme (scheme, dark colours, the buyers' switch), the
 // announcement's words and link, the footer's words, the hero's slides and
 // side banners, the category tiles' categories and title, the collections
 // section's collections, and what `/` shows. Choosing another template keeps
 // it (`storefrontThemeWithContent`), and "does this still match a template"
 // compares looks only (`storefrontThemeLook`).
-import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
+import { DEFAULT_STOREFRONT_THEME_BRAND, STOREFRONT_BRAND_IMAGE_KEYS } from "./brand";
 import { storefrontVariantSpec } from "./blocks";
+import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontTokensKeepingColorScheme } from "./tokens";
 import { emptyStorefrontPageTemplates } from "./pages";
-import type { StorefrontThemeDocument } from "./document";
+import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSection, type StorefrontSectionType } from "./sections";
 
 /** Block settings that are the merchant's words, by slot. */
@@ -78,8 +80,10 @@ export function storefrontThemeWithContent(
     return withSectionContent(section, match);
   });
   const { translations: _look, ...look } = target;
-  return {
+  return storefrontThemeWithReadableDarkColors({
     ...look,
+    // The colour scheme is the merchant's (a look that shows its own dark colours brings them); a bare look has none.
+    tokens: source ? storefrontTokensKeepingColorScheme(target.tokens, source.tokens) : { ...target.tokens, ...STOREFRONT_LIGHT_COLOR_SCHEME },
     // The merchant's translations are content: keyed by their words, they follow them into the new look.
     ...(source?.translations ? { translations: structuredClone(source.translations) } : {}),
     brand: source ? structuredClone(source.brand) : { ...DEFAULT_STOREFRONT_THEME_BRAND },
@@ -96,7 +100,7 @@ export function storefrontThemeWithContent(
       // The merchant's sections around the fixed parts are content too.
       templates: source ? structuredClone(source.pages.templates) : emptyStorefrontPageTemplates(),
     },
-  };
+  });
 }
 
 /** The document's look: everything but its content (content reset to empty). */
@@ -143,7 +147,7 @@ function sectionMediaReferences(section: StorefrontSection, at: string): Storefr
  * and what the dashboard previews. Not capped (the homepage read is).
  */
 export function storefrontThemeMediaReferences(theme: StorefrontThemeDocument): StorefrontThemeMediaReference[] {
-  const brand = (["logo", "footerLogo", "favicon"] as const).flatMap((key) =>
+  const brand = STOREFRONT_BRAND_IMAGE_KEYS.flatMap((key) =>
     theme.brand[key] ? [{ path: `brand.${key}`, mediaId: theme.brand[key]! }] : []);
   return [
     ...brand,
@@ -202,7 +206,7 @@ function sectionWithoutMedia(section: StorefrontSection, missing: ReadonlySet<st
 export function storefrontThemeWithoutMedia(theme: StorefrontThemeDocument, missing: ReadonlySet<string>): StorefrontThemeDocument {
   if (missing.size === 0) return theme;
   const brand = { ...theme.brand };
-  for (const key of ["logo", "footerLogo", "favicon"] as const) {
+  for (const key of STOREFRONT_BRAND_IMAGE_KEYS) {
     if (brand[key] && missing.has(brand[key]!)) brand[key] = null;
   }
   return {

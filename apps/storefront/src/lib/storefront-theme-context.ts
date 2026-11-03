@@ -130,7 +130,7 @@ function readBrandAsset(value: unknown, id: string | null): StorefrontBrandAsset
 
 /**
  * The brand images the API resolved for a document, kept only where they are
- * the images the document names (`brand.logo`, `footerLogo`, `favicon`), so
+ * the images the document names (`brand.logo`, `darkLogo`, `footerLogo`, `favicon`), so
  * a theme that renders (the default after a failed validation included)
  * never shows another document's logo. Anything else reads as no image.
  */
@@ -139,6 +139,7 @@ export function readStorefrontBrandAssets(value: unknown, brand: StorefrontTheme
   const assets = value as Record<string, unknown>;
   return {
     logo: readBrandAsset(assets.logo, brand.logo),
+    darkLogo: readBrandAsset(assets.darkLogo, brand.darkLogo),
     footerLogo: readBrandAsset(assets.footerLogo, brand.footerLogo),
     favicon: readBrandAsset(assets.favicon, brand.favicon),
   };

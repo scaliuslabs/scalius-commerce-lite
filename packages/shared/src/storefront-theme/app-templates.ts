@@ -13,8 +13,8 @@ import { z } from "zod";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
-import { storefrontThemeTokensSchema } from "./tokens";
-import type { StorefrontThemeDocument } from "./document";
+import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
+import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import {
   resolveStorefrontHandles,
@@ -35,7 +35,12 @@ export const storefrontAppTemplateThemeSchema = z.object({
   apps: storefrontThemeAppsSchema.omit({ template: true }).optional(),
   /** The homepage sections. */
   sections: storefrontSectionListSchema.optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  // As every theme: dark colours whenever its scheme or switch can show them, so an applied template always saves.
+  if (value.tokens && storefrontDarkColorsMissing(value.tokens)) {
+    context.addIssue({ code: "custom", path: ["tokens", "darkColors"], message: "A dark or device colour scheme, or the buyer's switch, needs the dark colours." });
+  }
+});
 export type StorefrontAppTemplateTheme = z.infer<typeof storefrontAppTemplateThemeSchema>;
 
 /** A declaration read at this store's version: its value, or the first reason it does not fit. */
@@ -181,7 +186,9 @@ export function readStorefrontAppTemplateTheme(value: unknown, themeVersion: num
  * The document with an app template applied: its tokens, blocks and skins
  * replace the document's, its sections become the homepage's, and the
  * document records the template it came from (`apps.template`). A homepage
- * section whose id the template reuses keeps the merchant's values.
+ * section whose id the template reuses keeps the merchant's values. The
+ * merchant's colour scheme, dark colours and switch stay unless the
+ * template shows dark colours of its own (`storefrontTokensKeepingColorScheme`).
  */
 export function applyStorefrontAppTemplate(
   document: StorefrontThemeDocument,
@@ -195,13 +202,13 @@ export function applyStorefrontAppTemplate(
       return kept && kept.type === section.type ? kept : section;
     })
     : document.pages.home;
-  return {
+  return storefrontThemeWithReadableDarkColors({
     ...document,
-    tokens: template.tokens ?? document.tokens,
+    tokens: template.tokens ? storefrontTokensKeepingColorScheme(template.tokens, document.tokens) : document.tokens,
     blocks: { ...document.blocks, ...(template.blocks ?? {}) },
     apps: { ...(template.apps ?? {}), template: key },
     pages: { ...document.pages, home },
-  };
+  });
 }
 
 /**

@@ -80,7 +80,7 @@ export function everySectionTheme() {
   };
   // A product homepage: the homepage read follows the product's buyer state.
   theme.pages.homeMode = { kind: "product", productId: "p_linen" };
-  theme.brand = { logo: "media_logo", logoWidth: 180, footerLogo: "media_story", favicon: "media_side" };
+  theme.brand = { logo: "media_logo", logoWidth: 180, darkLogo: "media_dark_logo", footerLogo: "media_story", favicon: "media_side" };
   theme.blocks.topBar = { variant: "utility", settings: { text: "Free delivery in Dhaka", link: "/shipping-policy" } };
   theme.blocks.footer = { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, tagline: "Handmade", about: "Since 1978", copyright: "Test Store Ltd" } } as typeof theme.blocks.footer;
   return theme;
@@ -168,7 +168,8 @@ function seedSql(): string {
     ('media_look', 'look.jpg', 'image', 'media/look.jpg', 1, 'image/jpeg', 'ready', 800, 800, 800, NULL, ${T}, ${T}),
     ('media_banner', 'banner.jpg', 'image', 'media/banner.jpg', 1, 'image/jpeg', 'ready', 1600, 500, 1600, NULL, ${T}, ${T}),
     ('media_story', 'story.jpg', 'image', 'media/story.jpg', 1, 'image/jpeg', 'ready', 1200, 900, 1200, NULL, ${T}, ${T}),
-    ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400, NULL, ${T}, ${T});
+    ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400, NULL, ${T}, ${T}),
+    ('media_dark_logo', 'logo-light.png', 'image', 'media/logo-light.png', 1, 'image/png', 'ready', 400, 400, 400, NULL, ${T}, ${T});
   UPDATE brands SET logo_media_id = 'media_logo' WHERE id = 'brd_aarong01';
 
   INSERT INTO products (id, name, description, price_minor, slug, category_id, brand_id, is_active, discount_type, discount_bps, discount_amount_minor, product_condition, meta_title, no_index, exclude_from_sitemap, created_at, updated_at) VALUES

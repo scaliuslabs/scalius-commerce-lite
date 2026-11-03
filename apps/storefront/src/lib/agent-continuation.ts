@@ -1,15 +1,17 @@
 import { normalizeHostedCheckoutUrl } from "@/lib/checkout/redirect-url";
 import { continuationCopy, continuationLanguage } from "./continuation-copy";
 import { buyerApiErrorText } from "./buyer-api-errors";
+import { followColorScheme, stripeCardStyle } from "./stripe-card-style";
 
 type ContinuationKind = "customer_auth" | "payment" | "payment_recovery";
 type JsonRecord = Record<string, unknown>;
 interface StripeCardElement {
   mount(selector: string): void;
+  update?(options: { style: ReturnType<typeof stripeCardStyle> }): void;
   on(event: string, handler: (event: { error?: { message?: string; code?: string; decline_code?: string } }) => void): void;
 }
 interface StripeInstance {
-  elements(): { create(type: "card"): StripeCardElement };
+  elements(): { create(type: "card", options?: { style?: ReturnType<typeof stripeCardStyle> }): StripeCardElement };
   confirmCardPayment(secret: string, input: { payment_method: { card: StripeCardElement } }): Promise<{
     error?: { message?: string; code?: string; decline_code?: string };
     paymentIntent?: { status?: string };
@@ -40,7 +42,7 @@ export function initAgentContinuation(): void {
 
   function setStatus(message: string, tone: "neutral" | "success" | "error" = "neutral"): void {
     if (!statusElement) return;
-    statusElement.className = `mt-5 rounded-lg border p-4 ${tone === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : tone === "success" ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-800" : "border-border bg-muted/20"}`;
+    statusElement.className = `mt-5 rounded-lg border p-4 ${tone === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : tone === "success" ? "border-success/40 bg-success/10 text-foreground" : "border-border bg-muted/20"}`;
     statusElement.textContent = message;
   }
 
@@ -133,8 +135,11 @@ export function initAgentContinuation(): void {
       const secureWindow = window as SecureWindow;
       if (!secureWindow.Stripe) throw new ContinuationFailure(copy.cardUnavailable);
       stripe = secureWindow.Stripe(publishableKey);
-      stripeCard = stripe.elements().create("card");
+      // The page's colours where the card mounts, again whenever the colour scheme changes.
+      const styled = document.getElementById("stripeCardElement") ?? document.body;
+      stripeCard = stripe.elements().create("card", { style: stripeCardStyle(styled, "16px") });
       stripeCard.mount("#stripeCardElement");
+      followColorScheme(styled, "16px", stripeCard);
       stripeCard.on("change", (event) => {
         const target = document.getElementById("stripeCardError");
         if (target) target.textContent = event.error ? buyerApiErrorText(event.error, { locale: language, fallback: copy.paymentFailed }) : "";

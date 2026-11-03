@@ -28,6 +28,7 @@ import {
   type StorefrontSectionType,
 } from "./sections";
 import {
+  STOREFRONT_LIGHT_COLOR_SCHEME,
   STOREFRONT_THEME_PALETTES,
   type StorefrontThemePaletteKey,
   type StorefrontThemeTokens,
@@ -36,7 +37,7 @@ import {
 export interface StorefrontTemplate {
   readonly id: StorefrontTemplateId;
   readonly palette: StorefrontThemePaletteKey;
-  readonly tokens: Readonly<Omit<StorefrontThemeTokens, "colors">>;
+  readonly tokens: Readonly<Omit<StorefrontThemeTokens, "colors" | "colorScheme" | "darkColors" | "colorSchemeToggle">>;
   readonly blocks: StorefrontThemeBlocks;
   readonly home: readonly StorefrontSection[];
 }
@@ -335,7 +336,11 @@ export function storefrontTemplateTheme(
   return {
     version: STOREFRONT_THEME_DOCUMENT_VERSION,
     template: id,
-    tokens: { ...structuredClone(template.tokens), colors: { ...STOREFRONT_THEME_PALETTES[palette] } } as StorefrontThemeTokens,
+    tokens: {
+      ...structuredClone(template.tokens),
+      colors: { ...STOREFRONT_THEME_PALETTES[palette] },
+      ...STOREFRONT_LIGHT_COLOR_SCHEME,
+    } as StorefrontThemeTokens,
     brand: { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: structuredClone(template.blocks) as StorefrontThemeBlocks,
     pages: { home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" }, landing: {}, templates: emptyStorefrontPageTemplates() },

@@ -1,7 +1,8 @@
 /**
  * Keeps the preview in step with the working document without reloads or
  * waiting for autosave (research P11, P12): theme tokens at once as custom
- * properties (then painted by the preview-only paint route), a text setting
+ * properties (then painted by the preview-only paint route) in the colour
+ * set the Colours group edits (the canvas shows that set), a text setting
  * replaced in place while typing, sections moved and hidden in the page at
  * once, then drawn from the unsaved document by the preview-only render
  * route. What only a whole page can show (a header layout, the product
@@ -14,7 +15,9 @@ import {
   buildStorefrontThemeTokens,
   isStorefrontThemeHexColor,
   storefrontScopeRegions,
+  storefrontThemeShowsDarkColors,
   type StorefrontSection,
+  type StorefrontThemeColorSet,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { canvasTextField } from "./canvas-text";
@@ -53,9 +56,30 @@ function sameShape(left: readonly StorefrontSection[], right: readonly Storefron
   });
 }
 
+/**
+ * The document as the canvas shows it: the colour set the Colours group
+ * edits stands as the scheme (light or dark), so the paint and the instant
+ * tokens show that set whatever the store's scheme is.
+ */
+export function previewColorDocument(theme: Theme, set: StorefrontThemeColorSet): Theme {
+  const dark = set === "darkColors" && storefrontThemeShowsDarkColors(theme.tokens) && theme.tokens.darkColors !== null;
+  const colorScheme = dark ? "dark" : "light";
+  if (theme.tokens.colorScheme === colorScheme) return theme;
+  return { ...theme, tokens: { ...theme.tokens, colorScheme } };
+}
+
+/** The tokens the canvas takes at once: those of the set it shows. */
+function instantTokens(theme: Theme): Record<string, string> | null {
+  const colors = theme.tokens.colorScheme === "dark" ? theme.tokens.darkColors : theme.tokens.colors;
+  if (!colors || !Object.values(colors).every((color) => isStorefrontThemeHexColor(color))) return null;
+  return buildStorefrontThemeTokens({ tokens: { ...theme.tokens, colors } });
+}
+
 /** What a change outside the page's sections and tokens needs: the page drawn again from the saved draft. */
 function needsWholePage(before: Theme, after: Theme, page: EditorPage): boolean {
-  return !sameFormValue(before.blocks, after.blocks)
+  // The core header draws the shoppers' colour switch.
+  return before.tokens.colorSchemeToggle !== after.tokens.colorSchemeToggle
+    || !sameFormValue(before.blocks, after.blocks)
     || !sameFormValue(before.brand, after.brand)
     || !sameFormValue(before.apps, after.apps)
     || (page.kind === "home" && !sameFormValue(before.pages.homeMode, after.pages.homeMode));
@@ -68,7 +92,7 @@ function textFieldOf(section: StorefrontSection, path: string): string | null {
   return key && !key.includes(".") ? key : null;
 }
 
-export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, appSections, onNeedSave, enabled = true, fieldsEnabled = false, resyncAt = 0 }: {
+export function usePreviewSync({ send, reload, connectedAt, working, sendable, savedTheme, page, presence, marks, appSections, onNeedSave, enabled = true, fieldsEnabled = false, resyncAt = 0, colorSet = "colors" }: {
   send: (command: PreviewCommand) => void;
   /** Historical frames must never receive optimistic working-document edits. */
   enabled?: boolean;
@@ -91,6 +115,8 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   appSections?: ReadonlyMap<string, AppSectionEntry>;
   /** A change only a reload shows: save it now. */
   onNeedSave: () => void;
+  /** The colour set the canvas shows (the one the Colours group edits). */
+  colorSet?: StorefrontThemeColorSet;
 }) {
   /** What the preview shows now. */
   const shown = useRef<Theme | null>(null);
@@ -100,8 +126,13 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
   const paintTimer = useRef(0);
   /** A change waits for its save, then the page loads again. */
   const reloadAfterSave = useRef(false);
-  const latest = useRef({ sendable, page, presence, marks, enabled });
-  latest.current = { sendable, page, presence, marks, enabled };
+  const latest = useRef({ sendable, page, presence, marks, enabled, colorSet });
+  latest.current = { sendable, page, presence, marks, enabled, colorSet };
+  /** What the paint route paints: the sendable document in the colour set the canvas shows. */
+  const paintable = () => {
+    const document = latest.current.sendable;
+    return document ? previewColorDocument(document, latest.current.colorSet) : null;
+  };
   const emit = (command: PreviewCommand) => {
     if (latest.current.enabled) send({ ...command, revision: Math.max(1, revision.current) });
   };
@@ -138,13 +169,12 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
 
     // Theme tokens: at once as custom properties, then painted (fonts, card attributes).
     if (!sameFormValue(before.tokens, working.tokens)) {
-      if (Object.values(working.tokens.colors).every((color) => isStorefrontThemeHexColor(color))) {
-        emit({ type: "tokens", vars: buildStorefrontThemeTokens(working) });
-      }
+      const vars = instantTokens(previewColorDocument(working, colorSet));
+      if (vars) emit({ type: "tokens", vars });
       window.clearTimeout(paintTimer.current);
       paintTimer.current = window.setTimeout(() => {
         const document = latest.current.sendable;
-        if (document && sameFormValue(document.tokens, shown.current?.tokens)) emit({ type: "paint", theme: document });
+        if (document && sameFormValue(document.tokens, shown.current?.tokens)) emit({ type: "paint", theme: paintable()! });
       }, PREVIEW_RENDER_DELAY_MS);
     }
 
@@ -232,9 +262,26 @@ export function usePreviewSync({ send, reload, connectedAt, working, sendable, s
       if (!document || !body) return;
       reconciled.current = resyncAt;
       emit({ type: "render", body, after: null });
-      emit({ type: "paint", theme: document });
+      emit({ type: "paint", theme: paintable()! });
     });
   }, [resyncAt, sendable, enabled, connectedAt]); // eslint-disable-line react-hooks/exhaustive-deps -- latest snapshot at dispatch
+
+  // The canvas shows the colour set the Colours group edits: painted again when it changes, and on a new frame.
+  const paintedSet = useRef(colorSet);
+  useEffect(() => {
+    if (!enabled || connectedAt === 0) return;
+    const saved = latest.current.sendable;
+    if (!saved) return;
+    const document = previewColorDocument(saved, colorSet);
+    const switched = paintedSet.current !== colorSet;
+    paintedSet.current = colorSet;
+    // A new frame shows the saved draft as stored: paint only when the canvas shows another set.
+    if (!switched && document === saved) return;
+    revision.current += 1;
+    const vars = instantTokens(document);
+    if (vars) emit({ type: "tokens", vars });
+    emit({ type: "paint", theme: document });
+  }, [colorSet, connectedAt, enabled]); // eslint-disable-line react-hooks/exhaustive-deps -- the latest document through refs
 
   // The saved draft caught up with a change only a whole page shows: load it again (in a hidden frame).
   useEffect(() => {

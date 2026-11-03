@@ -1,4 +1,19 @@
-@custom-variant dark (&:is(.dark *));
+/* `dark:` follows the theme's colour scheme (lib/color-scheme.ts): the dark
+   colours on <html data-color-scheme="dark">, or the device's dark setting
+   while `system` is not yet settled (a page without JavaScript). Screens
+   only: a printed page keeps the light colours. */
+@custom-variant dark {
+  @media screen {
+    &:where([data-color-scheme="dark"] *) {
+      @slot;
+    }
+  }
+  @media screen and (prefers-color-scheme: dark) {
+    &:where([data-color-scheme="system"] *) {
+      @slot;
+    }
+  }
+}
 
 /* Fallback tokens at zero specificity: the theme writes its own on
    `:root, .site-root` (theme-paint.ts), and that block must win at `:root`
@@ -41,33 +56,6 @@
   --chart-5: oklch(0.769 0.188 70.08);
 }
 
-.dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.53 0.14 150);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 285.938);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.53 0.14 150 / 0.5);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -91,6 +79,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* Status tones beyond the palette (constants, as the rating and in-stock
+     colours): tint a surface or mark with them, keep the words in the text
+     colour, so they read in the light and the dark colours alike. */
+  --color-success: var(--theme-success, #15803d);
+  --color-warning: var(--theme-rating, #f59e0b);
   /* The header's surface and ink follow the header tone token (light, dark
      or the brand colour): `bg-header text-header-foreground`. */
   --color-header: var(--theme-header-background, var(--background));
@@ -255,8 +248,10 @@ body {
   }
 }
 
-html.dark {
-  color-scheme: dark;
+/* A buyer's colour switch (the core header's or a skin's) shows only where
+   the theme offers one and the script that runs it has started. */
+:root:not([data-color-scheme-switch]) [data-color-scheme-toggle] {
+  display: none !important;
 }
 
 /* One keyboard focus indicator for every control (WCAG 2.4.7). It is

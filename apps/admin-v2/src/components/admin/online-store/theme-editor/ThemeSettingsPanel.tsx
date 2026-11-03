@@ -7,7 +7,8 @@
  */
 import { CardCustomFields } from "../schema-form/CardCustomFields";
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, TriangleAlert } from "lucide-react";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Link } from "@tanstack/react-router";
 import {
   HEADER_LOGO_WIDTH_MAX,
@@ -35,7 +36,7 @@ import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
 import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
-import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
+import { blockFallback, darkLogoMissing, darkLogoUnused, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
 import { TypographyCard } from "../TypographyCard";
 import { ThemeRevealContext, useThemeReveal, type ThemeRevealRequest, type ThemeSettingsGroup } from "../theme-reveal";
 import { Field } from "~/components/ui/field";
@@ -149,7 +150,7 @@ function useBlockChoice(theme: Theme, resolved: ResolvedStorefrontTheme, setDraf
 }
 
 /**
- * The brand: header logo (and its width), footer logo and browser tab icon,
+ * The brand: header logo (and its width), the logo for dark pages, footer logo and browser tab icon,
  * picked from Files and kept as media ids in the theme draft, so they
  * preview, publish and restore with the rest of the theme.
  */
@@ -158,7 +159,7 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
   const { brand } = theme;
   const setBrand = (next: Partial<Theme["brand"]>) =>
     setDraft((current) => ({ ...current, brand: { ...current.brand, ...next } }));
-  const image = (key: "logo" | "footerLogo" | "favicon") => ({
+  const image = (key: "logo" | "darkLogo" | "footerLogo" | "favicon") => ({
     mediaId: brand[key],
     previews: media.previews,
     fit: "contain" as const,
@@ -185,6 +186,13 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
             aria-valuetext={`${brand.logoWidth}px`}
           />
         </Field>
+      ) : null}
+      <MediaField id={THEME_FIELD_IDS.darkLogo} label={t("darkLogo")} help={t(darkLogoUnused(theme) ? "darkLogoUnused" : "darkLogoHelp")} {...image("darkLogo")} />
+      {darkLogoMissing(theme) ? (
+        <Alert variant="warning">
+          <TriangleAlert aria-hidden="true" />
+          <AlertDescription>{t("darkLogoMissing")}</AlertDescription>
+        </Alert>
       ) : null}
       <MediaField id={THEME_FIELD_IDS.footerLogo} label={t("footerLogo")} help={t("footerLogoHelp")} {...image("footerLogo")} />
       <MediaField id={THEME_FIELD_IDS.favicon} label={t("favicon")} {...image("favicon")} />

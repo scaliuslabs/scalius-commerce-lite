@@ -839,6 +839,7 @@ export declare function stickyHeader(): Attributes;
 export declare function menuDrawer(): Attributes;
 export declare function searchOpener(): Attributes;
 export declare function accountLink(): Attributes;
+export declare function colorSchemeToggle(): Attributes;
 export declare function quickAdd(product: Pick<StorefrontProductCard, "url" | "quickAdd">): Attributes;
 export declare function openCart(): Attributes;
 type ProductPageVariant = Pick<StorefrontProductPage["product"]["variants"][number], "id">;
@@ -970,7 +971,7 @@ export { componentFor, defineStorefront, storefrontDefinitionOf } from "./define
 export type { AppComponent, ComponentProps, ComponentPropsFor, FooterComponent, FooterProps, HeaderComponent, HeaderProps, LayoutSlotComponentProps, ListingMainComponent, ListingMainProps, PageComponentProps, ProductCardComponent, ProductCardProps, ProductCardSlotComponentProps, ProductMainComponent, ProductMainProps, ProductSlotComponentProps, SectionComponent, SectionProps, SectionSkinComponent, SectionSkinProps, SkinComponent, SkinProps, StorefrontComponentTargetName, StorefrontDefinition, StorefrontLayoutSlot, StorefrontModuleDefinition, } from "./define";
 export { EMPTY_HTML, escapeHtml, html, isHtml, raw, toHtml, type Html, type Renderable } from "./html";
 export { Fragment, jsx, jsxs, type Component, type JSX } from "./jsx-runtime";
-export { BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, ProductModule, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, buyVariant, chooseVariant, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut, } from "./components";
+export { BuyForm, CartCount, Deferred, Filters, Gallery, Image, Island, OrderForm, Pagination, Price, ProductModule, Recommendations, Reviews, Slot, Toolbar, accountLink, asset, buyVariant, chooseVariant, colorSchemeToggle, editable, menuDrawer, openCart, quickAdd, searchOpener, stickyHeader, whenSignedIn, whenSignedOut, } from "./components";
 export { formatDate, formatMoney, formatNumber, plural, storeTime, t, type Words } from "./locale";
 export type { BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
 export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeferredHydration, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductModuleEmbed, StorefrontProductPage, StorefrontProductSlot, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecification, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
@@ -4167,6 +4168,7 @@ export interface StorefrontStoreInfo {
     name: string;
     url: string;
     logo: StorefrontImage | null;
+    darkLogo?: StorefrontImage | null;
     logoWidth: number;
 }
 export interface StorefrontHeaderData {

@@ -42,7 +42,7 @@ const SheetContent = React.forwardRef<
     <SheetPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 h-full w-full bg-white shadow-lg focus:outline-none",
+        "fixed z-50 h-full w-full bg-background shadow-lg focus:outline-none",
         side === "right" &&
           "inset-y-0 inset-e-0 border-s data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md",
         side === "left" &&
@@ -96,7 +96,7 @@ const SheetTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold text-gray-950", className)}
+    className={cn("text-lg font-semibold text-foreground", className)}
     {...props}
   />
 ));
@@ -108,7 +108,7 @@ const SheetDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-gray-500", className)}
+    className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
 ));

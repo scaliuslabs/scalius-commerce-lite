@@ -70,16 +70,26 @@ const COMMON_THIRD_PARTY_DOMAINS = [
   "https://connect.facebook.net",
   "https://www.facebook.com",
   "https://*.facebook.com",
-  // Stripe payment gateway (card fields load and frame from Stripe)
+];
+
+/**
+ * The card payment providers whose fields load on store pages (Stripe: its
+ * script, the card and 3-D Secure frames on js.stripe.com and its
+ * subdomains, its API). The one list for scripts, frames and connections of
+ * every page that takes a card: the page policy and the continuations'
+ * strict policy (`cardPageCsp`).
+ */
+export const PAYMENT_PROVIDER_CSP_SOURCES = [
   "https://js.stripe.com",
   "https://*.stripe.com",
-];
+] as const;
 
 // Generate script-src directives
 function getScriptSrcDirectives(additionalDomains: string[]): string[] {
   return [
     ...ESSENTIAL_SCRIPT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
+    ...PAYMENT_PROVIDER_CSP_SOURCES,
     ...additionalDomains,
   ];
 }
@@ -92,6 +102,7 @@ function getConnectSrcDirectives(
   const directives = [
     ...ESSENTIAL_CONNECT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
+    ...PAYMENT_PROVIDER_CSP_SOURCES,
     ...additionalDomains,
   ];
 
@@ -107,12 +118,32 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
     ...ESSENTIAL_FRAME_SRC,
     "https://*.google.com", // For Google services like reCAPTCHA
     "https://*.facebook.com", // For Facebook UI elements or login iframes
-    "https://js.stripe.com", // Stripe card elements use iframes
-    "https://*.stripe.com",
+    ...PAYMENT_PROVIDER_CSP_SOURCES, // card fields and 3-D Secure frames
     "https://www.youtube-nocookie.com", // Merchant-authored YouTube embeds
     "https://player.vimeo.com", // Merchant-authored Vimeo embeds
     ...additionalDomains,
   ];
+}
+
+/**
+ * A card page's strict policy (the agent and checkout continuations): its
+ * own files, the payment providers' sources exactly as every store page
+ * allows them, no inline script but the one named by its hash (the colour
+ * scheme's), no framing, no other origin.
+ */
+export function cardPageCsp(scriptSource: string | null): string {
+  const payment = PAYMENT_PROVIDER_CSP_SOURCES.join(" ");
+  return [
+    "default-src 'self'",
+    `script-src 'self'${scriptSource ? ` ${scriptSource}` : ""} ${payment}`,
+    `connect-src 'self' ${payment}`,
+    `frame-src ${payment}`,
+    "img-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+  ].join("; ");
 }
 
 // Generate img-src directives

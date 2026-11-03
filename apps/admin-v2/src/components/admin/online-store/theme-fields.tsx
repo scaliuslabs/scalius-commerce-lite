@@ -1,21 +1,27 @@
 /**
  * Theme setting controls the Theme page and the theme editor share: the
- * colour fields, fit notes (why a choice shows something else on this
- * store) and a block variant's generated settings.
+ * colour scheme and colour fields, fit notes (why a choice shows something
+ * else on this store) and a block variant's generated settings.
  */
 import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import { SettingBindingScope } from "./schema-form/binding-context";
-import { useState, type CSSProperties } from "react";
+import { useContext, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
+  STOREFRONT_COLOR_SCHEMES,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
   storefrontBlockValue,
   storefrontVariantSpec,
   type StorefrontBlockSlot,
+  type StorefrontColorScheme,
+  type StorefrontThemeColorSet,
   type StorefrontThemeDocument,
   type StorefrontThemeFallback,
 } from "@scalius/shared/storefront-theme";
 import { Input } from "~/components/ui/input";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import { Switch } from "~/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { formatNumber, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -26,16 +32,25 @@ import { blockSettingSpec, hasSettings } from "./schema-form/registry-forms";
 import type { MediaPreviews } from "./schema-form/resource-fields";
 import { SchemaSettingsForm } from "./schema-form/SchemaSettingsForm";
 import {
-  COLOR_FIELD_IDS,
   COLOR_ROLE_TOKEN,
+  colorFieldId,
+  sameDarkPages,
+  darkColorsEdited,
+  regenerateDarkColors,
+  themeColorSetProblem,
+  setColorScheme,
+  setColorSchemeToggle,
   setThemeColor,
+  themeColorSets,
   themeContrastProblems,
   type ColorRole,
   type ContrastProblem,
   type ThemeBlockSlot,
 } from "./theme-settings";
-import { useThemeReveal } from "./theme-reveal";
-import { Field } from "~/components/ui/field";
+import { PreviewColorSetContext, useThemeReveal } from "./theme-reveal";
+import { ChoiceField, Field } from "~/components/ui/field";
+import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 
 export { useFitReason } from "./use-fit-reason";
 
@@ -54,13 +69,13 @@ const formatRatio = (ratio: number) =>
   formatNumber(Math.floor(ratio * 10) / 10, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function ColorField({
-  role,
+  id,
   label,
   value,
   problems,
   onChange,
 }: {
-  role: ColorRole;
+  id: string;
   label: string;
   value: string;
   /** Text this colour leaves below AA, in plain words. */
@@ -68,7 +83,6 @@ function ColorField({
   onChange: (value: string) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const id = COLOR_FIELD_IDS[role];
   const valid = isStorefrontThemeHexColor(value);
   const [left, setLeft] = useState(false);
   const server = useServerFieldError(id);
@@ -130,22 +144,135 @@ const COLOR_FIELDS: ReadonlyArray<{ role: ColorRole; label: MessageKey }> = [
   { role: "highlightText", label: "colorHighlightText" },
 ];
 
-/** The six colours a merchant picks, each with the readable-text problems it causes. */
-export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
+/** The six colours of one set, each with the readable-text problems it causes. */
+function ColorSetFields({ theme, set, setDraft }: { theme: Theme; set: StorefrontThemeColorSet; setDraft: SetTheme }) {
   const t = useMessages(onlineStoreMessages);
-  const problems = themeContrastProblems(theme);
+  const colors = theme.tokens[set];
+  if (!colors) return null;
+  const problems = themeContrastProblems(theme, set);
   return (
     <div className="grid gap-4 @lg:grid-cols-2">
       {COLOR_FIELDS.map(({ role, label }) => (
         <ColorField
           key={role}
-          role={role}
+          id={colorFieldId(role, set)}
           label={t(label)}
-          value={theme.tokens.colors[COLOR_ROLE_TOKEN[role]]}
+          value={colors[COLOR_ROLE_TOKEN[role]]}
           problems={problems.filter((problem) => problem.role === role)}
-          onChange={(value) => setDraft((current) => setThemeColor(current, role, value))}
+          onChange={(value) => setDraft((current) => setThemeColor(current, role, value, set))}
         />
       ))}
+    </div>
+  );
+}
+
+/** "Setting to fix" requests that already opened their tab. */
+const SHOWN_REVEALS = new WeakSet<object>();
+
+/**
+ * The colour scheme (light, dark or the shopper's device), the shoppers'
+ * switch, and the colours: one set, or the colours and the dark colours on
+ * two tabs once the store shows dark pages. Turning dark on stores dark
+ * colours made from the colours, so a newcomer gets a finished look.
+ */
+export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const preview = useContext(PreviewColorSetContext);
+  const [ownSet, setOwnSet] = useState<StorefrontThemeColorSet>("colors");
+  const sets = themeColorSets(theme);
+  const shown = sets.includes(preview?.set ?? ownSet) ? preview?.set ?? ownSet : "colors";
+  const show = (set: StorefrontThemeColorSet) => (preview ? preview.setSet(set) : setOwnSet(set));
+  // "Setting to fix" opens the tab of the colour set its field is in.
+  const reveal = useThemeReveal();
+  const showRef = useRef(show);
+  showRef.current = show;
+  useEffect(() => {
+    // Once per request: the group mounting again later keeps the merchant's own tab.
+    if (reveal?.group !== "colors" || !reveal.colorSet || SHOWN_REVEALS.has(reveal)) return;
+    SHOWN_REVEALS.add(reveal);
+    showRef.current(reveal.colorSet);
+  }, [reveal]);
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const regenerate = () => {
+    setConfirmRegenerate(false);
+    setDraft((current) => regenerateDarkColors(current));
+  };
+  const darkProblem = themeColorSetProblem(theme, "darkColors") !== null;
+  const scheme = (value: StorefrontColorScheme) => {
+    setDraft((current) => setColorScheme(current, value));
+    // The canvas follows the choice: dark shows the dark colours, light the colours.
+    if (value !== "system") show(value === "dark" ? "darkColors" : "colors");
+  };
+  return (
+    <div className="space-y-4">
+      <Field id="theme-color-scheme" label={t("colorScheme")}>
+        <SearchableSelect
+          id="theme-color-scheme"
+          value={theme.tokens.colorScheme}
+          options={STOREFRONT_COLOR_SCHEMES.map((value) => ({
+            value,
+            label: t(`colorScheme_${value}` as MessageKey),
+            description: t(`colorScheme_${value}Help` as MessageKey),
+          }))}
+          onValueChange={(value) => scheme(value as StorefrontColorScheme)}
+          triggerClassName="w-full"
+        />
+      </Field>
+      <ChoiceField
+        id="theme-color-scheme-toggle"
+        label={t("colorSchemeToggle")}
+        help={t("colorSchemeToggleHelp")}
+        control={(
+          <Switch
+            id="theme-color-scheme-toggle"
+            checked={theme.tokens.colorSchemeToggle}
+            aria-describedby="theme-color-scheme-toggle-help"
+            onCheckedChange={(checked) => setDraft((current) => setColorSchemeToggle(current, checked))}
+          />
+        )}
+      />
+      {sameDarkPages(theme) ? <p className="text-body text-muted-foreground">{t("darkColorsSameAsColors")}</p> : null}
+      {sets.length > 1 ? (
+        <Tabs value={shown} onValueChange={(value) => show(value as StorefrontThemeColorSet)}>
+          <TabsList aria-label={t("colorSets")}>
+            <TabsTrigger value="colors">{t("colorSet_colors")}</TabsTrigger>
+            <TabsTrigger value="darkColors">
+              {t("colorSet_darkColors")}
+              {darkProblem ? (
+                <>
+                  <span aria-hidden="true" className="size-2 rounded-full bg-destructive" />
+                  <span className="sr-only">{t("colorSetNeedsFix")}</span>
+                </>
+              ) : null}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="colors">
+            <ColorSetFields theme={theme} set="colors" setDraft={setDraft} />
+          </TabsContent>
+          <TabsContent value="darkColors" className="space-y-4">
+            <p className="text-body text-muted-foreground">{t("darkColorsHelp")}</p>
+            <ColorSetFields theme={theme} set="darkColors" setDraft={setDraft} />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!darkColorsEdited(theme)}
+              onClick={() => setConfirmRegenerate(true)}
+            >
+              {t("darkColorsRegenerate")}
+            </Button>
+            <ConfirmDialog
+              open={confirmRegenerate}
+              onOpenChange={setConfirmRegenerate}
+              title={t("darkColorsRegenerateTitle")}
+              description={t("darkColorsRegenerateDescription")}
+              confirmLabel={t("darkColorsRegenerate")}
+              onConfirm={regenerate}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <ColorSetFields theme={theme} set="colors" setDraft={setDraft} />
+      )}
     </div>
   );
 }

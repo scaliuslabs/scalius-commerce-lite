@@ -552,6 +552,18 @@
 .noor-logo-img { display: block; inline-size: auto; max-inline-size: min(var(--noor-logo-width, 140px), 44vw); max-block-size: 2.25rem; object-fit: contain; }
 .noor-logo-text { min-inline-size: 0; overflow: hidden; font-family: var(--n-serif); font-size: 1.5rem; line-height: 1.1; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
 @media (min-width: 64rem) { .noor-logo-img { max-block-size: 2.75rem; } .noor-logo-text { font-size: 1.875rem; } }
+/* The store's logo for dark pages, while the store paints its dark colours:
+   the dark scheme (or the buyer's switch), and the device's dark setting
+   under the `system` scheme before (or without) JavaScript. Screens only. */
+.noor-logo .noor-logo-dark { display: none; }
+@media screen {
+  :root[data-color-scheme="dark"] .noor-logo .noor-logo-light { display: none; }
+  :root[data-color-scheme="dark"] .noor-logo .noor-logo-dark { display: block; }
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root[data-color-scheme="system"] .noor-logo .noor-logo-light { display: none; }
+  :root[data-color-scheme="system"] .noor-logo .noor-logo-dark { display: block; }
+}
 
 .noor-icon-btn {
   position: relative;

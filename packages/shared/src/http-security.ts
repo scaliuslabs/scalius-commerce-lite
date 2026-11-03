@@ -32,6 +32,13 @@ export function redirectPlaintextRequest(request: Request): Response | null {
   });
 }
 
+/**
+ * The policy of every app answer (a plugin route's response, and the store's
+ * app proxy that passes it on): data only, never a page, never framed. One
+ * constant, so no app content can shape it.
+ */
+export const PLUGIN_ANSWER_CSP = "default-src 'none'; frame-ancestors 'none'";
+
 export type FrameProtection = "deny" | "same-origin" | "preserve";
 
 /**

@@ -26,6 +26,7 @@ import {
   storefrontSectionDefault,
   storefrontTemplateTheme,
   storefrontThemeBlocksSchema,
+  storefrontDarkPalette,
   storefrontThemeDocumentSchema,
   storefrontThemeTokensSchema,
   storefrontVariantSpec,
@@ -484,9 +485,11 @@ function tokenEntries(): GalleryEntry[] {
     contentSection("banner", "banner"),
     contentSection("newsletter", "newsletter"),
   ];
+  // Dark colours from the base's, so the colour-scheme variants (dark, system, the switch) are saveable themes.
+  base.tokens.darkColors = storefrontDarkPalette(base.tokens.colors);
   const entries: GalleryEntry[] = [];
   for (const variant of settingVariants(storefrontThemeTokensSchema, base.tokens)) {
-    if (variant.label === "default") continue;
+    if (variant.label === "default" || variant.label.startsWith("darkColors")) continue;
     const theme = clone(base);
     theme.tokens = variant.settings;
     entries.push({ id: entryId("token", variant.label), family: `token:${variant.label.split("=")[0]}`, title: `Token ${variant.label}`, page: "home", theme, focus: WHOLE_PAGE, scenario: {} });

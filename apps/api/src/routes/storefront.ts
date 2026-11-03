@@ -263,6 +263,7 @@ const skinMediaSchema = z.array(brandAssetSchema.unwrap()).max(STOREFRONT_SKIN_I
 /** A theme's brand images resolved (ready or trashed images; null when unset or gone). */
 const brandAssetsSchema = z.object({
   logo: brandAssetSchema,
+  darkLogo: brandAssetSchema,
   footerLogo: brandAssetSchema,
   favicon: brandAssetSchema,
 });

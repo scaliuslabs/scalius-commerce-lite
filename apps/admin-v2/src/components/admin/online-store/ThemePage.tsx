@@ -37,7 +37,7 @@ import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/a
 import { OnlineStorePage, SectionCard, actionErrorText } from "./shared";
 import { HeaderRows, ProductTile, Sketch, VisualChoice } from "./ThemeChoices";
 import { useOpenThemePreview } from "./theme-preview";
-import { TEMPLATE_THEMES, appTemplates, applyAppTemplate, applyTemplate, resolveThemeForStore, selectedTemplate } from "./theme-settings";
+import { TEMPLATE_THEMES, appTemplates, applyAppTemplate, applyTemplate, editedDarkColorsReplaced, resolveThemeForStore, selectedTemplate } from "./theme-settings";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
 import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
@@ -147,6 +147,9 @@ function ThemeOverview({ workspace, refetch }: {
   const templateName = (id: string) => fromApps.find((each) => each.template.key === id)?.template.name ?? option(`template_${id}`);
   const changed = workspace.draftDiffersFromLive;
   const pendingApp = fromApps.find((each) => each.template.key === pendingTemplate)?.template;
+  // The draft the pending choice makes (it may replace edited dark colours that would be unreadable with it).
+  const pendingResult = pendingTemplate === null ? null
+    : fromApps.find((each) => each.template.key === pendingTemplate)?.theme ?? applyTemplate(pendingTemplate as StorefrontTemplateId, draft);
   const refresh = async () => {
     await refetch();
     void queryClient.invalidateQueries({ queryKey: ["theme-versions"] });
@@ -276,11 +279,14 @@ function ThemeOverview({ workspace, refetch }: {
         open={pendingTemplate !== null}
         onOpenChange={(open) => { if (!open) setPendingTemplate(null); }}
         title={t("templateReplaceTitle", { name: pendingTemplate ? templateName(pendingTemplate) : "" })}
-        description={pendingApp
-          ? [editor("appTemplateReplaceBody"), ...(pendingApp.omittedCardFields.length > 0
-            ? [editor("appTemplateCardFieldsOmitted", { fields: formatList(pendingApp.omittedCardFields, getLocale()), count: pendingApp.omittedCardFields.length })]
-            : [])].join(" ")
-          : editor("templateReplaceBody")}
+        description={[
+          ...(pendingApp
+            ? [editor("appTemplateReplaceBody"), ...(pendingApp.omittedCardFields.length > 0
+              ? [editor("appTemplateCardFieldsOmitted", { fields: formatList(pendingApp.omittedCardFields, getLocale()), count: pendingApp.omittedCardFields.length })]
+              : [])]
+            : [editor("templateReplaceBody")]),
+          ...(pendingResult && editedDarkColorsReplaced(draft, pendingResult) ? [t("templateRemakesDarkColors")] : []),
+        ].join(" ")}
         confirmLabel={t("templateReplaceConfirm")}
         variant="default"
         onConfirm={() => {

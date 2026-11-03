@@ -449,7 +449,7 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 12;
+    version: 13;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -473,6 +473,29 @@ export type StorefrontThemeDocument = {
             input: string;
             ring: string;
         };
+        colorScheme: 'light' | 'dark' | 'system';
+        darkColors: {
+            background: string;
+            foreground: string;
+            card: string;
+            'card-foreground': string;
+            popover: string;
+            'popover-foreground': string;
+            primary: string;
+            'primary-foreground': string;
+            secondary: string;
+            'secondary-foreground': string;
+            muted: string;
+            'muted-foreground': string;
+            accent: string;
+            'accent-foreground': string;
+            destructive: string;
+            'destructive-foreground': string;
+            border: string;
+            input: string;
+            ring: string;
+        } | null;
+        colorSchemeToggle: boolean;
         typography: 'retail' | 'market' | 'editorial' | 'fresh' | 'beauty' | 'heritage' | 'tech';
         typeScale: 'flat' | 'retail' | 'display';
         headingCase: 'sentence' | 'uppercase';
@@ -488,6 +511,7 @@ export type StorefrontThemeDocument = {
     brand: {
         logo: string | null;
         logoWidth: number;
+        darkLogo: string | null;
         footerLogo: string | null;
         favicon: string | null;
     };
@@ -8770,6 +8794,13 @@ export type GetApiV1StorefrontLayoutResponses = {
                     width: number | null;
                     height: number | null;
                 } | null;
+                darkLogo: {
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
                 footerLogo: {
                     id: string;
                     url: string;
@@ -9128,6 +9159,13 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
             theme: StorefrontThemeDocument;
             brand: {
                 logo: {
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                } | null;
+                darkLogo: {
                     id: string;
                     url: string;
                     alt: string;

@@ -402,6 +402,16 @@ export interface StorefrontStoreInfo {
   /** The store's own home URL (`/` on the storefront origin). */
   url: string;
   logo: StorefrontImage | null;
+  /**
+   * The logo for dark pages: show it instead of `logo` while the store paints
+   * its dark colours, on screens, under exactly these two selectors:
+   * `:root[data-color-scheme="dark"]` (the dark scheme, the buyer's switch,
+   * or the device once the store's script ran) and
+   * `@media (prefers-color-scheme: dark) { :root[data-color-scheme="system"] }`
+   * (the device's setting before or without JavaScript). Draw both images
+   * and let CSS pick; load both eagerly. Null or absent: `logo` everywhere.
+   */
+  darkLogo?: StorefrontImage | null;
   /** The logo width on computers, in CSS pixels. */
   logoWidth: number;
 }

@@ -8,6 +8,7 @@ import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import SidebarNav from "../components/header/SidebarNav.astro";
 import ThemeFonts from "../components/ThemeFonts.astro";
+import ThemeHead from "../components/ThemeHead.astro";
 import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -343,7 +344,10 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // CSS comes only from shared enum constants and schema-validated hex colours
 // (plus the fluid grid steps derived from the density constants, widened for
 // portrait photos). Body data attributes carry the tokens CSS selects on.
-// The theme editor's paint route returns the same three for an unsaved document.
+// The theme editor's paint route returns the same for an unsaved document.
+// The colour scheme is the theme's, on <html>, for every buyer and every page
+// (private ones too); the head script settles `system` and the buyer's own
+// choice before the first paint, so the HTML and its caches never vary.
 const paint = themePaint(storefrontTheme, resolvedTheme);
 const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
   ? "product"
@@ -444,6 +448,7 @@ const pageStoreTimeZone = storeTimeZone();
 <!doctype html>
 <html
   data-library-preview={libraryPreview ? "" : undefined}
+  data-color-scheme={paint.colorScheme?.scheme}
   lang={pageLanguage}
   dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}
   data-market-presence={marketPresence ?? undefined}
@@ -539,7 +544,7 @@ const pageStoreTimeZone = storeTimeZone();
     {headScripts.map((script) => <Fragment set:html={script.config} />)}
     {appHeadScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
-    <style set:html={paint.css} data-theme-tokens={isThemePreview ? "" : undefined} />
+    <ThemeHead paint={paint} preview={isThemePreview} />
     {appStylesheets.map((href) => <link rel="stylesheet" href={href} data-app-stylesheet />)}
 
     <slot name="head" />

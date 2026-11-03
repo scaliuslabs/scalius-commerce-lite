@@ -19,6 +19,10 @@ export type HeaderVariant = StorefrontBlockVariant<"header">;
  */
 export interface HeaderLogo {
   src: string;
+  /** The logo on dark pages ("" for none: the logo everywhere). CSS picks one, so the HTML is the same for every buyer. */
+  darkSrc: string;
+  /** The theme opens dark: the dark logo loads first, the other only if it shows. */
+  darkFirst: boolean;
   alt: string;
   width: number;
 }

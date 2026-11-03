@@ -148,9 +148,9 @@ export function storefrontImageOf(asset: { url: string; alt?: string | null; wid
   };
 }
 
-/** The store's logo as apps get it (the header's, and the render context's): no alt text of its own is the store's name. */
-export function storeLogo(theme: Pick<RequestTheme, "brand">, storeName: string | null): StorefrontImage | null {
-  const logo = theme.brand.logo;
+/** A store logo as apps get it (header, footer and the render context): no alt text of its own is the store's name. */
+export function storeLogo(theme: Pick<RequestTheme, "brand">, storeName: string | null, which: "logo" | "darkLogo" = "logo"): StorefrontImage | null {
+  const logo = theme.brand[which];
   return storefrontImageOf(logo ? { ...logo, alt: logo.alt || storeName } : null);
 }
 
@@ -179,6 +179,7 @@ export function headerData(input: {
       name: input.storeName?.trim() || "Store",
       url: "/",
       logo: storeLogo(input.theme, input.storeName),
+      darkLogo: storeLogo(input.theme, input.storeName, "darkLogo"),
       logoWidth: resolved.brand.logoWidth,
     },
     menu: menuItems(sourceNavigation(resolved.blocks.navigation.source as NavigationSource, input.navigation, nodes)),
@@ -251,7 +252,8 @@ export function footerData(input: {
     store: {
       name: input.storeName?.trim() || "Store",
       url: "/",
-      logo: storefrontImageOf(brand.logo),
+      logo: storeLogo(input.theme, input.storeName),
+      darkLogo: storeLogo(input.theme, input.storeName, "darkLogo"),
       logoWidth: resolved.brand.logoWidth,
       footerLogo: storefrontImageOf(brand.footerLogo ?? brand.logo),
       phone: input.storePhone?.trim() || null,

@@ -461,7 +461,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </svg>
         </div>
       ) : (
-        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
+        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-warning/15 text-foreground" : "bg-muted text-foreground"}`}>
           <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : orderSuccessView.kind === "payment_pending" ? "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" : "M12 16h.01M12 8v4m9 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"}></path>
           </svg>
@@ -518,7 +518,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 data-payment-type={retryPaymentType}
                 data-deposit-amount={retryPaymentType === "deposit" && requestedDepositAmount ? String(requestedDepositAmount) : undefined}
               >
-                <span class="flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5" aria-hidden="true">
+                <span class={`flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5 ${option.presentation.darkMarkSrc ? "dark:bg-card" : ""}`} aria-hidden="true">
                   {option.presentation.markSrc && (
                     <img
                       src={option.presentation.markSrc}

@@ -301,6 +301,11 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
         if (/^data-(theme|card)-[a-z0-9-]+$/.test(name) && typeof value === "string") document.body.setAttribute(name, value);
       }
     }
+    // The colour scheme the editor shows (lib/color-scheme.ts settles \`system\` the same way).
+    const scheme = result.colorScheme;
+    if (scheme === "light" || scheme === "dark") document.documentElement.setAttribute("data-color-scheme", scheme);
+    else if (scheme === "system") document.documentElement.setAttribute("data-color-scheme", window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    else document.documentElement.removeAttribute("data-color-scheme");
     report();
     return true;
   };

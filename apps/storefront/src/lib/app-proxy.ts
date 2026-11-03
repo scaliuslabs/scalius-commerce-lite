@@ -25,13 +25,15 @@
 import { resolveBackendTarget, type BackendTarget } from "@/lib/api/transport";
 import { parsePluginPageOutput, type PluginPageOutput } from "@scalius/shared/plugins/storefront";
 import { hasControlCharacter } from "@scalius/shared/plugins/html";
+import { setOwnCsp } from "@/lib/middleware-helper/own-csp";
+import { PLUGIN_ANSWER_CSP } from "@scalius/shared/http-security";
 
 /** `vendor.name` (the platform's plugin id pattern). */
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const ROUTE_NAME = /^[a-z][a-z0-9_-]{0,47}$/;
 const METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 const FORWARDED_REQUEST_HEADERS = ["accept", "accept-language", "content-type", "if-none-match", "user-agent", "x-requested-with"];
-const FORWARDED_RESPONSE_HEADERS = ["content-type", "cache-control", "etag", "vary", "allow", "retry-after", "content-security-policy"];
+const FORWARDED_RESPONSE_HEADERS = ["content-type", "cache-control", "etag", "vary", "allow", "retry-after"];
 export const APP_PROXY_MAX_BODY_BYTES = 256 * 1024;
 /** Largest app answer read to find a page or redirect; a larger one passes through unread. */
 export const APP_PROXY_MAX_PAGE_ANSWER_BYTES = 512 * 1024;
@@ -166,6 +168,8 @@ export async function proxyAppRequest(
     const value = upstream.headers.get(name);
     if (value !== null) responseHeaders.set(name, value);
   }
+  // Every app answer's fixed policy, written here (never copied from upstream): the store keeps it.
+  setOwnCsp(responseHeaders, PLUGIN_ANSWER_CSP);
   if (!responseHeaders.has("cache-control")) responseHeaders.set("Cache-Control", "no-store");
   // An answer for a signed-in buyer is that buyer's alone.
   if (session) responseHeaders.set("Cache-Control", "private, no-store");

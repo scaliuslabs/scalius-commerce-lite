@@ -3,6 +3,7 @@
 // as an attachment under `Content-Security-Policy: sandbox`; the page CSP must
 // not replace that policy, and the stream never sends a referrer or frames.
 import { applyBaselineSecurityHeaders } from "@scalius/shared/http-security";
+import { takeOwnCsp } from "./own-csp";
 
 /** The download stream proxies; never HTML. */
 export function isDigitalDownloadPathname(pathname: string): boolean {
@@ -36,11 +37,18 @@ export function applyTransportSecurityHeaders(
   return secured;
 }
 
-/** The page CSP for everything but the streams and the private relay, which keep their own. */
+/**
+ * The page CSP for every response but those that own theirs: the download
+ * streams and the private relay (by path), and any response its code marked
+ * (`setOwnCsp`: the continuation pages' strict card-entry policy, an inbox or
+ * warranty attachment's sandbox, an app's SVG file, an app proxy answer). Any
+ * other policy, from an upstream or a framework, is replaced.
+ */
 export function withPageCsp(
   pathname: string,
   response: Response,
   options: { privateRelay: boolean; setPageCsp: (response: Response) => Response },
 ): Response {
-  return options.privateRelay || isDigitalDownloadPathname(pathname) ? response : options.setPageCsp(response);
+  const owned = takeOwnCsp(response);
+  return owned || options.privateRelay || isDigitalDownloadPathname(pathname) ? response : options.setPageCsp(response);
 }

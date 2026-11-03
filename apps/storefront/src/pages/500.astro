@@ -4,17 +4,31 @@ import "../styles/global.css";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { pagesCopy } from "@/lib/pages-copy";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { themePaint } from "@/lib/theme-paint";
+import ThemeHead from "@/components/ThemeHead.astro";
 
 const retryHref = `${Astro.url.pathname}${Astro.url.search}`;
 // The store's language when this request read it before failing; English otherwise.
 const language = storefrontLanguage(pageLanguage());
 const copy = pagesCopy(language).unavailable;
+// The store's theme when this request resolved it before failing (no new
+// read: that may be what failed); the default theme otherwise.
+// The error page never fails on the theme: without one it draws no theme.
+const requestTheme = await currentRequestTheme(Astro.locals).catch(() => null);
+let paint: ReturnType<typeof themePaint> | null = null;
+try {
+  paint = requestTheme ? themePaint(requestTheme.theme, requestTheme.resolved) : null;
+} catch {
+  paint = null;
+}
 ---
 
-<html lang={language}>
+<html lang={language} data-color-scheme={paint?.colorScheme?.scheme}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {paint && <ThemeHead paint={paint} preview={requestTheme?.preview != null} />}
     <link rel="icon" href="/favicon.svg" />
     <meta name="robots" content="noindex,nofollow" />
     <title>{copy.title}</title>

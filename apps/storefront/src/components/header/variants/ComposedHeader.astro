@@ -58,11 +58,12 @@ const {
   phoneDrop,
 } = Astro.props;
 
-const { language } = await currentRequestTheme(Astro.locals);
+const { theme, language } = await currentRequestTheme(Astro.locals);
 const copy = storefrontCopy(language).chrome;
 const logoWidth = normalizeHeaderLogoWidth(logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 const logoSrcSet = mediaImageSrcSet(logo.src);
+const darkLogoSrcSet = logo.darkSrc ? mediaImageSrcSet(logo.darkSrc) : undefined;
 const inlineMenu = hasMenu && menuPlacement === "inline";
 const menuRow = hasMenu && menuPlacement === "row";
 const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
@@ -133,14 +134,30 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
               srcset={logoSrcSet}
               sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
               alt={logo.alt}
-              class="hdr-logo-image"
+              class:list={["hdr-logo-image", logo.darkSrc && "dark:hidden"]}
               width={240}
               height={80}
-              loading="eager"
+              loading={logo.darkSrc && logo.darkFirst ? "lazy" : "eager"}
               decoding="async"
             />
           ) : (
-            <span class="hdr-logo-text">{logo.alt}</span>
+            <span class:list={["hdr-logo-text", logo.darkSrc && "dark:hidden"]}>{logo.alt}</span>
+          )
+        }
+        {/* Dark pages show the dark logo (CSS picks it: a hidden lazy image never loads). */}
+        {
+          logo.darkSrc && (
+            <img
+              src={mediaImageUrl(logo.darkSrc, 320)}
+              srcset={darkLogoSrcSet}
+              sizes={darkLogoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
+              alt={logo.alt}
+              class="hdr-logo-image hidden dark:block"
+              width={240}
+              height={80}
+              loading={logo.darkFirst ? "eager" : "lazy"}
+              decoding="async"
+            />
           )
         }
       </a>
@@ -164,6 +181,17 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
           </div>
         )}
         <AppSlot name="header.actions" />
+        {/* The buyer's light or dark switch (Theme settings, Colours); the head script shows and runs it (lib/color-scheme.ts). */}
+        {theme.tokens.colorSchemeToggle && (
+          <button type="button" class="hdr-util" data-color-scheme-toggle>
+            <span class="hdr-util-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" class="dark:hidden"><path d="M20.5 14.1A8.5 8.5 0 1 1 9.9 3.5a6.6 6.6 0 0 0 10.6 10.6Z" /></svg>
+              <svg viewBox="0 0 24 24" class="hidden dark:block"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+            </span>
+            <span class="hdr-util-text dark:hidden">{copy.header.darkColors}</span>
+            <span class="hdr-util-text hidden dark:inline">{copy.header.lightColors}</span>
+          </button>
+        )}
         <a
           id="account-link"
           href="/account"

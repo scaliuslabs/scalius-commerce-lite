@@ -1,7 +1,9 @@
 /**
  * The colours a merchant picks; each writes every token that shares its
  * role. Background also moves the card and popover surfaces, keeping the
- * template's own card-to-page relationship (see setThemeColor).
+ * template's own card-to-page relationship (see setThemeColor). A theme
+ * shown dark (a dark or device scheme, or the buyer's switch) has a second
+ * set, the dark colours, edited the same way.
  */
 import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import {
@@ -21,13 +23,19 @@ import {
   resolveStorefrontTheme,
   storefrontBlockSwitch,
   storefrontBlockValue,
+  storefrontDarkColorsAreMade,
+  storefrontThemeColorsAreDark,
+  storefrontDarkPalette,
   storefrontTemplateTheme,
+  storefrontThemeShowsDarkColors,
   storefrontThemeLook,
   storefrontThemeWithContent,
   type ResolvedStorefrontTheme,
   type StoreShape,
   type StorefrontAppTemplateTheme,
   type StorefrontBlockSlot,
+  type StorefrontColorScheme,
+  type StorefrontThemeColorSet,
   type StorefrontProductAppBlock,
   type StorefrontProductModule,
   type StorefrontSection,
@@ -77,6 +85,55 @@ export const COLOR_FIELD_IDS: Record<ColorRole, string> = {
   highlightText: "theme-color-highlight-text",
 };
 
+/** DOM id of a colour field in one set (the dark colours' fields are `theme-dark-color-…`). */
+export function colorFieldId(role: ColorRole, set: StorefrontThemeColorSet): string {
+  return set === "colors" ? COLOR_FIELD_IDS[role] : COLOR_FIELD_IDS[role].replace("theme-color-", "theme-dark-color-");
+}
+
+/** The colour sets buyers can see: the colours, and the dark colours while the theme shows them. */
+export function themeColorSets(theme: StorefrontThemeDocument): StorefrontThemeColorSet[] {
+  return storefrontThemeShowsDarkColors(theme.tokens) ? ["colors", "darkColors"] : ["colors"];
+}
+
+/**
+ * The document with the dark colours shown (a scheme, or the buyer's
+ * switch) or not. The first time they show, dark colours made from the
+ * colours are stored with it (`storefrontDarkPalette`), so the store looks
+ * right at once; the merchant's own dark colours are kept from then on.
+ */
+function withDarkColorsStored(theme: StorefrontThemeDocument, tokens: Partial<StorefrontThemeTokens>): StorefrontThemeDocument {
+  const next = { ...theme.tokens, ...tokens };
+  const darkColors = next.darkColors ?? (storefrontThemeShowsDarkColors(next) ? madeDarkColors(next.colors) : null);
+  return { ...theme, tokens: { ...next, darkColors } };
+}
+
+/**
+ * Dark colours this editor made from the colours, by identity: they still
+ * count as made while a light colour is half typed (not yet #rrggbb).
+ */
+const MADE_DARK_COLORS = new WeakSet<object>();
+
+function madeDarkColors(colors: StorefrontThemeTokens["colors"]): StorefrontThemeTokens["colors"] {
+  const dark = storefrontDarkPalette(colors);
+  MADE_DARK_COLORS.add(dark);
+  return dark;
+}
+
+/** Whether the dark colours are the ones made from the colours: they follow the colours until the merchant edits them. */
+export function darkColorsFollowColors(theme: StorefrontThemeDocument): boolean {
+  const dark = theme.tokens.darkColors;
+  return dark !== null && (MADE_DARK_COLORS.has(dark)
+    || (allThemeColorsValid(theme.tokens.colors) && storefrontDarkColorsAreMade(theme.tokens.colors, dark)));
+}
+
+export function setColorScheme(theme: StorefrontThemeDocument, colorScheme: StorefrontColorScheme): StorefrontThemeDocument {
+  return withDarkColorsStored(theme, { colorScheme });
+}
+
+export function setColorSchemeToggle(theme: StorefrontThemeDocument, colorSchemeToggle: boolean): StorefrontThemeDocument {
+  return withDarkColorsStored(theme, { colorSchemeToggle });
+}
+
 function hexChannels(hex: string): [number, number, number] {
   const value = Number.parseInt(hex.slice(1), 16);
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
@@ -100,18 +157,29 @@ export function cardForBackground(theme: StorefrontThemeDocument, background: st
   return channelsHex(next.map((channel, index) => channel + (card[index]! - page[index]!)));
 }
 
-/** The document with one role's colour set on every token of that role. */
-export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string): StorefrontThemeDocument {
-  const colors = { ...theme.tokens.colors };
+/**
+ * The document with one role's colour set on every token of that role, in
+ * one colour set. The dark colours' card keeps its own step from their page.
+ */
+export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string, set: StorefrontThemeColorSet = "colors"): StorefrontThemeDocument {
+  const current = theme.tokens[set];
+  if (!current) return theme;
+  const colors = { ...current };
   if (role === "background") {
-    const card = cardForBackground(theme, value);
+    const card = set === "colors" || !isStorefrontThemeHexColor(value) || !isStorefrontThemeHexColor(current.background)
+      ? cardForBackground(theme, value)
+      : channelsHex(hexChannels(value).map((channel, index) => channel + hexChannels(current.card)[index]! - hexChannels(current.background)[index]!));
     colors.background = value;
     colors.card = card;
     colors.popover = card;
   } else {
     for (const token of COLOR_ROLES[role]) colors[token] = value;
   }
-  return { ...theme, tokens: { ...theme.tokens, colors } };
+  // Dark colours made from the colours follow a light colour edit; ones the merchant edited stay.
+  const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
+    ? madeDarkColors(colors as StorefrontThemeTokens["colors"])
+    : theme.tokens.darkColors;
+  return { ...theme, tokens: { ...theme.tokens, darkColors, [set]: colors } };
 }
 
 /** A single-variant block slot the Theme page offers as a picker. */
@@ -185,6 +253,8 @@ const CONTRAST_MESSAGES: Record<string, { message: ContrastMessage; role: ColorR
 
 export interface ContrastProblem {
   message: ContrastMessage;
+  /** The colour set the problem is in. */
+  set: StorefrontThemeColorSet;
   /** The colour field that shows the problem. */
   role: ColorRole;
   /** The worst ratio among the pairs behind this message. */
@@ -196,19 +266,84 @@ export function allThemeColorsValid(colors: Record<StorefrontThemeColorKey, stri
 }
 
 /**
- * AA problems in plain words, one per message, over every pair the chosen
- * blocks paint (empty while any colour is not yet a valid #rrggbb).
+ * AA problems of one colour set in plain words, one per message, over every
+ * pair the chosen blocks paint (empty while any of its colours is not yet a
+ * valid #rrggbb, and for dark colours buyers cannot see).
  */
-export function themeContrastProblems(theme: StorefrontThemeDocument): ContrastProblem[] {
-  if (!allThemeColorsValid(theme.tokens.colors)) return [];
+export function themeContrastProblems(theme: StorefrontThemeDocument, set: StorefrontThemeColorSet = "colors"): ContrastProblem[] {
+  const colors = theme.tokens[set];
+  if (!colors || !themeColorSets(theme).includes(set) || !allThemeColorsValid(colors)) return [];
   const byMessage = new Map<ContrastMessage, ContrastProblem>();
-  for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(theme)) {
+  for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(theme, set)) {
     const { message, role } = CONTRAST_MESSAGES[`${text}/${surface}`] ?? { message: "contrastText", role: "text" };
     const known = byMessage.get(message);
     if (known) known.ratio = Math.min(known.ratio, ratio);
-    else byMessage.set(message, { message, role, ratio });
+    else byMessage.set(message, { message, set, role, ratio });
   }
   return [...byMessage.values()];
+}
+
+/**
+ * The first field of one colour set to fix: a colour that is not #rrggbb,
+ * then a pair below AA (`role` null: a colour no field shows, or the set is
+ * missing). Null when the set is valid and readable, or buyers cannot see it.
+ */
+export function themeColorSetProblem(theme: StorefrontThemeDocument, set: StorefrontThemeColorSet): { role: ColorRole | null } | null {
+  if (!themeColorSets(theme).includes(set)) return null;
+  const colors = theme.tokens[set];
+  if (!colors) return { role: null };
+  const bad = (Object.keys(COLOR_ROLE_TOKEN) as ColorRole[]).find((role) => !isStorefrontThemeHexColor(colors[COLOR_ROLE_TOKEN[role]] ?? ""));
+  if (bad || !allThemeColorsValid(colors)) return { role: bad ?? null };
+  const problem = themeContrastProblems(theme, set)[0];
+  return problem ? { role: problem.role } : null;
+}
+
+/** The first colour field to fix, in the colours and then the dark colours buyers can see; null when there is none. */
+export function themeColorProblem(theme: StorefrontThemeDocument): { set: StorefrontThemeColorSet; role: ColorRole | null } | null {
+  for (const set of themeColorSets(theme)) {
+    const problem = themeColorSetProblem(theme, set);
+    if (problem) return { set, ...problem };
+  }
+  return null;
+}
+
+/** Dark pages can show while the header logo has no dark version: it may not show on them. */
+export function darkLogoMissing(theme: StorefrontThemeDocument): boolean {
+  return themeColorSets(theme).includes("darkColors") && !storefrontThemeColorsAreDark(theme.tokens.colors)
+    && theme.brand.logo !== null && theme.brand.darkLogo === null;
+}
+
+/** The colours are dark themselves and the store shows no dark pages: the logo for dark pages never shows. */
+export function darkLogoUnused(theme: StorefrontThemeDocument): boolean {
+  return storefrontThemeColorsAreDark(theme.tokens.colors) && !themeColorSets(theme).includes("darkColors");
+}
+
+/** Dark pages show, but their colours are the colours (dark themselves): the scheme and the switch change nothing. */
+export function sameDarkPages(theme: StorefrontThemeDocument): boolean {
+  const { colors, darkColors } = theme.tokens;
+  return themeColorSets(theme).includes("darkColors") && darkColors !== null && storefrontThemeColorsAreDark(colors)
+    && STOREFRONT_THEME_COLOR_KEYS.every((key) => colors[key] === darkColors[key]);
+}
+
+/** Whether the dark colours differ from the ones made from the colours (the merchant edited them). */
+export function darkColorsEdited(theme: StorefrontThemeDocument): boolean {
+  return theme.tokens.darkColors !== null && !darkColorsFollowColors(theme);
+}
+
+/** The document with its dark colours made again from its colours. */
+export function regenerateDarkColors(theme: StorefrontThemeDocument): StorefrontThemeDocument {
+  return { ...theme, tokens: { ...theme.tokens, darkColors: madeDarkColors(theme.tokens.colors) } };
+}
+
+/**
+ * Applying a look replaced dark colours the merchant edited (they were
+ * unreadable with it, so they were made again from its colours): the
+ * merchant is told before choosing it.
+ */
+export function editedDarkColorsReplaced(current: StorefrontThemeDocument, applied: StorefrontThemeDocument): boolean {
+  const dark = applied.tokens.darkColors;
+  return darkColorsEdited(current) && themeColorSets(applied).includes("darkColors") && dark !== null
+    && !sameFormValue(dark, current.tokens.darkColors) && storefrontDarkColorsAreMade(applied.tokens.colors, dark);
 }
 
 /** The announcement link as typed: null (none) or canonical, else not usable yet. */
@@ -228,8 +363,7 @@ export function homeProductMissing(theme: StorefrontThemeDocument): boolean {
  * homepage without its product. Each field says why.
  */
 export function themeDraftInvalid(theme: StorefrontThemeDocument): boolean {
-  return !allThemeColorsValid(theme.tokens.colors)
-    || themeContrastProblems(theme).length > 0
+  return themeColorProblem(theme) !== null
     || announcementLinkInvalid(theme)
     || homeProductMissing(theme);
 }
@@ -238,6 +372,7 @@ export function themeDraftInvalid(theme: StorefrontThemeDocument): boolean {
 export const THEME_FIELD_IDS = {
   logo: "theme-brand-logo",
   logoWidth: "theme-logo-width",
+  darkLogo: "theme-brand-dark-logo",
   footerLogo: "theme-brand-footer-logo",
   favicon: "theme-brand-favicon",
   homeProduct: "theme-home-product",
@@ -268,7 +403,18 @@ export function appTemplates(apps: readonly ThemeApp[]): AppTemplateEntry[] {
 
 /** An app template applied to the document (`applyStorefrontAppTemplate`): its look, skins and homepage sections. */
 export function applyAppTemplate(template: AppTemplateEntry, current: StorefrontThemeDocument): StorefrontThemeDocument {
-  return applyStorefrontAppTemplate(current, template.key, template.theme);
+  return withFollowingDarkColors(current, applyStorefrontAppTemplate(current, template.key, template.theme));
+}
+
+/**
+ * A look applied over a draft whose dark colours still follow its colours
+ * (made by this editor, a light colour perhaps half typed): the kept dark
+ * colours are made again from the look's colours, never left stale.
+ */
+function withFollowingDarkColors(current: StorefrontThemeDocument | null, applied: StorefrontThemeDocument): StorefrontThemeDocument {
+  const kept = applied.tokens.darkColors;
+  if (!current || kept === null || !darkColorsFollowColors(current) || !sameFormValue(kept, current.tokens.darkColors)) return applied;
+  return { ...applied, tokens: { ...applied.tokens, darkColors: madeDarkColors(applied.tokens.colors) } };
 }
 
 /** Each template's complete document, for previews and matching. */
@@ -289,7 +435,7 @@ export function selectedTemplate(theme: StorefrontThemeDocument): StorefrontTemp
  * slides, chosen categories and collections, and what `/` shows.
  */
 export function applyTemplate(id: StorefrontTemplateId, current: StorefrontThemeDocument | null): StorefrontThemeDocument {
-  return storefrontThemeWithContent(storefrontTemplateTheme(id), current);
+  return withFollowingDarkColors(current, storefrontThemeWithContent(storefrontTemplateTheme(id), current));
 }
 
 // ─── Typography ───────────────────────────────────────────────────────────

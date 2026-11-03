@@ -35,7 +35,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 | You need | Read it from | Never |
 | --- | --- | --- |
-| The store's name and logo | `data.store.name`, `data.store.logo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` (every part) | A wordmark, your app's name, the header's markup |
+| The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` (every part) | A wordmark, your app's name, the header's markup |
 | Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
 | The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="details" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
@@ -52,7 +52,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 ### 1. The store's name and logo come from the projection
 
-Every header and footer skin gets `data.store`: `name`, `logo` (`StorefrontImage | null`), `logoWidth` and, in the footer, `footerLogo`, `phone`, `email`, `address` and `social`. Draw the logo when there is one and the name when there is not.
+Every header and footer skin gets `data.store`: `name`, `logo` (`StorefrontImage | null`), `darkLogo` (the logo for dark pages, or `null`), `logoWidth` and, in the footer, `footerLogo`, `phone`, `email`, `address` and `social`. Draw the logo when there is one and the name when there is not. When there is a `darkLogo`, draw both and show it instead of `logo` on screens under `:root[data-color-scheme="dark"]` and under `@media (prefers-color-scheme: dark) { :root[data-color-scheme="system"] … }` (the device's setting before or without JavaScript); load both eagerly.
 
 Wrong: every store that installs the theme shows your wordmark.
 
@@ -132,7 +132,7 @@ A store that just installed your theme may have no products, categories, collect
 | In the projection | On a new store |
 | --- | --- |
 | `data.menu`, `data.categories`, footer `data.menus`, `data.policies`, `data.store.social` | `[]` |
-| `data.store.logo`, `context.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
+| `data.store.logo`, `darkLogo`, `context.store.logo`, `footerLogo`, `phone`, `email`, `address`, `data.announcement` | `null` |
 | A `products` setting, a section's `products.cards`, a listing's `cards` | `[]` |
 | An `image` setting | `null` |
 | A card's `image`, `hoverImage`, `compareAt`, `rating` | `null` |
@@ -186,17 +186,28 @@ Right:
 - Format with the SDK: `formatNumber`, `plural`, `formatMoney`, `formatDate`. Money arrives as `StorefrontMoney` (`{ amountMinor, currency, formatted }`); show `formatted` or `<Price />`, never arithmetic on floats.
 - Write sides as logical properties so a right-to-left page mirrors without a second stylesheet: `margin-inline-start` (not `margin-left`), `padding-inline`, `inset-inline-start`, `border-inline-end`, `text-align: start`.
 - Style on the store's tokens so the merchant's colours and type still apply: `var(--primary)`, `--primary-foreground`, `--foreground`, `--background`, `--border`, `--muted-foreground`, `--radius`, `--theme-font-body`, `--theme-font-heading`.
+- The tokens already follow the store's colour scheme: on dark pages they hold the theme's dark colours, on every page, private ones included. Don't ship a second palette or your own light/dark switch. For what tokens can't say (a dark logo, an image swap), select on `:root[data-color-scheme="dark"]`; for a switch, put `colorSchemeToggle()` on a native button.
 - Prefix every class with your app's name (`studio-header`); an `id` must start with it.
 
 ## Templates
 
-A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 12 today); stores upgrade it from there.
+A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 13 today); stores upgrade it from there.
+
+Its `tokens` can set the colour scheme too, checked like any theme when the merchant saves:
+
+| Token | Values | What buyers see |
+| --- | --- | --- |
+| `colorScheme` | `light`, `dark`, `system` | `colors`, `darkColors`, or whichever the buyer's device asks for. |
+| `darkColors` | the same keys as `colors`, or `null` | Required, and held to the same readable-text checks, while `colorScheme` isn't `light` or the switch is on. |
+| `colorSchemeToggle` | `true`, `false` | A switch in the header; each buyer's choice is remembered on their device. |
+
+A template that leaves dark off (`light`, no switch) keeps the merchant's own scheme, dark colours and switch when applied; one that shows dark brings its own. A template written for version 12 reads as `light`, no dark colours and no switch.
 
 ```ts
 templates: [{
   id: "studio",
   name: "Studio",
-  themeVersion: 12,
+  themeVersion: 13,
   theme: {
     apps: { skins: { header: { app: "acme.studio/header", values: {} }, product_card: { app: "acme.studio/card", values: {} } } },
     sections: [

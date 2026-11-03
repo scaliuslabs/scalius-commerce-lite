@@ -6,6 +6,7 @@ import { fetchPaymentSessionWithProcessingRetry, PaymentSessionProcessingTimeout
 import { pagePath } from "@/lib/presence-url";
 import { paymentFailure } from "./failure";
 import { stripeErrorCopyKey, type StripeError } from "../stripe-error";
+import { followColorScheme, stripeCardStyle } from "@/lib/stripe-card-style";
 
 export { stripeErrorCopyKey };
 
@@ -37,6 +38,7 @@ interface StripeCardElement {
   mount(selector: string): void;
   unmount?(): void;
   destroy?(): void;
+  update?(options: { style: ReturnType<typeof stripeCardStyle> }): void;
   on(
     event: "change",
     handler: (e: { complete?: boolean; error?: StripeError & { message: string } }) => void,
@@ -56,6 +58,8 @@ export const STRIPE_FORM_DEADLINE_MS = 15_000;
 
 let stripeInstance: StripeInstance | null = null;
 let stripeCard: StripeCardElement | null = null;
+/** Stops restyling the mounted card when the colour scheme changes. */
+let stopFollowingScheme: (() => void) | null = null;
 let publishableKey: string | null = null;
 let stripeCardComplete = false;
 let stripeScriptPromise: Promise<void> | null = null;
@@ -99,22 +103,12 @@ async function mountStripeCard(container: HTMLElement, key: string, copy: Checko
   if (publishableKey !== key) throw new CheckoutCopyError("cardFormFailedText", "Stripe key changed while loading");
   stripeInstance = window.Stripe!(key);
   const elements = stripeInstance.elements();
-  const cardStyle = getComputedStyle(document.getElementById("stripeCardElement") ?? container);
-  const foreground = cardStyle.color;
-  const placeholder = cardStyle.getPropertyValue("--muted-foreground").trim() || foreground;
-  const card = elements.create("card", {
-    style: {
-      base: {
-        fontSize: "16px",
-        color: foreground,
-        fontFamily: "sans-serif",
-        iconColor: foreground,
-        "::placeholder": { color: placeholder },
-      },
-      invalid: { color: foreground, iconColor: foreground },
-    },
-  });
+  // The page's colours where the card mounts, again whenever the colour scheme changes.
+  const styled = document.getElementById("stripeCardElement") ?? container;
+  const card = elements.create("card", { style: stripeCardStyle(styled, "16px") });
   stripeCard = card;
+  stopFollowingScheme?.();
+  stopFollowingScheme = followColorScheme(styled, "16px", card);
   await new Promise<void>((resolve, reject) => {
     const deadline = setTimeout(() => reject(new CheckoutCopyError("cardFormFailedText", "Stripe card frame did not become ready")), STRIPE_FORM_DEADLINE_MS);
     card.on("ready", () => {
@@ -157,6 +151,8 @@ export function resetStripePaymentElement(): void {
     // The prior element may already be detached by browser history restore.
   }
   stripeCard = null;
+  stopFollowingScheme?.();
+  stopFollowingScheme = null;
   stripeCardLoading = null;
   stripeCardReady = false;
   stripeCardComplete = false;
