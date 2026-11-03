@@ -45,7 +45,7 @@ import {
   skuWeightSchema,
   STOCK_CHANGED_MESSAGE,
 } from "../products";
-import { assertLiveSkuWarrantyPolicies } from "./warranty";
+import { assertLiveSkuWarrantyPolicies, assertSkuWarrantyAllowed } from "./warranty";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -540,6 +540,8 @@ export async function planProductOptionMatrix(
         fieldPrefix?: string;
         /** The product's image associations after this save, when the same batch changes them. */
         attachedImages?: ReadonlyMap<string, { status: SkuImageStatus }>;
+        /** Whether the product is a gift card after this save (its SKUs keep the product's warranty). */
+        isGiftCard: boolean;
     },
 ): Promise<ProductOptionMatrixPlan> {
     const { adminUserId, fieldPrefix = "" } = context;
@@ -697,6 +699,11 @@ export async function planProductOptionMatrix(
         ...activeVariantById,
         ...restoredVariantById,
     ]);
+    normalizedVariants.forEach((variant, index) => assertSkuWarrantyAllowed(variant, {
+        isDefault: false,
+        isGiftCard: context.isGiftCard,
+        field: `${fieldPrefix}variants.${index}.warrantyMode`,
+    }));
     // Only a live SKU keeps a policy archived after it was chosen: a restored
     // combination's SKU is new to the merchant, like a new row.
     await assertLiveSkuWarrantyPolicies(db, normalizedVariants.map((variant, index) => ({
@@ -1174,12 +1181,16 @@ export async function saveProductOptionMatrix(
     adminUserId?: string,
 ): Promise<{ aggregateRevision: number }> {
     const { expectedAggregateRevision, ...input } = parseProductOptionMatrix(rawInput);
-    const product = await db.select({ id: products.id, isActive: products.isActive })
+    const product = await db.select({ id: products.id, isActive: products.isActive, isGiftCard: products.isGiftCard })
         .from(products)
         .where(and(eq(products.id, productId), isNull(products.deletedAt)))
         .get();
     if (!product) throw new NotFoundError("Product not found");
-    const plan = await planProductOptionMatrix(db, productId, input, { isActive: product.isActive, adminUserId });
+    const plan = await planProductOptionMatrix(db, productId, input, {
+        isActive: product.isActive,
+        adminUserId,
+        isGiftCard: product.isGiftCard === true,
+    });
     const { aggregateRevision } = await commitProductOptionMatrixPlan(db, productId, expectedAggregateRevision, plan);
     return { aggregateRevision };
 }

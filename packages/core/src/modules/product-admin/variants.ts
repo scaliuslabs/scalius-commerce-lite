@@ -49,7 +49,7 @@ import {
     executeProductAggregateMutationBatch as executeProductAggregateMutationBatchRaw,
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
-import { assertLiveSkuWarrantyPolicies } from "./warranty";
+import { assertLiveSkuWarrantyPolicies, assertSkuWarrantyAllowed, productIsGiftCard } from "./warranty";
 
 export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);
@@ -532,6 +532,9 @@ export async function createVariant(
     await assertSelectableVariantImage(db, productId, data.imageId);
 
     await assertSkuKeyFree(db, sku, skuKey);
+    if (data.warrantyMode !== undefined && data.warrantyMode !== "inherit") {
+        assertSkuWarrantyAllowed(data, { isDefault: false, isGiftCard: await productIsGiftCard(db, productId), field: "warrantyMode" });
+    }
     await assertLiveSkuWarrantyPolicies(db, [{ policyId: data.warrantyPolicyId, field: "warrantyPolicyId" }]);
 
     const variantValues = {
@@ -749,6 +752,13 @@ export async function planVariantUpdate(
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
     await assertSkuKeyFree(db, sku, skuKey, variantId, `${fieldPrefix}sku`);
+    if (data.warrantyMode !== undefined && data.warrantyMode !== "inherit") {
+        assertSkuWarrantyAllowed(data, {
+            isDefault: existingIsSimpleSku,
+            isGiftCard: await productIsGiftCard(db, productId),
+            field: `${fieldPrefix}warrantyMode`,
+        });
+    }
     await assertLiveSkuWarrantyPolicies(db, [{
         policyId: data.warrantyPolicyId,
         savedPolicyId: existingVariant.warrantyPolicyId,

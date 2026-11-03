@@ -70,7 +70,7 @@ import {
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
 import { optionMatrixBatchConflict, planProductOptionMatrix } from "./option-matrix";
-import { assertLiveSkuWarrantyPolicies, assertLiveWarrantyPolicy, liveWarrantyPolicyIds } from "./warranty";
+import { assertLiveSkuWarrantyPolicies, assertLiveWarrantyPolicy, assertSkuWarrantyAllowed, liveWarrantyPolicyIds } from "./warranty";
 import {
     resolveNewVariantBarcode,
     rethrowProductVariantIdentityConstraint,
@@ -448,6 +448,11 @@ export async function createProduct(
     const attributeRows = await prepareProductAttributeValueRows(db, productId, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
     await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
+    (data.optionMatrix?.variants ?? []).forEach((variant, index) => assertSkuWarrantyAllowed(variant, {
+        isDefault: false,
+        isGiftCard: data.isGiftCard === true,
+        field: `optionMatrix.variants.${index}.warrantyMode`,
+    }));
     await assertLiveSkuWarrantyPolicies(db, (data.optionMatrix?.variants ?? []).map((variant, index) => ({
         policyId: variant.warrantyPolicyId,
         field: `optionMatrix.variants.${index}.warrantyPolicyId`,
@@ -915,12 +920,14 @@ async function planProductSaveComposition(
         activeVariants: ReadonlyArray<{ id: string; isDefault: boolean; optionCombinationKey: string | null; imageId: string | null }>;
         mediaPlan: ProductMediaPlan;
         adminUserId?: string;
+        isGiftCard: boolean;
     },
 ): Promise<ProductSaveComposition | null> {
     if (data.optionMatrix) {
         return planProductOptionMatrix(db, id, data.optionMatrix, {
             isActive: data.isActive,
             adminUserId: context.adminUserId,
+            isGiftCard: context.isGiftCard,
             fieldPrefix: "optionMatrix.",
             // The SKUs may show photos this same Save attaches (or no longer those it removes).
             attachedImages: new Map(context.mediaPlan.rows
@@ -1166,7 +1173,7 @@ export async function updateProduct(
     }
 
     // Every check of everything the Save sends runs before anything is written.
-    const composition = await planProductSaveComposition(db, id, data, { priceMinor, activeVariants, mediaPlan, adminUserId });
+    const composition = await planProductSaveComposition(db, id, data, { priceMinor, activeVariants, mediaPlan, adminUserId, isGiftCard });
     const sectionStatements = await planProductSaveSections(db, id, data, isGiftCard);
     const costStatements = planProductSaveCosts(db, id, data, {
         currency,
@@ -1294,6 +1301,10 @@ export async function updateProduct(
     // The Shipping card's kind applies to every live SKU. Checkout refuses a
     // digital line until it is deliverable, so accepting the kind is safe.
     if (isGiftCard) {
+        // A gift card's denominations have no warranty of their own.
+        batchOps.push(db.update(productVariants)
+            .set({ warrantyMode: "inherit", warrantyPolicyId: null, updatedAt: sql`unixepoch()` })
+            .where(and(eq(productVariants.productId, id), sql`${productVariants.warrantyMode} <> 'inherit'`)));
         batchOps.push(db.update(productVariants)
             .set({ fulfillmentKind: "digital", trackInventory: false, updatedAt: sql`unixepoch()` })
             .where(and(

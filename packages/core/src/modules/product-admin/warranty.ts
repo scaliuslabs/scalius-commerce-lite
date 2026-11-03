@@ -2,8 +2,8 @@
 // Not part of the checkout authority fence: commit freezes whatever revision
 // is current, and a warranty never changes the price.
 import { chunkForD1, type Database } from "@scalius/database/client";
-import { warrantyPolicies } from "@scalius/database/schema";
-import { and, inArray, isNull } from "drizzle-orm";
+import { products, warrantyPolicies } from "@scalius/database/schema";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { ValidationError } from "../../errors";
 
 const UNAVAILABLE_POLICY = "That warranty policy is unavailable or archived. Choose another policy.";
@@ -20,6 +20,30 @@ export async function liveWarrantyPolicyIds(db: Database, policyIds: readonly st
         for (const row of rows) live.add(row.id);
     }
     return live;
+}
+
+/**
+ * Only an option SKU of a product that is not a gift card has a warranty of
+ * its own (what the editor shows): a product's one SKU takes the product's
+ * warranty, and a gift card's denominations have none of their own.
+ */
+export function assertSkuWarrantyAllowed(
+    input: { warrantyMode?: string | undefined },
+    sku: { isDefault: boolean; isGiftCard: boolean; field: string },
+): void {
+    if (input.warrantyMode === undefined || input.warrantyMode === "inherit") return;
+    if (sku.isGiftCard) {
+        throw new ValidationError("A gift card has no warranty of its own. Leave each denomination on the product's warranty.", { field: sku.field });
+    }
+    if (sku.isDefault) {
+        throw new ValidationError("A product without options has one warranty: set it on the product.", { field: sku.field });
+    }
+}
+
+/** Whether the product is a gift card (a SKU write that sets a warranty asks). */
+export async function productIsGiftCard(db: Database, productId: string): Promise<boolean> {
+    const row = await db.select({ isGiftCard: products.isGiftCard }).from(products).where(eq(products.id, productId)).get();
+    return row?.isGiftCard === true;
 }
 
 /** A product's policy: it exists and is not archived (omitted or null passes). */
