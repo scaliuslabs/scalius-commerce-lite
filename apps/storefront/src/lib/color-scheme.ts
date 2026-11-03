@@ -13,8 +13,9 @@
  *   `aria-pressed` while dark colours show, so its new state is announced
  *   under one stable name. The store's switch (the core header's, or the one
  *   it adds to a header skin) yields to one a header or footer skin, or an
- *   app in their slots, drew: a page shows one. One drawn after a skin that
- *   places no slot moves into the skin's `<header>` (its landmark).
+ *   app in their slots, drew: a page shows one (`data-color-scheme-switch-yields`
+ *   then frees the room the header kept for it). One drawn after a skin
+ *   that places no slot moves into the skin's `<header>` (its landmark).
  *
  * It is its own script, and a failure inside it is swallowed: nothing else
  * on the page waits on it. Without JavaScript the theme's scheme stands
@@ -58,8 +59,9 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     toggle
       ? 'document.addEventListener("DOMContentLoaded",function(){p();'
         + `var o=document.querySelector(${serializeJsonForInlineScript(SKIN_DRAWN_SWITCH)});`
+        + 'if(o)r.setAttribute("data-color-scheme-switch-yields","");'
         + 'document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
-        + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d)return;'
+        + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d||h.parentElement!==d)return;'
         + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h)})});'
       : "",
     toggle
