@@ -127,7 +127,11 @@ function ColorField({
           autoComplete="off"
           aria-invalid={errors.length > 0 ? true : undefined}
           aria-describedby={errors.length > 0 ? `${id}-note` : undefined}
-          onBlur={() => setLeft(true)}
+          onBlur={() => {
+            setLeft(true);
+            // Leaving a half-typed colour shows the colour the draft keeps: the field never disagrees with it.
+            if (!valid) setText(value);
+          }}
           onChange={(event) => change(event.target.value)}
         />
       </div>
