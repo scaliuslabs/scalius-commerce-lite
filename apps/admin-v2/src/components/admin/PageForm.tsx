@@ -111,6 +111,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
       hideTitle: false,
       featuredImage: null,
       ...defaultValues,
+      savedSlug: defaultValues?.id ? defaultValues.slug : undefined,
       content: richTextOrEmpty(defaultValues?.content),
     },
   });
