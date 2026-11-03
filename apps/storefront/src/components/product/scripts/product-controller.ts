@@ -222,6 +222,7 @@ export function init() {
   state.selection = requested?.selection ??
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
+  warranty = readWarranty();
 
   state.purchaseBlocked = Boolean(part("blocked"));
   state.adding = false;
@@ -324,12 +325,13 @@ function currentQuantity(): number {
   return clampQuantity(Number.isFinite(typed) ? typed : 1);
 }
 
+/** The quantity the field means, written back to it, with the limit's message when the buyer typed past it. */
 function readQuantity(): number {
   const input = cache.quantity;
   const message = part("quantity-message");
   if (!input) return 1;
   const typed = typedQuantity(input.value);
-  const quantity = clampQuantity(Number.isFinite(typed) ? typed : 1);
+  const quantity = currentQuantity();
   input.value = String(quantity);
   const capped = Number.isFinite(typed) && typed > QUANTITY_CONSTRAINTS.MAX;
   if (message) {
@@ -681,7 +683,6 @@ function updateOptionButtons() {
           option.name,
           button.dataset.optionValue || "",
           status,
-          selected,
         ) + (optionPrice ? ` ${optionPrice}.` : ""),
       );
     }
@@ -692,9 +693,7 @@ function optionButtonLabel(
   name: string,
   value: string,
   status: VariantOptionAvailability,
-  selected: boolean,
 ) {
-  void selected;
   // The page's words (ProductSummary.astro), so a Bangla page reads Bangla.
   const words = cache.actions?.dataset;
   const template = status === "sold_out"
@@ -712,13 +711,22 @@ function exactVariant() {
   );
 }
 
-function updateStockAndActions() {
+/**
+ * The SKU the buy box shows (a link's sold-out SKU, else the chosen one) and
+ * the SKUs its stock, price and warranty speak for: that one, else every SKU
+ * the choice so far still allows.
+ */
+function shownVariants(): { exact: Variant | null; candidates: Variant[] } {
   const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact
-    ? [exact]
-    : Object.keys(state.selection).length
-      ? filterVariantsBySelection(state.variants, state.selection)
-      : state.variants;
+  if (exact) return { exact, candidates: [exact] };
+  return {
+    exact,
+    candidates: Object.keys(state.selection).length ? filterVariantsBySelection(state.variants, state.selection) : state.variants,
+  };
+}
+
+function updateStockAndActions() {
+  const { exact, candidates } = shownVariants();
   const summary = getBuyerStockSummary(candidates);
   const copy = cache.actions?.dataset;
   const actions = getProductActionsPresentation({
@@ -801,12 +809,7 @@ function setButton(
 
 function updatePrice() {
   if (!state.productPricing) return;
-  const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact
-    ? [exact]
-    : Object.keys(state.selection).length
-      ? filterVariantsBySelection(state.variants, state.selection)
-      : state.variants;
+  const { exact, candidates } = shownVariants();
   const presentation = getBuyerVariantPricePresentation(state.productPricing, candidates);
   // "From" only while the remaining choices are priced differently.
   const starting =
@@ -866,25 +869,30 @@ function updateVariantImage() {
   );
 }
 
+let warranty: { box: HTMLElement; byVariant: Record<string, string | null> } | null = null;
+
+/** Reads the warranty rows' SKU map once per page (`warranty`); a broken one shows the rows as drawn. */
+function readWarranty() {
+  const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
+  if (!box) return null;
+  try {
+    return { box, byVariant: JSON.parse(box.dataset.sxWarrantyByVariant ?? "{}") as Record<string, string | null> };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The buy box's warranty row (WarrantyRow.astro): the chosen SKU's warranty,
  * or, with no SKU chosen, the one every SKU of the choice so far shares.
  * SKUs of one product may each have their own, or none.
  */
 function updateWarrantyRows() {
-  const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
-  if (!box) return;
-  let byVariant: Record<string, string | null>;
-  try {
-    byVariant = JSON.parse(box.dataset.sxWarrantyByVariant ?? "{}") as Record<string, string | null>;
-  } catch {
-    return;
-  }
-  const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact ? [exact] : filterVariantsBySelection(state.variants, state.selection);
-  const ids = new Set(candidates.map((variant) => byVariant[variant.id] ?? null));
+  if (!warranty) return;
+  const { byVariant } = warranty;
+  const ids = new Set(shownVariants().candidates.map((variant) => byVariant[variant.id] ?? null));
   const shown = ids.size === 1 ? [...ids][0] ?? null : null;
-  for (const row of box.querySelectorAll<HTMLElement>("[data-sx-warranty-row]")) {
+  for (const row of warranty.box.querySelectorAll<HTMLElement>("[data-sx-warranty-row]")) {
     row.hidden = shown === null || row.dataset.sxWarrantyId !== shown;
   }
 }
