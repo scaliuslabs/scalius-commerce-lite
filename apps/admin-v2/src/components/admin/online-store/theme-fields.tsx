@@ -257,14 +257,21 @@ export function ColorFields({ theme, setDraft }: { theme: Theme; setDraft: SetTh
           <TabsContent value="darkColors" className="space-y-4">
             <p className="text-body text-muted-foreground">{t("darkColorsHelp")}</p>
             <ColorSetFields theme={theme} set="darkColors" setDraft={setDraft} />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!darkColorsEdited(theme)}
-              onClick={() => setConfirmRegenerate(true)}
-            >
-              {t("darkColorsRegenerate")}
-            </Button>
+            <div className="space-y-1">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!darkColorsEdited(theme)}
+                aria-describedby={darkColorsEdited(theme) ? undefined : "theme-dark-colors-regenerate-help"}
+                onClick={() => setConfirmRegenerate(true)}
+              >
+                {t("darkColorsRegenerate")}
+              </Button>
+              {/* A disabled button says why (DESIGN C5). */}
+              {darkColorsEdited(theme) ? null : (
+                <p id="theme-dark-colors-regenerate-help" className="text-body text-muted-foreground">{t("darkColorsFollowing")}</p>
+              )}
+            </div>
             <ConfirmDialog
               open={confirmRegenerate}
               onOpenChange={setConfirmRegenerate}
