@@ -45,7 +45,7 @@ import { themeAppConnectHosts } from "@/lib/extensions/stylesheets";
 import { appendClearThemePreviewCookies, readThemePreviewCookie, THEME_PREVIEW_COOKIE_NAME } from "@/lib/theme-preview-cookie";
 import { catalogRedirectBeforeReads } from "@/lib/listing-url-redirect";
 import { presenceOfRenderRequest } from "@/lib/market-presence";
-import { buyerPageFetchRefusal, refusesBuyerPageFetch } from "@/lib/middleware-helper/buyer-page-fetch";
+import { buyerPageForbidsFraming } from "@/lib/middleware-helper/buyer-page-framing";
 
 interface PreviewFramingLocals {
   /** Set by the response policy: the page rendered a valid theme preview. */
@@ -196,8 +196,8 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         cdnBaseUrl: getCdnBase(),
       },
       getRuntimeCspAllowedDomains(),
-      // A buyer's own page is framed by nothing (a theme preview render excepted).
-      storefrontAppPage(url.pathname) === "private" && frameAncestors.length === 0 ? null : frameAncestors,
+      // A buyer's own page is framed by nothing (the shells, the editor's canvas and a theme preview render excepted).
+      buyerPageForbidsFraming(url.pathname) && frameAncestors.length === 0 ? null : frameAncestors,
       // The same choice Layout.astro makes: the scripts of this page kind.
       appScriptOrigins(appScriptsForPage(layout?.appScripts, storefrontAppPage(url.pathname))),
       // The browser hosts of the apps the theme draws (their islands).
@@ -255,19 +255,13 @@ const transportSecurityMiddleware = defineMiddleware(
     return applyTransportSecurityHeaders(request, response, {
       privateRelay,
       framedByPolicy,
-      buyerPage: storefrontAppPage(pathname) === "private",
+      buyerPage: buyerPageForbidsFraming(pathname),
     });
   },
 );
 
-// Before any read: a script's fetch of a buyer's own page is refused outright.
-const buyerPageFetchMiddleware = defineMiddleware(({ request, url }, next) =>
-  refusesBuyerPageFetch(request, url.pathname) ? buyerPageFetchRefusal() : next(),
-);
-
 export const onRequest = sequence(
   transportSecurityMiddleware,
-  buyerPageFetchMiddleware,
   requestRuntimeMiddleware,
   responsePolicyMiddleware,
 );
