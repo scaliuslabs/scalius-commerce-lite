@@ -7,7 +7,7 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
  * dashboard origin. The static SPA reads its route-guard state from
  * `GET /api/auth/dashboard-session`.
  */
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { pendingAdminAuthStep } from "@scalius/shared/admin-auth-step";
 import { createAuth, twoFactorMethodsForAccount } from "@scalius/core/auth";
 import { adminPrincipalExists } from "@scalius/core/auth/admin-setup";
@@ -21,6 +21,10 @@ import { getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader }
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { RateLimitError } from "../utils/api-error";
+import { isWithinRateLimit } from "../utils/rate-limit";
+import { enforceStaffProofLimit } from "../utils/staff-proofs";
+import { getTrustedClientIpFromRequest } from "../utils/client-ip";
 import { withEnvFields } from "../runtime/runtime-env";
 
 const AUTH_RETRY_DELAYS_MS = [200, 500, 1000] as const;
@@ -30,6 +34,7 @@ const SESSION_STATE_PATH = "/api/auth/dashboard-session";
 const RESET_SESSION_PATH = "/api/auth/reset-session";
 const RESET_PASSWORD_SESSION_PATH = "/api/auth/reset-password-session";
 const SIGN_IN_EMAIL_PATH = "/api/auth/sign-in/email";
+const TWO_FACTOR_PATH_PREFIX = "/api/auth/two-factor/";
 const TWO_FACTOR_VERIFY_PATHS = new Set([
   "/api/auth/two-factor/verify-totp",
   "/api/auth/two-factor/verify-otp",
@@ -500,6 +505,77 @@ async function markTwoFactorVerified(env: Env, response: Response): Promise<void
   );
 }
 
+const SIGN_IN_ACCOUNT_LIMIT_PURPOSE = "staff-sign-in-account";
+const SIGN_IN_NETWORK_LIMIT_PURPOSE = "staff-sign-in-network";
+
+function tooManyAttempts(): Response {
+  return json(
+    { code: "RATE_LIMITED", message: "Too many attempts. Wait a minute and try again." },
+    429,
+    { "Retry-After": "60", "X-Retry-After": "60" },
+  );
+}
+
+/**
+ * Better Auth limits sign-in per IP only. Each account also gets the standard
+ * limiter's budget (60 a minute), so guesses spread over many addresses still
+ * meet one bound per account. The strict per-network budget (5 a minute, the
+ * same as Better Auth's) is spent first, so one network can spend at most 5 of
+ * an account's 60: holding the owner out takes a dozen networks at full rate.
+ */
+async function limitSignInAccount(env: Env, request: Request): Promise<Response | null> {
+  const email = (await readJson(request)).email;
+  if (typeof email !== "string" || !email.trim()) return null;
+  if (!(await isWithinRateLimit(env, "RL_STRICT", SIGN_IN_NETWORK_LIMIT_PURPOSE, getTrustedClientIpFromRequest(request, env)))) {
+    return tooManyAttempts();
+  }
+  const allowed = await isWithinRateLimit(env, "RL_STANDARD", SIGN_IN_ACCOUNT_LIMIT_PURPOSE, email.trim().toLowerCase());
+  return allowed ? null : tooManyAttempts();
+}
+
+type SessionHolder = NonNullable<Awaited<ReturnType<typeof getAdminSessionFromCookieHeader>>>;
+
+function sessionHolder(env: Env, request: Request): Promise<SessionHolder | null> {
+  return getAdminSessionFromCookieHeader(getDb(env), request.headers.get("cookie") ?? undefined, env.BETTER_AUTH_SECRET);
+}
+
+/**
+ * A code checked against a signed-in session (not the sign-in challenge, which
+ * Better Auth counts and locks itself) spends the person's in-session proof
+ * budget: Better Auth's session path counts no failed codes.
+ */
+async function limitSessionSecondFactor(env: Env, holder: SessionHolder): Promise<Response | null> {
+  try {
+    await enforceStaffProofLimit(env, holder.user.id);
+    return null;
+  } catch (error) {
+    if (error instanceof RateLimitError) return tooManyAttempts();
+    throw error;
+  }
+}
+
+/**
+ * Turning two-step on through Better Auth (a first code on a session, or an
+ * email-code enable) signs out every other session of the account: one taken
+ * before it was on must sign in again with both factors. Better Auth replaced
+ * the enabling session with the one its answer sets, which is kept.
+ */
+async function signOutOthersIfTwoStepTurnedOn(env: Env, holder: SessionHolder, response: Response): Promise<void> {
+  if (!response.ok || holder.user.twoFactorEnabled) return;
+  const db = getDb(env);
+  const now = await db.select({ enabled: userTable.twoFactorEnabled }).from(userTable).where(eq(userTable.id, holder.user.id)).get();
+  if (now?.enabled !== true) return;
+  const setCookies = response.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+  const kept = await getAdminSessionTokenFromCookieHeader(setCookies, env.BETTER_AUTH_SECRET);
+  await retryTransientD1(
+    () => db.delete(sessionTable).where(and(
+      eq(sessionTable.userId, holder.user.id),
+      kept ? ne(sessionTable.token, kept) : ne(sessionTable.id, holder.session.id),
+    )),
+    { delaysMs: AUTH_RETRY_DELAYS_MS },
+  );
+}
+
 /**
  * Handles one `<basePath>/api/auth/*` request. `path` is the request path with
  * the dashboard base path removed; Better Auth itself sees the full path
@@ -547,9 +623,20 @@ export async function handleDashboardAuthRequest(
     return json({ code: "TRUSTED_DEVICE_DISABLED", message: "Trusted-device 2FA verification is not enabled." }, 400);
   }
 
+  const holder = method === "POST" && route.startsWith(TWO_FACTOR_PATH_PREFIX) ? await sessionHolder(authEnv, request) : null;
+  if (verifiesSecondFactor && holder) {
+    const refused = await limitSessionSecondFactor(authEnv, holder);
+    if (refused) return refused;
+  }
+
   const isSignIn = method === "POST" && route === SIGN_IN_EMAIL_PATH;
+  if (isSignIn) {
+    const refused = await limitSignInAccount(authEnv, request);
+    if (refused) return refused;
+  }
   let response = await runWithRetry((attempt) => auth.handler(attempt), request, isSignIn);
   if (isSignIn) response = await offerAccountTwoFactorMethods(authEnv, request, response);
   if (verifiesSecondFactor) await markTwoFactorVerified(authEnv, response);
+  if (holder) await signOutOthersIfTwoStepTurnedOn(authEnv, holder, response);
   return withNoStore(response);
 }

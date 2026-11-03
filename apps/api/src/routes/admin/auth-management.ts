@@ -72,6 +72,7 @@ import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { getClientNetworkForLog, getTrustedClientIp } from "../../utils/client-ip";
+import { staffProofs } from "../../utils/staff-proofs";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
@@ -982,6 +983,7 @@ app.openapi(changePasswordRoute, async (c) => {
     const sessionUser = c.get("user");
     const db = c.get("db");
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, auth, sessionUser.id);
     const { currentPassword, newPassword } = c.req.valid("json");
 
     if (!session) {
@@ -991,7 +993,7 @@ app.openapi(changePasswordRoute, async (c) => {
     const wrongCurrentPassword = () => new AppError(400, "PASSWORD_INCORRECT", "Current password is incorrect");
     if (newPassword === currentPassword) {
         // Say "reused" only once the current password is proven, so this never confirms a guess.
-        const proof = await auth.api.verifyPassword({
+        const proof = await proofs.verifyPassword({
             headers: c.req.raw.headers,
             body: { password: currentPassword },
         }).catch(() => null);
@@ -1001,7 +1003,7 @@ app.openapi(changePasswordRoute, async (c) => {
 
     let result: BetterAuthHeadersResult<{ token?: string } | null>;
     try {
-        result = await auth.api.changePassword({
+        result = await proofs.changePassword({
             headers: c.req.raw.headers,
             body: { currentPassword, newPassword, revokeOtherSessions: true },
             returnHeaders: true,
@@ -1349,9 +1351,10 @@ app.openapi(start2faMethodChallengeRoute, async (c) => {
     }
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, auth, sessionUser.id);
     const passwordProof = await (async () => {
         try {
-            return await auth.api.verifyPassword({
+            return await proofs.verifyPassword({
                 headers: c.req.raw.headers,
                 body: { password },
             });
@@ -1453,15 +1456,16 @@ async function verifySessionTwoFactorCode(
     const session = c.get("session");
     if (!session) throw new UnauthorizedError("No active session found");
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, auth, sessionUser.id);
     const verifiedProof = await (async () => {
         try {
             const betterAuthResult = verificationMethod === "email"
-                ? await auth.api.verifyTwoFactorOTP({
+                ? await proofs.verifyTwoFactorOTP({
                     headers: c.req.raw.headers,
                     body: { code, trustDevice: false },
                     returnHeaders: true,
                 }) as BetterAuthHeadersResult<{ token?: string }>
-                : await auth.api.verifyTOTP({
+                : await proofs.verifyTOTP({
                     headers: c.req.raw.headers,
                     body: { code, trustDevice: false },
                     returnHeaders: true,
@@ -1790,6 +1794,15 @@ app.openapi(update2faMethodRoute, async (c) => {
                     eq(sessionTable.userId, sessionUser.id),
                     eq(sessionTable.token, proofSession.sessionToken),
                 )),
+            // Turning two-step on signs out every other session: one taken
+            // before it was on must sign in again with both factors, never
+            // sit at the code prompt guessing.
+            ...(hasEstablishedMethod
+                ? []
+                : [db.delete(sessionTable).where(and(
+                    eq(sessionTable.userId, sessionUser.id),
+                    ne(sessionTable.id, proofSession.sessionId),
+                ))]),
         ]);
     } catch (error) {
         if (isBatchGuardError(error, "TWO_FACTOR_ENROLLMENT_CONFLICT")) {
@@ -1858,7 +1871,8 @@ app.openapi(disable2faRoute, async (c) => {
     if (await twoFactorRequiredFor(db, sessionUser.id)) throw twoFactorRequired();
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-    const passwordProof = await auth.api.verifyPassword({
+    const proofs = await staffProofs(c.env, auth, sessionUser.id);
+    const passwordProof = await proofs.verifyPassword({
         headers: c.req.raw.headers,
         body: { password },
     }).catch(() => null);
@@ -1954,16 +1968,16 @@ app.openapi(verify2faRoute, async (c) => {
         throw new ValidationError("This account signs in with emailed codes, not an authenticator app");
     }
 
-    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, createAuth(c.env, { appProviders: requestAppProviders(c) }), sessionUser.id);
     const verifyResult = await (async () => {
         try {
             if (type === "backup") {
-                return await auth.api.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
+                return await proofs.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
             }
             if (type === "email") {
-                return await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+                return await proofs.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
             }
-            return await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+            return await proofs.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
         } catch {
             throw new ValidationError("The verification code is invalid or expired");
         }
