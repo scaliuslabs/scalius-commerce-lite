@@ -27,14 +27,27 @@ Main files:
 | `order_item_warranties` | One record per fulfilment line. Id `wty_<fulfilment line id>`. Holds `starts_at`, `expires_at`, `replacement_until` and `voided_at`. |
 | `warranty_claims` | A claim record. `status` is `open`, `in_progress`, `resolved` or `rejected`. `resolved` needs a `resolution` (`repair`, `replacement`, `refund`, `other`). Unique `conversation_id`. At most one claim in `open` or `in_progress` per warranty. |
 
-Related columns: `products.warranty_policy_id` and `order_items.warranty_revision_id`.
+Related columns:
+
+| Column | Role |
+|--------|------|
+| `products.warranty_policy_id` | The product's policy, or NULL. `SET NULL` on delete. |
+| `product_variants.warranty_mode` | `inherit` (default: the product's policy), `policy` (the SKU's own) or `none` (0189). |
+| `product_variants.warranty_policy_id` | The SKU's own policy. A CHECK sets it exactly in `policy` mode. `RESTRICT` on delete. Partial index. |
+| `order_items.warranty_revision_id` | The revision frozen at commit. A trigger makes it immutable. |
+
+The SKU fields are written by the product editor's writes in `product-admin` (option matrix, single-SKU routes, duplicate) and validated by `products/sku-warranty.ts` and `product-admin/warranty.ts`. They are not part of the app API, webhooks or events.
 
 ## Rules
 
 - A policy edit that changes a buyer-facing field inserts the next revision and points the policy at it in one batch, guarded by the `version` the editor loaded.
-- Checkout freezes the policy's current revision onto the order line (`order_items.warranty_revision_id`). A trigger blocks any later change, so an edit never changes what a buyer bought.
+- A SKU's effective warranty is its own live policy (`policy`), nothing (`none`), or its product's live policy (`inherit`).
+- Checkout freezes the effective policy's current revision onto the order line (`order_items.warranty_revision_id`), inside the commit batch, binding only the SKU id. An archived own policy freezes none: it never falls back to the product's. Staff orders and an expanded bundle's component lines (each its own SKU) take the same path. A trigger blocks any later change, so an edit never changes what a buyer bought.
 - A trigger on `order_fulfillment_lines` creates one warranty record per fulfilment line of a line with a frozen revision. It starts at the fulfilment's creation time and expires by the revision's duration. A trigger voids the record when its fulfilment is voided.
-- A product may point only at a live (not archived) policy. Archiving hides the policy from buyers and from new products. Revisions are never deleted.
+- A product may point only at a live (not archived) policy. A SKU may be given only a live policy it does not already name; a SKU keeps a policy archived after it was chosen, so re-saving the matrix never fails on it. Archiving hides the policy from buyers and from new products. Revisions are never deleted.
+- A copied product keeps live policies. A SKU whose own policy is archived is copied as `none`.
+- The policy list's product count counts each live product once, whether it names the policy or a live SKU does.
+- The product page carries `product.warranties` (each effective live policy once, with its id) and each variant's `warrantyId` (null: no warranty). The buy box draws one row per warranty and shows the opening SKU's; the buy form shows the chosen SKU's row by `data-warranty-by-variant`.
 - Buyers claim only an active warranty: not voided, not expired, checked again inside the batch. A buyer is the account that owns the order or a guest holding the receipt proof. Staff may open a goodwill claim on an expired warranty, never on a voided one.
 - Opening a claim is one batch. It writes the thread (if not reserved yet), the claim row, the opening event line, the description as the first public message with its staged photos (at most 3), and its notification outbox row.
 - The claim id derives from the warranty and a client key from the form (`claimIdFor`), so a double submit lands on the same claim and thread.
@@ -43,7 +56,7 @@ Related columns: `products.warranty_policy_id` and `order_items.warranty_revisio
 
 ## DVC
 
-`order_item_warranties` and `warranty_claims` are private in the registry. `warranty_policy_revisions` is frozen at checkout and no public route reads it. `warranty_policies` is registered: a policy edit advances `p:<id>` of every product that points at it.
+`order_item_warranties` and `warranty_claims` are private in the registry. `warranty_policy_revisions` is frozen at checkout and no public route reads it. `warranty_policies` is registered: a policy edit advances `p:<id>` of every product that points at it, and of every product with a SKU that names it (`sku_upd`, 0189). `product_variants.warranty_mode` and `warranty_policy_id` are visible columns: a change advances the SKU's product.
 
 ## Routes
 

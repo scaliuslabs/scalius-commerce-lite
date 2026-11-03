@@ -26,7 +26,7 @@ This domain reads and defines. [`product-admin`](../product-admin/README.md) wri
 | Table | Role and constraints |
 |-------|----------------------|
 | `products` | Merchandising container with no stock column. Unique `slug`. Carries `aggregate_revision`, `product_condition` (`new`, `refurbished`, `used`, or null) and `customization_schema` (JSON, at most 4,096 characters). |
-| `product_variants` | The SKU: the only sellable and inventory identity. Unique `lower(trim(sku))` and, when set, `lower(trim(barcode))`. A default SKU has no option key, a non-default SKU has one. Unique `(product_id, option_combination_key)` among live non-default SKUs. Holds `stock`, `reserved_stock`, `stock_version`, `cost_minor`, `fulfillment_kind`, `image_id`. |
+| `product_variants` | The SKU: the only sellable and inventory identity. Unique `lower(trim(sku))` and, when set, `lower(trim(barcode))`. A default SKU has no option key, a non-default SKU has one. Unique `(product_id, option_combination_key)` among live non-default SKUs. Holds `stock`, `reserved_stock`, `stock_version`, `cost_minor`, `fulfillment_kind`, `image_id`, and its warranty (`warranty_mode`, `warranty_policy_id`; `sku-warranty.ts`, see [warranty](../warranty/README.md)). |
 | `product_option_definitions` | One option axis. `position` 0 to 4. `standard_mapping` is `size`, `color`, `material`, `pattern` or `none` (default). Unique live name per product. |
 | `product_option_values`, `product_variant_option_values` | Axis values (unique live value per axis) and the SKU to value assignment (primary key `(variant_id, option_definition_id)`). |
 | `product_media` | Ordered gallery. Unique `(product_id, media_id)` and `(product_id, sort_order)`. At most one primary row. Foreign key to `media` is `restrict`. |
