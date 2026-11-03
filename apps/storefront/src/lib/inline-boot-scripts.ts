@@ -72,6 +72,6 @@ export const VARIANT_PREPAINT_SCRIPT =
  */
 export const SKIN_CHOICE_PREPAINT_SCRIPT =
   '(()=>{try{const v=new URLSearchParams(location.search).get("variant");if(!v)return;' +
-  `for(const e of document.querySelectorAll(${JSON.stringify(SKIN_CHOOSE_CONTROL)})){const s=e.dataset.chooseVariant===v;` +
+  `for(const e of document.querySelectorAll("${SKIN_CHOOSE_CONTROL}")){const s=e.dataset.chooseVariant===v;` +
   'e.dataset.state=s?"selected":"unselected";if(e.tagName==="BUTTON")e.setAttribute("aria-pressed",String(s));' +
   'else if(s)e.setAttribute("aria-current","true");else e.removeAttribute("aria-current")}}catch{}})();';
