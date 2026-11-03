@@ -2,16 +2,18 @@
 // Centralized, idempotent inventory adjustment logic for order status changes.
 //
 // This module is the SINGLE SOURCE OF TRUTH for how inventory reacts to
-// order status transitions. Every endpoint that changes order status must
-// call applyInventoryForStatusChange() instead of manually adjusting stock.
+// order status transitions. A command that changes an order's status sends
+// prepareInventoryForStatusChange()'s statements in its own status batch;
+// applyInventoryForStatusChange() runs them alone (repairs, payment flows).
 
 import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
-import { inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { digitalLicenceKeys, inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
+import { buildBatchGuard, isBatchGuardError, isTursoConflictError, safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
-import { prepareStockReservationBatch, reserveStockBatch, type ReservationBatchItem } from "./reserve";
+import { isInventoryReservationConflictError, prepareStockReservationBatch, type ReservationBatchItem } from "./reserve";
+import { inJsonArray } from "../../utils/in-json-array";
 import { checkAndAlertLowStock } from "./alerts";
 import { readStockMovementClaims } from "./stock-movement-claims";
 import type { ReservationEntry, StockOperationResult } from "./types";
@@ -175,18 +177,6 @@ function hasBuyerCapacityTransition(
         !== resolveTrackedBuyerAvailabilityBand(afterCapacity, after.lowStockThreshold);
 }
 
-/**
- * Build inventory SQL statements for a status change WITHOUT executing them.
- * Used by callers that need to include inventory in a larger db.batch().
- *
- * The CAS-based stock operations (deductOrderStock / releaseOrderReservations)
- * still execute internally — they have their own multi-row update logic.
- * What we batch with callers is only the inventoryAction flag update on the order.
- * If any stock operation fails, this throws before returning statements so the
- * order cannot be marked as if the inventory transition succeeded.
- *
- * Returns empty statements array if no inventory action is needed.
- */
 async function hasOpenOrderReturn(db: Database, orderId: string): Promise<boolean> {
     const row = await db.select({ id: orderReturns.id }).from(orderReturns).where(and(
         eq(orderReturns.orderId, orderId),
@@ -195,17 +185,51 @@ async function hasOpenOrderReturn(db: Database, orderId: string): Promise<boolea
     return Boolean(row);
 }
 
-export async function buildInventoryStatements(
-    db: Database,
-    orderId: string,
-    newStatus: string,
-): Promise<{
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch statements require any[] return type
-    statements: any[];
-    newAction: InventoryAction;
+const ORDER_INVENTORY_CONFLICT = "order_inventory_conflict";
+
+/**
+ * A status change's stock, prepared for the caller's own write batch: the
+ * ledger-v2 movements with their stockVersion CAS, the buyer-state refresh,
+ * the order's `inventory_action` flip, and a final guard proving every
+ * movement and the flip landed. The caller sends `statements` after its own
+ * status CAS (and the guard that proves it), so the status and its stock
+ * commit together or not at all: a death between them cannot leave a
+ * cancelled order holding stock.
+ */
+export interface PreparedInventoryStatusChange {
+    /** The order's inventory action once the statements commit. */
+    inventoryAction: InventoryAction;
+    /** Empty when nothing moves. */
+    statements: SQLiteBatchItem[];
     availabilityTransitionVariantIds: string[];
-}> {
-    const order = await db
+    /** Low-stock alert refresh, once the batch committed; it never throws. */
+    afterCommit(): Promise<void>;
+    /** The refusal a failed batch means for the merchant (a location short of units), or null. */
+    translateError(error: unknown): unknown;
+}
+
+/** The batch failed because stock or the order's inventory moved since it was prepared: prepare again. */
+export function isOrderInventoryConflictError(error: unknown): boolean {
+    return isBatchGuardError(error, ORDER_INVENTORY_CONFLICT)
+        || isInventoryReservationConflictError(error)
+        || isTursoConflictError(error)
+        || isDuplicateTransitionMovementClaimError(error);
+}
+
+type InventoryPhase = { operation: StrictMovementOperation; entries: ReservationEntry[] };
+
+function unchangedInventory(inventoryAction: InventoryAction): PreparedInventoryStatusChange {
+    return {
+        inventoryAction,
+        statements: [],
+        availabilityTransitionVariantIds: [],
+        afterCommit: async () => undefined,
+        translateError: () => null,
+    };
+}
+
+async function readTransitionOrder(db: Database, orderId: string): Promise<InventoryTransitionOrder | undefined> {
+    return await db
         .select({
             id: orders.id,
             status: orders.status,
@@ -218,24 +242,36 @@ export async function buildInventoryStatements(
         .from(orders)
         .where(eq(orders.id, orderId))
         .get() as InventoryTransitionOrder | undefined;
+}
 
-    if (!order) return {
-        statements: [],
-        newAction: "none",
-        availabilityTransitionVariantIds: [],
-    };
+/**
+ * Prepares the stock a move to `newStatus` needs (see
+ * `PreparedInventoryStatusChange`). Reads only. Idempotent: an order whose
+ * inventory already matches the status prepares nothing.
+ *
+ * Licence keys are stock (a key-delivered SKU's units are its keys): a unit
+ * whose key was assigned left with the buyer, and its key never returns to
+ * the pool. Restoring a deducted order skips those units; releasing a
+ * reserved one consumes them (a deduct) instead of putting them back.
+ */
+export async function prepareInventoryForStatusChange(
+    db: Database,
+    orderId: string,
+    newStatus: string,
+): Promise<PreparedInventoryStatusChange> {
+    const order = await readTransitionOrder(db, orderId);
+    if (!order) return unchangedInventory("none");
 
     const currentAction = order.inventoryAction as InventoryAction;
     const needsRestore = STOCK_RESTORE_STATUSES.has(newStatus);
     const needsDeduct = STOCK_DEDUCT_STATUSES.has(newStatus);
 
     if (needsRestore && currentAction === "reserved") {
-        const availabilityTransitionVariantIds = await releaseOrderReservations(db, order);
-        return {
-            statements: [buildInventoryActionUpdate(db, order, "restored")],
-            newAction: "restored",
-            availabilityTransitionVariantIds,
-        };
+        const lines = await getOrderInventoryLines(db, order);
+        return prepareStrictInventoryPhases(db, order, "restored", [
+            { operation: "deduct", entries: keyedEntries(lines) },
+            { operation: "release", entries: unkeyedEntries(lines) },
+        ]);
     }
 
     if (needsRestore && currentAction === "deducted") {
@@ -243,42 +279,193 @@ export async function buildInventoryStatements(
         // restocks good units and writes off damaged ones. Restoring the whole
         // order here as well would count returned units twice.
         if (newStatus === "returned" && await hasOpenOrderReturn(db, orderId)) {
-            return { statements: [], newAction: currentAction, availabilityTransitionVariantIds: [] };
+            return unchangedInventory(currentAction);
         }
-        const availabilityTransitionVariantIds = await restoreDeductedOrderStock(db, order);
-        return {
-            statements: [buildInventoryActionUpdate(db, order, "restored")],
-            newAction: "restored",
-            availabilityTransitionVariantIds,
-        };
+        const lines = await getOrderInventoryLines(db, order);
+        return prepareStrictInventoryPhases(db, order, "restored", [
+            { operation: "restore", entries: unkeyedEntries(lines) },
+        ]);
     }
 
     if (needsDeduct && currentAction === "reserved") {
-        const availabilityTransitionVariantIds = await deductOrderStock(db, order);
-        return {
-            statements: [buildInventoryActionUpdate(db, order, "deducted")],
-            newAction: "deducted",
-            availabilityTransitionVariantIds,
-        };
+        const lines = await getOrderInventoryLines(db, order);
+        return prepareStrictInventoryPhases(db, order, "deducted", [
+            { operation: "deduct", entries: lines.map((line) => line.entry) },
+        ]);
     }
 
     // Recovery re-reservation: if repaired data or an interrupted compensating workflow leaves an
     // active order with restored inventory, reserve its items again. Public order transitions never
     // leave the terminal cancelled state; this path repairs inventory projection only.
-    const needsReReserve = isStockReservableStatus(newStatus) && currentAction === "restored";
-    if (needsReReserve) {
-        const availabilityTransitionVariantIds = await reserveOrderItems(db, order);
-        return {
-            statements: [buildInventoryActionUpdate(db, order, "reserved")],
-            newAction: "reserved",
-            availabilityTransitionVariantIds,
-        };
+    if (isStockReservableStatus(newStatus) && currentAction === "restored") {
+        return prepareInventoryReReservation(db, order);
     }
 
+    return unchangedInventory(currentAction);
+}
+
+function keyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[] {
+    return lines.flatMap((line) => line.keyed > 0 ? [{ ...line.entry, quantity: line.keyed }] : []);
+}
+
+function unkeyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[] {
+    return lines.flatMap((line) => line.entry.quantity > line.keyed
+        ? [{ ...line.entry, quantity: line.entry.quantity - line.keyed }]
+        : []);
+}
+
+function inventoryChangeGuard(
+    db: Database,
+    order: InventoryTransitionOrder,
+    inventoryAction: InventoryAction,
+    movementIds: readonly string[],
+): SQLiteBatchItem {
+    return buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${order.id} AND ${orders.inventoryAction} = ${inventoryAction}
+    ) AND (
+        SELECT count(*) FROM ${inventoryMovements}
+        WHERE ${inJsonArray(inventoryMovements.id, movementIds)}
+    ) = ${movementIds.length}`, ORDER_INVENTORY_CONFLICT);
+}
+
+async function prepareStrictInventoryPhases(
+    db: Database,
+    order: InventoryTransitionOrder,
+    inventoryAction: InventoryAction,
+    phases: readonly InventoryPhase[],
+): Promise<PreparedInventoryStatusChange> {
+    const pool = normalizeInventoryPool(order.inventoryPool);
+    const movementStatements: SQLiteBatchItem[] = [];
+    const movementIds: string[] = [];
+    // Each SKU's counters before the first movement this batch writes, and after its last.
+    const initial = new Map<string, InventoryVariantState>();
+    const carried = new Map<string, InventoryVariantState>();
+    const touched = new Set<string>();
+    const replayed = new Set<string>();
+    let deductLocationName: string | undefined;
+
+    for (const phase of phases) {
+        const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
+        if (entries.length === 0) continue;
+        const { operation } = phase;
+        const fresh = await loadTransitionVariantStates(
+            db,
+            order.id,
+            operation,
+            entries.filter((entry) => !carried.has(entry.variantId)),
+        );
+        const variants = new Map(entries.map((entry) => [
+            entry.variantId,
+            carried.get(entry.variantId) ?? fresh.get(entry.variantId)!,
+        ]));
+        const identities: InventoryTransitionMovementIdentity[] = [];
+        for (const entry of entries) {
+            identities.push({
+                id: await createTransitionMovementId({
+                    orderId: order.id,
+                    variantId: entry.variantId,
+                    operation,
+                    pool,
+                    generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, operation),
+                }),
+                variantId: entry.variantId,
+                orderId: order.id,
+                type: getTransitionMovementType(operation, pool),
+                quantity: operation === "release" ? -entry.quantity : entry.quantity,
+            });
+        }
+        for (const entry of entries) touched.add(entry.variantId);
+        // An earlier run committed these movements but not the action flip
+        // (a ledger written before movements and flip shared one batch):
+        // only the flip is left to write.
+        if (await resolveCommittedTransitionMovements(db, order.id, operation, identities, entries)) {
+            for (const entry of entries) replayed.add(entry.variantId);
+            continue;
+        }
+
+        const deductLocation = operation === "deduct"
+            ? await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId)
+            : null;
+        if (deductLocation) deductLocationName = deductLocation.name;
+        const claims = await buildTransitionMovementClaims(
+            db, order, operation, entries, variants, pool, identities, null, deductLocation,
+        );
+        if (deductLocation && pool === "regular") {
+            await assertInventoryLocationCovers(db, deductLocation, entries);
+        }
+        claims.forEach((claim, index) => {
+            const entry = entries[index]!;
+            const before = variants.get(entry.variantId)!;
+            movementStatements.push(buildTransitionMovementInsert(db, claim, before, operation, entry.quantity, pool));
+            movementIds.push(claim.id);
+            if (!initial.has(entry.variantId)) initial.set(entry.variantId, before);
+            carried.set(entry.variantId, getTransitionCounterStateAfter(operation, entry.quantity, before, pool));
+        });
+        // Each counter after its movement: inside the batch an update applies
+        // exactly when its movement's stockVersion read did.
+        for (const entry of entries) {
+            movementStatements.push(buildTransitionVariantUpdate(db, operation, entry, variants.get(entry.variantId)!, pool));
+        }
+    }
+
+    const variantIds = [...touched];
+    const availabilityTransitionVariantIds = variantIds.filter((variantId) => {
+        // The pre-state of a committed replay is no longer reconstructable: purge conservatively.
+        if (replayed.has(variantId)) return true;
+        const before = initial.get(variantId);
+        const after = carried.get(variantId);
+        return Boolean(before && after && hasBuyerCapacityTransition(before, after, pool));
+    });
     return {
-        statements: [],
-        newAction: currentAction,
-        availabilityTransitionVariantIds: [],
+        inventoryAction,
+        statements: [
+            ...movementStatements,
+            // Buyer state reads the counters this batch just wrote.
+            ...(movementStatements.length > 0 ? catalogBuyerStateRefreshStatementsForSkus(db, variantIds) : []),
+            buildInventoryActionUpdate(db, order, inventoryAction),
+            inventoryChangeGuard(db, order, inventoryAction, movementIds),
+        ],
+        availabilityTransitionVariantIds,
+        afterCommit: () => checkLowStockForTransitionEntries(
+            db,
+            variantIds.map((variantId) => ({ variantId, quantity: 0, pool })),
+        ),
+        translateError: (error) => isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)
+            ? inventoryLocationErrorFrom(error, deductLocationName)
+            : null,
+    };
+}
+
+async function prepareInventoryReReservation(
+    db: Database,
+    order: InventoryTransitionOrder,
+): Promise<PreparedInventoryStatusChange> {
+    const entries = (await getOrderInventoryLines(db, order)).map((line) => line.entry);
+    const statements: SQLiteBatchItem[] = [];
+    if (entries.length > 0) {
+        const plan = await prepareStockReservationBatch(
+            db,
+            await buildTransitionReservationBatchItems(db, order, entries),
+            normalizeInventoryPool(order.inventoryPool),
+            { salesChannelId: order.salesChannelId },
+        );
+        assertInventoryTransitionSucceeded(order.id, "reserve", plan);
+        statements.push(...plan.statements);
+    }
+    return {
+        inventoryAction: "reserved",
+        statements: [
+            ...statements,
+            buildInventoryActionUpdate(db, order, "reserved"),
+            inventoryChangeGuard(db, order, "reserved", []),
+        ],
+        // Reactivation is an administrative edge case. The reservation helper
+        // does not expose its pre-commit capacity bands, so conservatively
+        // invalidate the affected SKUs rather than risk stale availability.
+        availabilityTransitionVariantIds: [...new Set(entries.map((entry) => entry.variantId))],
+        afterCommit: async () => undefined,
+        translateError: () => null,
     };
 }
 
@@ -312,7 +499,10 @@ export async function assertOrderStockCoverable(db: Database, orderId: string): 
 }
 
 /**
- * Apply the correct inventory adjustment when an order's status changes.
+ * Apply the correct inventory adjustment when an order's status changes, in
+ * one batch of its own (`prepareInventoryForStatusChange`). Commands that
+ * change the status itself send the prepared statements with their status
+ * CAS instead, so the two cannot come apart.
  *
  * This function is IDEMPOTENT: calling it multiple times with the same
  * transition will only adjust inventory once, because it reads the current
@@ -334,34 +524,32 @@ export async function applyInventoryForStatusChangeWithImpact(
     orderId: string,
     newStatus: string,
 ): Promise<InventoryStatusTransitionImpact> {
-    const {
-        statements,
-        newAction,
-        availabilityTransitionVariantIds,
-    } = await buildInventoryStatements(db, orderId, newStatus);
-    if (statements.length > 0) {
-        const results = await safeBatch(db, statements as never) as { id: string }[][];
-        const missedActionUpdate = results.some((result) => !result || result.length === 0);
-        if (missedActionUpdate) {
-            const current = await db
-                .select({ inventoryAction: orders.inventoryAction })
-                .from(orders)
-                .where(eq(orders.id, orderId))
-                .get();
-            if (current?.inventoryAction !== newAction) {
+    for (let attempt = 0; ; attempt++) {
+        const prepared = await prepareInventoryForStatusChange(db, orderId, newStatus);
+        const impact = {
+            inventoryAction: prepared.inventoryAction,
+            availabilityTransitionVariantIds: prepared.availabilityTransitionVariantIds,
+        };
+        if (prepared.statements.length === 0) return impact;
+        try {
+            await safeBatch(db, prepared.statements as never);
+        } catch (error: unknown) {
+            const refusal = prepared.translateError(error);
+            if (refusal) throw refusal;
+            if (!isOrderInventoryConflictError(error)) throw error;
+            if (attempt >= MAX_TRANSITION_RETRIES - 1) {
                 throw new ValidationError(
-                    `Inventory action update conflicted for order ${orderId}`,
-                    { orderId, expectedInventoryAction: newAction, actualInventoryAction: current?.inventoryAction },
+                    `Inventory for order ${orderId} changed ${MAX_TRANSITION_RETRIES} times while it was being updated; try again.`,
+                    { orderId, inventoryAction: prepared.inventoryAction },
                 );
             }
+            await new Promise((resolve) => setTimeout(resolve, BASE_TRANSITION_BACKOFF_MS * Math.pow(2, attempt)));
+            continue;
         }
+        await prepared.afterCommit();
+        return impact;
     }
-    return {
-        inventoryAction: newAction,
-        availabilityTransitionVariantIds,
-    };
 }
-
 /**
  * Apply an explicit order-item inventory delta with a deterministic movement
  * claim and a stockVersion CAS update in the same D1 batch. Callers derive
@@ -416,10 +604,7 @@ export async function applyClaimedInventoryEntryBatchWithImpact(
     return result;
 }
 
-/**
- * Deduct physical stock permanently for all items in an order.
- * Used when an order transitions from reserved to confirmed/active.
- */
+/** The order's inventory action flip, a CAS on the action it was read with. */
 function buildInventoryActionUpdate(
     db: Database,
     order: InventoryTransitionOrder,
@@ -437,71 +622,6 @@ function buildInventoryActionUpdate(
             ),
         )
         .returning({ id: orders.id });
-}
-
-async function deductOrderStock(
-    db: Database,
-    order: InventoryTransitionOrder,
-): Promise<string[]> {
-    const entries = await getOrderInventoryEntries(db, order);
-
-    if (entries.length > 0) {
-        const result = await applyStrictInventoryTransitionMovements(
-            db,
-            order,
-            "deduct",
-            entries,
-        );
-        return result.availabilityTransitionVariantIds;
-    }
-    return [];
-}
-
-/**
- * Release reservations for all items in an order.
- * Used when a storefront order is cancelled before payment.
- */
-async function releaseOrderReservations(
-    db: Database,
-    order: InventoryTransitionOrder,
-): Promise<string[]> {
-    const entries = await getOrderInventoryEntries(db, order);
-
-    if (entries.length > 0) {
-        const result = await applyStrictInventoryTransitionMovements(
-            db,
-            order,
-            "release",
-            entries,
-        );
-        return result.availabilityTransitionVariantIds;
-    }
-    return [];
-}
-
-/**
- * Re-reserve stock for all items in an order.
- * Used to repair an active order whose inventory projection was previously restored.
- * Stock was released on cancellation; this re-reserves it.
- */
-async function reserveOrderItems(
-    db: Database,
-    order: InventoryTransitionOrder,
-): Promise<string[]> {
-    const entries = await getOrderInventoryEntries(db, order);
-
-    if (entries.length > 0) {
-        const batchItems = await buildTransitionReservationBatchItems(db, order, entries);
-        const result = await reserveStockBatch(db, batchItems, normalizeInventoryPool(order.inventoryPool), {
-            salesChannelId: order.salesChannelId,
-        });
-        assertInventoryTransitionSucceeded(order.id, "reserve", result);
-        // Reactivation is an administrative edge case. The reservation helper
-        // does not expose its pre-commit capacity bands, so conservatively
-        // invalidate the affected SKUs rather than risk stale availability.
-        return [...new Set(entries.map((entry) => entry.variantId))];
-    }
-    return [];
 }
 
 export const ORDER_RERESERVE_CONFLICT = "ORDER_RERESERVE_CONFLICT";
@@ -560,29 +680,6 @@ export async function prepareOrderReReservation(
     }
     statements.push(buildInventoryActionUpdate(db, order, "reserved"));
     return { status: "ready", statements };
-}
-
-/**
- * Restore deducted stock for all items in an order.
- * Used when a shipped/delivered order is cancelled or returned.
- * Physical stock was permanently decremented at ship time — this adds it back.
- */
-async function restoreDeductedOrderStock(
-    db: Database,
-    order: InventoryTransitionOrder,
-): Promise<string[]> {
-    const entries = await getOrderInventoryEntries(db, order);
-
-    if (entries.length > 0) {
-        const result = await applyStrictInventoryTransitionMovements(
-            db,
-            order,
-            "restore",
-            entries,
-        );
-        return result.availabilityTransitionVariantIds;
-    }
-    return [];
 }
 
 async function applyStrictInventoryTransitionMovements(
@@ -1586,6 +1683,40 @@ async function getOrderInventoryEntries(
             variantId: i.variantId as string,
             quantity: i.quantity,
             pool,
+        }));
+}
+
+type OrderInventoryLine = {
+    entry: ReservationEntry;
+    /** Units whose licence key was handed to the buyer: their keys never return to the pool. */
+    keyed: number;
+};
+
+/** The order's stock-tracked lines, each with the units its assigned licence keys took. */
+async function getOrderInventoryLines(
+    db: Database,
+    order: InventoryTransitionOrder,
+): Promise<OrderInventoryLine[]> {
+    const items = await db
+        .select({
+            variantId: orderItems.variantId,
+            quantity: orderItems.quantity,
+            inventoryTracked: orderItems.inventoryTracked,
+            // The outer line named in full: a bare "id" here is the key's own.
+            keyed: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys}
+                WHERE ${digitalLicenceKeys.orderItemId} = ${sql.raw('"order_items"."id"')}
+                  AND ${digitalLicenceKeys.status} <> 'available')`,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id))
+        .all();
+
+    const pool = normalizeInventoryPool(order.inventoryPool);
+    return items
+        .filter((item) => item.variantId !== null && item.inventoryTracked)
+        .map((item) => ({
+            entry: { variantId: item.variantId as string, quantity: item.quantity, pool },
+            keyed: Math.min(item.quantity, Math.max(0, Number(item.keyed) || 0)),
         }));
 }
 

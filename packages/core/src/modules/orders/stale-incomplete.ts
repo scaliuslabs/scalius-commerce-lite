@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     abandonedCheckouts,
     orderPayments,
@@ -11,7 +11,7 @@ import {
     PaymentRecordStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
-import { applyInventoryForStatusChange } from "../inventory";
+import { prepareInventoryForStatusChange } from "../inventory";
 import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel";
 import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
 import {
@@ -24,6 +24,7 @@ import { giftCardOnlyTenders, releaseCancelledOrderGiftCards } from "./status/li
 export const DEFAULT_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 25;
 export const MAX_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT = 100;
 const STALE_GIFT_CARD_RELEASE_CONFLICT = "stale_gift_card_release_conflict";
+const STALE_ORDER_CLAIM_CONFLICT = "stale_order_claim_conflict";
 /** How long a cancelled order must sit untouched before its leftover gift-card holds are released. */
 const LEFTOVER_HOLD_GRACE_SECONDS = 600;
 
@@ -104,25 +105,15 @@ function normalizeCleanupLimit(limit: number | undefined): number {
     return Math.max(1, Math.min(MAX_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT, Math.floor(limit)));
 }
 
-async function rollbackStaleIncompleteCleanupClaim(
-    db: Database,
-    orderId: string,
-    claimedVersion: number,
-    paymentStatus: RecoverableStalePaymentStatus,
-): Promise<void> {
-    await db.update(orders)
-        .set({
-            status: OrderStatus.INCOMPLETE,
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(orders.id, orderId),
-            eq(orders.version, claimedVersion),
-            eq(orders.status, OrderStatus.CANCELLED),
-            eq(orders.paymentStatus, paymentStatus),
-            isNull(orders.deletedAt),
-        ));
+/** The claim guard failed: was it because the order moved (leave it), or something else (an error)? */
+async function stillStaleIncomplete(db: Database, orderId: string, version: number): Promise<boolean> {
+    const row = await db.select({ id: orders.id }).from(orders).where(and(
+        eq(orders.id, orderId),
+        eq(orders.version, version),
+        eq(orders.status, OrderStatus.INCOMPLETE),
+        isNull(orders.deletedAt),
+    )).get();
+    return Boolean(row);
 }
 
 /**
@@ -205,116 +196,112 @@ export async function archiveStaleIncompleteOrders(
             }
 
             const claimedVersion = order.version + 1;
-            const claim = await db.update(orders)
-                .set({
-                    status: OrderStatus.CANCELLED,
-                    version: claimedVersion,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    eq(orders.id, order.id),
-                    eq(orders.version, order.version),
-                    eq(orders.status, OrderStatus.INCOMPLETE),
-                    eq(orders.paymentMethod, paymentMethod),
-                    eq(orders.paymentStatus, paymentStatus),
-                    eq(orders.paidAmountMinor, order.paidAmountMinor),
-                    onlyGiftCardMoneyCondition,
-                    isNull(orders.deletedAt),
-                    sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-                    noActiveShipmentClaimCondition(),
-                    noActivePaymentClaimCondition,
-                    noActivePaymentSessionClaimCondition,
-                ))
-                .returning({ id: orders.id });
-
-            if (claim.length === 0) {
-                continue;
-            }
-
-            if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
-                try {
-                    await applyInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED);
-                } catch (error) {
-                    await rollbackStaleIncompleteCleanupClaim(db, order.id, claimedVersion, paymentStatus);
-                    throw error;
-                }
-            }
-
-            const finalPaymentStatus = release.releasedMinor > 0 ? PaymentStatus.REFUNDED : paymentStatus;
-
             const finalizedVersion = claimedVersion + 1;
-            const [finalized] = await safeBatch(db, [
-                db.update(orders)
-                    .set({
-                        deletedAt: sql`unixepoch()`,
-                        inventoryAction: "restored",
-                        ...(release.releasedMinor > 0
-                            ? {
-                                // Every gift card went back: nothing paid, nothing owed.
-                                paidAmountMinor: 0,
-                                balanceDueMinor: 0,
-                                paymentStatus: finalPaymentStatus,
-                            }
-                            : {}),
-                        version: sql`${orders.version} + 1`,
-                        updatedAt: sql`unixepoch()`,
-                    })
-                    .where(and(
-                        eq(orders.id, order.id),
-                        eq(orders.version, claimedVersion),
-                        eq(orders.status, OrderStatus.CANCELLED),
-                        eq(orders.paymentMethod, paymentMethod),
-                        eq(orders.paymentStatus, paymentStatus),
-                        eq(orders.paidAmountMinor, order.paidAmountMinor),
-                        isNull(orders.deletedAt),
-                        noActivePaymentClaimCondition,
-                    ))
-                    .returning({ id: orders.id }),
-                ...(release.statements.length > 0
-                    ? [
-                        buildBatchGuard(db, sql`EXISTS (
-                            SELECT 1 FROM ${orders}
-                            WHERE ${orders.id} = ${order.id}
-                              AND ${orders.version} = ${finalizedVersion}
-                              AND ${orders.status} = ${OrderStatus.CANCELLED}
-                              AND ${orders.deletedAt} IS NOT NULL
-                        )`, STALE_GIFT_CARD_RELEASE_CONFLICT),
-                        ...release.statements,
-                    ]
-                    : []),
-                db.update(paymentPlans)
-                    .set({
-                        status: PaymentPlanStatus.CANCELLED,
-                        updatedAt: sql`unixepoch()`,
-                    })
-                    .where(and(
-                        eq(paymentPlans.orderId, order.id),
-                        eq(paymentPlans.status, PaymentPlanStatus.PENDING),
-                        sql`EXISTS (
-                            SELECT 1 FROM ${orders}
-                            WHERE ${orders.id} = ${order.id}
-                              AND ${orders.status} = ${OrderStatus.CANCELLED}
-                              AND ${orders.version} = ${finalizedVersion}
-                              AND ${orders.paymentMethod} = ${paymentMethod}
-                              AND ${orders.paymentStatus} = ${finalPaymentStatus}
-                              AND ${orders.deletedAt} IS NOT NULL
-                        )`,
-                    )),
-            ] as never) as unknown[];
+            const finalPaymentStatus = release.releasedMinor > 0 ? PaymentStatus.REFUNDED : paymentStatus;
+            // The stock this abandoned checkout holds goes back in the same
+            // batch as its cancel: a death between them would leave a
+            // cancelled order holding stock that no sweep selects again.
+            const inventory = order.inventoryAction === "reserved" || order.inventoryAction === "deducted"
+                ? await prepareInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED)
+                : null;
 
-            const finalizedRows = finalized as Array<{ id: string }> | undefined;
-            if ((finalizedRows?.length ?? 0) === 0) {
-                throw new Error("Stale order cleanup changed concurrently before final archive");
+            try {
+                await safeBatch(db, [
+                    db.update(orders)
+                        .set({
+                            status: OrderStatus.CANCELLED,
+                            version: claimedVersion,
+                            updatedAt: sql`unixepoch()`,
+                        })
+                        .where(and(
+                            eq(orders.id, order.id),
+                            eq(orders.version, order.version),
+                            eq(orders.status, OrderStatus.INCOMPLETE),
+                            eq(orders.paymentMethod, paymentMethod),
+                            eq(orders.paymentStatus, paymentStatus),
+                            eq(orders.paidAmountMinor, order.paidAmountMinor),
+                            onlyGiftCardMoneyCondition,
+                            isNull(orders.deletedAt),
+                            sql`${orders.createdAt} <= ${cutoffTimestamp}`,
+                            noActiveShipmentClaimCondition(),
+                            noActivePaymentClaimCondition,
+                            noActivePaymentSessionClaimCondition,
+                        )),
+                    // Nothing below runs unless this order was claimed now.
+                    buildBatchGuard(db, sql`EXISTS (
+                        SELECT 1 FROM ${orders}
+                        WHERE ${orders.id} = ${order.id}
+                          AND ${orders.version} = ${claimedVersion}
+                          AND ${orders.status} = ${OrderStatus.CANCELLED}
+                    )`, STALE_ORDER_CLAIM_CONFLICT),
+                    ...(inventory?.statements ?? []),
+                    db.update(orders)
+                        .set({
+                            deletedAt: sql`unixepoch()`,
+                            inventoryAction: "restored",
+                            ...(release.releasedMinor > 0
+                                ? {
+                                    // Every gift card went back: nothing paid, nothing owed.
+                                    paidAmountMinor: 0,
+                                    balanceDueMinor: 0,
+                                    paymentStatus: finalPaymentStatus,
+                                }
+                                : {}),
+                            version: finalizedVersion,
+                            updatedAt: sql`unixepoch()`,
+                        })
+                        .where(and(
+                            eq(orders.id, order.id),
+                            eq(orders.version, claimedVersion),
+                            eq(orders.status, OrderStatus.CANCELLED),
+                        )),
+                    ...(release.statements.length > 0
+                        ? [
+                            buildBatchGuard(db, sql`EXISTS (
+                                SELECT 1 FROM ${orders}
+                                WHERE ${orders.id} = ${order.id}
+                                  AND ${orders.version} = ${finalizedVersion}
+                                  AND ${orders.status} = ${OrderStatus.CANCELLED}
+                                  AND ${orders.deletedAt} IS NOT NULL
+                            )`, STALE_GIFT_CARD_RELEASE_CONFLICT),
+                            ...release.statements,
+                        ]
+                        : []),
+                    db.update(paymentPlans)
+                        .set({
+                            status: PaymentPlanStatus.CANCELLED,
+                            updatedAt: sql`unixepoch()`,
+                        })
+                        .where(and(
+                            eq(paymentPlans.orderId, order.id),
+                            eq(paymentPlans.status, PaymentPlanStatus.PENDING),
+                            sql`EXISTS (
+                                SELECT 1 FROM ${orders}
+                                WHERE ${orders.id} = ${order.id}
+                                  AND ${orders.status} = ${OrderStatus.CANCELLED}
+                                  AND ${orders.version} = ${finalizedVersion}
+                                  AND ${orders.paymentMethod} = ${paymentMethod}
+                                  AND ${orders.paymentStatus} = ${finalPaymentStatus}
+                                  AND ${orders.deletedAt} IS NOT NULL
+                            )`,
+                        )),
+                    db.insert(abandonedCheckouts).values({
+                        id: `ab_ch_sys_${order.id}`,
+                        checkoutId: order.id,
+                        customerPhone: order.customerPhone,
+                        checkoutData: JSON.stringify(order),
+                        createdAt: order.createdAt || new Date(),
+                        updatedAt: order.updatedAt || new Date(),
+                    }).onConflictDoNothing(),
+                ] as never);
+            } catch (error: unknown) {
+                // The order moved since the read (another sweep, a payment): leave it.
+                if (isBatchGuardError(error, STALE_ORDER_CLAIM_CONFLICT) && !(await stillStaleIncomplete(db, order.id, order.version))) {
+                    continue;
+                }
+                throw inventory?.translateError(error) ?? error;
             }
-
-            await db.insert(abandonedCheckouts).values({
-                id: `ab_ch_sys_${order.id}`,
-                checkoutId: order.id,
-                customerPhone: order.customerPhone,
-                checkoutData: JSON.stringify(order),
-                createdAt: order.createdAt || new Date(),
-                updatedAt: order.updatedAt || new Date(),
-            }).onConflictDoNothing();
+            await inventory?.afterCommit();
 
             result.archived++;
             result.archivedOrderIds.push(order.id);
