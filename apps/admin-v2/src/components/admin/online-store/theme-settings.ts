@@ -301,9 +301,17 @@ export function darkLogoMissing(theme: StorefrontThemeDocument): boolean {
     && theme.brand.logo !== null && theme.brand.darkLogo === null;
 }
 
-/** The colours are dark themselves and the store shows no dark pages: the logo for dark pages never shows. */
+/**
+ * The logo for dark pages is offered while the store can show dark pages,
+ * and stays (to be removed) while one is set; a light-only store never sees it.
+ */
+export function darkLogoOffered(theme: StorefrontThemeDocument): boolean {
+  return themeColorSets(theme).includes("darkColors") || theme.brand.darkLogo !== null;
+}
+
+/** A logo for dark pages is set, but the store shows no dark pages: it never shows. */
 export function darkLogoUnused(theme: StorefrontThemeDocument): boolean {
-  return storefrontThemeColorsAreDark(theme.tokens.colors) && !themeColorSets(theme).includes("darkColors");
+  return theme.brand.darkLogo !== null && !themeColorSets(theme).includes("darkColors");
 }
 
 /** Dark pages show, but their colours are the colours (dark themselves): the scheme and the switch change nothing. */

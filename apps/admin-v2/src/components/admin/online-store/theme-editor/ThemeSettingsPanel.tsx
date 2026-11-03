@@ -36,7 +36,7 @@ import type { ThemeApp } from "~/lib/api-query-options/online-store";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
 import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
-import { blockFallback, darkLogoMissing, darkLogoUnused, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
+import { blockFallback, darkLogoMissing, darkLogoOffered, darkLogoUnused, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
 import { TypographyCard } from "../TypographyCard";
 import { ThemeRevealContext, useThemeReveal, type ThemeRevealRequest, type ThemeSettingsGroup } from "../theme-reveal";
 import { Field } from "~/components/ui/field";
@@ -187,7 +187,9 @@ function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPre
           />
         </Field>
       ) : null}
-      <MediaField id={THEME_FIELD_IDS.darkLogo} label={t("darkLogo")} help={t(darkLogoUnused(theme) ? "darkLogoUnused" : "darkLogoHelp")} {...image("darkLogo")} />
+      {darkLogoOffered(theme) ? (
+        <MediaField id={THEME_FIELD_IDS.darkLogo} label={t("darkLogo")} help={t(darkLogoUnused(theme) ? "darkLogoUnused" : "darkLogoHelp")} {...image("darkLogo")} />
+      ) : null}
       {darkLogoMissing(theme) ? (
         <Alert variant="warning">
           <TriangleAlert aria-hidden="true" />
