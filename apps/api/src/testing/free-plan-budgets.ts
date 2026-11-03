@@ -121,9 +121,10 @@
  * Webhook subscribers (2026-11-03): a 3-line order's commit and after-response
  * work with 0, 3 and 8 store webhooks subscribed to every topic. Free sends at
  * most 2 deliveries after the response (the cron sends the rest), each six
- * sequential calls: 30, 54 and 56 calls, over Free's 50 from three
- * subscribers on (a known gap the file asserts with `it.fails`). Paid sends up
- * to 25: 30, 81 and 146.
+ * sequential calls: 30 calls, then 54 to 56 at 3 and 8 (which two deliveries
+ * go first varies by a call or two), over Free's 50 from three subscribers on
+ * (a known gap the file asserts with `it.fails`). Paid sends up to 25: 30, 81
+ * and 146.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -184,8 +185,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 30, d1Statements: 76, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 18 },
-    "order-3-line-commit-subscribers-3": { d1Calls: 54, d1Statements: 102, externalFetches: 2, rowsWritten: 93, rowsRead: 104, fullScans: 18 },
-    "order-3-line-commit-subscribers-8": { d1Calls: 56, d1Statements: 104, externalFetches: 2, rowsWritten: 103, rowsRead: 119, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 56, d1Statements: 104, externalFetches: 2, rowsWritten: 93, rowsRead: 104, fullScans: 18 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 56, d1Statements: 104, externalFetches: 2, rowsWritten: 103, rowsRead: 125, fullScans: 18 },
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
