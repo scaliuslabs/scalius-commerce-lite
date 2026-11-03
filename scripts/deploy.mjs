@@ -9,6 +9,8 @@
  *   node scripts/deploy.mjs --database-provider postgres --database-target-host db.example.com
  *     --api-url https://api.example.com # check the external schema, then deploy and verify its provider
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
+ *   node scripts/deploy.mjs --only api --dry-run --skip-verified # CI: the same job already ran the
+ *     typecheck, the dist scan and the canary builds; only a dry run may skip them
  *   node scripts/deploy.mjs --plan paid          # Workers Paid: the plan profile's CPU limit
  *     and limits (packages/shared/src/plan-limits.ts); also SCALIUS_PLAN=paid. The default is
  *     Free: the committed Wrangler configs deploy on Workers Free unchanged.
@@ -61,6 +63,7 @@ const args = process.argv.slice(2);
 const migrateOnly = args.includes("--migrate-only");
 const local = args.includes("--local");
 const dryRun = args.includes("--dry-run");
+const skipVerified = args.includes("--skip-verified");
 const healthOnly = args.includes("--health-only");
 const wranglerConfigArgIndex = args.indexOf("--wrangler-config");
 const customWranglerConfigPath = wranglerConfigArgIndex === -1
@@ -275,6 +278,22 @@ export function getTypecheckCommandForTarget(target) {
   const args = { api: " --no-astro", storefront: "" }[target];
   if (args === undefined) throw new Error(`Unknown deploy target: ${target}`);
   return `node scripts/typecheck.mjs${args}`;
+}
+
+/**
+ * `--skip-verified` is for a dry run inside a job that already ran the whole-repo
+ * typecheck and `check:dist-secrets` / `check:build-canaries` (CI). A real deploy
+ * never skips a check, and the flag refuses to be combined with one.
+ */
+export function assertSkipVerifiedOptions({ skipVerified = false, dryRun = false } = {}) {
+  if (skipVerified && !dryRun) {
+    throw new Error("--skip-verified only applies to --dry-run: a real deploy always runs its typecheck, dist scan and canary builds.");
+  }
+}
+
+/** Whether this run leaves out the steps its caller already verified. Only a dry run can. */
+export function skipsVerifiedSteps({ skipVerified = false, dryRun = false } = {}) {
+  return skipVerified === true && dryRun === true;
 }
 
 export function getSequentialWorkspaceCommand(task) {
@@ -1245,20 +1264,23 @@ export async function verifyPostDeployTarget(
 // The built output must carry no local env value: the dist scan catches env
 // files and inlined env in what is about to ship, and the canary builds prove
 // the bundlers cannot inline .dev.vars, .env* or shell secrets at all.
-export function getDistSecretCommands(targets) {
+export function getDistSecretCommands(targets, { skipVerified = false } = {}) {
   const appDirs = targets.flatMap((target) => {
     if (!appDirsByTarget[target]) throw new Error(`Unknown deploy target: ${target}`);
     return appDirsByTarget[target];
   });
   return [
-    {
-      cmd: `node scripts/check-dist-secrets.mjs ${appDirs.join(" ")}`,
-      label: "Verify app dist outputs carry no local env values",
-    },
-    {
-      cmd: `node scripts/check-build-canaries.mjs ${appDirs.map((dir) => dir.replace(/^apps\//, "")).join(" ")}`,
-      label: "Prove canary env values never reach a build",
-    },
+    // The dist scan and the canary builds are what a verified caller skipped.
+    ...(skipVerified ? [] : [
+      {
+        cmd: `node scripts/check-dist-secrets.mjs ${appDirs.join(" ")}`,
+        label: "Verify app dist outputs carry no local env values",
+      },
+      {
+        cmd: `node scripts/check-build-canaries.mjs ${appDirs.map((dir) => dir.replace(/^apps\//, "")).join(" ")}`,
+        label: "Prove canary env values never reach a build",
+      },
+    ]),
     ...(targets.includes("api")
       ? [{
           cmd: "node scripts/check-api-bundle.mjs --dist apps/api/dist",
@@ -1273,8 +1295,8 @@ export function getDistSecretCommands(targets) {
   ];
 }
 
-function checkDistSecrets(targets = deployTargets) {
-  for (const { cmd, label } of getDistSecretCommands(targets)) run(cmd, label);
+function checkDistSecrets(targets = deployTargets, options = {}) {
+  for (const { cmd, label } of getDistSecretCommands(targets, options)) run(cmd, label);
 }
 
 // ── Main
@@ -1335,6 +1357,7 @@ export async function main() {
   const persistFlag = local ? ` --persist-to ${shellQuote(localPersistPath)}` : "";
   const requestedTarget = validateOnlyTarget();
   try {
+    assertSkipVerifiedOptions({ skipVerified, dryRun });
     assertDatabaseDeploymentOptions({
       provider: databaseProvider,
       targetHost: databaseTargetHost,
@@ -1447,10 +1470,15 @@ export async function main() {
 
   try {
     // 1. Typecheck first — catches type mismatches esbuild ignores
-    run(
-      getTypecheckCommandForTarget(requestedTarget ?? undefined),
-      requestedTarget ? `Typecheck for the ${requestedTarget} deploy` : "Typecheck every workspace",
-    );
+    const verified = skipsVerifiedSteps({ skipVerified, dryRun });
+    if (verified) {
+      console.log("\nℹ Typecheck, dist scan and canary builds skipped (--skip-verified): this job already ran them.");
+    } else {
+      run(
+        getTypecheckCommandForTarget(requestedTarget ?? undefined),
+        requestedTarget ? `Typecheck for the ${requestedTarget} deploy` : "Typecheck every workspace",
+      );
+    }
 
     if (!requestedTarget || requestedTarget === "api") {
       // A maintainers' consistency proof that runs on every private change; the
@@ -1468,7 +1496,7 @@ export async function main() {
 
     if (requestedTarget) {
       buildTarget(requestedTarget);
-      checkDistSecrets([requestedTarget]);
+      checkDistSecrets([requestedTarget], { skipVerified: verified });
 
       if (dryRun) {
         validateDeployBundles([requestedTarget], apiDeployConfigPath, plan, pluginSandbox);
@@ -1496,7 +1524,7 @@ export async function main() {
 
     // 2. Build: all workspaces via Turbo
     run(getSequentialWorkspaceCommand("build"), "Build all workspaces sequentially");
-    checkDistSecrets(deployTargets);
+    checkDistSecrets(deployTargets, { skipVerified: verified });
 
     if (dryRun) {
       validateDeployBundles(deployTargets, apiDeployConfigPath, plan, pluginSandbox);
