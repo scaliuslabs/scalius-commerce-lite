@@ -86,15 +86,29 @@ const V12_PRODUCT_MODULES: Readonly<Record<string, string | null>> = {
   warranty: null,
 };
 
-/** A (partial) document's product modules under their one snake_case name. */
+/**
+ * The last version stored with the kebab-case module ids: version 13 first
+ * shipped (in builds before its release) with them. Later versions never carry
+ * them, so those names (and `warranty`) are free again from version 14.
+ */
+const LAST_KEBAB_PRODUCT_MODULES_VERSION = 13;
+
+/**
+ * A (partial) document's product modules under their one snake_case name.
+ * Renaming can meet a module already listed under its new name (a list holding
+ * `spec-table` and `spec_table`): it keeps the first, so the list still reads.
+ */
 function snakeProductModules(document: Json): Json {
   const blocks = document.blocks;
   const product = isRecord(blocks) ? blocks.product : undefined;
   if (!isRecord(blocks) || !isRecord(product) || !Array.isArray(product.below)) return document;
+  const seen = new Set<string>();
   const below = product.below.flatMap((module: unknown) => {
-    if (typeof module !== "string" || !Object.hasOwn(V12_PRODUCT_MODULES, module)) return [module];
-    const name = V12_PRODUCT_MODULES[module];
-    return name === null ? [] : [name];
+    if (typeof module !== "string") return [module];
+    const name = Object.hasOwn(V12_PRODUCT_MODULES, module) ? V12_PRODUCT_MODULES[module] ?? null : module;
+    if (name === null || seen.has(name)) return [];
+    seen.add(name);
+    return [name];
   });
   return { ...document, blocks: { ...blocks, product: { ...product, below } } };
 }
@@ -235,10 +249,10 @@ export function upgradeStorefrontThemeDocument(value: unknown, chain: Storefront
       throw failure(error, `The upgrade from version ${version}`);
     }
   }
-  // Version 13 first shipped (in this wave's own builds) with the kebab-case
-  // module ids; the same mapping reads those stored documents and templates
-  // too. It is idempotent: snake_case ids pass through untouched.
-  return upgradeSectionLists(snakeProductModules(document), chain);
+  // A version 13 document from a build that still wrote kebab-case module ids
+  // reads through the same mapping as the 12 → 13 step (idempotent).
+  const named = from <= LAST_KEBAB_PRODUCT_MODULES_VERSION ? snakeProductModules(document) : document;
+  return upgradeSectionLists(named, chain);
 }
 
 /** A stored document read through the chain: the current document and the version it was stored at. */
