@@ -103,8 +103,27 @@ export function themeColorSets(theme: StorefrontThemeDocument): StorefrontThemeC
  */
 function withDarkColorsStored(theme: StorefrontThemeDocument, tokens: Partial<StorefrontThemeTokens>): StorefrontThemeDocument {
   const next = { ...theme.tokens, ...tokens };
-  const darkColors = next.darkColors ?? (storefrontThemeShowsDarkColors(next) ? storefrontDarkPalette(next.colors) : null);
+  const darkColors = next.darkColors ?? (storefrontThemeShowsDarkColors(next) ? madeDarkColors(next.colors) : null);
   return { ...theme, tokens: { ...next, darkColors } };
+}
+
+/**
+ * Dark colours this editor made from the colours, by identity: they still
+ * count as made while a light colour is half typed (not yet #rrggbb).
+ */
+const MADE_DARK_COLORS = new WeakSet<object>();
+
+function madeDarkColors(colors: StorefrontThemeTokens["colors"]): StorefrontThemeTokens["colors"] {
+  const dark = storefrontDarkPalette(colors);
+  MADE_DARK_COLORS.add(dark);
+  return dark;
+}
+
+/** Whether the dark colours are the ones made from the colours: they follow the colours until the merchant edits them. */
+export function darkColorsFollowColors(theme: StorefrontThemeDocument): boolean {
+  const dark = theme.tokens.darkColors;
+  return dark !== null && (MADE_DARK_COLORS.has(dark)
+    || (allThemeColorsValid(theme.tokens.colors) && storefrontDarkColorsAreMade(theme.tokens.colors, dark)));
 }
 
 export function setColorScheme(theme: StorefrontThemeDocument, colorScheme: StorefrontColorScheme): StorefrontThemeDocument {
@@ -156,7 +175,11 @@ export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, v
   } else {
     for (const token of COLOR_ROLES[role]) colors[token] = value;
   }
-  return { ...theme, tokens: { ...theme.tokens, [set]: colors } };
+  // Dark colours made from the colours follow a light colour edit; ones the merchant edited stay.
+  const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
+    ? madeDarkColors(colors as StorefrontThemeTokens["colors"])
+    : theme.tokens.darkColors;
+  return { ...theme, tokens: { ...theme.tokens, darkColors, [set]: colors } };
 }
 
 /** A single-variant block slot the Theme page offers as a picker. */
@@ -304,12 +327,23 @@ export function sameDarkPages(theme: StorefrontThemeDocument): boolean {
 
 /** Whether the dark colours differ from the ones made from the colours (the merchant edited them). */
 export function darkColorsEdited(theme: StorefrontThemeDocument): boolean {
-  return theme.tokens.darkColors !== null && !storefrontDarkColorsAreMade(theme.tokens.colors, theme.tokens.darkColors);
+  return theme.tokens.darkColors !== null && !darkColorsFollowColors(theme);
 }
 
 /** The document with its dark colours made again from its colours. */
 export function regenerateDarkColors(theme: StorefrontThemeDocument): StorefrontThemeDocument {
-  return { ...theme, tokens: { ...theme.tokens, darkColors: storefrontDarkPalette(theme.tokens.colors) } };
+  return { ...theme, tokens: { ...theme.tokens, darkColors: madeDarkColors(theme.tokens.colors) } };
+}
+
+/**
+ * Applying a look replaced dark colours the merchant edited (they were
+ * unreadable with it, so they were made again from its colours): the
+ * merchant is told before choosing it.
+ */
+export function editedDarkColorsReplaced(current: StorefrontThemeDocument, applied: StorefrontThemeDocument): boolean {
+  const dark = applied.tokens.darkColors;
+  return darkColorsEdited(current) && themeColorSets(applied).includes("darkColors") && dark !== null
+    && !sameFormValue(dark, current.tokens.darkColors) && storefrontDarkColorsAreMade(applied.tokens.colors, dark);
 }
 
 /** The announcement link as typed: null (none) or canonical, else not usable yet. */
