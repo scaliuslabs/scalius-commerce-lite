@@ -234,8 +234,8 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
   const logo = (
     <a class="noor-logo" href={data.routes.home} aria-label={data.store.name}>
       {data.store.logo ? <Image image={data.store.logo} alt={data.store.name} loading="eager" class={cx("noor-logo-img", data.store.darkLogo && "noor-logo-light")} /> : <span class={cx("noor-logo-text", data.store.darkLogo && "noor-logo-light")}>{data.store.name}</span>}
-      {/* Dark pages show the store's logo for dark pages (CSS picks one; the hidden one is lazy). */}
-      {data.store.darkLogo ? <Image image={data.store.darkLogo} alt={data.store.name} loading="lazy" class="noor-logo-img noor-logo-dark" /> : null}
+      {/* Dark pages show the store's logo for dark pages (CSS picks one). Both load eagerly: the skin cannot know which the page opens with. */}
+      {data.store.darkLogo ? <Image image={data.store.darkLogo} alt={data.store.name} loading="eager" class="noor-logo-img noor-logo-dark" /> : null}
     </a>
   );
   if (campaign) {

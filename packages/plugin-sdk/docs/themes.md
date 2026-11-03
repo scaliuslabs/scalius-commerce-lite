@@ -50,7 +50,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 
 ### 1. The store's name and logo come from the projection
 
-Every header and footer skin gets `data.store`: `name`, `logo` (`StorefrontImage | null`), `darkLogo` (the logo for dark pages, or `null`), `logoWidth` and, in the footer, `footerLogo`, `phone`, `email`, `address` and `social`. Draw the logo when there is one and the name when there is not. When there is a `darkLogo`, draw both and show it instead of `logo` under `:root[data-color-scheme="dark"]` (give it `loading="lazy"`: a hidden image never loads).
+Every header and footer skin gets `data.store`: `name`, `logo` (`StorefrontImage | null`), `darkLogo` (the logo for dark pages, or `null`), `logoWidth` and, in the footer, `footerLogo`, `phone`, `email`, `address` and `social`. Draw the logo when there is one and the name when there is not. When there is a `darkLogo`, draw both and show it instead of `logo` on screens under `:root[data-color-scheme="dark"]` and under `@media (prefers-color-scheme: dark) { :root[data-color-scheme="system"] … }` (the device's setting before or without JavaScript); load both eagerly.
 
 Wrong: every store that installs the theme shows your wordmark.
 
