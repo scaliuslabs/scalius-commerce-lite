@@ -7,9 +7,14 @@
  * its own error below the field.
  */
 
+/** The window an element is in (the page's own, not a global). */
+function viewOf(element: Element): Window & typeof globalThis {
+  return (element.ownerDocument.defaultView ?? window) as Window & typeof globalThis;
+}
+
 /** The style Stripe's card element takes: the page's colours where it mounts. */
 export function stripeCardStyle(element: Element, fontSize: string) {
-  const style = getComputedStyle(element);
+  const style = viewOf(element).getComputedStyle(element);
   const foreground = style.color;
   const placeholder = style.getPropertyValue("--muted-foreground").trim() || foreground;
   return {
@@ -20,7 +25,7 @@ export function stripeCardStyle(element: Element, fontSize: string) {
 
 /** Restyles a mounted card when the page's colour scheme changes; returns the stop. */
 export function followColorScheme(element: Element, fontSize: string, card: { update?(options: { style: ReturnType<typeof stripeCardStyle> }): void }): () => void {
-  const observer = new MutationObserver(() => card.update?.({ style: stripeCardStyle(element, fontSize) }));
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] });
+  const observer = new (viewOf(element).MutationObserver)(() => card.update?.({ style: stripeCardStyle(element, fontSize) }));
+  observer.observe(element.ownerDocument.documentElement, { attributes: true, attributeFilter: ["data-color-scheme"] });
   return () => observer.disconnect();
 }
