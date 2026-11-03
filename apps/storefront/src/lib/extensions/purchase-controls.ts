@@ -49,7 +49,7 @@ function insideChoiceLink(html: string, at: number): boolean {
   return open > before.lastIndexOf("</a>") && /^<a\s[^>]*\bdata-choose-variant=/.test(before.slice(open));
 }
 
-function write(tag: string,attributes: ReadonlyArray<[string, string | null]>): string {
+function write(tag: string, attributes: ReadonlyArray<[string, string | null]>): string {
   return `<${tag}${attributes.map(([name, value]) => (value === null ? ` ${name}` : ` ${name}="${escapeHtml(value)}"`)).join("")}>`;
 }
 

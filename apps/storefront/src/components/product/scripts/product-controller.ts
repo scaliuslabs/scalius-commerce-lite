@@ -247,9 +247,10 @@ export function init() {
   // first frame, and its answers fill the fields the buyer has not touched.
   // The buyer inputs are the buy form itself (ProductBuyerInputs.astro), never a look-alike.
   const buyerForm = cache.form?.hasAttribute("data-buyer-inputs") ? cache.form : null;
-  state.edit = readEdit();
+  const productId = cache.container.dataset.productId;
+  state.edit = buyerForm && productId ? readCartLineEdit(productId) : null;
   prefilled.clear();
-  if (buyerForm && state.edit) prefillEdit(buyerForm, state.edit);
+  if (state.edit) prefillEdit(state.edit);
   // The inputs' own script loads only for a product that has them.
   buyerInputsReady = buyerForm
     ? loadBuyerInputs(buyerForm).then(() => true, () => {
@@ -287,16 +288,15 @@ async function loadBuyerInputs(form: HTMLFormElement) {
 }
 
 /** The edited line's quantity, answers and purchase option, in what the buyer has not changed yet. */
-function prefillEdit(form: HTMLFormElement, edit: CartLineEdit) {
+function prefillEdit(edit: CartLineEdit) {
   if (cache.quantity?.value === "1") cache.quantity.value = String(edit.quantity);
-  for (const { key, value } of edit.properties) {
-    const field = form.elements.namedItem(`${BUYER_INPUT_FIELD_PREFIX}${key}`);
-    if (field instanceof HTMLInputElement && field.type === "checkbox") {
-      if (field.checked || value !== "true") continue;
-      field.checked = true;
-    } else if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) && !field.value) {
-      field.value = value;
-    } else continue;
+  const answers = new Map(edit.properties.map(({ key, value }) => [`${BUYER_INPUT_FIELD_PREFIX}${key}`, value]));
+  for (const field of buyerInputFields()) {
+    const value = answers.get(field.name);
+    // A field the buyer already answered keeps their answer.
+    if (value === undefined || answer(field)) continue;
+    if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = value === "true";
+    else field.value = value;
     prefilled.set(field, answer(field));
   }
   if (!selectedPurchaseOption()) selectPurchaseOption(edit.purchaseOption ?? "");
@@ -1023,18 +1023,15 @@ function endAdd() {
  * but the cart may have moved on: a native post's busy state ends (the buyer
  * came back to buy again), and the cart line being edited is read again, as
  * an update the buyer finished (in the cart, Back) leaves none to update.
+ * A restore only ever drops this page's edit: an edit begun on another page
+ * (Edit in the cart opens a fresh page) is that page's, and this one never
+ * filled its answers.
  */
 function restoreFromHistory(event: PageTransitionEvent) {
   if (!event.persisted) return;
   endAdd();
-  state.edit = readEdit();
+  if (state.edit && readCartLineEdit(state.edit.productId)?.lineKey !== state.edit.lineKey) state.edit = null;
   refresh();
-}
-
-/** The cart line being edited ("Edit" in the cart): products with buyer inputs only. */
-function readEdit(): CartLineEdit | null {
-  const productId = cache.container?.dataset.productId;
-  return cache.form?.hasAttribute("data-buyer-inputs") && productId ? readCartLineEdit(productId) : null;
 }
 
 /** Adds the SKU `selection` names; true when the form was posted the no-JavaScript way instead. */
