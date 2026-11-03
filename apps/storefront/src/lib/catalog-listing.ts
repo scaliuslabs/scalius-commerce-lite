@@ -121,6 +121,15 @@ function filterPresentation(
 }
 
 /**
+ * The filters as a listing skin's `<Filters />` embed draws them: the
+ * merchant's placement and measured numbers, except a drawer, which sits as a
+ * sidebar until an embed can host the native listing's dialog.
+ */
+export function catalogEmbeddedFilters(filters: CatalogFilterPresentation): CatalogFilterPresentation {
+  return filters.placement === "drawer" ? { ...filters, placement: "sidebar" } : filters;
+}
+
+/**
  * The resolved listing block as the catalog components render it, for one
  * listing. `listingTemplate` is the category's, collection's or brand's own
  * `listing_template`: a layout (grid, list, shelves, quick-grid) or a filter
