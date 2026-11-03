@@ -4070,10 +4070,10 @@ export type StorefrontUiSlot = keyof typeof STOREFRONT_UI_SLOT_PAGES;
 export type StorefrontUiSlotPage = (typeof STOREFRONT_UI_SLOT_PAGES)[StorefrontUiSlot];
 export declare const STOREFRONT_UI_SLOTS: [StorefrontUiSlot, ...StorefrontUiSlot[]];
 export declare function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlot[];
-export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "module"];
+export declare const STOREFRONT_EMBED_KINDS: readonly ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "product_module"];
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export declare const STOREFRONT_EMBED_TAG = "scalius-embed";
-export declare const STOREFRONT_PRODUCT_MODULE_EMBEDS: readonly ["description", "spec-table", "key-attributes", "about-bullets", "content-blocks", "compare-similar", "policies", "recently-viewed"];
+export declare const STOREFRONT_PRODUCT_MODULE_EMBEDS: readonly ["details", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed"];
 export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMBEDS)[number];
 export declare const STOREFRONT_DEFERRED_TAG = "scalius-deferred";
 export declare const STOREFRONT_DEFERRED_HYDRATION: readonly ["idle", "visible", "interaction"];
@@ -4083,7 +4083,7 @@ export interface StorefrontEmbedRule {
     required: readonly StorefrontEmbedKind[];
     appended: readonly StorefrontEmbedKind[];
     slots?: readonly StorefrontComponentSlot[];
-    modules?: readonly StorefrontProductModuleEmbed[];
+    productModules?: readonly StorefrontProductModuleEmbed[];
 }
 export declare function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule;
 export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];

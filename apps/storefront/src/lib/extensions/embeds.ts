@@ -7,8 +7,9 @@
 // store's own component, scripts and words. A kind the page gives no
 // renderer, or whose renderer answers null, renders nothing.
 
-import type { StorefrontEmbedKind } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontEmbedKind, StorefrontProductModuleEmbed } from "@scalius/shared/plugins/storefront-protocol";
 import type { StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
+import type { StorefrontProductModule } from "@scalius/shared/storefront-theme";
 
 /** A core component and its props: what one embed renders. */
 export interface EmbedRender {
@@ -25,9 +26,33 @@ export interface EmbedPlacement {
 
 export type EmbedRenderers = Partial<Record<StorefrontEmbedKind, (embed: EmbedPlacement) => EmbedRender | null>>;
 
-/** The names the markup's embeds of a named kind place (`slot`, `module`): the page draws those there, not again elsewhere. */
-export function placedEmbedNames(parts: readonly StorefrontMarkupPart[], kind: "slot" | "module"): Set<string> {
-  return new Set(parts.flatMap((part) => part.kind === "embed" && part.embed === kind && part.data.name ? [part.data.name] : []));
+/**
+ * The one table from a placeable product module's public name
+ * (`STOREFRONT_PRODUCT_MODULE_EMBEDS`) to the theme's module id (the
+ * template's module list and the page's renderer).
+ */
+export const PRODUCT_MODULE_EMBED_IDS = {
+  details: "description",
+  "spec_table": "spec-table",
+  "key_attributes": "key-attributes",
+  "about_bullets": "about-bullets",
+  "content_blocks": "content-blocks",
+  "compare_similar": "compare-similar",
+  policies: "policies",
+  "recently_viewed": "recently-viewed",
+} as const satisfies Record<StorefrontProductModuleEmbed, StorefrontProductModule>;
+
+/** The theme module a `product_module` embed names; null for any other name. */
+export function productModuleOf(name: string | undefined): StorefrontProductModule | null {
+  return name && Object.hasOwn(PRODUCT_MODULE_EMBED_IDS, name) ? PRODUCT_MODULE_EMBED_IDS[name as StorefrontProductModuleEmbed] : null;
+}
+
+/** The theme modules a markup's `product_module` embeds place: the page draws those there, not again below. */
+export function placedProductModules(parts: readonly StorefrontMarkupPart[]): Set<StorefrontProductModule> {
+  return new Set(parts.flatMap((part) => {
+    const module = part.kind === "embed" && part.embed === "product_module" ? productModuleOf(part.data.name) : null;
+    return module ? [module] : [];
+  }));
 }
 
 const PRODUCT_ID = /^[A-Za-z0-9][A-Za-z0-9_:-]{0,127}$/;

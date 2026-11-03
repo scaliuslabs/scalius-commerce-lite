@@ -13,7 +13,7 @@ import AppComponent from "@/components/apps/AppComponent.astro";
 import AppSlot from "@/components/apps/AppSlot.astro";
 import { appSkin, appSlotComponents, renderAppSkin } from "@/lib/extensions";
 import { productPageData } from "@/lib/extensions/data";
-import { placedEmbedNames, type EmbedRender, type EmbedRenderers } from "@/lib/extensions/embeds";
+import { placedProductModules, productModuleOf, type EmbedRender, type EmbedRenderers } from "@/lib/extensions/embeds";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
@@ -527,6 +527,20 @@ const pageModules = productPageModules(resolvedTheme.blocks.product.below, produ
   similar: similarProducts.length,
   policies: storePolicies.length,
 });
+const featuresAt = featuresPlacement(pageModules, buyBoxLook);
+// A module the skin places draws there and not again below.
+const placedModules = productMainMarkup ? placedProductModules(productMainMarkup.parts) : new Set<RenderedProductModule>();
+// The details module draws the description, except below a skin (the skin
+// draws it itself) unless the skin places the module, which is then the
+// store's whole details module. With nothing to draw it goes.
+const detailsDescription = !productMainMarkup || placedModules.has("description");
+const detailsContent = (detailsDescription && Boolean(product.description))
+  || (product.additionalInfo?.length ?? 0) > 0 || (featuresAt === "description" && (product.features?.length ?? 0) > 0);
+// Every module the page draws, below or where the skin placed it.
+const drawnModules = pageModules.filter((module) => module !== "description" || detailsContent);
+const shownModules = drawnModules.filter((module) => !placedModules.has(module)
+  && !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
+// The anchor bar links only modules the page draws.
 const detailAnchorIds: Record<string, string> = {
   "about-bullets": "about",
   "key-attributes": "highlights",
@@ -534,18 +548,9 @@ const detailAnchorIds: Record<string, string> = {
   description: "description",
   "content-blocks": "content",
 };
-const detailAnchorId = pageModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
-const exploreAnchorId = pageModules.includes("related") && recommendations.products.length > 0 ? "related-products" : null;
-const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
-const featuresAt = featuresPlacement(pageModules, buyBoxLook);
-// A skin owns the description: the details module keeps only what the skin
-// does not draw (key features placed there and the extra tabs), else it goes.
-const detailsBeyondDescription = (product.additionalInfo?.length ?? 0) > 0 || (featuresAt === "description" && (product.features?.length ?? 0) > 0);
-const drawnModules = pageModules.filter((module) => !(module === "description" && productMainMarkup && !detailsBeyondDescription));
-// A module the skin places draws there and not again below.
-const placedModules = productMainMarkup ? placedEmbedNames(productMainMarkup.parts, "module") : new Set<string>();
-const shownModules = drawnModules.filter((module) => !placedModules.has(module)
-  && !(module === "reviews" && skinEmbeds.has("reviews")) && !(module === "related" && skinEmbeds.has("recommendations")));
+const detailAnchorId = drawnModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
+const exploreAnchorId = drawnModules.includes("related") && recommendations.products.length > 0 ? "related-products" : null;
+const reviewsAnchorId = drawnModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const appsBelow = (await appSlotComponents(Astro.locals, Astro.url, "product.below")).length > 0;
 const buyBox = {
   summary: {
@@ -582,7 +587,7 @@ const moduleProps = (module: RenderedProductModule) => ({
   module,
   mark: editorMarks ? themeEditorModuleMark(module) : null,
   product,
-  skinned: productMainMarkup !== null,
+  description: detailsDescription,
   detailsFeatures: featuresAt === "description",
   specificationRows,
   keySpecificationRows,
@@ -624,9 +629,12 @@ const productEmbeds: EmbedRenderers = {
   recommendations: () => recommendations.products.length > 0
     ? { component: RelatedProducts as EmbedRender["component"], props: { recommendations, currencySymbol, currencyCode } }
     : null,
-  module: ({ data }) => drawnModules.includes(data.name as RenderedProductModule)
-    ? { component: ProductPageModule as EmbedRender["component"], props: moduleProps(data.name as RenderedProductModule) }
-    : null,
+  "product_module": ({ data }) => {
+    const module = productModuleOf(data.name);
+    return module && drawnModules.includes(module)
+      ? { component: ProductPageModule as EmbedRender["component"], props: moduleProps(module) }
+      : null;
+  },
 };
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec). The description is

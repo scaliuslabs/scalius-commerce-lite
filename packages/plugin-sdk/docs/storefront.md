@@ -127,12 +127,23 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 | --- | --- | --- | --- |
 | `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | its slots | empty: core |
 | `product_card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | its two slots | empty: core |
-| `product_main` | `StorefrontProductPage` | `buy_form` (required, exactly one), `gallery`, `reviews`, `recommendations`, `module` (each product module once) | no buy form: core |
+| `product_main` | `StorefrontProductPage` | `buy_form` (required, exactly one), `gallery`, `reviews`, `recommendations`, `product_module` (each module once) | no buy form: core |
 | `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (only an omitted `pagination` is appended; place `filters` and `toolbar` yourself) | empty: core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none | empty: the core section |
 
 - **`product_main`** draws the product page's breadcrumbs, gallery and buy box. `<BuyForm />` is the store's real buy form: price, options, buyer inputs, quantity, buttons, delivery facts and the buy-box app components, kept current as the buyer chooses. `<Gallery />` is the theme's gallery (thumbnails and zoom on computers, a swipeable photo on phones, the chosen SKU's photo); its first photo is preloaded. Prefer it to drawing `product.media` yourself. The skin owns the description (`descriptionHtml`). Reviews and related products a skin places replace the template's modules of the same.
-- **Product modules in a skin.** `<ProductModule name="spec-table" />` draws one of the theme template's product modules where the skin puts it, with the store's own renderer, words and scripts, and leaves it out from below. The names are `STOREFRONT_PRODUCT_MODULE_EMBEDS`: `description` (the merchant's extra tabs and the key features; the skin draws `descriptionHtml` itself), `spec-table`, `key-attributes`, `about-bullets`, `content-blocks`, `compare-similar`, `policies` and `recently-viewed`. Each renders once, and only when the template has it and the product has something for it; otherwise nothing renders there. Never move the store's markup with an island.
+- **Product modules in a skin.** `<ProductModule name="spec_table" />` draws one of the theme template's product modules where the skin puts it, with the store's own renderer, words and scripts, and leaves it out from below. Each renders once, and only when the template has it and the product has something for it; otherwise nothing renders there. Never move the store's markup with an island. The names (`STOREFRONT_PRODUCT_MODULE_EMBEDS`):
+
+  | Name | Draws | Renders when |
+  | --- | --- | --- |
+  | `details` | The store's details tabs: the description, the merchant's extra tabs and the key features (when the buy form does not list them). A skin that places it does not draw `descriptionHtml` itself. | The product has any of them |
+  | `spec_table` | The specification table | The product has specifications |
+  | `key_attributes` | The key-spec highlights | The table has more rows than key specs, and the theme's buy box lists no facts column |
+  | `about_bullets` | "About this item": the key features | The theme's buy box does not list the features (`<BuyForm />` does then) |
+  | `content_blocks`, `compare_similar`, `policies` | The content blocks, compare with similar items, the store's policies | The product or store has them |
+  | `recently_viewed` | This browser's recently viewed products | Always placed; it holds no space until the browser fills it, so place it below the fold |
+
+  Reviews and related products have their own embeds. The warranty is part of `<BuyForm />` (the template's warranty module draws nothing of its own), so it is not a module here. A placed module keeps its heading.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`.
 - **`listing_main`** draws the listing between the collection template's sections. Page links are numbered links on every listing, so crawlers reach every product.
 - **Core sections.** Each skinnable section type has its own sealed projection (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, …) with its own version. Core's stored settings never reach a skin. Images arrive as `StorefrontImage | null`, product sources as `products` (`{ title, url, cards }`), categories and collections as tiles, a promotion as `{ endsAt } | null`. A projection only gains optional fields; when core changes a section, the host adapts it so your input stays the same. `aboveFold` is true for the homepage's lead section: load its first row of photos eagerly. `recently_viewed`, `endless_grid` and `objects` have no skin.
@@ -289,7 +300,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 | `buy_form` (`<BuyForm title={false} />`) | `product_main` (required, one) | The real buy form |
 | `gallery` (`<Gallery />`) | `product_main` (one) | The theme's gallery, in step with the chosen variant |
 | `reviews`, `recommendations` | `product_main` | The product's reviews and related products |
-| `module` (`<ProductModule name="…" />`) | `product_main` (each name once) | One of the template's product modules, left out from below |
+| `product_module` (`<ProductModule name="…" />`) | `product_main` (each name once) | One of the template's product modules, left out from below |
 | `filters`, `toolbar`, `pagination` | `listing_main` | The filter form, sort and page size, page links |
 | `order_form` (`<OrderForm product={…} />`) | sections (up to two each) | The single-page order form |
 | `slot` (`<Slot name="…" />`) | header, footer and card skins | A component slot |

@@ -1,7 +1,7 @@
 ---
 // One module of the product page (Theme -> Product page -> modules), drawn
 // where the page puts it: below the fold in the template's order, or in
-// place where a product_main skin places it (`<scalius-embed kind="module">`,
+// place where a product_main skin places it (`<scalius-embed kind="product_module">`,
 // STOREFRONT_PRODUCT_MODULE_EMBEDS). One renderer for both, so a placed
 // module shows the same rows, words, sanitizing and scripts. In the theme
 // editor's preview its mark selects the module.
@@ -29,8 +29,8 @@ interface Props {
   /** The theme editor's mark (preview only). */
   mark: string | null;
   product: Product;
-  /** An app skin draws the main part, and the description with it. */
-  skinned: boolean;
+  /** The details module draws the description (not below a skin that draws it itself). */
+  description: boolean;
   /** The key features open the details tabs. */
   detailsFeatures: boolean;
   specificationRows: NonNullable<Product["attributes"]>;
@@ -46,7 +46,7 @@ interface Props {
 }
 
 const {
-  module, mark, product, skinned, detailsFeatures, specificationRows, keySpecificationRows, similarProducts, policies,
+  module, mark, product, description, detailsFeatures, specificationRows, keySpecificationRows, similarProducts, policies,
   recommendations, currencySymbol, currencyCode, copy, words, reviews,
 } = Astro.props;
 ---
@@ -59,7 +59,7 @@ const {
   {module === "recently-viewed" && <ProductRecentlyViewed title={words.recentlyViewed} slug={product.slug} />}
   {module === "description" && (
     <ProductModule id="description">
-      <ProductDetails product={product} features={detailsFeatures} description={!skinned} />
+      <ProductDetails product={product} features={detailsFeatures} description={description} />
     </ProductModule>
   )}
   {module === "about-bullets" && (
@@ -96,12 +96,12 @@ const {
 
 <style is:global>
   /* Placed in a skin, a module takes the skin's column: no page gutters or rule of its own. */
-  .site-root [data-sx-embed="module"] .sf-container {
+  .site-root [data-sx-embed="product_module"] .sf-container {
     max-inline-size: none;
     padding-inline: 0;
   }
 
-  .site-root [data-sx-embed="module"] .product-module {
+  .site-root [data-sx-embed="product_module"] .product-module {
     border-block-start: 0;
     padding-block: 0;
   }

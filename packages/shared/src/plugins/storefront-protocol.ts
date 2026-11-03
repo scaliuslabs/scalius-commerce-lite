@@ -130,29 +130,38 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  *   where active apps' components render (a header skin places
  *   `header.actions`, a footer skin `footer.columns`, a card skin
  *   `product_card.badges` and `product_card.meta`).
- * - `module`: one of the product page's own modules (`data-name`, one of
- *   `STOREFRONT_PRODUCT_MODULE_EMBEDS`; `<ProductModule name="…" />`), drawn
- *   in place as the store draws it below the fold; the template's module
- *   then stays out from below.
+ * - `product_module`: one of the product page's own modules (`data-name`,
+ *   one of `STOREFRONT_PRODUCT_MODULE_EMBEDS`; `<ProductModule name="…" />`),
+ *   drawn in place as the store draws it below the fold; the template's
+ *   module then stays out from below.
  */
-export const STOREFRONT_EMBED_KINDS = ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "module"] as const;
+export const STOREFRONT_EMBED_KINDS = ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "product_module"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
 
 /**
- * The product page's modules a product_main skin may place (`module`
- * embeds), by their theme ids (Online store -> Theme, the product page's
- * modules): the details tabs (`description`: the merchant's extra tabs and
- * key features; the skin draws `descriptionHtml` itself), the specification
- * table (`spec-table`), its key-spec highlights (`key-attributes`), "About
- * this item" (`about-bullets`), the content blocks (`content-blocks`),
- * compare with similar items (`compare-similar`), the store's policies
- * (`policies`) and the buyer's recently viewed products (`recently-viewed`).
+ * The product page's modules a product_main skin may place
+ * (`product_module` embeds), the modules of the theme's product template
+ * (Online store -> Theme):
+ * - `details`: the store's details tabs as the page draws them: the
+ *   description, the merchant's extra tabs and the key features (when the
+ *   buy form does not list them). A skin that places it does not draw
+ *   `descriptionHtml` itself.
+ * - `spec_table`: the specification table; `key_attributes`: its key-spec
+ *   highlights (only when the table has more rows than key specs and the
+ *   theme's buy box lists no facts column).
+ * - `about_bullets`: "About this item", the key features (only when the
+ *   theme's buy box does not list them; `<BuyForm />` does then).
+ * - `content_blocks`, `compare_similar`, `policies`, `recently_viewed`
+ *   (this browser's list: it holds no space until filled).
+ *
  * Each renders only where the template has it and the product has something
  * for it, else nothing. Reviews and related products have their own embeds.
+ * The warranty is part of `<BuyForm />` (the template's warranty module draws
+ * nothing of its own), so it is not a module here.
  */
 export const STOREFRONT_PRODUCT_MODULE_EMBEDS = [
-  "description", "spec-table", "key-attributes", "about-bullets", "content-blocks", "compare-similar", "policies", "recently-viewed",
+  "details", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed",
 ] as const;
 export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMBEDS)[number];
 
@@ -175,14 +184,15 @@ export type StorefrontDeferredHydration = (typeof STOREFRONT_DEFERRED_HYDRATION)
  * (without one, core draws the unit instead), and the kinds the host appends
  * when the markup leaves them out (a listing always pages, so crawlers reach
  * every product). `slots` names the component slots a `slot` embed may be,
- * `modules` the product modules a `module` embed may be (each renders once).
+ * `productModules` the modules a `product_module` embed may be (each renders
+ * once).
  */
 export interface StorefrontEmbedRule {
   allowed: Partial<Record<StorefrontEmbedKind, number>>;
   required: readonly StorefrontEmbedKind[];
   appended: readonly StorefrontEmbedKind[];
   slots?: readonly StorefrontComponentSlot[];
-  modules?: readonly StorefrontProductModuleEmbed[];
+  productModules?: readonly StorefrontProductModuleEmbed[];
 }
 
 const NO_EMBEDS: StorefrontEmbedRule = { allowed: {}, required: [], appended: [] };
@@ -200,10 +210,10 @@ export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSk
       return { allowed: { slot: 2 }, required: [], appended: [], slots: ["product_card.badges", "product_card.meta"] };
     case "product_main":
       return {
-        allowed: { "buy_form": 1, reviews: 1, recommendations: 1, gallery: 1, module: STOREFRONT_PRODUCT_MODULE_EMBEDS.length },
+        allowed: { "buy_form": 1, reviews: 1, recommendations: 1, gallery: 1, "product_module": STOREFRONT_PRODUCT_MODULE_EMBEDS.length },
         required: ["buy_form"],
         appended: [],
-        modules: STOREFRONT_PRODUCT_MODULE_EMBEDS,
+        productModules: STOREFRONT_PRODUCT_MODULE_EMBEDS,
       };
     case "listing_main":
       return { allowed: { filters: 1, toolbar: 1, pagination: 1 }, required: [], appended: ["pagination"] };

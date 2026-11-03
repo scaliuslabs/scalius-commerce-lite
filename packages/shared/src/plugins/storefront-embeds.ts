@@ -73,8 +73,8 @@ export function splitStorefrontEmbeds(html: string, rule: StorefrontEmbedRule): 
       const kind = attributes.get("kind") ?? "";
       const allowed = KINDS.has(kind) ? rule.allowed[kind as StorefrontEmbedKind] ?? 0 : 0;
       const used = counts.get(kind as StorefrontEmbedKind) ?? 0;
-      // A slot or module embed names one of the unit's slots or modules, each placed once.
-      const names: readonly string[] | null = kind === "slot" ? rule.slots ?? [] : kind === "module" ? rule.modules ?? [] : null;
+      // A slot or product module embed names one of the unit's slots or modules, each placed once.
+      const names: readonly string[] | null = kind === "slot" ? rule.slots ?? [] : kind === "product_module" ? rule.productModules ?? [] : null;
       const name = names ? `${kind}:${attributes.get("data-name") ?? ""}` : null;
       if (used >= allowed || deferred(match.index) || (name !== null && (!names!.some((each) => `${kind}:${each}` === name) || named.has(name)))) {
         dropped += 1;
