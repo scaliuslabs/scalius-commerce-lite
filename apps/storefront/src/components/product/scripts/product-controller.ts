@@ -114,6 +114,23 @@ const cache = {
   discountBadge: null as HTMLElement | null,
 };
 
+/**
+ * One of the buy form's own parts, by its host-only role (`data-sx-buy`):
+ * the sanitizer strips `data-sx-*` from app markup, so an app component in
+ * the buy box's slots (`product.buy_box.before`, `.after`), which sit inside
+ * the form's container, never stands in for one, whatever it copies.
+ */
+function part<T extends Element = HTMLElement>(role: string): T | null {
+  return cache.summary?.querySelector<T>(`[data-sx-buy="${role}"]`) ?? null;
+}
+
+function parts<T extends Element = HTMLElement>(role: string): T[] {
+  return Array.from(cache.summary?.querySelectorAll<T>(`[data-sx-buy="${role}"]`) ?? []);
+}
+
+/** The purchase's problem as the form shows it (showError). */
+let errorMessage: HTMLElement | null = null;
+
 function parseDiscountType(value?: string): DiscountType {
   return value === "percentage" || value === "flat" ? value : null;
 }
@@ -129,28 +146,23 @@ export function init() {
   if (!cache.container || !summary) return;
   cache.summary = summary;
   cache.form = summary.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
-  cache.actions = summary.querySelector<HTMLElement>("#product-actions");
-  cache.quantity = summary.querySelector<HTMLInputElement>("#quantity");
-  cache.optionButtons = Array.from(
-    summary.querySelectorAll<HTMLButtonElement>(".variant-option-btn"),
-  );
-  cache.announcer = summary.querySelector("#variant-availability-status");
-  cache.statusPart = summary.querySelector('[data-buy-part="status"]');
-  cache.actionsPart = summary.querySelector('[data-buy-part="actions"]');
-  cache.unavailableNotice = summary.querySelector(
-    "#variant-unavailable-query-notice",
-  );
-  cache.stockBadge = summary.querySelector("#product-stock-badge");
-  cache.stockText = summary.querySelector("#product-stock-text");
-  cache.addButton = summary.querySelector('[data-action="add-to-cart"]');
-  cache.buyButton = summary.querySelector('[data-action="buy-now"]');
-  cache.addLabel = summary.querySelector('[data-action-label="add-to-cart"]');
-  cache.buyLabel = summary.querySelector('[data-action-label="buy-now"]');
-  cache.priceElements = Array.from(summary.querySelectorAll(".product-price"));
-  cache.originalPriceElements = Array.from(
-    summary.querySelectorAll(".product-original-price"),
-  );
-  cache.discountBadge = summary.querySelector(".discount-badge");
+  cache.actions = part("actions");
+  cache.quantity = part<HTMLInputElement>("quantity");
+  cache.optionButtons = parts<HTMLButtonElement>("option");
+  cache.announcer = part("announcer");
+  cache.statusPart = part("status");
+  cache.actionsPart = part("ctas");
+  cache.unavailableNotice = part("unavailable-notice");
+  cache.stockBadge = part("stock-badge");
+  cache.stockText = part("stock-text");
+  cache.addButton = part<HTMLButtonElement>("add");
+  cache.buyButton = part<HTMLButtonElement>("buy");
+  cache.addLabel = part("add-label");
+  cache.buyLabel = part("buy-label");
+  cache.priceElements = parts("price");
+  cache.originalPriceElements = parts("regular-price");
+  cache.discountBadge = part("discount");
+  errorMessage = null;
 
   state.variants = loadVariantsFromDOM(summary);
   state.options = loadOptionsFromDOM(summary);
@@ -192,7 +204,7 @@ export function init() {
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
 
-  state.purchaseBlocked = Boolean(summary.querySelector("[data-purchase-blocked]"));
+  state.purchaseBlocked = Boolean(part("blocked"));
   state.adding = false;
   state.error = null;
   missingOption = null;
@@ -200,12 +212,13 @@ export function init() {
   // A cart line being edited ("Edit" in the cart; products with buyer
   // inputs only) is known at once: the buttons say "Update cart" from the
   // first frame, and its answers fill the fields the buyer has not touched.
-  const buyerForm = summary.querySelector<HTMLFormElement>("form[data-buyer-inputs]");
+  // The buyer inputs are the buy form itself (ProductBuyerInputs.astro), never a look-alike.
+  const buyerForm = cache.form?.hasAttribute("data-buyer-inputs") ? cache.form : null;
   const productId = cache.container.dataset.productId;
   state.edit = buyerForm && productId ? readCartLineEdit(productId) : null;
   if (buyerForm && state.edit) prefillEdit(buyerForm, state.edit);
   // The inputs' own script loads only for a product that has them.
-  buyerInputsReady = buyerForm ? loadBuyerInputs(summary) : null;
+  buyerInputsReady = buyerForm ? loadBuyerInputs(buyerForm) : null;
 
   initQuantity();
   bindOptions();
@@ -229,10 +242,10 @@ export function init() {
 let buyerInputsReady: Promise<void> | null = null;
 
 /** The live side of the buyer-inputs form (buyer-inputs-controller.ts). An add waits for it. */
-async function loadBuyerInputs(summary: HTMLElement) {
+async function loadBuyerInputs(form: HTMLFormElement) {
   const { initBuyerInputs } = await import("./buyer-inputs-controller");
-  if (cache.summary !== summary) return;
-  state.buyerInputs = initBuyerInputs(summary, () => {
+  if (cache.form !== form) return;
+  state.buyerInputs = initBuyerInputs(form, () => {
     // Editing an answer takes its message away; the problem ends with the last one.
     const shown = state.buyerInputs?.form.querySelector("[data-buyer-input-error]:not(.hidden)");
     if (state.error === "input_invalid" && !shown) state.error = null;
@@ -255,7 +268,7 @@ function prefillEdit(form: HTMLFormElement, edit: CartLineEdit) {
 
 /** The buy form's purchase-option radios (an app's ways to buy, beside a one-time purchase). */
 function purchaseOptionInputs(): HTMLInputElement[] {
-  return Array.from(cache.summary?.querySelectorAll<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]') ?? []);
+  return parts<HTMLInputElement>("purchase-option");
 }
 
 function selectPurchaseOption(id: string) {
@@ -273,7 +286,7 @@ function selectedPurchaseOption(): CartLinePurchaseOption | null {
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
 function hideExpiredOffers() {
   const now = Date.now() / 1000;
-  cache.summary?.querySelectorAll<HTMLElement>("[data-offer-ends]").forEach((offer) => {
+  parts("offer").forEach((offer) => {
     const endsAt = Number(offer.dataset.offerEnds);
     if (endsAt > 0 && endsAt <= now) offer.hidden = true;
   });
@@ -297,7 +310,7 @@ function currentQuantity(): number {
 
 function readQuantity(): number {
   const input = cache.quantity;
-  const message = cache.summary?.querySelector<HTMLElement>("#quantity-message");
+  const message = part("quantity-message");
   if (!input) return 1;
   const typed = typedQuantity(input.value);
   const quantity = clampQuantity(Number.isFinite(typed) ? typed : 1);
@@ -320,8 +333,8 @@ function initQuantity() {
     readQuantity();
     changed();
   };
-  cache.summary?.querySelector("#quantity-minus")?.addEventListener("click", () => update(-1));
-  cache.summary?.querySelector("#quantity-plus")?.addEventListener("click", () => update(1));
+  part("quantity-minus")?.addEventListener("click", () => update(-1));
+  part("quantity-plus")?.addEventListener("click", () => update(1));
   input.addEventListener("change", () => {
     readQuantity();
     changed();
@@ -431,11 +444,11 @@ function bindActions() {
   cache.actions?.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     // With buyer inputs the buttons submit the form, which the script replaces.
-    if (target.closest('[data-action="add-to-cart"]')) {
+    if (target.closest('[data-sx-buy="add"]')) {
       event.preventDefault();
       void add(false);
     }
-    if (target.closest('[data-action="buy-now"]')) {
+    if (target.closest('[data-sx-buy="buy"]')) {
       event.preventDefault();
       void add(true);
     }
@@ -449,7 +462,7 @@ function bindActions() {
     // load: it posts its own SKU, as without JavaScript.
     if (submitter?.matches(SKIN_BUY_CONTROL)) return;
     event.preventDefault();
-    void add(Boolean(submitter?.closest('[data-action="buy-now"]')));
+    void add(Boolean(submitter?.matches('[data-sx-buy="buy"]')));
   });
 }
 
@@ -560,7 +573,7 @@ function setError(error: StorefrontProductError | null) {
 }
 
 export function revealSelectedOptions(root: ParentNode = cache.summary ?? document) {
-  root.querySelectorAll<HTMLElement>(".variant-option-values[data-option-overflow]").forEach((list) => {
+  root.querySelectorAll<HTMLElement>('[data-sx-buy="option-values"][data-option-overflow]').forEach((list) => {
     const selected = list.querySelector<HTMLElement>('.variant-option-btn[aria-pressed="true"]');
     if (!selected) return;
     const listRect = list.getBoundingClientRect();
@@ -870,7 +883,7 @@ let missingOption: string | null = null;
  */
 function showMissingOption(definitionId: string, message: string, focus = false) {
   const group = cache.summary?.querySelector<HTMLElement>(
-    `fieldset[data-option-definition-id="${CSS.escape(definitionId)}"]`,
+    `[data-sx-buy="option-group"][data-option-definition-id="${CSS.escape(definitionId)}"]`,
   );
   const note = group?.querySelector<HTMLElement>(".option-missing-message");
   if (!message) {
@@ -1075,8 +1088,8 @@ async function addSelected(redirect: boolean, focusProblem: boolean) {
  * button elsewhere on the page).
  */
 function showError(message: string, error: StorefrontProductError, focus = false) {
-  cache.summary?.querySelector("[data-product-action-error]")?.remove();
-  const element = document.createElement("p");
+  errorMessage?.remove();
+  const element = (errorMessage = document.createElement("p"));
   element.dataset.productActionError = "";
   element.className = "rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive";
   element.textContent = message;
@@ -1092,7 +1105,8 @@ function showError(message: string, error: StorefrontProductError, focus = false
 
 /** The form says no problem any more; the caller publishes. */
 function withdrawError() {
-  cache.summary?.querySelector("[data-product-action-error]")?.remove();
+  errorMessage?.remove();
+  errorMessage = null;
   if (cache.statusPart) cache.statusPart.dataset.state = "idle";
   state.error = null;
 }

@@ -283,6 +283,7 @@ function optionAriaLabel(
   <div class="buy-box-body flex h-full flex-col">
     <div
       id="product-actions"
+      data-sx-buy="actions"
       data-add-to-cart-text={actionCopy.addToCartText}
       data-buy-now-text={actionCopy.buyNowText}
       data-unavailable-text={actionCopy.unavailableText}
@@ -307,18 +308,18 @@ function optionAriaLabel(
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
       <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1" data-buy-part="price">
         <div class="buy-box-price-fact">
-          <p class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
+          <p data-sx-buy="price" class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
             {showsStartingPrice
               ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: openingPrice })
               : openingPrice}
           </p>
         </div>
         <div class="buy-box-regular-fact">
-          <s class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !pricing.hasDiscount }]}>
+          <s data-sx-buy="regular-price" class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !pricing.hasDiscount }]}>
             {openingRegularPrice}
           </s>
         </div>
-        <span class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
+        <span data-sx-buy="discount" class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
       </div>
       {bundleTiers.length > 0 ? (
         <ul class="mt-2 flex flex-wrap gap-1.5" data-product-bundles aria-label={bundleListLabel}>
@@ -333,8 +334,8 @@ function optionAriaLabel(
       <slot name="after-price" />
       {!factsColumn && (
         <div class="mt-2 flex flex-wrap items-center gap-2">
-          <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
+          <div id="product-stock-badge" data-sx-buy="stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
+            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" data-sx-buy="stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -342,7 +343,7 @@ function optionAriaLabel(
       {offers.length > 0 && (
         <ul class="mt-2 space-y-1" data-product-offers>
           {offers.map((offer) => (
-            <li class="flex items-start gap-1.5 text-sm text-foreground" data-offer-ends={offer.endsAtEpochSeconds ?? ""}>
+            <li class="flex items-start gap-1.5 text-sm text-foreground" data-sx-buy="offer" data-offer-ends={offer.endsAtEpochSeconds ?? ""}>
               <Icon name="tag" class="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <span>
                 <span class="font-medium">{offer.title}:</span> {offer.text.before}{offer.products.length === 1 && offer.products[0]!.slug !== product.slug
@@ -355,11 +356,11 @@ function optionAriaLabel(
       )}
     </div>
 
-    <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
-    <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
+    <script is:inline type="application/json" id="product-variants-data" data-sx-buy="variants" set:html={variantsJson} />
+    <script is:inline type="application/json" id="product-options-data" data-sx-buy="options" set:html={optionsJson} />
 
     <div class="space-y-3 pt-1 lg:pt-2">
-      <div id="variant-unavailable-query-notice" class="hidden rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert"></div>
+      <div id="variant-unavailable-query-notice" data-sx-buy="unavailable-notice" class="hidden rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert"></div>
 
       {options.length > 0 && nativeOptions && <div class="variant-option-panels" data-buy-part="options">
         {options.map((option) => {
@@ -386,9 +387,9 @@ function optionAriaLabel(
           const optionPrices = onlyWhenDifferent(pricedOptions);
           return (
             <div class="variant-option-panel">
-              <fieldset class="variant-option-selector" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
+              <fieldset class="variant-option-selector" data-sx-buy="option-group" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
                 <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
-                <div class="variant-option-values flex flex-wrap gap-1.5" data-option-overflow={option.values.length > 8 ? "" : undefined}>
+                <div class="variant-option-values flex flex-wrap gap-1.5" data-sx-buy="option-values" data-option-overflow={option.values.length > 8 ? "" : undefined}>
                   {option.values.map((value) => {
                     const selected = initialSelection[option.id] === value.id;
                     const status = availability.get(value.id) ?? "sold_out";
@@ -409,6 +410,7 @@ function optionAriaLabel(
                             "line-through": status === "sold_out",
                           },
                         ]}
+                        data-sx-buy="option"
                         data-option-definition-id={option.id}
                         data-option-value-id={value.id}
                         data-option-value={value.value}
@@ -441,9 +443,9 @@ function optionAriaLabel(
       )}
 
       {customizationUnavailable ? (
-        <p id="product-customization-unavailable" data-purchase-blocked class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
+        <p id="product-customization-unavailable" data-purchase-blocked data-sx-buy="blocked" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
       ) : onlinePaymentUnavailable ? (
-        <p id="product-online-payment-unavailable" data-purchase-blocked class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
+        <p id="product-online-payment-unavailable" data-purchase-blocked data-sx-buy="blocked" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
       ) : null}
 
       {hasBuyerInputs ? (
@@ -484,7 +486,7 @@ function optionAriaLabel(
     </div>
       <div class="buy-box-purchase">
       {factsColumn && (
-        <p class="purchase-price product-price text-2xl text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
+        <p data-sx-buy="price" class="purchase-price product-price text-2xl text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
           {showsStartingPrice
             ? formatCheckoutLanguageText(actionCopy.fromPriceText, { price: formatPrice(pricing.finalPrice) })
             : formatPrice(pricing.finalPrice)}
@@ -492,8 +494,8 @@ function optionAriaLabel(
       )}
       {factsColumn && (
         <div class="flex flex-wrap items-center gap-2">
-          <div id="product-stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
+          <div id="product-stock-badge" data-sx-buy="stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
+            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" data-sx-buy="stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
           </div>
           {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
         </div>
@@ -501,23 +503,23 @@ function optionAriaLabel(
       <div hidden={allSoldOut} data-buy-part="quantity">
         <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
         <div class="flex items-center">
-          <button type="button" id="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.decreaseQuantity}><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
-          <button type="button" id="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.increaseQuantity}><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" id="quantity-minus" data-sx-buy="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.decreaseQuantity}><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} data-sx-buy="quantity" aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
+          <button type="button" id="quantity-plus" data-sx-buy="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.increaseQuantity}><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
         </div>
-        <p id="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
+        <p id="quantity-message" data-sx-buy="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
       </div>
 
       {/* The purchase's messages: the choice for screen readers, and a refused add's problem (product-controller.ts). */}
-      <div class="space-y-2" data-buy-part="status" data-state="idle">
-        <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+      <div class="space-y-2" data-buy-part="status" data-sx-buy="status" data-state="idle">
+        <p id="variant-availability-status" data-sx-buy="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       </div>
-      <div class="buy-box-ctas flex gap-2 pt-1" data-buy-part="actions" data-state={actionPresentation.addToCart.disabled ? "unavailable" : "ready"}>
-        <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
-          <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
+      <div class="buy-box-ctas flex gap-2 pt-1" data-buy-part="actions" data-sx-buy="ctas" data-state={actionPresentation.addToCart.disabled ? "unavailable" : "ready"}>
+        <button type="submit" form={buyFormId} data-action="add-to-cart" data-sx-buy="add" disabled={actionPresentation.addToCart.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
+          <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart" data-sx-buy="add-label">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type="submit" form={buyFormId} data-action="buy-now" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
-          <span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
+        <button type="submit" form={buyFormId} data-action="buy-now" data-sx-buy="buy" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
+          <span data-action-label="buy-now" data-sx-buy="buy-label">{actionPresentation.buyNow.label}</span>
         </button>
       </div>
       {allSoldOut && (

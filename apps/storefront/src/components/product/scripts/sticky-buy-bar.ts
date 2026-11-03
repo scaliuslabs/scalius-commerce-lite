@@ -14,12 +14,12 @@ type BoundBar = HTMLElement & { __stickyBuyCleanup?: () => void };
  */
 export function bindStickyBuyBar(bar: BoundBar, root: Document): void {
   bar.__stickyBuyCleanup?.();
-  // The buy form's own parts, never a skin's look-alike markup.
-  const actions = root.querySelector<HTMLElement>("[data-sx-product-summary] #product-actions");
-  const main = actions?.querySelector<HTMLButtonElement>('[data-action="add-to-cart"]');
+  // The buy form's own parts (host-only roles), never an app's look-alike markup.
+  const actions = root.querySelector<HTMLElement>('[data-sx-product-summary] [data-sx-buy="actions"]');
+  const main = actions?.querySelector<HTMLButtonElement>('[data-sx-buy="add"]');
   const action = bar.querySelector<HTMLButtonElement>("[data-sticky-buy-action]");
   const price = bar.querySelector<HTMLElement>("[data-sticky-buy-price]");
-  const mainPrice = actions?.querySelector<HTMLElement>(".product-price");
+  const mainPrice = actions?.querySelector<HTMLElement>('[data-sx-buy="price"]');
   if (!actions || !main || !action || !price) return;
 
   const sync = () => {
