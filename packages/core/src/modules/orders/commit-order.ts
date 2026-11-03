@@ -12,9 +12,6 @@ import {
     orderItemTaxSnapshots,
     orders,
     orderTaxSnapshots,
-    productVariants,
-    products,
-    warrantyPolicies,
 } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -282,19 +279,22 @@ function isCustomerContactConstraintError(error: unknown): boolean {
  * to the product's. The SKU row binds one value (its id); its policy column
  * is set exactly in `policy` mode (CHECK), so COALESCE picks the effective
  * one. An expanded bundle's lines are its components, so each freezes its
- * component SKU's warranty; a line an order amendment adds freezes the same way. The warranty is not price-relevant, so it is
+ * component SKU's warranty; a line an order amendment adds freezes the same
+ * way. The tables carry their own aliases, so the subquery reads the same in
+ * a multi-row insert and as a field of any select (whose own table renders
+ * its columns unqualified). The warranty is not price-relevant, so it is
  * outside any authority fence.
  */
 export function currentWarrantyRevisionSql(variantId: string) {
     return sql<string | null>`(
-        SELECT ${warrantyPolicies.currentRevisionId}
-        FROM ${productVariants}
-        JOIN ${products} ON ${products.id} = ${productVariants.productId}
-        JOIN ${warrantyPolicies}
-          ON ${warrantyPolicies.id} = COALESCE(${productVariants.warrantyPolicyId}, ${products.warrantyPolicyId})
-        WHERE ${productVariants.id} = ${variantId}
-          AND ${productVariants.warrantyMode} <> 'none'
-          AND ${warrantyPolicies.archivedAt} IS NULL
+        SELECT warranty_policy.current_revision_id
+        FROM product_variants AS warranty_sku
+        JOIN products AS warranty_product ON warranty_product.id = warranty_sku.product_id
+        JOIN warranty_policies AS warranty_policy
+          ON warranty_policy.id = COALESCE(warranty_sku.warranty_policy_id, warranty_product.warranty_policy_id)
+        WHERE warranty_sku.id = ${variantId}
+          AND warranty_sku.warranty_mode <> 'none'
+          AND warranty_policy.archived_at IS NULL
     )`;
 }
 
