@@ -9,7 +9,8 @@
  *   storage) wins, `data-color-scheme-switch` shows the switches, and a click
  *   on any `[data-color-scheme-toggle]` (the core header's, or a skin's
  *   `colorSchemeToggle()`) flips the scheme and remembers it; other tabs, and
- *   a page restored from the back/forward cache, follow.
+ *   a page restored from the back/forward cache, follow. The switch the store
+ *   adds to a header skin yields to one the skin or an app drew there.
  *
  * It is its own script, and a failure inside it is swallowed: nothing else
  * on the page waits on it. Without JavaScript the theme's scheme stands
@@ -41,6 +42,11 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
     "a();",
     remember ? 'if(t==="system")m.addEventListener("change",a);' : "",
     toggle ? 'r.setAttribute("data-color-scheme-switch","");' : "",
+    // One switch per header: the host's yields to one a skin or an app drew there (the CSS rule's fallback without :has()).
+    toggle
+      ? 'document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-host-color-scheme-toggle]").forEach(function(h){'
+        + 'var d=h.closest("[data-storefront-header]");if(d&&d.querySelector("[data-color-scheme-toggle]:not([data-host-color-scheme-toggle])"))h.hidden=true})});'
+      : "",
     toggle
       ? 'document.addEventListener("click",function(e){var b=e.target instanceof Element?e.target.closest("[data-color-scheme-toggle]"):null;'
         + 'if(!b||e.defaultPrevented)return;c=r.getAttribute("data-color-scheme")==="dark"?"light":"dark";a();'

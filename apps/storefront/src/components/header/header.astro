@@ -15,6 +15,7 @@ import type { HomepageHeaderLead } from "@/lib/homepage-sections";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import CoreHeader from "./CoreHeader.astro";
 import HeaderSlot from "./HeaderSlot.astro";
+import ColorSchemeToggle from "./ColorSchemeToggle.astro";
 import type { EmbedRenderers } from "@/lib/extensions/embeds";
 import MobileTabBar from "./MobileTabBar.astro";
 import AppHeaderBehaviour from "./AppHeaderBehaviour.astro";
@@ -56,6 +57,8 @@ const data = async () => {
 <div class="contents" data-storefront-header>
   <Skin target="header" data={data} embeds={embeds} editorMark={theme.preview !== null ? THEME_EDITOR_MARKS.header : undefined}>
     <CoreHeader {...props} />
+    {/* A skin that places no `header.actions` still offers the switch, right after it. */}
+    <Fragment slot="slotless"><ColorSchemeToggle /></Fragment>
     <Fragment slot="drawn">
       <AppHeaderBehaviour />
       {tabBar && <MobileTabBar tabs={phone.tabs} compare={phone.compare} menu="app" />}
