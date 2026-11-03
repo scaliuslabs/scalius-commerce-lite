@@ -1071,6 +1071,11 @@ export async function createStorefrontOrder(
         } else {
             depositMinor = Math.min(taxQuote.totalMinor - 1, Math.ceil(taxQuote.totalMinor * codDepositSettings.codDepositPercent / 100));
         }
+        // The deposit must be a positive amount after rounding; otherwise COD
+        // is unavailable for this order (never silently accept a zero deposit).
+        if (depositMinor <= 0) {
+            throw new ValidationError("Cash on delivery is unavailable for this order: the deposit must be greater than zero.");
+        }
         // The deposit must leave a balance for COD collection; otherwise COD
         // is unavailable for this order (never silently degraded to plain COD).
         if (depositMinor >= taxQuote.totalMinor) {
