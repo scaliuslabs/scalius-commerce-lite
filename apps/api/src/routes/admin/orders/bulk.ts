@@ -262,8 +262,16 @@ app.openapi(bulkConfirmRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const { handled, remaining } = sliceForRequest(orderIds, planLimits().bulkOrders.confirm);
-    const results = await bulkConfirmOrders(db, handled, { requestKey, actorId: user?.id ?? null });
+    const limits = planLimits().bulkOrders;
+    const { handled, remaining } = sliceForRequest(orderIds, limits.confirm);
+    const all = await bulkConfirmOrders(db, handled, {
+        requestKey,
+        actorId: user?.id ?? null,
+        maxStockRepairs: limits.confirmStockRepairs,
+    });
+    // Orders over the request's stock-repair share go back with the rest.
+    const results = all.filter((result) => !result.deferred);
+    remaining.unshift(...all.filter((result) => result.deferred).map((result) => result.orderId));
     // The messages committed with their orders; one bounded sender takes them
     // after the response, and the scheduled drain sends whatever it leaves.
     const outboxIds = results.flatMap((result) => result.outboxId ? [result.outboxId] : []);

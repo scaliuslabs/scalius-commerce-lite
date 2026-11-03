@@ -280,18 +280,21 @@ async function markOrderReturnedToSender(db: Database, orderId: string, actorId:
         dedupeKey: `cod:${orderId}:returned`,
         source: "orders-cod-action",
     }, landed);
+    const returnable = and(
+        eq(orders.id, orderId),
+        eq(orders.version, current.version),
+        inArray(orders.status, [OrderStatus.SHIPPED, OrderStatus.DELIVERED]),
+    )!;
     try {
         await safeBatch(db, [
+            // The CAS's own precondition first: a lost CAS writes nothing,
+            // even when another writer reached the same version and status.
+            buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${returnable})`, RETURNED_TO_SENDER_CONFLICT),
             db.update(orders).set({
                 status: OrderStatus.RETURNED,
                 version,
                 updatedAt: sql`unixepoch()`,
-            }).where(and(
-                eq(orders.id, orderId),
-                eq(orders.version, current.version),
-                inArray(orders.status, [OrderStatus.SHIPPED, OrderStatus.DELIVERED]),
-            )),
-            buildBatchGuard(db, landed, RETURNED_TO_SENDER_CONFLICT),
+            }).where(returnable),
             openOwnCourierParcelsUpdate(db, orderId, ShipmentStatus.RETURNED),
             buildOrderEventInsert(db, {
                 id: await orderEventIdForRequest(orderId, "cod_returned", "cod-returned"),

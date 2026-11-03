@@ -73,8 +73,13 @@ export const ORDER_COMMENT_MAX_LENGTH = 2000;
  */
 async function orderEventId(orderId: string, kind: string, requestKey?: string | null): Promise<string> {
     const key = requestKey?.trim();
-    if (!key) return `oev_${Date.now().toString(36).padStart(9, "0")}${nanoid(8)}`;
+    if (!key) return newOrderEventId();
     return `oev_k${(await sha256Hex(`order-event\0${orderId}\0${kind}\0${key}`)).slice(0, 32)}`;
+}
+
+/** A time-sortable line id (for a line written in its change's own batch, which needs no request key). */
+export function newOrderEventId(): string {
+    return `oev_${Date.now().toString(36).padStart(9, "0")}${nanoid(8)}`;
 }
 
 /** Whether the action with this request key already logged its line (so it already happened). */

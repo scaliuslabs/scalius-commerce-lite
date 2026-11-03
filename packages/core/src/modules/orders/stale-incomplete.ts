@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     abandonedCheckouts,
@@ -105,15 +105,13 @@ function normalizeCleanupLimit(limit: number | undefined): number {
     return Math.max(1, Math.min(MAX_STALE_INCOMPLETE_ORDER_CLEANUP_LIMIT, Math.floor(limit)));
 }
 
-/** The claim guard failed: was it because the order moved (leave it), or something else (an error)? */
-async function stillStaleIncomplete(db: Database, orderId: string, version: number): Promise<boolean> {
-    const row = await db.select({ id: orders.id }).from(orders).where(and(
-        eq(orders.id, orderId),
-        eq(orders.version, version),
-        eq(orders.status, OrderStatus.INCOMPLETE),
-        isNull(orders.deletedAt),
-    )).get();
-    return Boolean(row);
+/**
+ * A batch failed: does the claim's precondition still hold? When it does not,
+ * the order moved (a payment, another sweep) and is left alone; when it does,
+ * the failure was something else (stock, an error) and counts as one.
+ */
+async function claimStillHolds(db: Database, claimable: SQL): Promise<boolean> {
+    return Boolean(await db.select({ id: orders.id }).from(orders).where(claimable).get());
 }
 
 /**
@@ -205,35 +203,31 @@ export async function archiveStaleIncompleteOrders(
                 ? await prepareInventoryForStatusChange(db, order.id, OrderStatus.CANCELLED)
                 : null;
 
+            const claimable = and(
+                eq(orders.id, order.id),
+                eq(orders.version, order.version),
+                eq(orders.status, OrderStatus.INCOMPLETE),
+                eq(orders.paymentMethod, paymentMethod),
+                eq(orders.paymentStatus, paymentStatus),
+                eq(orders.paidAmountMinor, order.paidAmountMinor),
+                onlyGiftCardMoneyCondition,
+                isNull(orders.deletedAt),
+                sql`${orders.createdAt} <= ${cutoffTimestamp}`,
+                noActiveShipmentClaimCondition(),
+                noActivePaymentClaimCondition,
+                noActivePaymentSessionClaimCondition,
+            )!;
             try {
                 await safeBatch(db, [
+                    // The claim's own precondition first: a lost claim writes nothing.
+                    buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${claimable})`, STALE_ORDER_CLAIM_CONFLICT),
                     db.update(orders)
                         .set({
                             status: OrderStatus.CANCELLED,
                             version: claimedVersion,
                             updatedAt: sql`unixepoch()`,
                         })
-                        .where(and(
-                            eq(orders.id, order.id),
-                            eq(orders.version, order.version),
-                            eq(orders.status, OrderStatus.INCOMPLETE),
-                            eq(orders.paymentMethod, paymentMethod),
-                            eq(orders.paymentStatus, paymentStatus),
-                            eq(orders.paidAmountMinor, order.paidAmountMinor),
-                            onlyGiftCardMoneyCondition,
-                            isNull(orders.deletedAt),
-                            sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-                            noActiveShipmentClaimCondition(),
-                            noActivePaymentClaimCondition,
-                            noActivePaymentSessionClaimCondition,
-                        )),
-                    // Nothing below runs unless this order was claimed now.
-                    buildBatchGuard(db, sql`EXISTS (
-                        SELECT 1 FROM ${orders}
-                        WHERE ${orders.id} = ${order.id}
-                          AND ${orders.version} = ${claimedVersion}
-                          AND ${orders.status} = ${OrderStatus.CANCELLED}
-                    )`, STALE_ORDER_CLAIM_CONFLICT),
+                        .where(claimable),
                     ...(inventory?.statements ?? []),
                     db.update(orders)
                         .set({
@@ -296,7 +290,7 @@ export async function archiveStaleIncompleteOrders(
                 ] as never);
             } catch (error: unknown) {
                 // The order moved since the read (another sweep, a payment): leave it.
-                if (isBatchGuardError(error, STALE_ORDER_CLAIM_CONFLICT) && !(await stillStaleIncomplete(db, order.id, order.version))) {
+                if (isBatchGuardError(error, STALE_ORDER_CLAIM_CONFLICT) && !(await claimStillHolds(db, claimable))) {
                     continue;
                 }
                 throw inventory?.translateError(error) ?? error;

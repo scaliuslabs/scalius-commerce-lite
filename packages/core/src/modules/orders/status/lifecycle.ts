@@ -1,7 +1,7 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
 import { buildBatchGuard, chunkForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
-import { buildOrderEventInsert, orderEventIdForRequest, type OrderEventKind } from "../timeline";
+import { buildOrderEventInsert, newOrderEventId, orderEventIdForRequest, type OrderEventKind } from "../timeline";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
@@ -562,10 +562,15 @@ async function attemptOrderStatusChange(
     }
 
     const before = options.before ? await options.before() : null;
+    // What `before` writes was prepared from its own read: the order must be
+    // the one this change validated (a return to sender in between is a conflict).
+    if (before && before.nextVersion !== existingOrder.version + 1) {
+        throw new ConflictError(ORDER_CHANGED_MESSAGE);
+    }
     const baseVersion = before?.nextVersion ?? existingOrder.version;
     const newVersion = changed ? baseVersion + 1 : baseVersion;
     const inventory = await prepareInventoryForStatusChange(db, orderId, nextStatus);
-    // The change took effect: every dependent write below is conditioned on it.
+    // The change took effect: every dependent write after the CAS is conditioned on it.
     const landed = sql`EXISTS (
         SELECT 1 FROM ${orders}
         WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${newVersion} AND ${orders.status} = ${nextStatus}
@@ -574,6 +579,7 @@ async function attemptOrderStatusChange(
     const casCondition = and(
         eq(orders.id, orderId),
         eq(orders.version, baseVersion),
+        eq(orders.status, existingOrder.status),
         noActiveRefundAttemptForOrderIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         ...(nextStatus === OrderStatus.CANCELLED
@@ -585,6 +591,14 @@ async function attemptOrderStatusChange(
             ]
             : []),
     )!;
+    // The CAS's own precondition, proven before it: when it fails the whole
+    // batch aborts, so a lost CAS writes nothing even if another writer
+    // reached the same version and status (the `landed` rows below are then
+    // exactly this change's).
+    statements.push(buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${changed
+        ? casCondition
+        : and(eq(orders.id, orderId), eq(orders.version, baseVersion), eq(orders.status, existingOrder.status))})`,
+    ORDER_STATUS_CONFLICT));
     if (changed) {
         // The status CAS, its stock, its delivery evidence, timeline line and
         // customer message are one batch: they commit together or not at all.
@@ -594,7 +608,7 @@ async function attemptOrderStatusChange(
             updatedAt: sql`unixepoch()`,
         }).where(casCondition) as SQLiteBatchItem);
     }
-    statements.push(buildBatchGuard(db, landed, ORDER_STATUS_CONFLICT), ...inventory.statements);
+    statements.push(...inventory.statements);
     if (isDeliveredOrCompleted) statements.push(manualDeliveryEvidenceUpdate(db, orderId));
 
     // Build notification payload if the new status warrants one
@@ -624,7 +638,9 @@ async function attemptOrderStatusChange(
     if (announce && options.event) {
         const kind = options.event.kind ?? "status_changed";
         statements.push(buildOrderEventInsert(db, {
-            id: await orderEventIdForRequest(orderId, kind, options.event.requestKey ?? `status:v${newVersion}`),
+            // The line commits with the change, so it needs no key unless the caller replays one;
+            // a time-sortable id keeps it in order with the lines written around it.
+            id: options.event.requestKey ? await orderEventIdForRequest(orderId, kind, options.event.requestKey) : newOrderEventId(),
             orderId,
             kind,
             actorId: options.event.actorId ?? null,
@@ -776,14 +792,18 @@ const OUTER_ORDER_ID = sql.raw('"orders"."id"');
  * Each order's status CAS, its timeline line and its customer message
  * (`outboxId`, for the caller's sender) commit in one batch, so a death or a
  * cut-off after the commit can lose neither, and a replay finds them all.
- * One read covers the whole selection; the writes go in batches of
- * BULK_CONFIRM_BATCH_ORDERS orders.
+ * The line and the message are written only when the CAS's own precondition
+ * holds, so a lost CAS writes neither. One read covers the whole selection;
+ * the writes go in batches of BULK_CONFIRM_BATCH_ORDERS orders. An order
+ * whose stock must be reserved again goes through the status kernel after
+ * those batches, at most `maxStockRepairs` of them; the rest come back
+ * `deferred` for the caller's next request.
  */
 export async function bulkConfirmOrders(
     db: Database,
     orderIds: readonly string[],
-    options: { requestKey?: string; actorId?: string | null; source?: string } = {},
-): Promise<Array<BulkOrderActionResult & { outboxId?: string }>> {
+    options: { requestKey?: string; actorId?: string | null; source?: string; maxStockRepairs?: number } = {},
+): Promise<Array<BulkOrderActionResult & { outboxId?: string; deferred?: true }>> {
     const ids = [...new Set(orderIds)];
     const eventKey = options.requestKey ? `bulk-confirm:${options.requestKey}` : null;
     const source = options.source ?? "orders-bulk-confirm";
@@ -825,7 +845,8 @@ export async function bulkConfirmOrders(
     }
     const byId = new Map(rows.map((row) => [row.id, row]));
 
-    const results = new Map<string, BulkOrderActionResult & { outboxId?: string }>();
+    const results = new Map<string, BulkOrderActionResult & { outboxId?: string; deferred?: true }>();
+    const stockRepairs: Array<{ orderId: string; status: string; version: number }> = [];
     const fail = (orderId: string, error: string) => results.set(orderId, { orderId, success: false, error });
     const pending: Array<{ orderId: string; statements: SQLiteBatchItem[]; outboxId: string }> = [];
     for (const orderId of ids) {
@@ -842,24 +863,26 @@ export async function bulkConfirmOrders(
         if (Number(order.paymentSetupActive)) { fail(orderId, ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE); continue; }
         if (Number(order.onHold)) { fail(orderId, "This order is on hold for review. Release the hold first."); continue; }
         if (order.inventoryAction === "restored") {
-            // Its stock must be reserved again: the status kernel does that in the confirm's batch.
-            try {
-                const update = await applyOrderStatusChange(db, orderId, OrderStatus.CONFIRMED, { expectedVersion: order.version }, {
-                    generic: true,
-                    event: { actorId: options.actorId ?? null, requestKey: eventKey ?? undefined, data: { from: order.status, to: OrderStatus.CONFIRMED } },
-                    notify: { source },
-                });
-                results.set(orderId, { orderId, success: true, outboxId: update.outboxIds?.[0] });
-            } catch (error: unknown) {
-                fail(orderId, error instanceof Error ? error.message : "Couldn't confirm this order.");
-            }
+            // Its stock must be reserved again: the status kernel does that in
+            // the confirm's batch, after the cheap batches below.
+            stockRepairs.push({ orderId, status: order.status, version: order.version });
             continue;
         }
         const version = order.version + 1;
-        const landed = sql`EXISTS (
-            SELECT 1 FROM ${orders}
-            WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${version} AND ${orders.status} = ${OrderStatus.CONFIRMED}
-        )`;
+        const confirmable = and(
+            eq(orders.id, orderId),
+            eq(orders.version, order.version),
+            eq(orders.status, order.status),
+            eq(orders.inventoryAction, order.inventoryAction),
+            noActiveShipmentClaimCondition(),
+            noActiveRefundAttemptForOrderIdCondition(orderId),
+            noActivePaymentSessionAttemptForOrderIdCondition(orderId),
+            noOpenOrderHoldCondition(orderId),
+        )!;
+        // The CAS's own precondition, so a lost CAS (another writer reaching
+        // the same version and status) writes no line and no message. The
+        // rows go just before the CAS, which then applies in the same transaction.
+        const claimable = sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${confirmable})`;
         const notificationType = NOTIFICATION_STATUSES[OrderStatus.CONFIRMED]!;
         const outbox = buildOrderNotificationOutboxInsert(db, {
             orderId,
@@ -872,33 +895,24 @@ export async function bulkConfirmOrders(
                 version,
             }),
             source,
-        }, landed);
+        }, claimable);
         pending.push({
             orderId,
             outboxId: outbox.outboxId,
             statements: [
-                db.update(orders).set({
-                    status: OrderStatus.CONFIRMED,
-                    version,
-                    updatedAt: sql`unixepoch()`,
-                }).where(and(
-                    eq(orders.id, orderId),
-                    eq(orders.version, order.version),
-                    eq(orders.status, order.status),
-                    eq(orders.inventoryAction, order.inventoryAction),
-                    noActiveShipmentClaimCondition(),
-                    noActiveRefundAttemptForOrderIdCondition(orderId),
-                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
-                    noOpenOrderHoldCondition(orderId),
-                )).returning({ id: orders.id }) as SQLiteBatchItem,
                 buildOrderEventInsert(db, {
-                    id: eventKey ? eventIds.get(orderId)! : await orderEventIdForRequest(orderId, "status_changed", `status:v${version}`),
+                    id: eventKey ? eventIds.get(orderId)! : newOrderEventId(),
                     orderId,
                     kind: "status_changed",
                     actorId: options.actorId ?? null,
                     data: { from: order.status, to: OrderStatus.CONFIRMED },
-                }, landed) as SQLiteBatchItem,
+                }, claimable) as SQLiteBatchItem,
                 outbox.statement as SQLiteBatchItem,
+                db.update(orders).set({
+                    status: OrderStatus.CONFIRMED,
+                    version,
+                    updatedAt: sql`unixepoch()`,
+                }).where(confirmable).returning({ id: orders.id }) as SQLiteBatchItem,
             ],
         });
     }
@@ -908,7 +922,7 @@ export async function bulkConfirmOrders(
         try {
             const written = await safeBatch(db, slice.flatMap((entry) => entry.statements) as never) as unknown[];
             slice.forEach((entry, index) => {
-                const claimed = written[index * 3] as Array<{ id: string }> | undefined;
+                const claimed = written[index * 3 + 2] as Array<{ id: string }> | undefined;
                 if ((claimed?.length ?? 0) > 0) {
                     results.set(entry.orderId, { orderId: entry.orderId, success: true, outboxId: entry.outboxId });
                 } else {
@@ -918,6 +932,23 @@ export async function bulkConfirmOrders(
         } catch (error: unknown) {
             console.error("[orders.bulk-confirm] a confirm batch failed", error instanceof Error ? error.message : "unknown");
             for (const entry of slice) fail(entry.orderId, "Couldn't confirm this order. Try again.");
+        }
+    }
+    const maxStockRepairs = options.maxStockRepairs ?? Number.POSITIVE_INFINITY;
+    for (const [index, repair] of stockRepairs.entries()) {
+        if (index >= maxStockRepairs) {
+            results.set(repair.orderId, { orderId: repair.orderId, success: false, deferred: true });
+            continue;
+        }
+        try {
+            const update = await applyOrderStatusChange(db, repair.orderId, OrderStatus.CONFIRMED, { expectedVersion: repair.version }, {
+                generic: true,
+                event: { actorId: options.actorId ?? null, requestKey: eventKey ?? undefined, data: { from: repair.status, to: OrderStatus.CONFIRMED } },
+                notify: { source },
+            });
+            results.set(repair.orderId, { orderId: repair.orderId, success: true, outboxId: update.outboxIds?.[0] });
+        } catch (error: unknown) {
+            fail(repair.orderId, error instanceof Error ? error.message : "Couldn't confirm this order.");
         }
     }
     return ids.map((orderId) => results.get(orderId)!);
