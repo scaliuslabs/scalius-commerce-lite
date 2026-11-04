@@ -19,9 +19,8 @@ import { hmacSha256Hex, sha256Hex } from "@scalius/shared/hash";
  *   proxy pool), and every code on a paid channel is a bill. Sixty contacts at
  *   their own hourly ceiling (600) is far above a store's real sign-in peak and
  *   still caps a rotating flood at 600 messages an hour per channel. Only a
- *   code that is sent counts, and once the ceiling is full it refuses only
- *   contacts that never proved themselves: a buyer with an account still gets
- *   a code.
+ *   code that is sent counts, and once the ceiling is full only a buyer with
+ *   an account still gets one; nobody else is told the difference.
  * The resend cooldown escalates with the contact's recent sends (60 s, 2 min,
  * 4 min … up to 10 min).
  */
@@ -58,8 +57,8 @@ export class OtpContactCeilingError extends RateLimitError {
  * Counts one code request against every contact it targets, per sender and
  * overall, and the caller's IP. Throws RateLimitError with the honest wait
  * (seconds until that bucket's window resets) once any bucket is full. The
- * store's channel ceiling is separate (otpStoreChannelFull and
- * countOtpStoreChannelSend): it counts only codes that are sent.
+ * store's channel ceiling is separate (countOtpStoreChannelSend): it counts
+ * only codes that are sent.
  */
 export async function enforceOtpSendRateLimits(
     db: Database,
@@ -98,36 +97,22 @@ export async function enforceOtpSendRateLimits(
 const storeChannelSubject = (channel: string) => `store-channel|${channel.trim().toLowerCase()}`;
 
 /**
- * Seconds until the store's hourly ceiling for this channel reopens when it is
- * full, else null. Reads only: a request refused for any reason spends nothing.
+ * Counts one code the store sends on this channel, atomically (a burst cannot
+ * pass the ceiling); false when the hour's ceiling is full and nothing was
+ * counted. Call it only once the send will happen.
  */
-export async function otpStoreChannelFull(
-    db: Database,
-    input: { channel: string; hashKey?: string; nowSeconds?: number },
-): Promise<number | null> {
-    const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
-    const key = await buildCustomerAuthOtpRateLimitKey("identifier", storeChannelSubject(input.channel), input.hashKey);
-    const row = await db
-        .select({ attempts: customerAuthOtpRateLimits.attempts, windowExpiresAt: customerAuthOtpRateLimits.windowExpiresAt })
-        .from(customerAuthOtpRateLimits)
-        .where(eq(customerAuthOtpRateLimits.key, key))
-        .get();
-    if (!row || row.windowExpiresAt <= nowSeconds || row.attempts < OTP_STORE_CHANNEL_RATE_LIMIT.attempts) return null;
-    return Math.max(1, row.windowExpiresAt - nowSeconds);
-}
-
-/** Counts one code the store sends on this channel; call it only once the send will happen. */
 export async function countOtpStoreChannelSend(
     db: Database,
     input: { channel: string; hashKey?: string; nowSeconds?: number },
-): Promise<void> {
-    await consumeRateLimitBucket(db, {
+): Promise<boolean> {
+    const counted = await consumeRateLimitBucket(db, {
         scope: "identifier",
         subject: storeChannelSubject(input.channel),
         ...OTP_STORE_CHANNEL_RATE_LIMIT,
         hashKey: input.hashKey,
         nowSeconds: input.nowSeconds ?? currentUnixSeconds(),
     });
+    return !("retryAfterSeconds" in counted);
 }
 
 /**

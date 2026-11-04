@@ -249,7 +249,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     appProviders: requestAppProviders(c),
   });
-  await sendAuthOtp(c, c.get("db"), result.otpDelivery);
+  if (result.otpDelivery) await sendAuthOtp(c, c.get("db"), result.otpDelivery);
   return ok(c, { message: result.message || "Verification code sent." });
 });
 

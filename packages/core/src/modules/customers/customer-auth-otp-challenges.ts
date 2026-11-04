@@ -263,6 +263,14 @@ export async function claimCustomerAuthOtpChallenge(
     throw new ValidationError("That code couldn't be checked. Send a new code.", { attemptsLeft: 0 });
 }
 
+/** Removes a challenge just stored for a code that will not be sent (only that delivery's row). */
+export async function discardCustomerAuthOtpChallenge(db: Database, otpKey: string, deliveryKey: string): Promise<void> {
+    await db.delete(customerAuthOtpChallenges).where(and(
+        eq(customerAuthOtpChallenges.otpKey, otpKey),
+        eq(customerAuthOtpChallenges.deliveryKey, deliveryKey),
+    ));
+}
+
 /** Keeps the latest pending code usable, at most 30 minutes from its issuance. */
 export async function extendPendingCustomerAuthOtpChallenge(
     db: Database,

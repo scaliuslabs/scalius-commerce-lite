@@ -19,7 +19,6 @@ import {
     ValidationError,
     ConflictError,
     ForbiddenError,
-    RateLimitError,
     ServiceUnavailableError,
     UnauthorizedError,
 } from "@scalius/core/errors";
@@ -30,15 +29,14 @@ import {
     persistCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
     buildCustomerAuthOtpStorageKey,
+    discardCustomerAuthOtpChallenge,
     extendPendingCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
     countOtpStoreChannelSend,
     enforceOtpSendRateLimits,
-    OTP_RATE_LIMIT_MESSAGE,
     OtpContactCeilingError,
-    otpStoreChannelFull,
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
@@ -113,8 +111,11 @@ export interface SendOtpResult {
     message: string;
     /** Seconds until another code can be requested for this contact. */
     resendAfterSeconds: number;
-    /** Opaque references the API sends the code from, after the response. */
-    otpDelivery: OtpDelivery;
+    /**
+     * Opaque references the API sends the code from, after the response; null
+     * when nothing is sent (the store's hourly ceiling held a code back).
+     */
+    otpDelivery: OtpDelivery | null;
 }
 
 /** Name and contact a buyer adds when the proven email/phone has no account yet. */
@@ -503,13 +504,6 @@ export async function sendOtp(
         }
         throw error;
     }
-    // The store's hourly ceiling for this channel: once full, only a contact
-    // that already proved itself (a buyer with an account) still gets a code.
-    const storeWait = await otpStoreChannelFull(db, { channel, hashKey: input.encryptionKey });
-    if (storeWait !== null && (await resolveProofOwner(db, input.method, identifier)).kind !== "account") {
-        console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
-        throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, storeWait);
-    }
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
@@ -530,12 +524,23 @@ export async function sendOtp(
         resendCooldownSeconds: allowance.resendCooldownSeconds,
         maxAttempts: OTP_MAX_ATTEMPTS,
     });
-    // Past the cooldown: this code goes out, so it counts.
-    await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
+    const resendAfterSeconds = Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000));
+    // Past the cooldown, the code is counted against the store's hourly ceiling
+    // for this channel, atomically, so a burst cannot pass it. Over the
+    // ceiling, only a contact that already proved itself (a buyer with an
+    // account) is sent its code; for anyone else the challenge is discarded and
+    // nothing is delivered, with the same answer, so the reply never tells who
+    // has an account.
+    if (!(await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey }))
+        && (await resolveProofOwner(db, input.method, identifier)).kind !== "account") {
+        await discardCustomerAuthOtpChallenge(db, otpKey, deliveryKey);
+        console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
+        return { message: "We sent you a code.", resendAfterSeconds, otpDelivery: null };
+    }
 
     return {
         message: "We sent you a code.",
-        resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000)),
+        resendAfterSeconds,
         otpDelivery: buildOtpDelivery({
             channel,
             purpose: "customer_login",
