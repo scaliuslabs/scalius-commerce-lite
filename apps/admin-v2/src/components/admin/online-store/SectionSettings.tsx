@@ -102,6 +102,7 @@ function SlideImage({ id, name, label, help, viewport, mediaId, previews, focalP
               type="button"
               variant="outline"
               size="sm"
+              aria-label={t(mediaId ? "changeImageFor" : "selectImageFor", { name: t("slideImageName", { slide: name, image: label }) })}
               aria-invalid={shown ? true : undefined}
               aria-describedby={shown ? `${id}-note` : undefined}
             >
@@ -119,7 +120,7 @@ function SlideImage({ id, name, label, help, viewport, mediaId, previews, focalP
           />
         ) : null}
         {mediaId && onRemove ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onRemove}>{t("remove")}</Button>
+          <Button type="button" variant="ghost" size="sm" aria-label={t("removeItem", { name: t("slideImageName", { slide: name, image: label }) })} onClick={onRemove}>{t("remove")}</Button>
         ) : null}
       </div>
       {shown ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p> : null}
