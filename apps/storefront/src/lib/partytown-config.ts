@@ -9,7 +9,7 @@
  * into a worker that has no receiver.
  */
 import type { AnalyticsConfig } from "@/lib/api/types";
-import { serializeJsonForInlineScript } from "./safe-json";
+import { serializeJsonForInlineScript } from "./safe-json.ts";
 
 /**
  * Proxies known third-party analytics scripts through the same-origin
