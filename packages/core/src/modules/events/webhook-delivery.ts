@@ -52,6 +52,7 @@ import {
 import { parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
+import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; 7 waits over about 22.6 hours. */
@@ -283,22 +284,26 @@ export const webhookFanOutTarget: EventFanOutTarget = {
     }).map((row, index) => ({ ...row, d: newDeliveryId(nowMs + index) }));
     if (rows.length === 0) return [];
 
-    // One round trip: every delivery row (one bound value), then those still
-    // waiting. A redelivered event adds nothing and re-sends only its waiting deliveries.
-    const [, pending] = await safeBatch(db, [
+    // One round trip: every delivery row (a bound JSON value per part, each
+    // far below D1's value limit), then those still waiting. A redelivered
+    // event adds nothing and re-sends only its waiting deliveries.
+    const inserts = jsonChunks(rows).map((part) =>
       // Every column, in the table's order (an INSERT ... SELECT names them all).
       db.insert(webhookDeliveries).select(sql`
         SELECT CAST(json_extract(value, '$.d') AS TEXT), CAST(json_extract(value, '$.i') AS TEXT), CAST(json_extract(value, '$.e') AS TEXT),
           'event', CAST(json_extract(value, '$.t') AS TEXT), CAST(json_extract(value, '$.rt') AS TEXT), CAST(json_extract(value, '$.r') AS TEXT),
           'pending', 0, unixepoch(), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, unixepoch(), unixepoch()
-        FROM json_each(${JSON.stringify(rows)}) WHERE 1 = 1`).onConflictDoNothing() as unknown as BatchItem<"sqlite">,
+        FROM json_each(${part}) WHERE 1 = 1`).onConflictDoNothing() as unknown as BatchItem<"sqlite">);
+    const results = await safeBatch(db, [
+      ...inserts,
       db.select({ id: webhookDeliveries.id, eventId: webhookDeliveries.eventId })
         .from(webhookDeliveries)
         .where(and(
           sql`${webhookDeliveries.eventId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(rows.map((row) => row.e))])}))`,
           eq(webhookDeliveries.status, "pending"),
-        )),
-    ]);
+        )) as unknown as BatchItem<"sqlite">,
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    const pending = results[results.length - 1];
     return (pending as Array<{ id: string; eventId: string }>)
       .map((row): FannedOutDelivery => ({ type: "webhooks.deliver", deliveryId: row.id, eventId: row.eventId }));
   },

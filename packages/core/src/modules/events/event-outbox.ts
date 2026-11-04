@@ -133,9 +133,12 @@ export function eventOutboxDueProbes(): SQL[] {
 }
 
 export interface EventFlushResult {
+  /** The rows this drain claimed (a row another drain holds is never claimed, so never counted). */
   scanned: number;
   dispatched: number;
+  /** Claimed rows that failed or were dead-lettered. */
   failed: number;
+  /** Always 0 for a drain: it claims only rows it can take (`processEventDispatch` reports a busy or settled row). */
   skipped: number;
   /** The deliveries the dispatched events recorded, for the caller to send. */
   deliveries: EventDelivery[];
@@ -222,10 +225,10 @@ export async function processEventDispatch(options: {
 }
 
 /**
- * The drain's three steps over the claimable rows `which` selects. A target
- * failure fails every event of the drain (each retries with its own backoff,
- * and the retry adds only what is missing); an unreadable row is
- * dead-lettered alone.
+ * The drain's three steps over the claimable rows `which` selects. When the
+ * drain's fan-out fails, each event is fanned out alone and only the events
+ * that fail on their own retry with their backoff (the retry adds only what is
+ * missing); an unreadable row is dead-lettered alone.
  */
 async function claimAndDispatch(
   db: Database,
@@ -259,18 +262,34 @@ async function claimAndDispatch(
   }
 
   const deliveries = new Map<string, EventDelivery[]>();
-  let failure: string | null = null;
+  /** Each event a fan-out failed for, with why. */
+  const failures = new Map<string, string>();
+  const fanOut = async (events: readonly OutboxEvent[]) => {
+    const recorded: FannedOutDelivery[] = [];
+    for (const target of targets) recorded.push(...await target.fanOut(db, events));
+    for (const { eventId, ...message } of recorded) {
+      deliveries.set(eventId, [...(deliveries.get(eventId) ?? []), message as EventDelivery]);
+    }
+  };
   if (readable.length > 0) {
     try {
-      const events = readable.map(({ event }) => event);
-      for (const target of targets) {
-        for (const delivery of await target.fanOut(db, events)) {
-          const { eventId, ...message } = delivery;
-          deliveries.set(eventId, [...(deliveries.get(eventId) ?? []), message as EventDelivery]);
+      await fanOut(readable.map(({ event }) => event));
+    } catch (error) {
+      if (readable.length === 1) {
+        failures.set(readable[0]!.row.id, normalizeError(error));
+      } else {
+        // One event's failure must not fail the drain: each event alone, so
+        // only the events that fail on their own retry (targets are
+        // idempotent, so what the first pass wrote is not written twice).
+        deliveries.clear();
+        for (const { event } of readable) {
+          try {
+            await fanOut([event]);
+          } catch (single) {
+            failures.set(event.id, normalizeError(single));
+          }
         }
       }
-    } catch (error) {
-      failure = normalizeError(error);
     }
   }
 
@@ -281,44 +300,44 @@ async function claimAndDispatch(
     statements.push(deadLetterStatement(db, ofClaim(row.id), "unreadable_event: topic, resource or facts do not match the catalog"));
     outcomes.push({ status: "dead_lettered", eventId: row.id, reason: "unreadable_event" });
   }
-  if (failure === null) {
-    if (readable.length > 0) {
-      const ids = JSON.stringify(readable.map(({ row }) => row.id));
-      statements.push(db
-        .update(eventOutbox)
-        .set({
-          status: "dispatched",
-          claimId: null,
-          claimExpiresAt: null,
-          lastError: null,
-          dispatchedAt: sql`unixepoch()`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, eq(eventOutbox.claimId, claimId))));
-    }
-    for (const { row, event } of readable) {
+  const dispatched = readable.filter(({ row }) => !failures.has(row.id));
+  if (dispatched.length > 0) {
+    const ids = JSON.stringify(dispatched.map(({ row }) => row.id));
+    statements.push(db
+      .update(eventOutbox)
+      .set({
+        status: "dispatched",
+        claimId: null,
+        claimExpiresAt: null,
+        lastError: null,
+        dispatchedAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(and(sql`${eventOutbox.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${ids}))`, eq(eventOutbox.claimId, claimId))));
+  }
+  for (const { row, event } of readable) {
+    const failure = failures.get(row.id);
+    if (failure === undefined) {
       outcomes.push({ status: "dispatched", eventId: row.id, event, deliveries: deliveries.get(row.id) ?? [] });
+      continue;
     }
-  } else {
-    for (const { row } of readable) {
-      if (row.attempts >= MAX_EVENT_DISPATCH_ATTEMPTS) {
-        statements.push(deadLetterStatement(db, ofClaim(row.id), `event_attempt_limit_reached: ${failure}`));
-        outcomes.push({ status: "dead_lettered", eventId: row.id, reason: failure });
-        continue;
-      }
-      statements.push(db
-        .update(eventOutbox)
-        .set({
-          status: "failed",
-          claimId: null,
-          claimExpiresAt: null,
-          lastError: failure,
-          nextAttemptAt: sql`unixepoch() + ${eventDispatchRetryDelaySeconds(row.attempts)}`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(ofClaim(row.id)));
-      outcomes.push({ status: "failed", eventId: row.id, reason: failure });
+    if (row.attempts >= MAX_EVENT_DISPATCH_ATTEMPTS) {
+      statements.push(deadLetterStatement(db, ofClaim(row.id), `event_attempt_limit_reached: ${failure}`));
+      outcomes.push({ status: "dead_lettered", eventId: row.id, reason: failure });
+      continue;
     }
+    statements.push(db
+      .update(eventOutbox)
+      .set({
+        status: "failed",
+        claimId: null,
+        claimExpiresAt: null,
+        lastError: failure,
+        nextAttemptAt: sql`unixepoch() + ${eventDispatchRetryDelaySeconds(row.attempts)}`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(ofClaim(row.id)));
+    outcomes.push({ status: "failed", eventId: row.id, reason: failure });
   }
   if (statements.length > 0) await safeBatch(db, statements as [SQLiteBatchItem, ...SQLiteBatchItem[]]);
   return outcomes;

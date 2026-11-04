@@ -48,6 +48,7 @@ import type { EventFanOutTarget, FannedOutDelivery } from "../events";
 import { PluginError } from "./errors";
 import { maskPluginLogText } from "./logs";
 import { HELD_UNTIL } from "./held-deliveries";
+import { jsonChunks } from "../../utils/json-chunks";
 import { hasApprovedEventPlugins, listApprovedEventPluginsForEvents, getActivePluginInstallation } from "./registry";
 
 export const PLUGIN_DELIVERY_MAX_ATTEMPTS = 8;
@@ -108,21 +109,23 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
     }
     if (rows.length === 0) return [];
     const eventIds = JSON.stringify([...new Set(rows.map((row) => row.e))]);
+    // Each list is bound as JSON parts far below D1's value limit, one statement a part.
     const results = await safeBatch(db, [
-      // Every column, in the table's order (an INSERT ... SELECT names them all).
-      db.insert(pluginEventDeliveries).select(sql`
-        SELECT CAST(json_extract(value, '$.d') AS TEXT), CAST(json_extract(value, '$.p') AS TEXT), CAST(json_extract(value, '$.e') AS TEXT),
-          CAST(json_extract(value, '$.t') AS TEXT), CAST(json_extract(value, '$.rt') AS TEXT), CAST(json_extract(value, '$.r') AS TEXT),
-          'pending', 0, unixepoch(), NULL, NULL, NULL, NULL, NULL, NULL, NULL, unixepoch(), unixepoch()
-        FROM json_each(${JSON.stringify(rows)}) WHERE 1 = 1`).onConflictDoNothing() as unknown as BatchItem<"sqlite">,
-      ...(held.length > 0 ? [db.update(pluginEventDeliveries).set({ nextAttemptAt: HELD_UNTIL, lastError: HELD_REASON }).where(and(
+      ...jsonChunks(rows).map((part) =>
+        // Every column, in the table's order (an INSERT ... SELECT names them all).
+        db.insert(pluginEventDeliveries).select(sql`
+          SELECT CAST(json_extract(value, '$.d') AS TEXT), CAST(json_extract(value, '$.p') AS TEXT), CAST(json_extract(value, '$.e') AS TEXT),
+            CAST(json_extract(value, '$.t') AS TEXT), CAST(json_extract(value, '$.rt') AS TEXT), CAST(json_extract(value, '$.r') AS TEXT),
+            'pending', 0, unixepoch(), NULL, NULL, NULL, NULL, NULL, NULL, NULL, unixepoch(), unixepoch()
+          FROM json_each(${part}) WHERE 1 = 1`).onConflictDoNothing() as unknown as BatchItem<"sqlite">),
+      ...jsonChunks(held).map((part) => db.update(pluginEventDeliveries).set({ nextAttemptAt: HELD_UNTIL, lastError: HELD_REASON }).where(and(
         sql`${pluginEventDeliveries.eventId} IN (SELECT CAST(value AS TEXT) FROM json_each(${eventIds}))`,
-        sql`EXISTS (SELECT 1 FROM json_each(${JSON.stringify(held)}) AS held_pair
+        sql`EXISTS (SELECT 1 FROM json_each(${part}) AS held_pair
           WHERE CAST(json_extract(held_pair.value, '$.p') AS TEXT) = ${pluginEventDeliveries.pluginId}
             AND CAST(json_extract(held_pair.value, '$.e') AS TEXT) = ${pluginEventDeliveries.eventId})`,
         eq(pluginEventDeliveries.status, "pending"),
         eq(pluginEventDeliveries.attempts, 0),
-      ))] : []),
+      ))),
       // A redelivered event re-sends only deliveries still waiting (never the held ones).
       db.select({ id: pluginEventDeliveries.id, eventId: pluginEventDeliveries.eventId })
         .from(pluginEventDeliveries)
