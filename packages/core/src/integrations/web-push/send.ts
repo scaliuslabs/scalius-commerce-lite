@@ -8,7 +8,14 @@ export interface WebPushSubscription {
   keys: WebPushKeys;
 }
 
-export type WebPushOutcome = "sent" | "gone" | "retry" | "rejected";
+/**
+ * - `retry`: the push service took nothing (a rate limit, or the message never
+ *   left), so sending again cannot show it twice.
+ * - `uncertain`: the request may have been taken (a server error, a timeout, a
+ *   lost connection). Web Push has no idempotency key, so it is never sent
+ *   again: a second push would alert the person twice.
+ */
+export type WebPushOutcome = "sent" | "gone" | "retry" | "uncertain" | "rejected";
 
 export interface WebPushResult {
   outcome: WebPushOutcome;
@@ -60,7 +67,8 @@ export function isAllowedPushEndpoint(value: string): boolean {
 function classify(status: number): WebPushOutcome {
   if (status === 201 || status === 202) return "sent";
   if (status === 404 || status === 410) return "gone";
-  if (status === 429 || status >= 500) return "retry";
+  if (status === 429) return "retry";
+  if (status >= 500) return "uncertain";
   return "rejected";
 }
 
@@ -107,6 +115,6 @@ export async function sendWebPush(input: SendWebPushInput): Promise<WebPushResul
     await response.body?.cancel().catch(() => undefined);
     return { outcome: classify(response.status), httpStatus: response.status };
   } catch {
-    return { outcome: "retry", httpStatus: null };
+    return { outcome: "uncertain", httpStatus: null };
   }
 }

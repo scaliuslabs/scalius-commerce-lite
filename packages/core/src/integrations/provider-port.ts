@@ -35,6 +35,12 @@ export type BoundProvider<K extends ProviderKind> = ProviderPort<K, ProviderCall
   readonly countries?: ProviderCountries;
   /** The chat channels a messaging provider carries (`whatsapp`, ...); absent for other ports. */
   readonly channels?: readonly string[];
+  /**
+   * An app's promise that a send repeated under the same `idempotencyKey` is
+   * applied once (its descriptor's `dedupesOnIdempotencyKey`); only such a
+   * provider's send that may already have gone is ever repeated. Absent: not.
+   */
+  readonly dedupesOnIdempotencyKey?: boolean;
 };
 
 /** A built-in call: the adapter's saved settings travel with the call. */

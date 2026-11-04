@@ -250,6 +250,15 @@ function getFcmProviderSetupFailureReason(error: FcmSendError | undefined): stri
 }
 
 /**
+ * FCM takes no idempotency key, so only its quota rejection proves nothing was
+ * sent. A server error or a lost answer may follow a delivered push: it is
+ * recorded as skipped and never sent again.
+ */
+function fcmFailureIsRepeatable(error: FcmSendError | undefined): boolean {
+    return error?.code === "messaging/message-rate-exceeded";
+}
+
+/**
  * Sends push notifications to active admin devices about an order.
  * When an outbox id is provided, each FCM token is guarded by a durable
  * delivery receipt so retries skip tokens already accepted by FCM.
@@ -658,6 +667,20 @@ async function sendAdminFcmPush(
                 }
 
                 console.error(`[Notifications] FCM send failed for token #${index}:`, errorCode, errorMessage);
+                if (!fcmFailureIsRepeatable(resp.error)) {
+                    outcomes.push(await markSkippedOutcome(
+                        db,
+                        entry.target,
+                        entry.receipt,
+                        "fcm_delivery_unconfirmed",
+                        {
+                            provider: "fcm",
+                            providerStatus: errorCode,
+                            rawResponse: errorMessage,
+                        },
+                    ));
+                    continue;
+                }
                 outcomes.push(await markFailedOutcome(
                     db,
                     entry.target,

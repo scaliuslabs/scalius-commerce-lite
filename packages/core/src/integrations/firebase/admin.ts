@@ -174,7 +174,10 @@ async function sendFCMMessage(
   while (attempt < MAX_RETRIES) {
     attempt++;
     const response = await fetch(url, options);
-    const isRetryable = response.status === 429 || response.status >= 500;
+    // FCM takes no idempotency key: only a quota rejection proves nothing was
+    // sent. A server error or a lost answer may follow a delivered message, so
+    // it is answered at once and never sent again.
+    const isRetryable = response.status === 429;
 
     if (response.ok) {
       const responseData = (await response.json()) as FCMSuccessResponse;
@@ -206,9 +209,9 @@ async function sendFCMMessage(
 
   return {
     error: {
-      code: 500,
+      code: 429,
       message: "Exceeded max retries for FCM request.",
-      status: "MAX_RETRIES_EXCEEDED",
+      status: "QUOTA_EXCEEDED",
     },
   };
 }

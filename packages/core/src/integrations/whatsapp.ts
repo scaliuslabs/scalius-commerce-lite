@@ -125,6 +125,14 @@ export async function getWhatsAppCloudApiSettings(
   };
 }
 
+/**
+ * One template message through the Meta WhatsApp Cloud API. The API takes no
+ * idempotency key, so a send whose outcome is unknown (the request did not
+ * complete, the answer was lost, a timeout or server error of Meta's, an
+ * answer without a message id) answers `retryable: false`: the message may
+ * already be on the buyer's phone and is never sent twice. Only a rate limit
+ * (429), which proves nothing was sent, is `retryable`.
+ */
 export async function sendWhatsAppTemplateMessage(
   input: SendWhatsAppTemplateMessageInput,
   fetchImpl: typeof fetch = fetch,
@@ -167,32 +175,40 @@ export async function sendWhatsAppTemplateMessage(
     ];
   }
 
-  const response = await fetchImpl(
-    `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${input.phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.accessToken}`,
-        "Content-Type": "application/json",
+  let response: Response;
+  try {
+    response = await fetchImpl(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${input.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = summarizeWhatsAppErrorResponse(
-      await response.text(),
-      response.status,
     );
+  } catch {
+    // A timeout, abort or lost connection: the request may have reached Meta.
+    return {
+      success: false,
+      rawStatus: "request_not_confirmed",
+      rawResponse: JSON.stringify({ error: "request_not_confirmed" }),
+      retryable: false,
+    };
+  }
+
+  // A body that cannot be read after the answer is as good as none.
+  const responseText = await response.text().catch(() => "");
+  if (!response.ok) {
     return {
       success: false,
       rawStatus: `HTTP ${response.status}`,
-      rawResponse: errorText,
+      rawResponse: summarizeWhatsAppErrorResponse(responseText, response.status),
       retryable: isRetryableWhatsAppStatus(response.status),
     };
   }
 
-  const responseText = await response.text();
   const parsed = parseWhatsAppResponse(responseText);
   const message = parsed?.messages?.[0];
   if (!message?.id) {
@@ -204,7 +220,8 @@ export async function sendWhatsAppTemplateMessage(
         error: "missing_message_id",
         responseLength: responseText.length,
       }),
-      retryable: true,
+      // Meta answered 2xx: the message may well have been taken.
+      retryable: false,
     };
   }
 
@@ -262,8 +279,9 @@ function summarizeWhatsAppErrorResponse(value: string, status: number): string {
   });
 }
 
+/** Only a rate limit proves Meta took nothing; a timeout or a server error may follow a message it sent. */
 function isRetryableWhatsAppStatus(status: number): boolean {
-  return status === 408 || status === 409 || status === 429 || status >= 500;
+  return status === 429;
 }
 
 export function looksLikeWhatsAppPlaceholderCredential(

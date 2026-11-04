@@ -466,8 +466,8 @@ Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, ope
 
 ### Service ports
 
-- **Messaging.** Declare `channels` (`whatsapp`, `messenger`, `instagram`, `telegram`, `viber`). `send({ channel, to, text | template, idempotencyKey? })` answers like SMS. A WhatsApp app replaces the built-in Meta sender when the merchant chooses it.
-- **Push.** `send({ audience, to, notification, idempotencyKey? })`: `to` lists Scalius staff or customer ids; map them to your own subscribers. Web Push is built in; your app replaces it for buyers when chosen.
+- **Messaging.** Declare `channels` (`whatsapp`, `messenger`, `instagram`, `telegram`, `viber`). `send({ channel, to, text | template, idempotencyKey? })` answers like SMS, including `dedupesOnIdempotencyKey` (declare it only if a repeat under the same key is applied once; left out, a send that may already have gone is never repeated). A WhatsApp app replaces the built-in Meta sender when the merchant chooses it.
+- **Push.** `send({ audience, to, notification, idempotencyKey? })`: `to` lists Scalius staff or customer ids; map them to your own subscribers. `dedupesOnIdempotencyKey` works as for SMS: left out, a push that may already have gone is not sent again. Web Push is built in; your app replaces it for buyers when chosen.
 - **Search.** `search({ query, locale, marketId, limit })` answers `{ productIds, correctedQuery? }`, best first. The platform reads, prices and filters the products itself and uses built-in search when you fail or take more than 1.5 s. Keep your index current from `product.*` events.
 - **Address.** `suggest({ query, country, locale, sessionToken })` answers up to 8 suggestions; `resolve({ id, … })` answers the canonical address fields. Declare `countries`. The form still validates the address.
 - **FX.** `rates({ base, quotes })` answers exact decimal rates (`"0.0084"`). The scheduled tick asks; buyers never wait on you; a failure keeps the last rate.

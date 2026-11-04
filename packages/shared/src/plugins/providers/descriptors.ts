@@ -236,24 +236,27 @@ export const courierHistoryProviderDescriptorSchema = z.object({
   countries: providerCountriesSchema.default("any"),
 }).strict();
 
-/** A messaging provider names the chat channels it carries. */
+/**
+ * `dedupesOnIdempotencyKey: true` promises that a `send` repeated with the same
+ * `idempotencyKey` is applied once (the provider dedupes on the key, or the app
+ * does, keyed on it), so the platform may repeat a send whose answer was lost
+ * (a timeout: the message may already have gone). Left out (or `false`): such a
+ * send is never repeated, because the message could reach the buyer twice.
+ */
+const dedupesOnIdempotencyKey = z.boolean().optional();
+
+/** A messaging provider names the chat channels it carries, and whether it dedupes a send on its key. */
 export const messagingProviderDescriptorSchema = z.object({
   ...base("messaging"),
   channels: z.array(z.enum(MESSAGING_CHANNELS)).min(1).max(MESSAGING_CHANNELS.length)
     .refine((channels) => new Set(channels).size === channels.length, "List each channel once."),
+  dedupesOnIdempotencyKey,
 }).strict();
 
-/**
- * An SMS or email provider. `dedupesOnIdempotencyKey: true` promises that a
- * `send` repeated with the same `idempotencyKey` is applied once (the provider
- * dedupes on the key, or the app does, keyed on it), so the platform may retry
- * a send whose answer was lost (a timeout: the message may already be sent).
- * Left out (or `false`): such a send is never repeated, because the message
- * could reach the buyer twice.
- */
-const messageSenderProviderDescriptorSchema = <K extends "sms" | "email">(kind: K) => z.object({
+/** An SMS, email or push provider; it may declare `dedupesOnIdempotencyKey` (see above). */
+const messageSenderProviderDescriptorSchema = <K extends "sms" | "email" | "push">(kind: K) => z.object({
   ...base(kind),
-  dedupesOnIdempotencyKey: z.boolean().optional(),
+  dedupesOnIdempotencyKey,
 }).strict();
 
 /** An address provider knows addresses of some countries (default `any`); checkout asks it only for those. */
@@ -272,7 +275,7 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
   translation: plain("translation"),
   ai: plain("ai"),
   messaging: messagingProviderDescriptorSchema,
-  push: plain("push"),
+  push: messageSenderProviderDescriptorSchema("push"),
   search: plain("search"),
   address: addressProviderDescriptorSchema,
   fx: plain("fx"),
@@ -295,7 +298,8 @@ export type PluginProviderDeclaration =
   | ({ kind: "messaging" } & MessagingProviderDescriptor)
   | ({ kind: "address" } & AddressProviderDescriptor)
   | ({ kind: "sms" | "email" } & MessageSenderProviderDescriptor)
-  | ({ kind: "tax" | "translation" | "ai" | "push" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
+  | ({ kind: "push" } & MessageSenderProviderDescriptor)
+  | ({ kind: "tax" | "translation" | "ai" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
 
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat
