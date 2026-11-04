@@ -3,6 +3,7 @@ import { deliveryZoneLocations, placeAddressFieldSql, places } from "@scalius/da
 import { ValidationError } from "@scalius/core/errors";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { addressPlaceCountrySql } from "./places";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 /**
  * The chosen city, thana or area was removed or turned off since the buyer
@@ -61,7 +62,7 @@ export function selectActiveDeliveryLocationRowsByIds(
             parentId: places.parentId,
             isActive: places.isActive,
             deletedAt: places.deletedAt,
-            deliveryZoneId: sql<string | null>`(SELECT ${deliveryZoneLocations.zoneId} FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.locationId} = ${places.id})`,
+            deliveryZoneId: sql<string | null>`(SELECT ${deliveryZoneLocations.zoneId} FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.locationId} = ${qualifiedColumn(places.id)})`,
         })
         .from(places);
 

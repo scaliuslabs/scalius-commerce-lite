@@ -3,7 +3,7 @@ import { runWithReadObserver } from "@scalius/database/read-observer";
 import { createEventWriteObserver } from "./middleware/event-dispatch";
 import { publishRealtime, tableChanges } from "./realtime/publish";
 import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
-import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { releaseExpiredReservations, sweepExpiredReservationHistory } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
@@ -17,7 +17,7 @@ import {
 } from "@scalius/core/modules/orders";
 import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
-import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
+import { sweepAutoFulfilment, sweepExpiredShipmentClaims } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integrations/meta/capi-settings";
@@ -37,7 +37,7 @@ import { planLimits } from "@scalius/shared/plan-limits";
 import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
-import { sendOrderRefundNotification } from "./utils/order-notifications";
+import { sendOrderNotificationsForStatus, sendOrderRefundNotification } from "./utils/order-notifications";
 import { dueSweepIndexes, firstSweepRunOfHour } from "./scheduled/slices";
 import {
   isNightlyCatalogTick,
@@ -70,6 +70,7 @@ export const STAFF_ATTEMPT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
+export const EXPIRED_SHIPMENT_CLAIM_LIMIT = 10;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const TAX_DOCUMENT_DRAIN_LIMIT = 10;
 export { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour, sweepPeriodMinutes } from "./scheduled/slices";
@@ -430,8 +431,42 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // Order locks a dead invocation left behind: refund attempts, then courier
+    // booking claims whose lease ran out (one job, so the rotation keeps its
+    // length). A booked attempt is finished, a dead one becomes a courier
+    // confirmation on the order, an empty one is released.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
+      // A cursor walks the expired claims, so one that keeps failing never holds the others back.
+      const claimCursor = await readMaintenanceCursor(db, "shipment-claims");
+      const claims = await timed("expired_shipment_claim_sweep", () =>
+        sweepExpiredShipmentClaims(db, {
+          limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT),
+          afterOrderId: claimCursor.value.orders,
+          // Finishing a booking ships its order: Free affords one a run.
+          maxFinalized: planLimits().maintenance.bookedClaimsPerRun,
+        }),
+      );
+      await claimCursor.save({ orders: claims.lastOrderId });
+      for (const booked of claims.finalized) {
+        if (!booked.orderStatusChanged) continue;
+        // The notification drain sends it on the next tick.
+        await sendOrderNotificationsForStatus({
+          db,
+          send: undefined,
+          orderIds: [booked.orderId],
+          newStatus: booked.orderStatus,
+          trackingByOrderId: { [booked.orderId]: booked.trackingId },
+          dedupeKeyByOrderId: { [booked.orderId]: `shipment:${booked.shipmentId}:order_${booked.orderStatus}` },
+          source: "expired-shipment-claim-sweep",
+        });
+      }
+      if (claims.scanned > 0) {
+        console.log(
+          `[scheduled] Expired shipment claims: scanned=${claims.scanned}, released=${claims.released}, ` +
+            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}`,
+        );
+      }
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
         reconcileDueRefundAttempts(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
@@ -908,6 +943,23 @@ async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<
       `soldRecommendations=${nightly.soldRecommendations}, projectionsChecked=${nightly.projectionsChecked}, ` +
       `projectionsRepaired=${nightly.projectionsRepaired}`,
   );
+  // The routine expiry sweep reads only recent reservations; once a day the
+  // history pass reads a bounded span of older ones from its cursor (e.g.
+  // holds left while the sweep was down), moving past what it read.
+  const historyCursor = await readMaintenanceCursor(db, "inventory-expiry-history");
+  const history = await timed("inventory_expiry_history_pass", () =>
+    sweepExpiredReservationHistory(db, {
+      after: historyCursor.value.after ? { at: Number(historyCursor.value.after), key: historyCursor.value.afterKey ?? null } : null,
+      limit: planLimits().maintenance.inventoryExpiryPerRun,
+    }),
+  );
+  await historyCursor.save(history.next === null ? {} : { after: String(history.next.at), afterKey: history.next.key });
+  if (history.result && history.result.found > 0) {
+    console.log(
+      `[scheduled] Inventory expiry history pass: found=${history.result.found}, released=${history.result.released}, ` +
+        `hasMore=${history.result.hasMore}`,
+    );
+  }
   const { measurePluginStorage } = await import("./plugins/scheduled");
   await timed("plugin_storage_measure", () => measurePluginStorage(db));
   // A sampled drift check of the derived projections, repaired in place.

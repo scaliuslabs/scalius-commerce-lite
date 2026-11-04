@@ -14,11 +14,11 @@
 
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { deliveryProviders, deliveryShipments } from "@scalius/database/schema";
+import { deliveryProviders, deliveryShipments, ShipmentStatus } from "@scalius/database/schema";
 import { courierFor, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
-import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
+import { settleShipmentClaimForCourierPush, syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import {
   isQualifiedProviderId,
   providerErrorOf,
@@ -28,7 +28,7 @@ import {
 } from "@scalius/shared/plugins/providers";
 import { requestCourierProviders } from "../../plugins/providers/courier";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { sendOrderStatusChangeNotification } from "../../utils/order-notifications";
+import { sendOrderNotificationsForStatus, sendOrderStatusChangeNotification } from "../../utils/order-notifications";
 import {
   claimProviderEvent,
   markWebhookEventFailed,
@@ -65,6 +65,30 @@ function parseMetadata(value: string | null): Record<string, unknown> {
 function accepted(c: Context, reply: CourierWebhookReply | undefined, fallback: Record<string, unknown>): Response {
   if (!reply) return c.json(fallback);
   return c.json(reply.body ?? fallback, reply.status as 200, reply.headers ?? {});
+}
+
+/** Seconds a courier waits before resending a push whose first delivery is still being applied. */
+export const COURIER_PUSH_IN_FLIGHT_RETRY_SECONDS = 60;
+
+/**
+ * A resend while the first delivery's claim is still being applied: nothing
+ * durable would replay it if that attempt died, so the courier must come back
+ * (a stale claim is reclaimed after its lease). A failed row this request
+ * could not reclaim was just reclaimed by another. Only an applied event is
+ * a duplicate.
+ */
+function inFlight(c: Context, status: string | undefined): Response | null {
+  if (status !== "processing" && status !== "retrying" && status !== "failed") return null;
+  return retryLater(c);
+}
+
+/** Nothing was applied; the courier sends the push again. */
+function retryLater(c: Context): Response {
+  return c.json(
+    { error: "This event can't be applied yet. Send it again shortly." },
+    503,
+    { "Retry-After": String(COURIER_PUSH_IN_FLIGHT_RETRY_SECONDS) },
+  );
 }
 
 const confirmedExisting = sql`CASE WHEN json_valid(${deliveryShipments.metadata}) THEN json_extract(${deliveryShipments.metadata}, '$.unknownOutcomeResolution.outcome') END = 'confirmed_existing'`;
@@ -176,7 +200,9 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       result: { externalId },
     });
     const eventId = claim.id;
-    if (!claim.claimed) return accepted(c, reply, { received: true, duplicate: true });
+    if (!claim.claimed) {
+      return inFlight(c, claim.existing?.status) ?? accepted(c, reply, { received: true, duplicate: true });
+    }
     try {
       await db.update(deliveryShipments).set({
         lastChecked: new Date(),
@@ -192,6 +218,27 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   }
 
   const { tracking } = verification;
+  // The push proves the booking: an order still claimed by it (a booking whose
+  // invocation died) is finished first, in this invocation, and the courier
+  // is asked to resend: its status then applies in a fresh invocation (one
+  // invocation could not afford both on Free). A booking still finishing, or
+  // one held for staff, is never written over.
+  const settled = await settleShipmentClaimForCourierPush(db, shipment.id);
+  if (settled.state !== "ready") return retryLater(c);
+  if (settled.finalized) {
+    if (settled.finalized.orderStatusChanged) {
+      await sendOrderNotificationsForStatus({
+        db,
+        send: notificationSender(c),
+        orderIds: [settled.finalized.orderId],
+        newStatus: settled.finalized.orderStatus,
+        trackingByOrderId: { [settled.finalized.orderId]: settled.finalized.trackingId },
+        dedupeKeyByOrderId: { [settled.finalized.orderId]: `shipment:${shipment.id}:order_${settled.finalized.orderStatus}` },
+        source: "courier-webhook",
+      });
+    }
+    return retryLater(c);
+  }
   // The courier's own event id when it sends one, else the state it reports at its time.
   const sourceEventId = verification.eventId
     ? `${externalId}:${verification.eventId}`
@@ -206,11 +253,12 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
   });
   const eventId = claim.id;
   if (!claim.claimed) {
-    return accepted(c, reply, { received: true, duplicate: true, status: claim.existing?.status ?? "unknown" });
+    return inFlight(c, claim.existing?.status)
+      ?? accepted(c, reply, { received: true, duplicate: true, status: claim.existing?.status ?? "unknown" });
   }
 
   try {
-    await db.update(deliveryShipments).set({
+    const written = await db.update(deliveryShipments).set({
       status: tracking.status,
       rawStatus: tracking.rawStatus,
       lastChecked: new Date(),
@@ -220,7 +268,15 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
         ...(tracking.details ?? {}),
         lastWebhookAt: new Date().toISOString(),
       }),
-    }).where(eq(deliveryShipments.id, shipment.id));
+    }).where(and(
+      eq(deliveryShipments.id, shipment.id),
+      // A shipment that became a reconciliation meanwhile waits for staff.
+      ne(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED),
+    )).returning({ id: deliveryShipments.id });
+    if (written.length === 0) {
+      await markWebhookEventFailed(db, eventId, { error: "courier_webhook_shipment_held" });
+      return retryLater(c);
+    }
 
     // The ledger follows the parcel (F11): before the order moves for units
     // the courier holds, after it for units the courier never took.

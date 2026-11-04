@@ -43,7 +43,7 @@ import type {
     OrderShipmentRecoverySummary,
     OrderShipmentSummary,
 } from "../types";
-import { hasActiveShipmentClaim, noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel";
+import { hasActiveShipmentClaim, isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../../delivery";
 
 // ─────────────────────────────────────────
@@ -293,7 +293,8 @@ export function buildShipmentRecoverySummary(
     latestShipment: OrderShipmentSummary | null,
     nowSeconds: number,
 ): OrderShipmentRecoverySummary {
-    const hasActiveClaim = hasActiveShipmentClaim(order, nowSeconds);
+    // A running lease is a booking in flight; an expired or held one waits for resolution.
+    const hasActiveClaim = isShipmentClaimLeaseLive(order, nowSeconds) && !isShipmentClaimHeld(order);
     const hasClaim = Boolean(order.shipmentClaimId);
     const status = latestShipment?.status?.toLowerCase() ?? null;
     const shipmentId = latestShipment?.id ?? null;
@@ -307,7 +308,7 @@ export function buildShipmentRecoverySummary(
             severity: "danger",
             activeLock: true,
             label: "Courier confirmation needed",
-            message: "The courier may have accepted this shipment, but Scalius could not confirm the result. Check the courier portal or contact the courier with this order number before attempting another booking.",
+            message: "The courier may have accepted this shipment, but Scalius could not confirm the result. Check the courier portal or contact the courier with this order ID before attempting another booking.",
             shipmentId,
             status,
             providerType,
@@ -330,7 +331,8 @@ export function buildShipmentRecoverySummary(
             shipmentId,
             status,
             providerType,
-            canRefresh: canProviderRefresh && !hasActiveClaim,
+            // A refresh refuses while any claim locks the order; Repair finishes it.
+            canRefresh: canProviderRefresh && !hasClaim,
             canRetryCreate: false,
             canRepair: true,
             unknownOutcome: false,
@@ -357,20 +359,29 @@ export function buildShipmentRecoverySummary(
         };
     }
 
-    if (hasClaim && status && ![ShipmentStatus.FAILED, ShipmentStatus.CANCELLED].includes(status as typeof ShipmentStatus.FAILED | typeof ShipmentStatus.CANCELLED)) {
+    // An expired claim locks the order until it is resolved (the maintenance
+    // sweep does it unprompted; Repair does it now): no attempt row, or a
+    // failed or cancelled one, releases it; anything else becomes a
+    // reconciliation or a courier confirmation.
+    // A claim whose own attempt is shown failed or cancelled holds nothing.
+    const claimShipment = latestShipment?.id === order.shipmentClaimId;
+    if (hasClaim && hasActiveShipmentClaim({
+        ...order,
+        ...(claimShipment ? { shipmentClaimShipmentStatus: status } : {}),
+    }, nowSeconds)) {
         return {
             state: "needs_attention",
             reason: "claim_expired",
             severity: "danger",
             activeLock: true,
             label: "Shipment recovery required",
-            message: "A previous shipment attempt expired without a clean finish. Open the order and resolve the shipment before retrying bulk actions.",
-            shipmentId,
-            status,
-            providerType,
-            canRefresh: canProviderRefresh,
+            message: "A previous shipment attempt expired without a clean finish. Repair checks the attempt: it is released if nothing was booked, otherwise it asks for courier confirmation.",
+            shipmentId: order.shipmentClaimId ?? shipmentId,
+            status: claimShipment ? status : null,
+            providerType: claimShipment ? providerType : null,
+            canRefresh: false,
             canRetryCreate: false,
-            canRepair: false,
+            canRepair: true,
             unknownOutcome: false,
             updatedAt: latestShipment?.updatedAt ?? null,
         };

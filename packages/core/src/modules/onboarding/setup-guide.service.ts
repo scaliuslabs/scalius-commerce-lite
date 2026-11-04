@@ -17,6 +17,7 @@ import {
     themeSettingsVersions,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 export interface SetupGuideFacts {
     /** A live product: active and not in the trash. A draft is not for sale. */
@@ -67,10 +68,10 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
                 WHERE ${shippingMethods.isActive} = 1 AND ${shippingMethods.deletedAt} IS NULL
                   AND (${shippingMethods.kind} = 'pickup' OR (
                     ${shippingMethods.zoneId} IS NOT NULL
-                    AND EXISTS (SELECT 1 FROM ${deliveryZones} WHERE ${deliveryZones.id} = ${shippingMethods.zoneId})
+                    AND EXISTS (SELECT 1 FROM ${deliveryZones} WHERE ${deliveryZones.id} = ${qualifiedColumn(shippingMethods.zoneId)})
                     AND (
-                      EXISTS (SELECT 1 FROM ${deliveryZoneRegions} WHERE ${deliveryZoneRegions.zoneId} = ${shippingMethods.zoneId})
-                      OR EXISTS (SELECT 1 FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.zoneId} = ${shippingMethods.zoneId})
+                      EXISTS (SELECT 1 FROM ${deliveryZoneRegions} WHERE ${deliveryZoneRegions.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)})
+                      OR EXISTS (SELECT 1 FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)})
                     )
                   ))
             )`,

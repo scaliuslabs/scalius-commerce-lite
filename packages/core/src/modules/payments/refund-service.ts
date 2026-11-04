@@ -47,6 +47,7 @@ import {
   noActiveRefundAttemptForOrderIdCondition,
   REFUND_IN_PROGRESS_MESSAGE,
   type StockHeldReason,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";
@@ -1786,6 +1787,8 @@ export async function processRefund(
             version: orders.version,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+            shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
             currencyCode: orders.currencyCode,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
             discountAmountMinor: orders.discountAmountMinor,

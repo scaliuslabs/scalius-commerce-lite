@@ -42,7 +42,7 @@ import {
   resolveOrderCurrencySnapshot,
   type OrderCurrencySnapshot,
 } from "@scalius/core/modules/payments/browser";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/order-kernel";
+import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition, shipmentClaimShipmentStatusSql } from "@scalius/core/modules/order-kernel";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { orderLineTypesSql, parseOrderLineTypes } from "@scalius/core/modules/orders";
@@ -560,6 +560,8 @@ async function loadPaymentSessionOrder(
       deletedAt: orders.deletedAt,
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+      shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
       // The order's line types, in the same statement.
       lineTypes: orderLineTypesSql(),
     })
@@ -684,11 +686,7 @@ async function ensureOrderCanUseGateway(
         AND ${orders.paymentStatus} IN (${PaymentStatus.UNPAID}, ${PaymentStatus.FAILED})
         AND ${orders.paidAmountMinor} <= 0
         AND ${orders.deletedAt} IS NULL
-        AND (
-          ${orders.shipmentClaimId} IS NULL
-          OR ${orders.shipmentClaimExpiresAt} IS NULL
-          OR ${orders.shipmentClaimExpiresAt} <= unixepoch()
-        )
+        AND ${noActiveShipmentClaimCondition()}
         AND ${noActivePaymentSessionAttemptForOrderSqlCondition(sql`${order.id}`)}
         AND NOT EXISTS (
           SELECT 1 FROM ${orderPayments}

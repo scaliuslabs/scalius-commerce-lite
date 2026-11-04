@@ -55,7 +55,7 @@ import { getUnpayableOrderReason } from "./payable-order";
 import { acceptsProviderPayment, inferPaymentType, releaseAuthorization, validateIncomingPaymentState } from "./process-payment";
 import { readCustomerPaymentMethod, savedMethodVisibleTo, type SavedMethodActor } from "./saved-payment-methods";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
-import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE } from "../order-kernel";
+import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaimShipmentStatusSql } from "../order-kernel";
 import {
   closeCommandAttempt,
   commandAttemptKeyCondition,
@@ -451,6 +451,8 @@ export async function chargeSavedPaymentMethod(
     deletedAt: orders.deletedAt,
     shipmentClaimId: orders.shipmentClaimId,
     shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+    shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
     currencyCode: orders.currencyCode,
     currencyDecimalPlaces: orders.currencyDecimalPlaces,
   }).from(orders).where(eq(orders.id, input.orderId)).get();

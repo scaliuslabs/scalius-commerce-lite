@@ -41,6 +41,7 @@ import {
   noActiveRefundAttemptForOrderIdCondition,
   noActiveShipmentClaimCondition,
   validateTransition,
+  shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
 import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
@@ -484,6 +485,8 @@ async function attemptOrderStatusChange(
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
@@ -832,6 +835,8 @@ export async function bulkConfirmOrders(
                 inventoryAction: orders.inventoryAction,
                 shipmentClaimId: orders.shipmentClaimId,
                 shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+                // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+                shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
                 onHold: sql<number>`NOT (${noOpenOrderHoldCondition(OUTER_ORDER_ID)})`,
                 refundActive: sql<number>`NOT (${noActiveRefundAttemptForOrderColumnCondition(OUTER_ORDER_ID)})`,
                 paymentSetupActive: sql<number>`${activePaymentSessionAttemptExistsCondition(OUTER_ORDER_ID)}`,

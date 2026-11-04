@@ -12,7 +12,7 @@ machine; safe for the dashboard).
 | File | Exports | Purpose |
 |------|---------|---------|
 | `state-machine.ts` | `canTransitionTo()`, `validateTransition()`, `getAvailableTransitions()` | Order, payment and fulfilment transitions (`@scalius/shared/order-state`), with the `ValidationError` a refused move throws |
-| `shipment-claim.ts` | `assertNoActiveShipmentClaim()`, `hasActiveShipmentClaim()`, `noActiveShipmentClaimCondition()` | The lease a courier booking holds on the order row |
+| `shipment-claim.ts` | `assertNoActiveShipmentClaim()`, `hasActiveShipmentClaim()`, `noActiveShipmentClaimCondition()`, `isShipmentClaimLeaseLive()` | The claim a courier booking holds on the order row: it outlives its 15-minute lease until its attempt is resolved (no row, failed or cancelled releases it) |
 | `payment-session-guard.ts` | `assertNoActivePaymentSessionAttempt()`, `noActivePaymentSessionAttemptForOrderIdCondition()`, ... | While a hosted payment session is being set up (a claimed attempt whose lease has not expired), nothing else changes the order |
 | `refund-attempt-guard.ts` | `assertNoActiveRefundAttempt()`, `noActiveRefundAttemptForOrderIdCondition()`, `findActiveRefundAttempt()`, `ACTIVE_REFUND_ATTEMPT_STATUSES`, ... | While a refund is in flight (an active attempt or a pending refund payment), nothing else changes the order |
 | `app-facts.ts` | `buildAppDiscountFactInserts()`, `resolveOrderAppFacts()`, `listOrderAppFacts()`, `recordAppRiskChecks()`, ... | What apps did to an order, kept as immutable `order_events` rows: app discounts (written in the checkout commit) and advisory risk checks |

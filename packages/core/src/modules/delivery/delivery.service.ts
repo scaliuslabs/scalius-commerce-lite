@@ -14,6 +14,7 @@ import {
 } from "@scalius/shared/plugins/providers";
 
 import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
   PROVIDER_OUTCOME_UNKNOWN,
   type MerchantOrderShipmentLookup,
@@ -27,7 +28,8 @@ import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
-  hasActiveShipmentClaim,
+  isShipmentClaimLeaseLive,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { assertOrderStockCoverable, InventoryLocationShortfallError } from "../inventory";
 import { getDeliveryProviderReadinessSummary } from "./provider-readiness";
@@ -422,22 +424,38 @@ export async function lookupShipmentByMerchantOrderId(
   const provider = await getDeliveryProvider(db, providerId);
   if (!provider) throw new NotFoundError("Delivery provider not found");
   const courier = await courierFor(couriers, provider.type);
-  if (!courier?.findShipment) {
+  // An app courier that is not loaded may have a lookup: that proves nothing.
+  if (!courier) {
     return {
       confirmed: false,
-      message: `${provider.type} does not support lookup by the original order number. Confirm the outcome in the courier portal or with courier support.`,
+      reason: "unavailable",
+      message: `${provider.type} is not available right now, so the order ID could not be looked up. The recovery lock remains active.`,
     };
   }
-  const { settings } = await requireCourierSettings(provider, encryptionKey, couriers);
+  if (!courier.findShipment) {
+    return {
+      confirmed: false,
+      reason: "unsupported",
+      message: `${provider.type} does not support lookup by the order ID. Confirm the outcome in the courier portal or with courier support.`,
+    };
+  }
+  // Unreadable courier settings prove nothing either.
+  let settings: unknown;
+  try {
+    ({ settings } = await requireCourierSettings(provider, encryptionKey, couriers));
+  } catch (error) {
+    if (!(error instanceof ServiceUnavailableError)) throw error;
+    return { confirmed: false, reason: "unavailable", message: `${error.message} The recovery lock remains active.` };
+  }
   let found: CourierFind;
   try {
     found = await courier.findShipment({ orderId: merchantOrderId }, courierCall(settings, db));
   } catch (error) {
     const failure = providerErrorOf(error);
     if (!failure) throw error;
-    return { confirmed: false, message: `${failure.message} The recovery lock remains active.` };
+    return { confirmed: false, reason: "unavailable", message: `${failure.message} The recovery lock remains active.` };
   }
-  if (!found.found) return { confirmed: false, message: found.message };
+  if (!found.found) return { confirmed: false, reason: "not_found", message: found.message };
   return {
     confirmed: true,
     courier: courier.label,
@@ -751,6 +769,8 @@ export async function checkShipmentStatus(
     .select({
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+      shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
     })
     .from(orders)
     .where(eq(orders.id, shipment.orderId))
@@ -820,6 +840,34 @@ export async function checkShipmentStatus(
 /**
  * Delete a shipment
  */
+const DELIVERY_PROVIDER_IN_RECOVERY = "DELIVERY_PROVIDER_IN_RECOVERY";
+
+/**
+ * Deletes a delivery provider unless one of its shipments is still being
+ * booked, waits for reconciliation or holds its order's claim: resolving
+ * those needs the provider (its lookup, its courier), and without it the
+ * order would stay locked. Checked in the delete's own batch.
+ */
+export async function deleteDeliveryProvider(db: Database, id: string): Promise<void> {
+  const inRecovery = sql`EXISTS (
+    SELECT 1 FROM ${deliveryShipments}
+    WHERE ${deliveryShipments.providerId} = ${id}
+      AND (${deliveryShipments.status} IN (${ShipmentStatus.CREATING}, ${ShipmentStatus.RECONCILE_REQUIRED})
+        OR EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.shipmentClaimId} = ${deliveryShipments.id}))
+  )`;
+  try {
+    await safeBatch(db, [
+      buildBatchGuard(db, sql`NOT ${inRecovery}`, DELIVERY_PROVIDER_IN_RECOVERY),
+      db.delete(deliveryProviders).where(eq(deliveryProviders.id, id)),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, DELIVERY_PROVIDER_IN_RECOVERY)) {
+      throw new ConflictError("A shipment of this provider is still being booked or reconciled. Resolve it on its order before deleting the provider.");
+    }
+    throw error;
+  }
+}
+
 export async function deleteShipmentRecord(db: Database, id: string) {
   const shipment = await db
     .select({
@@ -851,7 +899,9 @@ export async function deleteShipmentRecord(db: Database, id: string) {
     .get();
 
   if (orderClaim) {
-    if (hasActiveShipmentClaim(orderClaim)) {
+    // A running lease is a booking in flight; an expired claim on this
+    // shipment is settled by its own status below.
+    if (isShipmentClaimLeaseLive(orderClaim)) {
       throw new ConflictError("Cannot delete a shipment while order shipment creation is in progress");
     }
 
