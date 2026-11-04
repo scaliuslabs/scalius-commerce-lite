@@ -195,10 +195,9 @@ export function customerListConditions(db: Database, filter: CustomerListFilter)
     const deletedAt = filter.leadWithMatches ? sql`+${customers.deletedAt}` : sql`${customers.deletedAt}`;
     if (showTrashed) {
         // A retired guest record (all its orders joined an account) is merged, not trashed.
-        // Nearly every customer is unmerged: SQLite's `+` keeps it reading the trash by `deleted_at`.
-        const unmerged = getDatabaseProviderForClient(db) === "postgres"
-            ? sql`${customers.mergedIntoCustomerId} IS NULL`
-            : sql`+${customers.mergedIntoCustomerId} IS NULL`;
+        // Nearly every customer is unmerged: SQLite's `+` keeps it reading the trash by `deleted_at`
+        // (PostgreSQL's compiler drops the `+`).
+        const unmerged = sql`+${customers.mergedIntoCustomerId} IS NULL`;
         whereConditions.push(sql`${deletedAt} IS NOT NULL AND ${unmerged}`);
     } else {
         whereConditions.push(sql`${deletedAt} IS NULL`);
