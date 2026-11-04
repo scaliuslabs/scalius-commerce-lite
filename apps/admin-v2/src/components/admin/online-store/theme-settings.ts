@@ -1,9 +1,9 @@
 /**
  * The colours a merchant picks; each writes every token that shares its
- * role. Background also moves the card and popover surfaces, keeping the
- * template's own card-to-page relationship (see setThemeColor). A theme
- * shown dark (a dark or device scheme, or the buyer's switch) has a second
- * set, the dark colours, edited the same way.
+ * role, and every colour no field shows is made from them (fitThemeColors),
+ * so any readable choice saves. A theme shown dark (a dark or device scheme,
+ * or the buyer's switch) has a second set, the dark colours, edited the same
+ * way.
  */
 import type { SettingBindings } from "@scalius/shared/storefront-theme/bindings";
 import {
@@ -14,6 +14,9 @@ import {
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
   STOREFRONT_THEME_DOCUMENT_VERSION,
+  STOREFRONT_THEME_MAX_MUTED_CHROMA,
+  STOREFRONT_THEME_MIN_CONTRAST,
+  STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE,
   STOREFRONT_TYPE_PAIRING_SPECS,
   applyStorefrontAppTemplate,
   isStorefrontThemeHexColor,
@@ -23,7 +26,14 @@ import {
   resolveStorefrontTheme,
   storefrontBlockSwitch,
   storefrontBlockValue,
+  storefrontContrastRoleToken,
   storefrontDarkColorsAreMade,
+  storefrontThemeChroma,
+  storefrontThemeColorDistance,
+  storefrontThemeContrast,
+  storefrontThemeFieldBorder,
+  storefrontThemeLuminance,
+  storefrontThemeMix,
   storefrontThemeColorsAreDark,
   storefrontDarkPalette,
   storefrontTemplateTheme,
@@ -55,8 +65,8 @@ import { appValuesInvalid, type AppSettingValues } from "./schema-form/app-setti
 import { sameFormValue } from "~/lib/form-values";
 
 export const COLOR_ROLES = {
-  background: ["background", "card", "popover"],
-  text: ["foreground", "card-foreground", "popover-foreground"],
+  background: ["background"],
+  text: ["foreground", "card-foreground", "popover-foreground", "secondary-foreground"],
   buttons: ["primary", "ring"],
   buttonText: ["primary-foreground"],
   highlight: ["accent"],
@@ -130,39 +140,148 @@ function channelsHex(channels: readonly number[]): string {
   return `#${channels.map((channel) => Math.min(255, Math.max(0, Math.round(channel))).toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** The colours no field shows: made from the six fields (fitThemeColors). */
+const SURFACE_TOKENS = ["card", "popover", "secondary", "muted", "border", "input"] as const satisfies readonly StorefrontThemeColorKey[];
+
 /**
- * The card surface for a new page background: the template the theme is
- * based on keeps its card a set step lighter or darker than its page
- * (retail's white cards on warm paper, midnight's raised panels), so a new
- * background moves the card by the same step instead of flattening it.
+ * Where `color` sits on the line from `from` to `to` (0 at `from`, 1 at `to`,
+ * negative beyond `from`), and what is left over off the line (a tint):
+ * `from + weight * (to - from) + rest` is `color` again.
  */
-export function cardForBackground(theme: StorefrontThemeDocument, background: string): string {
-  const palette = storefrontTemplateTheme(theme.template).tokens.colors;
-  if (!isStorefrontThemeHexColor(background)) return background;
-  const [page, card] = [hexChannels(palette.background), hexChannels(palette.card)];
-  const next = hexChannels(background);
-  return channelsHex(next.map((channel, index) => channel + (card[index]! - page[index]!)));
+function placeOnLine(color: string, from: string, to: string): { weight: number; rest: number[] } {
+  const [c, a, b] = [hexChannels(color), hexChannels(from), hexChannels(to)];
+  const span = b.map((channel, index) => channel - a[index]!);
+  const length = span.reduce((sum, channel) => sum + channel * channel, 0);
+  const weight = length === 0 ? 0 : span.reduce((sum, channel, index) => sum + channel * (c[index]! - a[index]!), 0) / length;
+  return { weight, rest: c.map((channel, index) => channel - a[index]! - weight * span[index]!) };
+}
+
+/** A colour placed on another line the way `placeOnLine` measured it. */
+function onLine(place: { weight: number; rest: readonly number[] }, from: string, to: string): string {
+  const [a, b] = [hexChannels(from), hexChannels(to)];
+  return channelsHex(a.map((channel, index) => channel + place.weight * (b[index]! - channel) + place.rest[index]!));
+}
+
+const reads = (text: string, surface: string) => storefrontThemeContrast(text, surface) >= STOREFRONT_THEME_MIN_CONTRAST;
+
+/** `color` moved toward `toward` until every text reads on it (`color` itself when none has to). */
+function untilRead(color: string, texts: readonly string[], toward: string): string {
+  for (let step = 0; step <= 20; step += 1) {
+    const candidate = storefrontThemeMix(color, toward, step / 20);
+    if (texts.every((text) => reads(text, candidate))) return candidate;
+  }
+  return toward;
+}
+
+/** `color` moved toward `toward` until it reads on every surface; `toward` at worst. */
+function readableOn(color: string, surfaces: readonly string[], toward: string): string {
+  for (let step = 0; step <= 20; step += 1) {
+    const candidate = storefrontThemeMix(color, toward, step / 20);
+    if (surfaces.every((surface) => reads(candidate, surface))) return candidate;
+  }
+  return toward;
+}
+
+/** The grey as light as `color` (the same WCAG luminance, so the same contrast with everything). */
+function greyLike(color: string): string {
+  const luminance = storefrontThemeLuminance(color);
+  const srgb = luminance <= 0.0031308 ? luminance * 12.92 : 1.055 * luminance ** (1 / 2.4) - 0.055;
+  return channelsHex([srgb * 255, srgb * 255, srgb * 255]);
+}
+
+/** Neutral greys lighter text may take, black to white. */
+const GREYS = Array.from({ length: 33 }, (_, index) => channelsHex([index * 8, index * 8, index * 8].map((channel) => Math.min(255, channel))));
+/** Error colours to search when the reference's cannot stand apart: every colour at eight levels a channel. */
+const ERROR_CANDIDATES = Array.from({ length: 512 }, (_, index) => channelsHex([index >> 6, (index >> 3) & 7, index & 7].map((level) => (level * 255) / 7)));
+
+/**
+ * The colour set with every colour no field shows made from the six fields,
+ * so any readable choice of the fields saves:
+ * - Surfaces (cards, menus, shaded panels, light buttons, borders) sit
+ *   between the page and the text where the reference puts them, with its
+ *   tint, then step back toward the page until the text, the buttons (on
+ *   cards) and black or white read on them as they do on the page.
+ * - Lighter text keeps its place between text and page, moving toward the
+ *   text until it reads on the page, panels and cards; a tinted one turns
+ *   to the grey as light as it.
+ * - The error colour is the reference's, deepened or lightened until it reads
+ *   on the page and cards and reddened until it stands apart from lighter
+ *   text; text on it is black or white when the reference's does not read.
+ * `rebase` (the page or the text changed) places surfaces and lighter text
+ * anew from `reference`; otherwise they keep their colour while it reads.
+ */
+export function fitThemeColors(
+  colors: Record<StorefrontThemeColorKey, string>,
+  reference: Record<StorefrontThemeColorKey, string>,
+  rebase: boolean,
+): Record<StorefrontThemeColorKey, string> {
+  const next = { ...colors };
+  const { background: page, foreground: text, primary } = next;
+  const ink = storefrontThemeContrast("#000000", page) >= storefrontThemeContrast("#ffffff", page) ? "#000000" : "#ffffff";
+  if (rebase) {
+    for (const token of SURFACE_TOKENS) next[token] = onLine(placeOnLine(reference[token], reference.background, reference.foreground), page, text);
+    next["muted-foreground"] = onLine(placeOnLine(reference["muted-foreground"], reference.foreground, reference.background), text, page);
+    next.destructive = reference.destructive;
+    next["destructive-foreground"] = reference["destructive-foreground"];
+  }
+  // Only text that reads on the page is held on the surfaces: an unreadable text colour is its field's problem.
+  const onPage = (texts: readonly string[]) => texts.filter((each) => reads(each, page));
+  next.card = untilRead(next.card, onPage([text, primary, ink]), page);
+  next.popover = untilRead(next.popover, onPage([text, primary, ink]), page);
+  next.muted = untilRead(next.muted, onPage([text, ink]), page);
+  next.secondary = untilRead(next.secondary, onPage([text, ink]), page);
+  next.input = storefrontThemeFieldBorder(next);
+  const surfaces = [page, next.muted, next.card];
+  let muted = readableOn(next["muted-foreground"], surfaces, text);
+  if (storefrontThemeChroma(muted) > STOREFRONT_THEME_MAX_MUTED_CHROMA) muted = readableOn(greyLike(muted), surfaces, ink);
+  next["muted-foreground"] = muted;
+  const errorSurfaces = [page, next.card];
+  const apart = (error: string) => storefrontThemeColorDistance(muted, error) >= STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE;
+  let error = readableOn(next.destructive, errorSurfaces, ink);
+  for (let step = 1; step <= 10 && !apart(error); step += 1) error = readableOn(storefrontThemeMix(next.destructive, "#ff0000", step / 10), errorSurfaces, ink);
+  if (!apart(error)) {
+    // A mid-tone page leaves little room: search the colours that read for an error colour (nearest the reference's)
+    // apart from lighter text, then for another readable grey of lighter text.
+    const greys = [muted, ...GREYS].filter((grey) => surfaces.every((surface) => reads(grey, surface)));
+    const errors = ERROR_CANDIDATES.filter((candidate) => errorSurfaces.every((surface) => reads(candidate, surface)))
+      .sort((left, right) => storefrontThemeColorDistance(left, next.destructive) - storefrontThemeColorDistance(right, next.destructive));
+    search: for (const grey of greys) {
+      for (const candidate of errors) {
+        if (storefrontThemeColorDistance(grey, candidate) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE) continue;
+        [muted, error] = [grey, candidate];
+        next["muted-foreground"] = grey;
+        break search;
+      }
+    }
+  }
+  next.destructive = error;
+  if (!reads(next["destructive-foreground"], error)) {
+    next["destructive-foreground"] = storefrontThemeContrast("#000000", error) >= storefrontThemeContrast("#ffffff", error) ? "#000000" : "#ffffff";
+  }
+  return next;
+}
+
+/**
+ * The colours a set's hidden colours are placed from: the template's for the
+ * colours, and for the dark colours the ones made from the colours.
+ */
+function colorReference(theme: StorefrontThemeDocument, set: StorefrontThemeColorSet): Record<StorefrontThemeColorKey, string> {
+  return set === "colors" ? storefrontTemplateTheme(theme.template).tokens.colors : storefrontDarkPalette(theme.tokens.colors);
 }
 
 /**
  * The document with one role's colour (a complete #rrggbb: the fields commit
- * nothing else) set on every token of that role, in one colour set. The dark
- * colours' card keeps its own step from their page.
+ * nothing else) set on every token of that role, in one colour set, and the
+ * colours no field shows made from the fields (`fitThemeColors`).
  */
 export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string, set: StorefrontThemeColorSet = "colors"): StorefrontThemeDocument {
   const current = theme.tokens[set];
   if (!current) return theme;
-  const colors = { ...current };
-  if (role === "background") {
-    const card = set === "colors"
-      ? cardForBackground(theme, value)
-      : channelsHex(hexChannels(value).map((channel, index) => channel + hexChannels(current.card)[index]! - hexChannels(current.background)[index]!));
-    colors.background = value;
-    colors.card = card;
-    colors.popover = card;
-  } else {
-    for (const token of COLOR_ROLES[role]) colors[token] = value;
-  }
+  const edited = { ...current };
+  for (const token of COLOR_ROLES[role]) edited[token] = value;
+  const colors = allThemeColorsValid(edited) && allThemeColorsValid(theme.tokens.colors)
+    ? fitThemeColors(edited, colorReference(theme, set), role === "background" || role === "text")
+    : edited;
   // Dark colours made from the colours follow a light colour edit; ones the merchant edited stay.
   const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
     ? storefrontDarkPalette(colors)
@@ -207,37 +326,50 @@ export function blockFallback(resolved: ResolvedStorefrontTheme, slot: ThemeBloc
 
 export type ContrastMessage =
   | "contrastText"
+  | "contrastTextOnCards"
+  | "contrastTextOnPanels"
+  | "contrastSecondary"
   | "contrastButtonText"
   | "contrastLinks"
+  | "contrastLinksOnCards"
   | "contrastMuted"
-  | "contrastSecondary"
+  | "contrastMutedOnCards"
+  | "contrastMutedOnPanels"
   | "contrastAccent"
-  | "contrastError";
+  | "contrastError"
+  | "contrastErrorOnCards"
+  | "contrastErrorText"
+  | "errorApart";
 
 /**
- * Plain-words names for the text pairs the storefront must keep readable,
- * and the colour field that can fix each. Pairs the colour roles always move
- * together (text on cards, on popovers, on the header) share one message, so
- * the merchant reads each problem once.
+ * Each text pair the storefront must keep readable, in plain words naming
+ * that pair's own text and surface, on the colour field that changes it: the
+ * text's field where a field shows the text, else the field it is made
+ * from (lighter text from Text, the error colour from Background). Header
+ * pairs read as the tokens the header tone gives them. Pairs a role always
+ * moves together (cards and menus) share one message.
  */
 const CONTRAST_MESSAGES: Record<string, { message: ContrastMessage; role: ColorRole }> = {
   "foreground/background": { message: "contrastText", role: "text" },
-  "card-foreground/card": { message: "contrastText", role: "text" },
-  "popover-foreground/popover": { message: "contrastText", role: "text" },
-  "header-foreground/header-background": { message: "contrastText", role: "text" },
-  "foreground/muted": { message: "contrastText", role: "text" },
+  "background/foreground": { message: "contrastText", role: "text" },
+  "card-foreground/card": { message: "contrastTextOnCards", role: "text" },
+  "popover-foreground/popover": { message: "contrastTextOnCards", role: "text" },
+  "foreground/muted": { message: "contrastTextOnPanels", role: "text" },
+  "secondary-foreground/secondary": { message: "contrastSecondary", role: "text" },
   "primary-foreground/primary": { message: "contrastButtonText", role: "buttonText" },
   "primary/background": { message: "contrastLinks", role: "buttons" },
-  "primary/card": { message: "contrastLinks", role: "buttons" },
-  "muted-foreground/background": { message: "contrastMuted", role: "background" },
-  "muted-foreground/muted": { message: "contrastMuted", role: "background" },
-  "muted-foreground/card": { message: "contrastMuted", role: "background" },
-  "secondary-foreground/secondary": { message: "contrastSecondary", role: "background" },
+  "primary/card": { message: "contrastLinksOnCards", role: "buttons" },
+  "muted-foreground/background": { message: "contrastMuted", role: "text" },
+  "muted-foreground/card": { message: "contrastMutedOnCards", role: "text" },
+  "muted-foreground/muted": { message: "contrastMutedOnPanels", role: "text" },
   "accent-foreground/accent": { message: "contrastAccent", role: "highlightText" },
-  "destructive-foreground/destructive": { message: "contrastError", role: "background" },
   "destructive/background": { message: "contrastError", role: "background" },
-  "destructive/card": { message: "contrastError", role: "background" },
+  "destructive/card": { message: "contrastErrorOnCards", role: "background" },
+  "destructive-foreground/destructive": { message: "contrastErrorText", role: "background" },
 };
+
+/** The pairs of two fields' own colours, each shown on its text's field: Text, Buttons and links, Button text, Text on highlights. */
+const OWN_PAIR_MESSAGES: readonly ContrastMessage[] = ["contrastText", "contrastLinks", "contrastButtonText", "contrastAccent"];
 
 export interface ContrastProblem {
   message: ContrastMessage;
@@ -263,12 +395,20 @@ export function themeContrastProblems(theme: StorefrontThemeDocument, set: Store
   if (!colors || !themeColorSets(theme).includes(set) || !allThemeColorsValid(colors)) return [];
   const byMessage = new Map<ContrastMessage, ContrastProblem>();
   for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(theme, set)) {
-    const { message, role } = CONTRAST_MESSAGES[`${text}/${surface}`] ?? { message: "contrastText", role: "text" };
+    const pair = `${storefrontContrastRoleToken(text, theme.tokens, set)}/${storefrontContrastRoleToken(surface, theme.tokens, set)}`;
+    const { message, role } = CONTRAST_MESSAGES[pair] ?? { message: "contrastText", role: "text" };
     const known = byMessage.get(message);
     if (known) known.ratio = Math.min(known.ratio, ratio);
     else byMessage.set(message, { message, set, role, ratio });
   }
-  return [...byMessage.values()];
+  // While a field's own pair fails, the colours made from it cannot read either: the field says its own problem once.
+  const own = new Set([...byMessage.keys()].filter((message) => OWN_PAIR_MESSAGES.includes(message)).map((message) => byMessage.get(message)!.role));
+  const problems = [...byMessage.values()].filter((problem) => !own.has(problem.role) || OWN_PAIR_MESSAGES.includes(problem.message));
+  // Every pair reads, but error text looks like lighter text (the server refuses it too): on some pages no error colour both reads and stands apart.
+  if (problems.length === 0 && storefrontThemeColorDistance(colors["muted-foreground"], colors.destructive) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE) {
+    problems.push({ message: "errorApart", set, role: "background", ratio: 0 });
+  }
+  return problems;
 }
 
 /**
@@ -312,6 +452,17 @@ export function darkLogoOffered(theme: StorefrontThemeDocument): boolean {
 /** A logo for dark pages is set, but the store shows no dark pages: it never shows. */
 export function darkLogoUnused(theme: StorefrontThemeDocument): boolean {
   return theme.brand.darkLogo !== null && !themeColorSets(theme).includes("darkColors");
+}
+
+/**
+ * What the logo for dark pages says under it: that it never shows (no dark
+ * pages), that it is not needed (the light colours are dark themselves, so
+ * the header logo already sits on a dark page, as `sameDarkPages` says of the
+ * dark colours), or what it is for.
+ */
+export function darkLogoHelp(theme: StorefrontThemeDocument): "darkLogoUnused" | "darkLogoNotNeeded" | "darkLogoHelp" {
+  if (darkLogoUnused(theme)) return "darkLogoUnused";
+  return storefrontThemeColorsAreDark(theme.tokens.colors) ? "darkLogoNotNeeded" : "darkLogoHelp";
 }
 
 /** Dark pages show, but their colours are the colours (dark themselves): the scheme and the switch change nothing. */
