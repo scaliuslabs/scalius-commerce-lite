@@ -35784,6 +35784,10 @@ export type PostApiV1AdminCustomersByIdAddressesErrors = {
      */
     404: ErrorResponse;
     /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -58396,6 +58400,22 @@ export type PostApiV1AdminOrdersErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
     /**
      * Service unavailable
      */

@@ -523,6 +523,8 @@ const createAddressRoute = createRoute({
     responses: {
         201: { description: "Address added", content: { "application/json": { schema: successEnvelope(customerAddressSchema) } } },
         ...errorResponses,
+        // The address book is full, or the customer's data was erased.
+        409: conflictResponse,
     },
 });
 

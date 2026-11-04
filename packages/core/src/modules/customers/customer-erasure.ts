@@ -151,13 +151,26 @@ async function readBlockingOrder(db: Database, scope: ErasureScope) {
 }
 
 /** One delete task a buyer image of the customer's conversations (a repeat is a no-op). */
-function enqueueFileTasks(db: Database, subjectId: string, scope: ErasureScope): SQLiteBatchItem {
+function enqueueFileTasks(
+  db: Database,
+  subjectId: string,
+  scope: ErasureScope,
+  options: { exceptOpenOrders?: boolean } = {},
+): SQLiteBatchItem {
+  // An order still in progress keeps its conversation: the scrub that would erase it is refused.
+  const openOrderThreads = options.exceptOpenOrders
+    ? sql`AND ${conversationAttachments.conversationId} NOT IN (
+        SELECT ${conversations.id} FROM ${conversations}
+        WHERE ${conversations.orderId} IN (SELECT ${orders.id} FROM ${orders} WHERE ${scope.blockingOrder})
+      )`
+    : sql``;
   return db.insert(customerErasureTasks).select(sql`
     SELECT 'file:' || ${conversationAttachments.id}, ${subjectId}, 'delete_file', NULL, ${conversationAttachments.r2Key},
       0, unixepoch(), NULL, unixepoch()
     FROM ${conversationAttachments}
     WHERE ${scope.inTheirConversations(conversationAttachments.conversationId)}
       AND ${conversationAttachments.uploaderType} IN (${sql.join(BUYER_AUTHORS.map((type) => sql`${type}`), sql`, `)})
+      ${openOrderThreads}
   `).onConflictDoNothing() as unknown as SQLiteBatchItem;
 }
 
@@ -326,15 +339,16 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
 
 /**
  * A repeat erasure. First the work outside the database resumes, whatever
- * else holds: the buyer's images are enqueued again and failed tasks become
- * due now. Then the scrub runs again (it repairs a record that regained data
- * and changes nothing on one that did not), unless an order of the record is
- * in progress: then the scrub is refused like a first erasure.
+ * else holds: the buyer's images are enqueued again (except those of an
+ * order still in progress) and failed tasks become due now. Then the scrub
+ * runs again (it repairs a record that regained data and changes nothing on
+ * one that did not), unless an order of the record is in progress: then the
+ * scrub is refused like a first erasure.
  */
 async function resumeErasure(db: Database, subjectId: string): Promise<EraseCustomerResult> {
   const scope = await erasureScope(db, subjectId);
   await safeBatch(db, [
-    enqueueFileTasks(db, subjectId, scope),
+    enqueueFileTasks(db, subjectId, scope, { exceptOpenOrders: true }),
     db.update(customerErasureTasks)
       .set({ nextAttemptAt: sql`unixepoch()` })
       .where(and(eq(customerErasureTasks.customerId, subjectId), isNotNull(customerErasureTasks.lastError))) as unknown as SQLiteBatchItem,
