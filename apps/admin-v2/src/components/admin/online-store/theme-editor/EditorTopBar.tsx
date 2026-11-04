@@ -82,7 +82,8 @@ export const TopBarButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<H
   },
 );
 
-export type SaveStatus = "saved" | "unsaved" | "saving" | "failed" | "held" | "conflict" | "readOnly";
+/** `held`: what can be saved is saved, a setting to fix waits; `blocked`: nothing saves until it is fixed. */
+export type SaveStatus = "saved" | "unsaved" | "saving" | "failed" | "held" | "blocked" | "conflict" | "readOnly";
 
 const STATUS_DOT: Record<SaveStatus, string> = {
   saved: "bg-success",
@@ -90,6 +91,7 @@ const STATUS_DOT: Record<SaveStatus, string> = {
   saving: "bg-topbar-progress",
   failed: "bg-critical",
   held: "bg-warning",
+  blocked: "bg-critical",
   conflict: "bg-critical",
   readOnly: "bg-topbar-subdued",
 };
@@ -141,7 +143,9 @@ export function EditorTopBar({
   const t = useMessages(themeEditorMessages);
   /** A width as the merchant reads it: "Fit width", or "1280 px" (no thousands separator). */
   const sizeName = (width: DesktopWidth | 390) => (width === "fill" ? t("widthFill") : t("widthPx", { width: String(width) }));
-  const statusText = status === "held" ? (heldCount === 1 ? t("statusHeldOne") : t("statusHeld", { count: heldCount }))
+  const fixable = (status === "held" || status === "blocked") && onShowProblem;
+  const statusText = status === "held" ? t("statusHeld", { count: heldCount })
+    : status === "blocked" ? t("statusBlocked", { count: heldCount })
     : status === "saved" && live ? t("status_noChanges")
       : t(`status_${status}`);
   return (
@@ -172,7 +176,7 @@ export function EditorTopBar({
         )}
         {/* One save status, always there; a phone shows its dot (the words stay for screen readers). */}
         <span role="status" aria-live="polite" data-save-status={status} className={cn("flex min-w-0 shrink-0 items-center gap-1.5 text-body", phone ? "w-6 justify-center px-0" : "w-44 px-1")}>
-          {status === "held" && onShowProblem && phone ? (
+          {fixable && phone ? (
             // A phone shows only the dot, so the dot is the control: a real, tappable target (its hit area reaches past the dot), never a clipped screen-reader-only button.
             <button
               type="button"
@@ -185,7 +189,7 @@ export function EditorTopBar({
           ) : (
             <>
               <span className={cn("size-2 shrink-0 rounded-full", STATUS_DOT[status])} aria-hidden="true" />
-              {status === "held" && onShowProblem ? (
+              {fixable ? (
                 <button type="button" onClick={onShowProblem} className="min-w-0 truncate text-start underline decoration-dotted underline-offset-2 hover:text-topbar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress max-xl:sr-only">
                   {statusText}
                 </button>

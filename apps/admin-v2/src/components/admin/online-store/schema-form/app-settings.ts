@@ -198,6 +198,12 @@ export function appSettingProblem(field: ThemeAppSettingField, value: unknown): 
   }
 }
 
+/** The DOM id of one app setting (`theme-section-app-values-title`). */
+export const appSettingFieldId = (idPrefix: string, key: string) => `${idPrefix}-${key}`;
+
+/** The field ids of an app section's settings start with this (`theme-section-app-2-values`, inside the section's `theme-section-<id>`). */
+export const appSectionFieldPrefix = (sectionId: string) => `theme-section-${sectionId}-values`;
+
 /** Every field's problem, by setting key. */
 export function appSettingProblems(fields: readonly ThemeAppSettingField[], values: Readonly<Record<string, unknown>>): Map<string, AppSettingProblem> {
   const problems = new Map<string, AppSettingProblem>();

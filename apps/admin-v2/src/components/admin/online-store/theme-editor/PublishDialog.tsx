@@ -76,7 +76,7 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedA
             <Alert variant="warning" data-publish-held>
               <TriangleAlert aria-hidden="true" />
               <AlertDescription>
-                <p>{held === 1 ? t("publishHeldOne") : t("publishHeld", { count: held })}</p>
+                <p>{t("publishHeld", { count: held })}</p>
                 <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={onShowProblem}>{t("publishFix")}</Button></span>
               </AlertDescription>
             </Alert>

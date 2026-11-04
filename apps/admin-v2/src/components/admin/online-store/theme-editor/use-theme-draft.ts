@@ -27,7 +27,7 @@ import { actionErrorText } from "../action-error";
 import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 import { editorHistory, startHistory, type EditorAction } from "./editor-state";
 import type { SaveStatus } from "./EditorTopBar";
-import { saveableDraft, type DraftApps } from "./saveable-draft";
+import { invalidDraftParts, saveableDraft, type DraftApps } from "./saveable-draft";
 import { themeVersionsKey } from "./theme-history-queries";
 import { sameFormValue } from "~/lib/form-values";
 
@@ -110,7 +110,8 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
   const saveable = useMemo(() => saveableDraft(working, saved.theme, apps), [working, saved.theme, apps]);
   const pending = saveable?.theme ?? null;
   const dirty = useMemo(() => pending !== null && !sameFormValue(pending, lastSent), [pending, lastSent]);
-  const held = saveable?.held ?? [];
+  // Nothing can be saved: every invalid part is what to fix (the fix link opens the first, and the edits stay in this browser).
+  const held = useMemo(() => saveable?.held ?? invalidDraftParts(working, apps), [saveable, working, apps]);
   const unsavedEdits = useMemo(() => !sameFormValue(working, lastSent), [working, lastSent]);
   const failedHere = failure !== null && pending !== null && sameFormValue(failure.for, pending);
 
@@ -320,7 +321,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
     : conflict ? "conflict"
       : saving ? "saving"
         : failedHere ? "failed"
-          : saveable === null ? "held"
+          : saveable === null ? (unsavedEdits ? "blocked" : "held")
             : dirty ? "unsaved"
               : held.length > 0 ? "held"
                 : "saved";
