@@ -5,8 +5,8 @@
  * autosave status. Centre: the page switcher, the previewed market and
  * language, the device and the frame's size. Right: the inspector, undo and
  * redo, history, more, and Publish. Narrower windows move the less used
- * controls into More; a phone moves Redo there too, so the page switcher
- * keeps room for the page's name.
+ * controls into More; a phone moves Undo and Redo there too, so the page
+ * switcher keeps room for the page's name in either language.
  */
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -148,8 +148,8 @@ export function EditorTopBar({
     <header
       data-editor-topbar
       className={cn(
-        "grid h-12 items-center gap-2 border-b border-topbar-border bg-topbar px-2 text-topbar-foreground",
-        phone ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]",
+        "grid h-12 items-center border-b border-topbar-border bg-topbar px-2 text-topbar-foreground",
+        phone ? "grid-cols-[auto_minmax(0,1fr)_auto] gap-1" : "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
@@ -264,10 +264,12 @@ export function EditorTopBar({
             <MousePointer2 aria-hidden="true" />
           </TopBarButton>
         )}
-        <TopBarButton label={t("undo")} shortcut={shortcutCaps("undo")} disabled={!canUndo || !canEdit} onClick={onUndo} aria-keyshortcuts="Meta+Z Control+Z">
-          <Undo2 aria-hidden="true" />
-        </TopBarButton>
-        {/* A phone keeps the bar's room for the page's name: Redo waits in More there. */}
+        {/* A phone keeps the bar's room for the page's name: Undo and Redo wait in More there. */}
+        {phone ? null : (
+          <TopBarButton label={t("undo")} shortcut={shortcutCaps("undo")} disabled={!canUndo || !canEdit} onClick={onUndo} aria-keyshortcuts="Meta+Z Control+Z">
+            <Undo2 aria-hidden="true" />
+          </TopBarButton>
+        )}
         {phone ? null : (
           <TopBarButton label={t("redo")} shortcut={shortcutCaps("redo")} disabled={!canRedo || !canEdit} onClick={onRedo} aria-keyshortcuts="Meta+Shift+Z Control+Y">
             <Redo2 aria-hidden="true" />
@@ -285,7 +287,13 @@ export function EditorTopBar({
             </TopBarButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {phone ? <DropdownMenuItem disabled={!canRedo || !canEdit} onSelect={onRedo}><Redo2 aria-hidden="true" />{t("redo")}</DropdownMenuItem> : null}
+            {phone ? (
+              <>
+                <DropdownMenuItem disabled={!canUndo || !canEdit} onSelect={onUndo}><Undo2 aria-hidden="true" />{t("undo")}</DropdownMenuItem>
+                <DropdownMenuItem disabled={!canRedo || !canEdit} onSelect={onRedo}><Redo2 aria-hidden="true" />{t("redo")}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuItem className="lg:hidden" onSelect={onHistory}><History aria-hidden="true" />{t("versions")}</DropdownMenuItem>
             <DropdownMenuItem className="lg:hidden" onSelect={() => onInspector(!inspector)}>
               <MousePointer2 aria-hidden="true" />{t(inspector ? "inspectorOff" : "inspectorOn")}
@@ -312,9 +320,11 @@ export function EditorTopBar({
             onClick={onPublish}
             disabled={!canPublish || publishing}
             aria-busy={publishing || undefined}
+            // A phone says it in one word ("পাবলিশ"), keeping the whole label as its name.
+            aria-label={phone ? t("publish") : undefined}
             className="flex h-11 shrink-0 items-center sm:h-9 rounded-lg bg-topbar-primary px-3 text-body font-medium text-topbar-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-topbar-progress disabled:opacity-50 pointer-coarse:h-11"
           >
-            {t("publish")}
+            {t(phone ? "publishShort" : "publish")}
           </button>
         ) : null}
       </div>
