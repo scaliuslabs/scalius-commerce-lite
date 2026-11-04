@@ -46,11 +46,11 @@ import {
   type ProductActionPresentation,
 } from "../lib/product-actions";
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/line-price";
-import { BUYER_INPUT_FIELD_PREFIX } from "../lib/buy-form";
+import { BUYER_INPUT_FIELD_PREFIX, SKIN_BUY_CONTROL, SKIN_CHOOSE_CONTROL } from "../lib/buy-form";
 import type { BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
-import { DEFERRED_REVEAL_EVENT } from "@/scripts/browser-events";
+import { DEFERRED_REVEAL_EVENT, STALE_ASSET_EVENT } from "@/scripts/browser-events";
 import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-protocol";
 
 // The buy form's one authority: its option buttons, a product_main skin's
@@ -61,9 +61,6 @@ import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-
 // `data-sx-*` from app markup), so a skin's own `.product-price`,
 // `[data-action]` or look-alike container is never taken over. The product's
 // facts come from the page's `#product-container`, which wraps the skin.
-
-/** A skin's buy button the host bound (lib/extensions/purchase-controls.ts); only the host writes `data-sx-*`. */
-const SKIN_BUY_CONTROL = "[data-sx-bound][data-buy-variant]";
 
 const state = {
   variants: [] as Variant[],
@@ -114,6 +111,58 @@ const cache = {
   discountBadge: null as HTMLElement | null,
 };
 
+/**
+ * One of the buy form's own parts, by its host-only role (`data-sx-buy`):
+ * the sanitizer strips `data-sx-*` from app markup, so an app component in
+ * the buy box's slots (`product.buy_box.before`, `.after`), which sit inside
+ * the form's container, never stands in for one, whatever it copies.
+ */
+function part<T extends Element = HTMLElement>(role: string): T | null {
+  return cache.summary?.querySelector<T>(`[data-sx-buy="${role}"]`) ?? null;
+}
+
+function parts<T extends Element = HTMLElement>(role: string): T[] {
+  return Array.from(cache.summary?.querySelectorAll<T>(`[data-sx-buy="${role}"]`) ?? []);
+}
+
+/** The purchase's problem as the form shows it (showError). */
+let errorMessage: HTMLElement | null = null;
+
+/**
+ * Whether the product's buyer inputs work, once their script is in (or
+ * failed to load); null for a product without them. An add waits for it;
+ * when it failed, the add posts the form the no-JavaScript way after the
+ * form's own checks (an edited line's update is refused), and the page
+ * reloads only if that loses nothing the buyer typed (`staleAsset`).
+ */
+let buyerInputsReady: Promise<boolean> | null = null;
+
+/**
+ * One of the store's lazy scripts failed to load (a page cached before a
+ * deploy): the page's stale-asset recovery reloads it, unless the buyer has
+ * typed an answer that a reload would lose. An edited line's own answers
+ * (`prefillEdit`) are no loss: the reloaded page fills them again.
+ */
+function staleAsset() {
+  const typed = buyerInputFields().some((field) => answer(field) !== (prefilled.get(field) ?? ""));
+  if (!typed) window.dispatchEvent(new Event(STALE_ASSET_EVENT));
+}
+
+type BuyerInputField = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+
+/** The buy form's buyer-input fields (`property.<key>`; only its inputs, text areas and selects carry such names). */
+function buyerInputFields(): BuyerInputField[] {
+  return (Array.from(cache.form?.elements ?? []) as BuyerInputField[]).filter((field) => field.name?.startsWith(BUYER_INPUT_FIELD_PREFIX));
+}
+
+/** A field's answer as the cart line keeps it: a ticked box is "true", an empty one "". */
+function answer(field: BuyerInputField): string {
+  return field instanceof HTMLInputElement && field.type === "checkbox" ? (field.checked ? "true" : "") : field.value;
+}
+
+/** The answers `prefillEdit` wrote, by field. */
+const prefilled = new Map<BuyerInputField, string>();
+
 function parseDiscountType(value?: string): DiscountType {
   return value === "percentage" || value === "flat" ? value : null;
 }
@@ -129,28 +178,23 @@ export function init() {
   if (!cache.container || !summary) return;
   cache.summary = summary;
   cache.form = summary.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
-  cache.actions = summary.querySelector<HTMLElement>("#product-actions");
-  cache.quantity = summary.querySelector<HTMLInputElement>("#quantity");
-  cache.optionButtons = Array.from(
-    summary.querySelectorAll<HTMLButtonElement>(".variant-option-btn"),
-  );
-  cache.announcer = summary.querySelector("#variant-availability-status");
-  cache.statusPart = summary.querySelector('[data-buy-part="status"]');
-  cache.actionsPart = summary.querySelector('[data-buy-part="actions"]');
-  cache.unavailableNotice = summary.querySelector(
-    "#variant-unavailable-query-notice",
-  );
-  cache.stockBadge = summary.querySelector("#product-stock-badge");
-  cache.stockText = summary.querySelector("#product-stock-text");
-  cache.addButton = summary.querySelector('[data-action="add-to-cart"]');
-  cache.buyButton = summary.querySelector('[data-action="buy-now"]');
-  cache.addLabel = summary.querySelector('[data-action-label="add-to-cart"]');
-  cache.buyLabel = summary.querySelector('[data-action-label="buy-now"]');
-  cache.priceElements = Array.from(summary.querySelectorAll(".product-price"));
-  cache.originalPriceElements = Array.from(
-    summary.querySelectorAll(".product-original-price"),
-  );
-  cache.discountBadge = summary.querySelector(".discount-badge");
+  cache.actions = part("actions");
+  cache.quantity = part<HTMLInputElement>("quantity");
+  cache.optionButtons = parts<HTMLButtonElement>("option");
+  cache.announcer = part("announcer");
+  cache.statusPart = part("status");
+  cache.actionsPart = part("ctas");
+  cache.unavailableNotice = part("unavailable-notice");
+  cache.stockBadge = part("stock-badge");
+  cache.stockText = part("stock-text");
+  cache.addButton = part<HTMLButtonElement>("add");
+  cache.buyButton = part<HTMLButtonElement>("buy");
+  cache.addLabel = part("add-label");
+  cache.buyLabel = part("buy-label");
+  cache.priceElements = parts("price");
+  cache.originalPriceElements = parts("regular-price");
+  cache.discountBadge = part("discount");
+  errorMessage = null;
 
   state.variants = loadVariantsFromDOM(summary);
   state.options = loadOptionsFromDOM(summary);
@@ -191,26 +235,35 @@ export function init() {
   state.selection = requested?.selection ??
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
+  warranty = readWarranty();
 
-  state.purchaseBlocked = Boolean(summary.querySelector("[data-purchase-blocked]"));
-  state.adding = false;
+  state.purchaseBlocked = Boolean(part("blocked"));
+  endAdd();
   state.error = null;
   missingOption = null;
   state.buyerInputs = null;
   // A cart line being edited ("Edit" in the cart; products with buyer
   // inputs only) is known at once: the buttons say "Update cart" from the
   // first frame, and its answers fill the fields the buyer has not touched.
-  const buyerForm = summary.querySelector<HTMLFormElement>("form[data-buyer-inputs]");
+  // The buyer inputs are the buy form itself (ProductBuyerInputs.astro), never a look-alike.
+  const buyerForm = cache.form?.hasAttribute("data-buyer-inputs") ? cache.form : null;
   const productId = cache.container.dataset.productId;
   state.edit = buyerForm && productId ? readCartLineEdit(productId) : null;
-  if (buyerForm && state.edit) prefillEdit(buyerForm, state.edit);
+  prefilled.clear();
+  if (state.edit) prefillEdit(state.edit);
   // The inputs' own script loads only for a product that has them.
-  buyerInputsReady = buyerForm ? loadBuyerInputs(summary) : null;
+  buyerInputsReady = buyerForm
+    ? loadBuyerInputs(buyerForm).then(() => true, () => {
+      staleAsset();
+      return false;
+    })
+    : null;
 
   initQuantity();
   bindOptions();
   bindActions();
   loadExtras();
+  window.addEventListener("pageshow", restoreFromHistory, { signal: extrasBinding!.signal });
   for (const input of purchaseOptionInputs()) input.addEventListener("change", changed);
   refresh(true);
   // The pre-paint hold of a `?variant=` link (VARIANT_PREPAINT_SCRIPT) ends in
@@ -220,19 +273,11 @@ export function init() {
   });
 }
 
-/**
- * Settles once the product's buyer inputs work; null for a product without
- * them. It rejects when their script fails to load: an add then refuses
- * (`failed`) and the buyer's answers stay in the form; left unhandled, the
- * rejection reaches the page's stale-asset recovery, which reloads.
- */
-let buyerInputsReady: Promise<void> | null = null;
-
 /** The live side of the buyer-inputs form (buyer-inputs-controller.ts). An add waits for it. */
-async function loadBuyerInputs(summary: HTMLElement) {
+async function loadBuyerInputs(form: HTMLFormElement) {
   const { initBuyerInputs } = await import("./buyer-inputs-controller");
-  if (cache.summary !== summary) return;
-  state.buyerInputs = initBuyerInputs(summary, () => {
+  if (cache.form !== form) return;
+  state.buyerInputs = initBuyerInputs(form, () => {
     // Editing an answer takes its message away; the problem ends with the last one.
     const shown = state.buyerInputs?.form.querySelector("[data-buyer-input-error]:not(.hidden)");
     if (state.error === "input_invalid" && !shown) state.error = null;
@@ -243,19 +288,23 @@ async function loadBuyerInputs(summary: HTMLElement) {
 }
 
 /** The edited line's quantity, answers and purchase option, in what the buyer has not changed yet. */
-function prefillEdit(form: HTMLFormElement, edit: CartLineEdit) {
+function prefillEdit(edit: CartLineEdit) {
   if (cache.quantity?.value === "1") cache.quantity.value = String(edit.quantity);
-  for (const { key, value } of edit.properties) {
-    const field = form.elements.namedItem(`${BUYER_INPUT_FIELD_PREFIX}${key}`);
-    if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked ||= value === "true";
-    else if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) && !field.value) field.value = value;
+  const answers = new Map(edit.properties.map(({ key, value }) => [`${BUYER_INPUT_FIELD_PREFIX}${key}`, value]));
+  for (const field of buyerInputFields()) {
+    const value = answers.get(field.name);
+    // A field the buyer already answered keeps their answer.
+    if (value === undefined || answer(field)) continue;
+    if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = value === "true";
+    else field.value = value;
+    prefilled.set(field, answer(field));
   }
   if (!selectedPurchaseOption()) selectPurchaseOption(edit.purchaseOption ?? "");
 }
 
 /** The buy form's purchase-option radios (an app's ways to buy, beside a one-time purchase). */
 function purchaseOptionInputs(): HTMLInputElement[] {
-  return Array.from(cache.summary?.querySelectorAll<HTMLInputElement>('[data-product-purchase-options] input[name="purchaseOption"]') ?? []);
+  return parts<HTMLInputElement>("purchase-option");
 }
 
 function selectPurchaseOption(id: string) {
@@ -273,7 +322,7 @@ function selectedPurchaseOption(): CartLinePurchaseOption | null {
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
 function hideExpiredOffers() {
   const now = Date.now() / 1000;
-  cache.summary?.querySelectorAll<HTMLElement>("[data-offer-ends]").forEach((offer) => {
+  parts("offer").forEach((offer) => {
     const endsAt = Number(offer.dataset.offerEnds);
     if (endsAt > 0 && endsAt <= now) offer.hidden = true;
   });
@@ -295,12 +344,13 @@ function currentQuantity(): number {
   return clampQuantity(Number.isFinite(typed) ? typed : 1);
 }
 
+/** The quantity the field means, written back to it, with the limit's message when the buyer typed past it. */
 function readQuantity(): number {
   const input = cache.quantity;
-  const message = cache.summary?.querySelector<HTMLElement>("#quantity-message");
+  const message = part("quantity-message");
   if (!input) return 1;
   const typed = typedQuantity(input.value);
-  const quantity = clampQuantity(Number.isFinite(typed) ? typed : 1);
+  const quantity = currentQuantity();
   input.value = String(quantity);
   const capped = Number.isFinite(typed) && typed > QUANTITY_CONSTRAINTS.MAX;
   if (message) {
@@ -320,8 +370,8 @@ function initQuantity() {
     readQuantity();
     changed();
   };
-  cache.summary?.querySelector("#quantity-minus")?.addEventListener("click", () => update(-1));
-  cache.summary?.querySelector("#quantity-plus")?.addEventListener("click", () => update(1));
+  part("quantity-minus")?.addEventListener("click", () => update(-1));
+  part("quantity-plus")?.addEventListener("click", () => update(1));
   input.addEventListener("change", () => {
     readQuantity();
     changed();
@@ -431,11 +481,11 @@ function bindActions() {
   cache.actions?.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     // With buyer inputs the buttons submit the form, which the script replaces.
-    if (target.closest('[data-action="add-to-cart"]')) {
+    if (target.closest('[data-sx-buy="add"]')) {
       event.preventDefault();
       void add(false);
     }
-    if (target.closest('[data-action="buy-now"]')) {
+    if (target.closest('[data-sx-buy="buy"]')) {
       event.preventDefault();
       void add(true);
     }
@@ -445,62 +495,35 @@ function bindActions() {
   // default one); anything else still lands here, as the buyer's own choice.
   cache.form?.addEventListener("submit", (event) => {
     const submitter = (event as SubmitEvent).submitter;
-    // A skin's buy button reaches the form only when its script failed to
-    // load: it posts its own SKU, as without JavaScript.
-    if (submitter?.matches(SKIN_BUY_CONTROL)) return;
     event.preventDefault();
-    void add(Boolean(submitter?.closest('[data-action="buy-now"]')));
+    void add(Boolean(submitter?.matches('[data-sx-buy="buy"]')));
   });
 }
 
-/** The skin's SKU controls, once their script has loaded (skin-controls.ts). */
-let skinControls: { sync(): void } | null = null;
+/** Whether the page has a skin's bound SKU controls (placed now or in deferred markup). */
+let skinControls = false;
 /** Publishes the form's state to app islands, once its script has loaded (island-state.ts). */
 let publishState: (() => void) | null = null;
 let extrasBinding: AbortController | null = null;
 
 /**
- * What only some product pages use loads only there: a product_main skin's
+ * What only some product pages use runs only there: a product_main skin's
  * SKU controls (`chooseVariant`, `buyVariant`; placed now or in deferred
- * markup) and the state for app islands (`context.product`; islands live in
- * app components). A page without either pays nothing for them.
+ * markup) are taken and kept in step, and the state for app islands
+ * (`context.product`; islands live in app components) loads its script.
  */
 function loadExtras() {
   extrasBinding?.abort();
-  skinControls = null;
   publishState = null;
   const { signal } = (extrasBinding = new AbortController());
   const bound = "[data-sx-bound]";
-  if (document.querySelector(bound) || Array.from(document.querySelectorAll<HTMLTemplateElement>("scalius-deferred>template")).some((template) => template.content.querySelector(bound))) {
-    // A press on a control before its script is in waits for it (the last
-    // one): a choice or buy then runs as if pressed after.
-    let pending: HTMLElement | null = null;
-    const hold = (event: MouseEvent) => {
-      const control = event.target instanceof Element
-        ? event.target.closest<HTMLElement>(`${bound}[data-choose-variant],${bound}[data-buy-variant]`)
-        : null;
-      // A new tab or window follows a link itself.
-      if (!control || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      event.preventDefault();
-      pending = control;
-    };
-    document.addEventListener("click", hold, { capture: true, signal });
-    void import("./skin-controls").then(({ bindSkinControls }) => {
-      document.removeEventListener("click", hold, { capture: true });
-      if (signal.aborted) return;
-      skinControls = bindSkinControls({ state, choose: chooseVariant, add, selected: exactVariant, stock: getBuyerStockSummary }, signal);
-      // Controls in deferred markup take the form's state when they enter the page.
-      document.addEventListener(DEFERRED_REVEAL_EVENT, skinControls.sync, { signal });
-      skinControls.sync();
-      pending?.click();
-    }, (error: unknown) => {
-      // Their script is gone (a deploy): a held press goes the native way (a
-      // link opens, a buy button posts its own SKU), the one navigation;
-      // with none held, the page's stale-asset recovery hears the failure.
-      document.removeEventListener("click", hold, { capture: true });
-      if (pending) pending.click();
-      else throw error;
-    });
+  skinControls = Boolean(document.querySelector(bound))
+    || Array.from(document.querySelectorAll<HTMLTemplateElement>("scalius-deferred>template")).some((template) => template.content.querySelector(bound));
+  if (skinControls) {
+    // Their presses and state are the form's from the first frame.
+    document.addEventListener("click", pressSkinControl, { capture: true, signal });
+    // Controls in deferred markup take the form's state when they enter the page.
+    document.addEventListener(DEFERRED_REVEAL_EVENT, syncSkinControls, { signal });
   }
   if (cache.summary && document.querySelector("[data-sx-app]")) {
     const summary = cache.summary;
@@ -509,8 +532,60 @@ function loadExtras() {
       publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, option: selectedPurchaseOption, stock: getBuyerStockSummary });
       // The first state goes out in a frame too, never ahead of what the page shows.
       requestAnimationFrame(publish);
-    });
+    }, staleAsset);
   }
+}
+
+/**
+ * Brings every bound SKU control on the page in step with the form: the
+ * chosen SKU marked, a buy button off as the form's own buttons are (Buy
+ * now gone then), none while a cart line is edited (the form updates it).
+ */
+function syncSkinControls() {
+  if (!skinControls) return;
+  const chosen = exactVariant()?.id;
+  for (const control of document.querySelectorAll<HTMLElement>(SKIN_CHOOSE_CONTROL)) {
+    const on = chosen !== undefined && control.dataset.chooseVariant === chosen;
+    control.dataset.state = on ? "selected" : "unselected";
+    if (control instanceof HTMLButtonElement) control.setAttribute("aria-pressed", String(on));
+    else if (on) control.setAttribute("aria-current", "true");
+    else control.removeAttribute("aria-current");
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>(SKIN_BUY_CONTROL)) {
+    const variant = state.variants.find((candidate) => candidate.id === button.dataset.buyVariant);
+    button.disabled = !variant || !getBuyerStockSummary([variant]).canPurchaseAny || state.purchaseBlocked;
+    button.hidden = Boolean(state.edit) || (button.dataset.buyIntent === "buy" && button.disabled);
+  }
+}
+
+/**
+ * A press on a product_main skin's SKU control (`chooseVariant`,
+ * `buyVariant`). The nearest bound control is the one pressed: a buy button
+ * inside a choice card buys. A choice goes through the form's selection; a
+ * buy button chooses its SKU, is taken at once (a second press is refused),
+ * then, after the frame that shows the SKU (and tells islands), runs the
+ * form's own add or Buy now. While a cart line is edited the form's
+ * "Update cart" is the only way to buy.
+ */
+function pressSkinControl(event: MouseEvent) {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest<HTMLButtonElement>(SKIN_BUY_CONTROL);
+  const choice = event.target.closest<HTMLElement>(SKIN_CHOOSE_CONTROL);
+  if (button && (!choice || choice.contains(button))) {
+    event.preventDefault();
+    if (button.disabled || state.adding || state.purchaseBlocked || state.edit) return;
+    if (!chooseVariant(button.dataset.buyVariant ?? "")) return;
+    state.adding = true;
+    requestAnimationFrame(() => {
+      state.adding = false;
+      void add(button.dataset.buyIntent === "buy", button);
+    });
+    return;
+  }
+  // A new tab or window follows a link itself.
+  if (!choice || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  chooseVariant(choice.dataset.chooseVariant ?? "");
 }
 
 function replaceVariantUrl() {
@@ -560,7 +635,7 @@ function setError(error: StorefrontProductError | null) {
 }
 
 export function revealSelectedOptions(root: ParentNode = cache.summary ?? document) {
-  root.querySelectorAll<HTMLElement>(".variant-option-values[data-option-overflow]").forEach((list) => {
+  root.querySelectorAll<HTMLElement>('[data-sx-buy="option-values"][data-option-overflow]').forEach((list) => {
     const selected = list.querySelector<HTMLElement>('.variant-option-btn[aria-pressed="true"]');
     if (!selected) return;
     const listRect = list.getBoundingClientRect();
@@ -644,7 +719,6 @@ function updateOptionButtons() {
           option.name,
           button.dataset.optionValue || "",
           status,
-          selected,
         ) + (optionPrice ? ` ${optionPrice}.` : ""),
       );
     }
@@ -655,9 +729,7 @@ function optionButtonLabel(
   name: string,
   value: string,
   status: VariantOptionAvailability,
-  selected: boolean,
 ) {
-  void selected;
   // The page's words (ProductSummary.astro), so a Bangla page reads Bangla.
   const words = cache.actions?.dataset;
   const template = status === "sold_out"
@@ -675,13 +747,22 @@ function exactVariant() {
   );
 }
 
-function updateStockAndActions() {
+/**
+ * The SKU the buy box shows (a link's sold-out SKU, else the chosen one) and
+ * the SKUs its stock, price and warranty speak for: that one, else every SKU
+ * the choice so far still allows.
+ */
+function shownVariants(): { exact: Variant | null; candidates: Variant[] } {
   const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact
-    ? [exact]
-    : Object.keys(state.selection).length
-      ? filterVariantsBySelection(state.variants, state.selection)
-      : state.variants;
+  if (exact) return { exact, candidates: [exact] };
+  return {
+    exact,
+    candidates: Object.keys(state.selection).length ? filterVariantsBySelection(state.variants, state.selection) : state.variants,
+  };
+}
+
+function updateStockAndActions() {
+  const { exact, candidates } = shownVariants();
   const summary = getBuyerStockSummary(candidates);
   const copy = cache.actions?.dataset;
   const actions = getProductActionsPresentation({
@@ -742,7 +823,7 @@ function updateStockAndActions() {
     if (cache.buyButton) cache.buyButton.hidden = true;
   }
   updateActionsState();
-  skinControls?.sync();
+  syncSkinControls();
 }
 
 /** The buttons' row: `busy` while an add runs, `unavailable` while nothing chosen can be bought, else `ready`. */
@@ -764,12 +845,7 @@ function setButton(
 
 function updatePrice() {
   if (!state.productPricing) return;
-  const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact
-    ? [exact]
-    : Object.keys(state.selection).length
-      ? filterVariantsBySelection(state.variants, state.selection)
-      : state.variants;
+  const { exact, candidates } = shownVariants();
   const presentation = getBuyerVariantPricePresentation(state.productPricing, candidates);
   // "From" only while the remaining choices are priced differently.
   const starting =
@@ -829,25 +905,35 @@ function updateVariantImage() {
   );
 }
 
+let warranty: { box: HTMLElement; byVariant: Record<string, string | null> } | null = null;
+
+/**
+ * Reads the warranty rows' SKU map once per page (`warranty`). Without one
+ * (every SKU shares one warranty: WarrantyRow.astro) or with a broken one,
+ * the rows stay as drawn.
+ */
+function readWarranty() {
+  const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
+  const map = box?.dataset.sxWarrantyByVariant;
+  if (!box || !map) return null;
+  try {
+    return { box, byVariant: JSON.parse(map) as Record<string, string | null> };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The buy box's warranty row (WarrantyRow.astro): the chosen SKU's warranty,
  * or, with no SKU chosen, the one every SKU of the choice so far shares.
  * SKUs of one product may each have their own, or none.
  */
 function updateWarrantyRows() {
-  const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
-  if (!box) return;
-  let byVariant: Record<string, string | null>;
-  try {
-    byVariant = JSON.parse(box.dataset.sxWarrantyByVariant ?? "{}") as Record<string, string | null>;
-  } catch {
-    return;
-  }
-  const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact ? [exact] : filterVariantsBySelection(state.variants, state.selection);
-  const ids = new Set(candidates.map((variant) => byVariant[variant.id] ?? null));
+  if (!warranty) return;
+  const { byVariant } = warranty;
+  const ids = new Set(shownVariants().candidates.map((variant) => byVariant[variant.id] ?? null));
   const shown = ids.size === 1 ? [...ids][0] ?? null : null;
-  for (const row of box.querySelectorAll<HTMLElement>("[data-sx-warranty-row]")) {
+  for (const row of warranty.box.querySelectorAll<HTMLElement>("[data-sx-warranty-row]")) {
     row.hidden = shown === null || row.dataset.sxWarrantyId !== shown;
   }
 }
@@ -870,7 +956,7 @@ let missingOption: string | null = null;
  */
 function showMissingOption(definitionId: string, message: string, focus = false) {
   const group = cache.summary?.querySelector<HTMLElement>(
-    `fieldset[data-option-definition-id="${CSS.escape(definitionId)}"]`,
+    `[data-sx-buy="option-group"][data-option-definition-id="${CSS.escape(definitionId)}"]`,
   );
   const note = group?.querySelector<HTMLElement>(".option-missing-message");
   if (!message) {
@@ -906,39 +992,54 @@ async function add(redirect: boolean, source: HTMLElement | null = null) {
   updateActionsState();
   publish();
   // Busy while the line is added, so a slow phone shows the press took.
-  const button = source ?? (redirect ? cache.buyButton : cache.addButton);
-  button?.setAttribute("aria-busy", "true");
-  button?.classList.add("opacity-70", "cursor-progress");
+  busyButton = source ?? (redirect ? cache.buyButton : cache.addButton);
+  busyButton?.setAttribute("aria-busy", "true");
+  busyButton?.classList.add("opacity-70", "cursor-progress");
+  let posted = false;
   try {
-    await addSelected(redirect, source !== null);
+    // The SKU as it was pressed: a choice made while the add waits (for the
+    // buyer inputs' script) never changes what it buys.
+    posted = (await addSelected(redirect, source !== null, state.selection)) === true;
   } finally {
-    state.adding = false;
-    button?.removeAttribute("aria-busy");
-    button?.classList.remove("opacity-70", "cursor-progress");
+    // A native post is on its way: the form stays busy and takes no other press.
+    if (!posted) endAdd();
     updateActionsState();
     publish();
   }
 }
 
-async function addSelected(redirect: boolean, focusProblem: boolean) {
+/** The button an add marks busy, until the add ends. */
+let busyButton: HTMLElement | null = null;
+
+function endAdd() {
+  state.adding = false;
+  busyButton?.removeAttribute("aria-busy");
+  busyButton?.classList.remove("opacity-70", "cursor-progress");
+  busyButton = null;
+}
+
+/**
+ * A page restored from the back/forward cache is the page as it was left,
+ * but the cart may have moved on: a native post's busy state ends (the buyer
+ * came back to buy again), and the cart line being edited is read again, as
+ * an update the buyer finished (in the cart, Back) leaves none to update.
+ * A restore only ever drops this page's edit: an edit begun on another page
+ * (Edit in the cart opens a fresh page) is that page's, and this one never
+ * filled its answers.
+ */
+function restoreFromHistory(event: PageTransitionEvent) {
+  if (!event.persisted) return;
+  endAdd();
+  if (state.edit && readCartLineEdit(state.edit.productId)?.lineKey !== state.edit.lineKey) state.edit = null;
+  refresh();
+}
+
+/** Adds the SKU `selection` names; true when the form was posted the no-JavaScript way instead. */
+async function addSelected(redirect: boolean, focusProblem: boolean, selection: VariantSelection): Promise<boolean | void> {
   if (!cache.container || !state.productPricing) return;
   const fail = (message: string, error: StorefrontProductError) => showError(message, error, focusProblem);
-  // A product's buyer inputs work first. When their script failed to load
-  // (some browsers then refuse it for the life of the page), the form goes
-  // the no-JavaScript way: it posts every answer, the chosen SKU and the
-  // quantity, and the store checks and prices them. A cart line being
-  // edited cannot be replaced that way, so its update is refused instead
-  // (the answers stay in the form).
-  if (buyerInputsReady && !(await buyerInputsReady.then(() => true, () => false))) {
-    if (state.edit || !cache.form) return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
-    const field = cache.form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
-    const chosen = exactVariant();
-    if (field && chosen) field.value = chosen.id;
-    // Not requestSubmit: that comes back to this script's own submit handler.
-    return HTMLFormElement.prototype.submit.call(cache.form);
-  }
   const validation = validateSelection(
-    state.selection,
+    selection,
     state.options,
     state.variants,
   );
@@ -954,6 +1055,25 @@ async function addSelected(redirect: boolean, focusProblem: boolean) {
   // The page's words, never the check's: the sold-out word, or the one for a choice no SKU has.
   if (!validation.valid || !validation.variant)
     return fail((validation.reason === "sold_out" ? cache.actions?.dataset.unavailableText : cache.actions?.dataset.combinationUnavailableText) ?? "", "unavailable");
+  // A product's buyer inputs work first. When their script failed to load
+  // (some browsers then refuse it for the life of the page), the form goes
+  // the no-JavaScript way once the browser's own checks pass (a required
+  // answer: its message, nothing posted): it posts every answer, this SKU
+  // and the quantity, and the store checks and prices them. A cart line
+  // being edited cannot be replaced that way, so its update is refused
+  // instead (the answers stay in the form).
+  if (buyerInputsReady && !(await buyerInputsReady)) {
+    if (state.edit || !cache.form) return fail(cache.actions?.dataset.cartAddFailedText ?? "", "failed");
+    // Bangla digits become the quantity's own first, so the browser's
+    // (English) pattern message never shows for them.
+    readQuantity();
+    if (!cache.form.reportValidity()) return setError("input_invalid");
+    const field = cache.form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]');
+    if (field) field.value = validation.variant.id;
+    // Not requestSubmit: that comes back to this script's own submit handler.
+    HTMLFormElement.prototype.submit.call(cache.form);
+    return true;
+  }
   // Each problem shows (and takes focus) under its field.
   const inputs = state.buyerInputs?.validate() ?? null;
   if (inputs && !inputs.ok) return setError("input_invalid");
@@ -1075,8 +1195,8 @@ async function addSelected(redirect: boolean, focusProblem: boolean) {
  * button elsewhere on the page).
  */
 function showError(message: string, error: StorefrontProductError, focus = false) {
-  cache.summary?.querySelector("[data-product-action-error]")?.remove();
-  const element = document.createElement("p");
+  errorMessage?.remove();
+  const element = (errorMessage = document.createElement("p"));
   element.dataset.productActionError = "";
   element.className = "rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive";
   element.textContent = message;
@@ -1092,7 +1212,8 @@ function showError(message: string, error: StorefrontProductError, focus = false
 
 /** The form says no problem any more; the caller publishes. */
 function withdrawError() {
-  cache.summary?.querySelector("[data-product-action-error]")?.remove();
+  errorMessage?.remove();
+  errorMessage = null;
   if (cache.statusPart) cache.statusPart.dataset.state = "idle";
   state.error = null;
 }

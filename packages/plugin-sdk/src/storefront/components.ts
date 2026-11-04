@@ -223,7 +223,9 @@ export function accountLink(): Attributes {
  * The buyer's light or dark switch: a native `<button type="button">` the
  * store flips the colour scheme with and remembers on the buyer's device.
  * It shows only where the theme offers the switch (and JavaScript runs);
- * style its two states on `:root[data-color-scheme="dark"]`.
+ * style its two states on `:root[data-color-scheme="dark"]`. The store keeps
+ * it `aria-pressed` while dark colours show: give it one stable name
+ * ("Dark colours"), not one that flips.
  */
 export function colorSchemeToggle(): Attributes {
   return { "data-color-scheme-toggle": "" };
@@ -258,7 +260,9 @@ type ProductPageVariant = Pick<StorefrontProductPage["product"]["variants"][numb
  * form's own picker chooses (a `buyVariant` button still buys). The host
  * draws the SKU the page opens on chosen and keeps `data-state`
  * (`selected`, `unselected`), `aria-pressed` (a button) or `aria-current`
- * (a link) and `data-availability` (`available`, `sold-out`) current.
+ * (a link) and `data-availability` (`available`, `sold-out`) current. Write
+ * the sold-out word in the control's own text: assistive technology does
+ * not read the attribute.
  *
  *   <a {...chooseVariant(variant)}>{variant.title}</a>
  */
@@ -275,9 +279,15 @@ export function chooseVariant(variant: ProductPageVariant): Attributes {
  * of the form posting its SKU. The host owns `type`, `disabled`, `hidden`
  * and `aria-busy`: off while the SKU is sold out or the product cannot be
  * bought here, as the form's own buttons (a `"buy"` button then gone), busy
- * while it adds, gone while the buyer edits a cart line.
+ * while it adds, gone while the buyer edits a cart line. Put it beside the
+ * SKU's `chooseVariant` link (both inside a `<div>` card), never inside it:
+ * a button inside a link is invalid HTML that keyboard, screen reader and
+ * switch users cannot use reliably (the store warns once).
  *
- *   <button {...buyVariant(variant, "add")}>Add</button>
+ *   <div class="plan">
+ *     <a {...chooseVariant(variant)}>{variant.title}</a>
+ *     <button {...buyVariant(variant, "add")}>Add</button>
+ *   </div>
  */
 export function buyVariant(variant: ProductPageVariant, action: "add" | "buy"): Attributes {
   return { "data-buy-variant": variant.id, "data-buy-intent": action };

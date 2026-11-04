@@ -88,6 +88,8 @@ function ColorField({
   useEffect(() => setText(value), [value]);
   const valid = isStorefrontThemeHexColor(text.trim().toLowerCase());
   const [left, setLeft] = useState(false);
+  // What a merchant left half typed, said aloud once the field shows the kept colour again.
+  const [discarded, setDiscarded] = useState<string | null>(null);
   const server = useServerFieldError(id);
   const asked = useThemeReveal() !== null;
   const errors = [
@@ -99,6 +101,7 @@ function ColorField({
   ].filter((error): error is string => Boolean(error));
   const change = (next: string) => {
     server.clear();
+    setDiscarded(null);
     setText(next);
     // The document stores lowercase #rrggbb, and only a complete one.
     const color = next.trim().toLowerCase();
@@ -126,11 +129,15 @@ function ColorField({
           spellCheck={false}
           autoComplete="off"
           aria-invalid={errors.length > 0 ? true : undefined}
-          aria-describedby={errors.length > 0 ? `${id}-note` : undefined}
+          aria-describedby={[errors.length > 0 && `${id}-note`, discarded && `${id}-kept`].filter(Boolean).join(" ") || undefined}
           onBlur={() => {
             setLeft(true);
-            // Leaving a half-typed colour shows the colour the draft keeps: the field never disagrees with it.
-            if (!valid) setText(value);
+            // Leaving a half-typed colour shows the colour the draft keeps, and says so:
+            // the field never disagrees with the draft, and never silently.
+            if (!valid) {
+              setDiscarded(text.trim() || null);
+              setText(value);
+            }
           }}
           onChange={(event) => change(event.target.value)}
         />
@@ -140,6 +147,10 @@ function ColorField({
           {errors.map((error) => <p key={error} className="text-body text-destructive">{error}</p>)}
         </div>
       ) : null}
+      {/* Always in the page, so a screen reader hears the note when it appears. */}
+      <p id={`${id}-kept`} role="status" className={discarded ? "text-body text-muted-foreground" : "sr-only"}>
+        {discarded ? t("colorKept", { typed: discarded, kept: value }) : null}
+      </p>
     </Field>
   );
 }

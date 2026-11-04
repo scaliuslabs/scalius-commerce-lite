@@ -6,6 +6,7 @@ import {
   STOREFRONT_THEME_COLOR_KEYS,
   STOREFRONT_THEME_MAX_MUTED_CHROMA,
   STOREFRONT_THEME_MIN_CONTRAST,
+  STOREFRONT_THEME_MIN_FIELD_BORDER_CONTRAST,
   STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE,
   storefrontHeaderBands,
   storefrontHeaderToneColors,
@@ -287,13 +288,28 @@ function fontStack(font: StorefrontFontKey, bangla: keyof typeof STOREFRONT_BANG
 
 type Palette = Readonly<StorefrontThemeColors>;
 
+/**
+ * A palette from its colours. `input` (a field's border) is a tint the
+ * palette names, taken toward the ink until it shows against the page and
+ * the card (WCAG 1.4.11): the border is the only edge a text field has.
+ */
 function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"> & Partial<Palette>): Palette {
   return {
     popover: colors.card,
     "popover-foreground": colors["card-foreground"],
     ring: colors.primary,
     ...colors,
+    input: storefrontThemeFieldBorder(colors),
   } as Palette;
+}
+
+/**
+ * A colour set's field border as the palettes give it: its `input` tint
+ * taken toward the ink until it shows (3:1) against the page and the card.
+ * A border that already shows comes back as it is.
+ */
+export function storefrontThemeFieldBorder(colors: Pick<StorefrontThemeColors, "input" | "background" | "card" | "foreground">): string {
+  return fieldBorder(colors.input, [colors.background, colors.card], colors.foreground);
 }
 
 /**
@@ -388,13 +404,18 @@ export const STOREFRONT_THEME_PALETTES = {
 export type StorefrontThemePaletteKey = keyof typeof STOREFRONT_THEME_PALETTES;
 export const STOREFRONT_THEME_PALETTE_KEYS = Object.keys(STOREFRONT_THEME_PALETTES) as StorefrontThemePaletteKey[];
 
-/** `color` moved toward `toward` until it reads (AA) on every surface; `toward` itself at worst. */
-function readableOn(color: string, surfaces: readonly string[], toward: string): string {
+/** `color` moved toward `toward` until it reads (AA, or `min`) on every surface; `toward` itself at worst. */
+function readableOn(color: string, surfaces: readonly string[], toward: string, min = STOREFRONT_THEME_MIN_CONTRAST): string {
   for (let step = 0; step <= 20; step += 1) {
     const candidate = storefrontThemeMix(color, toward, step / 20);
-    if (surfaces.every((surface) => storefrontThemeContrast(candidate, surface) >= STOREFRONT_THEME_MIN_CONTRAST)) return candidate;
+    if (surfaces.every((surface) => storefrontThemeContrast(candidate, surface) >= min)) return candidate;
   }
   return toward;
+}
+
+/** A field border that shows (3:1) on every surface, from its tint toward the ink. */
+function fieldBorder(tint: string, surfaces: readonly string[], ink: string): string {
+  return readableOn(tint, surfaces, ink, STOREFRONT_THEME_MIN_FIELD_BORDER_CONTRAST);
 }
 
 /** `color` moved toward black until its luminance is at most `luminance`. */
@@ -442,7 +463,7 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
     muted, "muted-foreground": mutedForeground,
     accent, "accent-foreground": foreground,
     destructive, "destructive-foreground": background,
-    border: mix(background, paper, 0.16), input: mix(background, paper, 0.24), ring: primary,
+    border: mix(background, paper, 0.16), input: fieldBorder(mix(background, paper, 0.24), [background, card], paper), ring: primary,
   };
 }
 

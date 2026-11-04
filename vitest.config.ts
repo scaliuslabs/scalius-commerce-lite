@@ -95,6 +95,10 @@ export default defineConfig({
     // (`pnpm test:affected`, scripts/test-affected.mjs) selects by what a test
     // really imports instead of walking the static graph.
     experimental: { recordDependencies: true },
+    // Vitest's default also lists `**/package.json`, which makes `--changed` select every
+    // file when any manifest changes. scripts/test-affected.mjs selects by package for
+    // workspace manifests and the lockfile, and runs everything for the root manifest.
+    forceRerunTriggers: ["**/{vitest,vite}.config.*"],
     projects: [
       ...(pass === "serial"
         ? []

@@ -35,7 +35,7 @@ export async function prepareContinuationPage(astro: {
   params: Record<string, string | undefined>;
   request: Request;
   locals: object;
-  response: { headers: Headers; status: number };
+  response: { headers: Headers; status?: number };
 }): Promise<ContinuationPage> {
   // The middleware already resolved the store language in its one layout read.
   const language = continuationLanguage(getRuntimeStoreLanguage());

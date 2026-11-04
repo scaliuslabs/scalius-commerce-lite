@@ -160,7 +160,7 @@ function buyFormContainer(): ParentNode | null {
 
 /** The SKUs the buy form drew (`root`: its container). */
 export function loadVariantsFromDOM(root: ParentNode | null = buyFormContainer()): Variant[] {
-  const element = root?.querySelector("#product-variants-data");
+  const element = root?.querySelector('[data-sx-buy="variants"]');
   if (!element?.textContent) return [];
   try {
     const value = JSON.parse(element.textContent);
@@ -171,7 +171,7 @@ export function loadVariantsFromDOM(root: ParentNode | null = buyFormContainer()
 }
 
 export function loadOptionsFromDOM(root: ParentNode | null = buyFormContainer()): ProductOptionDefinition[] {
-  const element = root?.querySelector("#product-options-data");
+  const element = root?.querySelector('[data-sx-buy="options"]');
   if (!element?.textContent) return [];
   try {
     const value = JSON.parse(element.textContent);
