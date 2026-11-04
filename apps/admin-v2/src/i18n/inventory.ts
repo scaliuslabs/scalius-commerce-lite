@@ -17,6 +17,7 @@ export const inventoryMessages = defineMessages({
     committed: "Committed",
     available: "Available",
     availableCount: "{count} available",
+    availableSummary: "{count} available",
     availableBreakdown: "{summary}. Show breakdown",
     availableHelp: "On hand minus stock held for open orders.",
     clearSelection: "Clear",
@@ -250,6 +251,8 @@ export const inventoryMessages = defineMessages({
     committed: "অর্ডারে রাখা",
     available: "বিক্রির জন্য আছে",
     availableCount: "{count}টি বিক্রির জন্য আছে",
+    // A space, not টি: the table cell shows the bare number, and the name must hold it as a word (WCAG 2.5.3).
+    availableSummary: "{count} বিক্রির জন্য আছে",
     availableBreakdown: "{summary}। বিস্তারিত দেখুন",
     availableHelp: "হাতের স্টক থেকে খোলা অর্ডারে রাখা স্টক বাদে।",
     clearSelection: "বাছাই মুছুন",

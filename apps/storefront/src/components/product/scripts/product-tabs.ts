@@ -112,6 +112,11 @@ function isRtl(): boolean {
 function updateScrollUI(): void {
   if (!elements?.nav || !elements.fadeLeft || !elements.fadeRight) return;
 
+  // The hints sit beside the strip. When every tab fits the rail they give their width back; this
+  // is measured against the rail, not the strip, so giving the width back cannot flip the answer.
+  const rail = elements.nav.closest<HTMLElement>("[data-tab-rail]");
+  if (rail) rail.toggleAttribute("data-fits", elements.nav.scrollWidth <= rail.clientWidth + 1);
+
   const { scrollLeft, scrollWidth, clientWidth } = elements.nav;
   const max = Math.max(0, scrollWidth - clientWidth);
   const position = Math.min(max, Math.max(0, isRtl() ? -scrollLeft : scrollLeft));

@@ -158,15 +158,20 @@ export function VariantName({ productId, productName, optionLabel }: {
   optionLabel: string | null;
 }) {
   const t = useMessages(inventoryMessages);
-  // The product and its option values each use one line, with the whole value on hover.
+  // The product and its option values each use one line, with the whole value on hover. One link
+  // covers both lines (about 40px, 24px at the least), so its hit area is all real text height with
+  // nothing laid over it and nothing reaching into a neighbouring row; touch adds 2px above and below
+  // inside the cell to reach 44px (C6).
   return (
-    <span className="block min-w-0">
-      {/* One text line whose hit area grows by padding the row cancels with a negative margin: 44px on phones and touch screens, 24px with a mouse (C6), the layout stays one line. */}
-      <RowLink to={`/admin/products/${productId}/edit`} title={productName ?? t("unknownProduct")} className="-my-3 block min-h-0 truncate py-3 font-medium hover:underline sm:pointer-fine:-my-0.5 sm:pointer-fine:py-0.5">
+    <RowLink
+      to={`/admin/products/${productId}/edit`}
+      className="group block min-w-0 py-0.5 sm:pointer-fine:py-0"
+    >
+      <span title={productName ?? t("unknownProduct")} className="block h-lh truncate font-medium group-hover:underline">
         {productName ?? t("unknownProduct")}
-      </RowLink>
+      </span>
       <span title={optionLabel ?? undefined} className="block h-lh truncate text-muted-foreground">{optionLabel}</span>
-    </span>
+    </RowLink>
   );
 }
 
@@ -268,7 +273,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       header: sortHeader(t("available")),
       meta: { numeric: true, priority: 95, minWidth: 100 },
       cell: ({ row }) => (
-        <AvailableBreakdown variant={row.original} storeLevel={storeLevel} summary={`${formatNumber(row.original.available)} ${t("available")}`}>
+        <AvailableBreakdown variant={row.original} storeLevel={storeLevel} summary={t("availableSummary", { count: row.original.available })}>
           {formatNumber(row.original.available)}
         </AvailableBreakdown>
       ),
