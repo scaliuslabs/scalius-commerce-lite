@@ -1933,10 +1933,11 @@ export async function processRefund(
             `This refund gives back more than the order kept: ${why}. Refund at most ${display(maxMinor)}.`,
             {
                 reason: GIFT_CARD_VALUE_SPENT_REASON,
-                // Major units in the order's currency: the dashboard words them in its own language.
                 maxRefundAmount: display(maxMinor),
-                spentAmount: display(giftCardClawback.spentMinor),
-                unissuedAmount: display(giftCardClawback.unissuedMinor),
+                // Integer minor units: clients word the refusal in their own language.
+                maxRefundMinor: maxMinor,
+                spentMinor: giftCardClawback.spentMinor,
+                unissuedMinor: giftCardClawback.unissuedMinor,
             },
         );
     }

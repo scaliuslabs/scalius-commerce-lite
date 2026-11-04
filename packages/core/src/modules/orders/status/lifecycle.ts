@@ -44,7 +44,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
 import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
-import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
     normalizeOrderStatus,
@@ -275,7 +275,7 @@ export function assertOrderCodActionAllowed(
     if (canProcessOrderCodAction(status, action, context)) return;
     // A second click from a tab opened before the first: say what happened, not what is allowed.
     if (action === "returned" && status === OrderStatus.RETURNED) {
-        throw new ConflictError("This order is already marked returned.");
+        throw new AppError(409, "conflict", "This order is already marked returned.", { reason: "order_already_returned" });
     }
     throw new ValidationError(action === "collected" && context.requiresShipping === false
         ? "Confirm the order before recording the cash."

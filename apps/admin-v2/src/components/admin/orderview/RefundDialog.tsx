@@ -20,6 +20,7 @@ import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
 import { useMessages } from "~/i18n";
 import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
+import { refundRefusalMessages } from "~/i18n/refund-refusals";
 import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
@@ -37,17 +38,14 @@ const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", 
 
 /**
  * The API's refusal of a refund larger than the order kept (gift cards it sold
- * were spent, or are still to be issued), in the order's major units; null for
- * any other failure.
+ * were spent, or are still to be issued), from its minor units into the
+ * order's major units; null for any other failure.
  */
-export function giftCardRefundLimit(error: unknown): { max: number; spent: number; unissued: number } | null {
+export function giftCardRefundLimit(error: unknown, decimalPlaces: number): { max: number; spent: number; unissued: number } | null {
   const details = readAdminApiError(error)?.details as Record<string, unknown> | undefined;
   if (details?.reason !== "gift_card_value_spent") return null;
-  const amount = (value: unknown) => {
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  };
-  return { max: amount(details.maxRefundAmount), spent: amount(details.spentAmount), unissued: amount(details.unissuedAmount) };
+  const major = (minor: unknown) => (Number.isSafeInteger(minor) && (minor as number) > 0 ? (minor as number) / 10 ** decimalPlaces : 0);
+  return { max: major(details.maxRefundMinor), spent: major(details.spentMinor), unissued: major(details.unissuedMinor) };
 }
 
 /**
@@ -97,6 +95,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const g = useMessages(giftCardOrderMessages);
+  const why = useMessages(refundRefusalMessages);
   const owed = initialRefundAmount(order);
   const [amount, setAmount] = useState<number | null>(owed);
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -117,12 +116,12 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const requestKey = useRef(crypto.randomUUID());
   const mutation = useRefundOrder();
   // The most the server said this refund can be (gift cards the order sold were spent).
-  const refusal = giftCardRefundLimit(mutation.error);
+  const decimalPlaces = order.currencyDecimalPlaces ?? 2;
+  const refusal = giftCardRefundLimit(mutation.error, decimalPlaces);
   const limit = refusal ? Math.min(paid, refusal.max) : paid;
 
   const value = amount ?? Number.NaN;
   const valid = Number.isFinite(value) && value > 0 && value <= limit;
-  const decimalPlaces = order.currencyDecimalPlaces ?? 2;
   const toMinor = (major: number) => Math.round(major * 10 ** decimalPlaces);
   // What the split is previewed for: the typed amount, else everything refundable.
   const previewMinor = toMinor(valid ? value : limit);
@@ -186,8 +185,8 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
               <AlertDescription>
                 {refusal
                   ? [
-                    refusal.spent > 0 ? t("refund.giftCardSpent", { spent: money(refusal.spent), max: money(refusal.max) }) : null,
-                    refusal.unissued > 0 ? t("refund.giftCardUnissued", { unissued: money(refusal.unissued), max: money(refusal.max) }) : null,
+                    refusal.spent > 0 ? why("giftCardSpent", { spent: money(refusal.spent), max: money(refusal.max) }) : null,
+                    refusal.unissued > 0 ? why("giftCardUnissued", { unissued: money(refusal.unissued), max: money(refusal.max) }) : null,
                   ].filter(Boolean).join(" ") || t("refund.max", { amount: money(refusal.max) })
                   : orderErrorMessage(mutation.error)}
               </AlertDescription>

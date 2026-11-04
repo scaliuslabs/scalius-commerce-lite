@@ -410,8 +410,14 @@ export type ReservationVariantState = {
  * keys here keeps a sold key from being counted twice (once as reserved, once
  * as gone from the pool). Compared with reserved stock, it is what checkout
  * may still sell, even where an old typed-in quantity outgrew the keys.
- * Driven by `digital_licence_keys_pool_idx`, `order_items_variant_id_idx` and
- * `digital_licence_keys_order_item_idx`.
+ *
+ * The held keys are read from the store's open orders (the statuses that can
+ * hold a reservation, by `orders_status_idx`; `CROSS JOIN` keeps SQLite from
+ * starting at the SKU's lifetime of lines), then each order's lines of this
+ * product (`order_items_order_product_idx`) and their keys
+ * (`digital_licence_keys_order_item_idx`): the read grows with open orders,
+ * never with past sales. A reserved order in any other status would only
+ * count fewer held keys, refusing a sale, never overselling.
  */
 export function licenceKeyStockSql(variantId: SQLWrapper): SQL {
   return sql`(CASE WHEN EXISTS (
@@ -422,11 +428,15 @@ export function licenceKeyStockSql(variantId: SQLWrapper): SQL {
       JOIN digital_assets rka ON rka.id = rkk.asset_id
       WHERE rka.variant_id = ${variantId} AND rka.kind = 'licence_keys' AND rkk.status = 'available'
     ) + (
-      SELECT count(*) FROM order_items rki
-      JOIN orders rko ON rko.id = rki.order_id
+      SELECT count(*) FROM orders rko
+      CROSS JOIN order_items rki
       JOIN digital_licence_keys rkh ON rkh.order_item_id = rki.id
-      WHERE rki.variant_id = ${variantId} AND rki.inventory_tracked = 1
-        AND rko.inventory_action = 'reserved' AND rkh.status = 'assigned'
+      WHERE rko.status IN ('incomplete', 'pending', 'processing', 'confirmed')
+        AND rko.inventory_action = 'reserved'
+        AND rki.order_id = rko.id
+        AND rki.product_id = (SELECT rkv.product_id FROM product_variants rkv WHERE rkv.id = ${variantId})
+        AND rki.variant_id = ${variantId} AND rki.inventory_tracked = 1
+        AND rkh.status = 'assigned'
     ) ELSE NULL END)`;
 }
 
