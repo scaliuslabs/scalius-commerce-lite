@@ -8594,7 +8594,8 @@
             "invoice_issued",
             "fulfillment_location_changed",
             "prices_set",
-            "app_event"
+            "app_event",
+            "stock_held"
            ]
           },
           "body": {

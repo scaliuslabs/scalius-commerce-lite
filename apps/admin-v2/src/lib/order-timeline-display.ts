@@ -93,6 +93,9 @@ export function describeTimelineEvent(
       };
     case "refund_kept":
       return { text: t("timeline.refundKept", { amount: money(count(data.amount)) }), detail: null };
+    case "stock_held":
+      // A refund cancelled the order; the location's refusal is the detail.
+      return { text: t("timeline.stockHeld"), detail: body };
     case "refund_recorded":
       return {
         text: t("timeline.refunded", { amount: money(count(data.amount)) }),

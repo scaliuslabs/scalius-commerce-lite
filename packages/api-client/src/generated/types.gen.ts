@@ -56660,7 +56660,7 @@ export type PostApiV1AdminOrdersByIdRefundData = {
          */
         settlement?: 'original' | 'store_credit';
         /**
-         * One key per refund (per dialog opening). Repeating it returns the first refund.
+         * One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it.
          */
         requestKey?: string;
         /**
@@ -56670,6 +56670,12 @@ export type PostApiV1AdminOrdersByIdRefundData = {
             orderItemId: string;
             quantity: number;
         }>;
+    };
+    headers?: {
+        /**
+         * One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -59634,7 +59640,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event' | 'stock_held';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -59703,7 +59709,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event' | 'stock_held';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -76650,7 +76656,10 @@ export type GetApiV1AdminGiftCardsResponse = GetApiV1AdminGiftCardsResponses[key
 
 export type PostApiV1AdminGiftCardsData = {
     body: {
-        requestKey: string;
+        /**
+         * One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.
+         */
+        requestKey?: string;
         amount: number;
         expiresAt?: string | null;
         customerId?: string | null;
@@ -76662,6 +76671,12 @@ export type PostApiV1AdminGiftCardsData = {
         message?: string | null;
         note?: string | null;
         notify?: boolean;
+    };
+    headers?: {
+        /**
+         * The retry key, instead of body.requestKey.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -77024,9 +77039,18 @@ export type PatchApiV1AdminGiftCardsByGiftCardIdResponse = PatchApiV1AdminGiftCa
 
 export type PostApiV1AdminGiftCardsByGiftCardIdAdjustData = {
     body: {
-        requestKey: string;
+        /**
+         * One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.
+         */
+        requestKey?: string;
         amount: number;
         reason: string;
+    };
+    headers?: {
+        /**
+         * The retry key, instead of body.requestKey.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         giftCardId: string;

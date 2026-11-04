@@ -8392,7 +8392,7 @@ export const getApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(opt
 /**
  * Issue a gift card
  *
- * Issues a manual gift card. Idempotent by `requestKey`. The response carries the full code once; afterwards staff see the last 4 characters only.
+ * Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required. The response carries the full code once; afterwards staff see the last 4 characters only.
  */
 export const postApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminGiftCardsData, ThrowOnError>): RequestResult<PostApiV1AdminGiftCardsResponses, PostApiV1AdminGiftCardsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminGiftCardsResponses, PostApiV1AdminGiftCardsErrors, ThrowOnError>({
     url: '/api/v1/admin/gift-cards',
@@ -8453,7 +8453,7 @@ export const patchApiV1AdminGiftCardsByGiftCardId = <ThrowOnError extends boolea
 /**
  * Adjust a gift card balance
  *
- * Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey`.
+ * Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required.
  */
 export const postApiV1AdminGiftCardsByGiftCardIdAdjust = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminGiftCardsByGiftCardIdAdjustData, ThrowOnError>): RequestResult<PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses, PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses, PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors, ThrowOnError>({
     url: '/api/v1/admin/gift-cards/{giftCardId}/adjust',

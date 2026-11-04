@@ -6,7 +6,7 @@
 import { inJsonArray } from "../../utils/in-json-array";
 import { orderPricePolicy, readGiftCardSettings, toStoreMinor } from "../settings";
 import { readStoreCurrency } from "../markets";
-import { eq, sql, desc, and, type SQL } from "drizzle-orm";
+import { eq, ne, sql, desc, and, type SQL } from "drizzle-orm";
 import {
     orders,
     orderEvents,
@@ -36,7 +36,7 @@ import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
   ACTIVE_REFUND_ATTEMPT_STATUSES,
   assertNoActivePaymentSessionAttempt,
@@ -835,8 +835,11 @@ export async function refundNotificationOutboxId(dedupeKey: string): Promise<str
  * the settlement exactly once. A batch that loses its guard re-reads and
  * tries again (an attempt finished meanwhile is left as it is). Stock of a
  * fully refunded, cancelled order is released in that batch, behind its
- * guard on the order's version; only stock its location refuses to take back
- * is released after the batch, which then reports the refusal.
+ * guard on the order's version. Stock the location refuses to take back
+ * (when the release is prepared or in its batch) never stops the money: the
+ * batch records the money and the cancel without it, with a `stock_held`
+ * timeline line naming the refusal, and the stock stays held for staff
+ * (nothing after the commit throws).
  * `actorUserId` is the staff member the line and the settlement name.
  */
 export async function finalizeAcceptedRefundAttemptIds(
@@ -872,8 +875,8 @@ export async function finalizeAcceptedRefundAttemptIds(
     for (const orderId of orderIds) {
         let orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
         let read = reads.get(orderId)!;
-        // Stock the location can't take back is released after the batch instead (its refusal reaches the caller).
-        let stockInBatch = true;
+        // Why the location refused the stock, once it did: the batch then records the money without it.
+        let stockHeld: string | null = null;
         for (let round = 0; ; round += 1) {
             const { order, currency, paymentRows } = read;
             const paymentState = computePaymentStateFromLedger({
@@ -911,8 +914,25 @@ export async function finalizeAcceptedRefundAttemptIds(
                 }
             }
             // The stock of the cancel moves in the cancel's batch, behind its guard on the order's version.
-            const inventory = shouldReleaseInventory && stockInBatch
-                ? await prepareInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED)
+            let inventory: Awaited<ReturnType<typeof prepareInventoryForStatusChange>> | null = null;
+            if (shouldReleaseInventory && stockHeld === null) {
+                try {
+                    inventory = await prepareInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED);
+                } catch (error: unknown) {
+                    stockHeld = stockRefusal(error);
+                    if (stockHeld === null) throw error;
+                }
+            }
+            const stockHeldLine = shouldReleaseInventory && stockHeld !== null
+                ? db.insert(orderEvents).values({
+                    id: await stockHeldEventId(orderId, orderAttempts.map((attempt) => attempt.id)),
+                    orderId,
+                    kind: "stock_held",
+                    body: stockHeld,
+                    data: JSON.stringify({ status: nextOrderStatus ?? order.status }),
+                    actorId: null,
+                    createdAt: sql`unixepoch()`,
+                }).onConflictDoNothing({ target: orderEvents.id })
                 : null;
             const guard = sql.join([
                 sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`,
@@ -946,11 +966,13 @@ export async function finalizeAcceptedRefundAttemptIds(
                     ...(announcement?.statements ?? []),
                     ...settlements.flatMap((settlement) => settlement.statements),
                     ...(inventory?.statements ?? []),
+                    ...(stockHeldLine ? [stockHeldLine] : []),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
                 ] as any);
             } catch (error: unknown) {
-                if (inventory?.translateError(error)) {
-                    stockInBatch = false;
+                const refusal = inventory?.translateError(error);
+                if (refusal) {
+                    stockHeld = stockRefusal(refusal) ?? String(refusal);
                     continue;
                 }
                 if (!isBatchGuardError(error, REFUND_FINALIZE_CONFLICT) && !isOrderInventoryConflictError(error)) throw error;
@@ -967,9 +989,6 @@ export async function finalizeAcceptedRefundAttemptIds(
             if (inventory) {
                 for (const variantId of inventory.availabilityTransitionVariantIds) availabilityTransitionVariantIds.add(variantId);
                 await inventory.afterCommit();
-            } else if (shouldReleaseInventory) {
-                const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, OrderStatus.CANCELLED);
-                for (const variantId of impact.availabilityTransitionVariantIds) availabilityTransitionVariantIds.add(variantId);
             }
             result.orderIds.push(orderId);
             result.finalizedAttemptIds.push(...orderAttempts.map((attempt) => attempt.id));
@@ -986,6 +1005,16 @@ export async function finalizeAcceptedRefundAttemptIds(
 
 /** How many times a settlement batch that lost its guard re-reads and tries again. */
 const FINALIZE_CONFLICT_RETRIES = 2;
+
+/** The merchant-facing reason a stock release was refused (a location short of units, a stale plan), or null for any other error. */
+function stockRefusal(error: unknown): string | null {
+    return error instanceof AppError && error.status < 500 ? error.message : null;
+}
+
+async function stockHeldEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {
+    const key = `refund-attempts:${[...attemptIds].sort().join(",")}`;
+    return `oev_k${(await sha256Hex(`order-event\0${orderId}\0stock_held\0${key}`)).slice(0, 32)}`;
+}
 
 async function readFinalizeAttempts(db: Database, attemptIds: readonly string[]) {
     return db
@@ -1353,7 +1382,8 @@ async function markRefundAttemptsReconcileRequired(
             nextProbeAt: sql`unixepoch()`,
             lastError: serializeRefundAttemptError(error),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)))
+        // A settlement that committed before the error keeps its attempts refunded.
+        }).where(and(eq(refundAttempts.id, getRefundAttemptId(allocation)), ne(refundAttempts.status, "refunded")))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ) as any);
 }

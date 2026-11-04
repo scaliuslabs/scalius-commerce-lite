@@ -38,6 +38,8 @@ export const ORDER_EVENT_KINDS = [
     "prices_set",
     /** An app's typed entry (packages/plugin-sdk/docs/apps.md, "Order timeline"): `data` names the app and its kind. */
     "app_event",
+    /** A refund cancelled the order but its location refused the stock back: the stock stays held; `body` is the reason. */
+    "stock_held",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 
