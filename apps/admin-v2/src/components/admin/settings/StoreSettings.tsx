@@ -1,6 +1,5 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { formatBdLandline } from "@scalius/shared/bd-landline";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { storeDefaultsQueryOptions } from "~/lib/api-query-options/store-defaults";
@@ -42,9 +41,40 @@ function joined(parts: Array<string | undefined>): string {
 // The missing-logo warning reads the theme, so its code loads after the page.
 const StoreLogoNotice = lazy(() => import("./StoreLogoNotice").then((module) => ({ default: module.StoreLogoNotice })));
 
+// The contact row writes a Bangladesh landline as 02-9876543 with the phone
+// metadata the dialogs' fields share, loading beside the page's data; until it
+// arrives the row shows the phone as saved.
+let formatLandline: ((phone: string) => string) | undefined;
+let landlineLoad: Promise<void> | null = null;
+
+function loadLandlineFormat(): Promise<void> {
+  landlineLoad ??= import("@scalius/shared/bd-landline").then((module) => {
+    formatLandline = module.formatBdLandline;
+  }, () => {
+    // A failed download is tried again by the next card that mounts.
+    landlineLoad = null;
+  });
+  return landlineLoad;
+}
+void loadLandlineFormat();
+
+function useFormatLandline(): (phone: string) => string {
+  const [format, setFormat] = useState(() => formatLandline);
+  useEffect(() => {
+    if (format) return;
+    let live = true;
+    void loadLandlineFormat().then(() => {
+      if (live && formatLandline) setFormat(() => formatLandline);
+    });
+    return () => { live = false; };
+  }, [format]);
+  return format ?? ((phone) => phone);
+}
+
 export function BusinessCard() {
   const t = useMessages(storeSettingsMessages);
   const canEdit = useCanEditStore();
+  const formatPhone = useFormatLandline();
   const { data, isError, refetch } = useQuery(businessQuery);
   if (isError) {
     return <SettingsLoadFailure title={t("loadBusiness")} onRetry={refetch} />;
@@ -69,7 +99,7 @@ export function BusinessCard() {
                 value={[
                   data.companyName || t("noName"),
                   data.email || t("noEmail"),
-                  formatBdLandline(data.phone) || t("noPhone"),
+                  formatPhone(data.phone) || t("noPhone"),
                 ].join(" · ")}
               />
             }
