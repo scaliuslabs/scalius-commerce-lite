@@ -1,4 +1,5 @@
 import type { RouterHistory } from "@tanstack/react-router";
+import { onPopStateBeforeRouter } from "~/lib/popstate-before-router";
 
 /*
  * Back (the browser's button, Android's back gesture) closes the open modal
@@ -166,8 +167,9 @@ let watching: MutationObserver | null = null;
 
 /**
  * Starts once, after the dashboard's first paint: overlays are noticed as
- * their portals come and go. The capture listener runs before the router's,
- * so a Back that only closes an overlay never reaches it.
+ * their portals come and go. Popstate reaches it through the listener added
+ * before the router's (`popstate-before-router.ts`), so a Back that only
+ * closes an overlay, or takes its entry off, never reaches the router.
  */
 export function watchOverlaysForBack(routeHistory?: RouterHistory): void {
   if (watching) return;
@@ -175,7 +177,7 @@ export function watchOverlaysForBack(routeHistory?: RouterHistory): void {
   // Successful navigation and a rejected traversal both notify. A rejected
   // traversal still waits for its restoring popstate before onAcceptedPage.
   unsubscribe = routeHistory?.subscribe(scheduleSync);
-  window.addEventListener("popstate", onPopState, { capture: true });
+  onPopStateBeforeRouter(onPopState);
   watching = new MutationObserver(sync);
   watching.observe(document.body, { childList: true });
   sync();
@@ -185,7 +187,7 @@ export function watchOverlaysForBack(routeHistory?: RouterHistory): void {
 export function resetBackClosesForTest() {
   watching?.disconnect();
   watching = null;
-  window.removeEventListener("popstate", onPopState, { capture: true });
+  onPopStateBeforeRouter(undefined);
   window.clearTimeout(release);
   window.clearTimeout(reconcile);
   unsubscribe?.();

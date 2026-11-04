@@ -7,6 +7,7 @@ import { RouteErrorComponent, RouteNotFoundComponent, RoutePendingComponent } fr
 import { getDashboardBasePath } from "./lib/dashboard-base-path";
 import { BootGate } from "./lib/boot-gate";
 import { ROUTER_LOADING_OPTIONS } from "./lib/router-loading";
+import { createDashboardHistory } from "./lib/popstate-before-router";
 
 export { ROUTE_PENDING_MIN_MS, ROUTE_PENDING_MS } from "./lib/router-loading";
 
@@ -23,6 +24,8 @@ export function getRouter() {
 
   const router = createRouter({
     routeTree,
+    // Back that only closes a dialog is heard before the router's own listener.
+    history: createDashboardHistory(),
     context: { queryClient },
     // Runtime dashboard base path (Platform Dashboard URL), read from the
     // shell's meta tag; "" at a host root.
