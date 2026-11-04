@@ -6,6 +6,7 @@ import { digitalCardMessages } from "~/i18n/digital-card";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { DIGITAL_CARD_ID } from "./digital-stock";
 import type { ProductFormValues } from "./types";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 // Loaded only once a digital product's card is open, so physical products never download it.
 const DigitalDeliveryPanel = React.lazy(() =>
@@ -38,9 +39,9 @@ export function DigitalDeliveryCard({ form, productId, readOnly }: {
       {!digital ? (
         <p className="text-body text-muted-foreground">{t("notDigitalHelp")}</p>
       ) : productId ? (
-        <React.Suspense fallback={<Skeleton className="h-24 w-full" />}>
+        <LazyPart fallback={<Skeleton className="h-24 w-full" />}>
           <DigitalDeliveryPanel productId={productId} readOnly={readOnly} />
-        </React.Suspense>
+        </LazyPart>
       ) : (
         <p className="text-body text-muted-foreground">{t("saveFirst")}</p>
       )}

@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 const PublishingChannels = React.lazy(() =>
   import("./PublishingChannels").then((module) => ({ default: module.PublishingChannels })));
@@ -23,9 +24,9 @@ export function PublishingCard({ form, readOnly }: {
         <CardTitle>{t("publishing")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <React.Suspense fallback={<Skeleton className="h-40 w-full" />}>
+        <LazyPart fallback={<Skeleton className="h-40 w-full" />}>
           <PublishingChannels form={form} readOnly={readOnly} />
-        </React.Suspense>
+        </LazyPart>
       </CardContent>
     </Card>
   );

@@ -35,6 +35,7 @@ import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { getCustomerColumns, type CustomerListItem } from "~/components/admin/customers/customer-columns";
 import { pageHead } from "~/i18n/page-titles";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 type Customer = CustomerListItem;
 
@@ -157,9 +158,9 @@ function CustomersPage() {
         countLabel={(count) => (count === 1 ? t("customersCountOne") : t("customersCount", { count }))}
         filterParams={CUSTOMER_FILTER_PARAMS}
         filters={(
-          <Suspense fallback={<Skeleton className="h-9 w-full sm:w-40" />}>
+          <LazyPart fallback={<Skeleton className="h-9 w-full sm:w-40" />}>
             <CustomerListFilters search={search} />
-          </Suspense>
+          </LazyPart>
         )}
         bulkActions={(target, done, run) => (
           <Suspense fallback={null}>

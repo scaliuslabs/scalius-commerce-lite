@@ -61,6 +61,7 @@ import {
   type SocialLink,
   type UrlKey,
 } from "./store-settings-shared";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 const ImageField = lazy(() => import("../online-store/ImageField").then((module) => ({ default: module.ImageField })));
 
@@ -308,7 +309,7 @@ export function SocialProfileFields() {
                   </SettingsField>
                   <div className="sm:col-span-2">
                     {/* The image field (and the online-store copy it speaks) loads with the first profile. */}
-                    <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+                    <LazyPart fallback={<Skeleton className="h-16 w-full" />}>
                       <ImageField
                         label={t("socialIcon")}
                         src={link.iconUrl ?? ""}
@@ -319,7 +320,7 @@ export function SocialProfileFields() {
                           return image.src ? { ...rest, iconUrl: image.src } : rest;
                         }))}
                       />
-                    </Suspense>
+                    </LazyPart>
                   </div>
                 </div>
                 <Button

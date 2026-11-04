@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 const WarrantyPolicyPicker = React.lazy(() =>
   import("./WarrantyPolicyPicker").then((module) => ({ default: module.WarrantyPolicyPicker })));
@@ -25,10 +26,10 @@ export function WarrantyCard({ form, readOnly }: {
         <CardTitle>{t("warranty")}</CardTitle>
       </CardHeader>
       <CardContent>
-        {/* While its code loads: a skeleton of the select, as high as the field. */}
-        <React.Suspense fallback={<Skeleton className="h-11 w-full sm:pointer-fine:h-9" />}>
+        {/* While its code and then the policies load: one skeleton of the select, as high as the field, after 300 ms. */}
+        <LazyPart fallback={<Skeleton className="h-11 w-full sm:pointer-fine:h-9" />}>
           <WarrantyPolicyPicker form={form} readOnly={readOnly} />
-        </React.Suspense>
+        </LazyPart>
       </CardContent>
     </Card>
   );

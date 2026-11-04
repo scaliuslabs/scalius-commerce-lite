@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback } from "react";
+import { lazy, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
@@ -12,6 +12,7 @@ import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CUSTOMER_CHANNELS, type CustomerChannel, type CustomerListSearch } from "./customer-list-search";
 import { filterCustomerSegments } from "./segment-list-search";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 
 // Loads only when an active app has a column to filter by.
@@ -103,9 +104,9 @@ export function CustomerListFilters({ search }: { search: CustomerListSearch }) 
       />
       </FilterControl>
       {appFilterable ? (
-        <Suspense fallback={<Skeleton className="h-15 w-full" />}>
+        <LazyPart fallback={<Skeleton className="h-15 w-full" />}>
           <AppListFilter labelled resource="customer" value={search.appFilter} onChange={(appFilter) => set({ appFilter })} />
-        </Suspense>
+        </LazyPart>
       ) : null}
     </>
   );

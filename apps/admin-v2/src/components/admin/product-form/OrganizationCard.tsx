@@ -14,6 +14,7 @@ import { categoryStatusLabel } from "./category-status-label";
 import type { Category, ProductFormValues } from "./types";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { useFieldControl } from "~/components/ui/field";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;
@@ -78,7 +79,7 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
             <ReadOnlyValue label={t("brand")} value={field.value ? brandName || t("savedValueUnavailable") : null} />
           ) : (
             <Field id="product-brand" label={t("brand")} error={fieldState.error?.message}>
-              <Suspense fallback={<Skeleton className="h-11 w-full sm:pointer-fine:h-9" />}>
+              <LazyPart fallback={<Skeleton className="h-11 w-full sm:pointer-fine:h-9" />}>
                 <BrandPicker
                   id="product-brand"
                   value={field.value}
@@ -88,7 +89,7 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
                     field.onChange(value);
                   }}
                 />
-              </Suspense>
+              </LazyPart>
             </Field>
           )}
         />

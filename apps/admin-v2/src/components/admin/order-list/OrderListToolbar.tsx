@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -7,6 +7,7 @@ import { DataTableSortMenu, type SortField } from "~/components/admin/data-table
 import { useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
 import { CLEARED_ORDER_FILTERS, countOrderFilters, type OrderListSearch } from "./order-list-search";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 const OrderListFilters = lazy(() => import("./OrderListFilters").then((module) => ({ default: module.OrderListFilters })));
 
@@ -84,9 +85,9 @@ export function OrderListToolbar({
         </span>
       }
       filters={
-        <Suspense fallback={<Skeleton className="col-span-full h-15 w-full" />}>
+        <LazyPart fallback={<Skeleton className="col-span-full h-15 w-full" />}>
           <OrderListFilters search={search} onChange={onChange} appFilterable={appFilterable} />
-        </Suspense>
+        </LazyPart>
       }
     />
   );

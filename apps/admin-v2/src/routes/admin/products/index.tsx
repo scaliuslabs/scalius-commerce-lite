@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
@@ -49,6 +49,7 @@ import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { pageHead } from "~/i18n/page-titles";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
+import { LazyPart } from "~/components/admin/states/LazyPart";
 
 const STATUSES = ["active", "draft"] as const;
 const CHANNEL_STATES = ["published", "unpublished"] as const;
@@ -265,7 +266,7 @@ function ProductsPage() {
           </FilterControl>
           ) : null}
           {app.filterable.length > 0 ? (
-            <Suspense fallback={<Skeleton className="h-15 w-full" />}>
+            <LazyPart fallback={<Skeleton className="h-15 w-full" />}>
               <AppListFilter
                 labelled
                 resource="product"
@@ -275,7 +276,7 @@ function ProductsPage() {
                   search: ((prev: Record<string, unknown>) => ({ ...prev, appFilter, page: 1, ...NO_CURSOR })) as never,
                 })}
               />
-            </Suspense>
+            </LazyPart>
           ) : null}
           </>
         }
