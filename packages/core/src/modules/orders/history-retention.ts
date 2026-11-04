@@ -43,9 +43,12 @@ export const ORDER_HISTORY_RETENTION_DAYS = {
 
 /**
  * Rows of each table one run deletes at most (Paid; Free scales it to 50).
- * The job runs about 63 times a day on Free, so it deletes about 3,100 rows a
- * table a day: more than the notifications (the busiest table) of the Free
- * order ceiling, so history never outgrows retention (scripts/free-plan-budget.test.mjs).
+ * The job runs about 63 times a day on Free, so a table can lose about 3,100
+ * rows a day: more than the notifications (the busiest table) of the Free
+ * order ceiling. Free also caps the rows deleted a day
+ * (`planLimits().maintenance.retentionRowsPerDay`, `orderHistoryDailyAllowance`),
+ * so catching up on a long history takes a bounded share of the day's writes
+ * (scripts/free-plan-budget.test.mjs, apps/api/src/sweep-rows-read.test.ts).
  * Every delete is one statement of the job's one batch.
  */
 export const ORDER_HISTORY_RETENTION_LIMIT = 250;
@@ -133,4 +136,33 @@ export async function pruneOrderHistory(
         reviewRequests: (reviewRequests as unknown[]).length,
         checkoutCursor: nextCursor,
     };
+}
+
+/** Rows one pass deletes: a notification takes its delivery receipt (about one each) with it. */
+export function orderHistoryRowsDeleted(result: OrderHistoryRetentionResult): number {
+    return result.checkoutAttempts + result.receipts + 2 * result.notifications + result.reviewRequests;
+}
+
+/** The row-deleting statements of a pass, and the most rows one of its pages takes per row limit. */
+const ROWS_PER_LIMIT = 6;
+
+/**
+ * A pass's per-table limit under a daily allowance of deleted rows (`rowsPerDay`,
+ * from the plan profile): what is left of today's allowance (the saved `day`
+ * and `spent`), split so a full pass cannot overshoot it. Zero: today's share
+ * is spent, the pass waits for tomorrow.
+ */
+export function orderHistoryDailyAllowance(input: {
+    nowSeconds: number;
+    rowsPerDay: number;
+    limit: number;
+    saved: { day?: string | null; spent?: string | null };
+}): { limit: number; day: number; spent: number } {
+    const day = Math.floor(input.nowSeconds / DAY);
+    const spent = Number(input.saved.day) === day ? Math.max(0, Number(input.saved.spent) || 0) : 0;
+    const left = input.rowsPerDay - spent;
+    const limit = Number.isFinite(left)
+        ? Math.max(0, Math.min(input.limit, Math.floor(left / ROWS_PER_LIMIT)))
+        : input.limit;
+    return { limit, day, spent };
 }

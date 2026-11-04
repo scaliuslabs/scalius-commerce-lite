@@ -11,6 +11,8 @@ import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
   ORDER_HISTORY_RETENTION_LIMIT,
+  orderHistoryDailyAllowance,
+  orderHistoryRowsDeleted,
   pruneOrderHistory,
 } from "@scalius/core/modules/orders";
 import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/modules/notifications";
@@ -651,13 +653,27 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         async () => {
           // Per-order history past every window that reads it (checkout replays,
           // receipts, notification dedupe, review requests): one round trip.
+          // Free caps the rows it deletes a day (planLimits), so a store with a
+          // long history catches up without spending its daily writes.
           const cursor = await readMaintenanceCursor(db, "order-history");
+          const allowance = orderHistoryDailyAllowance({
+            nowSeconds,
+            rowsPerDay: planLimits().maintenance.retentionRowsPerDay,
+            limit: scaled(ORDER_HISTORY_RETENTION_LIMIT),
+            saved: cursor.value,
+          });
+          if (allowance.limit === 0) return;
           const history = await timed("order_history_retention", () => pruneOrderHistory(db, {
             nowSeconds,
-            limit: scaled(ORDER_HISTORY_RETENTION_LIMIT),
+            limit: allowance.limit,
             checkoutCursor: cursor.value.checkoutAttempts,
           }));
-          await cursor.save({ checkoutAttempts: history.checkoutCursor });
+          const deleted = orderHistoryRowsDeleted(history);
+          await cursor.save({
+            checkoutAttempts: history.checkoutCursor,
+            day: String(allowance.day),
+            spent: String(allowance.spent + deleted),
+          });
           if (history.checkoutAttempts + history.receipts + history.notifications + history.reviewRequests > 0) {
             console.log(
               `[scheduled] Order history retention: checkoutAttempts=${history.checkoutAttempts}, receipts=${history.receipts}, ` +

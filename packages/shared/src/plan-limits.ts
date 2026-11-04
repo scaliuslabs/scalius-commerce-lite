@@ -104,6 +104,13 @@ export interface PlanLimits {
     readonly orphanAttachmentsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
     readonly limitScale: number;
+    /**
+     * History rows (checkout attempts, receipts, notifications with their delivery
+     * receipts, review requests) retention deletes a UTC day at most: on Free a store
+     * with a long history catches up within a bounded share of the 100,000 rows
+     * written a day; Paid has no cap.
+     */
+    readonly retentionRowsPerDay: number;
   };
   readonly lists: {
     /** Most rows a list counts for its total: `total` is exact up to it and reads "N+" beyond. */
@@ -231,6 +238,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       digitalUploadsPerState: 6,
       orphanAttachmentsPerRun: 10,
       limitScale: 0.2,
+      retentionRowsPerDay: 6_000,
     }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
@@ -278,6 +286,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       digitalUploadsPerState: 25,
       orphanAttachmentsPerRun: 50,
       limitScale: 1,
+      retentionRowsPerDay: Number.POSITIVE_INFINITY,
     }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
     bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
