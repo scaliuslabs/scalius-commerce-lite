@@ -17,7 +17,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useMessages } from "~/i18n";
-import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { productLaterMessages, type ProductLaterMessageKey } from "~/i18n/products-later";
 import { resourceMessages } from "~/i18n/resource";
 import {
   BUYER_INPUT_TYPES,
@@ -36,7 +36,7 @@ const TYPE_LABELS = {
   checkbox: "inputType.checkbox",
 } as const;
 
-function issueText(issue: BuyerInputIssue, t: (key: ProductMessageKey, vars?: Record<string, string | number>) => string): string {
+function issueText(issue: BuyerInputIssue, t: (key: ProductLaterMessageKey, vars?: Record<string, string | number>) => string): string {
   switch (issue.field) {
     case "label":
       return issue.reason === "required" ? t("inputLabelRequired") : t("inputTooLong", { max: CUSTOMIZATION_LIMITS.labelLength });
@@ -67,7 +67,7 @@ export function BuyerInputDialog({ open, onOpenChange, initial, others, currency
   currencyCode: string;
   onSave: (draft: BuyerInputDraft) => void;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productLaterMessages);
   const r = useMessages(resourceMessages);
   const [draft, setDraft] = React.useState<BuyerInputDraft | null>(initial);
   const [issue, setIssue] = React.useState<BuyerInputIssue | null>(null);

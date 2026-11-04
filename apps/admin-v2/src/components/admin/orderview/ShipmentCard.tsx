@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
@@ -16,8 +16,10 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
-import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
+
+// The courier's raw details load when "Show details" is first opened.
+const ShipmentMetadataDisplay = lazy(() => import("~/components/ui/ShipmentMetadataDisplay").then((module) => ({ default: module.ShipmentMetadataDisplay })));
 import {
   getProviderReadinessLabel,
   getProviderReadinessMessage,
@@ -377,7 +379,7 @@ function ShipmentRow({
           <Button type="button" variant="link" size="sm" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
             {expanded ? t("shipments.hideDetails") : t("shipments.showDetails")}
           </Button>
-          {expanded ? <ShipmentMetadataDisplay metadata={shipment.metadata} /> : null}
+          {expanded ? <Suspense fallback={null}><ShipmentMetadataDisplay metadata={shipment.metadata} /></Suspense> : null}
         </>
       ) : null}
     </li>

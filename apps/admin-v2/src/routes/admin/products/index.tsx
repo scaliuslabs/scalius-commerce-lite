@@ -45,7 +45,7 @@ import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useAppListColumns } from "~/components/admin/apps/ui/list-columns";
 import { useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productListMessages } from "~/i18n/product-list";
 import { resourceMessages } from "~/i18n/resource";
 import { pageHead } from "~/i18n/page-titles";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
@@ -133,7 +133,7 @@ const loadCategories: SearchableSelectLoader = async ({ search: typed, page, sig
 function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const t = useMessages(productMessages);
+  const t = useMessages(productListMessages);
   const r = useMessages(resourceMessages);
   const [term] = useListSearch(listSearchKey("products", search, "status"));
   const { fmt } = useCurrency();

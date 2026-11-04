@@ -35,7 +35,7 @@ import { productVariantsQueryOptions } from "~/lib/api-query-options/products";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { collectionsQueryOptions } from "~/lib/api-query-options/collections";
 import { useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productListMessages } from "~/i18n/product-list";
 import { resourceMessages } from "~/i18n/resource";
 import type { ProductListItem } from "./product-columns";
 import { downloadPagedExport } from "~/components/admin/store-transfer/export-download";
@@ -71,7 +71,7 @@ export function ProductBulkActions({ target, filter, done, run }: {
   done: () => void;
   run: BulkRun;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productListMessages);
   const r = useMessages(resourceMessages);
   const [picker, setPicker] = useState<Picker | null>(null);
   const [publishing, setPublishing] = useState<"publish" | "unpublish" | null>(null);

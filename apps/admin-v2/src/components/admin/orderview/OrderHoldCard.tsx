@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderLaterMessages } from "~/i18n/order-detail-later";
 import { useReleaseOrderHold } from "~/lib/api-mutations/orders";
 import { clearOrderNotice } from "~/lib/order-notice";
 import { formatOrderTimestamp, orderTimestampIso } from "./formatters";
@@ -22,7 +22,7 @@ import type { Order, OrderHold } from "./types";
  * carry one.
  */
 export function OrderHoldCard({ order }: { order: Pick<Order, "id" | "holds"> }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderLaterMessages);
   const { canChangeOrderStatus } = useOrderActionPermissions();
   const release = useReleaseOrderHold();
   // The last hold asked about stays named while the dialog closes.

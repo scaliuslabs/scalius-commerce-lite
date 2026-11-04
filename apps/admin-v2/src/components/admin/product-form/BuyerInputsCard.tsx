@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/hooks/use-currency";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productLaterMessages } from "~/i18n/products-later";
 import {
   emptyBuyerInput,
   moveBuyerInput,
@@ -45,7 +45,7 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
   /** Someone else saved the product while these inputs were being edited. */
   conflict?: { onReview: () => void } | null;
 }) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productLaterMessages);
   const { code, fmt } = useCurrency();
   const watched = useWatch({ control: form.control, name: "customizationSchema" });
   const drafts = React.useMemo(() => watched ?? [], [watched]);

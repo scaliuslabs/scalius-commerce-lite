@@ -15,7 +15,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Checkbox } from "~/components/ui/checkbox";
 import { CANCEL_REASONS, restockedUnits } from "~/components/admin/orderview/cancel-order";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderLaterMessages } from "~/i18n/order-detail-later";
 import type { UpdateOrderStatusInput } from "~/lib/api-mutations/orders";
 import { getOrderItems } from "~/lib/api-query-options/orders";
 import { queryKeys } from "~/lib/query-keys";
@@ -48,7 +48,7 @@ export function CancelOrderDialog({
   pending: boolean;
   onConfirm: (reason?: CancelReason, notifyCustomer?: boolean) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderLaterMessages);
   const [reason, setReason] = useState<CancelReason | "">("");
   // Shopify's "Send a notification to the customer": on by default, off for a test or duplicate order.
   const [sendMessage, setSendMessage] = useState(true);

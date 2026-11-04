@@ -23,7 +23,7 @@ import {
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
-import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
+import { useWarmEverydayRouteCode } from "~/lib/use-warm-route-code";
 import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
 
 // Asks the API what the store uses once the first page is up.
