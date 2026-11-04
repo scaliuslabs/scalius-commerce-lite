@@ -32,6 +32,7 @@ import {
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import { publicCursorSigner } from "../utils/public-cursor";
+import { canonicalIntegerQuery } from "../schemas/query-numbers";
 import { AppError } from "@scalius/core/errors";
 import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
 
@@ -136,7 +137,7 @@ const productFeedSchema = z.object({
   cursor: z.string().max(PUBLIC_CURSOR_MAX_LENGTH).regex(PUBLIC_FEED_CURSOR_PATTERN).optional().openapi({
     description: "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.",
   }),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(100).openapi({ description: "Items per page" }),
+  limit: canonicalIntegerQuery(1, 100).optional().default(100).openapi({ description: "Items per page" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   ids: z.string().optional().openapi({
