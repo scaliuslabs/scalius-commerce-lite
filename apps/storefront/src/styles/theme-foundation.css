@@ -267,6 +267,14 @@ body {
   display: none !important;
 }
 
+/* The updated-page notice (scripts/lazy-script.ts) sits just below the
+   sticky header (`--header-height`, the header's own measure), clear of
+   every bottom action bar: the product buy bar, the phone tab bar, a skin's
+   order bar, the checkout's submit. It never covers one. */
+[data-stale-page-notice] {
+  top: calc(var(--header-height, 0px) + 0.75rem);
+}
+
 /* The store's switch for a header skin has two places, one showing at a
    time, as the core header's: the bar, and below 23.75rem (380px) the skin's
    phone menu (`[data-menu-drawer]`), where the head script puts the menu's

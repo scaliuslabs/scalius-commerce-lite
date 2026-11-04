@@ -1060,7 +1060,7 @@ export function bindDesktopZoomWhenEligible(
     requested = true;
     removeChangeListener();
     // Zoom is an extra: without its script the photos stay as they are.
-    void loadLazyScript(loadController)
+    void loadLazyScript(loadController, { needed: false })
       .then(({ bindDesktopZoom }) => {
         if (!signal.aborted) bindDesktopZoom(root, signal);
       })

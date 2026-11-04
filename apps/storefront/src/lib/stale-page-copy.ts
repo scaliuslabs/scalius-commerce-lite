@@ -8,6 +8,8 @@ export interface StalePageCopy {
   updated: string;
   /** On checkout, where the typed details come back after a reload. */
   draftKept: string;
+  /** The button that closes the notice and leaves the page as it is. */
+  dismiss: string;
   /** The button that reloads the page. */
   reload: string;
 }
@@ -16,12 +18,14 @@ const EN: StalePageCopy = {
   updated: "This page has been updated. Reload to continue.",
   draftKept: "Your checkout details stay filled in.",
   reload: "Reload",
+  dismiss: "Dismiss",
 };
 
 const BN: StalePageCopy = {
   updated: "এই পেজটি হালনাগাদ হয়েছে। চালিয়ে যেতে পেজটি আবার লোড করুন।",
   draftKept: "আপনার চেকআউটের তথ্য পূরণ করা থাকবে।",
   reload: "আবার লোড করুন",
+  dismiss: "বন্ধ করুন",
 };
 
 export function stalePageCopy(language: unknown): StalePageCopy {

@@ -14,6 +14,12 @@ export interface LazyScriptOptions {
   retryDelayMs?: number;
   /** The page keeps what the buyer typed across a reload (the checkout's draft): the notice says so. */
   draftRestores?: boolean;
+  /**
+   * The buyer needs the part to go on (the default): when it cannot load on a
+   * newer build, the page offers its reload. An extra the page reads the
+   * same without (desktop zoom, address suggestions) never asks for one.
+   */
+  needed?: boolean;
 }
 
 /** The wait before trying a failed download again: long enough for a dropped connection to come back. */
@@ -50,39 +56,60 @@ export function buyerHasTyped(doc: Document = document): boolean {
   return typed.has(doc);
 }
 
-// Every page that can load a lazy script notes typing from the start.
-if (typeof document !== "undefined") trackBuyerInput();
+/** The page has started to leave (a reload under way): no notice may flash before it goes. */
+let leaving = false;
+
+// Every page that can load a lazy script notes typing from the start, and when it leaves.
+if (typeof document !== "undefined") {
+  trackBuyerInput();
+  window.addEventListener("beforeunload", () => { leaving = true; });
+  window.addEventListener("pageshow", () => { leaving = false; });
+}
+
+/** The wait between adding the notice's empty status region and its words, so screen readers announce them. */
+const ANNOUNCE_DELAY_MS = 100;
 
 /**
  * The notice a page shows when the store was updated after it loaded, the
  * part the buyer reached for cannot load, and a reload would lose what they
- * typed: they choose when to reload. One per page; it never takes focus.
+ * typed: they choose when to reload, or dismiss it. One per page; it never
+ * takes focus. Its status region is in the page before its words arrive, so
+ * a screen reader announces them; it sits just below the sticky header,
+ * clear of every bottom action bar (theme-foundation.css).
  */
 export function showStalePageNotice(options: { draftRestores?: boolean } = {}, doc: Document = document): void {
   if (doc.querySelector("[data-stale-page-notice]")) return;
   const copy = stalePageCopy(doc.documentElement.lang);
   const notice = doc.createElement("div");
   notice.setAttribute("data-stale-page-notice", "");
-  notice.setAttribute("role", "status");
-  notice.className = "fixed inset-x-3 bottom-3 z-[80] mx-auto flex max-w-md flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground shadow-lg";
-  const words = doc.createElement("div");
-  words.className = "min-w-0 flex-1";
-  const updated = doc.createElement("p");
-  updated.textContent = copy.updated;
-  words.append(updated);
-  if (options.draftRestores) {
-    const kept = doc.createElement("p");
-    kept.className = "text-muted-foreground";
-    kept.textContent = copy.draftKept;
-    words.append(kept);
-  }
+  notice.className = "fixed inset-x-3 z-[80] mx-auto flex max-w-md flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground shadow-lg";
+  const status = doc.createElement("div");
+  status.setAttribute("role", "status");
+  status.className = "min-w-0 flex-1";
   const reload = doc.createElement("button");
   reload.type = "button";
   reload.className = "min-h-11 shrink-0 rounded-[var(--theme-button-radius,var(--radius))] bg-primary px-4 font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
   reload.textContent = copy.reload;
   reload.addEventListener("click", () => doc.defaultView?.location.reload());
-  notice.append(words, reload);
+  const dismiss = doc.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "min-h-11 shrink-0 rounded-[var(--theme-button-radius,var(--radius))] px-3 font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  dismiss.textContent = copy.dismiss;
+  dismiss.addEventListener("click", () => notice.remove());
+  notice.append(status, reload, dismiss);
   doc.body.append(notice);
+  // The region first, its words a moment later: a region added with its text already in it is often not read.
+  setTimeout(() => {
+    const updated = doc.createElement("p");
+    updated.textContent = copy.updated;
+    status.append(updated);
+    if (options.draftRestores) {
+      const kept = doc.createElement("p");
+      kept.className = "text-muted-foreground";
+      kept.textContent = copy.draftKept;
+      status.append(kept);
+    }
+  }, ANNOUNCE_DELAY_MS);
 }
 
 /** The build the store serves now (its health answer, never cached), or null when it cannot say. */
@@ -127,12 +154,16 @@ export async function loadLazyScript<T>(load: () => Promise<T>, options: LazyScr
   } catch (error) {
     const served = await (options.servedBuild ?? storeServedBuild)();
     if (served !== null && served !== (options.pageBuild ?? BUILD_ID)) {
+      if (options.needed === false) throw error;
       const notice = () => showStalePageNotice({ draftRestores: options.draftRestores });
       if ((options.typed ?? buyerHasTyped)()) notice();
       else {
         window.dispatchEvent(new Event(STALE_ASSET_EVENT));
-        // The recovery reloads at most every 30 s: a page it did not reload offers the notice instead.
-        setTimeout(notice, STALE_NOTICE_FALLBACK_MS);
+        // The recovery reloads at most every 30 s: a page it did not reload offers the notice instead,
+        // never one that is already leaving (a slow reload under way).
+        setTimeout(() => {
+          if (!leaving) notice();
+        }, STALE_NOTICE_FALLBACK_MS);
       }
       throw error;
     }
