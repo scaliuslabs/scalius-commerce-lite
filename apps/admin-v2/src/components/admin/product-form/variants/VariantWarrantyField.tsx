@@ -37,12 +37,12 @@ function WithProductPolicy({ control, ...props }: FieldProps & { control: Contro
 
 function WarrantySelect({ readOnly, variant, name, error, onChange, productPolicyId }: FieldProps & { productPolicyId: string | null }) {
   const t = useMessages(warrantyMessages);
-  const { policies: list, placeholder } = useWarrantyPolicies();
+  const { policies: list, placeholder, failed, failure } = useWarrantyPolicies();
   if (placeholder) return placeholder;
   const policyName = (id: string | null) => {
     if (!id) return t("none");
     const policy = list.find((candidate) => candidate.id === id);
-    if (!policy) return t("policyUnavailable");
+    if (!policy) return t(failed ? "loadFailed" : "policyUnavailable");
     return policy.archivedAt ? t("archivedPolicy", { name: policy.name }) : policy.name;
   };
   const mode = variant.warrantyMode ?? "inherit";
@@ -58,11 +58,14 @@ function WarrantySelect({ readOnly, variant, name, error, onChange, productPolic
 
   if (readOnly) {
     return (
-      <ReadOnlyValue
-        label={t("card")}
-        value={value === INHERIT ? inheritLabel : value === NONE ? t("none") : policyName(ownId)}
-        help={help}
-      />
+      <div className="flex flex-col gap-2">
+        <ReadOnlyValue
+          label={t("card")}
+          value={value === INHERIT ? inheritLabel : value === NONE ? t("none") : policyName(ownId)}
+          help={help}
+        />
+        {failure}
+      </div>
     );
   }
   const options: SearchableSelectOption[] = [
@@ -76,22 +79,26 @@ function WarrantySelect({ readOnly, variant, name, error, onChange, productPolic
       })),
     { value: NONE, label: t("none") },
   ];
+  // "Same as product" and "No warranty" stay choices while the policies fail to load; the list says so, with Try again.
   return (
-    <Field label={t("card")} help={help} error={error}>
-      <SearchableSelect
-        ariaLabel={label}
-        triggerClassName="w-full"
-        options={options}
-        value={value}
-        selectedLabel={ownId && !list.some((policy) => policy.id === ownId) ? policyName(ownId) : undefined}
-        searchPlaceholder={t("searchPolicies")}
-        emptyMessage={t("noPolicies")}
-        onValueChange={(next) => onChange(next === INHERIT
-          ? { warrantyMode: "inherit", warrantyPolicyId: null }
-          : next === NONE
-            ? { warrantyMode: "none", warrantyPolicyId: null }
-            : { warrantyMode: "policy", warrantyPolicyId: next })}
-      />
-    </Field>
+    <div className="flex flex-col gap-2">
+      <Field label={t("card")} help={help} error={error}>
+        <SearchableSelect
+          ariaLabel={label}
+          triggerClassName="w-full"
+          options={options}
+          value={value}
+          selectedLabel={ownId && !list.some((policy) => policy.id === ownId) ? policyName(ownId) : undefined}
+          searchPlaceholder={t("searchPolicies")}
+          emptyMessage={t("noPolicies")}
+          onValueChange={(next) => onChange(next === INHERIT
+            ? { warrantyMode: "inherit", warrantyPolicyId: null }
+            : next === NONE
+              ? { warrantyMode: "none", warrantyPolicyId: null }
+              : { warrantyMode: "policy", warrantyPolicyId: next })}
+        />
+      </Field>
+      {failure}
+    </div>
   );
 }

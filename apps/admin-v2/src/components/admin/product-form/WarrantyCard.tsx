@@ -4,6 +4,7 @@
 import React from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
@@ -24,8 +25,8 @@ export function WarrantyCard({ form, readOnly }: {
         <CardTitle>{t("warranty")}</CardTitle>
       </CardHeader>
       <CardContent>
-        {/* The picker's code is small and loads fast: its place stays empty meanwhile, as its policies' wait does. */}
-        <React.Suspense fallback={<div className="h-9" aria-hidden="true" />}>
+        {/* While its code loads: a skeleton of the select, as high as the field. */}
+        <React.Suspense fallback={<Skeleton className="h-11 w-full sm:pointer-fine:h-9" />}>
           <WarrantyPolicyPicker form={form} readOnly={readOnly} />
         </React.Suspense>
       </CardContent>

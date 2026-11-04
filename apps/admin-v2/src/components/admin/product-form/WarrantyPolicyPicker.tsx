@@ -23,7 +23,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
   const t = useMessages(warrantyMessages);
   const value = useWatch({ control: form.control, name: "warrantyPolicyId" });
   // A read-only "No warranty" names no policy: it shows at once.
-  const { policies: list, placeholder } = useWarrantyPolicies(!(readOnly && value == null));
+  const { policies: list, placeholder, failed, failure } = useWarrantyPolicies(!(readOnly && value == null));
   if (placeholder) return placeholder;
   const selected = list.find((policy) => policy.id === value) ?? null;
   const options: SearchableSelectOption[] = [
@@ -44,7 +44,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
           label={t("policy")}
           value={value == null ? t("none") : selected
             ? (selected.archivedAt ? t("archivedPolicy", { name: selected.name }) : selected.name)
-            : t("policyUnavailable")}
+            : t(failed ? "loadFailed" : "policyUnavailable")}
           help={selected ? warrantySummary(t, selected) : undefined}
         />
       ) : (
@@ -54,7 +54,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
             triggerClassName="w-full"
             options={options}
             value={value ?? NONE}
-            selectedLabel={value && !selected ? t("policyUnavailable") : undefined}
+            selectedLabel={value && !selected ? t(failed ? "loadFailed" : "policyUnavailable") : undefined}
             placeholder={t("choose")}
             searchPlaceholder={t("searchPolicies")}
             emptyMessage={t("noPolicies")}
@@ -63,6 +63,8 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
           />
         </Field>
       )}
+      {/* "No warranty" stays a choice while the policies fail to load; the list says so, with Try again. */}
+      {failure}
       <Link to="/admin/settings/policies/warranty" className={standaloneLinkClassName}>
         {t("managePolicies")}
       </Link>
