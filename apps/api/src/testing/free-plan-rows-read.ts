@@ -198,13 +198,20 @@ export function seedOrderHistory(sqlite: DatabaseSync, input: { orders: number; 
       20000, 20000, 20000, 20000,
       CASE WHEN i > ${n - 3} THEN 'incomplete' WHEN i > ${n - 30} THEN 'confirmed' WHEN i % 33 = 0 THEN 'cancelled' ELSE 'delivered' END,
       CASE WHEN i > ${n - 3} OR i % 4 = 0 THEN 'stripe' ELSE 'cod' END,
-      CASE WHEN i > ${n - 30} OR i % 33 = 0 THEN 'unpaid' ELSE 'paid' END,
-      CASE WHEN i > ${n - 30} OR i % 33 = 0 THEN 0 ELSE 20000 END,
+      CASE WHEN i BETWEEN ${n - 29} AND ${n - 25} THEN 'paid' WHEN i > ${n - 30} OR i % 33 = 0 THEN 'unpaid' ELSE 'paid' END,
+      CASE WHEN i BETWEEN ${n - 29} AND ${n - 25} THEN 20000 WHEN i > ${n - 30} OR i % 33 = 0 THEN 0 ELSE 20000 END,
       ${at("i")}, ${at("i")}
     FROM n;
     ${counter(n * 2)}
-    INSERT INTO order_items (id, order_id, product_id, variant_id, product_name, quantity, unit_price_minor, line_subtotal_minor, created_at)
-    SELECT printf('li_h_%08d', i), ${order("(i + 1) / 2")}, 'p_bulk_' || (i % 100 + 1), 'v_bulk_' || (i % 100 + 1), 'Bulk item', 1, 10000, 10000, ${at("(i + 1) / 2")}
+    INSERT INTO order_items (id, order_id, product_id, variant_id, product_name, quantity, unit_price_minor, line_subtotal_minor,
+      fulfillment_type, fulfilled_quantity, created_at)
+    SELECT printf('li_h_%08d', i), ${order("(i + 1) / 2")}, 'p_bulk_' || (i % 100 + 1), 'v_bulk_' || (i % 100 + 1), 'Bulk item', 1, 10000, 10000,
+      -- Every 20th order's second line is a download, every 50th a gift card: handed over in the
+      -- history, owed on five open paid orders (the auto-fulfil backstop's partial index).
+      CASE WHEN i % 2 = 0 AND (i / 2) % 20 = 0 THEN 'digital' WHEN i % 2 = 0 AND (i / 2) % 50 = 0 THEN 'gift_card'
+        WHEN i % 2 = 0 AND (i / 2) BETWEEN ${n - 29} AND ${n - 25} THEN 'digital' ELSE 'ship' END,
+      CASE WHEN i % 2 = 0 AND (i / 2) BETWEEN ${n - 29} AND ${n - 25} THEN 0 WHEN (i + 1) / 2 > ${n - 30} THEN 0 ELSE 1 END,
+      ${at("(i + 1) / 2")}
     FROM n;
     ${counter(n * 4)}
     INSERT INTO inventory_movements (id, variant_id, order_id, type, quantity, previous_stock, new_stock, ledger_version, created_at)
