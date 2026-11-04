@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useShownAfter } from "~/components/admin/data-table/use-shown-after";
+import { useShownAfter } from "~/components/admin/states/loading-sign";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useShownAfter } from "@/components/admin/data-table/use-shown-after";
+import { useShownAfter } from "@/components/admin/states/loading-sign";
 import { useMessages } from "~/i18n";
 import { warrantyMessages } from "~/i18n/warranty";
 import { InlineError } from "../states/InlineError";

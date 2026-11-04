@@ -268,10 +268,11 @@ function errorApartFromMuted(muted: string, preferred: string, mutedSurfaces: re
  *   on the page and cards and reddened until it stands apart from lighter
  *   text (on a mid-tone page, the nearest colour that does); text on it is
  *   black or white when its own does not read.
- * Surfaces and lighter text are placed anew only when the page or the text
- * changed from `previous`; otherwise every colour keeps its value while it
- * reads, and the field border is redrawn only when the page, the text or the
- * card it shows against changed.
+ * Lighter text is placed anew when the page or the text changed from
+ * `previous`, surfaces when the page did or the text crossed to the page's
+ * other side; otherwise every colour keeps its value while it reads (a
+ * darker text leaves the cards as they are), and the field border is redrawn
+ * only when the page, the text or the card it shows against changed.
  */
 export function fitThemeColors(
   colors: Record<StorefrontThemeColorKey, string>,
@@ -281,8 +282,14 @@ export function fitThemeColors(
   const next = { ...colors };
   const { background: page, foreground: text, primary } = next;
   const ink = storefrontThemeContrast("#000000", page) >= storefrontThemeContrast("#ffffff", page) ? "#000000" : "#ffffff";
-  if (page !== previous.background || text !== previous.foreground) {
+  const lighter = (color: string, than: string) => storefrontThemeLuminance(color) > storefrontThemeLuminance(than);
+  // A new text moves the surfaces only when it crosses to the page's other side (or the old pair was too alike to place them by).
+  const textCrossed = text !== previous.foreground
+    && (lighter(text, page) !== lighter(previous.foreground, previous.background) || storefrontThemeContrast(previous.foreground, previous.background) < PLACEABLE_CONTRAST);
+  if (page !== previous.background || textCrossed) {
     for (const token of SURFACE_TOKENS) next[token] = onLine(placeOnLine(reference[token], reference.background, reference.foreground), page, text);
+  }
+  if (page !== previous.background || text !== previous.foreground) {
     next["muted-foreground"] = onLine(placeOnLine(reference["muted-foreground"], reference.foreground, reference.background), text, page);
     next.destructive = reference.destructive;
     next["destructive-foreground"] = reference["destructive-foreground"];
@@ -327,6 +334,18 @@ function colorReference(theme: StorefrontThemeDocument, set: StorefrontThemeColo
   return set === "colors" ? storefrontTemplateTheme(theme.template).tokens.colors : storefrontDarkPalette(theme.tokens.colors);
 }
 
+/** Every token a colour field writes. */
+const FIELD_TOKENS = Object.values(COLOR_ROLES).flat();
+
+/**
+ * The colour set each set `setThemeColor` made was made from. Edits keep
+ * making the hidden colours from it, not from the last edit's rounded and
+ * readability-moved ones, so no colour drifts edit by edit, and typing the
+ * fields' first values back gives the first set exactly. A set reached any
+ * other way (opened, undone to, restored) is its own origin.
+ */
+const madeFrom = new WeakMap<object, Record<StorefrontThemeColorKey, string>>();
+
 /**
  * The document with one role's colour (a complete #rrggbb: the fields commit
  * nothing else) set on every token of that role, in one colour set, and the
@@ -336,11 +355,17 @@ function colorReference(theme: StorefrontThemeDocument, set: StorefrontThemeColo
 export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string, set: StorefrontThemeColorSet = "colors"): StorefrontThemeDocument {
   const current = theme.tokens[set];
   if (!current || COLOR_ROLES[role].every((token) => current[token] === value)) return theme;
+  const origin = madeFrom.get(current) ?? current;
   const edited = { ...current };
   for (const token of COLOR_ROLES[role]) edited[token] = value;
-  const colors = allThemeColorsValid(edited) && allThemeColorsValid(current) && allThemeColorsValid(theme.tokens.colors)
-    ? fitThemeColors(edited, current, colorReference(theme, set, current))
-    : edited;
+  let colors = edited;
+  if (allThemeColorsValid(edited) && allThemeColorsValid(origin) && allThemeColorsValid(theme.tokens.colors)) {
+    // The fields as they now stand, over the origin's hidden colours.
+    const fields = { ...origin };
+    for (const token of FIELD_TOKENS) fields[token] = edited[token];
+    colors = FIELD_TOKENS.every((token) => fields[token] === origin[token]) ? origin : fitThemeColors(fields, origin, colorReference(theme, set, origin));
+    if (colors !== origin) madeFrom.set(colors, origin);
+  }
   // Dark colours made from the colours follow a light colour edit; ones the merchant edited stay.
   const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
     ? storefrontDarkPalette(colors)

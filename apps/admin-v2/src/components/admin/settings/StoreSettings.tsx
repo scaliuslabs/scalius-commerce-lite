@@ -16,6 +16,7 @@ import { storeSettingsMessages } from "~/i18n/settings-store";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { ADVANCED_URL_KEYS, MAIN_URL_KEYS, SettingsAdvanced, URL_LABELS, currencyName, useCanEditStore } from "./store-settings-shared";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const loadStoreDefaultsFields = () => import("./StoreDefaultsFields");
 const TimeZoneFields = lazy(() => loadStoreDefaultsFields().then((module) => ({ default: module.TimeZoneFields })));
@@ -289,7 +290,7 @@ export function StoreDefaultsCard() {
               />
             }
           >
-            <Suspense fallback={<Skeleton className="h-32 w-full" />}><UnitFields /></Suspense>
+            <LazyPart fallback={<Skeleton className="h-32 w-full" />}><UnitFields /></LazyPart>
           </SettingsDialog>
           <SettingsDialog
             title={t("timeZoneTitle")}
@@ -301,7 +302,7 @@ export function StoreDefaultsCard() {
               />
             }
           >
-            <Suspense fallback={<Skeleton className="h-32 w-full" />}><TimeZoneFields /></Suspense>
+            <LazyPart fallback={<Skeleton className="h-32 w-full" />}><TimeZoneFields /></LazyPart>
           </SettingsDialog>
           <SettingsDialog
             title={t("countriesTitle")}
@@ -319,7 +320,7 @@ export function StoreDefaultsCard() {
               />
             }
           >
-            <Suspense fallback={<Skeleton className="h-32 w-full" />}><CountryFields /></Suspense>
+            <LazyPart fallback={<Skeleton className="h-32 w-full" />}><CountryFields /></LazyPart>
           </SettingsDialog>
         </>
       }

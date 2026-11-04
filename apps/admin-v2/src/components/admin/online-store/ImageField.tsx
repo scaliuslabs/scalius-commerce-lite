@@ -43,7 +43,7 @@ export function ImageField({
             capability="image"
             onSelect={(file) => onChange({ src: file.url, alt: file.altText?.trim() || "" })}
             trigger={
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="outline" size="sm" aria-label={t(src ? "changeImageFor" : "selectImageFor", { name: label })}>
                 {src ? t("changeImage") : t("selectImage")}
               </Button>
             }
@@ -53,6 +53,7 @@ export function ImageField({
               type="button"
               variant="ghost"
               size="sm"
+              aria-label={t("removeItem", { name: label })}
               onClick={() => onChange({ src: "", alt: "" })}
             >
               {t("remove")}

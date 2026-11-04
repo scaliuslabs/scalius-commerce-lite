@@ -98,7 +98,7 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 | Destructive or irreversible confirmation | `AlertDialog`: no outside-click dismiss. The title names the object: "Delete 'Cotton panjabi'?". |
 | In-context preview | `Sheet`. |
 | Menu, hint | `DropdownMenu`, `Tooltip`. |
-| Loading | `Skeleton`. Mirror the real layout and keep the real titles. |
+| Loading | `Skeleton`. Mirror the real layout and keep the real titles. A part whose code loads lazily waits in `LazyPart` (`fallback` is its skeleton), never a bare `Suspense` with a skeleton: L3 then covers its code and its data as one wait. |
 | Feedback | `toast` from `~/lib/toast`: noun plus past verb, three words or fewer. A toast with an action gets `duration: 10000`. An error that blocks work is a banner, not a toast. |
 
 ### Tables

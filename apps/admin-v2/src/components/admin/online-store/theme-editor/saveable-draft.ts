@@ -9,6 +9,7 @@
  * shows its error. Everything else keeps saving.
  */
 import {
+  STOREFRONT_SECTION_REGISTRY,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
   type StorefrontThemeDocument,
@@ -19,11 +20,14 @@ import {
   invalidAppSkins,
   sectionSkinInvalid,
   productAppBlocksInvalid,
+  themeAppSkin,
   themeColorProblem,
   type AppBlockEntry,
   type AppSkinEntry,
   type AppSkinUnit,
 } from "../theme-settings";
+import { appSettingProblems } from "../schema-form/app-settings";
+import { settingErrors } from "../schema-form/errors";
 import { appSectionInvalid, type AppSectionEntry } from "./editor-state";
 
 type Theme = StorefrontThemeDocument;
@@ -187,16 +191,27 @@ export function invalidDraftParts(theme: Theme, apps: DraftApps): DraftPart[] {
 
 /**
  * What autosave may send now: the working document with every invalid part
- * as it was saved, and the parts held back. Null when no valid document can
- * be made (a problem across parts, such as a variant whose colours a
- * merchant's palette cannot read): the status then says what to fix.
+ * as it was saved, and the parts held back. A part the saved draft itself
+ * fails (a template that shipped a section without its required product)
+ * is sent as saved: that changes nothing on the server, so it holds back
+ * only the merchant's edits to that part, never every other edit. Null when
+ * no valid document can be made (a problem across parts, such as a variant
+ * whose colours a merchant's palette cannot read): nothing saves, and the
+ * status says so.
  */
 export function saveableDraft(working: Theme, saved: Theme, apps: DraftApps): { theme: Theme; held: DraftPart[] } | null {
   const held = new Set<DraftPart>();
+  let savedFails: Set<DraftPart> | null = null;
   let candidate = working;
+  /** Still invalid, leaving out the parts already as saved that were saved that way. */
+  const blocking = () => invalidDraftParts(candidate, apps).filter((part) => {
+    if (!held.has(part)) return true;
+    savedFails ??= new Set(invalidDraftParts(saved, apps));
+    return !savedFails.has(part);
+  });
   // A part held back can make another one invalid (a section list without a new section); three rounds settle it.
   for (let round = 0; round < 3; round += 1) {
-    const invalid = invalidDraftParts(candidate, apps);
+    const invalid = blocking();
     if (invalid.length === 0) return { theme: candidate, held: [...held] };
     for (const part of invalid) {
       if (part === "document") return null;
@@ -206,5 +221,41 @@ export function saveableDraft(working: Theme, saved: Theme, apps: DraftApps): { 
       held.add(part);
     }
   }
-  return invalidDraftParts(candidate, apps).length === 0 ? { theme: candidate, held: [...held] } : null;
+  return blocking().length === 0 ? { theme: candidate, held: [...held] } : null;
+}
+
+function partSection(theme: Theme, part: DraftPart): StorefrontSection | null {
+  const rest = part.slice("section:".length);
+  const at = rest.lastIndexOf(":");
+  return sectionList(theme, rest.slice(0, at))?.find((section) => section.id === rest.slice(at + 1)) ?? null;
+}
+
+/**
+ * How many settings the held parts ask the merchant to fix, as the forms mark
+ * them: each failing field of a section, of an app's section or of a skin;
+ * one for a theme-wide part (its group names the one problem).
+ */
+export function heldSettingCount(theme: Theme, held: readonly DraftPart[], apps: DraftApps): number {
+  let count = 0;
+  for (const part of held) {
+    let fields = 0;
+    if (part.startsWith("section:")) {
+      const section = partSection(theme, part);
+      if (section?.type === "app") {
+        const entry = apps.sections.get(section.settings.app);
+        fields = entry ? appSettingProblems(entry.section.settings, section.settings.values).size : 0;
+      } else if (section) {
+        fields = settingErrors(STOREFRONT_SECTION_REGISTRY[section.type].settings, section.settings).size;
+        const skin = (section as { skin?: { app: string; values: Record<string, unknown> } }).skin;
+        const entry = skin ? apps.skins.get(skin.app) : undefined;
+        if (entry && skin) fields += appSettingProblems(entry.skin.settings, skin.values).size;
+      }
+    } else if (part.startsWith("skin:")) {
+      const chosen = themeAppSkin(theme, part.slice(5) as AppSkinUnit);
+      const entry = chosen ? apps.skins.get(chosen.app) : undefined;
+      fields = entry && chosen ? appSettingProblems(entry.skin.settings, chosen.values).size : 0;
+    }
+    count += Math.max(1, fields);
+  }
+  return count;
 }

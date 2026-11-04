@@ -37,6 +37,7 @@ import {
   appFieldValue,
   appListItemDefaults,
   appListItemProblems,
+  appSettingFieldId,
   appSettingProblems,
   themeAppFields,
   withAppSettingValue,
@@ -50,9 +51,6 @@ import { moveAt, removeAt, replaceAt } from "./media-previews";
 import { Field } from "~/components/ui/field";
 
 type Messages = (key: keyof (typeof themeEditorFull)["en"], vars?: Record<string, string | number>) => string;
-
-/** The DOM id of one app setting (`theme-section-app-values-title`). */
-export const appSettingFieldId = (idPrefix: string, key: string) => `${idPrefix}-${key}`;
 
 function problemText(t: Messages, problem: AppSettingProblem): string {
   switch (problem.kind) {

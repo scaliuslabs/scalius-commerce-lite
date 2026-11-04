@@ -1,6 +1,6 @@
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-import { useShownAfter } from "./use-shown-after";
+import { useShownAfter } from "../states/loading-sign";
 
 /**
  * A refetch (search, filter, sort, the next page) keeps the rows on screen

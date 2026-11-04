@@ -160,6 +160,7 @@ export function MediaField({ id, label, help, mediaId, previews, onPick, onRemov
                 type="button"
                 variant="outline"
                 size="sm"
+                aria-label={t(mediaId ? "changeImageFor" : "selectImageFor", { name: label })}
                 aria-invalid={shown ? true : undefined}
                 aria-describedby={shown ? `${id}-note` : undefined}
               >
@@ -172,6 +173,7 @@ export function MediaField({ id, label, help, mediaId, previews, onPick, onRemov
               type="button"
               variant="ghost"
               size="sm"
+              aria-label={t("removeItem", { name: label })}
               onClick={() => {
                 server.clear();
                 onRemove();

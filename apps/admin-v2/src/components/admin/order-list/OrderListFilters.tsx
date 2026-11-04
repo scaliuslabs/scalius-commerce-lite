@@ -31,6 +31,7 @@ import {
   type OrderListSearch,
 } from "./order-list-search";
 import { Field, FieldSet } from "~/components/ui/field";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const DateRangePickerWithPresets = lazy(() =>
   import("./DateRangePickerWithPresets").then((module) => ({
@@ -181,9 +182,9 @@ export function OrderListFilters({ search, onChange, appFilterable }: {
         onChange={(range) => filter({ startDate: formatDateOnly(range?.from), endDate: formatDateOnly(range?.to) })}
       />
       {appFilterable ? (
-        <Suspense fallback={<Skeleton className="h-15 w-full" />}>
+        <LazyPart fallback={<Skeleton className="h-15 w-full" />}>
           <AppListFilter labelled resource="order" value={search.appFilter} onChange={(appFilter) => filter({ appFilter })} />
-        </Suspense>
+        </LazyPart>
       ) : null}
       <div className="col-span-full flex flex-col justify-end gap-2 sm:flex-row sm:gap-4">
         <div className="flex items-center gap-2">

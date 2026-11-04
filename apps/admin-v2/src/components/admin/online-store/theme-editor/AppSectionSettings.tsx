@@ -6,15 +6,11 @@
 import type { StorefrontAppSection } from "@scalius/shared/storefront-theme";
 import { useMessages } from "~/i18n";
 import { themeEditorFull } from "~/i18n/theme-editor-panes";
-import { sectionFieldPrefix } from "../SectionSettings";
-import { themeAppFields, type AppSettingValues } from "../schema-form/app-settings";
+import { appSectionFieldPrefix, themeAppFields, type AppSettingValues } from "../schema-form/app-settings";
 import { AppSettingFields } from "../schema-form/AppSettingFields";
 import type { MediaPreviews } from "../schema-form/media-previews";
 import type { AppSectionEntry } from "./editor-state";
 import { StorefrontProblemNotice } from "~/components/admin/apps/StorefrontProblemNotice";
-
-/** The field ids of an app section's settings start with this (`theme-section-app-2-values`). */
-export const appSectionFieldPrefix = (sectionId: string) => `${sectionFieldPrefix(sectionId)}-values`;
 
 /**
  * A rejected save's issues (by data path under the section's `settings`) as

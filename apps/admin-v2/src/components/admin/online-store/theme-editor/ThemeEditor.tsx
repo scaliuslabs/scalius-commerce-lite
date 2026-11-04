@@ -57,7 +57,7 @@ import type { NavigationResourceOption } from "~/lib/api-query-options/navigatio
 import { marketsQueryOptions } from "~/lib/api-query-options/markets";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { languageName } from "../../translations/translation-form";
-import { appSettingDefaults } from "../schema-form/app-settings";
+import { appSectionFieldPrefix, appSettingDefaults, appSettingFieldId, appSettingProblems } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
@@ -116,6 +116,7 @@ import { useBlockName, useEditorTree, useSectionName } from "./use-editor-tree";
 import { usePreview } from "./use-preview";
 import { usePreviewSync } from "./use-preview-sync";
 import { THEME_PRESENCE_KEY, useThemeDraft } from "./use-theme-draft";
+import { heldSettingCount } from "./saveable-draft";
 
 type Theme = StorefrontThemeDocument;
 type Section = StorefrontSection;
@@ -151,16 +152,16 @@ function PhoneBottomBar({ label, children }: { label: string; children: ReactNod
   return <nav ref={bar} aria-label={label} className="z-40 flex h-14 gap-1 border-t border-border bg-card px-2">{children}</nav>;
 }
 
-/** Puts the cursor in a field once the (lazy) pane draws it. */
+/** Puts the cursor in a field once the (lazy) pane draws it: its code may take a few seconds on a slow connection. */
 function focusWhenShown(id: string, focus = true) {
-  let tries = 0;
+  const until = Date.now() + 8000;
   const attempt = () => {
     const field = document.getElementById(id);
     const target = field?.matches("input, textarea, button, select") ? field : field?.querySelector<HTMLElement>("input, textarea, button, select");
     if (target) {
       if (focus) target.focus();
       target.scrollIntoView({ block: "center" });
-    } else if (tries++ < 60) requestAnimationFrame(attempt);
+    } else if (Date.now() < until) requestAnimationFrame(attempt);
   };
   requestAnimationFrame(attempt);
 }
@@ -619,7 +620,15 @@ export function ThemeEditor({ workspace, refetch }: {
     const section = pageSections(theme, where)?.find((each) => each.id === sectionId);
     if (!section) return;
     if (!samePage(where, page)) setPageState(where);
-    const path = isStorefrontAppSection(section) ? null : firstSettingError(section);
+    if (isStorefrontAppSection(section)) {
+      // An app's section: its first setting the app would refuse (the form marks every one).
+      select(section.id, "tree");
+      const entry = appSections.get(section.settings.app);
+      const key = entry ? appSettingProblems(entry.section.settings, section.settings.values).keys().next().value : undefined;
+      if (key) focusWhenShown(appSettingFieldId(appSectionFieldPrefix(section.id), key));
+      return;
+    }
+    const path = firstSettingError(section);
     const inBlock = path ? storefrontSectionBlockLists(section.type).find((each) => path.startsWith(`${each.path}.`)) : undefined;
     const index = inBlock && path ? Number(path.slice(inBlock.path.length + 1).split(".")[0]) : -1;
     select(inBlock && index >= 0 ? `${section.id}/${inBlock.path}/${index}` : section.id, "tree");
@@ -927,14 +936,16 @@ export function ThemeEditor({ workspace, refetch }: {
   }, [noticeId, preview.loading]);
 
   const unopened = useMemo(() => unopenedAiSections(theme), [theme]);
-  const publishable = canEdit && draft.differsFromLive && !draft.conflict && !draft.busy && draft.pending !== null;
+  // With a setting to fix, Publish still opens: its dialog says what waits and links to it.
+  const publishable = canEdit && draft.differsFromLive && !draft.conflict && !draft.busy;
+  const heldCount = useMemo(() => Math.max(1, heldSettingCount(theme, draft.held, draftApps)), [theme, draft.held, draftApps]);
 
   return (
     <div className="grid h-svh grid-rows-[auto_minmax(0,1fr)_auto] bg-background text-foreground" data-theme-editor>
       <h1 className="sr-only">{t("title")}</h1>
       <EditorTopBar
         status={draft.status}
-        heldCount={Math.max(1, draft.held.length)}
+        heldCount={heldCount}
         onShowProblem={showProblem}
         onRetry={() => void draft.save()}
         live={!draft.differsFromLive}
@@ -1150,7 +1161,7 @@ export function ThemeEditor({ workspace, refetch }: {
             }}
             live={draft.published.theme}
             draft={draft.pending ?? draft.saved.theme}
-            held={draft.held.length > 0 || draft.pending === null ? Math.max(1, draft.held.length) : 0}
+            held={draft.held.length > 0 || draft.pending === null ? heldCount : 0}
             unopenedAi={unopened}
             sectionName={sectionName}
             publishing={draft.publishing}
