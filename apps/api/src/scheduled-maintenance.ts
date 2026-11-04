@@ -94,6 +94,11 @@ function tickDate(runContext: ScheduledRunContext): Date {
   return new Date(runContext.scheduledAt ?? runContext.startedAt);
 }
 
+/** The hour's first minute (a manual run, without a scheduled time, counts too). */
+function isFirstTickOfHour(runContext: ScheduledRunContext): boolean {
+  return runContext.scheduledAt === undefined || runContext.scheduledAt % 3_600_000 < 60_000;
+}
+
 /** A sweep's row limit under the plan: the full limit on Paid, a fraction on Free. */
 function scaled(limit: number): number {
   return Math.max(1, Math.floor(limit * planLimits().maintenance.limitScale));
@@ -196,8 +201,10 @@ export async function runScheduledMaintenance(
 
   try {
     await runScheduledMaintenanceInner(env, executionCtx, runContext);
-    // An idle tick (nothing due, nothing found) logs nothing: it runs 1,440 times a day.
+    // An idle tick (nothing due, nothing found) logs nothing: it runs 1,440
+    // times a day. The hour's first tick says it ran anyway (a liveness signal).
     if (runContext.worked) console.log(`[scheduled] event=scheduled_run_completed, ${run()}`);
+    else if (isFirstTickOfHour(runContext)) console.log(`[scheduled] event=scheduled_heartbeat, ${run()}`);
   } catch (error) {
     console.error(`[scheduled] event=scheduled_run_failed, ${run()}`, error);
     throw error;
@@ -618,36 +625,56 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // Retention of settled events and deliveries, after the dispatch sweep.
     name: "event_outbox_retention",
     async run({ db, timed, runContext }) {
-      const { runScheduledEventRetention } = await import("./events/dispatch");
-      const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
-      if (pruned.events > 0 || pruned.deliveries > 0 || pruned.pluginDeliveries > 0) {
-        console.log(
-          `[scheduled] Event outbox retention: prunedEvents=${pruned.events}, prunedDeliveries=${pruned.deliveries}, ` +
-            `prunedPluginDeliveries=${pruned.pluginDeliveries}`,
-        );
+      const nowSeconds = Math.floor(tickDate(runContext).getTime() / 1000);
+      // Three independent purges: a failure of one is logged (by `timed`) and
+      // rethrown after the others ran, so it never skips them.
+      const parts: Array<() => Promise<void>> = [
+        async () => {
+          const { runScheduledEventRetention } = await import("./events/dispatch");
+          const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
+          if (pruned.events > 0 || pruned.deliveries > 0 || pruned.pluginDeliveries > 0) {
+            console.log(
+              `[scheduled] Event outbox retention: prunedEvents=${pruned.events}, prunedDeliveries=${pruned.deliveries}, ` +
+                `prunedPluginDeliveries=${pruned.pluginDeliveries}`,
+            );
+          }
+        },
+        async () => {
+          // Meta CAPI logs past the store's retention: a bounded share a run (a
+          // browser event never deletes).
+          const capiLogs = await timed("meta_capi_log_retention", () => purgeExpiredCapiLogs(db, {
+            nowSeconds,
+            limit: scaled(CAPI_LOG_PURGE_LIMIT),
+          }));
+          if (capiLogs > 0) console.log(`[scheduled] Meta CAPI log retention: deleted=${capiLogs}`);
+        },
+        async () => {
+          // Per-order history past every window that reads it (checkout replays,
+          // receipts, notification dedupe, review requests): one round trip.
+          const cursor = await readMaintenanceCursor(db, "order-history");
+          const history = await timed("order_history_retention", () => pruneOrderHistory(db, {
+            nowSeconds,
+            limit: scaled(ORDER_HISTORY_RETENTION_LIMIT),
+            checkoutCursor: cursor.value.checkoutAttempts,
+          }));
+          await cursor.save({ checkoutAttempts: history.checkoutCursor });
+          if (history.checkoutAttempts + history.receipts + history.notifications + history.reviewRequests > 0) {
+            console.log(
+              `[scheduled] Order history retention: checkoutAttempts=${history.checkoutAttempts}, receipts=${history.receipts}, ` +
+                `notifications=${history.notifications}, reviewRequests=${history.reviewRequests}`,
+            );
+          }
+        },
+      ];
+      let failure: unknown;
+      for (const part of parts) {
+        try {
+          await part();
+        } catch (error) {
+          failure ??= error;
+        }
       }
-      // Meta CAPI logs past the store's retention: a bounded share a run (a
-      // browser event never deletes).
-      const capiLogs = await timed("meta_capi_log_retention", () => purgeExpiredCapiLogs(db, {
-        nowSeconds: Math.floor(tickDate(runContext).getTime() / 1000),
-        limit: scaled(CAPI_LOG_PURGE_LIMIT),
-      }));
-      if (capiLogs > 0) console.log(`[scheduled] Meta CAPI log retention: deleted=${capiLogs}`);
-      // Per-order history past every window that reads it (checkout replays,
-      // receipts, notification dedupe, review requests): one round trip.
-      const cursor = await readMaintenanceCursor(db, "order-history");
-      const history = await timed("order_history_retention", () => pruneOrderHistory(db, {
-        nowSeconds: Math.floor(tickDate(runContext).getTime() / 1000),
-        limit: scaled(ORDER_HISTORY_RETENTION_LIMIT),
-        checkoutCursor: cursor.value.checkoutAttempts,
-      }));
-      await cursor.save({ checkoutAttempts: history.checkoutCursor });
-      if (history.checkoutAttempts + history.receipts + history.notifications + history.reviewRequests > 0) {
-        console.log(
-          `[scheduled] Order history retention: checkoutAttempts=${history.checkoutAttempts}, receipts=${history.receipts}, ` +
-            `notifications=${history.notifications}, reviewRequests=${history.reviewRequests}`,
-        );
-      }
+      if (failure !== undefined) throw failure;
     },
   },
   {
