@@ -4,8 +4,27 @@
  * store), and the storefront pages composed from them the way the storefront
  * batch composes a render.
  */
+import { createHmac, hkdfSync } from "node:crypto";
 import { isPublicApiCacheRoute, withMarketPresence } from "@scalius/shared/public-api-cache-routes";
+import { RUNTIME_SECRET_HKDF_SALT, RUNTIME_SECRET_BYTES } from "@scalius/shared/runtime-secrets";
+import { SITEMAP_PAGE_SIZE } from "@scalius/shared/sitemap-pagination";
 import { DVC_IDS } from "./seed-store";
+
+/** The harness Worker's master secret (a test value): signed continuations need one. */
+export const DVC_MASTER_SECRET = "dvc-harness-master-secret-0123456789abcdef0123";
+
+/**
+ * A product sitemap page boundary signed as the API signs it
+ * (`apps/api/src/utils/public-cursor.ts`), for a page after the first. The
+ * position is past every seeded product, so the page lists them all and its
+ * proof covers the keyset read.
+ */
+function signedSitemapAfter(page: number, limit: number): string {
+  const secret = Buffer.from(hkdfSync("sha256", DVC_MASTER_SECRET, RUNTIME_SECRET_HKDF_SALT, "public-discovery-cursor", RUNTIME_SECRET_BYTES)).toString("base64url");
+  const position = `${(4_102_444_800).toString(36)}.${Buffer.from("p_zzzz").toString("base64url")}`;
+  const signature = createHmac("sha256", secret).update(`sitemap-products:${page}:${limit}\n${position}`).digest("base64url");
+  return `${position}.${signature}`;
+}
 
 const LIST = "page=1&limit=20";
 
@@ -32,6 +51,9 @@ function productParts(): string[] {
     "/api/v1/products/feed?channel=sc_meta",
     "/api/v1/products/feed?channel=sc_agents&ids=p_linen,p_bag,p_shoe",
     "/api/v1/products/sitemap",
+    // The sitemap index's outline (the only count), and a later page at its signed boundary.
+    `/api/v1/products/sitemap?outline=true&limit=${SITEMAP_PAGE_SIZE}`,
+    `/api/v1/products/sitemap?page=2&limit=100&after=${signedSitemapAfter(2, 100)}`,
     "/api/v1/products/recommendations?limit=8",
     "/api/v1/products/recommendations?productIds=p_linen&limit=8",
     "/api/v1/products/compare?ids=p_linen,p_cotton,p_silk",
@@ -232,6 +254,7 @@ export function dvcPageCatalogue(): DvcPage[] {
     { name: "article", parts: [...SHELL, "/api/v1/articles/slug/eid-lookbook"] },
     { name: "cart-shell", parts: [...SHELL, ...COMMERCE, "/api/v1/checkout-languages/active", "/api/v1/locations/cities"] },
     { name: "sitemap-products", parts: ["/api/v1/products/sitemap"] },
+    { name: "sitemap-index-products", parts: [`/api/v1/products/sitemap?outline=true&limit=${SITEMAP_PAGE_SIZE}`] },
     { name: "feed", parts: ["/api/v1/products/feed", "/api/v1/seo"] },
     { name: "feed:meta", parts: ["/api/v1/products/feed?channel=sc_meta", "/api/v1/seo"] },
   ];

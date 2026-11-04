@@ -1,5 +1,6 @@
 import type { BuyerPriceRange, ProductFacet, RatingFacetValue } from "@/lib/api";
 import { browserApiUrl } from "@/lib/api/browser-url";
+import { isProductListQueryKey } from "./product-list-query";
 import { navigateToCatalogFilterSearch } from "./catalog-filter-dialog";
 import { catalogSwatchPaint } from "./catalog-swatch";
 import {
@@ -313,7 +314,10 @@ export function catalogFilterSearchParams(form: HTMLFormElement): URLSearchParam
 export function catalogCountQuery(params: URLSearchParams): URLSearchParams {
   const query = new URLSearchParams();
   for (const [key, value] of params) {
-    if (key === "sortBy" || key === "page" || key === "limit") continue;
+    if (key === "sortBy" || key === "page" || key === "limit" || key === "showAll") continue;
+    // Only the keys a listing reads: ad-click, campaign, newsletter and freshness
+    // tags are the browser URL's, never the API's (an undeclared key is refused there).
+    if (!isProductListQueryKey(key)) continue;
     query.append(key === "q" ? "search" : key, value);
   }
   query.set("limit", "1");

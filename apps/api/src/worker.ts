@@ -24,6 +24,7 @@ import {
 import {
   getPublicApiCachePolicy,
 } from "./public-cache-policy";
+import { publicApiQueryRefusal } from "@scalius/shared/public-api-cache-routes";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { cacheFrontierEndpoint, serveCacheFrontierCheck, serveCacheFrontierDelta } from "./cache-frontier";
 import { isStorefrontIncidentEndpoint } from "./plugins/storefront-incident-path";
@@ -178,6 +179,19 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
         return applyBaselineSecurityHeaders(request, routed, { frameProtection: "deny" });
       }
       request = routed;
+    }
+
+    // A public cached read takes only the query its route declares: anything
+    // else is refused here, before the cache and before any read, so an
+    // unknown parameter can neither split a cache key nor force a render.
+    const queryRefusal = request.method === "GET" || request.method === "HEAD"
+      ? publicApiQueryRefusal(new URL(request.url))
+      : null;
+    if (queryRefusal) {
+      return applyBaselineSecurityHeaders(request, Response.json(
+        { success: false, error: { code: "validation_error", message: queryRefusal } },
+        { status: 400, headers: { "Cache-Control": "private, no-store" } },
+      ), { frameProtection: "deny" });
     }
 
     if (getPublicApiCachePolicy(request)) {

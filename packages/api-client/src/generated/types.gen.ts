@@ -8882,6 +8882,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 dashboardUrl: string;
                 mediaUrl: string;
                 sameOriginMedia: boolean;
+                feedProductsPerRequest: number;
             };
             timeZone: string;
             cspAllowedDomains: string;
@@ -18324,7 +18325,7 @@ export type GetApiV1ProductsFeedData = {
          */
         search?: string;
         /**
-         * Opaque continuation cursor returned by the previous feed response
+         * Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.
          */
         cursor?: string;
         /**
@@ -18480,6 +18481,14 @@ export type GetApiV1ProductsSitemapData = {
          * Items per page
          */
         limit?: number;
+        /**
+         * Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted.
+         */
+        after?: string;
+        /**
+         * The sitemap index's read: no rows, the number of listed products, and every later page with its `after`.
+         */
+        outline?: 'true';
     };
     url: '/api/v1/products/sitemap';
 };
@@ -18512,8 +18521,13 @@ export type GetApiV1ProductsSitemapResponses = {
             pagination: {
                 page: number;
                 limit: number;
-                total: number;
-                totalPages: number;
+                hasNextPage?: boolean;
+                total?: number;
+                totalPages?: number;
+                pages?: Array<{
+                    page: number;
+                    after: string;
+                }>;
             };
         };
     };
@@ -45938,7 +45952,9 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
         data: {
             stats: {
                 totalProducts: number;
+                totalProductsIsCapped: boolean;
                 totalCustomers: number;
+                totalCustomersIsCapped: boolean;
                 currentMonth: {
                     orders: number;
                     revenue: number | null;
@@ -59471,6 +59487,10 @@ export type PostApiV1AdminOrdersBulkShipResponses = {
                 error?: string;
                 [key: string]: unknown;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59516,6 +59536,10 @@ export type PostApiV1AdminOrdersBulkConfirmResponses = {
                 success: boolean;
                 error?: string;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59563,6 +59587,10 @@ export type PostApiV1AdminOrdersBulkFulfillResponses = {
                 success: boolean;
                 error?: string;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };

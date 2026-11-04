@@ -3,6 +3,8 @@ import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { AGENTS_CHANNEL_ID } from "@scalius/shared/sales-channels";
+import { isPublicFeedCursor } from "@scalius/shared/public-cursor";
+import { MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH } from "@scalius/shared/public-api-cache-routes";
 import { getLayoutData, type CurrencyData, type LayoutData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
 import { renderForPresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -38,6 +40,8 @@ const MAX_SEARCH_LIMIT = 50;
 export const MAX_LOOKUP_IDS = 25;
 const MAX_UCP_BODY_BYTES = 64 * 1024;
 const MAX_ECHOED_IDENTIFIER_LENGTH = 256;
+/** The longest identifier a lookup reads (a longer one names nothing in the catalogue). */
+const MAX_LOOKUP_IDENTIFIER_LENGTH = MAX_ECHOED_IDENTIFIER_LENGTH;
 const GID_PREFIX = "gid://scalius/";
 type UcpStatus = "success" | "error";
 type UcpMessageType = "info" | "warning" | "error";
@@ -937,8 +941,7 @@ function parsePagination(value: unknown) {
   const cursorValue = pagination.cursor;
   if (cursorValue !== undefined && (
     typeof cursorValue !== "string" ||
-    cursorValue.length > 512 ||
-    !/^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/.test(cursorValue)
+    !isPublicFeedCursor(cursorValue)
   )) {
     return { valid: false as const, limit };
   }
@@ -1001,7 +1004,7 @@ function hasRecognizedSearchInput(body: SearchRequestBody): boolean {
 
 async function loadFeedProducts(
   options: Parameters<typeof getFeedProducts>[0],
-): Promise<FeedProductPage | null> {
+): Promise<FeedProductPage | "invalid_cursor" | null> {
   try {
     // UCP lists what the AI agents sales channel publishes (MARKETS-DESIGN D6).
     return await getFeedProducts({ ...options, channel: AGENTS_CHANNEL_ID });
@@ -1036,6 +1039,15 @@ export async function searchCatalog(
   }
   const options = buildSearchOptions(body, context, pagination);
   const result = await loadFeedProducts(options);
+  if (result === "invalid_cursor") {
+    return listError(
+      "search",
+      400,
+      "request_invalid",
+      "Catalog pagination cursor is invalid or no longer supported.",
+      { path: "$.pagination.cursor" },
+    );
+  }
   if (!result) {
     return listError("search", 503, "temporarily_unavailable", "Catalog search is temporarily unavailable.");
   }
@@ -1094,18 +1106,50 @@ function lookupInputs(ids: unknown, context: UcpCatalogContext): LookupInput[] {
     .filter((input) => input.normalized.length > 0);
 }
 
+/**
+ * The identifier lists of a lookup, each short enough for one cached public
+ * read (`ids` at most `MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH` characters); an
+ * identifier longer than that alone is its own, uncached, read.
+ */
+export function lookupIdChunks(identifiers: readonly string[]): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let length = 0;
+  for (const identifier of identifiers) {
+    const added = current.length === 0 ? identifier.length : length + 1 + identifier.length;
+    if (current.length > 0 && added > MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH) {
+      chunks.push(current);
+      current = [identifier];
+      length = identifier.length;
+    } else {
+      current.push(identifier);
+      length = added;
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
 async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[] | null> {
   if (inputs.length === 0) return [];
 
-  const result = await loadFeedProducts({
-    limit: Math.max(inputs.length, DEFAULT_SEARCH_LIMIT),
-    ids: inputs.map((input) => input.normalized).join(","),
-  });
-  if (!result) return null;
-
-  return Array.from(
-    new Map(result.data.map((product) => [product.id, product])).values(),
-  );
+  // No product, variant, SKU or handle is longer than an echoed identifier:
+  // a longer one is not found, without a read.
+  const identifiers = inputs
+    .map((input) => input.normalized)
+    .filter((identifier) => identifier.length <= MAX_LOOKUP_IDENTIFIER_LENGTH);
+  // One cacheable read per chunk, all at once, so the render's read batch joins them.
+  const results = await Promise.all(lookupIdChunks(identifiers).map((ids) => loadFeedProducts({
+    limit: Math.max(ids.length, DEFAULT_SEARCH_LIMIT),
+    ids: ids.join(","),
+  })));
+  const products = new Map<string, Product>();
+  for (const result of results) {
+    // No cursor is sent, so the API cannot refuse one.
+    if (!result || result === "invalid_cursor") return null;
+    for (const product of result.data) products.set(product.id, product);
+  }
+  return [...products.values()];
 }
 
 function buildInputMatches(products: Product[], inputs: LookupInput[]) {

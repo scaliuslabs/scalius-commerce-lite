@@ -60,7 +60,7 @@ All paths are under `/api/v1` and public except the last two (admin).
 
 ### Feeds and sitemaps
 
-- `GET /products/feed` is cursor-paged (`feed-v1.` cursor), newest first, at most 100 per page. A `page` other than 1 is refused.
+- `GET /products/feed` is cursor-paged, newest first, at most 100 per page. A `page` other than 1 is refused. The route signs the core's position (`feed-v1.<position>`) into the public `feed-v2.<position>.<signature>` (`apps/api/src/utils/public-cursor.ts`, a key derived from `SCALIUS_SECRET`, scoped to the channel) and refuses any cursor it did not sign before the core runs.
 - A product enters the feed when it is public with a buyer SKU, has a live physical SKU, has a real primary image and is published to the feed's sales channel (`?channel=`: `sc_google` by default, `sc_meta`, `sc_agents` for UCP) while that channel is active. Gift cards and products with service or digital SKUs stay out. Leaving a feed's channel does not hide or noindex the product page; leaving the online store does (see [`products`](../products/README.md)).
 - `projectCatalogFeedRows` (`packages/shared/src/catalog-feed-row.ts`) builds the rows. The storefront renders them as XML (`apps/storefront/src/pages/api/product-feed.xml.ts`, `facebook-feed.xml.ts`).
   - Availability: Google `in_stock` and `out_of_stock`; Meta `in stock` and `out of stock`.
@@ -68,7 +68,7 @@ All paths are under `/api/v1` and public except the last two (admin).
   - A row whose original or current price is not positive is omitted (`non_positive_price`). `<g:sale_price>` appears only when it is lower than `<g:price>`.
   - The default strategy is one row per SKU (`variants`). The feed policy can switch it to one row per product. An empty catalogue gives a valid empty feed.
 - `feed-diagnostics.ts` scans the 500 most recently updated products and returns counts per skip reason with 5 samples each (at most 50). `feed-row-preview.ts` returns at most 10 rows per call within a 46 KiB budget. Both are read-only and follow the XML feed's policy.
-- `getStorefrontSitemapProducts` filters `noIndex` and `excludeFromSitemap` in the query, before paging. `getPublicCollectionSitemapEntries` does the same for active, live collections. Product, category, brand and collection sitemap reads expose complete filtered totals and deterministic pages of at most 5,000 rows; the XML index advertises every chunk. Shared pagination bounds live in `@scalius/shared/sitemap-pagination`.
+- `getStorefrontSitemapProducts` filters `noIndex` and `excludeFromSitemap` in the query, before paging. `getPublicCollectionSitemapEntries` does the same for active, live collections. Category, brand and collection sitemap reads expose complete filtered totals and deterministic pages of at most 5,000 rows; the XML index advertises every chunk. Products count only in the index's outline (`getStorefrontSitemapOutline`: one window walk returns the total and each later page's boundary, which the route signs); a product page is a keyset seek from its signed `after`, never a count or an OFFSET walk. Shared pagination bounds live in `@scalius/shared/sitemap-pagination`.
 
 ### Recommendations, cards and homepage
 

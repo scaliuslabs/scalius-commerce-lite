@@ -5,6 +5,7 @@ import { readStoreCurrency } from "../markets";
 import type { AppProviders } from "../../integrations/provider-port";
 import { buildStorefrontDiscountAllocation } from "./discount-allocation";
 import { quoteTax } from "./provider";
+import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
 import { taxCountryOf } from "./region-match";
 import {
     SYSTEM_TAX_PROVIDER_ID,
@@ -48,12 +49,19 @@ export interface StorefrontTaxAuthoritySnapshot {
 }
 
 const STOREFRONT_TAX_AUTHORITY_PROOF = Symbol("scalius.storefrontTaxAuthority");
+/** The countries whose regions a snapshot read (a Set); null: every country's. */
+const STOREFRONT_TAX_AUTHORITY_REGION_SCOPE = Symbol("scalius.storefrontTaxAuthorityRegionScope");
 
 function markTrustedStorefrontTaxAuthority(
     snapshot: StorefrontTaxAuthoritySnapshot,
+    regionScope: ReadonlySet<string> | null,
 ): StorefrontTaxAuthoritySnapshot {
     Object.defineProperty(snapshot, STOREFRONT_TAX_AUTHORITY_PROOF, {
         value: true,
+        enumerable: false,
+    });
+    Object.defineProperty(snapshot, STOREFRONT_TAX_AUTHORITY_REGION_SCOPE, {
+        value: regionScope,
         enumerable: false,
     });
     return snapshot;
@@ -126,15 +134,106 @@ interface RegionRateRow {
     combinable: boolean | number | null;
 }
 
+/** ISO countries as the region read binds them: normalised, unique, sorted; unknown codes dropped. */
+export function taxRegionScopeCountries(countries: readonly (string | null | undefined)[]): string[] {
+    return [...new Set(countries.map((country) => normalizeMarketCountry(country)).filter((country): country is string => country !== null))].sort();
+}
+
+/**
+ * The countries whose regions a quote at this destination reads
+ * (`taxCountryOf`): the address's, Bangladesh for a Bangladesh place; none
+ * for an order with no address, which is taxed at the store's own country
+ * (the read always adds that one).
+ */
+export function taxDestinationCountries(
+    destination: { countryCode?: string | null; city?: string | null },
+): string[] {
+    return destination.countryCode || destination.city ? taxRegionScopeCountries([taxCountryOf(destination)]) : [];
+}
+
+/**
+ * Regions of the given countries with their active rates, in one statement
+ * on the `country_code` leg of the scope index. The store's own country
+ * (where an addressless or pickup order is taxed) always rides along; with
+ * no countries given, it is the only one (Bangladesh when the store has no
+ * default location). `undefined`: every country's.
+ */
+function selectTaxRegionRates(db: Database, countries: readonly string[] | undefined) {
+    const inScope = countries === undefined
+        ? undefined
+        : countries.length > 0
+            ? sql`${taxRegions.countryCode} IN (SELECT value FROM json_each(${JSON.stringify(countries)}) UNION SELECT ${ORIGIN_COUNTRY_SQL})`
+            : sql`${taxRegions.countryCode} IN (SELECT coalesce(${ORIGIN_COUNTRY_SQL}, ${DELIVERY_HIERARCHY_COUNTRY}))`;
+    return db.select({
+        regionId: taxRegions.id,
+        countryCode: taxRegions.countryCode,
+        adminArea: taxRegions.adminArea,
+        postalPrefix: taxRegions.postalPrefix,
+        placeType: taxRegions.placeType,
+        placeId: taxRegions.placeId,
+        providerId: taxRegions.providerId,
+        // Aliased: D1 returns rows by column name, and both tables have an `id`.
+        rateId: sql<string | null>`${taxRates.id}`.as("tax_rate_id"),
+        taxClassId: taxRates.taxClassId,
+        name: taxRates.name,
+        rateBps: taxRates.rateBps,
+        priority: taxRates.priority,
+        isCompound: taxRates.isCompound,
+        combinable: taxRates.combinable,
+    }).from(taxRegions).leftJoin(taxRates, and(
+        eq(taxRates.taxRegionId, taxRegions.id),
+        eq(taxRates.isActive, true),
+    )).where(inScope).orderBy(asc(taxRegions.id), asc(taxRates.priority), asc(taxRates.id));
+}
+
+function foldTaxRegionRates(rows: readonly RegionRateRow[]): { regions: TaxRegionDefinition[]; rates: TaxRateDefinition[] } {
+    const regions = new Map<string, TaxRegionDefinition>();
+    const rates: TaxRateDefinition[] = [];
+    for (const row of rows) {
+        if (!regions.has(row.regionId)) {
+            regions.set(row.regionId, {
+                id: row.regionId,
+                countryCode: row.countryCode,
+                adminArea: row.adminArea || null,
+                postalPrefix: row.postalPrefix || null,
+                placeType: row.placeType,
+                placeId: row.placeId,
+                providerId: row.providerId,
+            });
+        }
+        if (row.rateId && row.taxClassId && row.name !== null && row.rateBps !== null) {
+            rates.push({
+                id: row.rateId,
+                taxClassId: row.taxClassId,
+                taxRegionId: row.regionId,
+                name: row.name,
+                rateBps: row.rateBps,
+                priority: row.priority ?? 0,
+                isCompound: Boolean(row.isCompound),
+                combinable: Boolean(row.combinable),
+            });
+        }
+    }
+    return { regions: [...regions.values()], rates };
+}
+
 /**
  * The tax authority in three statements, as before regions: the settings
  * row (with the markets' flags and the origin country beside it, read also
  * when the store never saved tax settings), the
  * classes, and the regions with their active rates.
+ *
+ * `countries` bounds the third to the countries a quote can be taxed in
+ * (the destination's and the billing country, plus the store's own, which
+ * the statement adds): a store with thousands of regions reads one country's.
+ * A quote in a country outside them reads that country's regions itself
+ * (`calculateStorefrontTaxQuote`); omitted: every country's.
  */
 export function createStorefrontTaxAuthorityReadPlan(
     db: Database,
+    countries?: readonly (string | null | undefined)[],
 ): StorefrontTaxAuthorityReadPlan {
+    const scoped = countries === undefined ? undefined : taxRegionScopeCountries(countries);
     return {
         statements: [
             // One row always: the store's origin country does not depend on
@@ -156,26 +255,7 @@ export function createStorefrontTaxAuthorityReadPlan(
                 name: taxClasses.name,
                 isExempt: taxClasses.isExempt,
             }).from(taxClasses).where(isNull(taxClasses.deletedAt)),
-            db.select({
-                regionId: taxRegions.id,
-                countryCode: taxRegions.countryCode,
-                adminArea: taxRegions.adminArea,
-                postalPrefix: taxRegions.postalPrefix,
-                placeType: taxRegions.placeType,
-                placeId: taxRegions.placeId,
-                providerId: taxRegions.providerId,
-                // Aliased: D1 returns rows by column name, and both tables have an `id`.
-                rateId: sql<string | null>`${taxRates.id}`.as("tax_rate_id"),
-                taxClassId: taxRates.taxClassId,
-                name: taxRates.name,
-                rateBps: taxRates.rateBps,
-                priority: taxRates.priority,
-                isCompound: taxRates.isCompound,
-                combinable: taxRates.combinable,
-            }).from(taxRegions).leftJoin(taxRates, and(
-                eq(taxRates.taxRegionId, taxRegions.id),
-                eq(taxRates.isActive, true),
-            )).orderBy(asc(taxRegions.id), asc(taxRates.priority), asc(taxRates.id)),
+            selectTaxRegionRates(db, scoped),
         ],
         resolve(results) {
             const settingsRows = Array.isArray(results[0])
@@ -194,43 +274,23 @@ export function createStorefrontTaxAuthorityReadPlan(
                 }
                 : DISABLED_TAX_SETTINGS;
             const regionRows = Array.isArray(results[2]) ? results[2] as RegionRateRow[] : [];
-            const regions = new Map<string, TaxRegionDefinition>();
-            const rates: TaxRateDefinition[] = [];
-            for (const row of regionRows) {
-                if (!regions.has(row.regionId)) {
-                    regions.set(row.regionId, {
-                        id: row.regionId,
-                        countryCode: row.countryCode,
-                        adminArea: row.adminArea || null,
-                        postalPrefix: row.postalPrefix || null,
-                        placeType: row.placeType,
-                        placeId: row.placeId,
-                        providerId: row.providerId,
-                    });
-                }
-                if (row.rateId && row.taxClassId && row.name !== null && row.rateBps !== null) {
-                    rates.push({
-                        id: row.rateId,
-                        taxClassId: row.taxClassId,
-                        taxRegionId: row.regionId,
-                        name: row.name,
-                        rateBps: row.rateBps,
-                        priority: row.priority ?? 0,
-                        isCompound: Boolean(row.isCompound),
-                        combinable: Boolean(row.combinable),
-                    });
-                }
-            }
+            const { regions, rates } = foldTaxRegionRates(regionRows);
+            const originCountry = settingsRow?.originCountry ?? null;
+            // The statement's own scope: the given countries, and the store's
+            // (Bangladesh when it has none and no country was given).
+            const regionScope = scoped === undefined
+                ? null
+                : new Set(originCountry ? [...scoped, originCountry] : scoped.length > 0 ? scoped : [DELIVERY_HIERARCHY_COUNTRY]);
             return markTrustedStorefrontTaxAuthority({
                 settings,
                 classes: Array.isArray(results[1])
                     ? (results[1] as TaxClassDefinition[]).map((row) => ({ id: row.id, name: row.name, isExempt: Boolean(row.isExempt) }))
                     : [],
-                regions: [...regions.values()],
+                regions,
                 rates,
                 markets: marketTaxInclusionFromSql(settingsRow?.marketTaxInclusion),
-                originCountry: settingsRow?.originCountry ?? null,
-            });
+                originCountry,
+            }, regionScope);
         },
     };
 }
@@ -246,9 +306,16 @@ export async function readStoreOriginCountry(db: Database): Promise<string | nul
     return row?.originCountry ?? null;
 }
 
-/** Reads the tax authority in one batch (staff orders and previews; checkout folds it into its own). */
-export async function readStorefrontTaxAuthority(db: Database): Promise<StorefrontTaxAuthoritySnapshot> {
-    const plan = createStorefrontTaxAuthorityReadPlan(db);
+/**
+ * Reads the tax authority in one batch (staff orders and previews; checkout
+ * folds it into its own). `countries`: see the read plan; omitted: every
+ * country's regions.
+ */
+export async function readStorefrontTaxAuthority(
+    db: Database,
+    countries?: readonly (string | null | undefined)[],
+): Promise<StorefrontTaxAuthoritySnapshot> {
+    const plan = createStorefrontTaxAuthorityReadPlan(db, countries);
     return plan.resolve(await db.batch(plan.statements as never) as unknown[]);
 }
 
@@ -289,6 +356,31 @@ export interface StorefrontTaxQuoteOptions {
     signal?: AbortSignal;
 }
 
+/**
+ * An authority read for some countries, quoted at a destination outside
+ * them (a billing or fulfilment address the caller did not foresee): that
+ * country's regions are read now, so a country is never taxed as if the
+ * store had no region there (no region means no tax).
+ */
+async function withDestinationRegions(
+    db: Database,
+    authority: StorefrontTaxAuthoritySnapshot,
+    destination: TaxDestination,
+): Promise<StorefrontTaxAuthoritySnapshot> {
+    const scope = Reflect.get(authority, STOREFRONT_TAX_AUTHORITY_REGION_SCOPE) as ReadonlySet<string> | null | undefined;
+    if (!scope) return authority;
+    const country = taxCountryOf(destination, authority.originCountry);
+    if (scope.has(country)) return authority;
+    const read = foldTaxRegionRates(await selectTaxRegionRates(db, [country]) as RegionRateRow[]);
+    const regions = read.regions.filter((region) => region.countryCode === country);
+    const regionIds = new Set(regions.map((region) => region.id));
+    return {
+        ...authority,
+        regions: [...authority.regions, ...regions],
+        rates: [...authority.rates, ...read.rates.filter((rate) => regionIds.has(rate.taxRegionId))],
+    };
+}
+
 export async function calculateStorefrontTaxQuote(
     db: Database,
     input: StorefrontTaxQuoteInput,
@@ -317,10 +409,13 @@ export async function calculateStorefrontTaxQuote(
     if (authoritySnapshot && !isTrustedStorefrontTaxAuthority(authoritySnapshot)) {
         throw new ValidationError("Checkout tax authority could not be trusted. Please retry checkout.");
     }
-    const [currency, authority] = await Promise.all([
+    const [currency, readAuthority] = await Promise.all([
         currencyRead,
-        authoritySnapshot ? Promise.resolve(authoritySnapshot) : readStorefrontTaxAuthority(db),
+        authoritySnapshot
+            ? Promise.resolve(authoritySnapshot)
+            : readStorefrontTaxAuthority(db, taxDestinationCountries(input.destination)),
     ]);
+    const authority = await withDestinationRegions(db, readAuthority, input.destination);
     const lines: TaxQuoteLineInput[] = input.lines.map((line) => ({
         lineId: line.lineId,
         productId: line.productId,

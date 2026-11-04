@@ -15,27 +15,17 @@ import {
   type SearchSource,
 } from "@scalius/database/search-index";
 import { sql, type SQL } from "drizzle-orm";
+import { searchQueryTokens } from "@scalius/shared/search-query";
 
 export type { SearchSource };
 
-// Every ASCII character outside an FTS5 bareword (letters, digits, `_`) and
-// the Bangla danda: a stray `%`, `$` or `;` would otherwise be an FTS5 syntax
-// error, not a search.
-const FTS5_SPECIAL_CHARS = /[\p{Cc}\x20-\x2F\x3A-\x40\x5B-\x5E\x60\x7B-\x7E।॥]/gu;
-const MAX_SEARCH_TOKENS = 8;
-
 /**
- * Splits buyer/admin input into bounded search tokens. Input is NFC-normalized
- * first so Bangla typed through different keyboards (for example a precomposed
- * or decomposed য়) produces one token form.
+ * Splits buyer/admin input into bounded search tokens (NFC, FTS5 separators
+ * and the Bangla danda removed): the shared definition, so the predictive
+ * search minimum (`isSearchableQuery`) counts the tokens searched here.
  */
 export function sanitizeSearchTokens(input: string): string[] {
-  const cleaned = input.normalize("NFC").replace(FTS5_SPECIAL_CHARS, " ").trim();
-  if (!cleaned) return [];
-  return cleaned
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, MAX_SEARCH_TOKENS);
+  return searchQueryTokens(input);
 }
 
 /**

@@ -24,6 +24,7 @@
  */
 import type { StorefrontBatchPartCache } from "./cache-frontier";
 import { MARKET_PRESENCE_QUERY_PARAM } from "./markets";
+import { LISTING_FILTER_KEY_PATTERN } from "./catalog-attributes";
 import { parseBindingResourceSelector } from "./storefront-theme/bindings";
 
 /** How a public read relates to markets: keyed by the page's presence, or the same in every market (with the reason). */
@@ -42,12 +43,16 @@ const presenceOnly = (url: URL) => url.searchParams.size === 0
 
 const MAX_PUBLIC_CACHE_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
-const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
+/** The longest query value a cached read keys; a longer one is served, uncached. */
+export const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
 
 export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   // Prices (step 4a): a presence's market may price its own way (FX, price
   // lists), so every read that shows a product price is market-keyed. A
   // market that prices like the backup market answers the root's bytes.
+  // The product sitemap index's outline: product positions and their count,
+  // the same for every presence, so one entry (no presence) serves them all.
+  { path: "/api/v1/products/sitemap", exact: true, isEligible: (url) => url.searchParams.get("outline") === "true", market: { invariant: "The outline counts and positions products; it shows no price and no translated text." } },
   { path: "/api/v1/products", market: { keyed: true } },
   { path: "/api/v1/categories", market: { keyed: true } },
   { path: "/api/v1/brands", market: { keyed: true } },
@@ -89,6 +94,117 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/storefront/markets", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: "The presence matrix is the same for every market." } },
 ];
 
+/**
+ * The query each public cached read accepts: its operation's declared query
+ * parameters (the OpenAPI contract; `public-api-query-census.test.ts` keeps
+ * this table equal to it) plus `presence` on a market-keyed route. Any other
+ * key is refused before the cache and before any read, so an unknown
+ * parameter can neither split a cache key nor force a render. A listing
+ * marked `facets` also takes its attribute filters (`<attribute slug>`, its
+ * `.min`/`.max` bound, `option.<axis>`, `brand`), which are functional keys by
+ * design: they must have that shape, and each resolves in one indexed lookup.
+ * Templates are tried in order, so a fixed path comes before `{slug}`.
+ */
+export const PUBLIC_API_QUERY_KEYS: ReadonlyArray<{
+  readonly template: string;
+  readonly keys: readonly string[];
+  readonly facets?: true;
+}> = [
+  { template: "/api/v1/products", keys: ["category", "search", "page", "limit", "cursor", "sort", "minRating", "minPrice", "maxPrice", "freeDelivery", "hasDiscount", "inStock", "ids"], facets: true },
+  { template: "/api/v1/products/search", keys: ["search", "page", "limit"] },
+  { template: "/api/v1/products/feed", keys: ["category", "search", "cursor", "limit", "minPrice", "maxPrice", "ids", "channel"] },
+  { template: "/api/v1/products/sitemap", keys: ["page", "limit", "after", "outline"] },
+  { template: "/api/v1/products/recommendations", keys: ["productIds", "limit"] },
+  { template: "/api/v1/products/compare", keys: ["ids"] },
+  { template: "/api/v1/products/{slug}/sections/{section}", keys: ["offset", "limit", "field", "itemId"] },
+  { template: "/api/v1/products/{id}/reviews", keys: ["sort", "rating", "cursor", "limit"] },
+  { template: "/api/v1/products/{slug}", keys: [] },
+  { template: "/api/v1/categories", keys: [] },
+  { template: "/api/v1/categories/summaries", keys: ["page", "limit"] },
+  { template: "/api/v1/categories/sitemap", keys: ["page", "limit"] },
+  { template: "/api/v1/categories/tree", keys: [] },
+  { template: "/api/v1/categories/{slug}/children", keys: ["limit"] },
+  { template: "/api/v1/categories/{slug}/breadcrumb", keys: [] },
+  { template: "/api/v1/categories/{slug}/sections/{section}", keys: ["field", "offset"] },
+  { template: "/api/v1/categories/{slug}/products", keys: ["page", "limit", "cursor", "sort", "minRating", "search", "minPrice", "maxPrice", "freeDelivery", "hasDiscount", "inStock", "includeSubcategories", "shelfPreview"], facets: true },
+  { template: "/api/v1/categories/{slug}/product-summaries", keys: ["includeSubcategories", "page", "limit", "cursor", "sort", "minRating", "search", "minPrice", "maxPrice", "freeDelivery", "hasDiscount", "inStock"], facets: true },
+  { template: "/api/v1/categories/{slug}", keys: [] },
+  { template: "/api/v1/brands", keys: ["page", "limit"] },
+  { template: "/api/v1/brands/sitemap", keys: ["page", "limit"] },
+  { template: "/api/v1/brands/{slug}/products", keys: ["page", "limit", "cursor", "sort", "minRating", "search", "minPrice", "maxPrice", "freeDelivery", "hasDiscount", "inStock"], facets: true },
+  { template: "/api/v1/brands/{slug}", keys: [] },
+  { template: "/api/v1/collections", keys: [] },
+  { template: "/api/v1/collections/directory", keys: [] },
+  { template: "/api/v1/collections/sitemap", keys: ["page", "limit"] },
+  { template: "/api/v1/collections/{id}", keys: ["page", "limit", "cursor", "sort", "minRating", "search", "minPrice", "maxPrice", "freeDelivery", "hasDiscount", "inStock"], facets: true },
+  { template: "/api/v1/search", keys: ["q", "categoryId", "minPrice", "maxPrice", "limit", "searchPages", "searchCategories", "provider", "locale"] },
+  { template: "/api/v1/storefront/homepage", keys: [] },
+  { template: "/api/v1/checkout/config", keys: [] },
+  { template: "/api/v1/checkout-languages/active", keys: [] },
+  { template: "/api/v1/shipping-methods", keys: ["countryCode", "cityId", "zoneId", "areaId", "adminArea", "postalCode"] },
+  { template: "/api/v1/locations/cities", keys: [] },
+  { template: "/api/v1/locations/cities/summaries", keys: ["page", "limit", "search"] },
+  { template: "/api/v1/locations/zones", keys: ["cityId"] },
+  { template: "/api/v1/locations/zones/summaries", keys: ["page", "limit", "search", "cityId"] },
+  { template: "/api/v1/locations/areas", keys: ["zoneId"] },
+  { template: "/api/v1/locations/areas/summaries", keys: ["page", "limit", "search", "zoneId"] },
+  { template: "/api/v1/address-rules", keys: [] },
+  { template: "/api/v1/address-rules/{countryCode}", keys: [] },
+  { template: "/api/v1/objects/{type}", keys: ["handle", "limit"] },
+  { template: "/api/v1/attributes/search-filters", keys: ["q", "categoryId"] },
+  { template: "/api/v1/attributes/category/{categoryId}", keys: [] },
+  { template: "/api/v1/attributes/category-slug/{categorySlug}", keys: [] },
+  { template: "/api/v1/pages", keys: ["limit", "page", "sort"] },
+  { template: "/api/v1/pages/slug/{slug}", keys: [] },
+  { template: "/api/v1/pages/{id}", keys: [] },
+  { template: "/api/v1/articles", keys: ["limit", "page", "tag"] },
+  { template: "/api/v1/articles/slug/{slug}", keys: [] },
+  { template: "/api/v1/seo", keys: [] },
+  { template: "/api/v1/navigation", keys: ["type"] },
+  { template: "/api/v1/navigation/categories", keys: [] },
+  { template: "/api/v1/navigation/placements", keys: [] },
+  { template: "/api/v1/navigation/menus/{menuId}/items", keys: ["revision", "dependencyRevision", "parentId", "limit", "cursor"] },
+  { template: "/api/v1/navigation/menus/{menuId}", keys: ["revision", "dependencyRevision"] },
+  { template: "/api/v1/navigation/{id}", keys: [] },
+  { template: "/api/v1/storefront/pages/slug/{slug}", keys: [] },
+  { template: "/api/v1/storefront/landing/{slug}", keys: [] },
+  { template: "/api/v1/storefront/template/{kind}", keys: ["resource"] },
+  { template: "/api/v1/storefront/layout", keys: [] },
+  { template: "/api/v1/storefront/redirect", keys: ["path"] },
+  { template: "/api/v1/storefront/markets", keys: [] },
+];
+
+const QUERY_KEY_MATCHERS = PUBLIC_API_QUERY_KEYS.map((entry) => ({
+  ...entry,
+  pattern: new RegExp(`^${entry.template.replace(/\{[^}]+\}/g, "[^/]+")}$`),
+  allowed: new Set(entry.keys),
+}));
+
+/** An attribute filter key of a listing, as the storefront and the filter resolution read it. */
+const FACET_QUERY_KEY = LISTING_FILTER_KEY_PATTERN;
+
+/**
+ * Why a GET of this URL is refused before any read: a query key the public
+ * cached read it addresses does not accept. Null for an acceptable query, and
+ * for a URL that is no public cached read (its own route decides). A declared
+ * key's size is the route's schema to judge: a query past the cache's bounds
+ * is served, only not cached (`hasBoundedPublicQuery`).
+ */
+export function publicApiQueryRefusal(url: URL): string | null {
+  const pathname = url.pathname.replace(/\/$/, "") || "/";
+  const matching = PUBLIC_API_CACHE_ROUTES.filter((candidate) => routeMatches(pathname, candidate));
+  const route = matching.find((candidate) => !candidate.isEligible || candidate.isEligible(url)) ?? matching[0];
+  if (!route) return null;
+  const operation = QUERY_KEY_MATCHERS.find((entry) => entry.pattern.test(pathname));
+  for (const key of new Set(url.searchParams.keys())) {
+    if (key === MARKET_PRESENCE_QUERY_PARAM && "keyed" in route.market) continue;
+    if (operation?.allowed.has(key)) continue;
+    if (operation?.facets && FACET_QUERY_KEY.test(key)) continue;
+    return `Unknown query parameter "${key.slice(0, MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH)}".`;
+  }
+  return null;
+}
+
 function routeMatches(pathname: string, route: PublicApiCacheRoute): boolean {
   if (route.exact) return pathname === route.path;
   return pathname === route.path || pathname.startsWith(`${route.path}/`);
@@ -108,7 +224,7 @@ export function hasBoundedPublicQuery(url: URL): boolean {
 
 /** The cached public route this GET reads, or null. */
 export function publicApiCacheRouteOf(url: URL): PublicApiCacheRoute | null {
-  if (!hasBoundedPublicQuery(url)) return null;
+  if (!hasBoundedPublicQuery(url) || publicApiQueryRefusal(url) !== null) return null;
   const pathname = url.pathname.replace(/\/$/, "") || "/";
   return PUBLIC_API_CACHE_ROUTES.find(
     (route) => routeMatches(pathname, route) && (!route.isEligible || route.isEligible(url)),

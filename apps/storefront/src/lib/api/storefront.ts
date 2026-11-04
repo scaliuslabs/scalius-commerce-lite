@@ -248,6 +248,8 @@ export interface LayoutData {
     mediaUrl?: string;
     /** The plan profile serves photos from the store's own origin (`/media/...`). */
     sameOriginMedia?: boolean;
+    /** Most products one catalogue feed request may ask for (`limit`). */
+    feedProductsPerRequest?: number;
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;

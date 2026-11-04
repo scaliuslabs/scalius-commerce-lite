@@ -18,6 +18,7 @@ import {
   calculateStorefrontTaxQuote,
   readStorefrontTaxAuthority,
   taxAddressSource,
+  taxDestinationCountries,
   type StorefrontTaxAuthoritySnapshot,
   type TaxDiscountAllocationInput,
   type TaxExemption,
@@ -472,7 +473,8 @@ export async function priceStorefrontCheckout(
     customer: input.segmentCustomerId ? { id: input.segmentCustomerId, exemption: input.taxExemption ?? null } : null,
   };
   // The authority read once: the quote's, and the store's country it carries.
-  const taxAuthority = input.taxAuthority ?? await readStorefrontTaxAuthority(db);
+  const taxAuthority = input.taxAuthority
+    ?? await readStorefrontTaxAuthority(db, taxDestinationCountries(taxQuoteInput.destination));
   const taxQuote = await calculateStorefrontTaxQuote(db, taxQuoteInput, taxAuthority, { apps: input.appProviders });
 
   return {

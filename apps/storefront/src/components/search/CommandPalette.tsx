@@ -16,6 +16,7 @@ import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import { normalizeSearchQuery } from "@/lib/search-query";
+import { isSearchableQuery } from "@scalius/shared/search-query";
 import { currentPresence, pagePath } from "@/lib/presence-url";
 import { pageLocale, searchProvider } from "@/lib/app-services";
 import { formatCount, pageLanguage } from "@/lib/store-time-zone";
@@ -87,6 +88,9 @@ export default function CommandPalette() {
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchRunRef = useRef(0);
   const normalizedQuery = React.useMemo(() => normalizeSearchQuery(query), [query]);
+  // Too short to search as the buyer types (a deliberate submit still reaches
+  // the full results page): no request, the start state stays.
+  const searchable = isSearchableQuery(normalizedQuery);
 
   useEffect(() => {
     setMounted(true);
@@ -182,7 +186,7 @@ export default function CommandPalette() {
       return;
     }
 
-    if (!normalizedQuery) {
+    if (!searchable) {
       searchAbortRef.current?.abort();
       setResults(null);
       setIsLoading(false);
@@ -269,7 +273,7 @@ export default function CommandPalette() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [isOpen, normalizedQuery, searchRetry]);
+  }, [isOpen, normalizedQuery, searchable, searchRetry]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -459,7 +463,7 @@ export default function CommandPalette() {
           )}
 
           {/* State: Empty/Start */}
-          {!normalizedQuery && (
+          {!searchable && (
             <div className="pointer-events-none flex h-full flex-col items-center justify-center py-24 text-muted-foreground sm:py-20">
               <div className="mb-4 rounded-full bg-muted/50 p-4">
                 <Search className="w-6 h-6 opacity-20" />

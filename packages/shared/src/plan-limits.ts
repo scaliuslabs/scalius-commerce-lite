@@ -126,6 +126,14 @@ export interface PlanLimits {
      * or brand shows its own counts.
      */
     readonly facetLiveProducts: number;
+    /**
+     * Products one catalogue feed request (`/api/product-feed.xml`,
+     * `/api/facebook-feed.xml`) may ask for with `limit`: each 100 is one feed
+     * page read, so a single request is bounded by this many products, never by
+     * the catalogue. The default first page (1,000) fits both plans; the
+     * storefront learns the value from the layout (`platform.feedProductsPerRequest`).
+     */
+    readonly feedProductsPerRequest: number;
   };
   /** Orders one per-row bulk order action handles per request (see `BulkOrderLimits`). */
   readonly bulkOrders: BulkOrderLimits;
@@ -224,7 +232,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       orphanAttachmentsPerRun: 10,
       limitScale: 0.2,
     }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
@@ -271,7 +279,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       orphanAttachmentsPerRun: 50,
       limitScale: 1,
     }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
     bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({

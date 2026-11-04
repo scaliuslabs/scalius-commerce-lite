@@ -71,6 +71,37 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
  */
 export const ROUTE_PERMISSIONS: RoutePermissionMap = Object.assign({}, ...ROUTE_PERMISSION_MAPS);
 
+interface WildcardRoute {
+  readonly pattern: string;
+  readonly regex: RegExp;
+}
+
+/**
+ * The wildcard patterns, most specific first (more path segments, then fewer
+ * wildcards; ties keep merged key order), each compiled once at module load
+ * from the static route maps. A pattern without a wildcard only matches its
+ * own path, which the exact lookup already answered, so the table holds
+ * wildcards only.
+ */
+function buildWildcardRoutes(): readonly WildcardRoute[] {
+  return Object.keys(ROUTE_PERMISSIONS)
+    .filter((pattern) => pattern.includes("*"))
+    .sort((a, b) => {
+      // More specific patterns (with more path segments) should come first
+      const aSegments = a.split("/").length;
+      const bSegments = b.split("/").length;
+      if (aSegments !== bSegments) return bSegments - aSegments;
+
+      // Patterns with fewer wildcards should come before patterns with more
+      const aWildcards = (a.match(/\*/g) || []).length;
+      const bWildcards = (b.match(/\*/g) || []).length;
+      return aWildcards - bWildcards;
+    })
+    .map((pattern) => ({ pattern, regex: compilePattern(pattern) }));
+}
+
+const WILDCARD_ROUTES = buildWildcardRoutes();
+
 /**
  * Get the permission configuration for a route and method
  */
@@ -86,22 +117,9 @@ export function getRoutePermission(
     return exactMatch[method] || null;
   }
 
-  // Try pattern matching with wildcards
-  // Sort patterns by specificity (longer patterns first, patterns with more specific segments first)
-  const sortedPatterns = Object.keys(ROUTE_PERMISSIONS).sort((a, b) => {
-    // More specific patterns (with more path segments) should come first
-    const aSegments = a.split("/").length;
-    const bSegments = b.split("/").length;
-    if (aSegments !== bSegments) return bSegments - aSegments;
-
-    // Patterns without wildcards should come before patterns with wildcards
-    const aWildcards = (a.match(/\*/g) || []).length;
-    const bWildcards = (b.match(/\*/g) || []).length;
-    return aWildcards - bWildcards;
-  });
-
-  for (const pattern of sortedPatterns) {
-    if (matchPattern(pattern, normalizedPathname)) {
+  // Then the wildcard patterns, most specific first
+  for (const { pattern, regex } of WILDCARD_ROUTES) {
+    if (regex.test(normalizedPathname)) {
       const config = ROUTE_PERMISSIONS[pattern];
       if (config && config[method]) {
         return config[method] ?? null;
@@ -120,15 +138,10 @@ function normalizePathname(pathname: string): string {
 }
 
 /**
- * Simple pattern matching: `*` is one path segment, `**` one or more (only
+ * Compiles a wildcard pattern: `*` is one path segment, `**` one or more (only
  * plugin route families use it, whose sub-paths belong to the plugin).
  */
-function matchPattern(pattern: string, pathname: string): boolean {
-  if (!pattern.includes("*")) {
-    return pattern === pathname;
-  }
-
-  // Convert glob pattern to regex
+function compilePattern(pattern: string): RegExp {
   // Escape special regex chars (including backslash) before converting globs
   const regexPattern = pattern
     .replace(/[\\^$.|?+()[\]{}]/g, "\\$&") // Escape regex special chars
@@ -137,6 +150,5 @@ function matchPattern(pattern: string, pathname: string): boolean {
     .replace(/\uE000/g, "[^/]+(?:/[^/]+)*")
     .replace(/\//g, "\\/"); // Escape forward slashes
 
-  const regex = new RegExp(`^${regexPattern}$`);
-  return regex.test(pathname);
+  return new RegExp(`^${regexPattern}$`);
 }
