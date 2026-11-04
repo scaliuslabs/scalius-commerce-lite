@@ -366,7 +366,8 @@ export const manifest = {
       { id: "smsnetbd", name: "SMS.net.bd", settings: ["smsnetbd_api_key"] },
       { id: "bdbulksms", name: "BDBulkSMS (GreenWeb)", settings: ["bdbulksms_token"] },
       { id: "mimsms", name: "MIM SMS", settings: ["mimsms_username", "mimsms_api_key", "mimsms_sender_name"] },
-      { id: "gennet", name: "GenNet iSMS", settings: ["gennet_api_token", "gennet_base_url", "gennet_sid"] },
+      // GenNet dedupes on csms_id (the message's key), so a lost answer may be sent again; the other gateways do not.
+      { id: "gennet", name: "GenNet iSMS", dedupesOnIdempotencyKey: true, settings: ["gennet_api_token", "gennet_base_url", "gennet_sid"] },
     ],
     courier_history: [
       { id: "fraudbd", name: "FraudBD", countries: ["BD"], operations: ["testConnection"], settings: ["fraudbd_api_url", "fraudbd_api_key", "fraudbd_username", "fraudbd_password"] },

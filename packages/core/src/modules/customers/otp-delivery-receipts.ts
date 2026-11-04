@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { authOtpDeliveryReceipts } from "@scalius/database/schema";
 import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
-import { sha256Hex } from "@scalius/shared/hash";
+import { sha256Hex, sha256HexSync } from "@scalius/shared/hash";
 
 export type AuthOtpDeliveryChannel = "email" | "sms" | "whatsapp";
 
@@ -69,12 +69,16 @@ export function createAuthOtpDeliveryKey(): string {
     return `otp_${createRandomId()}`;
 }
 
+/**
+ * The provider's client reference for one send (GenNet's `csms_id`: at most
+ * 20 alphanumerics): a digest of the whole delivery, channel and recipient, so
+ * the same send keeps one reference and a different recipient or channel never
+ * shares it. Cutting the joined ids instead would keep only the delivery key.
+ */
 export function createAuthOtpProviderClientReference(
     target: Pick<AuthOtpDeliveryTarget, "deliveryKey" | "channel" | "identifierHash">,
 ): string {
-    return `${target.deliveryKey}${target.channel}${target.identifierHash}`
-        .replace(/[^a-zA-Z0-9]/g, "")
-        .slice(0, 20);
+    return sha256HexSync(`${target.deliveryKey}\n${target.channel}\n${target.identifierHash}`).slice(0, 20);
 }
 
 export async function claimAuthOtpDeliveryReceipt(

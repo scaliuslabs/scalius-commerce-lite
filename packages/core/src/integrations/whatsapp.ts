@@ -125,6 +125,15 @@ export async function getWhatsAppCloudApiSettings(
   };
 }
 
+/**
+ * One template message through the Meta WhatsApp Cloud API. The API takes no
+ * idempotency key, so a send whose outcome is unknown (the request did not
+ * complete, the answer was lost, a timeout or server error of Meta's, an
+ * answer without a message id) answers `retryable: false`: the message may
+ * already be on the buyer's phone and is never sent twice. Only an answer that
+ * proves Meta took nothing is `retryable`: a rate limit (HTTP 429, or a Graph
+ * throttling code on a 400), HTTP 503 and code 131016 "Service unavailable".
+ */
 export async function sendWhatsAppTemplateMessage(
   input: SendWhatsAppTemplateMessageInput,
   fetchImpl: typeof fetch = fetch,
@@ -167,32 +176,40 @@ export async function sendWhatsAppTemplateMessage(
     ];
   }
 
-  const response = await fetchImpl(
-    `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${input.phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.accessToken}`,
-        "Content-Type": "application/json",
+  let response: Response;
+  try {
+    response = await fetchImpl(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${input.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = summarizeWhatsAppErrorResponse(
-      await response.text(),
-      response.status,
     );
+  } catch {
+    // A timeout, abort or lost connection: the request may have reached Meta.
     return {
       success: false,
-      rawStatus: `HTTP ${response.status}`,
-      rawResponse: errorText,
-      retryable: isRetryableWhatsAppStatus(response.status),
+      rawStatus: "request_not_confirmed",
+      rawResponse: JSON.stringify({ error: "request_not_confirmed" }),
+      retryable: false,
     };
   }
 
-  const responseText = await response.text();
+  // A body that cannot be read after the answer is as good as none.
+  const responseText = await response.text().catch(() => "");
+  if (!response.ok) {
+    return {
+      success: false,
+      rawStatus: `HTTP ${response.status}`,
+      rawResponse: summarizeWhatsAppErrorResponse(responseText, response.status),
+      retryable: isRetryableWhatsAppFailure(response.status, responseText),
+    };
+  }
+
   const parsed = parseWhatsAppResponse(responseText);
   const message = parsed?.messages?.[0];
   if (!message?.id) {
@@ -204,7 +221,8 @@ export async function sendWhatsAppTemplateMessage(
         error: "missing_message_id",
         responseLength: responseText.length,
       }),
-      retryable: true,
+      // Meta answered 2xx: the message may well have been taken.
+      retryable: false,
     };
   }
 
@@ -262,8 +280,27 @@ function summarizeWhatsAppErrorResponse(value: string, status: number): string {
   });
 }
 
-function isRetryableWhatsAppStatus(status: number): boolean {
-  return status === 408 || status === 409 || status === 429 || status >= 500;
+/**
+ * Graph error codes that mean Meta took nothing: 4 (API too many calls),
+ * 80007 (rate limit issues), 130429 (Cloud API throughput reached), 131056
+ * (pair rate limit) and 131016 (service unavailable). They usually arrive as
+ * HTTP 400.
+ */
+const NOT_PROCESSED_GRAPH_CODES = new Set([4, 80007, 130429, 131056, 131016]);
+
+/**
+ * Only an answer that proves Meta took nothing is repeated: HTTP 429, HTTP 503
+ * ("not processed") or one of the Graph throttling codes. A timeout, a 408/409
+ * or any other server error may follow a message it sent.
+ */
+function isRetryableWhatsAppFailure(status: number, responseText: string): boolean {
+  if (status === 429 || status === 503) return true;
+  try {
+    const code = (JSON.parse(responseText) as { error?: { code?: unknown } }).error?.code;
+    return typeof code === "number" && NOT_PROCESSED_GRAPH_CODES.has(code);
+  } catch {
+    return false;
+  }
 }
 
 export function looksLikeWhatsAppPlaceholderCredential(

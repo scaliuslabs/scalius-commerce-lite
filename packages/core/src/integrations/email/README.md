@@ -48,7 +48,7 @@ The `email` settings document (`emailDocument` in `packages/core/src/modules/set
 
 - The sender name is the store name (`fromName`, else Business `companyName`, `legalName` or the Store URL host). It is stripped of quotes, angle brackets and line breaks and cut to 78 characters. Cloudflare and Mailpit take it as a separate field. Resend takes `"Name" <address>`.
 - Only `List-Unsubscribe` and `List-Unsubscribe-Post` headers pass through (marketing mail).
-- Resend gets `idempotencyKey` as `Idempotency-Key` (first 256 characters). Cloudflare returns a `messageId`.
+- Resend gets `idempotencyKey` as `Idempotency-Key` (first 256 characters). Cloudflare returns a `messageId` and takes no key, so a binding error that may follow a sent message (`E_INTERNAL_SERVER_ERROR`, `E_DELIVERY_FAILED`, an error without a code) answers `retryable: false`; a refusal with another `E_` code is thrown and retried.
 
 ## Admin routes
 

@@ -41,8 +41,10 @@ function manualKeyOf(totpUri: string | null): string | null {
   }
 }
 
+/** A wrong password is a 400; a 401 means the session ended, never a wrong password. */
 const wrongPassword = ({ code, status }: AuthFailure): AccountMessageKey | null =>
-  code === "PASSWORD_INCORRECT" || code === "INVALID_PASSWORD" || status === 400 || status === 401 ? "wrongPassword" : null;
+  status === 401 ? "sessionEnded"
+    : code === "PASSWORD_INCORRECT" || code === "INVALID_PASSWORD" || status === 400 ? "wrongPassword" : null;
 
 const METHOD_ICON = { totp: Smartphone, email: Mail } as const;
 

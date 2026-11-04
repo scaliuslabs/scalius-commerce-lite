@@ -131,25 +131,45 @@ interface FCMMessage {
   webpush?: {
     fcmOptions?: { link?: string };
     notification?: { badge?: string };
+    headers?: { Topic: string };
   };
+  android?: { collapse_key: string };
+  apns?: { headers: { "apns-collapse-id": string } };
   token: string;
 }
 
 interface FCMResponse {
   name?: string;
-  error?: { code: number; message: string; status: string };
+  /** `errorCode` is the `FcmError` detail (QUOTA_EXCEEDED, UNREGISTERED, UNAVAILABLE...). */
+  error?: { code: number; message: string; status: string; errorCode?: string };
 }
 
 // Type definitions for FCM API responses
 interface FCMSuccessResponse {
   name: string;
 }
-interface FCMErrorResponse {
-  error: {
-    code: number;
-    message: string;
-    status: string;
-    details: unknown[];
+
+/**
+ * Reads FCM's error body: `{ error: { code, message, status, details: [{ "@type":
+ * ".../google.firebase.fcm.v1.FcmError", errorCode }] } }`. A body that is not JSON
+ * (a gateway page) keeps only the HTTP status.
+ */
+async function readFcmError(response: Response): Promise<NonNullable<FCMResponse["error"]>> {
+  let error: { message?: unknown; status?: unknown; details?: unknown } | undefined;
+  try {
+    const parsed = JSON.parse(await response.text()) as { error?: typeof error };
+    error = parsed.error && typeof parsed.error === "object" ? parsed.error : undefined;
+  } catch {
+    error = undefined;
+  }
+  const detail = Array.isArray(error?.details)
+    ? (error.details as Array<{ errorCode?: unknown } | null>).find((entry) => typeof entry?.errorCode === "string")
+    : undefined;
+  return {
+    code: response.status,
+    message: typeof error?.message === "string" && error.message ? error.message : "Unknown FCM error",
+    status: typeof error?.status === "string" && error.status ? error.status : "UNKNOWN",
+    ...(typeof detail?.errorCode === "string" ? { errorCode: detail.errorCode } : {}),
   };
 }
 
@@ -174,7 +194,12 @@ async function sendFCMMessage(
   while (attempt < MAX_RETRIES) {
     attempt++;
     const response = await fetch(url, options);
-    const isRetryable = response.status === 429 || response.status >= 500;
+    // FCM takes no idempotency key: only a quota rejection (429) and a 503
+    // ("not processed") prove nothing was sent. Any other server error or a
+    // lost answer may follow a delivered message, so it is answered at once and
+    // never sent again. A message carrying a collapse key also replaces a
+    // still-queued first copy.
+    const isRetryable = response.status === 429 || response.status === 503;
 
     if (response.ok) {
       const responseData = (await response.json()) as FCMSuccessResponse;
@@ -184,8 +209,9 @@ async function sendFCMMessage(
     if (isRetryable && attempt < MAX_RETRIES) {
       const retryAfter = response.headers.get("Retry-After");
       let delay = 2 ** attempt * 1000 + randomJitterMs(1000);
-      if (retryAfter) {
-        delay = parseInt(retryAfter, 10) * 1000;
+      const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : Number.NaN;
+      if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+        delay = retryAfterSeconds * 1000;
       }
       console.warn(
         `FCM API returned retryable status ${response.status}. Retrying in ${delay}ms... (Attempt ${attempt}/${MAX_RETRIES})`,
@@ -194,21 +220,14 @@ async function sendFCMMessage(
       continue;
     }
 
-    const responseData = (await response.json()) as FCMErrorResponse;
-    return {
-      error: {
-        code: response.status,
-        message: responseData.error?.message || "Unknown FCM error",
-        status: responseData.error?.status || "UNKNOWN",
-      },
-    };
+    return { error: await readFcmError(response) };
   }
 
   return {
     error: {
-      code: 500,
+      code: 429,
       message: "Exceeded max retries for FCM request.",
-      status: "MAX_RETRIES_EXCEEDED",
+      status: "QUOTA_EXCEEDED",
     },
   };
 }
@@ -346,6 +365,8 @@ export class FCMMessagingService {
       notification?: { badge?: string };
     };
     tokens: string[];
+    /** One key per push event (`pushCollapseKey`): a repeat replaces a queued first copy. */
+    collapseKey?: string;
   }): Promise<{
     successCount: number;
     failureCount: number;
@@ -365,7 +386,15 @@ export class FCMMessagingService {
             token,
             notification: payload.notification,
             data: payload.data,
-            webpush: payload.webpush,
+            ...(payload.collapseKey
+              ? {
+                android: { collapse_key: payload.collapseKey },
+                apns: { headers: { "apns-collapse-id": payload.collapseKey } },
+              }
+              : {}),
+            ...(payload.webpush || payload.collapseKey
+              ? { webpush: { ...payload.webpush, ...(payload.collapseKey ? { headers: { Topic: payload.collapseKey } } : {}) } }
+              : {}),
           };
           const response = await sendFCMMessage(
             accessToken,
@@ -377,7 +406,7 @@ export class FCMMessagingService {
             return {
               success: false,
               error: {
-                code: this.mapErrorCode(response.error.status),
+                code: this.mapErrorCode(response.error),
                 message: response.error.message,
               },
             };
@@ -401,23 +430,35 @@ export class FCMMessagingService {
     return { successCount, failureCount, responses };
   }
 
-  private mapErrorCode(status: string): string {
-    switch (status) {
-      case "INVALID_ARGUMENT":
-        return "messaging/invalid-argument";
-      case "UNREGISTERED":
-        return "messaging/registration-token-not-registered";
-      case "SENDER_ID_MISMATCH":
-        return "messaging/mismatched-credential";
-      case "QUOTA_EXCEEDED":
-        return "messaging/message-rate-exceeded";
-      case "UNAVAILABLE":
-        return "messaging/server-unavailable";
-      case "INTERNAL":
-        return "messaging/internal-error";
-      default:
-        return "messaging/unknown-error";
+  /**
+   * The FcmError detail names the failure best; the status and the HTTP code
+   * cover a body without one. `server-unavailable` is only HTTP 503, the one
+   * server answer FCM documents as not processed.
+   */
+  private mapErrorCode(error: { code: number; status: string; errorCode?: string }): string {
+    const names = [error.errorCode, error.status].filter((name): name is string => Boolean(name));
+    for (const name of names) {
+      switch (name) {
+        case "INVALID_ARGUMENT":
+          return "messaging/invalid-argument";
+        case "UNREGISTERED":
+        case "NOT_FOUND":
+          return "messaging/registration-token-not-registered";
+        case "SENDER_ID_MISMATCH":
+          return "messaging/mismatched-credential";
+        case "QUOTA_EXCEEDED":
+        case "RESOURCE_EXHAUSTED":
+          return "messaging/message-rate-exceeded";
+        case "UNAVAILABLE":
+          if (error.code === 503) return "messaging/server-unavailable";
+          break;
+        case "INTERNAL":
+          return "messaging/internal-error";
+      }
     }
+    if (error.code === 429) return "messaging/message-rate-exceeded";
+    if (error.code === 503) return "messaging/server-unavailable";
+    return "messaging/unknown-error";
   }
 }
 

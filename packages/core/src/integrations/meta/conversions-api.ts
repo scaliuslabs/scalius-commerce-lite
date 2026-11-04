@@ -205,7 +205,7 @@ export async function sendCapiEvent(
 
   const retentionHours = settings.logRetentionDays * 24;
   const { pixelId, accessToken, testEventCode } = settings;
-  const url = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${pixelId}/events?access_token=${accessToken}`;
+  const url = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${pixelId}/events`;
 
   const preparedUserData = await prepareUserData(event.user_data);
   const finalEvent: ServerEvent = { ...event, user_data: preparedUserData };
@@ -222,7 +222,12 @@ export async function sendCapiEvent(
   try {
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // The token travels in a header, never the query string, so a proxy,
+      // access log or error report never records it.
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(payload),
     });
     const responseData = await response.json() as Record<string, unknown>;

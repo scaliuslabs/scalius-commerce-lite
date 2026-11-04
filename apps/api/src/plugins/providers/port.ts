@@ -24,6 +24,7 @@ export function appPortProvider<K extends ProviderKind>(kind: K) {
     };
     if ("countries" in declaration) provider.countries = declaration.countries;
     if ("channels" in declaration) provider.channels = declaration.channels;
+    if ("dedupesOnIdempotencyKey" in declaration && declaration.dedupesOnIdempotencyKey === true) provider.dedupesOnIdempotencyKey = true;
     for (const operation of declaredProviderOperations(declaration)) {
       provider[operation] = async (input: unknown, { signal }: { signal?: AbortSignal } = {}) => {
         const host = await runtime.host();

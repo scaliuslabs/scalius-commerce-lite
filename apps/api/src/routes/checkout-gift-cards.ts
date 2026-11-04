@@ -11,7 +11,7 @@ import {
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { getClientIp } from "@scalius/shared/rate-limit";
+import { getTrustedClientIpFromRequest } from "../utils/client-ip";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { ok } from "../utils/api-response";
 import { RateLimitError, ServiceUnavailableError } from "../utils/api-error";
@@ -59,7 +59,7 @@ function noStore(c: { header: (name: string, value: string) => void }) {
 }
 
 async function enforceGiftCardRateLimit(env: Env, request: Request, purpose: string): Promise<void> {
-  const ip = getClientIp(request);
+  const ip = getTrustedClientIpFromRequest(request, env);
   const [strict, standard] = await Promise.all([
     isWithinRateLimit(env, "RL_STRICT", `${purpose}-ip`, ip),
     isWithinRateLimit(env, "RL_STANDARD", `${purpose}-ip-minute`, ip),

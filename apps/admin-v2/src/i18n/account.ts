@@ -12,6 +12,7 @@ export const accountMessages = defineMessages({
     offline: "Couldn't reach the server. Check your connection and try again.",
     unavailable: "Something went wrong on our side. Try again in a moment.",
     rateLimited: "Too many attempts. Wait a minute and try again.",
+    sessionEnded: "Your session ended. Sign in again.",
 
     profile: "Profile",
     name: "Name",
@@ -121,6 +122,7 @@ export const accountMessages = defineMessages({
     offline: "সার্ভারের সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
     unavailable: "আমাদের দিকে একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।",
     rateLimited: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
+    sessionEnded: "আপনার সেশন শেষ হয়ে গেছে। আবার সাইন ইন করুন।",
 
     profile: "প্রোফাইল",
     name: "নাম",

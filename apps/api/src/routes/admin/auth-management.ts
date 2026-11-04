@@ -71,6 +71,8 @@ import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { getClientNetworkForLog, getTrustedClientIp } from "../../utils/client-ip";
+import { staffProofs } from "../../utils/staff-proofs";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
@@ -652,6 +654,7 @@ const deleteUserRoute = createRoute({
     responses: {
         200: { description: "User deleted", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -723,7 +726,22 @@ app.openapi(deleteUserRoute, async (c) => {
             createdAt: revokedAt,
             updatedAt: revokedAt,
         })));
+        // The invitee may accept (set a password) between the reads above and
+        // this batch: the pending state is checked again with the writes, so a
+        // just-accepted administrator is never deleted.
+        const stillPending = buildBatchGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${user}
+            WHERE ${user.id} = ${userId}
+              AND ${user.mustChangePassword} = ${true}
+              AND ${user.isSuperAdmin} = ${false}
+        ) AND EXISTS (
+            SELECT 1 FROM ${adminInvitations}
+            WHERE ${adminInvitations.id} = ${userToDelete.invitationId}
+              AND ${adminInvitations.userId} = ${userId}
+              AND ${adminInvitations.status} = 'pending'
+        )`, "ADMIN_INVITATION_REVOKE_CONFLICT");
         await safeBatch(db, [
+            stillPending,
             ...(liveLinks.length ? [
                 db.delete(verification).where(inJsonArray(verification.id, liveLinks.map(({ id }) => id))),
                 ...chunkInsertRowsForD1(cancelledMarkers, (row) => db.insert(verification).values(row))
@@ -746,6 +764,9 @@ app.openapi(deleteUserRoute, async (c) => {
 
         return ok(c, { message: "Administrator invitation revoked" });
     } catch (error: unknown) {
+        if (isBatchGuardError(error, "ADMIN_INVITATION_REVOKE_CONFLICT")) {
+            throw new ConflictError("The invitation was accepted or changed before it could be revoked");
+        }
         console.error("Delete admin user error:", error);
         throw error;
     }
@@ -981,6 +1002,7 @@ app.openapi(changePasswordRoute, async (c) => {
     const sessionUser = c.get("user");
     const db = c.get("db");
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const { currentPassword, newPassword } = c.req.valid("json");
 
     if (!session) {
@@ -990,7 +1012,7 @@ app.openapi(changePasswordRoute, async (c) => {
     const wrongCurrentPassword = () => new AppError(400, "PASSWORD_INCORRECT", "Current password is incorrect");
     if (newPassword === currentPassword) {
         // Say "reused" only once the current password is proven, so this never confirms a guess.
-        const proof = await auth.api.verifyPassword({
+        const proof = await proofs.verifyPassword({
             headers: c.req.raw.headers,
             body: { password: currentPassword },
         }).catch(() => null);
@@ -1000,7 +1022,7 @@ app.openapi(changePasswordRoute, async (c) => {
 
     let result: BetterAuthHeadersResult<{ token?: string } | null>;
     try {
-        result = await auth.api.changePassword({
+        result = await proofs.changePassword({
             headers: c.req.raw.headers,
             body: { currentPassword, newPassword, revokeOtherSessions: true },
             returnHeaders: true,
@@ -1348,9 +1370,10 @@ app.openapi(start2faMethodChallengeRoute, async (c) => {
     }
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const passwordProof = await (async () => {
         try {
-            return await auth.api.verifyPassword({
+            return await proofs.verifyPassword({
                 headers: c.req.raw.headers,
                 body: { password },
             });
@@ -1452,15 +1475,16 @@ async function verifySessionTwoFactorCode(
     const session = c.get("session");
     if (!session) throw new UnauthorizedError("No active session found");
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const verifiedProof = await (async () => {
         try {
             const betterAuthResult = verificationMethod === "email"
-                ? await auth.api.verifyTwoFactorOTP({
+                ? await proofs.verifyTwoFactorOTP({
                     headers: c.req.raw.headers,
                     body: { code, trustDevice: false },
                     returnHeaders: true,
                 }) as BetterAuthHeadersResult<{ token?: string }>
-                : await auth.api.verifyTOTP({
+                : await proofs.verifyTOTP({
                     headers: c.req.raw.headers,
                     body: { code, trustDevice: false },
                     returnHeaders: true,
@@ -1789,6 +1813,15 @@ app.openapi(update2faMethodRoute, async (c) => {
                     eq(sessionTable.userId, sessionUser.id),
                     eq(sessionTable.token, proofSession.sessionToken),
                 )),
+            // Turning two-step on signs out every other session: one taken
+            // before it was on must sign in again with both factors, never
+            // sit at the code prompt guessing.
+            ...(hasEstablishedMethod
+                ? []
+                : [db.delete(sessionTable).where(and(
+                    eq(sessionTable.userId, sessionUser.id),
+                    ne(sessionTable.id, proofSession.sessionId),
+                ))]),
         ]);
     } catch (error) {
         if (isBatchGuardError(error, "TWO_FACTOR_ENROLLMENT_CONFLICT")) {
@@ -1857,7 +1890,8 @@ app.openapi(disable2faRoute, async (c) => {
     if (await twoFactorRequiredFor(db, sessionUser.id)) throw twoFactorRequired();
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-    const passwordProof = await auth.api.verifyPassword({
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
+    const passwordProof = await proofs.verifyPassword({
         headers: c.req.raw.headers,
         body: { password },
     }).catch(() => null);
@@ -1953,16 +1987,16 @@ app.openapi(verify2faRoute, async (c) => {
         throw new ValidationError("This account signs in with emailed codes, not an authenticator app");
     }
 
-    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
+    const proofs = await staffProofs(c.env, c.get("db"), createAuth(c.env, { appProviders: requestAppProviders(c) }), sessionUser.id);
     const verifyResult = await (async () => {
         try {
             if (type === "backup") {
-                return await auth.api.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
+                return await proofs.verifyBackupCode({ headers: c.req.raw.headers, body: { code } });
             }
             if (type === "email") {
-                return await auth.api.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+                return await proofs.verifyTwoFactorOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
             }
-            return await auth.api.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
+            return await proofs.verifyTOTP({ headers: c.req.raw.headers, body: { code, trustDevice: trustDevice ?? false } });
         } catch {
             throw new ValidationError("The verification code is invalid or expired");
         }
@@ -2434,7 +2468,7 @@ async function setupTokenMatches(provided: string, expected: string): Promise<bo
  * value is compared after the setup rate limit so guesses are bounded, and it
  * is never logged or echoed.
  */
-async function enforceSetupToken(c: Context<{ Bindings: Env }>, clientIp: string): Promise<void> {
+async function enforceSetupToken(c: Context<{ Bindings: Env }>): Promise<void> {
     const env = c.env;
     if (!isSetupTokenRequired(env)) return;
     const expected = env.ADMIN_SETUP_TOKEN;
@@ -2443,7 +2477,7 @@ async function enforceSetupToken(c: Context<{ Bindings: Env }>, clientIp: string
     }
     const provided = c.req.header(ADMIN_SETUP_TOKEN_HEADER)?.trim() ?? "";
     if (!provided || !(await setupTokenMatches(provided, expected))) {
-        console.warn(`[SECURITY] Setup token rejected. IP: ${clientIp}`);
+        console.warn(`[SECURITY] Setup token rejected. Network: ${getClientNetworkForLog(c)}`);
         throw new ForbiddenError("A valid setup token is required to complete first-admin setup.");
     }
 }
@@ -2564,15 +2598,13 @@ setupApp.openapi(setupRoute, async (c) => {
     const adminExists = await firstAdminExists(db);
 
     if (adminExists) {
-        const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-        console.warn(`[SECURITY] Setup endpoint accessed after admin exists. IP: ${ip}`);
+        console.warn(`[SECURITY] Setup endpoint accessed after admin exists. Network: ${getClientNetworkForLog(c)}`);
         throw new ForbiddenError("An admin user already exists. Please use the login page.");
     }
 
     // The database is the setup authority and the first-admin bootstrap lock.
-    const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
-    await enforceAdminSetupRateLimit(db, ip);
-    await enforceSetupToken(c, ip);
+    await enforceAdminSetupRateLimit(db, getTrustedClientIp(c));
+    await enforceSetupToken(c);
 
     const auth = createAuth(env, { appProviders: requestAppProviders(c) });
 

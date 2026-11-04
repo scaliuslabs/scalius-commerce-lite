@@ -34,6 +34,7 @@ import {
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { planLimits } from "@scalius/shared/plan-limits";
+import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
 import { sendOrderRefundNotification } from "./utils/order-notifications";
@@ -65,6 +66,7 @@ export const TRACKING_PURGE_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
+export const STAFF_ATTEMPT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
@@ -553,6 +555,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           `[scheduled] Customer auth OTP rate-limit cleanup: scanned=${customerAuthOtpRateLimitCleanup.scanned}, ` +
             `deleted=${customerAuthOtpRateLimitCleanup.deleted}, limit=${customerAuthOtpRateLimitCleanup.limit}, ` +
             `hasMore=${customerAuthOtpRateLimitCleanup.hasMore}`,
+        );
+      }
+      // Staff sign-in and proof attempt windows: the other auth rate-limit rows, in the same job.
+      const staffAttemptCleanup = await timed("staff_attempt_cleanup", () =>
+        sweepExpiredStaffAttempts(db, Date.now(), { limit: scaled(STAFF_ATTEMPT_SWEEP_LIMIT) }),
+      );
+      if (staffAttemptCleanup.scanned > 0 || staffAttemptCleanup.hasMore) {
+        console.log(
+          `[scheduled] Staff attempt cleanup: scanned=${staffAttemptCleanup.scanned}, ` +
+            `deleted=${staffAttemptCleanup.deleted}, limit=${staffAttemptCleanup.limit}, hasMore=${staffAttemptCleanup.hasMore}`,
         );
       }
     },

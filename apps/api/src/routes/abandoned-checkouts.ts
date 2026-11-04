@@ -3,7 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { abandonedCheckouts } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { getClientIp } from "@scalius/shared/rate-limit";
+import { getTrustedClientIp } from "../utils/client-ip";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
@@ -44,7 +44,7 @@ const saveAbandonedCheckoutRoute = createRoute({
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
   // The storefront saves a debounced snapshot as the buyer fills each checkout
   // field, so one buyer legitimately sends several saves a minute.
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "abandoned-checkout", getClientIp(c.req.raw)))) {
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "abandoned-checkout", getTrustedClientIp(c)))) {
     throw new RateLimitError("Too many requests. Please try again later.");
   }
 

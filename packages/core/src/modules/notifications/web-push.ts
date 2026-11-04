@@ -408,13 +408,16 @@ export interface AppPushResult {
 /**
  * One send through an app push provider (the `push` port). A provider that
  * is not ready, or that fails, answers `success: false`; `retryable` only for
- * a transient failure the provider did not act on, or one it can dedupe.
+ * a transient failure the provider did not act on, or an uncertain one (a
+ * timeout: the push may have gone) of a provider that declares
+ * `dedupesOnIdempotencyKey` when the push carries a key.
  */
 export async function sendAppPush(appProviders: AppProviders | undefined, providerId: string, input: PushSendInput): Promise<AppPushResult> {
   const choice = await resolveAppProvider(appProviders, "push", providerId);
   if (!choice.provider) return { success: false, rawStatus: choice.issue.slice(0, 300), retryable: false };
+  const provider = choice.provider;
   try {
-    const answer = await choice.provider.send(input, {});
+    const answer = await provider.send(input, {});
     return {
       success: answer.success,
       ...(answer.providerRef ? { providerRef: answer.providerRef } : {}),
@@ -426,7 +429,8 @@ export async function sendAppPush(appProviders: AppProviders | undefined, provid
     return {
       success: false,
       rawStatus: (failure?.message ?? "The push provider could not send.").slice(0, 300),
-      retryable: failure?.category === "retryable" && (!failure.uncertain || input.idempotencyKey !== undefined),
+      retryable: failure?.category === "retryable"
+        && (!failure.uncertain || (provider.dedupesOnIdempotencyKey === true && input.idempotencyKey !== undefined)),
     };
   }
 }

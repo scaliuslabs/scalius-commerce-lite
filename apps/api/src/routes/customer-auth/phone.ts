@@ -56,7 +56,7 @@ app.openapi(sendAccountPhoneCodeRoute, async (c) => {
     credentialEncryptionKey: getCredentialEncryptionKey(env),
     appProviders: requestAppProviders(c),
   });
-  await sendAuthOtp(c, c.get("db"), result.otpDelivery);
+  if (result.otpDelivery) await sendAuthOtp(c, c.get("db"), result.otpDelivery);
   return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
 });
 
