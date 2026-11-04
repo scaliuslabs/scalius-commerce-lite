@@ -22,8 +22,11 @@
  * (the route no longer writes them in calls of their own). The recorded
  * 53 statements / 6 full scans were already stale: the base measured 48 calls,
  * 56 statements and 7 full scans (the 7th, the notice delivery's read of the
- * settings table's revision, predates this change). Now 44 calls, 57
- * statements, 7 full scans.
+ * settings table's revision, predates this change). Now 43 calls, 56
+ * statements, 7 full scans: the attempts turn refunded inside the settlement
+ * batch. A refund of a gift-card purchase (`order-refund-gift-card`, a ৳1,000
+ * card partly refunded in cash) measures 29 calls, 51 statements, 2 full scans:
+ * the claim's clawback and the settlement ride batches that run anyway.
  * Status/refund (2026-10-15): 32/41 calls with RBAC warm, 38/47 in isolation
  * with a cold marker. Both retain a 50-call cap; other counters cover both runs.
  * Earlier 71/80 counts included the next run's setup.
@@ -209,6 +212,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 21, d1Statements: 124, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
     "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1341, fullScans: 7 },
+    "order-refund-gift-card": { d1Calls: 29, d1Statements: 51, externalFetches: 0, rowsWritten: 23, rowsRead: 35, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.68 },
     "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 430, rowsRead: 25782, fullScans: 75 },
@@ -255,6 +259,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 97, d1Statements: 314, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
     "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1342, fullScans: 7 },
+    "order-refund-gift-card": { d1Calls: 29, d1Statements: 51, externalFetches: 0, rowsWritten: 23, rowsRead: 35, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 58, d1Statements: 68, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
     "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 430, rowsRead: 28348, fullScans: 451 },
