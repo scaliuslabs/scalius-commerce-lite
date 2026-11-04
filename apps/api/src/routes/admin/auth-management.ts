@@ -1002,7 +1002,7 @@ app.openapi(changePasswordRoute, async (c) => {
     const sessionUser = c.get("user");
     const db = c.get("db");
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-    const proofs = await staffProofs(c.env, auth, sessionUser.id);
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const { currentPassword, newPassword } = c.req.valid("json");
 
     if (!session) {
@@ -1370,7 +1370,7 @@ app.openapi(start2faMethodChallengeRoute, async (c) => {
     }
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-    const proofs = await staffProofs(c.env, auth, sessionUser.id);
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const passwordProof = await (async () => {
         try {
             return await proofs.verifyPassword({
@@ -1475,7 +1475,7 @@ async function verifySessionTwoFactorCode(
     const session = c.get("session");
     if (!session) throw new UnauthorizedError("No active session found");
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-    const proofs = await staffProofs(c.env, auth, sessionUser.id);
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const verifiedProof = await (async () => {
         try {
             const betterAuthResult = verificationMethod === "email"
@@ -1890,7 +1890,7 @@ app.openapi(disable2faRoute, async (c) => {
     if (await twoFactorRequiredFor(db, sessionUser.id)) throw twoFactorRequired();
 
     const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
-    const proofs = await staffProofs(c.env, auth, sessionUser.id);
+    const proofs = await staffProofs(c.env, c.get("db"), auth, sessionUser.id);
     const passwordProof = await proofs.verifyPassword({
         headers: c.req.raw.headers,
         body: { password },
@@ -1987,7 +1987,7 @@ app.openapi(verify2faRoute, async (c) => {
         throw new ValidationError("This account signs in with emailed codes, not an authenticator app");
     }
 
-    const proofs = await staffProofs(c.env, createAuth(c.env, { appProviders: requestAppProviders(c) }), sessionUser.id);
+    const proofs = await staffProofs(c.env, c.get("db"), createAuth(c.env, { appProviders: requestAppProviders(c) }), sessionUser.id);
     const verifyResult = await (async () => {
         try {
             if (type === "backup") {

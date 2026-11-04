@@ -78,10 +78,10 @@ Format `$sc1$<algorithm>$<params>$<salt>$<hash>`. The plan profile (`planLimits(
 | Wrong 2FA codes | Better Auth locks the 2FA row; the API answers 429 `TWO_FACTOR_LOCKED` ("try again in 15 minutes") | `two_factor.locked_until` |
 | Identity handoff routes | 10 per minute | plugin |
 | First-admin setup | 5 per hour per IP | D1 `admin_setup_rate_limits` |
-| Dashboard sign-in, before Better Auth | 5 per minute per network, then 60 per minute per account email | `RL_STRICT`, `RL_STANDARD` |
-| In-session proofs (change password, 2FA method change or off, a code checked against a session) | 5 per minute per staff member, 429 before the proof runs (`apps/api/src/utils/staff-proofs.ts`) | `RL_STRICT` |
+| Dashboard sign-in, before Better Auth | 5 per minute per network; from a browser that never signed in to the account, 20 wrong passwords per 15 minutes per staff account (a right password marks the browser, which is never held out) | `RL_STRICT`; D1 `rate_limit` (`scalius:` keys) |
+| In-session proofs (change password, 2FA setup, method change or off, a code checked against a session) | 5 per minute and 10 wrong per 15 minutes per staff member, 429 before the proof runs (`apps/api/src/utils/staff-proofs.ts`) | `RL_STRICT`; D1 `rate_limit` |
 
-Turning two-step on signs out every other session of the account.
+Native limiter counters are per Cloudflare location, so every bound that matters is also counted in D1. Better Auth's router takes writes only on the routes the dashboard uses (`apps/api/src/dashboard/auth.ts`); a two-step write needs a live session in D1 (not only the cookie cache) and a JSON body. Turning two-step on signs out every other session of the account.
 
 - Better Auth reads the client IP from `cf-connecting-ip`, then `x-forwarded-for`, and groups IPv6 by /64. API routes call `getTrustedClientIp` (`apps/api/src/utils/client-ip.ts`): it trusts `cf-connecting-ip` only, reads `x-forwarded-for` only when a platform origin is loopback, and otherwise returns `unknown`; it groups IPv6 by /64 the same way, and it is the only reader of those headers in `apps/api/src`.
 - Native limiters `RL_STRICT` (5 per 60 s) and `RL_STANDARD` (60 per 60 s; it also limits agent calls) are in `apps/api/wrangler.jsonc`.
