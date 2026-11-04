@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { ChoiceField } from "~/components/ui/field";
+import { standaloneLinkTarget } from "~/components/ui/link";
 import { Textarea } from "~/components/ui/textarea";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
 import {
@@ -64,6 +65,33 @@ function FeedLink({ id, label, url }: { id: string; label: string; url: string }
   );
 }
 
+/**
+ * The example products under a reason. One product alone on its line is a
+ * touch target like a button (DESIGN C6); several run together as a sentence
+ * ("A, B and 3 more"), where each link stays inline.
+ */
+export function FeedSampleLine({ samples, products }: { samples: ReadonlyArray<{ id: string; name: string }>; products: number }) {
+  const t = useMessages(onlineStoreMessages);
+  const alone = samples.length === 1 && products === 1;
+  return (
+    <p className="text-muted-foreground">
+      {samples.map((sample, index) => (
+        <Fragment key={sample.id}>
+          {index ? ", " : null}
+          <Link
+            to="/admin/products/$productId/edit"
+            params={{ productId: sample.id }}
+            className={alone ? `${standaloneLinkTarget} text-link hover:underline` : "text-link hover:underline"}
+          >
+            {sample.name}
+          </Link>
+        </Fragment>
+      ))}
+      {products > samples.length ? ` ${t("andMore", { count: products - samples.length })}` : null}
+    </p>
+  );
+}
+
 type FeedReason = FeedDiagnostics["reasons"][number]["reason"];
 /** Products that are off the storefront too: leaving them out of the feed is expected. */
 const EXPECTED_REASONS = new Set<FeedReason>(["feed_disabled", "inactive_deleted_unpublished"]);
@@ -99,17 +127,7 @@ function FeedLeftOut() {
               {t(`feedReason_${reason as Exclude<FeedReason, "feed_disabled" | "inactive_deleted_unpublished">}`)}
               <span className="text-muted-foreground"> · {t(products === 1 ? "oneProduct" : "productCount", { count: products })}</span>
             </p>
-            <p className="text-muted-foreground">
-              {samples.map((sample, index) => (
-                <Fragment key={sample.id}>
-                  {index ? ", " : null}
-                  <Link to="/admin/products/$productId/edit" params={{ productId: sample.id }} className="text-link hover:underline">
-                    {sample.name}
-                  </Link>
-                </Fragment>
-              ))}
-              {products > samples.length ? ` ${t("andMore", { count: products - samples.length })}` : null}
-            </p>
+            <FeedSampleLine samples={samples} products={products} />
           </li>
         ))}
       </ul>

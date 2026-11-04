@@ -67,9 +67,11 @@ function VariantCell({ variant }: { variant: InventoryVariant }) {
 }
 
 /** The Available number opens its breakdown (on hand, committed) by click, tap or keyboard. */
-function AvailableBreakdown({ variant, storeLevel, children }: {
+function AvailableBreakdown({ variant, storeLevel, summary, children }: {
   variant: InventoryVariant;
   storeLevel: number | null;
+  /** The button's spoken name: begins with its visible text as whole words (WCAG 2.5.3), then says what it is. */
+  summary: string;
   children: ReactNode;
 }) {
   const t = useMessages(inventoryMessages);
@@ -82,7 +84,7 @@ function AvailableBreakdown({ variant, storeLevel, children }: {
           variant="ghost"
           size="sm"
           className="-my-3"
-          aria-label={t("availableBreakdown", { count: variant.available })}
+          aria-label={t("availableBreakdown", { summary })}
         >
           {children}
         </Button>
@@ -159,8 +161,8 @@ export function VariantName({ productId, productName, optionLabel }: {
   // The product and its option values each use one line, with the whole value on hover.
   return (
     <span className="block min-w-0">
-      {/* One text line, not the table rule's 44px phone link: the whole phone card already opens the product. */}
-      <RowLink to={`/admin/products/${productId}/edit`} title={productName ?? t("unknownProduct")} className="block min-h-0 truncate font-medium hover:underline">
+      {/* One text line whose hit area grows by padding the row cancels with a negative margin: 44px on phones and touch screens, 24px with a mouse (C6), the layout stays one line. */}
+      <RowLink to={`/admin/products/${productId}/edit`} title={productName ?? t("unknownProduct")} className="-my-3 block min-h-0 truncate py-3 font-medium hover:underline sm:pointer-fine:-my-0.5 sm:pointer-fine:py-0.5">
         {productName ?? t("unknownProduct")}
       </RowLink>
       <span title={optionLabel ?? undefined} className="block h-lh truncate text-muted-foreground">{optionLabel}</span>
@@ -266,7 +268,9 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       header: sortHeader(t("available")),
       meta: { numeric: true, priority: 95, minWidth: 100 },
       cell: ({ row }) => (
-        <AvailableBreakdown variant={row.original} storeLevel={storeLevel}>{formatNumber(row.original.available)}</AvailableBreakdown>
+        <AvailableBreakdown variant={row.original} storeLevel={storeLevel} summary={`${formatNumber(row.original.available)} ${t("available")}`}>
+          {formatNumber(row.original.available)}
+        </AvailableBreakdown>
       ),
     },
     {
@@ -348,7 +352,9 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
           <IdText value={variant.sku} copy className="text-muted-foreground" />
           <div className="flex min-w-0 items-center gap-2">
             <StockBadge variant={variant} storeLevel={storeLevel} />
-            <AvailableBreakdown variant={variant} storeLevel={storeLevel}>{t("availableCount", { count: variant.available })}</AvailableBreakdown>
+            <AvailableBreakdown variant={variant} storeLevel={storeLevel} summary={t("availableCount", { count: variant.available })}>
+              {t("availableCount", { count: variant.available })}
+            </AvailableBreakdown>
           </div>
           {filterLocation ? (
             <p className="text-body text-muted-foreground tabular-nums">

@@ -84,7 +84,8 @@ export function MediaGallery(props: MediaGalleryProps) {
         title={t("emptyTitle")}
         description={t("emptyBody")}
         action={props.onUploadClick ? (
-          <Button type="button" onClick={props.onUploadClick}>
+          // The page header (or a picker's Add) already holds the view's one primary (DESIGN C3).
+          <Button type="button" variant="outline" onClick={props.onUploadClick}>
             <Upload aria-hidden="true" />
             {t("upload")}
           </Button>
