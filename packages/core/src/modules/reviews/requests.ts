@@ -52,11 +52,13 @@ function openReviewableLineExists(now: number) {
  * deliveries, so the sweep skips it without an outbox row.
  */
 async function reachableOrderContact(db: Database) {
-  let channels: readonly string[] = DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS.review_request ?? ["email"];
+  let channels: readonly string[];
   try {
-    channels = (await getNotificationChannels(db)).review_request ?? channels;
+    channels = (await getNotificationChannels(db)).review_request ?? DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS.review_request ?? ["email"];
   } catch {
-    // The sender falls back to the defaults too.
+    // A transient read failure must not end a request (skipping is terminal):
+    // queue as before and let the sender decide with the channels it reads.
+    return sql`1 = 1`;
   }
   const email = channels.includes("email")
     ? sql`trim(coalesce(${orders.customerEmail}, '')) <> ''`
