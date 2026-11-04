@@ -32,6 +32,7 @@ import {
   storefrontThemeColorDistance,
   storefrontThemeContrast,
   storefrontThemeFieldBorder,
+  storefrontThemeLab,
   storefrontThemeLuminance,
   storefrontThemeMix,
   storefrontThemeColorsAreDark,
@@ -189,36 +190,98 @@ function greyLike(color: string): string {
   return channelsHex([srgb * 255, srgb * 255, srgb * 255]);
 }
 
-/** Neutral greys lighter text may take, black to white. */
-const GREYS = Array.from({ length: 33 }, (_, index) => channelsHex([index * 8, index * 8, index * 8].map((channel) => Math.min(255, channel))));
-/** Error colours to search when the reference's cannot stand apart: every colour at eight levels a channel. */
-const ERROR_CANDIDATES = Array.from({ length: 512 }, (_, index) => channelsHex([index >> 6, (index >> 3) & 7, index & 7].map((level) => (level * 255) / 7)));
+interface Swatch {
+  hex: string;
+  luminance: number;
+  lab: readonly [number, number, number];
+}
+
+const swatch = (hex: string): Swatch => ({ hex, luminance: storefrontThemeLuminance(hex), lab: storefrontThemeLab(hex) });
+const labDistance = (left: Swatch["lab"], right: Swatch["lab"]) => Math.hypot(left[0] - right[0], left[1] - right[1], left[2] - right[2]);
+const readsLuminance = (text: number, surface: number) => (Math.max(text, surface) + 0.05) / (Math.min(text, surface) + 0.05) >= STOREFRONT_THEME_MIN_CONTRAST;
+
+let swatches: { greys: Swatch[]; edge: Swatch[] } | null = null;
+/**
+ * The colours the error-colour search tries, made on first use: every grey,
+ * and the faces of the sRGB cube at 32 steps an edge. Readability depends on
+ * lightness alone, and at any lightness the most colourful colours (the
+ * furthest from a grey) lie on the cube's faces, so the faces hold the best
+ * answer there is.
+ */
+function searchSwatches(): { greys: Swatch[]; edge: Swatch[] } {
+  if (swatches) return swatches;
+  const greys = Array.from({ length: 256 }, (_, level) => swatch(channelsHex([level, level, level])));
+  const edge = new Map<string, Swatch>();
+  const step = (index: number) => (index * 255) / 32;
+  for (let axis = 0; axis < 3; axis += 1) {
+    for (const fixed of [0, 255]) {
+      for (let first = 0; first <= 32; first += 1) {
+        for (let second = 0; second <= 32; second += 1) {
+          const free = [step(first), step(second)];
+          const channels = [0, 1, 2].map((channel) => (channel === axis ? fixed : free.shift()!));
+          const hex = channelsHex(channels);
+          if (!edge.has(hex)) edge.set(hex, swatch(hex));
+        }
+      }
+    }
+  }
+  swatches = { greys, edge: [...edge.values()] };
+  return swatches;
+}
+
+/**
+ * Lighter text and an error colour that both read and stand apart, when the
+ * page leaves little room: the error colour nearest `preferred` (a red where
+ * one works), lighter text staying `muted` if it can, else the readable grey
+ * nearest it (the ends of the readable bands are the furthest from any
+ * error colour, so only they are tried). Null when no pair exists.
+ */
+function errorApartFromMuted(muted: string, preferred: string, mutedSurfaces: readonly string[], errorSurfaces: readonly string[]): { muted: string; error: string } | null {
+  const { greys, edge } = searchSwatches();
+  const lights = (surfaces: readonly string[]) => surfaces.map(storefrontThemeLuminance);
+  const [mutedOn, errorOn] = [lights(mutedSurfaces), lights(errorSurfaces)];
+  const readableGrey = greys.map((grey) => mutedOn.every((surface) => readsLuminance(grey.luminance, surface)));
+  const ends = greys.filter((_, level) => readableGrey[level] && !(readableGrey[level - 1] && readableGrey[level + 1]));
+  const current = swatch(muted);
+  const candidates = [current, ...ends.sort((left, right) => Math.abs(left.lab[0] - current.lab[0]) - Math.abs(right.lab[0] - current.lab[0]))];
+  const target = storefrontThemeLab(preferred);
+  const errors = edge.filter((error) => errorOn.every((surface) => readsLuminance(error.luminance, surface)))
+    .sort((left, right) => labDistance(left.lab, target) - labDistance(right.lab, target));
+  for (const grey of candidates) {
+    const error = errors.find((each) => labDistance(each.lab, grey.lab) >= STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE);
+    if (error) return { muted: grey.hex, error: error.hex };
+  }
+  return null;
+}
 
 /**
  * The colour set with every colour no field shows made from the six fields,
  * so any readable choice of the fields saves:
- * - Surfaces (cards, menus, shaded panels, light buttons, borders) sit
- *   between the page and the text where the reference puts them, with its
- *   tint, then step back toward the page until the text, the buttons (on
+ * - Surfaces (cards, menus, shaded panels, light buttons, borders) keep their
+ *   place between the page and the text, with their tint, as `reference` has
+ *   them, then step back toward the page until the text, the buttons (on
  *   cards) and black or white read on them as they do on the page.
  * - Lighter text keeps its place between text and page, moving toward the
  *   text until it reads on the page, panels and cards; a tinted one turns
  *   to the grey as light as it.
  * - The error colour is the reference's, deepened or lightened until it reads
  *   on the page and cards and reddened until it stands apart from lighter
- *   text; text on it is black or white when the reference's does not read.
- * `rebase` (the page or the text changed) places surfaces and lighter text
- * anew from `reference`; otherwise they keep their colour while it reads.
+ *   text (on a mid-tone page, the nearest colour that does); text on it is
+ *   black or white when its own does not read.
+ * Surfaces and lighter text are placed anew only when the page or the text
+ * changed from `previous`; otherwise every colour keeps its value while it
+ * reads, and the field border is redrawn only when the page, the text or the
+ * card it shows against changed.
  */
 export function fitThemeColors(
   colors: Record<StorefrontThemeColorKey, string>,
-  reference: Record<StorefrontThemeColorKey, string>,
-  rebase: boolean,
+  previous: Record<StorefrontThemeColorKey, string>,
+  reference: Record<StorefrontThemeColorKey, string> = previous,
 ): Record<StorefrontThemeColorKey, string> {
   const next = { ...colors };
   const { background: page, foreground: text, primary } = next;
   const ink = storefrontThemeContrast("#000000", page) >= storefrontThemeContrast("#ffffff", page) ? "#000000" : "#ffffff";
-  if (rebase) {
+  if (page !== previous.background || text !== previous.foreground) {
     for (const token of SURFACE_TOKENS) next[token] = onLine(placeOnLine(reference[token], reference.background, reference.foreground), page, text);
     next["muted-foreground"] = onLine(placeOnLine(reference["muted-foreground"], reference.foreground, reference.background), text, page);
     next.destructive = reference.destructive;
@@ -230,30 +293,19 @@ export function fitThemeColors(
   next.popover = untilRead(next.popover, onPage([text, primary, ink]), page);
   next.muted = untilRead(next.muted, onPage([text, ink]), page);
   next.secondary = untilRead(next.secondary, onPage([text, ink]), page);
-  next.input = storefrontThemeFieldBorder(next);
+  if (page !== previous.background || text !== previous.foreground || next.card !== previous.card) next.input = storefrontThemeFieldBorder(next);
   const surfaces = [page, next.muted, next.card];
   let muted = readableOn(next["muted-foreground"], surfaces, text);
   if (storefrontThemeChroma(muted) > STOREFRONT_THEME_MAX_MUTED_CHROMA) muted = readableOn(greyLike(muted), surfaces, ink);
-  next["muted-foreground"] = muted;
   const errorSurfaces = [page, next.card];
   const apart = (error: string) => storefrontThemeColorDistance(muted, error) >= STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE;
   let error = readableOn(next.destructive, errorSurfaces, ink);
   for (let step = 1; step <= 10 && !apart(error); step += 1) error = readableOn(storefrontThemeMix(next.destructive, "#ff0000", step / 10), errorSurfaces, ink);
   if (!apart(error)) {
-    // A mid-tone page leaves little room: search the colours that read for an error colour (nearest the reference's)
-    // apart from lighter text, then for another readable grey of lighter text.
-    const greys = [muted, ...GREYS].filter((grey) => surfaces.every((surface) => reads(grey, surface)));
-    const errors = ERROR_CANDIDATES.filter((candidate) => errorSurfaces.every((surface) => reads(candidate, surface)))
-      .sort((left, right) => storefrontThemeColorDistance(left, next.destructive) - storefrontThemeColorDistance(right, next.destructive));
-    search: for (const grey of greys) {
-      for (const candidate of errors) {
-        if (storefrontThemeColorDistance(grey, candidate) < STOREFRONT_THEME_MIN_MUTED_ERROR_DISTANCE) continue;
-        [muted, error] = [grey, candidate];
-        next["muted-foreground"] = grey;
-        break search;
-      }
-    }
+    const found = errorApartFromMuted(muted, next.destructive, surfaces, errorSurfaces);
+    if (found) ({ muted, error } = found);
   }
+  next["muted-foreground"] = muted;
   next.destructive = error;
   if (!reads(next["destructive-foreground"], error)) {
     next["destructive-foreground"] = storefrontThemeContrast("#000000", error) >= storefrontThemeContrast("#ffffff", error) ? "#000000" : "#ffffff";
@@ -261,26 +313,33 @@ export function fitThemeColors(
   return next;
 }
 
+/** Below this, a set's page and text are too alike to place its other colours between them. */
+const PLACEABLE_CONTRAST = 2;
+
 /**
- * The colours a set's hidden colours are placed from: the template's for the
- * colours, and for the dark colours the ones made from the colours.
+ * The colours a set's hidden colours keep their places from: the set's own
+ * (an app template's or an agent's palette keeps its tints), unless its page
+ * and text are too alike to measure against; then the template's for the
+ * colours, and the ones made from the colours for the dark colours.
  */
-function colorReference(theme: StorefrontThemeDocument, set: StorefrontThemeColorSet): Record<StorefrontThemeColorKey, string> {
+function colorReference(theme: StorefrontThemeDocument, set: StorefrontThemeColorSet, current: Record<StorefrontThemeColorKey, string>): Record<StorefrontThemeColorKey, string> {
+  if (storefrontThemeContrast(current.foreground, current.background) >= PLACEABLE_CONTRAST) return current;
   return set === "colors" ? storefrontTemplateTheme(theme.template).tokens.colors : storefrontDarkPalette(theme.tokens.colors);
 }
 
 /**
  * The document with one role's colour (a complete #rrggbb: the fields commit
  * nothing else) set on every token of that role, in one colour set, and the
- * colours no field shows made from the fields (`fitThemeColors`).
+ * colours no field shows made from the fields (`fitThemeColors`). A colour
+ * the role already has changes nothing.
  */
 export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string, set: StorefrontThemeColorSet = "colors"): StorefrontThemeDocument {
   const current = theme.tokens[set];
-  if (!current) return theme;
+  if (!current || COLOR_ROLES[role].every((token) => current[token] === value)) return theme;
   const edited = { ...current };
   for (const token of COLOR_ROLES[role]) edited[token] = value;
-  const colors = allThemeColorsValid(edited) && allThemeColorsValid(theme.tokens.colors)
-    ? fitThemeColors(edited, colorReference(theme, set), role === "background" || role === "text")
+  const colors = allThemeColorsValid(edited) && allThemeColorsValid(current) && allThemeColorsValid(theme.tokens.colors)
+    ? fitThemeColors(edited, current, colorReference(theme, set, current))
     : edited;
   // Dark colours made from the colours follow a light colour edit; ones the merchant edited stay.
   const darkColors = set === "colors" && darkColorsFollowColors(theme) && allThemeColorsValid(colors)
