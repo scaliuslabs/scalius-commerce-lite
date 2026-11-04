@@ -24,7 +24,7 @@ import { ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 import { isInventoryReservationConflictError, prepareStockReservationBatch, type ReservationBatchItem } from "./reserve";
 import { inJsonArray } from "../../utils/in-json-array";
-import { checkAndAlertLowStock } from "./alerts";
+import { checkAndAlertLowStock, refreshLowStockAlerts } from "./alerts";
 import { readStockMovementClaims } from "./stock-movement-claims";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
@@ -188,14 +188,6 @@ function hasBuyerCapacityTransition(
         !== resolveTrackedBuyerAvailabilityBand(afterCapacity, after.lowStockThreshold);
 }
 
-async function hasOpenOrderReturn(db: Database, orderId: string): Promise<boolean> {
-    const row = await db.select({ id: orderReturns.id }).from(orderReturns).where(and(
-        eq(orderReturns.orderId, orderId),
-        sql`${orderReturns.status} NOT IN ('cancelled', 'rejected')`,
-    )).get();
-    return Boolean(row);
-}
-
 const ORDER_INVENTORY_CONFLICT = "order_inventory_conflict";
 
 /**
@@ -254,20 +246,125 @@ function unchangedInventory(inventoryAction: InventoryAction): PreparedInventory
     };
 }
 
+const transitionOrderFields = {
+    id: orders.id,
+    status: orders.status,
+    inventoryAction: orders.inventoryAction,
+    inventoryPool: orders.inventoryPool,
+    version: orders.version,
+    fulfillmentLocationId: orders.fulfillmentLocationId,
+    salesChannelId: orders.salesChannelId,
+};
+
 async function readTransitionOrder(db: Database, orderId: string): Promise<InventoryTransitionOrder | undefined> {
     return await db
-        .select({
-            id: orders.id,
-            status: orders.status,
-            inventoryAction: orders.inventoryAction,
-            inventoryPool: orders.inventoryPool,
-            version: orders.version,
-            fulfillmentLocationId: orders.fulfillmentLocationId,
-            salesChannelId: orders.salesChannelId,
-        })
+        .select(transitionOrderFields)
         .from(orders)
         .where(eq(orders.id, orderId))
         .get() as InventoryTransitionOrder | undefined;
+}
+
+/** One of the order's ledger movements: its replay identity and its ledger-v2 edge. */
+type TransitionMovementRow = InventoryLedgerV2Event & {
+    orderId: string | null;
+    quantity: number;
+    ledgerVersion: number | null;
+    locationId: string | null;
+};
+
+const transitionMovementFields = {
+    id: inventoryMovements.id,
+    variantId: inventoryMovements.variantId,
+    orderId: inventoryMovements.orderId,
+    type: inventoryMovements.type,
+    quantity: inventoryMovements.quantity,
+    ledgerVersion: inventoryMovements.ledgerVersion,
+    pool: inventoryMovements.pool,
+    reservationGeneration: inventoryMovements.reservationGeneration,
+    stockVersionBefore: inventoryMovements.stockVersionBefore,
+    stockVersionAfter: inventoryMovements.stockVersionAfter,
+    previousStock: inventoryMovements.previousStock,
+    newStock: inventoryMovements.newStock,
+    stockDelta: inventoryMovements.stockDelta,
+    previousReservedStock: inventoryMovements.previousReservedStock,
+    newReservedStock: inventoryMovements.newReservedStock,
+    reservedStockDelta: inventoryMovements.reservedStockDelta,
+    previousPreorderStock: inventoryMovements.previousPreorderStock,
+    newPreorderStock: inventoryMovements.newPreorderStock,
+    preorderStockDelta: inventoryMovements.preorderStockDelta,
+    locationId: inventoryMovements.locationId,
+};
+
+const transitionVariantFields = {
+    id: productVariants.id,
+    stock: productVariants.stock,
+    reservedStock: productVariants.reservedStock,
+    preorderStock: productVariants.preorderStock,
+    stockVersion: productVariants.stockVersion,
+    trackInventory: productVariants.trackInventory,
+    lowStockThreshold: effectiveLowStockThresholdSql(),
+    allowPreorder: productVariants.allowPreorder,
+    allowBackorder: productVariants.allowBackorder,
+    backorderLimit: productVariants.backorderLimit,
+};
+
+/**
+ * Everything a status change's stock is prepared from, read in one batch
+ * (one consistent snapshot, one D1 call): the order, its lines, their SKUs'
+ * counters, every ledger movement of the order (generations, ledger
+ * contexts, replayed claims and where deducted units left from all come
+ * from it) and whether a return is open. An order's movements are bounded
+ * by its lines and lifecycle, not by the store.
+ */
+interface TransitionSnapshot {
+    order: InventoryTransitionOrder;
+    lines: OrderInventoryLine[];
+    variants: ReadonlyMap<string, InventoryVariantState>;
+    movements: readonly TransitionMovementRow[];
+    openReturn: boolean;
+}
+
+async function readTransitionSnapshot(db: Database, orderId: string): Promise<TransitionSnapshot | undefined> {
+    const [orderRows, lineRows, variantRows, movementRows, returnRows] = await safeBatch(db, [
+        db.select(transitionOrderFields).from(orders).where(eq(orders.id, orderId)).limit(1),
+        orderInventoryLineQuery(db, orderId),
+        db.select(transitionVariantFields).from(productVariants).where(sql`${productVariants.id} IN (
+            SELECT ${orderItems.variantId} FROM ${orderItems} WHERE ${orderItems.orderId} = ${orderId}
+        )`),
+        db.select(transitionMovementFields).from(inventoryMovements).where(eq(inventoryMovements.orderId, orderId)),
+        db.select({ id: orderReturns.id }).from(orderReturns).where(and(
+            eq(orderReturns.orderId, orderId),
+            sql`${orderReturns.status} NOT IN ('cancelled', 'rejected')`,
+        )).limit(1),
+    ] as const);
+    const order = orderRows[0] as InventoryTransitionOrder | undefined;
+    if (!order) return undefined;
+    return {
+        order,
+        lines: orderInventoryLinesFrom(lineRows, order),
+        variants: new Map((variantRows as InventoryVariantState[]).map((variant) => [variant.id, variant])),
+        movements: movementRows as TransitionMovementRow[],
+        openReturn: returnRows.length > 0,
+    };
+}
+
+/** The deterministic movements an earlier run committed, among the order's movements. */
+function committedClaimRows(
+    movements: readonly TransitionMovementRow[],
+    claims: readonly InventoryTransitionMovementIdentity[],
+): TransitionMovementRow[] {
+    const ids = new Set(claims.map((claim) => claim.id));
+    return movements.filter((movement) => ids.has(movement.id));
+}
+
+/** `loadTransitionMovementGeneration` over the order's movements. */
+function movementGeneration(
+    movements: readonly TransitionMovementRow[],
+    variantId: string,
+    operation: InventoryTransitionOperation,
+): number {
+    const types = getTransitionGenerationTypes(operation);
+    return movements.filter((movement) => movement.variantId === variantId && types.includes(movement.type)).length;
 }
 
 /**
@@ -285,16 +382,16 @@ export async function prepareInventoryForStatusChange(
     orderId: string,
     newStatus: string,
 ): Promise<PreparedInventoryStatusChange> {
-    const order = await readTransitionOrder(db, orderId);
-    if (!order) return unchangedInventory("none");
+    const snapshot = await readTransitionSnapshot(db, orderId);
+    if (!snapshot) return unchangedInventory("none");
+    const { lines } = snapshot;
 
-    const currentAction = order.inventoryAction as InventoryAction;
+    const currentAction = snapshot.order.inventoryAction as InventoryAction;
     const needsRestore = STOCK_RESTORE_STATUSES.has(newStatus);
     const needsDeduct = STOCK_DEDUCT_STATUSES.has(newStatus);
 
     if (needsRestore && currentAction === "reserved") {
-        const lines = await getOrderInventoryLines(db, order);
-        return prepareStrictInventoryPhases(db, order, "restored", [
+        return prepareStrictInventoryPhases(db, snapshot, "restored", [
             { operation: "deduct", entries: keyedEntries(lines), digitalUnits: true },
             { operation: "release", entries: unkeyedEntries(lines) },
         ], assignedKeyCount(lines));
@@ -304,18 +401,16 @@ export async function prepareInventoryForStatusChange(
         // A return record owns the stock of what came back: its receipt
         // restocks good units and writes off damaged ones. Restoring the whole
         // order here as well would count returned units twice.
-        if (newStatus === "returned" && await hasOpenOrderReturn(db, orderId)) {
+        if (newStatus === "returned" && snapshot.openReturn) {
             return unchangedInventory(currentAction);
         }
-        const lines = await getOrderInventoryLines(db, order);
-        return prepareStrictInventoryPhases(db, order, "restored", [
+        return prepareStrictInventoryPhases(db, snapshot, "restored", [
             { operation: "restore", entries: unkeyedEntries(lines) },
         ], assignedKeyCount(lines));
     }
 
     if (needsDeduct && currentAction === "reserved") {
-        const lines = await getOrderInventoryLines(db, order);
-        return prepareStrictInventoryPhases(db, order, "deducted", [
+        return prepareStrictInventoryPhases(db, snapshot, "deducted", [
             { operation: "deduct", entries: lines.filter((line) => !line.digital).map((line) => line.entry) },
             { operation: "deduct", entries: lines.filter((line) => line.digital).map((line) => line.entry), digitalUnits: true },
         ]);
@@ -325,7 +420,7 @@ export async function prepareInventoryForStatusChange(
     // active order with restored inventory, reserve its items again. Public order transitions never
     // leave the terminal cancelled state; this path repairs inventory projection only.
     if (isStockReservableStatus(newStatus) && currentAction === "restored") {
-        return prepareInventoryReReservation(db, order);
+        return prepareInventoryReReservation(db, snapshot);
     }
 
     return unchangedInventory(currentAction);
@@ -343,7 +438,7 @@ function unkeyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[
 
 /** The deterministic movement ids of one phase (each SKU's split part, when it has one). */
 async function transitionIdentities(
-    db: Database,
+    movements: readonly TransitionMovementRow[],
     order: InventoryTransitionOrder,
     operation: StrictMovementOperation,
     entries: readonly ReservationEntry[],
@@ -358,7 +453,7 @@ async function transitionIdentities(
                 variantId: entry.variantId,
                 operation,
                 pool,
-                generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, operation),
+                generation: movementGeneration(movements, entry.variantId, operation),
                 part: parts?.get(entry.variantId) ?? 0,
             }),
             variantId: entry.variantId,
@@ -382,20 +477,13 @@ async function planRestoreSources(
     order: InventoryTransitionOrder,
     entries: readonly ReservationEntry[],
     pool: InventoryPoolName,
+    movements: readonly TransitionMovementRow[],
 ): Promise<InventoryPhase[]> {
-    const deducts = await db.select({
-        variantId: inventoryMovements.variantId,
-        quantity: inventoryMovements.quantity,
-        locationId: inventoryMovements.locationId,
-        reservationGeneration: inventoryMovements.reservationGeneration,
-        stockVersionAfter: inventoryMovements.stockVersionAfter,
-    }).from(inventoryMovements).where(and(
-        eq(inventoryMovements.orderId, order.id),
-        inJsonArray(inventoryMovements.variantId, entries.map((entry) => entry.variantId)),
-        eq(inventoryMovements.ledgerVersion, 2),
-        eq(inventoryMovements.pool, pool),
-        inArray(inventoryMovements.type, ["deducted", "preorder_deducted"]),
-    )).all();
+    const restored = new Set(entries.map((entry) => entry.variantId));
+    const deducts = movements.filter((movement) => restored.has(movement.variantId)
+        && movement.ledgerVersion === 2
+        && movement.pool === pool
+        && (movement.type === "deducted" || movement.type === "preorder_deducted"));
     const whole: ReservationEntry[] = [];
     const sources = new Map<string, InventoryPhase & { source: { location: InventoryLocationRef; parts: Map<string, number> } }>();
     const active = await selectActiveInventoryLocationIds(db, [...new Set(deducts.flatMap((row) => row.locationId ? [row.locationId] : []))]);
@@ -551,11 +639,12 @@ function inventoryChangeGuard(
 
 async function prepareStrictInventoryPhases(
     db: Database,
-    order: InventoryTransitionOrder,
+    snapshot: TransitionSnapshot,
     inventoryAction: InventoryAction,
     phases: readonly InventoryPhase[],
     assignedKeys: number | null = null,
 ): Promise<PreparedInventoryStatusChange> {
+    const { order, movements } = snapshot;
     const pool = normalizeInventoryPool(order.inventoryPool);
     const movementStatements: SQLiteBatchItem[] = [];
     const movementIds: string[] = [];
@@ -575,7 +664,7 @@ async function prepareStrictInventoryPhases(
         const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
         if (entries.length === 0) continue;
         if (phase.operation === "restore") {
-            planned.push(...await planRestoreSources(db, order, entries, pool));
+            planned.push(...await planRestoreSources(db, order, entries, pool, movements));
             continue;
         }
         if (!phase.digitalUnits || phase.operation !== "deduct" || pool !== "regular") {
@@ -584,8 +673,8 @@ async function prepareStrictInventoryPhases(
         }
         // A deduct committed whole before deducts were split (its action flip
         // not): the replay below recognises it under its unsplit identity.
-        const unsplit = await transitionIdentities(db, order, "deduct", entries, pool, null);
-        if (await resolveCommittedTransitionMovements(db, order.id, "deduct", unsplit, entries)) {
+        const unsplit = await transitionIdentities(movements, order, "deduct", entries, pool, null);
+        if (matchCommittedTransitionMovements(order.id, "deduct", unsplit, entries, committedClaimRows(movements, unsplit))) {
             planned.push({ operation: "deduct", entries });
             continue;
         }
@@ -598,8 +687,8 @@ async function prepareStrictInventoryPhases(
         const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
         if (entries.length === 0) continue;
         const { operation } = phase;
-        const fresh = await loadTransitionVariantStates(
-            db,
+        const fresh = transitionVariantStatesFrom(
+            snapshot.variants,
             order.id,
             operation,
             entries.filter((entry) => !carried.has(entry.variantId)),
@@ -608,12 +697,12 @@ async function prepareStrictInventoryPhases(
             entry.variantId,
             carried.get(entry.variantId) ?? fresh.get(entry.variantId)!,
         ]));
-        const identities = await transitionIdentities(db, order, operation, entries, pool, phase.source?.parts ?? null);
+        const identities = await transitionIdentities(movements, order, operation, entries, pool, phase.source?.parts ?? null);
         for (const entry of entries) touched.add(entry.variantId);
         // An earlier run committed these movements but not the action flip
         // (a ledger written before movements and flip shared one batch):
         // only the flip is left to write.
-        if (await resolveCommittedTransitionMovements(db, order.id, operation, identities, entries)) {
+        if (matchCommittedTransitionMovements(order.id, operation, identities, entries, committedClaimRows(movements, identities))) {
             for (const entry of entries) replayed.add(entry.variantId);
             continue;
         }
@@ -625,7 +714,7 @@ async function prepareStrictInventoryPhases(
         // A shortfall names the order's location; a planned source checked its units already.
         if (namedLocation && operation === "deduct" && !phase.source) deductLocationName = namedLocation.name;
         const claims = await buildTransitionMovementClaims(
-            db, order, operation, entries, variants, pool, identities, null, namedLocation,
+            db, order, operation, entries, variants, pool, identities, null, namedLocation, movements,
         );
         if (namedLocation && operation === "deduct" && pool === "regular" && !phase.source) {
             await assertInventoryLocationCovers(db, namedLocation, entries);
@@ -664,10 +753,7 @@ async function prepareStrictInventoryPhases(
             inventoryChangeGuard(db, order, inventoryAction, movementIds, assignedKeys),
         ],
         availabilityTransitionVariantIds,
-        afterCommit: () => checkLowStockForTransitionEntries(
-            db,
-            variantIds.map((variantId) => ({ variantId, quantity: 0, pool })),
-        ),
+        afterCommit: () => refreshTransitionLowStock(db, variantIds),
         translateError: (error) => isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)
             ? inventoryLocationErrorFrom(error, deductLocationName)
             : null,
@@ -676,14 +762,15 @@ async function prepareStrictInventoryPhases(
 
 async function prepareInventoryReReservation(
     db: Database,
-    order: InventoryTransitionOrder,
+    snapshot: TransitionSnapshot,
 ): Promise<PreparedInventoryStatusChange> {
-    const entries = (await getOrderInventoryLines(db, order)).map((line) => line.entry);
+    const { order } = snapshot;
+    const entries = snapshot.lines.map((line) => line.entry);
     const statements: SQLiteBatchItem[] = [];
     if (entries.length > 0) {
         const plan = await prepareStockReservationBatch(
             db,
-            await buildTransitionReservationBatchItems(db, order, entries),
+            await buildTransitionReservationBatchItems(db, order, entries, snapshot.movements),
             normalizeInventoryPool(order.inventoryPool),
             { salesChannelId: order.salesChannelId },
         );
@@ -1182,6 +1269,8 @@ async function buildTransitionReservationBatchItems(
     db: Database,
     order: InventoryTransitionOrder,
     entries: ReservationEntry[],
+    /** The order's movements when already read (a status change's snapshot). */
+    movements?: readonly TransitionMovementRow[],
 ): Promise<ReservationBatchItem[]> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const mergedEntries = mergeTransitionEntriesByVariant(entries, pool);
@@ -1194,7 +1283,9 @@ async function buildTransitionReservationBatchItems(
             variantId: entry.variantId,
             operation: "reserve",
             pool,
-            generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, "reserve"),
+            generation: movements
+                ? movementGeneration(movements, entry.variantId, "reserve")
+                : await loadTransitionMovementGeneration(db, order.id, entry.variantId, "reserve"),
         }),
     }));
 }
@@ -1225,25 +1316,29 @@ async function loadTransitionVariantStates(
     operation: InventoryTransitionOperation,
     entries: ReservationEntry[],
 ): Promise<Map<string, InventoryVariantState>> {
+    const rows = new Map<string, InventoryVariantState>();
+    for (const entry of entries) {
+        const variant = await db
+            .select(transitionVariantFields)
+            .from(productVariants)
+            .where(eq(productVariants.id, entry.variantId))
+            .get() as InventoryVariantState | undefined;
+        if (variant) rows.set(entry.variantId, variant);
+    }
+    return transitionVariantStatesFrom(rows, orderId, operation, entries);
+}
+
+/** Each entry's SKU counters from rows already read; a SKU that is gone fails the transition. */
+function transitionVariantStatesFrom(
+    rows: ReadonlyMap<string, InventoryVariantState>,
+    orderId: string,
+    operation: InventoryTransitionOperation,
+    entries: readonly ReservationEntry[],
+): Map<string, InventoryVariantState> {
     const variants = new Map<string, InventoryVariantState>();
 
     for (const entry of entries) {
-        const variant = await db
-            .select({
-                id: productVariants.id,
-                stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
-                preorderStock: productVariants.preorderStock,
-                stockVersion: productVariants.stockVersion,
-                trackInventory: productVariants.trackInventory,
-                lowStockThreshold: effectiveLowStockThresholdSql(),
-                allowPreorder: productVariants.allowPreorder,
-                allowBackorder: productVariants.allowBackorder,
-                backorderLimit: productVariants.backorderLimit,
-            })
-            .from(productVariants)
-            .where(eq(productVariants.id, entry.variantId))
-            .get();
+        const variant = rows.get(entry.variantId);
 
         if (!variant) {
             throwInventoryTransitionError(orderId, operation, {
@@ -1278,17 +1373,23 @@ async function buildTransitionMovementClaims(
     identities: readonly InventoryTransitionMovementIdentity[],
     createdBy: string | null = null,
     namedLocation: InventoryLocationRef | null = null,
+    /** The order's movements when already read (a status change's snapshot). */
+    movements?: readonly TransitionMovementRow[],
 ): Promise<InventoryTransitionMovementClaim[]> {
     const claims: InventoryTransitionMovementClaim[] = [];
     const contexts = new Map<string, TransitionLedgerContext>();
     for (const entry of entries) {
-        contexts.set(entry.variantId, await loadTransitionLedgerContext(
-            db,
-            order.id,
-            entry.variantId,
-            pool,
-            operation,
-        ));
+        contexts.set(entry.variantId, movements
+            ? transitionLedgerContextFrom(
+                movements.filter((movement) => movement.variantId === entry.variantId
+                    && movement.ledgerVersion === 2
+                    && movement.pool === pool),
+                order.id,
+                entry.variantId,
+                pool,
+                operation,
+            )
+            : await loadTransitionLedgerContext(db, order.id, entry.variantId, pool, operation));
     }
     const locationIdByVariant = await resolveTransitionLocations(
         db,
@@ -1673,28 +1774,10 @@ async function loadTransitionLedgerContext(
     pool: InventoryPoolName,
     operation: StrictMovementOperation,
 ): Promise<TransitionLedgerContext> {
+    // The ledger edge alone: a replay is matched elsewhere, by id.
+    const { quantity: _quantity, ...ledgerFields } = transitionMovementFields;
     const rows = await db
-        .select({
-            id: inventoryMovements.id,
-            variantId: inventoryMovements.variantId,
-            orderId: inventoryMovements.orderId,
-            type: inventoryMovements.type,
-            ledgerVersion: inventoryMovements.ledgerVersion,
-            pool: inventoryMovements.pool,
-            reservationGeneration: inventoryMovements.reservationGeneration,
-            stockVersionBefore: inventoryMovements.stockVersionBefore,
-            stockVersionAfter: inventoryMovements.stockVersionAfter,
-            previousStock: inventoryMovements.previousStock,
-            newStock: inventoryMovements.newStock,
-            stockDelta: inventoryMovements.stockDelta,
-            previousReservedStock: inventoryMovements.previousReservedStock,
-            newReservedStock: inventoryMovements.newReservedStock,
-            reservedStockDelta: inventoryMovements.reservedStockDelta,
-            previousPreorderStock: inventoryMovements.previousPreorderStock,
-            newPreorderStock: inventoryMovements.newPreorderStock,
-            preorderStockDelta: inventoryMovements.preorderStockDelta,
-            locationId: inventoryMovements.locationId,
-        })
+        .select(ledgerFields)
         .from(inventoryMovements)
         .where(and(
             eq(inventoryMovements.orderId, orderId),
@@ -1702,8 +1785,18 @@ async function loadTransitionLedgerContext(
             eq(inventoryMovements.ledgerVersion, 2),
             eq(inventoryMovements.pool, pool),
         ))
-        .all();
+        .all() as TransitionMovementRow[];
+    return transitionLedgerContextFrom(rows, orderId, variantId, pool, operation);
+}
 
+/** The ledger context from the SKU's ledger-v2 movements of the order in its pool. */
+function transitionLedgerContextFrom(
+    rows: readonly TransitionMovementRow[],
+    orderId: string,
+    variantId: string,
+    pool: InventoryPoolName,
+    operation: StrictMovementOperation,
+): TransitionLedgerContext {
     const v2Rows = rows.filter((row) => row.ledgerVersion === 2);
     if (v2Rows.length > 0) {
         const events = v2Rows as Array<InventoryLedgerV2Event & { locationId: string | null }>;
@@ -1847,6 +1940,21 @@ async function resolveCommittedTransitionMovements(
     entries: ReservationEntry[],
 ): Promise<boolean> {
     const existingRows = await readStockMovementClaims(db, movementClaims.map((claim) => claim.id));
+    return matchCommittedTransitionMovements(orderId, operation, movementClaims, entries, existingRows);
+}
+
+/**
+ * Whether an earlier run committed these deterministic movements (`existingRows`,
+ * the ledger rows with their ids): false when none did; true when they match;
+ * a claim whose row says otherwise fails for manual reconciliation.
+ */
+function matchCommittedTransitionMovements(
+    orderId: string,
+    operation: StrictMovementOperation,
+    movementClaims: readonly InventoryTransitionMovementIdentity[],
+    entries: ReservationEntry[],
+    existingRows: ReadonlyArray<Pick<TransitionMovementRow, "id" | "variantId" | "orderId" | "type" | "quantity">>,
+): boolean {
     if (existingRows.length === 0) return false;
     const existingById = new Map(existingRows.map((row) => [row.id, row]));
     const mismatched = movementClaims.find((claim) => {
@@ -1873,6 +1981,20 @@ async function resolveCommittedTransitionMovements(
     }
 
     return true;
+}
+
+/** The touched SKUs' low-stock alerts, in one read and at most one write batch; never throws. */
+async function refreshTransitionLowStock(db: Database, variantIds: readonly string[]): Promise<void> {
+    try {
+        await refreshLowStockAlerts(db, variantIds);
+    } catch (error: unknown) {
+        // The stock and its ledger already committed; an alert refresh
+        // failure must not report the status change as failed.
+        console.error(
+            `[inventory/transition] Low-stock alert refresh failed for ${variantIds.length} SKU(s):`,
+            error instanceof Error ? error.message : String(error),
+        );
+    }
 }
 
 async function checkLowStockForTransitionEntries(
@@ -1937,7 +2059,11 @@ async function getOrderInventoryLines(
     db: Database,
     order: InventoryTransitionOrder,
 ): Promise<OrderInventoryLine[]> {
-    const items = await db
+    return orderInventoryLinesFrom(await orderInventoryLineQuery(db, order.id).all(), order);
+}
+
+function orderInventoryLineQuery(db: Database, orderId: string) {
+    return db
         .select({
             variantId: orderItems.variantId,
             quantity: orderItems.quantity,
@@ -1950,9 +2076,13 @@ async function getOrderInventoryLines(
                 WHERE ${productVariants.id} = ${sql.raw('"order_items"."variant_id"')})`,
         })
         .from(orderItems)
-        .where(eq(orderItems.orderId, order.id))
-        .all();
+        .where(eq(orderItems.orderId, orderId));
+}
 
+function orderInventoryLinesFrom(
+    items: Awaited<ReturnType<ReturnType<typeof orderInventoryLineQuery>["all"]>>,
+    order: InventoryTransitionOrder,
+): OrderInventoryLine[] {
     const pool = normalizeInventoryPool(order.inventoryPool);
     return items
         .filter((item) => item.variantId !== null && item.inventoryTracked)

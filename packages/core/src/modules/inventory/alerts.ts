@@ -14,6 +14,7 @@ import {
   operationalSkuRowPredicate,
 } from "../products";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { inJsonArray } from "../../utils/in-json-array";
 
 /**
  * Result of a low-stock check, for observability.
@@ -183,6 +184,95 @@ export async function checkAndAlertLowStock(
   }
 
   return result;
+}
+
+/**
+ * `checkAndAlertLowStock` for several SKUs at once, as one read (the SKUs and
+ * their alert rows) and at most one batch of the alert writes that change
+ * something: none when no SKU is low and none has an open alert, the common
+ * case after an order's stock moves. Same outcome per SKU; no result, since
+ * no caller of a set notifies from it. 90 SKUs a wave (D1's bound list).
+ */
+export async function refreshLowStockAlerts(db: Database, variantIds: readonly string[]): Promise<void> {
+  const ids = [...new Set(variantIds)];
+  for (let index = 0; index < ids.length; index += 90) {
+    await refreshLowStockAlertWave(db, ids.slice(index, index + 90));
+  }
+}
+
+async function refreshLowStockAlertWave(db: Database, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const [variants, alerts] = await safeBatch(db, [
+    db.select({
+      id: productVariants.id,
+      productId: productVariants.productId,
+      stock: productVariants.stock,
+      reservedStock: productVariants.reservedStock,
+      lowStockThreshold: effectiveLowStockThresholdSql(),
+      trackInventory: productVariants.trackInventory,
+    }).from(productVariants).where(and(
+      inJsonArray(productVariants.id, ids),
+      operationalSkuRowPredicate(),
+    )),
+    db.select({ variantId: productLowStockAlerts.variantId, alertStatus: productLowStockAlerts.alertStatus })
+      .from(productLowStockAlerts)
+      .where(inJsonArray(productLowStockAlerts.variantId, ids)),
+  ] as const);
+  const variantById = new Map(variants.map((variant) => [variant.id, variant]));
+  const alertByVariant = new Map(alerts.map((alert) => [alert.variantId, alert.alertStatus]));
+  const writes: unknown[] = [];
+  const resolve = (variantId: string, currentQty?: number) => writes.push(db.update(productLowStockAlerts).set({
+    ...(currentQty === undefined ? {} : { currentQty }),
+    alertStatus: "resolved",
+    resolvedAt: sql`unixepoch()`,
+    updatedAt: sql`unixepoch()`,
+  }).where(and(eq(productLowStockAlerts.variantId, variantId), ne(productLowStockAlerts.alertStatus, "resolved"))));
+  for (const variantId of ids) {
+    const variant = variantById.get(variantId);
+    const status = alertByVariant.get(variantId);
+    const open = status !== undefined && status !== "resolved";
+    if (!variant) {
+      if (open) resolve(variantId);
+      continue;
+    }
+    const available = variant.stock - variant.reservedStock;
+    const threshold = isLowStockThresholdEnabled(variant.lowStockThreshold) ? variant.lowStockThreshold : 0;
+    if (!variant.trackInventory || available > threshold) {
+      if (open) resolve(variantId, available);
+      continue;
+    }
+    const now = new Date();
+    if (status === undefined) {
+      writes.push(db.insert(productLowStockAlerts).values({
+        id: crypto.randomUUID(),
+        variantId,
+        productId: variant.productId,
+        currentQty: available,
+        threshold,
+        alertStatus: "active",
+        alertSentAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoNothing({ target: productLowStockAlerts.variantId }));
+    } else if (status === "resolved") {
+      writes.push(db.update(productLowStockAlerts).set({
+        currentQty: available,
+        threshold,
+        alertStatus: "active",
+        alertSentAt: now,
+        acknowledgedAt: null,
+        resolvedAt: null,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(productLowStockAlerts.variantId, variantId)));
+    } else {
+      writes.push(db.update(productLowStockAlerts).set({
+        currentQty: available,
+        threshold,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(productLowStockAlerts.variantId, variantId)));
+    }
+  }
+  if (writes.length > 0) await safeBatch(db, writes as never);
 }
 
 /**

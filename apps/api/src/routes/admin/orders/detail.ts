@@ -88,6 +88,7 @@ import {
 import {
     listPaymentWebhookIssuesForOrder,
     PAYMENT_WEBHOOK_ISSUE_REASONS,
+    PAYMENT_WEBHOOK_ISSUE_STATES,
 } from "../../../utils/payment-webhook-issues";
 import {
     listOrderNotificationOutboxForOrder,
@@ -186,7 +187,7 @@ const paymentWebhookIssueSchema = z.object({
     id: z.string(),
     provider: z.string(),
     eventType: z.string(),
-    status: z.enum(["failed", "manual_reconciliation"]),
+    status: z.enum(PAYMENT_WEBHOOK_ISSUE_STATES),
     reason: z.enum(PAYMENT_WEBHOOK_ISSUE_REASONS),
     message: z.string(),
     error: z.string().nullable(),

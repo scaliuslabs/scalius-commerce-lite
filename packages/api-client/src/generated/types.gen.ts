@@ -60655,8 +60655,8 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 id: string;
                 provider: string;
                 eventType: string;
-                status: 'failed' | 'manual_reconciliation';
-                reason: 'manual_reconciliation' | 'dead_letter' | 'failed' | 'external_refund';
+                status: 'failed' | 'manual_reconciliation' | 'waiting';
+                reason: 'manual_reconciliation' | 'dead_letter' | 'failed' | 'external_refund' | 'shipment_claim';
                 message: string;
                 error: string | null;
                 processedAt: string | number;

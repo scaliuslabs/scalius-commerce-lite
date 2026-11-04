@@ -214972,7 +214972,8 @@
                                 "type": "string",
                                 "enum": [
                                   "failed",
-                                  "manual_reconciliation"
+                                  "manual_reconciliation",
+                                  "waiting"
                                 ]
                               },
                               "reason": {
@@ -214981,7 +214982,8 @@
                                   "manual_reconciliation",
                                   "dead_letter",
                                   "failed",
-                                  "external_refund"
+                                  "external_refund",
+                                  "shipment_claim"
                                 ]
                               },
                               "message": {

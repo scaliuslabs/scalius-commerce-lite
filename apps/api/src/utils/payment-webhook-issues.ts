@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { webhookEvents } from "@scalius/database/schema";
 import { LOCAL_REFUND_IN_PROGRESS_REASON, REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments";
+import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/order-kernel";
 import { paymentWebhookEventCondition, type WebhookEventStatus } from "./webhook-idempotency";
 
 const PAYMENT_WEBHOOK_ISSUE_STATUSES = ["failed", "manual_reconciliation"] as const satisfies readonly WebhookEventStatus[];
@@ -10,16 +11,20 @@ const MAX_PAYMENT_WEBHOOK_ISSUES_PER_ORDER = 10;
 /**
  * `external_refund`: the provider reports a refund not on the order yet (made
  * in its dashboard); the scheduled reconciliation records it, and it stays
- * listed while it cannot.
+ * listed while it cannot. `shipment_claim`: a provider payment waits, uncounted,
+ * for the order's courier booking to be resolved, and is recorded then.
  */
-export const PAYMENT_WEBHOOK_ISSUE_REASONS = ["manual_reconciliation", "dead_letter", "failed", "external_refund"] as const;
+export const PAYMENT_WEBHOOK_ISSUE_REASONS = ["manual_reconciliation", "dead_letter", "failed", "external_refund", "shipment_claim"] as const;
 export type PaymentWebhookIssueReason = (typeof PAYMENT_WEBHOOK_ISSUE_REASONS)[number];
+
+/** `waiting`: parked for a shipment claim, not failed (reason `shipment_claim`). */
+export const PAYMENT_WEBHOOK_ISSUE_STATES = ["failed", "manual_reconciliation", "waiting"] as const;
 
 export interface PaymentWebhookIssue {
   id: string;
   provider: string;
   eventType: string;
-  status: (typeof PAYMENT_WEBHOOK_ISSUE_STATUSES)[number];
+  status: (typeof PAYMENT_WEBHOOK_ISSUE_STATES)[number];
   reason: PaymentWebhookIssueReason;
   message: string;
   error: string | null;
@@ -60,7 +65,14 @@ export async function listPaymentWebhookIssuesForOrder(
     .where(and(
       eq(webhookEvents.orderId, orderId),
       paymentWebhookEventCondition(),
-      inArray(webhookEvents.status, PAYMENT_WEBHOOK_ISSUE_STATUSES),
+      or(
+        inArray(webhookEvents.status, PAYMENT_WEBHOOK_ISSUE_STATUSES),
+        // A payment waiting for the order's courier booking (parked, uncounted).
+        and(
+          eq(webhookEvents.status, "retrying"),
+          sql`json_extract(${webhookEvents.result}, '$.reason') = ${SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT}`,
+        ),
+      ),
     ))
     .orderBy(desc(webhookEvents.processedAt))
     .limit(MAX_PAYMENT_WEBHOOK_ISSUES_PER_ORDER);
@@ -84,7 +96,9 @@ export function formatPaymentWebhookIssue(row: PaymentWebhookIssueRow): PaymentW
     id: row.id,
     provider: row.provider,
     eventType: row.eventType,
-    status: row.status === "manual_reconciliation" ? "manual_reconciliation" : "failed",
+    status: row.status === "manual_reconciliation"
+      ? "manual_reconciliation"
+      : row.status === "retrying" ? "waiting" : "failed",
     reason: paymentWebhookIssueReason(row, parsed),
     message: buildPaymentWebhookIssueMessage(row, parsed),
     error: parsed.error ?? null,
@@ -119,6 +133,7 @@ function paymentWebhookIssueReason(row: PaymentWebhookIssueRow, result: ParsedWe
   const status = row.status;
   if (status === "manual_reconciliation" && row.eventType === REFUND_OBSERVED_EVENT_TYPE) return "external_refund";
   if (status === "manual_reconciliation") return "manual_reconciliation";
+  if (status === "retrying" && result.reason === SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT) return "shipment_claim";
   if (result.reason === "retries_exhausted") return "dead_letter";
   return "failed";
 }
@@ -132,6 +147,10 @@ function buildPaymentWebhookIssueMessage(row: PaymentWebhookIssueRow, result: Pa
     return result.error
       ? `Payment webhook needs manual reconciliation: ${result.error}`
       : "Payment webhook needs manual reconciliation before this order can be trusted as settled.";
+  }
+
+  if (status === "retrying" && result.reason === SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT) {
+    return "A provider payment waits for this order's courier booking to be resolved; it is recorded automatically once the booking is finished or released.";
   }
 
   if (result.reason === "retries_exhausted") {
