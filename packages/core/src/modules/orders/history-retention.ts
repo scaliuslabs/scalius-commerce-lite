@@ -41,8 +41,14 @@ export const ORDER_HISTORY_RETENTION_DAYS = {
     reviewRequests: 365,
 } as const;
 
-/** Rows of each table one run deletes at most (Paid; Free scales it). */
-export const ORDER_HISTORY_RETENTION_LIMIT = 50;
+/**
+ * Rows of each table one run deletes at most (Paid; Free scales it to 50).
+ * The job runs about 63 times a day on Free, so it deletes about 3,100 rows a
+ * table a day: more than the notifications (the busiest table) of the Free
+ * order ceiling, so history never outgrows retention (scripts/free-plan-budget.test.mjs).
+ * Every delete is one statement of the job's one batch.
+ */
+export const ORDER_HISTORY_RETENTION_LIMIT = 250;
 
 const FINISHED_NOTIFICATION_STATUSES = ["sent", "dead_lettered"];
 const FINISHED_REVIEW_REQUEST_STATUSES = ["queued", "skipped"] as const;
@@ -52,15 +58,16 @@ export interface OrderHistoryRetentionResult {
     receipts: number;
     notifications: number;
     reviewRequests: number;
-    /** The checkout-attempt walk's position (an order `created_at`): pass it back next run. */
+    /** The checkout-attempt walk's position (`<created_at>:<order id>` of the last order passed): pass it back next run. */
     checkoutCursor: string | null;
 }
 
 /**
  * One bounded retention pass, one D1 round trip. Checkout attempts carry no
  * time index of their own: they commit in their order's batch, so the pass
- * walks orders by `created_at` from `checkoutCursor` and deletes the attempts
- * of the orders it passes (by `order_id`).
+ * walks orders by (`created_at`, `id`) from `checkoutCursor` and deletes the
+ * attempts of the orders it passes (by `order_id`); orders sharing a second
+ * are never skipped.
  */
 export async function pruneOrderHistory(
     db: Database,
@@ -68,20 +75,26 @@ export async function pruneOrderHistory(
 ): Promise<OrderHistoryRetentionResult> {
     const limit = Math.max(1, Math.floor(options.limit));
     const now = Math.floor(options.nowSeconds);
-    const after = Number(options.checkoutCursor ?? 0);
-    const cursor = Number.isSafeInteger(after) && after > 0 ? after : 0;
+    const [afterAt, afterId = ""] = (options.checkoutCursor ?? "").split(/:(.*)/s);
+    const parsedAt = Number(afterAt);
+    const cursorAt = Number.isSafeInteger(parsedAt) && parsedAt > 0 ? parsedAt : 0;
     const attemptCutoff = now - ORDER_HISTORY_RETENTION_DAYS.checkoutAttempts * DAY;
     const notificationCutoff = now - ORDER_HISTORY_RETENTION_DAYS.notifications * DAY;
 
-    // The same page twice in one batch (one transaction): read, then its attempts deleted.
-    const pageWhere = and(sql`${orders.createdAt} > ${cursor}`, sql`${orders.createdAt} < ${attemptCutoff}`);
+    // The same page twice in one batch (one transaction): read, then its attempts
+    // deleted. Keyset on (created_at, id): the created_at range drives the index.
+    const pageWhere = and(
+        sql`${orders.createdAt} >= ${cursorAt}`,
+        sql`(${orders.createdAt} > ${cursorAt} OR ${orders.id} > ${afterId})`,
+        sql`${orders.createdAt} < ${attemptCutoff}`,
+    );
 
     const [page, attempts, receipts, notifications, reviewRequests] = await safeBatch(db, [
         db.select({ id: orders.id, createdAt: sql<number>`${orders.createdAt}`.as("created_at") })
-            .from(orders).where(pageWhere).orderBy(asc(orders.createdAt)).limit(limit),
+            .from(orders).where(pageWhere).orderBy(asc(orders.createdAt), asc(orders.id)).limit(limit),
         db.delete(checkoutAttempts)
             .where(inArray(checkoutAttempts.orderId, db.select({ id: orders.id })
-                .from(orders).where(pageWhere).orderBy(asc(orders.createdAt)).limit(limit)))
+                .from(orders).where(pageWhere).orderBy(asc(orders.createdAt), asc(orders.id)).limit(limit)))
             .returning({ id: checkoutAttempts.id }),
         db.delete(orderReceipts)
             .where(inArray(orderReceipts.tokenHash, db.select({ tokenHash: orderReceipts.tokenHash }).from(orderReceipts)
@@ -112,15 +125,7 @@ export async function pruneOrderHistory(
 
     const passed = page as Array<{ id: string; createdAt: number }>;
     const last = passed.at(-1);
-    let nextCursor = options.checkoutCursor ?? null;
-    if (last) {
-        const lastAt = Number(last.createdAt);
-        // A full page may have left orders of its last second for the next
-        // run: start that run inside the second (its deletes are idempotent),
-        // unless the whole page is that second (then move past it).
-        const full = passed.length === limit;
-        nextCursor = String(full && Number(passed[0]!.createdAt) !== lastAt ? lastAt - 1 : lastAt);
-    }
+    const nextCursor = last ? `${Number(last.createdAt)}:${last.id}` : options.checkoutCursor ?? null;
     return {
         checkoutAttempts: (attempts as unknown[]).length,
         receipts: (receipts as unknown[]).length,

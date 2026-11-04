@@ -77,7 +77,7 @@ pnpm free-plan:budget --json out.json # keep the raw report
 - **workerd tier** (`apps/api/src/free-plan-workerd.test.ts`) runs the bundled Worker in workerd, where CPU is wall time minus time waiting on the D1 proxy. Only this tier shows cold route graphs and real hashing cost. The Free password hash and verify must each stay below 5 ms (best of 15 runs).
 - **Sweep tier** (`apps/api/src/sweep-rows-read.test.ts`, about 20 s) runs every maintenance job and the nightly pass on two stores with the same daily volume and 50 or 500 days of history, counting D1's own `rows_read` in Miniflare. A job whose reads grow with the history fails it: the Node tier's estimate sees only `SCAN` steps, not an index range that walks every order.
 
-The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-14, D1 rows written ended a Free store first, at about 270 orders a day (unverified: rerun the command). No Worker encodes images (there is no Images binding), so the transformation allowance is not a limit.
+The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. The model also charges the 13 history rows of each order that retention deletes later. In the 2026-11-03 measurement, D1 rows written end a Free store first, at about 360 orders a day (`DOCUMENTED_FREE_ORDER_CEILING`; 424 without retention's deletes; unverified live). No Worker encodes images (there is no Images binding), so the transformation allowance is not a limit.
 
 ## Catalogue ceiling
 
@@ -124,7 +124,7 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |
 | Image renditions | media rows with `variant_width` NULL (pending) | none: no Worker renders images | an open dashboard tab renders them in the background |
 
-History that only grows is deleted once nothing reads it: the `event_outbox_retention` job also purges Meta CAPI logs past their retention, checkout attempts 30 days after their order, receipt proofs a day after they expire, sent notifications after 180 days and finished review requests after a year, a bounded share a run (`packages/core/src/modules/orders/history-retention.ts`).
+History that only grows is deleted once nothing reads it: the `event_outbox_retention` job also purges Meta CAPI logs past their retention, checkout attempts 30 days after their order, receipt proofs a day after they expire, sent notifications after 180 days and finished review requests after a year, 50 rows a table a run on Free (about 3,100 a day, more than the notifications of the Free order ceiling) and 250 on Paid (`packages/core/src/modules/orders/history-retention.ts`).
 
 Rules:
 
