@@ -737,6 +737,24 @@ export async function sendOrderNotificationEmail(
     options: OrderNotificationOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
     const outcomes: OrderNotificationChannelOutcome[] = [];
+    // The order's facts, read once on first use: the recipient when the caller
+    // passed none, the phone for SMS and WhatsApp, then the message itself.
+    // The store's templates are read only after a target is claimed.
+    const context = options.orderContext ?? readOrderContextOnce(db, {
+        orderId, name, type, data,
+        storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
+    });
+    // A dispatcher that shares the context passes no address: it is the order's own.
+    if (email === undefined && options.orderContext) {
+        try {
+            email = (await context()).contact.email;
+        } catch (error: unknown) {
+            console.error(`[Notifications] Order details for ${type} (order ${orderId}) could not be read: ${compactProviderLogDetail(error)}`);
+            return buildDispatchResult([{ channel: "email", provider: "email", recipientMasked: "unknown", status: "failed", error: "order_details_unavailable", retryable: true }]);
+        }
+    }
+
+    // (Read after the shared context, whose batch already holds the notifications document.)
     // Every buyer notification, including the support-request acknowledgement,
     // defaults to email; the merchant's saved channels override it.
     let enabledChannels = ["email"];
@@ -746,12 +764,6 @@ export async function sendOrderNotificationEmail(
         console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
     }
 
-    // Read lazily, after a target is claimed: an accepted or skipped receipt
-    // never re-reads the order or the store's templates.
-    const context = options.orderContext ?? readOrderContextOnce(db, {
-        orderId, name, type, data,
-        storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
-    });
     const templates = once(async () => (await getNotificationTemplates(db, (await context()).language)).templates);
     const smsMessage = async () => composeOrderSms(await context(), (await templates()).sms[type].body);
 
@@ -1080,7 +1092,7 @@ export async function sendOrderNotificationEmail(
                             template: orderTemplate,
                             orderNumber: (await context()).variables.order_number ?? `#${orderId}`,
                             notificationType: type,
-                            customerName: name,
+                            customerName: (await context()).variables.customer_name || name,
                             customerPhone,
                             data,
                             idempotencyKey,
@@ -1286,12 +1298,19 @@ export interface OrderStaffChannelResult {
 export async function sendOrderStaffNotifications(
     db: Database,
     env: Env,
-    order: OrderNotificationData & { notificationType: OrderNotificationType },
+    order: Omit<OrderNotificationData, "customerName"> & {
+        notificationType: OrderNotificationType;
+        /** The buyer's name for the staff push; without it, the shared order context's (read only by the channel that needs it). */
+        customerName?: string;
+    },
     options: OrderNotificationOptions & {
         /** Staff push needs Platform's API origin; told when it is missing (the push is then not sent). */
         onAdminPushSkipped?: () => void;
     } = {},
 ): Promise<OrderStaffChannelResult[]> {
+    const customerName = async () => order.customerName
+        ?? (options.orderContext ? (await options.orderContext()).variables.customer_name : "")
+        ?? "";
     const settings = await notificationsDocument.read(db);
     const staffChannels = settings.adminChannels[order.notificationType] ?? [];
     await recordStaffAlert(db, { outboxId: options.outboxId, kind: order.notificationType },
@@ -1304,14 +1323,15 @@ export async function sendOrderStaffNotifications(
             options.onAdminPushSkipped?.();
         } else {
             try {
-                results.push({ channel: "admin push", result: await sendOrderNotification(db, order, env, origin, { outboxId: options.outboxId }) });
+                const pushOrder = { id: order.id, notificationType: order.notificationType, customerName: (await customerName()) || "Customer" };
+                results.push({ channel: "admin push", result: await sendOrderNotification(db, pushOrder, env, origin, { outboxId: options.outboxId }) });
             } catch (error: unknown) {
                 results.push({ channel: "admin push", error });
             }
         }
     }
     try {
-        results.push({ channel: "staff email", result: await sendStaffOrderEmails(db, order, options) });
+        results.push({ channel: "staff email", result: await sendStaffOrderEmails(db, { ...order, customerName: order.customerName ?? "" }, options) });
     } catch (error: unknown) {
         results.push({ channel: "staff email", error });
     }

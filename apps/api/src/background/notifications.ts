@@ -69,7 +69,8 @@ async function dispatchOrderNotification(
   input: {
     outboxId?: string;
     orderId: string;
-    context: OrderMessageContext;
+    /** The order's message context, read once by the first channel that needs it. */
+    orderContext: () => Promise<OrderMessageContext>;
     notificationType: OrderNotificationType;
     data?: Record<string, unknown>;
   },
@@ -81,13 +82,13 @@ async function dispatchOrderNotification(
     env: runtimeEnv,
     outboxId: input.outboxId,
     appProviders,
-    orderContext: async () => input.context,
+    orderContext: input.orderContext,
     emailSettings: readEmailSettingsOnce(db, { env: runtimeEnv, encryptionKey, appProviders }),
   };
-  const customerName = input.context.variables.customer_name || "Customer";
+  // The recipient comes from the shared context (undefined: the order's own address).
   const customerNotificationResult = await sendOrderNotificationEmail(
-    input.context.contact.email,
-    customerName,
+    undefined,
+    "Customer",
     input.orderId,
     input.notificationType,
     input.data,
@@ -98,11 +99,11 @@ async function dispatchOrderNotification(
     ? [`customer channels: ${summarizeNotificationFailures(customerNotificationResult.outcomes)}`]
     : [];
 
-  // The staff side: the staff alert recorded once, then staff push and staff emails.
+  // The staff side: the staff alert recorded once, then staff push and staff
+  // emails. A failed order read fails only the channel that needed it.
   try {
     const staff = await sendOrderStaffNotifications(db, env, {
       id: input.orderId,
-      customerName,
       notificationType: input.notificationType,
     }, {
       ...shared,
@@ -286,22 +287,29 @@ async function dispatchClaimedNotification(
     if (!isOrderNotificationType(claim.notificationType)) {
       return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
     }
-    // The order's one read: its facts, contact and the store's identity.
-    const context = await findOrderMessageContext({
+    // The order's one read (its facts, contact and the store's identity),
+    // made by the first channel that needs it.
+    let contextRead: Promise<OrderMessageContext | null> | undefined;
+    const readContext = () => (contextRead ??= findOrderMessageContext({
       orderId: claim.subjectId,
       type: claim.notificationType,
       name: "Customer",
       data: claim.data,
       storefrontUrl: env.STOREFRONT_URL,
-    }, db);
-    if (!context) return { kind: "unsupported", reason: "order_missing" };
+    }, db));
     const failures = await dispatchOrderNotification(db, env, {
       outboxId: claim.outboxId,
       orderId: claim.subjectId,
-      context,
+      orderContext: async () => {
+        const context = await readContext();
+        if (!context) throw new Error("order_missing");
+        return context;
+      },
       notificationType: claim.notificationType,
       data: claim.data,
     });
+    // A deleted order is dead-lettered, whatever its channels made of it.
+    if (contextRead && await contextRead.catch(() => undefined) === null) return { kind: "unsupported", reason: "order_missing" };
     return failures.length > 0 ? { kind: "retry", failures } : { kind: "done" };
   }
 
