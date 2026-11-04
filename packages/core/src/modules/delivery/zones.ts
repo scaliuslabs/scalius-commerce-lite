@@ -133,7 +133,8 @@ export function destinationRegionKeys(destinations: readonly DeliveryDestination
 /**
  * The region rows that can match the destinations, as a JSON text column
  * (`[{ "zoneId", "countryCode", "adminArea", "postalPrefix" }]`): one key seek
- * each (at most 12 a destination), never every region of the country.
+ * each (at most 13 a destination: its country, its admin area as stored and
+ * in upper case, ten postal prefixes), never every region of the country.
  */
 function regionRowsJsonSql(keys: ReadonlyArray<{ c: string; a: string; p: string }>): SQL<string | null> {
     return sql<string | null>`(SELECT '[' || group_concat(json_object('zoneId', destination_region.zone_id, 'countryCode', destination_region.country_code, 'adminArea', destination_region.admin_area, 'postalPrefix', destination_region.postal_prefix), ',') || ']'

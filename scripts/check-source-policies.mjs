@@ -74,7 +74,7 @@ export const policies = [
     rule: "a saved order's money and free-line presentation is defined once, in @scalius/shared/order-money-presentation",
     why: "the dashboard and storefront each kept a copy (order-tax-presentation.ts) and the copies drifted: the receipt showed a free gift at full price while the dashboard and invoice showed it free",
     paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src"],
-    forbid: [/\bfunction\s+(?:resolveSavedOrderMoneySummary|hasSavedOrderLineMoney|resolveSavedOrderLineMoney|isFreeOrderLine)\b/],
+    forbid: [/\b(?:function\s+|(?:const|let|var)\s+)(?:resolveSavedOrderMoneySummary|hasSavedOrderLineMoney|resolveSavedOrderLineMoney|isFreeOrderLine)\b/],
     sample: "export function resolveSavedOrderMoneySummary(order) { return null; }",
   },
   {

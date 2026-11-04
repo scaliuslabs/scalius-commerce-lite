@@ -419,6 +419,8 @@ export async function writeSettingsDocuments(
       : [];
     if (results && written.every(Boolean)) {
       await Promise.all(prepared.map((write) => write.committed()));
+      // A read through the handle while the batch ran may have kept the old row.
+      for (const write of prepared) forgetScopedRead(db, documentReadKey(write.key));
       return prepared.map((write, index) => ({ value: write.value, revision: written[index]!.revision }));
     }
 
