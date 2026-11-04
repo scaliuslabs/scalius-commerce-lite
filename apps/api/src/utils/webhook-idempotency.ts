@@ -1,9 +1,9 @@
 import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
-import { orders, webhookEvents } from "@scalius/database/schema";
+import { webhookEvents } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
 import { duePaymentCommandProbes, onlinePaymentMethodCondition } from "@scalius/core/modules/payments";
-import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/order-kernel";
+import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, shipmentClaimLocksOrderSql } from "@scalius/core/modules/order-kernel";
 
 /**
  * `retrying`: a payment event whose last attempt failed, due again at
@@ -302,9 +302,11 @@ export const PAYMENT_EVENT_PARKED_RECHECK_SECONDS = 60 * 60;
  * Records an attempt refused only because a shipment claim locks the order
  * (a booking in flight, or a dead one waiting for the claim sweep or staff):
  * the event waits as `retrying` without spending the attempt, so it can never
- * run out of retries while money it carries is captured. Whatever ends the
- * claim makes it due at once (`requeueShipmentClaimParkedPaymentEvents`); it
- * also looks again hourly. Due at once if the claim already went.
+ * run out of retries while money it carries is captured. While the kernel's
+ * lock holds, a parked event is not due at all (`duePaymentEventBranches`):
+ * it takes no drain slot from a real retry. Whatever ends the claim makes it
+ * due at once (`requeueShipmentClaimParkedPaymentEvents`); it also looks
+ * again hourly, and is due at once if the lock is already gone.
  */
 export async function parkPaymentEventForShipmentClaim(
   db: Database,
@@ -318,22 +320,30 @@ export async function parkPaymentEventForShipmentClaim(
     .set({
       status: "retrying",
       attempts: counted,
-      // Qualified by hand: an update renders its own columns unqualified.
-      nextAttemptAt: sql`CASE WHEN EXISTS (
-        SELECT 1 FROM ${orders} AS parked_order
-        WHERE parked_order.id = ${sql.raw(`"webhook_events"."order_id"`)} AND parked_order.shipment_claim_id IS NOT NULL
-      ) THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
+      nextAttemptAt: sql`CASE WHEN ${parkedEventOrderLocked()} THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
       result: JSON.stringify({ reason: SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, attempts: counted, error }),
       processedAt: sql`unixepoch()`,
     })
     .where(eq(webhookEvents.id, id));
 }
 
+/** The event's order is locked by a shipment claim, by the kernel's own guard. */
+function parkedEventOrderLocked() {
+  // Qualified by hand: an update renders its own columns unqualified.
+  return shipmentClaimLocksOrderSql(sql.raw(`"webhook_events"."order_id"`));
+}
+
+/** A parked event whose order a shipment claim still locks: never due until the lock ends. */
+function stillParked() {
+  return sql`(COALESCE(json_extract(${sql.raw(`"webhook_events"."result"`)}, '$.reason'), '') = ${SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT}
+    AND ${parkedEventOrderLocked()})`;
+}
+
 /** Payment events due again, or whose attempt died with its invocation (lease expired). */
-/** The due states, each one index range: a retry past its time, or an attempt whose invocation died. */
+/** The due states, each one index range: a retry past its time (not one still parked), or an attempt whose invocation died. */
 function duePaymentEventBranches(leaseSeconds = DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS) {
   return [
-    and(eq(webhookEvents.status, "retrying"), lte(webhookEvents.nextAttemptAt, sql`unixepoch()`))!,
+    and(eq(webhookEvents.status, "retrying"), lte(webhookEvents.nextAttemptAt, sql`unixepoch()`), sql`NOT ${stillParked()}`)!,
     and(eq(webhookEvents.status, "processing"), lte(webhookEvents.processedAt, sql`unixepoch() - ${leaseSeconds}`))!,
   ];
 }

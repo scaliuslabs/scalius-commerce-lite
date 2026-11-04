@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { orders, webhookEvents } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { ConflictError } from "@scalius/core/errors";
@@ -97,6 +97,15 @@ export function noActiveShipmentClaimCondition() {
             )`,
         ),
     );
+}
+
+/**
+ * Whether a shipment claim locks the order `orderId` names, for a statement
+ * on another table: `noActiveShipmentClaimCondition`, negated, over that
+ * order's row (its primary key), so it answers exactly as the guard does.
+ */
+export function shipmentClaimLocksOrderSql(orderId: SQL) {
+    return sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${sql.raw(`"orders"."id"`)} = ${orderId} AND NOT (${noActiveShipmentClaimCondition()}))`;
 }
 
 /**
