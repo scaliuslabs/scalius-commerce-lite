@@ -142,6 +142,11 @@ export function useOrderActions(
             toast.success(skipped > 0 ? `${done} · ${t("bulkSkipped", { count: skipped })}` : done);
             return;
           }
+          // The result is said as a toast too: how many went through and how many were refused.
+          const refused = t("bulkRefused", { count: result.failures.length });
+          toast.warning(result.succeeded.length > 0
+            ? `${t(pluralKey(`bulkDone.${action}`, result.succeeded.length), { count: result.succeeded.length })} · ${refused}`
+            : refused);
           // Failed orders stay selected (and in the dialog) so the merchant can look at them or retry.
           const failed = new Set(result.failures.map((failure) => failure.orderId));
           selection.current.deselect(result.succeeded);

@@ -177,6 +177,7 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
   "/api/v1/admin/abandoned-checkouts/*": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
     DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
 };

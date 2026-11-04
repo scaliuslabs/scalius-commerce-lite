@@ -48,6 +48,11 @@ export const orderLineGiftCardExtraSchema = z.object({
   initialAmountMinor: z.number().int(),
   currencyCode: z.string(),
   sentTo: z.string().nullable(),
+  /** Staff reads only: what the card holds now, after spending and any refund that took value back. */
+  balance: z.number().optional(),
+  balanceMinor: z.number().int().optional(),
+  /** Staff reads only: the card is disabled (a refund took its whole balance) and can't be spent. */
+  disabled: z.boolean().optional(),
 }).openapi("OrderLineGiftCardExtra");
 
 export const orderLineWarrantyExtraSchema = z.object({
@@ -137,6 +142,7 @@ export async function composeOrderLineExtras(
     lineExtras(composed, orderItemId).giftCards = cards.map((card) => ({
       ...card,
       initialAmount: fromMinor(card.initialAmountMinor, input.currencyDecimalPlaces),
+      ...(card.balanceMinor === undefined ? {} : { balance: fromMinor(card.balanceMinor, input.currencyDecimalPlaces) }),
     }));
   }
   for (const [orderItemId, warranties] of await listLineWarranties(db, lines)) {

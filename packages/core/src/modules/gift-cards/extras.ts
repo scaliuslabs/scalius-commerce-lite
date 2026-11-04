@@ -7,8 +7,9 @@ import { maskGiftCardContact } from "./mask";
 
 /**
  * Gift cards each order line issued, keyed by order item id (`extras.giftCards`).
- * Never a code: last 4, value and the masked delivery contact only. The caller
- * has already proven access to the order.
+ * Never a code: last 4, value and the masked delivery contact only, plus (staff
+ * only) the balance and whether the card is disabled. The caller has already
+ * proven access to the order.
  */
 export async function listLineIssuedCards(
     db: Database,
@@ -25,6 +26,8 @@ export async function listLineIssuedCards(
             currencyCode: giftCards.currencyCode,
             recipientEmail: giftCards.recipientEmail,
             recipientPhone: giftCards.recipientPhone,
+            balanceMinor: giftCards.balanceMinor,
+            status: giftCards.status,
         })
             .from(giftCards)
             .where(and(
@@ -47,6 +50,10 @@ export async function listLineIssuedCards(
                     : row.recipientPhone
                         ? maskGiftCardContact("phone", row.recipientPhone)
                         : null,
+                // Staff see what the card holds now; a buyer's view of a card they gave stays the issued value.
+                ...(input.audience === "staff"
+                    ? { balanceMinor: row.balanceMinor, disabled: row.status === "disabled" }
+                    : {}),
             });
             byItem.set(row.orderItemId, cards);
         }
