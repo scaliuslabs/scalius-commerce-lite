@@ -25,6 +25,8 @@ import {
   validateTransition,
 } from "../order-kernel";
 import { sql, eq, and } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
+import { safeBatch } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
   assertOrderNotOnHold,
@@ -37,6 +39,7 @@ import {
 import {
     clearShipmentClaim,
     findShipmentByRequestKey,
+    parseShipmentMetadata,
     SENDABLE_ORDER_STATUSES,
 } from "./shared";
 import { recordCourierBookingFulfilment, recordOrderFulfilment } from "./ledger";
@@ -62,13 +65,17 @@ async function holdShipmentClaimForReconciliation(db: Database, orderId: string,
  * Settles a claim whose lease ran out: an attempt that left no row, or a
  * failed or cancelled one, releases the order; anything else (a `creating`
  * row whose invocation died, or a booked row the order never caught up with)
- * becomes a reconciliation the dashboard resolves, held without expiry.
+ * becomes a reconciliation the dashboard resolves, held without expiry. The
+ * reconciliation and the hold are written only while the order still holds
+ * this claim and the row still shows the status read here, so a finisher
+ * that lost a race to another never re-marks a shipment the other finished
+ * (`changed`: read the order again).
  */
 export async function resolveExpiredShipmentClaim(
     db: Database,
     orderId: string,
     claimId: string,
-): Promise<{ blocked: true; result: Record<string, unknown> } | { blocked: false }> {
+): Promise<{ blocked: true; changed?: true; result: Record<string, unknown> } | { blocked: false }> {
     const shipment = await db
         .select({
             id: deliveryShipments.id,
@@ -86,30 +93,50 @@ export async function resolveExpiredShipmentClaim(
         return { blocked: false };
     }
 
+    const stillClaimed = sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.shipmentClaimId} = ${claimId})`;
+    const statements: BatchItem<"sqlite">[] = [];
     if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED) {
         const outcomeUnknown = shipment.status === "creating" && !shipment.externalId && !shipment.trackingId;
-        await markShipmentReconciliationRequired(
-            db,
-            claimId,
-            outcomeUnknown ? PROVIDER_OUTCOME_UNKNOWN : "expired_order_shipment_claim",
-            outcomeUnknown ? undefined : {
-                externalId: shipment.externalId ?? undefined,
-                trackingId: shipment.trackingId ?? undefined,
-                status: shipment.status,
+        const reason = outcomeUnknown ? PROVIDER_OUTCOME_UNKNOWN : "expired_order_shipment_claim";
+        const metadata = {
+            ...parseShipmentMetadata(shipment.metadata),
+            reconciliation: {
+                required: true,
+                reason,
+                ...(outcomeUnknown ? {} : { providerStatus: shipment.status }),
+                detectedAt: new Date().toISOString(),
             },
-        );
+        };
+        statements.push(db.update(deliveryShipments).set({
+            status: ShipmentStatus.RECONCILE_REQUIRED,
+            rawStatus: reason,
+            metadata: JSON.stringify(metadata),
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(deliveryShipments.id, claimId),
+            eq(deliveryShipments.status, shipment.status),
+            stillClaimed,
+        )).returning({ id: deliveryShipments.id }) as BatchItem<"sqlite">);
     }
-    await holdShipmentClaimForReconciliation(db, orderId, claimId);
-    return {
-        blocked: true,
-        result: {
-            orderId,
-            success: false,
-            reconciliationRequired: true,
-            shipmentId: claimId,
-            error: "Previous shipment creation attempt requires reconciliation before retry.",
-        },
+    statements.push(db.update(orders).set({
+        shipmentClaimExpiresAt: null,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(orders.id, orderId),
+        eq(orders.shipmentClaimId, claimId),
+        sql`EXISTS (SELECT 1 FROM ${deliveryShipments} WHERE ${deliveryShipments.id} = ${claimId} AND ${deliveryShipments.status} = ${ShipmentStatus.RECONCILE_REQUIRED})`,
+    )).returning({ id: orders.id }) as BatchItem<"sqlite">);
+    const results = await safeBatch(db, statements) as Array<{ id: string }[]>;
+    const result = {
+        orderId,
+        success: false,
+        reconciliationRequired: true,
+        shipmentId: claimId,
+        error: "Previous shipment creation attempt requires reconciliation before retry.",
     };
+    // Another finisher moved the order or the row first: nothing was written here.
+    if (results.some((rows) => !rows || rows.length === 0)) return { blocked: true, changed: true, result };
+    return { blocked: true, result };
 }
 
 export async function bulkShipOrders(

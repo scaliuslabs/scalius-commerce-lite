@@ -219,24 +219,26 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
 
   const { tracking } = verification;
   // The push proves the booking: an order still claimed by it (a booking whose
-  // invocation died) is finished first. A booking still finishing, or one held
-  // for staff, is never written over: the courier sends the push again.
+  // invocation died) is finished first, in this invocation, and the courier
+  // is asked to resend: its status then applies in a fresh invocation (one
+  // invocation could not afford both on Free). A booking still finishing, or
+  // one held for staff, is never written over.
   const settled = await settleShipmentClaimForCourierPush(db, shipment.id);
   if (settled.state !== "ready") return retryLater(c);
-  if (settled.finalized?.orderStatusChanged) {
-    await sendOrderNotificationsForStatus({
-      db,
-      send: notificationSender(c),
-      orderIds: [settled.finalized.orderId],
-      newStatus: settled.finalized.orderStatus,
-      trackingByOrderId: { [settled.finalized.orderId]: settled.finalized.trackingId },
-      dedupeKeyByOrderId: { [settled.finalized.orderId]: `shipment:${shipment.id}:order_${settled.finalized.orderStatus}` },
-      source: "courier-webhook",
-    });
+  if (settled.finalized) {
+    if (settled.finalized.orderStatusChanged) {
+      await sendOrderNotificationsForStatus({
+        db,
+        send: notificationSender(c),
+        orderIds: [settled.finalized.orderId],
+        newStatus: settled.finalized.orderStatus,
+        trackingByOrderId: { [settled.finalized.orderId]: settled.finalized.trackingId },
+        dedupeKeyByOrderId: { [settled.finalized.orderId]: `shipment:${shipment.id}:order_${settled.finalized.orderStatus}` },
+        source: "courier-webhook",
+      });
+    }
+    return retryLater(c);
   }
-  const current = settled.finalized
-    ? await db.select().from(deliveryShipments).where(eq(deliveryShipments.id, shipment.id)).get() ?? shipment
-    : shipment;
   // The courier's own event id when it sends one, else the state it reports at its time.
   const sourceEventId = verification.eventId
     ? `${externalId}:${verification.eventId}`
@@ -262,7 +264,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       lastChecked: new Date(),
       updatedAt: new Date(),
       metadata: JSON.stringify({
-        ...parseMetadata(current.metadata),
+        ...parseMetadata(shipment.metadata),
         ...(tracking.details ?? {}),
         lastWebhookAt: new Date().toISOString(),
       }),
@@ -285,7 +287,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       db,
       send: notificationSender(c),
       statusChange: statusResult?.statusChange ?? null,
-      trackingId: current.trackingId,
+      trackingId: shipment.trackingId,
       source: "courier-webhook",
     });
 
@@ -293,7 +295,7 @@ async function handleCourierWebhook(c: Context<{ Bindings: Env }>, courierId: st
       externalId,
       status: tracking.status,
       rawStatus: tracking.rawStatus,
-      previousStatus: current.status,
+      previousStatus: shipment.status,
     });
     return accepted(c, reply, { received: true, status: tracking.status });
   } catch (error) {

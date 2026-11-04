@@ -44,8 +44,8 @@ export interface ExpiryResult {
   availabilityTransitionVariantIds: string[];
   /** Any errors encountered (non-fatal) */
   errors: string[];
-  /** The first reservation time (unix seconds) of the last group read, for a cursor. */
-  lastCreatedAt: number | null;
+  /** The last group read (its first reservation time and group key), for a cursor. */
+  last: { at: number; key: string } | null;
 }
 
 export interface ExpirySweepOptions {
@@ -57,6 +57,8 @@ export interface ExpirySweepOptions {
    */
   createdFrom?: number;
   createdBefore?: number;
+  /** Only groups ordered after this one (first reservation time, then group key). */
+  after?: { at: number; key: string | null } | null;
 }
 
 type ReservationMovementType = "reserved" | "preorder_reserved";
@@ -200,7 +202,7 @@ export async function releaseExpiredReservations(
     releasedVariantIds: [],
     availabilityTransitionVariantIds: [],
     errors: [],
-    lastCreatedAt: null,
+    last: null,
   };
 
   // Calculate the cutoff timestamp
@@ -235,6 +237,9 @@ export async function releaseExpiredReservations(
         )
     ), 0)
   )`;
+  // One group's identity, for a cursor that resumes inside a second of reservations.
+  const groupKeySql = sql<string>`(${inventoryMovements.variantId} || '|' || ${inventoryMovements.orderId} || '|' || ${inventoryMovements.type}
+    || '|' || COALESCE(${inventoryMovements.pool}, '') || '|' || COALESCE(CAST(${inventoryMovements.reservationGeneration} AS TEXT), ''))`;
   const expiredReservationCandidates = await db
     .select({
       variantId: inventoryMovements.variantId,
@@ -243,6 +248,7 @@ export async function releaseExpiredReservations(
       pool: inventoryMovements.pool,
       reservationGeneration: inventoryMovements.reservationGeneration,
       firstCreatedAt: sql<number>`MIN(${inventoryMovements.createdAt})`,
+      groupKey: groupKeySql,
     })
     .from(inventoryMovements)
     .where(
@@ -268,16 +274,22 @@ export async function releaseExpiredReservations(
       inventoryMovements.pool,
       inventoryMovements.reservationGeneration,
     )
-    .having(sql`${outstandingQuantitySql} > 0`)
-    .orderBy(sql`MIN(${inventoryMovements.createdAt})`)
+    .having(and(
+      sql`${outstandingQuantitySql} > 0`,
+      options.after?.key != null
+        ? sql`(MIN(${inventoryMovements.createdAt}) > ${options.after.at}
+            OR (MIN(${inventoryMovements.createdAt}) = ${options.after.at} AND ${groupKeySql} > ${options.after.key}))`
+        : undefined,
+    ))
+    .orderBy(sql`MIN(${inventoryMovements.createdAt})`, groupKeySql)
     .limit(limit + 1)
     .all();
 
   const expiredReservations = expiredReservationCandidates.slice(0, limit);
   result.found = expiredReservations.length;
   result.hasMore = expiredReservationCandidates.length > limit;
-  const lastRead = expiredReservations.at(-1)?.firstCreatedAt;
-  result.lastCreatedAt = lastRead === undefined || lastRead === null ? null : Number(lastRead);
+  const lastRead = expiredReservations.at(-1);
+  result.last = lastRead ? { at: Number(lastRead.firstCreatedAt), key: String(lastRead.groupKey) } : null;
 
   if (expiredReservations.length === 0) {
     return result;
@@ -463,20 +475,24 @@ export async function releaseExpiredReservations(
   return result;
 }
 
+/** Where the nightly history pass resumes: a reservation time, and the last group read in it. */
+export type ExpiryHistoryCursor = { at: number; key: string | null };
+
 /**
  * The nightly history pass: reservations older than the routine window, a
- * bounded span at a time from the persisted cursor (`after`, unix seconds),
- * each night starting at the first reservation at or after it. The cursor
- * moves past what it read, failures included, and wraps to the start (null)
- * once it reaches the routine window.
+ * bounded span at a time from the persisted cursor, each night starting at
+ * the first reservation at or after it. The cursor moves past the last group
+ * it read (by its first reservation time, then its group key, so a page that
+ * ends inside one second resumes there), failures included, and wraps to the
+ * start (null) once it reaches the routine window.
  */
 export async function sweepExpiredReservationHistory(
   db: Database,
-  options: { after: number | null; limit?: number; spanSeconds?: number; maxAgeMinutes?: number },
-): Promise<{ result: ExpiryResult | null; next: number | null }> {
+  options: { after: ExpiryHistoryCursor | null; limit?: number; spanSeconds?: number; maxAgeMinutes?: number },
+): Promise<{ result: ExpiryResult | null; next: ExpiryHistoryCursor | null }> {
   const maxAgeMinutes = options.maxAgeMinutes ?? 30;
   const windowStart = Math.floor(Date.now() / 1000) - maxAgeMinutes * 60 - EXPIRY_SWEEP_WINDOW_SECONDS;
-  const after = new Date((options.after ?? 0) * 1000);
+  const after = new Date((options.after?.at ?? 0) * 1000);
   // The first reservation of each type at or after the cursor: one index row each.
   const firsts = await Promise.all((["reserved", "preorder_reserved"] as const).map((type) =>
     db.select({ createdAt: inventoryMovements.createdAt })
@@ -489,7 +505,12 @@ export async function sweepExpiredReservationHistory(
   const from = starts.length > 0 ? Math.min(...starts) : null;
   if (from === null || from >= windowStart) return { result: null, next: null };
   const before = Math.min(from + (options.spanSeconds ?? EXPIRY_HISTORY_SPAN_SECONDS), windowStart);
-  const result = await releaseExpiredReservations(db, maxAgeMinutes, { limit: options.limit, createdFrom: from, createdBefore: before });
-  const next = result.hasMore && result.lastCreatedAt !== null ? result.lastCreatedAt + 1 : before;
-  return { result, next: next >= windowStart ? null : next };
+  const result = await releaseExpiredReservations(db, maxAgeMinutes, {
+    limit: options.limit,
+    createdFrom: from,
+    createdBefore: before,
+    after: options.after?.key != null && options.after.at === from ? options.after : null,
+  });
+  const next: ExpiryHistoryCursor = result.hasMore && result.last ? result.last : { at: before, key: null };
+  return { result, next: next.at >= windowStart ? null : next };
 }

@@ -5,6 +5,7 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
     courierFor,
+    deleteDeliveryProvider,
     getDeliveryProviders,
     getDeliveryProvider,
     getDeliveryProviderReadiness,
@@ -13,8 +14,6 @@ import {
     type CourierProvidersSource,
 } from "@scalius/core/modules/delivery";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { deliveryProviders } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { requestCourierProviders } from "../../../plugins/providers/courier";
@@ -324,7 +323,8 @@ const deleteProviderRoute = createRoute({
 app.openapi(deleteProviderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
+    // A provider whose shipment is still being booked or reconciled stays (409).
+    await deleteDeliveryProvider(db, id);
 
     return ok(c, {});
 });

@@ -102,6 +102,8 @@ export interface PlanLimits {
     readonly digitalUploadsPerState: number;
     /** Each unattached image requires a guarded row delete. */
     readonly orphanAttachmentsPerRun: number;
+    /** Dead courier bookings one run finishes (each ships its order: about 28 D1 queries). */
+    readonly bookedClaimsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
     readonly limitScale: number;
     /**
@@ -237,6 +239,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 2,
       digitalUploadsPerState: 6,
       orphanAttachmentsPerRun: 10,
+      bookedClaimsPerRun: 1,
       limitScale: 0.2,
       retentionRowsPerDay: 6_000,
     }),
@@ -285,6 +288,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 25,
       digitalUploadsPerState: 25,
       orphanAttachmentsPerRun: 50,
+      bookedClaimsPerRun: 10,
       limitScale: 1,
       retentionRowsPerDay: Number.POSITIVE_INFINITY,
     }),

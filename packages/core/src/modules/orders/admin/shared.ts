@@ -308,7 +308,7 @@ export function buildShipmentRecoverySummary(
             severity: "danger",
             activeLock: true,
             label: "Courier confirmation needed",
-            message: "The courier may have accepted this shipment, but Scalius could not confirm the result. Check the courier portal or contact the courier with this order number before attempting another booking.",
+            message: "The courier may have accepted this shipment, but Scalius could not confirm the result. Check the courier portal or contact the courier with this order ID before attempting another booking.",
             shipmentId,
             status,
             providerType,

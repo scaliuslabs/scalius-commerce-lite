@@ -440,7 +440,12 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
       // A cursor walks the expired claims, so one that keeps failing never holds the others back.
       const claimCursor = await readMaintenanceCursor(db, "shipment-claims");
       const claims = await timed("expired_shipment_claim_sweep", () =>
-        sweepExpiredShipmentClaims(db, { limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT), afterOrderId: claimCursor.value.orders }),
+        sweepExpiredShipmentClaims(db, {
+          limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT),
+          afterOrderId: claimCursor.value.orders,
+          // Finishing a booking ships its order: Free affords one a run.
+          maxFinalized: planLimits().maintenance.bookedClaimsPerRun,
+        }),
       );
       await claimCursor.save({ orders: claims.lastOrderId });
       for (const booked of claims.finalized) {
@@ -944,11 +949,11 @@ async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<
   const historyCursor = await readMaintenanceCursor(db, "inventory-expiry-history");
   const history = await timed("inventory_expiry_history_pass", () =>
     sweepExpiredReservationHistory(db, {
-      after: historyCursor.value.after ? Number(historyCursor.value.after) : null,
+      after: historyCursor.value.after ? { at: Number(historyCursor.value.after), key: historyCursor.value.afterKey ?? null } : null,
       limit: planLimits().maintenance.inventoryExpiryPerRun,
     }),
   );
-  await historyCursor.save({ after: history.next === null ? null : String(history.next) });
+  await historyCursor.save(history.next === null ? {} : { after: String(history.next.at), afterKey: history.next.key });
   if (history.result && history.result.found > 0) {
     console.log(
       `[scheduled] Inventory expiry history pass: found=${history.result.found}, released=${history.result.released}, ` +
