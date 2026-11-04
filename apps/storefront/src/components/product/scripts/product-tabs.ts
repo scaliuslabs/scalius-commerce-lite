@@ -112,6 +112,12 @@ function isRtl(): boolean {
 function updateScrollUI(): void {
   if (!elements?.nav || !elements.fadeLeft || !elements.fadeRight) return;
 
+  // The hint pair sits after the strip and shows only when the tabs overflow the rail. Tabs start at
+  // the strip's start, so showing it shortens the strip from its end and moves no tab. Measured against
+  // the rail, not the strip, so showing the pair cannot flip the answer.
+  const rail = elements.nav.closest<HTMLElement>("[data-tab-rail]");
+  if (rail) rail.toggleAttribute("data-overflow", elements.nav.scrollWidth > rail.clientWidth + 1);
+
   const { scrollLeft, scrollWidth, clientWidth } = elements.nav;
   const max = Math.max(0, scrollWidth - clientWidth);
   const position = Math.min(max, Math.max(0, isRtl() ? -scrollLeft : scrollLeft));
