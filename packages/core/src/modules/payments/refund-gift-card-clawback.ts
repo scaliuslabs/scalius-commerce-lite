@@ -20,10 +20,11 @@
 // gives back, once and only to the cards it took from, what the money that
 // actually went back no longer requires, in the batch that ends the last
 // attempt.
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { and, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderItems, orderPayments, orderRefundLines, orderRefunds, orders, refundAttempts } from "@scalius/database/schema";
 import { buildGiftCardTransactionInsertOnce, newGiftCardTransactionId } from "../gift-cards";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 /** An order's gift-card line: its units, each card's value, and the units refunds already named. */
 export interface GiftCardPurchaseLine {
@@ -238,7 +239,8 @@ const TERMINAL_ATTEMPT_STATUSES: ReadonlySet<string> = new Set(["refunded", "fai
 
 /** The SQL a batch guard holds for an order that bought cards (a value bound, not an outer column). */
 export function orderHasPurchasedGiftCardsSql(orderId: string) {
-    return sql<number>`EXISTS (SELECT 1 FROM ${giftCards} WHERE ${giftCards.sourceOrderId} = ${orderId} AND ${giftCards.source} = 'purchase')`;
+    // A gift-card line, issued or not: units still to issue matter to the bound too.
+    return sql<number>`EXISTS (SELECT 1 FROM ${orderItems} AS oi WHERE oi.order_id = ${orderId} AND oi.fulfillment_type = 'gift_card')`;
 }
 
 export interface GiftCardClawbackSettlement {
@@ -258,12 +260,15 @@ export interface GiftCardClawbackSettlement {
  * some of its attempts (`outcomes`). Once every attempt has ended it runs once,
  * and keeps this simple:
  *
- * - a refund the claim took from only gives back: in total what it took less
- *   what the money that actually went back still requires (the bound, over
- *   the cards as they were before the take), and each card at most what was
- *   taken from it, never anything to or from a card the claim didn't touch;
- * - a refund with no claim (recorded from the provider, its money already
- *   gone) takes what the bound requires, once.
+ * - a refund the claim took from only gives back, as far as the bound allows
+ *   for the money that actually went back (a unit of balance counts only up
+ *   to the card's issued value, as the claim counts it), each card at most
+ *   what was taken from it, never anything to or from a card the claim
+ *   didn't touch;
+ * - a refund recorded from the provider (no claim, its money already gone)
+ *   takes what the bound requires, once; any other refund never takes;
+ * - when the bound is still over, units not issued yet are named on the
+ *   refund's record, so the handover never hands them over.
  *
  * A named unit is no different: if only part of the money went back, its
  * card gets the part that never went back. Reads only rows of this order.
@@ -284,6 +289,7 @@ export async function buildGiftCardClawbackSettlement(
             amountMinor: refundAttempts.amountMinor,
             refundPaymentId: refundAttempts.refundPaymentId,
             allocationIndex: refundAttempts.allocationIndex,
+            attemptKey: refundAttempts.attemptKey,
         }).from(refundAttempts).where(eq(refundAttempts.refundGroupId, input.refundGroupId)),
         db.select({
             id: orderPayments.id,
@@ -301,22 +307,24 @@ export async function buildGiftCardClawbackSettlement(
             eq(giftCardTransactions.orderId, input.orderId),
             eq(giftCardTransactions.kind, "adjust"),
         )),
-        db.select({ orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
+        db.select({ id: orderRefundLines.id, orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
             .from(orderRefundLines).where(eq(orderRefundLines.refundId, input.refundGroupId)),
         db.select({ paymentStatus: orders.paymentStatus, status: orders.status }).from(orders).where(eq(orders.id, input.orderId)),
     ]);
     const guard = attemptStatusesGuard(input.refundGroupId, attempts);
     const none = { guard, statements: [] };
     const order = orderRows[0];
-    if (cards.length === 0 || attempts.length === 0 || !order) return none;
+    if ((cards.length === 0 && items.length === 0) || attempts.length === 0 || !order) return none;
     const after = attempts.map((attempt) => ({ ...attempt, status: input.outcomes.get(attempt.id) ?? attempt.status }));
     // Money may still go back: the batch that ends the last open attempt settles.
     if (after.some((attempt) => !TERMINAL_ATTEMPT_STATUSES.has(attempt.status))) return none;
     const first = [...after].sort((left, right) => left.allocationIndex - right.allocationIndex)[0]!;
     const isOwn = (row: { idempotencyKey: string; giftCardId: string }, key: (attempt: string, card: string) => string) =>
         row.idempotencyKey === key(first.id, row.giftCardId);
+    const settleLinePrefix = giftCardSettleLineId(input.refundGroupId, "");
     // Settled once: a second run or a retry writes nothing.
     if (adjusts.some((row) => isOwn(row, giftCardClawbackReleaseKey) || isOwn(row, giftCardClawbackSettleKey))) return none;
+    if (groupLines.some((line) => line.id.startsWith(settleLinePrefix))) return none;
     const claimTakes = new Map<string, { takenMinor: number; emptied: boolean }>();
     for (const row of adjusts) {
         if (!isOwn(row, giftCardClawbackKey)) continue;
@@ -340,79 +348,209 @@ export async function buildGiftCardClawbackSettlement(
         cards,
         spent,
     );
-    const closesOrder = !giftCardHandoverPending(order, refundedBefore + refundedMinor >= received);
+    const handoverPending = giftCardHandoverPending(order, refundedBefore + refundedMinor >= received);
     const actor = input.actor ?? { type: "system" as const, id: null };
 
-    if (claimTakes.size === 0) {
-        // No claim: the money is already gone, so take what the bound requires (as far as it reaches).
+    // Everything below works on the bound as it stands now (cards after the
+    // claim's takes): slack = received − (refunded + kept + still to issue).
+    const balance = new Map(state.cards.map((card) => [card.giftCardId, card.balanceMinor]));
+    const kept = (card: PurchasedGiftCard) => Math.min(card.initialAmountMinor, Math.max(0, balance.get(card.giftCardId) ?? 0) + card.spentMinor);
+    const unissued = new Map(state.lines.map((line) => {
+        const issued = state.cards.filter((card) => card.orderItemId === line.orderItemId).length;
+        return [line.orderItemId, handoverPending ? Math.max(0, line.quantity - issued - line.refundedQuantity) : 0] as const;
+    }));
+    const stillToIssue = () => state.lines.reduce((sum, line) => sum + (unissued.get(line.orderItemId) ?? 0) * line.unitValueMinor, 0);
+    const slack = () => received - (refundedBefore + refundedMinor + state.cards.reduce((sum, card) => sum + kept(card), 0) + stillToIssue());
+    const statements: unknown[] = [];
+
+    if (claimTakes.size > 0) {
+        // Give back only, each card at most its own take, as far as the bound
+        // allows: a unit of balance raises kept value only up to the issued
+        // value (a goodwill top-up the claim took stays taken while it must).
+        const byTake = [...claimTakes.entries()].sort(([leftId, left], [rightId, right]) =>
+            right.takenMinor - left.takenMinor || (leftId < rightId ? -1 : leftId > rightId ? 1 : 0));
+        for (const [giftCardId, take] of byTake) {
+            const room = slack();
+            if (room <= 0) break;
+            const card = state.cards.find((candidate) => candidate.giftCardId === giftCardId);
+            if (!card) continue;
+            const headroom = Math.max(0, card.initialAmountMinor - (balance.get(giftCardId) ?? 0) - card.spentMinor);
+            const amountMinor = Math.min(take.takenMinor, headroom) <= room ? take.takenMinor : room;
+            if (amountMinor <= 0) continue;
+            balance.set(giftCardId, (balance.get(giftCardId) ?? 0) + amountMinor);
+            const id = newGiftCardTransactionId();
+            statements.push(buildGiftCardTransactionInsertOnce(db, {
+                id,
+                giftCardId,
+                kind: "adjust",
+                amountMinor,
+                idempotencyKey: giftCardClawbackReleaseKey(first.id, giftCardId),
+                actor,
+                orderId: input.orderId,
+                refundAttemptId: first.id,
+                reason: GIFT_CARD_CLAWBACK_RELEASE_REASON,
+            }));
+            // The take emptied and disabled it: given value back by this very row, it is the buyer's to spend again.
+            if (take.emptied) {
+                statements.push(db.update(giftCards).set({
+                    status: "active",
+                    version: sql`${giftCards.version} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                }).where(and(
+                    eq(giftCards.id, giftCardId),
+                    eq(giftCards.status, "disabled"),
+                    sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} WHERE ${giftCardTransactions.id} = ${id})`,
+                )));
+            }
+        }
+    } else if (after.every((attempt) => attempt.attemptKey.startsWith(EXTERNAL_ATTEMPT_KEY_PREFIX)) && slack() < 0) {
+        // A refund recorded from the provider (no claim; its money is already
+        // gone): take what the bound requires, as far as the cards reach.
         const plan = planGiftCardClawback({
-            state, refundLines: [], receivedMinor: received, refundedBeforeMinor: refundedBefore, refundMinor: refundedMinor, closesOrder,
+            state, refundLines: [], receivedMinor: received, refundedBeforeMinor: refundedBefore, refundMinor: refundedMinor, closesOrder: !handoverPending,
         });
-        return {
-            guard: settledOnceGuard(guard, input.orderId, first.id),
-            statements: plan.clawbacks.flatMap((clawback) => [
-                buildGiftCardTransactionInsertOnce(db, {
-                    giftCardId: clawback.giftCardId,
-                    kind: "adjust",
-                    amountMinor: -clawback.amountMinor,
-                    idempotencyKey: giftCardClawbackSettleKey(first.id, clawback.giftCardId),
-                    actor,
-                    orderId: input.orderId,
-                    refundAttemptId: first.id,
-                    reason: GIFT_CARD_CLAWBACK_REASON,
-                }),
-                ...(clawback.disable ? [disableEmptied(db, clawback.giftCardId)] : []),
-            ]),
-        };
+        for (const clawback of plan.clawbacks) {
+            balance.set(clawback.giftCardId, (balance.get(clawback.giftCardId) ?? 0) - clawback.amountMinor);
+            statements.push(buildGiftCardTransactionInsertOnce(db, {
+                giftCardId: clawback.giftCardId,
+                kind: "adjust",
+                amountMinor: -clawback.amountMinor,
+                idempotencyKey: giftCardClawbackSettleKey(first.id, clawback.giftCardId),
+                actor,
+                orderId: input.orderId,
+                refundAttemptId: first.id,
+                reason: GIFT_CARD_CLAWBACK_REASON,
+            }));
+            if (clawback.disable) statements.push(disableEmptied(db, clawback.giftCardId));
+        }
     }
 
-    // What the money that went back still requires, over the cards as they were before the take.
-    let unissuedMinor = 0;
-    if (!closesOrder) {
-        for (const line of state.lines) {
-            const issued = state.cards.filter((card) => card.orderItemId === line.orderItemId).length;
-            unissuedMinor += Math.max(0, line.quantity - issued - line.refundedQuantity) * line.unitValueMinor;
-        }
-    }
-    const keptBefore = state.cards.reduce((sum, card) =>
-        sum + Math.min(card.initialAmountMinor, card.balanceMinor + (claimTakes.get(card.giftCardId)?.takenMinor ?? 0) + card.spentMinor), 0);
-    const requiredMinor = Math.max(0, refundedBefore + refundedMinor + keptBefore + unissuedMinor - received);
-    const takenMinor = [...claimTakes.values()].reduce((sum, take) => sum + take.takenMinor, 0);
-    let releaseMinor = Math.max(0, takenMinor - requiredMinor);
-    const statements: unknown[] = [];
-    const byTake = [...claimTakes.entries()].sort(([leftId, left], [rightId, right]) =>
-        right.takenMinor - left.takenMinor || (leftId < rightId ? -1 : leftId > rightId ? 1 : 0));
-    for (const [giftCardId, take] of byTake) {
-        if (releaseMinor <= 0) break;
-        const amountMinor = Math.min(take.takenMinor, releaseMinor);
-        releaseMinor -= amountMinor;
-        const id = newGiftCardTransactionId();
-        statements.push(buildGiftCardTransactionInsertOnce(db, {
-            id,
-            giftCardId,
-            kind: "adjust",
-            amountMinor,
-            idempotencyKey: giftCardClawbackReleaseKey(first.id, giftCardId),
-            actor,
+    // Still over: units not issued yet are the rest of the buyer's value.
+    // The refund names them (its record's lines), so the handover never
+    // hands them over; what the buyer is still owed stays refundable.
+    for (const line of [...state.lines].sort((left, right) => right.unitValueMinor - left.unitValueMinor)) {
+        const over = -slack();
+        if (over <= 0) break;
+        const open = unissued.get(line.orderItemId) ?? 0;
+        if (open <= 0 || line.unitValueMinor <= 0) continue;
+        const units = Math.min(open, Math.ceil(over / line.unitValueMinor));
+        unissued.set(line.orderItemId, open - units);
+        statements.push(db.insert(orderRefundLines).values({
+            id: giftCardSettleLineId(input.refundGroupId, line.orderItemId),
+            refundId: input.refundGroupId,
             orderId: input.orderId,
-            refundAttemptId: first.id,
-            reason: GIFT_CARD_CLAWBACK_RELEASE_REASON,
-        }));
-        // The take emptied and disabled it: given value back by this very row, it is the buyer's to spend again.
-        if (take.emptied) {
-            statements.push(db.update(giftCards).set({
-                status: "active",
-                version: sql`${giftCards.version} + 1`,
-                updatedAt: sql`unixepoch()`,
-            }).where(and(
-                eq(giftCards.id, giftCardId),
-                eq(giftCards.status, "disabled"),
-                sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} WHERE ${giftCardTransactions.id} = ${id})`,
-            )));
+            orderItemId: line.orderItemId,
+            quantity: units,
+            createdAt: sql`unixepoch()`,
+        }).onConflictDoNothing({ target: orderRefundLines.id }));
+    }
+    return { guard: statements.length > 0 ? settledOnceGuard(guard, input.orderId, first.id, input.refundGroupId) : guard, statements };
+}
+
+/** `attempt_key` of a refund recorded from the provider (refund-reconciliation.ts). */
+const EXTERNAL_ATTEMPT_KEY_PREFIX = "external:";
+
+/** The refund line a settlement writes for units not issued yet that the refund now names. */
+export function giftCardSettleLineId(refundGroupId: string, orderItemId: string): string {
+    return `${refundGroupId}_settle_${orderItemId}`;
+}
+
+/**
+ * When a request's settlement can't be planned and none of its money went
+ * back: give back exactly what its claim took (known in memory), under the
+ * same settle-once guard; if even that can't be written, the reconciliation
+ * backstop settles the refund later.
+ */
+export function buildClaimTakesRelease(
+    db: Database,
+    input: {
+        orderId: string;
+        refundGroupId: string;
+        firstAttemptId: string;
+        clawbacks: readonly GiftCardClawback[];
+        actor?: { type: "system" | "admin"; id: string | null };
+    },
+): GiftCardClawbackSettlement {
+    const actor = input.actor ?? { type: "system" as const, id: null };
+    return {
+        guard: settledOnceGuard(sql`1 = 1`, input.orderId, input.firstAttemptId, input.refundGroupId),
+        statements: input.clawbacks.flatMap((clawback) => {
+            const id = newGiftCardTransactionId();
+            return [
+                buildGiftCardTransactionInsertOnce(db, {
+                    id,
+                    giftCardId: clawback.giftCardId,
+                    kind: "adjust",
+                    amountMinor: clawback.amountMinor,
+                    idempotencyKey: giftCardClawbackReleaseKey(input.firstAttemptId, clawback.giftCardId),
+                    actor,
+                    orderId: input.orderId,
+                    refundAttemptId: input.firstAttemptId,
+                    reason: GIFT_CARD_CLAWBACK_RELEASE_REASON,
+                }),
+                ...(clawback.disable ? [db.update(giftCards).set({
+                    status: "active",
+                    version: sql`${giftCards.version} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                }).where(and(
+                    eq(giftCards.id, clawback.giftCardId),
+                    eq(giftCards.status, "disabled"),
+                    sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} WHERE ${giftCardTransactions.id} = ${id})`,
+                ))] : []),
+            ];
+        }),
+    };
+}
+
+/**
+ * The backstop: refunds that ended within the last week with a claim's take
+ * and no settlement (a request that couldn't plan or write it). Bounded,
+ * indexed by attempt status, and only for orders that bought gift cards;
+ * settling one twice is refused by its guard.
+ */
+export async function settleUnsettledGiftCardRefunds(
+    db: Database,
+    options: { nowSeconds: number; limit?: number },
+): Promise<number> {
+    const since = options.nowSeconds - UNSETTLED_REFUND_WINDOW_SECONDS;
+    // Outer columns stay qualified inside the subqueries (their aliased tables have the same names).
+    const outerOrderId = qualifiedColumn(refundAttempts.orderId);
+    const outerGroupId = qualifiedColumn(refundAttempts.refundGroupId);
+    const candidates = await db.selectDistinct({ orderId: refundAttempts.orderId, refundGroupId: refundAttempts.refundGroupId })
+        .from(refundAttempts)
+        .where(and(
+            eq(refundAttempts.status, "failed"),
+            isNull(refundAttempts.claimExpiresAt),
+            gte(refundAttempts.createdAt, sql`${since}`),
+            sql`EXISTS (SELECT 1 FROM ${orderItems} AS oi WHERE oi.order_id = ${outerOrderId} AND oi.fulfillment_type = 'gift_card')`,
+            sql`NOT EXISTS (SELECT 1 FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId} AND sib.status NOT IN ('refunded', 'failed', 'cancelled'))`,
+            sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} AS t WHERE t.order_id = ${outerOrderId} AND t.kind = 'adjust'
+                AND substr(t.idempotency_key, 1, 9) = 'clawback:'
+                AND t.refund_attempt_id IN (SELECT sib.id FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId}))`,
+            sql`NOT EXISTS (SELECT 1 FROM ${giftCardTransactions} AS t WHERE t.order_id = ${outerOrderId} AND t.kind = 'adjust'
+                AND (substr(t.idempotency_key, 1, 17) = 'clawback-release:' OR substr(t.idempotency_key, 1, 16) = 'clawback-settle:')
+                AND t.refund_attempt_id IN (SELECT sib.id FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId}))`,
+        ))
+        .limit(options.limit ?? UNSETTLED_REFUND_SWEEP_LIMIT)
+        .all();
+    let settled = 0;
+    for (const candidate of candidates) {
+        const settlement = await buildGiftCardClawbackSettlement(db, { orderId: candidate.orderId, refundGroupId: candidate.refundGroupId, outcomes: new Map() });
+        if (settlement.statements.length === 0) continue;
+        try {
+            await db.batch([buildBatchGuard(db, settlement.guard, UNSETTLED_REFUND_GUARD), ...settlement.statements] as never);
+            settled += 1;
+        } catch (error: unknown) {
+            if (!isBatchGuardError(error, UNSETTLED_REFUND_GUARD)) throw error;
         }
     }
-    return { guard: statements.length > 0 ? settledOnceGuard(guard, input.orderId, first.id) : guard, statements };
+    return settled;
 }
+
+const UNSETTLED_REFUND_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+const UNSETTLED_REFUND_SWEEP_LIMIT = 10;
+const UNSETTLED_REFUND_GUARD = "gift_card_unsettled_refund_moved";
+
 
 function disableEmptied(db: Database, giftCardId: string) {
     return db.update(giftCards).set({
@@ -436,12 +574,16 @@ function attemptStatusesGuard(refundGroupId: string, attempts: ReadonlyArray<{ i
     ) AND (SELECT count(*) FROM ${refundAttempts} AS ra WHERE ra.refund_group_id = ${refundGroupId}) = ${attempts.length}`;
 }
 
-/** And no earlier settlement of this refund wrote a give-back or a take. */
-function settledOnceGuard(guard: SQL, orderId: string, firstAttemptId: string): SQL {
+/** And no earlier settlement of this refund wrote a give-back, a take or a line for units not issued yet. */
+function settledOnceGuard(guard: SQL, orderId: string, firstAttemptId: string, refundGroupId: string): SQL {
+    const settleLinePrefix = giftCardSettleLineId(refundGroupId, "");
     return sql`${guard} AND NOT EXISTS (
         SELECT 1 FROM ${giftCardTransactions} AS t
         WHERE t.order_id = ${orderId} AND t.refund_attempt_id = ${firstAttemptId} AND t.kind = 'adjust'
           AND (substr(t.idempotency_key, 1, 17) = 'clawback-release:' OR substr(t.idempotency_key, 1, 16) = 'clawback-settle:')
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${orderRefundLines} AS rl
+        WHERE rl.refund_id = ${refundGroupId} AND substr(rl.id, 1, ${settleLinePrefix.length}) = ${settleLinePrefix}
     )`;
 }
 

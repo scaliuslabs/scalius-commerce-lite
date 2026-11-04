@@ -71,6 +71,7 @@ import {
     giftCardPurchaseReads,
     giftCardPurchaseState,
     planGiftCardClawback,
+    buildClaimTakesRelease,
     buildGiftCardClawbackSettlement,
     giftCardHandoverPending,
     orderHasPurchasedGiftCardsSql,
@@ -2129,6 +2130,7 @@ export async function processRefund(
                 error,
             };
             let written = false;
+            let planned = true;
             for (let round = 0; giftCardClawback.clawbacks.length > 0 && !written && round <= FINALIZE_CONFLICT_RETRIES; round += 1) {
                 const settlement = await buildGiftCardClawbackSettlement(db, {
                     orderId: params.orderId,
@@ -2139,14 +2141,36 @@ export async function processRefund(
                     console.error("[refund-service] Gift card settlement of a failed refund could not be planned:", settleError instanceof Error ? settleError.name : "error");
                     return null;
                 });
-                if (!settlement) break;
+                if (!settlement) {
+                    planned = false;
+                    break;
+                }
                 try {
                     await markRefundAllocationsFailed(db, { ...failure, settlement });
                     written = true;
                 } catch (writeError: unknown) {
-                    if (!isBatchGuardError(writeError, REFUND_FINALIZE_CONFLICT)) throw writeError;
+                    if (isBatchGuardError(writeError, REFUND_FINALIZE_CONFLICT)) continue;
+                    console.error("[refund-service] Gift card settlement of a failed refund could not be written:", writeError instanceof Error ? writeError.name : "error");
+                    break;
                 }
             }
+            if (!written && !planned && completedAllocations.length === 0) {
+                // Nothing went back and the settlement couldn't be planned: the
+                // claim's own takes (known here) go back with the failures.
+                await markRefundAllocationsFailed(db, {
+                    ...failure,
+                    settlement: buildClaimTakesRelease(db, {
+                        orderId: params.orderId,
+                        refundGroupId,
+                        firstAttemptId: getRefundAttemptId(allocations[0]!),
+                        clawbacks: giftCardClawback.clawbacks,
+                        actor,
+                    }),
+                }).then(() => { written = true; }, (releaseError: unknown) => {
+                    console.error("[refund-service] The claim's gift card takes are left to the reconciliation backstop:", releaseError instanceof Error ? releaseError.name : "error");
+                });
+            }
+            // The failures are written whatever the settlement did (the backstop settles what's left).
             if (!written) await markRefundAllocationsFailed(db, failure);
         }
 
