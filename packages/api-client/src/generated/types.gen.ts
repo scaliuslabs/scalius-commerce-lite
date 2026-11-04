@@ -59326,6 +59326,10 @@ export type PostApiV1AdminOrdersBulkShipResponses = {
                 error?: string;
                 [key: string]: unknown;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59371,6 +59375,10 @@ export type PostApiV1AdminOrdersBulkConfirmResponses = {
                 success: boolean;
                 error?: string;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59418,6 +59426,10 @@ export type PostApiV1AdminOrdersBulkFulfillResponses = {
                 success: boolean;
                 error?: string;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };

@@ -6137,6 +6137,8 @@ export const postApiV1AdminOrdersArchive = <ThrowOnError extends boolean = false
 
 /**
  * Bulk ship orders
+ *
+ * Books a courier for each listed order. One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.
  */
 export const postApiV1AdminOrdersBulkShip = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersBulkShipData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersBulkShipResponses, PostApiV1AdminOrdersBulkShipErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersBulkShipResponses, PostApiV1AdminOrdersBulkShipErrors, ThrowOnError>({
     url: '/api/v1/admin/orders/bulk-ship',
@@ -6149,6 +6151,8 @@ export const postApiV1AdminOrdersBulkShip = <ThrowOnError extends boolean = fals
 
 /**
  * Confirm several new orders
+ *
+ * Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done. One request handles the plan's number of orders; the rest come back in `remaining`.
  */
 export const postApiV1AdminOrdersBulkConfirm = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersBulkConfirmData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersBulkConfirmResponses, PostApiV1AdminOrdersBulkConfirmErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersBulkConfirmResponses, PostApiV1AdminOrdersBulkConfirmErrors, ThrowOnError>({
     url: '/api/v1/admin/orders/bulk-confirm',
@@ -6161,6 +6165,8 @@ export const postApiV1AdminOrdersBulkConfirm = <ThrowOnError extends boolean = f
 
 /**
  * Mark several confirmed orders as sent with your own courier
+ *
+ * One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.
  */
 export const postApiV1AdminOrdersBulkFulfill = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersBulkFulfillData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersBulkFulfillResponses, PostApiV1AdminOrdersBulkFulfillErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersBulkFulfillResponses, PostApiV1AdminOrdersBulkFulfillErrors, ThrowOnError>({
     url: '/api/v1/admin/orders/bulk-fulfill',

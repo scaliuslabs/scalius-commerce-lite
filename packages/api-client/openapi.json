@@ -209833,6 +209833,7 @@
           "Admin - Orders"
         ],
         "summary": "Bulk ship orders",
+        "description": "Books a courier for each listed order. One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -209954,13 +209955,21 @@
                             ],
                             "additionalProperties": {}
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
                         "totalProcessed",
                         "successCount",
                         "failureCount",
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210045,6 +210054,7 @@
           "Admin - Orders"
         ],
         "summary": "Confirm several new orders",
+        "description": "Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done. One request handles the plan's number of orders; the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210113,10 +210123,18 @@
                               "success"
                             ]
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210201,6 +210219,7 @@
           "Admin - Orders"
         ],
         "summary": "Mark several confirmed orders as sent with your own courier",
+        "description": "One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210277,10 +210296,18 @@
                               "success"
                             ]
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
