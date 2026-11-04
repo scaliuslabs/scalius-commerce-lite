@@ -28783,7 +28783,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -29842,7 +29842,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -36217,6 +36217,10 @@
                             },
                             "sameOriginMedia": {
                               "type": "boolean"
+                            },
+                            "feedProductsPerRequest": {
+                              "type": "integer",
+                              "minimum": 1
                             }
                           },
                           "required": [
@@ -36224,7 +36228,8 @@
                             "apiUrl",
                             "dashboardUrl",
                             "mediaUrl",
-                            "sameOriginMedia"
+                            "sameOriginMedia",
+                            "feedProductsPerRequest"
                           ]
                         },
                         "timeZone": {
@@ -68942,11 +68947,11 @@
             "schema": {
               "type": "string",
               "maxLength": 512,
-              "pattern": "^feed-v1\\.[0-9a-z]+\\.[A-Za-z0-9_-]+$",
-              "description": "Opaque continuation cursor returned by the previous feed response"
+              "pattern": "^feed-v2\\.[0-9a-z]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$",
+              "description": "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted."
             },
             "required": false,
-            "description": "Opaque continuation cursor returned by the previous feed response",
+            "description": "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.",
             "name": "cursor",
             "in": "query"
           },
@@ -69520,7 +69525,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -69540,6 +69545,31 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^[0-9a-z]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$",
+              "description": "Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted."
+            },
+            "required": false,
+            "description": "Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "The sitemap index's read: no rows, the number of listed products, and every later page with its `after`."
+            },
+            "required": false,
+            "description": "The sitemap index's read: no rows, the number of listed products, and every later page with its `after`.",
+            "name": "outline",
             "in": "query"
           }
         ],
@@ -69588,23 +69618,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 1
                             },
                             "limit": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "hasNextPage": {
+                              "type": "boolean"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 0
                             },
                             "totalPages": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "pages": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "page": {
+                                    "type": "integer",
+                                    "minimum": 2
+                                  },
+                                  "after": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "page",
+                                  "after"
+                                ]
+                              }
                             }
                           },
                           "required": [
                             "page",
-                            "limit",
-                            "total",
-                            "totalPages"
+                            "limit"
                           ]
                         }
                       },
@@ -73142,7 +73196,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -163181,8 +163235,14 @@
                             "totalProducts": {
                               "type": "number"
                             },
+                            "totalProductsIsCapped": {
+                              "type": "boolean"
+                            },
                             "totalCustomers": {
                               "type": "number"
+                            },
+                            "totalCustomersIsCapped": {
+                              "type": "boolean"
                             },
                             "currentMonth": {
                               "type": "object",
@@ -163253,7 +163313,9 @@
                           },
                           "required": [
                             "totalProducts",
+                            "totalProductsIsCapped",
                             "totalCustomers",
+                            "totalCustomersIsCapped",
                             "currentMonth",
                             "lastMonth"
                           ]
@@ -210256,6 +210318,7 @@
           "Admin - Orders"
         ],
         "summary": "Bulk ship orders",
+        "description": "Books a courier for each listed order. One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210377,13 +210440,21 @@
                             ],
                             "additionalProperties": {}
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
                         "totalProcessed",
                         "successCount",
                         "failureCount",
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210468,6 +210539,7 @@
           "Admin - Orders"
         ],
         "summary": "Confirm several new orders",
+        "description": "Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done. One request handles the plan's number of orders; the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210536,10 +210608,18 @@
                               "success"
                             ]
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210624,6 +210704,7 @@
           "Admin - Orders"
         ],
         "summary": "Mark several confirmed orders as sent with your own courier",
+        "description": "One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210700,10 +210781,18 @@
                               "success"
                             ]
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
