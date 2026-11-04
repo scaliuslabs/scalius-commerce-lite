@@ -19,7 +19,7 @@ export const MEDIA_FIRST_PAGE_GRACE_MS = 5_000;
 export function mediaWorkspaceFilters(
   state: MediaWorkspaceRouteState,
   capability: MediaCapability = "both",
-): Partial<MediaFilterOptions> {
+): MediaFilterOptions {
   return {
     search: state.search,
     sortBy: state.sortBy,

@@ -167,8 +167,6 @@ export async function dispatchPendingEvents(options: {
       result.dispatched += 1;
       result.deliveries.push(...outcome.deliveries);
       flushed.push(outcome.event);
-    } else if (outcome.status === "skipped") {
-      result.skipped += 1;
     } else {
       result.failed += 1;
       console.warn(`[events] Dispatch of ${outcome.eventId} ${outcome.status}: ${outcome.reason}`);

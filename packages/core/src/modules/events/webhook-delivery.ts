@@ -16,6 +16,7 @@ import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
 import {
   eventOutbox,
+  type EventOutboxRow,
   pluginEventDeliveries,
   pluginInstallations,
   webhookDeliveries,
@@ -375,8 +376,8 @@ export async function processWebhookDelivery(options: {
     db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, delivery.subscriptionId)).limit(1),
     db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId ?? "")).limit(1),
   ]);
-  const subscription = subscriptionRows[0];
-  const eventRow = delivery.eventId ? eventRows[0] : undefined;
+  const subscription = (subscriptionRows as WebhookSubscription[])[0];
+  const eventRow = delivery.eventId ? (eventRows as EventOutboxRow[])[0] : undefined;
   if (!subscription || subscription.status !== "active") {
     await finishDelivery(db, delivery, claimId, { status: "cancelled", error: "subscription_disabled" });
     return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };

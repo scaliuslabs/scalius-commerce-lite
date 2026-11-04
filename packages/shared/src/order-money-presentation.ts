@@ -76,7 +76,7 @@ export function resolveSavedOrderMoneySummary(
     || !amounts.every(isNonNegativeSafeInteger)
   ) return null;
 
-  const [subtotalMinor, shippingMinor, discountMinor, taxMinor, totalMinor] = amounts as number[];
+  const [subtotalMinor, shippingMinor, discountMinor, taxMinor, totalMinor] = amounts as [number, number, number, number, number];
   const expectedTotal = subtotalMinor + shippingMinor - discountMinor
     + (order.pricesIncludeTax ? 0 : taxMinor);
   if (!Number.isSafeInteger(expectedTotal) || expectedTotal !== totalMinor) return null;

@@ -10,7 +10,9 @@
 // arrive more than once.
 
 import { safeBatch, type Database } from "@scalius/database/client";
-import { eventOutbox, pluginInstallations } from "@scalius/database/schema";
+import { eventOutbox, pluginInstallations, type EventOutboxRow } from "@scalius/database/schema";
+
+type PluginInstallationRow = typeof pluginInstallations.$inferSelect;
 import {
   cancelPluginEventDelivery,
   claimPluginEventDelivery,
@@ -69,8 +71,9 @@ export async function processPluginEventDelivery(options: {
     db.select().from(pluginInstallations).where(eq(pluginInstallations.pluginId, delivery.pluginId)).limit(1),
     db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId ?? "")).limit(1),
   ]);
-  const installation = installationRows[0] ? toPluginInstallation(installationRows[0]) : null;
-  const eventRow = eventRows[0];
+  const installationRow = (installationRows as PluginInstallationRow[])[0];
+  const installation = installationRow ? toPluginInstallation(installationRow) : null;
+  const eventRow = (eventRows as EventOutboxRow[])[0];
   // Only an uninstall or a grant that no longer covers the topic ends a
   // delivery; an app that is off keeps it until it runs again (held).
   if (!installation || !installation.grant || !topicMatchesAnyFilter(delivery.topic as never, installation.grant.events)) {
