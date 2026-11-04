@@ -341,6 +341,104 @@ function unkeyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[
         : []);
 }
 
+/** The deterministic movement ids of one phase (each SKU's split part, when it has one). */
+async function transitionIdentities(
+    db: Database,
+    order: InventoryTransitionOrder,
+    operation: StrictMovementOperation,
+    entries: readonly ReservationEntry[],
+    pool: InventoryPoolName,
+    parts: ReadonlyMap<string, number> | null,
+): Promise<InventoryTransitionMovementIdentity[]> {
+    const identities: InventoryTransitionMovementIdentity[] = [];
+    for (const entry of entries) {
+        identities.push({
+            id: await createTransitionMovementId({
+                orderId: order.id,
+                variantId: entry.variantId,
+                operation,
+                pool,
+                generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, operation),
+                part: parts?.get(entry.variantId) ?? 0,
+            }),
+            variantId: entry.variantId,
+            orderId: order.id,
+            type: getTransitionMovementType(operation, pool),
+            quantity: operation === "release" ? -entry.quantity : entry.quantity,
+        });
+    }
+    return identities;
+}
+
+/**
+ * A restore of SKUs whose last deduct was split over locations (digital
+ * units) puts each part back where it left, latest part first, up to the
+ * quantity restored; a SKU deducted from one location keeps one restore
+ * (it goes back where its generation was deducted). Digital SKUs cannot be
+ * transferred, so returning every unit to one location would strand them.
+ */
+async function planRestoreSources(
+    db: Database,
+    order: InventoryTransitionOrder,
+    entries: readonly ReservationEntry[],
+    pool: InventoryPoolName,
+): Promise<InventoryPhase[]> {
+    const deducts = await db.select({
+        variantId: inventoryMovements.variantId,
+        quantity: inventoryMovements.quantity,
+        locationId: inventoryMovements.locationId,
+        reservationGeneration: inventoryMovements.reservationGeneration,
+        stockVersionAfter: inventoryMovements.stockVersionAfter,
+    }).from(inventoryMovements).where(and(
+        eq(inventoryMovements.orderId, order.id),
+        inJsonArray(inventoryMovements.variantId, entries.map((entry) => entry.variantId)),
+        eq(inventoryMovements.ledgerVersion, 2),
+        eq(inventoryMovements.pool, pool),
+        inArray(inventoryMovements.type, ["deducted", "preorder_deducted"]),
+    )).all();
+    const whole: ReservationEntry[] = [];
+    const sources = new Map<string, InventoryPhase & { source: { location: InventoryLocationRef; parts: Map<string, number> } }>();
+    const active = await selectActiveInventoryLocationIds(db, [...new Set(deducts.flatMap((row) => row.locationId ? [row.locationId] : []))]);
+    let fallback: InventoryLocationRef | null = null;
+    for (const entry of entries) {
+        const own = deducts.filter((row) => row.variantId === entry.variantId);
+        const generation = own.reduce((maximum, row) => Math.max(maximum, row.reservationGeneration ?? 0), 0);
+        const parts = own
+            .filter((row) => (row.reservationGeneration ?? 0) === generation && row.quantity > 0)
+            .sort((left, right) => (right.stockVersionAfter ?? 0) - (left.stockVersionAfter ?? 0));
+        if (parts.length <= 1) {
+            whole.push(entry);
+            continue;
+        }
+        let remaining = entry.quantity;
+        let part = 0;
+        for (const row of parts) {
+            if (remaining <= 0) break;
+            const take = Math.min(remaining, row.quantity);
+            let location: InventoryLocationRef;
+            if (row.locationId && active.has(row.locationId)) {
+                location = { id: row.locationId, name: row.locationId };
+            } else {
+                fallback ??= await resolveActiveInventoryLocation(db, await resolveRestoreFallbackLocation(db, order.fulfillmentLocationId));
+                location = fallback;
+            }
+            const source = sources.get(location.id)
+                ?? { operation: "restore" as const, entries: [], source: { location, parts: new Map<string, number>() } };
+            source.entries.push({ ...entry, quantity: take });
+            source.source.parts.set(entry.variantId, part);
+            sources.set(location.id, source);
+            remaining -= take;
+            part += 1;
+        }
+        // More restored than the split deducted (never, for a status restore): the rest where its generation went.
+        if (remaining > 0) whole.push({ ...entry, quantity: remaining });
+    }
+    return [
+        ...(whole.length > 0 ? [{ operation: "restore" as const, entries: whole }] : []),
+        ...sources.values(),
+    ];
+}
+
 /** Where one deduct of digital units leaves from, with each SKU's part of its split. */
 type DigitalUnitSource = { location: InventoryLocationRef; entries: ReservationEntry[]; parts: Map<string, number> };
 
@@ -406,6 +504,18 @@ async function planDigitalUnitSources(
     return [...sources.values()];
 }
 
+/**
+ * The order still has the inventory action this change was prepared from,
+ * proven before any movement: a writer that moved it since aborts the batch
+ * (prepared again), instead of the final guard accepting its resulting state.
+ */
+function inventoryActionPrecondition(db: Database, order: InventoryTransitionOrder): SQLiteBatchItem {
+    return buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${order.id} AND ${orders.inventoryAction} = ${order.inventoryAction}
+    )`, ORDER_INVENTORY_CONFLICT);
+}
+
 /** The keys handed out for the order's lines when it was read: the split between kept and returned units. */
 function assignedKeyCount(lines: readonly OrderInventoryLine[]): number {
     return lines.reduce((total, line) => total + line.assigned, 0);
@@ -456,15 +566,29 @@ async function prepareStrictInventoryPhases(
     const replayed = new Set<string>();
     let deductLocationName: string | undefined;
 
-    // A digital deduct becomes one phase per location its units leave from.
+    // A digital deduct of the regular pool becomes one phase per location
+    // its units leave from; a restore mirrors a deduct that was split.
+    // Preorder and backorder deducts move no on-hand units, so their digital
+    // lines stay with the order's location, as physical lines do.
     const planned: InventoryPhase[] = [];
     for (const phase of phases) {
-        if (!phase.digitalUnits || phase.operation !== "deduct") {
-            planned.push(phase);
-            continue;
-        }
         const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
         if (entries.length === 0) continue;
+        if (phase.operation === "restore") {
+            planned.push(...await planRestoreSources(db, order, entries, pool));
+            continue;
+        }
+        if (!phase.digitalUnits || phase.operation !== "deduct" || pool !== "regular") {
+            planned.push({ operation: phase.operation, entries });
+            continue;
+        }
+        // A deduct committed whole before deducts were split (its action flip
+        // not): the replay below recognises it under its unsplit identity.
+        const unsplit = await transitionIdentities(db, order, "deduct", entries, pool, null);
+        if (await resolveCommittedTransitionMovements(db, order.id, "deduct", unsplit, entries)) {
+            planned.push({ operation: "deduct", entries });
+            continue;
+        }
         for (const source of await planDigitalUnitSources(db, order, entries)) {
             planned.push({ operation: "deduct", entries: source.entries, source: { location: source.location, parts: source.parts } });
         }
@@ -484,23 +608,7 @@ async function prepareStrictInventoryPhases(
             entry.variantId,
             carried.get(entry.variantId) ?? fresh.get(entry.variantId)!,
         ]));
-        const identities: InventoryTransitionMovementIdentity[] = [];
-        for (const entry of entries) {
-            identities.push({
-                id: await createTransitionMovementId({
-                    orderId: order.id,
-                    variantId: entry.variantId,
-                    operation,
-                    pool,
-                    generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, operation),
-                    part: phase.source?.parts.get(entry.variantId) ?? 0,
-                }),
-                variantId: entry.variantId,
-                orderId: order.id,
-                type: getTransitionMovementType(operation, pool),
-                quantity: operation === "release" ? -entry.quantity : entry.quantity,
-            });
-        }
+        const identities = await transitionIdentities(db, order, operation, entries, pool, phase.source?.parts ?? null);
         for (const entry of entries) touched.add(entry.variantId);
         // An earlier run committed these movements but not the action flip
         // (a ledger written before movements and flip shared one batch):
@@ -510,15 +618,17 @@ async function prepareStrictInventoryPhases(
             continue;
         }
 
-        const deductLocation = operation !== "deduct"
-            ? null
-            : phase.source?.location ?? await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
-        if (deductLocation) deductLocationName = deductLocation.name;
+        // Where units move: a planned source, else the order's location for a deduct
+        // (a restore without one goes back where its generation was deducted).
+        const namedLocation = phase.source?.location
+            ?? (operation === "deduct" ? await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId) : null);
+        // A shortfall names the order's location; a planned source checked its units already.
+        if (namedLocation && operation === "deduct" && !phase.source) deductLocationName = namedLocation.name;
         const claims = await buildTransitionMovementClaims(
-            db, order, operation, entries, variants, pool, identities, null, deductLocation,
+            db, order, operation, entries, variants, pool, identities, null, namedLocation,
         );
-        if (deductLocation && pool === "regular" && !phase.source) {
-            await assertInventoryLocationCovers(db, deductLocation, entries);
+        if (namedLocation && operation === "deduct" && pool === "regular" && !phase.source) {
+            await assertInventoryLocationCovers(db, namedLocation, entries);
         }
         claims.forEach((claim, index) => {
             const entry = entries[index]!;
@@ -546,6 +656,7 @@ async function prepareStrictInventoryPhases(
     return {
         inventoryAction,
         statements: [
+            inventoryActionPrecondition(db, order),
             ...movementStatements,
             // Buyer state reads the counters this batch just wrote.
             ...(movementStatements.length > 0 ? catalogBuyerStateRefreshStatementsForSkus(db, variantIds) : []),
@@ -582,6 +693,7 @@ async function prepareInventoryReReservation(
     return {
         inventoryAction: "reserved",
         statements: [
+            inventoryActionPrecondition(db, order),
             ...statements,
             buildInventoryActionUpdate(db, order, "reserved"),
             inventoryChangeGuard(db, order, "reserved", []),
