@@ -9,7 +9,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
     createStorefrontOrder,
-    type CreateStorefrontOrderInput,
     type StorefrontCheckoutPolicySnapshot,
     type StorefrontDeliveryPreflightResult,
     type StorefrontCartValidationResult,
@@ -17,11 +16,11 @@ import {
     markTrustedStorefrontCartValidationResult,
     createTrustedStorefrontCheckoutPolicySnapshot,
 } from "@scalius/core/modules/checkout";
+import { type CreateStorefrontOrderInput, type CreateStorefrontOrderCustomerIdentity } from "@scalius/core/modules/orders";
 import { ValidationError } from "@scalius/core/errors";
 import { PaymentMethod } from "@scalius/database/schema";
 import type { TaxQuote } from "../tax/browser";
-import type { StorefrontTaxAuthoritySnapshot } from "../tax/browser";
-import { markTrustedStorefrontTaxAuthorityForTest } from "../tax/tax.service";
+import { type StorefrontTaxAuthoritySnapshot, markTrustedStorefrontTaxAuthorityForTest } from "../tax/tax.service";
 import type { PresentmentMoney } from "@scalius/shared/presentment";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
@@ -37,6 +36,8 @@ function createMockCartValidation(overrides: Partial<StorefrontCartValidationRes
         shopCurrencyCode: "BDT",
         shopDecimalPlaces: 2,
         fxSource: "same_currency",
+        fxAsOf: null,
+        lockMinutes: 30,
     };
     return markTrustedStorefrontCartValidationResult({
         money,
@@ -623,10 +624,8 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
                     requiresShipping: true,
                     allowsCashOnDelivery: false, // COD not allowed
                     lineTypes: ["ship"],
-                    hasPhysicalLines: true,
-                    hasDigitalLines: false,
-                    hasServiceLines: false,
-                    hasGiftCardLines: false,
+                    requiresDeliveryMethod: true,
+                    deliveryMethodKind: "delivery",
                 },
             });
             const taxQuote = createMockTaxQuote(10500);
@@ -634,7 +633,7 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
             const input = createMockOrderInput();
 
             await expect(
-                createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, taxQuote, requestCurrency, policy, mockTaxAuthoritySnapshot),
+                createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, undefined, requestCurrency, policy, mockTaxAuthoritySnapshot),
             ).rejects.toThrow(
                 "Cash on delivery isn't available for this order. Choose an online payment method.",
             );
@@ -676,6 +675,8 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
                     shopDecimalPlaces: 2,
                     incrementMinor: 1,
                     fxSource: "fx_rate",
+                    fxAsOf: Math.floor(Date.now() / 1000),
+                    lockMinutes: 30,
                 },
             });
             const delivery = createMockDeliveryPreflight();
@@ -777,7 +778,7 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
 
             const input = createMockOrderInput();
 
-            const result = await createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, taxQuote, requestCurrency, policy, mockTaxAuthoritySnapshot);
+            const result = await createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, undefined, requestCurrency, policy, mockTaxAuthoritySnapshot);
 
             expect(result.commitPayload.codDeposit).toEqual({
                 amountMinor: 2550, // 25.50 * 100
@@ -800,7 +801,7 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
 
             const input = createMockOrderInput();
 
-            const result = await createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, taxQuote, requestCurrency, policy, mockTaxAuthoritySnapshot);
+            const result = await createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, undefined, requestCurrency, policy, mockTaxAuthoritySnapshot);
 
             expect(result.commitPayload.codDeposit).toEqual({
                 amountMinor: 2100, // ceil(10500 * 20 / 100) = 2100

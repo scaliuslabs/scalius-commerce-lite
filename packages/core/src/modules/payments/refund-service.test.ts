@@ -3,6 +3,7 @@ import {
   computePaymentStateFromLedger,
   finalizeAcceptedRefundAttemptIds,
   processRefund,
+  type RefundCaller,
 } from "./refund-service";
 import { PaymentRecordStatus, PaymentStatus, PaymentPlanStatus, OrderStatus } from "@scalius/database/schema";
 
@@ -567,7 +568,7 @@ describe("processRefund — manual COD deposit amount validation (Fix B)", () =>
       reason: "Customer returned item",
       manualSettlementConfirmed: true,
       actorUserId: "admin_1",
-      caller: "staff",
+      caller: "staff" as RefundCaller,
     };
 
     // Should not throw the deposit validation error - it may fail later at finalize
@@ -606,7 +607,7 @@ describe("processRefund — manual COD deposit amount validation (Fix B)", () =>
       reason: "Customer returned item",
       manualSettlementConfirmed: true,
       actorUserId: "admin_1",
-      caller: "staff",
+      caller: "staff" as RefundCaller,
     };
 
     // Should not throw the deposit validation error
@@ -641,7 +642,7 @@ describe("processRefund — manual COD deposit amount validation (Fix B)", () =>
       reason: "Partial refund attempt",
       manualSettlementConfirmed: true,
       actorUserId: "admin_1",
-      caller: "staff",
+      caller: "staff" as RefundCaller,
     };
 
     await expect(processRefund(db as any, params)).rejects.toThrow(
@@ -675,7 +676,7 @@ describe("processRefund — manual COD deposit amount validation (Fix B)", () =>
       reason: "Over-refund attempt",
       manualSettlementConfirmed: true,
       actorUserId: "admin_1",
-      caller: "staff",
+      caller: "staff" as RefundCaller,
     };
 
     await expect(processRefund(db as any, params)).rejects.toThrow(
@@ -712,7 +713,7 @@ describe("processRefund — manual COD deposit amount validation (Fix B)", () =>
       reason: "Mixed refund",
       manualSettlementConfirmed: true,
       actorUserId: "admin_1",
-      caller: "staff",
+      caller: "staff" as RefundCaller,
     };
 
     // Should not throw the deposit validation error
@@ -745,7 +746,7 @@ describe("processRefund — manual COD deposit amount validation (Fix B)", () =>
       reason: "Missing confirmation",
       manualSettlementConfirmed: false, // NOT confirmed
       actorUserId: "admin_1",
-      caller: "staff",
+      caller: "staff" as RefundCaller,
     };
 
     await expect(processRefund(db as any, params)).rejects.toThrow(
