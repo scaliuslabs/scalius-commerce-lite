@@ -19,7 +19,6 @@ import {
   type Database,
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
-import { ConflictError } from "@scalius/core/errors";
 import {
   isInventoryReservationConflictError,
   isStockReservableStatus,
@@ -42,6 +41,7 @@ import {
   hasActiveShipmentClaim,
   noActiveShipmentClaimCondition,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
+  ShipmentClaimConflictError,
   validateTransition,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
@@ -471,6 +471,12 @@ export async function processPaymentConfirmed(
   /** The payment was recorded, but the order's released stock could not be reserved again: staff must resolve it. */
   inventoryShortfall?: true;
   /**
+   * Refused only because a shipment claim locks the order (a booking in
+   * flight, or a dead one the sweep or staff resolve): retry once the claim
+   * is gone; the attempt should not count.
+   */
+  shipmentClaim?: true;
+  /**
    * The customer message the payment's batch wrote (a replay names it too):
    * send it by id after every attempt; the sender skips a row already sent.
    */
@@ -494,7 +500,7 @@ export async function processPaymentConfirmed(
       return { success: false, error: `Order ${params.orderId} not found` };
     }
     if (hasActiveShipmentClaim(shipmentClaim)) {
-      return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
+      return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaim: true };
     }
     const currency = resolveOrderCurrencySnapshot(shipmentClaim);
     try {
@@ -1224,7 +1230,7 @@ async function applyFailedPayment(
       await safeBatch(db, batchStatements);
     } catch (error: unknown) {
       if (isBatchGuardError(error, PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD)) {
-        throw new ConflictError(SHIPMENT_CLAIM_CONFLICT_MESSAGE);
+        throw new ShipmentClaimConflictError();
       }
       throw error;
     }
@@ -1298,6 +1304,8 @@ export async function processPaymentAuthorized(
   /** The authorization placed an open checkout (incomplete → pending). */
   placed?: boolean;
   inventoryShortfall?: true;
+  /** Refused only because a shipment claim locks the order (see `processPaymentConfirmed`). */
+  shipmentClaim?: true;
   /**
    * The order_created message a placing batch wrote (a replay names it too):
    * send it by id after every attempt; the sender skips a row already sent.
@@ -1328,7 +1336,7 @@ export async function processPaymentAuthorized(
       .where(eq(orders.id, params.orderId))
       .get();
     if (!order) return { success: false, error: `Order ${params.orderId} not found` };
-    if (hasActiveShipmentClaim(order)) return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE };
+    if (hasActiveShipmentClaim(order)) return { success: false, error: SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaim: true };
     const currency = resolveOrderCurrencySnapshot(order);
     try {
       assertOrderPaymentCurrency(params.currency, currency, `${params.provider} provider authorization`);

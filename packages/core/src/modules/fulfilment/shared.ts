@@ -1,11 +1,12 @@
 // Helpers shared by the fulfilment actions. Not exported from the domain entry.
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import {
     orders,
     deliveryShipments,
     OrderStatus,
 } from "@scalius/database/schema";
 import { sql, eq, and } from "drizzle-orm";
+import { requeueShipmentClaimParkedPaymentEvents } from "../order-kernel";
 
 export function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
     if (!metadata) return {};
@@ -25,18 +26,22 @@ export function parseShipmentMetadata(metadata: unknown): Record<string, unknown
         : {};
 }
 
+/** Ends the order's claim, and makes the payment events it parked due now. */
 export async function clearShipmentClaim(db: Database, orderId: string, claimId: string): Promise<void> {
-    await db
-        .update(orders)
-        .set({
-            shipmentClaimId: null,
-            shipmentClaimExpiresAt: null,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(orders.id, orderId),
-            eq(orders.shipmentClaimId, claimId),
-        ));
+    await safeBatch(db, [
+        db
+            .update(orders)
+            .set({
+                shipmentClaimId: null,
+                shipmentClaimExpiresAt: null,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(orders.id, orderId),
+                eq(orders.shipmentClaimId, claimId),
+            )),
+        requeueShipmentClaimParkedPaymentEvents(db, orderId),
+    ]);
 }
 
 export const SENDABLE_ORDER_STATUSES = new Set<string>([

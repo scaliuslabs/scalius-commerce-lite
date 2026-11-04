@@ -130,7 +130,7 @@ Rules:
 
 - A drain takes at most its plan batch (`planLimits().background`) and leaves the rest due for the next tick. The drains and the tick's maintenance job share one cron invocation, so on Free the batches keep a tick within 50 D1 queries.
 - A claim with a lease guards each row, and the handlers are idempotent. An after-response run and a tick never deliver the same row twice, and a crashed run is reclaimed when its lease ends.
-- Webhook and app subscribers fit a Free invocation: with 0 to 8 webhooks or one app a 3-line order and its after-response work take at most 27 D1 calls, an admin status change 33 and a refund 44 (`apps/api/src/free-plan-budget.test.ts` checks each case against 50; rule `after-response-fits-free-invocation`).
+- Webhook and app subscribers fit a Free invocation at the measured counts: with 0 to 8 webhooks or one app a 3-line order and its after-response work take at most 28 D1 calls; with 1 or 3 webhooks an admin status change 30, a partial refund 39, a cancel that releases a 3-line order's stock 39 and a full refund that cancels it 41 (`apps/api/src/free-plan-budget.test.ts` checks each case against 50; rule `after-response-fits-free-invocation`). An order's stock is read in one batch whatever its line count, but a write's own work grows with its lines: the cases bound 3 lines, not every order.
 - After-response work shares the request's invocation budget. On Free a request sends at most `notificationsPerDrain` committed notifications; the next tick sends the rest.
 
 ### No KV

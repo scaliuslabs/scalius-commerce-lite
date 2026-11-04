@@ -437,14 +437,57 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // confirmation on the order, an empty one is released.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
+      // Money first. A refund this pass finalized (which can cancel its order
+      // and release its stock) or failed costs what finishing a booking does,
+      // so it takes one of the run's bookings: on Free (one a run) such a run
+      // leaves the dead booking first in line for the next. A refund the
+      // provider still reports processing is a cheap re-check and takes none,
+      // so a long-pending refund never starves the bookings. A refund pass
+      // that throws stopped before its work (its due read), and the claims
+      // still run in full.
+      const refundLimit = scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT);
+      let refundsWorked = 0;
+      let refundFailure: unknown = null;
+      try {
+        const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
+          reconcileDueRefundAttempts(db, {
+            encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+            limit: refundLimit,
+            providers: appPaymentProvidersLoader(env, db),
+          }),
+        );
+        refundsWorked = refundReconciliation.finalized + refundReconciliation.failed;
+        if (refundReconciliation.refundNotifications.length > 0) {
+          await timed("refund_reconciliation_notification_record", () =>
+            recordReconciledRefundNotifications(db, refundReconciliation.refundNotifications),
+          );
+        }
+        if (
+          refundReconciliation.scanned > 0 ||
+          refundReconciliation.failed > 0 ||
+          refundReconciliation.deferred > 0 ||
+          refundReconciliation.errors.length > 0 ||
+          refundReconciliation.hasMore
+        ) {
+          console.log(
+            `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
+              `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
+              `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
+              `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
+              `hasMore=${refundReconciliation.hasMore}`,
+          );
+        }
+      } catch (error) {
+        refundFailure = error;
+      }
       // A cursor walks the expired claims, so one that keeps failing never holds the others back.
       const claimCursor = await readMaintenanceCursor(db, "shipment-claims");
       const claims = await timed("expired_shipment_claim_sweep", () =>
         sweepExpiredShipmentClaims(db, {
           limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT),
           afterOrderId: claimCursor.value.orders,
-          // Finishing a booking ships its order: Free affords one a run.
-          maxFinalized: planLimits().maintenance.bookedClaimsPerRun,
+          // Finishing a booking ships its order: Free affords one a run, less the refunds worked on.
+          maxFinalized: Math.max(0, planLimits().maintenance.bookedClaimsPerRun - refundsWorked),
         }),
       );
       await claimCursor.save({ orders: claims.lastOrderId });
@@ -464,36 +507,11 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
       if (claims.scanned > 0) {
         console.log(
           `[scheduled] Expired shipment claims: scanned=${claims.scanned}, released=${claims.released}, ` +
-            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}`,
+            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}, waiting=${claims.waiting}`,
         );
       }
-      const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
-        reconcileDueRefundAttempts(db, {
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-          limit: scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT),
-          providers: appPaymentProvidersLoader(env, db),
-        }),
-      );
-      if (refundReconciliation.refundNotifications.length > 0) {
-        await timed("refund_reconciliation_notification_record", () =>
-          recordReconciledRefundNotifications(db, refundReconciliation.refundNotifications),
-        );
-      }
-      if (
-        refundReconciliation.scanned > 0 ||
-        refundReconciliation.failed > 0 ||
-        refundReconciliation.deferred > 0 ||
-        refundReconciliation.errors.length > 0 ||
-        refundReconciliation.hasMore
-      ) {
-        console.log(
-          `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
-            `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
-            `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
-            `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
-            `hasMore=${refundReconciliation.hasMore}`,
-        );
-      }
+      // The refund pass's failure (already logged by its operation) fails the job.
+      if (refundFailure) throw refundFailure;
     },
   },
   {

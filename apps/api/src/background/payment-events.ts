@@ -4,8 +4,10 @@
 // payload; the event is applied right after the response, and a failed
 // attempt is retried from that row by the scheduled drain with backoff
 // (`retrying`, 1 to 16 minutes) until it is `failed` after six attempts, the
-// state the order page shows. Applying is idempotent (the payment kernel
-// dedupes on the provider reference), so a redelivery is harmless.
+// state the order page shows. An attempt refused only because a shipment
+// claim locks the order is not counted: the event waits for the claim's end.
+// Applying is idempotent (the payment kernel dedupes on the provider
+// reference), so a redelivery is harmless.
 import type { Database } from "@scalius/database/client";
 import { runWithReadObserver } from "@scalius/database/read-observer";
 import {
@@ -30,7 +32,9 @@ import {
   markPaymentEventAttemptFailed,
   markWebhookEventManualReconciliation,
   markWebhookEventProcessed,
+  parkPaymentEventForShipmentClaim,
 } from "../utils/webhook-idempotency";
+import { isShipmentClaimConflictError } from "@scalius/core/modules/order-kernel";
 import { createEventWriteObserver } from "../middleware/event-dispatch";
 import { notificationSender } from "./notification-sender";
 import { runOrderAutoFulfil } from "./auto-fulfil";
@@ -43,6 +47,9 @@ export interface PaymentEventPayload {
 }
 
 type Outcome = { status: "processed" | "manual_reconciliation"; result: Record<string, unknown> };
+
+/** The event was refused only because a shipment claim locks its order: it waits, uncounted. */
+class ParkedForShipmentClaim extends Error {}
 
 /**
  * One attempt at a claimed event: apply it and record the outcome, or record
@@ -65,6 +72,13 @@ export async function applyClaimedPaymentEvent(
     outcome = await runWithReadObserver(writes, () => applyPaymentEvent(db, env, ctx, send, claim.payload));
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
+    if (error instanceof ParkedForShipmentClaim || isShipmentClaimConflictError(error)) {
+      // A courier booking holds the order: nothing is wrong with the payment,
+      // so the attempt is not spent. The claim's end makes the event due again.
+      await parkPaymentEventForShipmentClaim(db, claim.id, claim.attempts, message);
+      console.warn(`[payments] Event ${claim.id} waits for its order's shipment claim; retrying`);
+      return "retrying";
+    }
     const status = await markPaymentEventAttemptFailed(db, claim.id, claim.attempts, message);
     console.warn(`[payments] Event ${claim.id} attempt ${claim.attempts} failed; ${status}`);
     return status;
@@ -167,6 +181,7 @@ async function applyPaymentEvent(
         review: event.review ?? null,
       });
       if (!result.success) {
+        if (result.shipmentClaim) throw new ParkedForShipmentClaim(result.error ?? "shipment claim");
         if (result.retryable === false) {
           console.warn(`[payments] ${provider} payment confirmation for order ${event.orderId} requires manual reconciliation; the reason is on its event row`);
           return { status: "manual_reconciliation", result: { ...refs, outcome: "manual_reconciliation", error: result.error ?? null } };
@@ -229,6 +244,7 @@ async function applyPaymentEvent(
         review: event.review ?? null,
       });
       if (!result.success) {
+        if (result.shipmentClaim) throw new ParkedForShipmentClaim(result.error ?? "shipment claim");
         if (result.retryable === false) {
           console.warn(`[payments] ${provider} authorization for order ${event.orderId} requires manual reconciliation; the reason is on its event row`);
           return { status: "manual_reconciliation", result: { ...refs, outcome: "manual_reconciliation", error: result.error ?? null } };
