@@ -25,6 +25,8 @@ export const MAX_EXPIRY_SWEEP_LIMIT = 200;
 export const EXPIRY_SWEEP_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 /** The history the nightly pass reads in one night, at most. */
 export const EXPIRY_HISTORY_SPAN_SECONDS = 30 * 24 * 60 * 60;
+/** The reservations of each type the nightly pass reads in one night, at most (a busy store's span ends sooner). */
+export const EXPIRY_HISTORY_ROWS_PER_NIGHT = 1_000;
 
 /**
  * Result of an expiry sweep, for observability.
@@ -488,7 +490,7 @@ export type ExpiryHistoryCursor = { at: number; key: string | null };
  */
 export async function sweepExpiredReservationHistory(
   db: Database,
-  options: { after: ExpiryHistoryCursor | null; limit?: number; spanSeconds?: number; maxAgeMinutes?: number },
+  options: { after: ExpiryHistoryCursor | null; limit?: number; spanSeconds?: number; rowsPerNight?: number; maxAgeMinutes?: number },
 ): Promise<{ result: ExpiryResult | null; next: ExpiryHistoryCursor | null }> {
   const maxAgeMinutes = options.maxAgeMinutes ?? 30;
   const windowStart = Math.floor(Date.now() / 1000) - maxAgeMinutes * 60 - EXPIRY_SWEEP_WINDOW_SECONDS;
@@ -504,7 +506,22 @@ export async function sweepExpiredReservationHistory(
   const starts = firsts.flatMap((row) => (row?.createdAt ? [Math.floor(row.createdAt.getTime() / 1000)] : []));
   const from = starts.length > 0 ? Math.min(...starts) : null;
   if (from === null || from >= windowStart) return { result: null, next: null };
-  const before = Math.min(from + (options.spanSeconds ?? EXPIRY_HISTORY_SPAN_SECONDS), windowStart);
+  // The night ends at the span, the routine window, or each type's Nth reservation
+  // (read through the covering index), whichever comes first: the cost follows the
+  // night's work, not how dense or long the history is.
+  const rowsPerNight = Math.max(1, Math.floor(options.rowsPerNight ?? EXPIRY_HISTORY_ROWS_PER_NIGHT));
+  const ends = await Promise.all((["reserved", "preorder_reserved"] as const).map((type) =>
+    db.select({ createdAt: inventoryMovements.createdAt })
+      .from(inventoryMovements)
+      .where(and(eq(inventoryMovements.type, type), gte(inventoryMovements.createdAt, new Date(from * 1000))))
+      .orderBy(inventoryMovements.createdAt)
+      .limit(1)
+      .offset(rowsPerNight)
+      .get()));
+  const bounds = ends.flatMap((row) => (row?.createdAt ? [Math.floor(row.createdAt.getTime() / 1000)] : []));
+  // A second holding more reservations than a night's share is still read whole.
+  const rowBound = bounds.length > 0 ? Math.max(from + 1, Math.min(...bounds)) : Number.POSITIVE_INFINITY;
+  const before = Math.min(from + (options.spanSeconds ?? EXPIRY_HISTORY_SPAN_SECONDS), windowStart, rowBound);
   const result = await releaseExpiredReservations(db, maxAgeMinutes, {
     limit: options.limit,
     createdFrom: from,
