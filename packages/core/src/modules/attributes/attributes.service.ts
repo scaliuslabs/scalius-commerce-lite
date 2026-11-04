@@ -993,7 +993,7 @@ export async function listAttributeValues(
                 and(
                     eq(productAttributeValues.attributeId, attributeId),
                     sql`lower(trim(${productAttributeValues.value})) IN (
-                        SELECT CAST(value AS TEXT)
+                        SELECT value
                         FROM json_each(${JSON.stringify(matchingPresetKeys)})
                     )`,
                     isNull(products.deletedAt),

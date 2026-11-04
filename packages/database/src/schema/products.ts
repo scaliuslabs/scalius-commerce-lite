@@ -117,6 +117,8 @@ export const products = sqliteTable(
         // The dashboard list's sorts, each ending with the keyset tiebreaker `id`.
         index("products_list_updated_idx").on(table.deletedAt, table.updatedAt, table.id),
         index("products_list_name_idx").on(table.deletedAt, table.name, table.id),
+        // Store import matches a product by its name as typed: trimmed, any case.
+        index("products_name_identity_idx").on(sql`lower(trim(${table.name}))`),
         index("products_list_price_idx").on(table.deletedAt, table.priceMinor, table.id),
         // The trash, recently updated first.
         index("products_list_trash_idx")
@@ -549,7 +551,6 @@ export const productAttributes = sqliteTable("product_attributes", {
         .notNull()
         .default("checkbox"),
 }, (table) => [
-    index("product_attributes_slug_idx").on(table.slug),
     index("product_attributes_group_idx").on(table.groupId, table.sortOrder),
     check("product_attributes_value_type_check", sql`${table.valueType} IN ('text', 'number', 'boolean', 'enum')`),
     check("product_attributes_unit_check", sql`${table.unit} IS NULL OR (${table.unit} = trim(${table.unit}) AND length(${table.unit}) BETWEEN 1 AND 16)`),

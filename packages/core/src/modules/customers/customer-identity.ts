@@ -184,18 +184,9 @@ export function buildVerifiedContactOrderLink(
     db: Database,
     input: { customerId: string; email?: string | null; phone?: string | null },
 ) {
-    const phone = phoneOrNull(input.phone);
-    const email = normalizeContactEmail(input.email);
-    const phoneMatch = phone ? sql`${orders.customerPhone} = ${phone}` : null;
-    const emailMatch = email ? sql`lower(trim(${orders.customerEmail})) = ${email}` : null;
-    const contactMatch = [phoneMatch, emailMatch].filter((match): match is SQL => match !== null);
-    if (contactMatch.length === 0) return [];
-    const joiningOrder = (match: SQL) => sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND ${match}`;
-    // With both contacts, an OR can choose a scan of all live orders without statistics.
-    // UNION keeps each proven contact on its own index and deduplicates shared matches.
-    const joins = contactMatch.length === 1 ? joiningOrder(contactMatch[0]!)
-        : sql`CASE WHEN ${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL THEN 1 ELSE 0 END = 1
-            AND ${orders.id} IN (${sql.join(contactMatch.map((match) => sql`SELECT ${orders.id} FROM ${orders} WHERE ${joiningOrder(match)}`), sql` UNION `)})`;
+    const joining = joiningContactOrders(input);
+    if (!joining) return [];
+    const { joins, phoneMatch } = joining;
     const leaves = and(joins, isNotNull(orders.customerId), ne(orders.customerId, input.customerId))!;
     const via = phoneMatch ? sql`CASE WHEN ${phoneMatch} THEN 'phone' ELSE 'email' END` : sql`'email'`;
     // Guest records whose every order is about to join the account: they are merged into it.
@@ -238,6 +229,27 @@ export function buildVerifiedContactOrderLink(
             .set({ customerId: input.customerId, accountOwnerCustomerId: input.customerId })
             .where(joins),
     ];
+}
+
+/**
+ * Unowned live orders placed with a verified contact (the orders a link
+ * moves), or null without a verified contact. Each contact match leads with
+ * its own contact index.
+ */
+function joiningContactOrders(input: { email?: string | null; phone?: string | null }) {
+    const phone = phoneOrNull(input.phone);
+    const email = normalizeContactEmail(input.email);
+    const phoneMatch = phone ? sql`${orders.customerPhone} = ${phone}` : null;
+    const emailMatch = email ? sql`lower(trim(${orders.customerEmail})) = ${email}` : null;
+    const contactMatch = [phoneMatch, emailMatch].filter((match): match is SQL => match !== null);
+    if (contactMatch.length === 0) return null;
+    const joiningOrder = (match: SQL) => sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND ${match}`;
+    // With both contacts, an OR can choose a scan of all live orders without statistics.
+    // UNION keeps each proven contact on its own index and deduplicates shared matches.
+    const joins = contactMatch.length === 1 ? joiningOrder(contactMatch[0]!)
+        : sql`CASE WHEN ${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL THEN 1 ELSE 0 END = 1
+            AND ${orders.id} IN (${sql.join(contactMatch.map((match) => sql`SELECT ${orders.id} FROM ${orders} WHERE ${joiningOrder(match)}`), sql` UNION `)})`;
+    return { joins, phoneMatch };
 }
 
 const account = alias(customers, "account");
@@ -381,12 +393,17 @@ export async function linkVerifiedContactOrders(db: Database, customerId: string
         .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
         .get();
     if (!account) return;
-    const statements = buildVerifiedContactOrderLink(db, {
+    const contact = {
         customerId,
         email: account.emailVerifiedAt ? account.email : null,
         phone: account.phoneVerifiedAt ? account.phone : null,
-    });
-    if (statements.length > 0) {
-        await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
-    }
+    };
+    // Most views have nothing to link: one indexed probe instead of the
+    // nine-statement write batch. An order placed after the probe links on the
+    // next view (or at checkout, when its contact is already verified).
+    const joining = joiningContactOrders(contact);
+    if (!joining) return;
+    const pending = await db.select({ id: orders.id }).from(orders).where(joining.joins).limit(1).get();
+    if (!pending) return;
+    await safeBatch(db, buildVerifiedContactOrderLink(db, contact) as unknown as Parameters<typeof safeBatch>[1]);
 }

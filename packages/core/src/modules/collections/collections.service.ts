@@ -272,7 +272,8 @@ async function assertCollectionReferenceSetsExist(
                 sql`${products.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIdList)})
                 )`,
-                isNull(products.deletedAt),
+                // `+`: the id list drives; without statistics SQLite would walk every live row on a deleted_at index.
+                sql`+${products.deletedAt} IS NULL`,
             )).all()
             : Promise.resolve([]),
         categoryIdList.length > 0
@@ -280,7 +281,7 @@ async function assertCollectionReferenceSetsExist(
                 sql`${categories.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdList)})
                 )`,
-                isNull(categories.deletedAt),
+                sql`+${categories.deletedAt} IS NULL`,
             )).all()
             : Promise.resolve([]),
     ]);
@@ -518,7 +519,7 @@ export async function updateCollectionProducts(
     const found = candidates.length > 0
         ? new Set((await db.select({ id: products.id }).from(products).where(and(
             sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(candidates)}))`,
-            isNull(products.deletedAt),
+            sql`+${products.deletedAt} IS NULL`,
         )).all()).map((row) => row.id))
         : new Set<string>();
     const productIds = [...kept, ...candidates.filter((productId) => found.has(productId))];

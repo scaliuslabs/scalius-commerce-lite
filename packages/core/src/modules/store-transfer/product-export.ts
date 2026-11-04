@@ -110,7 +110,9 @@ export async function buildProductCsvPage(
   }).from(products)
     .leftJoin(brands, eq(brands.id, products.brandId))
     .where(and(
-      isNull(products.deletedAt),
+      // `+`: the id order (and any id list) drives; without statistics SQLite
+      // would otherwise walk every live product on a deleted_at index per page.
+      sql`+${products.deletedAt} IS NULL`,
       input.after ? gt(products.id, input.after) : undefined,
       // One bound JSON value, whatever the selection's size.
       input.ids ? sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(input.ids)}))` : undefined,

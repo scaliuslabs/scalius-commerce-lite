@@ -325,6 +325,56 @@ export const CACHE_DEP_RETIRED_TABLES: Readonly<Record<string, RetiredCacheDepTa
   },
 };
 
+/** The migration that drops the order triggers (`CACHE_DEP_DROPPED_RULES`). */
+export const CACHE_DEP_ORDER_TRIGGERS_DROPPED_IN = "0192_lean_indexes_and_triggers";
+
+export interface DroppedCacheDepRules {
+  /** The registry table it followed, so 0101 and 0139 render byte for byte. */
+  readonly after: string;
+  /** The migration that drops its triggers (and, on PostgreSQL, their functions). */
+  readonly droppedIn: string;
+  readonly spec: CacheDepTableSpec;
+}
+
+/**
+ * Tables that stay in the schema but whose cache triggers a later migration
+ * drops, because no request reads the keys they advanced. Deployed 0101 and
+ * 0139 installed them, so their renderers keep each frozen spec at its old
+ * registry position; `droppedIn` drops the triggers on both chains.
+ */
+export const CACHE_DEP_DROPPED_RULES: Readonly<Record<string, DroppedCacheDepRules>> = {
+  // Private order signals: only the background recommendation refresh ranked
+  // them, outside any request's dependency scope.
+  orders: {
+    after: "sales_channel_locations",
+    droppedIn: CACHE_DEP_ORDER_TRIGGERS_DROPPED_IN,
+    spec: {
+      kinds: ["recommendation-signals" as CacheDepKind], noise: [],
+      rules: withOldImageCompanions([
+        { name: "ins", event: "insert", image: "new", keys: [{ dep: "recommendation-signals" }] },
+        { name: "del", event: "delete", image: "old", keys: [{ dep: "recommendation-signals" }] },
+        { name: "upd", event: "update", image: "new", keys: [{ dep: "recommendation-signals" }],
+          changed: ["id", "status", "customer_phone", "customer_email", "created_at", "deleted_at"] },
+      ].map((rule): CacheDepRule => ({
+        ...rule,
+        where: { exists: "SELECT 1 WHERE R.deleted_at IS NULL AND R.status IN ('pending', 'processing', 'confirmed', 'shipped', 'delivered', 'completed')" },
+      }) as CacheDepRule)),
+    },
+  },
+  order_items: {
+    after: "sales_channel_locations",
+    droppedIn: CACHE_DEP_ORDER_TRIGGERS_DROPPED_IN,
+    spec: {
+      kinds: ["recommendation-signals" as CacheDepKind], noise: [],
+      rules: withOldImageCompanions([
+        { name: "ins", event: "insert", image: "new", keys: [{ dep: "recommendation-signals" }] },
+        { name: "del", event: "delete", image: "old", keys: [{ dep: "recommendation-signals" }] },
+        { name: "upd", event: "update", image: "new", keys: [{ dep: "recommendation-signals" }], changed: ["product_id", "order_id", "created_at"] },
+      ] as CacheDepRule[]),
+    },
+  },
+};
+
 const BREAKPOINT = "--> statement-breakpoint";
 
 /** Trigger name prefix of every generated per-table trigger. */
@@ -805,24 +855,39 @@ function postgresTrigger(table: string, spec: CacheDepTableSpec, rule: CacheDepR
   ].join("\n");
 }
 
-/** The registry's tables in order, each retired table at its old position when asked for. */
-function registryTables(withRetired: boolean): Array<[string, CacheDepTableSpec]> {
+/**
+ * The registry's tables in order; with `withRetired`, each retired table at
+ * its old position; with `withDropped`, each table whose triggers a later
+ * migration dropped (`CACHE_DEP_DROPPED_RULES`) at its old position.
+ */
+function registryTables(withRetired: boolean, withDropped: boolean): Array<[string, CacheDepTableSpec]> {
   const tables: Array<[string, CacheDepTableSpec]> = [];
   for (const [table, spec] of Object.entries(CACHE_DEP_TABLES) as Array<[string, CacheDepTableSpec]>) {
     tables.push([table, spec]);
-    if (!withRetired) continue;
-    for (const [retired, frozen] of Object.entries(CACHE_DEP_RETIRED_TABLES)) {
-      if (frozen.after === table) tables.push([retired, frozen.spec]);
+    if (withRetired) {
+      for (const [retired, frozen] of Object.entries(CACHE_DEP_RETIRED_TABLES)) {
+        if (frozen.after === table) tables.push([retired, frozen.spec]);
+      }
+    }
+    if (withDropped) {
+      for (const [dropped, frozen] of Object.entries(CACHE_DEP_DROPPED_RULES)) {
+        if (frozen.after === table) tables.push([dropped, frozen.spec]);
+      }
     }
   }
   return tables;
 }
 
-/** Every per-table trigger, in registry order (with `withRetired`, deployed 0100's retired tables too). */
-export function generateCacheDepTriggers(options: { withRetired?: boolean } = {}): GeneratedCacheDepTrigger[] {
+/**
+ * Every per-table trigger the schema holds now, in registry order. With
+ * `withRetired`, deployed 0100's retired tables too; with `withDropped`, the
+ * triggers a later migration dropped (for rendering the migrations that
+ * installed them).
+ */
+export function generateCacheDepTriggers(options: { withRetired?: boolean; withDropped?: boolean } = {}): GeneratedCacheDepTrigger[] {
   const triggers: GeneratedCacheDepTrigger[] = [];
   const names = new Set<string>();
-  for (const [table, spec] of registryTables(options.withRetired === true)) {
+  for (const [table, spec] of registryTables(options.withRetired === true, options.withDropped === true)) {
     columnsOf(table);
     for (const column of spec.noise) assertColumn(table, column);
     for (const rule of spec.rules) {
@@ -844,12 +909,13 @@ export function generateCacheDepTriggers(options: { withRetired?: boolean } = {}
   return triggers;
 }
 
-const generated = generateCacheDepTriggers();
-const generatedWithRetired = generateCacheDepTriggers({ withRetired: true });
+/** Every trigger a migration of the chain installed, dropped ones included. */
+const generated = generateCacheDepTriggers({ withDropped: true });
+const generatedWithRetired = generateCacheDepTriggers({ withRetired: true, withDropped: true });
 /** Deployed 0101 omits the signal inputs repaired additively in 0139. */
 const generatedProjectionBaseline = (() => {
   renderingProjectionBaseline = true;
-  try { return generateCacheDepTriggers(); }
+  try { return generateCacheDepTriggers({ withDropped: true }); }
   finally { renderingProjectionBaseline = false; }
 })();
 /** Deployed 0100's triggers: with its retired tables and the columns it saw. */
@@ -865,7 +931,7 @@ const postgresByName = new Map(generatedWithRetired.map((trigger) => [trigger.na
 const baselineWhereTriggers = new Set(Object.keys(CACHE_DEP_BASELINE_WHERE)
   .map((key) => `${CACHE_DEP_TRIGGER_PREFIX}${key.replace(":", "_")}`));
 /** Band rules, whose 0100 text read the store default at every use (`bandChangedSql`). */
-const bandTriggers = new Set(registryTables(false).flatMap(([table, spec]) =>
+const bandTriggers = new Set(registryTables(false, false).flatMap(([table, spec]) =>
   spec.rules.filter((rule) => rule.bandChanged).map((rule) => triggerName(table, rule))));
 const baselineByName = new Map([
   ...generatedBaseline.filter((trigger) => trigger.table in CACHE_DEP_BASELINE_COLUMNS
@@ -887,12 +953,25 @@ for (const [table, columnSets] of Object.entries(CACHE_DEP_SUPERSEDED_COLUMNS)) 
   }
 }
 
-/** The trigger names a retired table's drop removes (its SQLite triggers go with the table). */
+/**
+ * The trigger names a later migration removes: a retired table's (its SQLite
+ * triggers go with the table) and a dropped rule set's (`CACHE_DEP_DROPPED_RULES`).
+ */
 export function retiredCacheDepTriggerNames(migration?: string): string[] {
+  const droppedIn = (table: string) => CACHE_DEP_RETIRED_TABLES[table]?.droppedIn ?? CACHE_DEP_DROPPED_RULES[table]?.droppedIn;
   return generatedWithRetired
-    .filter((trigger) => trigger.table in CACHE_DEP_RETIRED_TABLES
-      && (migration === undefined || CACHE_DEP_RETIRED_TABLES[trigger.table]!.droppedIn === migration))
+    .filter((trigger) => droppedIn(trigger.table) !== undefined
+      && (migration === undefined || droppedIn(trigger.table) === migration))
     .map((trigger) => trigger.name);
+}
+
+/** SQLite statements dropping the triggers of the dropped rule sets `migration` names (the tables stay). */
+export function droppedCacheDepTriggerDrops(migration: string): { sqlite: string[]; postgres: string[] } {
+  const triggers = generatedWithRetired.filter((trigger) => CACHE_DEP_DROPPED_RULES[trigger.table]?.droppedIn === migration);
+  return {
+    sqlite: triggers.map((trigger) => `DROP TRIGGER IF EXISTS \`${trigger.name}\`;`),
+    postgres: triggers.map((trigger) => `DROP TRIGGER IF EXISTS ${postgres.id(trigger.name)} ON ${postgres.id(trigger.table)};`),
+  };
 }
 
 /** PostgreSQL statements dropping the trigger functions of the tables `migration` drops. */

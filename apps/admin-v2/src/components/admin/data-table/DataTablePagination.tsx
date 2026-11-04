@@ -30,6 +30,8 @@ interface DataTablePaginationProps<TData extends TableRowData> {
   table: Table<TData>;
   pageSizeOptions?: readonly number[];
   cursorPaging?: DataTableCursorPaging;
+  /** A list paged by number whose total is a lower bound ("1,000+"). */
+  totalIsCapped?: boolean;
   /** Names the list whose page size this browser keeps (`createListSearchValidator`'s `list`). */
   layoutKey?: string;
   /** A page is loading: the arrows wait instead of stacking requests. */
@@ -46,6 +48,7 @@ export function DataTablePagination<TData extends TableRowData>({
   table,
   pageSizeOptions = PAGE_SIZE_OPTIONS,
   cursorPaging,
+  totalIsCapped,
   layoutKey,
   busy = false,
 }: DataTablePaginationProps<TData>) {
@@ -62,7 +65,7 @@ export function DataTablePagination<TData extends TableRowData>({
     ? t("showingRange", { start, end })
     : !known
       ? t("showingBeyond", { count: rowsOnPage, total })
-      : cursorPaging?.totalIsCapped
+      : (cursorPaging ? cursorPaging.totalIsCapped : totalIsCapped)
         ? t("showingCapped", { start, end, total })
         : t("showing", { start, end, total });
 

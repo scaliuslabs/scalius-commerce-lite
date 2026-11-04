@@ -56,7 +56,6 @@ export const deps = {
   recommendations: (productId: Id): void => declareOne(cacheDep.recommendations, productId),
   sold: (productId: Id): void => declareOne(cacheDep.sold, productId),
   popular: (): void => declare(cacheDep.popular()),
-  recommendationSignals: (): void => declare(cacheDep.recommendationSignals()),
   /** `p:<id>` for every card, row or recommendation shown. */
   products: (productIds: Iterable<Id>): void => declareEach(cacheDep.product, productIds),
   /** `lm:<scope>`: which products are public members of a listing, and newest order. */

@@ -90,7 +90,6 @@ export const notificationDeliveryReceipts = sqliteTable("notification_delivery_r
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
 }, (table) => [
     uniqueIndex("notification_delivery_receipts_receipt_key_unique").on(table.receiptKey),
-    index("notification_delivery_receipts_outbox_id_idx").on(table.outboxId),
     index("notification_delivery_receipts_outbox_status_idx").on(table.outboxId, table.status),
     index("notification_delivery_receipts_subject_created_idx").on(table.subjectType, table.subjectId, table.createdAt),
     index("notification_delivery_receipts_subject_channel_idx").on(

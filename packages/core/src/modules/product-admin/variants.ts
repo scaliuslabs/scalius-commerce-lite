@@ -93,7 +93,7 @@ export async function assertSkusFree(
         .from(productVariants)
         .innerJoin(products, eq(products.id, productVariants.productId))
         .where(and(
-            sql`lower(trim(${productVariants.sku})) IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...byKey.keys()])}))`,
+            sql`lower(trim(${productVariants.sku})) IN (SELECT value FROM json_each(${JSON.stringify([...byKey.keys()])}))`,
             ownProductId ? ne(productVariants.productId, ownProductId) : undefined,
         ))
         .limit(1)
