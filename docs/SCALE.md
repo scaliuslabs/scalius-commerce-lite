@@ -48,17 +48,25 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `admin-order-list` | 9 | 15 | 1 | 1,319 | 4 | - |
 | `admin-order-list-deep` | 3 | 7 | 1 | 57 | 0 | - |
 | `admin-product-save` | 24 | 39 | 549 | 161 | 29 | - |
-| `order-status-change` | 50 | 42 | 35 | 1,286 | 5 | - |
-| `order-refund` | 50 | 53 | 73 | 1,292 | 6 | - |
+| `order-status-change` | 40 | 44 | 18 | 1,342 | 5 | - |
+| `order-refund` | 48 | 56 | 22 | 1,344 | 7 | - |
 | `sku-stock-change` | 9 | 17 | 8 | 21 | 7 | - |
-| `cron-idle` | 19 | 20 | 117 | 7,556 | 21 | 0 / 15.79 |
-| `cron-nightly` | 25 | 32 | 432 | 25,963 | 91 | - |
+| `cron-idle` | 10 | 20 | 98 | 7,453 | 18 | 0 / 15.79 |
+| `cron-nightly` | 25 | 32 | 430 | 25,782 | 77 | - |
 | `drain-busy` | 7 | 17 | 103 | 882 | 21 | - |
 | `order-3-line-commit` | 34 | 80 | 74 | 73 | 26 | - |
 | `order-lifecycle` | 34 | 80 | 74 | 73 | 26 | - |
 | `bulk-run-chunk` | 7 | 195 | 1,142 | 295 | 7 | - |
 | `order-3-line-commit-tracking` | 45 | 108 | 153 | 102 | 28 | - |
 | `payment-webhook-confirmed` | 25 | 39 | 14 | 31 | 1 | - |
+| `order-3-line-commit-subscribers-0` | 30 | 76 | 74 | 73 | 18 | - |
+| `order-3-line-commit-subscribers-3` | 58 | 108 | 93 | 104 | 18 | - |
+| `order-3-line-commit-subscribers-8` | 58 | 108 | 103 | 125 | 18 | - |
+| `order-status-change-subscribers-1` | 54 | 61 | 26 | 1,354 | 5 | - |
+| `order-refund-subscribers-1` | 68 | 78 | 41 | 56 | 3 | - |
+| `order-status-change-subscribers-3` | 60 | 68 | 36 | 62 | 1 | - |
+| `order-refund-subscribers-3` | 68 | 78 | 46 | 64 | 3 | - |
+| `order-3-line-commit-app-subscriber` | 48 | 96 | 119 | 85 | 18 | - |
 
 <!-- free-plan-budgets:end -->
 
