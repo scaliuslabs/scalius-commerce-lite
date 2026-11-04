@@ -21,7 +21,7 @@ import { Field } from "~/components/ui/field";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
 import type { ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
-export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedAi, sectionName, publishing, appsProblem = null, onOpenSection, onShowProblem, onPublish }: {
+export function PublishDialog({ open, onOpenChange, live, draft, held, keptHere = false, unopenedAi, sectionName, publishing, appsProblem = null, onOpenSection, onShowProblem, onPublish }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   live: StorefrontThemeDocument;
@@ -29,6 +29,8 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedA
   draft: StorefrontThemeDocument;
   /** Settings to fix: their edits cannot be saved, so they would not go live. */
   held: number;
+  /** Edits waiting on those settings are kept in this browser (none when only the saved draft fails them). */
+  keptHere?: boolean;
   unopenedAi: readonly StorefrontSection[];
   sectionName: (section: StorefrontSection) => string;
   publishing: boolean;
@@ -76,7 +78,7 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, unopenedA
             <Alert variant="warning" data-publish-held>
               <TriangleAlert aria-hidden="true" />
               <AlertDescription>
-                <p>{t("publishHeld", { count: held })}</p>
+                <p>{t(keptHere ? "publishHeld" : "publishHeldSaved", { count: held })}</p>
                 <span className="mt-2 flex"><Button type="button" variant="outline" size="sm" onClick={onShowProblem}>{t("publishFix")}</Button></span>
               </AlertDescription>
             </Alert>

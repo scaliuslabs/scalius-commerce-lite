@@ -30,6 +30,7 @@ import type { SaveStatus } from "./EditorTopBar";
 import { invalidDraftParts, saveableDraft, type DraftApps } from "./saveable-draft";
 import { themeVersionsKey } from "./theme-history-queries";
 import { sameFormValue } from "~/lib/form-values";
+import { getDashboardBasePath } from "~/lib/dashboard-base-path";
 
 type Theme = StorefrontThemeDocument;
 
@@ -45,11 +46,14 @@ export const AUTOSAVE_DELAY_MS = 800;
  * the shared draft is still the revision they were made on. Anything else
  * (another save, a discard, a restore) wins and the copy is dropped.
  */
-const HELD_EDITS_KEY = "scalius.theme-editor.held-edits";
+export function heldEditsKey(staffId: string | null): string {
+  // One store's dashboard (its base path) and one staff member: edits never reach another account or store.
+  return `scalius.theme-editor.held-edits:${getDashboardBasePath()}:${staffId ?? ""}`;
+}
 
-function readHeldEdits(revision: number): Theme | null {
+function readHeldEdits(key: string, revision: number): Theme | null {
   try {
-    const stored = JSON.parse(window.localStorage.getItem(HELD_EDITS_KEY) ?? "null") as { revision?: unknown; theme?: unknown } | null;
+    const stored = JSON.parse(window.localStorage.getItem(key) ?? "null") as { revision?: unknown; theme?: unknown } | null;
     if (!stored || stored.revision !== revision || typeof stored.theme !== "object" || stored.theme === null) return null;
     return stored.theme as Theme;
   } catch {
@@ -57,10 +61,10 @@ function readHeldEdits(revision: number): Theme | null {
   }
 }
 
-function writeHeldEdits(value: { revision: number; theme: Theme } | null) {
+function writeHeldEdits(key: string, value: { revision: number; theme: Theme } | null) {
   try {
-    if (value) window.localStorage.setItem(HELD_EDITS_KEY, JSON.stringify(value));
-    else window.localStorage.removeItem(HELD_EDITS_KEY);
+    if (value) window.localStorage.setItem(key, JSON.stringify(value));
+    else window.localStorage.removeItem(key);
   } catch {
     // A private window or full storage: the edits stay in this tab only.
   }
@@ -77,12 +81,14 @@ export interface Conflict {
   at: string | null;
 }
 
-export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
+export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = null }: {
   workspace: ThemeWorkspaceDocument;
   refetch: () => Promise<{ data?: ThemeWorkspaceDocument }>;
   canEdit: boolean;
   /** What the active apps declare: their values hold back like any invalid field. */
   apps: DraftApps;
+  /** The signed-in staff member: edits kept in this browser are theirs alone. */
+  staffId?: string | null;
 }) {
   const t = useMessages(themeEditorMessages);
   const queryClient = useQueryClient();
@@ -203,16 +209,16 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps }: {
   useEffect(() => {
     if (restoredHeld.current || !canEdit) return;
     restoredHeld.current = true;
-    const kept = readHeldEdits(workspace.draft.revision);
+    const kept = readHeldEdits(heldEditsKey(staffId), workspace.draft.revision);
     if (!kept || sameFormValue(kept, workspace.draft.theme)) return;
     dispatchHistory({ type: "edit", update: () => kept, at: Date.now() });
     toast.info(t("heldRestored"));
-  }, [canEdit, workspace.draft.revision, workspace.draft.theme, t]);
+  }, [canEdit, workspace.draft.revision, workspace.draft.theme, t, staffId]);
   // Keep the edits held back (not the ones autosave is about to send) until they can be saved.
   useEffect(() => {
     if (!canEdit || !restoredHeld.current) return;
-    writeHeldEdits(held.length > 0 && unsavedEdits ? { revision: saved.revision, theme: working } : null);
-  }, [canEdit, held.length, unsavedEdits, saved.revision, working]);
+    writeHeldEdits(heldEditsKey(staffId), held.length > 0 && unsavedEdits ? { revision: saved.revision, theme: working } : null);
+  }, [canEdit, held.length, unsavedEdits, saved.revision, working, staffId]);
 
   // A store without a draft gets one, so the preview has a draft to render.
   useEffect(() => {

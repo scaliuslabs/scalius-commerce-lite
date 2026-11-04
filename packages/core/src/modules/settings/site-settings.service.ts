@@ -59,6 +59,7 @@ import {
   type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
 import type { StorefrontExtension } from "@scalius/shared/plugins/storefront-components";
+import type { PluginSettingsSchema } from "@scalius/shared/plugins/settings-schema";
 import { STOREFRONT_PRODUCT_SLOTS } from "@scalius/shared/plugins/storefront-protocol";
 import { mergeSeoDiscoverySettings, type SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { mergeSeoReturnPolicySettings, type SeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
@@ -541,6 +542,41 @@ function assertThemeApps(theme: StorefrontThemeDocument, apps: ThemePublishApps)
   throw new AppError(400, THEME_APPS_UNAVAILABLE, sentences.join(" "), problems);
 }
 
+export const THEME_APP_SETTINGS_MISSING = "theme_app_settings_missing";
+
+/**
+ * A theme going live shows no app part without a setting its app requires:
+ * no value and no default to fall back to (a featured product without its
+ * product), read as the dashboard reads it. Hidden sections draw nothing.
+ */
+function assertThemeAppSettings(theme: StorefrontThemeDocument, apps: ThemePublishApps): void {
+  const schemas = new Map<string, PluginSettingsSchema>();
+  for (const extension of apps.extensions) {
+    for (const [type, schema] of Object.entries(extension.sectionSettings)) schemas.set(`section:${extension.pluginId}/${type}`, schema);
+    for (const skin of extension.skins) schemas.set(`skin:${extension.pluginId}/${skin.id}`, skin.settings);
+    for (const component of extension.components) schemas.set(`product_block:${extension.pluginId}/${component.type}`, component.settings);
+  }
+  const missing = storefrontThemeAppReferences(theme).filter((reference) => {
+    const schema = reference.hidden ? undefined : schemas.get(`${reference.kind === "section_skin" ? "skin" : reference.kind}:${reference.pluginId}/${reference.type}`);
+    if (!schema) return false;
+    let node: unknown = theme;
+    for (const key of reference.path.replace(/\.app$/, ".values").split(".")) node = (node as Record<string, unknown> | undefined)?.[key];
+    const values = typeof node === "object" && node !== null ? node as Record<string, unknown> : {};
+    return schema.some((field) => {
+      if (!field.required || field.type === "secret") return false;
+      const value = Object.hasOwn(values, field.key) && values[field.key] !== undefined ? values[field.key] : (field as { default?: unknown }).default;
+      return value === undefined || value === null || value === "" || (field.type === "multiselect" && Array.isArray(value) && value.length === 0);
+    });
+  });
+  if (missing.length === 0) return;
+  throw new AppError(
+    400,
+    THEME_APP_SETTINGS_MISSING,
+    `${missing.length === 1 ? "An app part in this theme needs a setting" : `${missing.length} app parts in this theme need settings`} before it can go live. Open the theme editor and fix ${missing.length === 1 ? "it" : "them"}, or remove ${missing.length === 1 ? "it" : "them"}.`,
+    { paths: missing.map((reference) => reference.path) },
+  );
+}
+
 /** The validated app releases must still be active and approved when the theme commits. */
 function buildThemeAppsGuard(db: Database, theme: StorefrontThemeDocument, apps: ThemePublishApps) {
   const byId = new Map(apps.extensions.map((app) => [app.pluginId, app]));
@@ -829,6 +865,7 @@ export async function publishThemeDraft(
   const normalized = serializeThemeSettings(workspace.draft.theme);
   await assertThemeReferences(db, normalized.theme);
   assertThemeApps(normalized.theme, apps);
+  assertThemeAppSettings(normalized.theme, apps);
   const changes = compareThemeDocuments(workspace.published.theme, normalized.theme);
   const meta: ThemeVersionMeta = {
     changes: changes.slice(0, THEME_VERSION_CHANGES_MAX),

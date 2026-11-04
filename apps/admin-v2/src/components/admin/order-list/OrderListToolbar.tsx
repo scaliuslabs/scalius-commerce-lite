@@ -85,7 +85,7 @@ export function OrderListToolbar({
         </span>
       }
       filters={
-        <LazyPart fallback={<Skeleton className="col-span-full h-15 w-full" />}>
+        <LazyPart className="col-span-full" fallback={<Skeleton className="col-span-full h-15 w-full" />}>
           <OrderListFilters search={search} onChange={onChange} appFilterable={appFilterable} />
         </LazyPart>
       }
