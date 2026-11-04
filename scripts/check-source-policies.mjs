@@ -569,7 +569,6 @@ const NEVER_TRANSLATED = new Set(["WhatsApp", "Messenger", "Facebook", "Instagra
  * few English values one file may hold (file -> { reason, text }).
  */
 export const BUYER_ENGLISH_ALLOW = {
-  "apps/storefront/src/pages/theme-preview.astro": "the merchant's draft preview shell (staff from the theme editor, never buyers); it reads no store language",
   "apps/storefront/src/pages/theme-preview/library.astro": "the theme editor's section library frame (staff, never buyers)",
   "apps/storefront/src/components/newsletter/NewsletterForm.astro": { reason: "the bot trap's label: hidden from people and assistive technology", text: ["Company website"] },
 };
