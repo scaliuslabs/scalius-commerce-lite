@@ -1,13 +1,15 @@
 // Counts down to an offer's end (epoch ms from the server), once a second,
-// and stops at zero. Before it mounts the boxes read "--".
+// and stops at zero, in the page's digits (`zero`: the store's "0" on this
+// page, "০" on a Bangla page). Before it mounts the boxes read "--".
 
 import { defineIsland } from "@scalius/plugin-sdk/island";
 
-export default defineIsland<{ end?: number }>((element, props) => {
+export default defineIsland<{ end?: number; zero?: string }>((element, props) => {
   const end = Number(props?.end);
   if (!Number.isFinite(end)) return;
+  const zero = typeof props?.zero === "string" && props.zero.length === 1 ? props.zero.codePointAt(0)! : 48;
   const values = new Map([...element.querySelectorAll<HTMLElement>("[data-unit]")].map((node) => [node.dataset.unit!, node]));
-  const pad = (value: number) => String(value).padStart(2, "0");
+  const pad = (value: number) => String(value).padStart(2, "0").replace(/[0-9]/g, (digit) => String.fromCodePoint(zero + Number(digit)));
   /** Shows the time left; false once the offer has ended. */
   const tick = () => {
     const left = Math.max(0, end - Date.now());

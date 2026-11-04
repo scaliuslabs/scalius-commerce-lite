@@ -569,8 +569,9 @@
   cursor: pointer;
   transition: border-color var(--n-fast), color var(--n-fast);
 }
+.noor-search-trigger { text-decoration: none; }
 .noor-search-trigger:hover { border-color: currentColor; color: inherit; }
-@media (min-width: 64rem) { button.noor-search-trigger.noor-desk-only { display: inline-flex; } }
+@media (min-width: 64rem) { a.noor-search-trigger.noor-desk-only { display: inline-flex; } }
 
 .noor-logo { display: inline-flex; align-items: center; justify-self: center; min-inline-size: 0; max-inline-size: 100%; color: inherit; text-decoration: none; }
 .noor-logo-img { display: block; inline-size: auto; max-inline-size: min(var(--noor-logo-width, 140px), 44vw); max-block-size: 2.25rem; object-fit: contain; }
@@ -807,35 +808,14 @@
 .noor-drawer-foot { padding: 1.25rem; }
 .noor-drawer-foot a { display: inline-flex; align-items: center; gap: 0.5rem; color: inherit; font-size: 0.9375rem; text-decoration: none; }
 
-/* Search */
-.noor-search {
-  inset: 0 0 auto;
-  inline-size: 100%;
-  max-inline-size: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: var(--n-surface);
-  color: var(--n-ink);
-  box-shadow: 0 24px 40px -24px rgb(20 16 12 / 0.4);
-  opacity: 0;
-  transform: translateY(-1rem);
-  transition: opacity var(--n-base) var(--n-ease), transform var(--n-base) var(--n-ease), overlay var(--n-base) allow-discrete, display var(--n-base) allow-discrete;
-}
-.noor-search:popover-open { opacity: 1; transform: none; }
-@starting-style { .noor-search:popover-open { opacity: 0; transform: translateY(-1rem); } }
-.noor-search::backdrop { background: rgb(20 16 12 / 0.35); }
-.noor-search-inner { max-inline-size: 48rem; margin: 0 auto; padding: 1rem var(--n-gutter) 1.5rem; }
-.noor-search-suggest { margin-block-start: 1.25rem; }
-.noor-search-suggest ul { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
-.noor-search-suggest a { display: inline-flex; padding: 0.4375rem 0.875rem; border: 1px solid var(--n-line); border-radius: 999px; color: inherit; font-size: 0.875rem; text-decoration: none; }
-.noor-search-suggest a:hover { border-color: var(--n-ink); }
 
 .noor-field { display: flex; align-items: center; gap: 0.625rem; padding-inline: 0.875rem 0.25rem; border: 1px solid var(--n-field); border-radius: var(--n-btn-radius); background: var(--n-bg); color: var(--n-muted); }
 .noor-field:focus-within { border-color: var(--n-ink); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, var(--n-brand)) 22%, transparent); }
 .noor-field input:focus-visible { outline: none; }
 .noor-field input { flex: 1; min-inline-size: 0; block-size: 2.75rem; border: 0; outline: 0; background: transparent; color: var(--n-ink); font: inherit; font-size: 1rem; }
 .noor-field.is-large input { block-size: 3.25rem; font-size: 1.0625rem; }
+/* The drawer's search: a field-shaped link that opens the store's live search. */
+.noor-field.is-opener { min-block-size: 2.75rem; text-decoration: none; }
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 

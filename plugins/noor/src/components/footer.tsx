@@ -6,7 +6,7 @@
 import { Image, Slot, editable, t, type FooterProps } from "@scalius/plugin-sdk/storefront";
 import { MenuLinks } from "./header";
 import { Icon, SocialIcon } from "./icons";
-import { choice, cx, text } from "./ui";
+import { choice, cx, digits, text } from "./ui";
 
 export interface FooterSettings {
   newsletter_heading: string | null;
@@ -53,7 +53,7 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
   const legal = (
     <div class="noor-footer-legal">
       <p>
-        © {data.year} {data.store.name}
+        © {digits(context, data.year)} {data.store.name}
         {data.policies.map((policy) => <><span aria-hidden="true"> · </span><a href={policy.url}>{policy.title}</a></>)}
       </p>
       {payments.length > 0 ? (
@@ -90,7 +90,7 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
             </a>
             {text(settings.tagline) ? <p class="noor-footer-tagline" {...editable(context, "tagline")}>{settings.tagline}</p> : null}
             <ul class="noor-contact">
-              {data.store.phone ? <li><Icon name="phone" size={16} /><a href={`tel:${data.store.phone.replace(/[^\d+]/g, "")}`}>{data.store.phone}</a></li> : null}
+              {data.store.phone ? <li><Icon name="phone" size={16} /><a href={`tel:${data.store.phone.replace(/[^\d+]/g, "")}`}><bdi dir="ltr">{digits(context, data.store.phone)}</bdi></a></li> : null}
               {data.store.email ? <li><Icon name="mail" size={16} /><a href={`mailto:${data.store.email}`}>{data.store.email}</a></li> : null}
               {data.store.address ? <li><Icon name="pin" size={16} /><span>{data.store.address}</span></li> : null}
             </ul>

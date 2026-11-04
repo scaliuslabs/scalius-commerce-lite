@@ -68,6 +68,23 @@ export function Section({ name, tone, space, bleed = false, label, children, id 
   );
 }
 
+/** The digit zero as the store writes numbers on this page ("০" on a Bangla page). */
+export function zeroDigit(context: Context): string {
+  return formatNumber(context, 0);
+}
+
+/**
+ * A number or a text of digits (a year, a phone, a step) in the store's
+ * digits on this page ("০১৭১১…" on a Bangla page); everything else stays.
+ */
+export function digits(context: Context, value: string | number): string {
+  const zero = zeroDigit(context);
+  const text = String(value);
+  if (zero === "0" || zero.length !== 1) return text;
+  const base = zero.codePointAt(0)!;
+  return text.replace(/[0-9]/g, (digit) => String.fromCodePoint(base + Number(digit)));
+}
+
 /** What a section waiting on a merchant's choice (its product) shows: a note in the theme editor, nothing to buyers. */
 export function Empty({ context, words }: { context: Context; words: { en: string; bn: string } }) {
   return context.preview ? <Section name="landing-empty" space="s"><p class="noor-empty">{t(context, words)}</p></Section> : null;

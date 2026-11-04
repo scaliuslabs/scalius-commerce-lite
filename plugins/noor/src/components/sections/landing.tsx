@@ -20,7 +20,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { ICON_NAMES, Icon, type IconName } from "../icons";
-import { Empty, Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
+import { Empty, Section, SectionHead, Stars, choice, cx, digits, percent, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
 import { Countdown, countdownEnd } from "./commerce";
 
 function iconOf(value: unknown): IconName {
@@ -90,7 +90,7 @@ export function LandingHero({ settings, context, instanceId }: SectionProps<Land
             <ol class="noor-thumbs" data-controls hidden>
               {photos.map((photo, index) => (
                 <li><button type="button" data-dot={String(index)} aria-current={index === 0 ? "true" : "false"}
-                  aria-label={t(context, { en: `Photo ${index + 1}`, bn: `ছবি ${index + 1}` })}>
+                  aria-label={t(context, { en: `Photo ${index + 1}`, bn: `ছবি ${digits(context, index + 1)}` })}>
                   <Image image={photo} sizes="72px" alt="" class="noor-cover" />
                 </button></li>
               ))}
@@ -177,7 +177,7 @@ export function LandingFeatures({ settings, context }: SectionProps<LandingFeatu
           {items.map((item, index) => (
             <li class="noor-feature">
               {style === "steps"
-                ? <span class="noor-step" aria-hidden="true">{index + 1}</span>
+                ? <span class="noor-step" aria-hidden="true">{digits(context, index + 1)}</span>
                 : item.image
                   ? <span class="noor-feature-photo"><Image image={item.image} sizes="(min-width: 768px) 25vw, 50vw" class="noor-cover" alt="" /></span>
                   : <span class="noor-feature-icon"><Icon name={iconOf(item.icon)} size={22} /></span>}

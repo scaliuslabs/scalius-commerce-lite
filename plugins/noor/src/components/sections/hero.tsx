@@ -5,7 +5,7 @@
 
 import { Image, Island, editable, t, type SectionProps, type StorefrontImage } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "../icons";
-import { Button, Section, choice, cx, text, type Context } from "../ui";
+import { Button, Section, choice, cx, digits, text, type Context } from "../ui";
 
 export interface HeroSettings {
   eyebrow: string | null;
@@ -111,7 +111,7 @@ export function Slideshow({ settings, context, instanceId }: SectionProps<Slides
               const link = text(slide.link);
               return (
                 <li class={cx("noor-slide", `at-${choice(slide.position, ["start", "center", "end"] as const, "start")}`)} data-slide
-                  aria-roledescription="slide" aria-label={`${index + 1} / ${slides.length}`} id={`noor-${instanceId}-slide-${index}`}>
+                  aria-roledescription="slide" aria-label={`${digits(context, index + 1)} / ${digits(context, slides.length)}`} id={`noor-${instanceId}-slide-${index}`}>
                   <div class="noor-hero-media">
                     <Photo image={slide.image} phone={slide.phone_image} eager={index === 0} sizes="100vw" />
                   </div>
@@ -135,7 +135,7 @@ export function Slideshow({ settings, context, instanceId }: SectionProps<Slides
               <ol class="noor-dots">
                 {slides.map((_, index) => (
                   <li><button type="button" data-dot={String(index)} aria-current={index === 0 ? "true" : "false"}
-                    aria-label={t(context, { en: `Slide ${index + 1}`, bn: `স্লাইড ${index + 1}` })} /></li>
+                    aria-label={t(context, { en: `Slide ${index + 1}`, bn: `স্লাইড ${digits(context, index + 1)}` })} /></li>
                 ))}
               </ol>
               <button type="button" class="noor-round is-glass" data-next aria-label={t(context, { en: "Next slide", bn: "পরের স্লাইড" })}><Icon name="arrow" size={18} /></button>

@@ -18,7 +18,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "../icons";
-import { Button, Empty, Products, Rail, Section, SectionHead, Stars, cardActionWords, choice, cx, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
+import { Button, Empty, Products, Rail, Section, SectionHead, Stars, cardActionWords, choice, cx, digits, zeroDigit, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
 
 // ── Products with tabs ───────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ export function ProductShowcase({ settings, context, instanceId }: SectionProps<
             {tabs.map((tab, index) => (
               <label class="noor-tab">
                 <input type="radio" name={name} value={String(index)} checked={index === 0} class="noor-tab-input" />
-                <span>{tab.label ?? `${index + 1}`}</span>
+                <span>{tab.label ?? digits(context, index + 1)}</span>
               </label>
             ))}
           </div>
@@ -164,7 +164,7 @@ export function ShopTheLook({ settings, context }: SectionProps<LookSettings>) {
           {spots.map((spot, index) => (
             <details class={cx("noor-spot", ...spotPlacement(spot.x, spot.y))} style={{ left: `${spot.x}%`, top: `${spot.y}%` }}>
               {/* Its name is the number it shows, then the product's title. */}
-              <summary>{index + 1}<span class="noor-sr"> {spot.title}</span></summary>
+              <summary>{digits(context, index + 1)}<span class="noor-sr"> {spot.title}</span></summary>
               <div class="noor-spot-card">
                 <strong>{spot.title}</strong>
                 {text(spot.text) ? <p>{spot.text}</p> : null}
@@ -299,7 +299,7 @@ export function Countdown({ end, context, size = "m" }: { end: number; context: 
     { key: "seconds", en: "Sec", bn: "সেকেন্ড" },
   ];
   return (
-    <Island name="countdown" hydrate="idle" props={{ end }} class={cx("noor-timer", `is-${size}`)}>
+    <Island name="countdown" hydrate="idle" props={{ end, ...(zeroDigit(context) === "0" ? {} : { zero: zeroDigit(context) }) }} class={cx("noor-timer", `is-${size}`)}>
       <ol class="noor-timer-list" aria-live="off">
         {units.map((unit) => (
           <li><span class="noor-timer-value" data-unit={unit.key}>--</span><span class="noor-timer-label">{t(context, unit)}</span></li>
