@@ -48,10 +48,10 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `admin-order-list` | 9 | 15 | 1 | 1,378 | 4 | - |
 | `admin-order-list-deep` | 3 | 7 | 1 | 57 | 0 | - |
 | `admin-product-save` | 21 | 36 | 539 | 164 | 26 | - |
-| `order-status-change` | 24 | 37 | 10 | 1,339 | 5 | - |
+| `order-status-change` | 18 | 33 | 10 | 34 | 1 | - |
 | `bulk-confirm` | 9 | 105 | 131 | 73 | 0 | - |
-| `bulk-confirm-repair` | 21 | 124 | 134 | 90 | 5 | - |
-| `order-refund` | 25 | 42 | 19 | 1,341 | 7 | - |
+| `bulk-confirm-repair` | 19 | 126 | 134 | 90 | 5 | - |
+| `order-refund` | 25 | 42 | 19 | 27 | 3 | - |
 | `order-refund-gift-card` | 28 | 60 | 48 | 51 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 8 | 18 | 4 | - |
 | `cron-idle` | 10 | 20 | 98 | 7,453 | 16 | 0 / 15.68 |
@@ -67,11 +67,17 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-3-line-commit-subscribers-0` | 18 | 74 | 87 | 89 | 18 | - |
 | `order-3-line-commit-subscribers-3` | 29 | 92 | 82 | 113 | 18 | - |
 | `order-3-line-commit-subscribers-8` | 29 | 92 | 98 | 134 | 18 | - |
-| `order-status-change-subscribers-1` | 35 | 53 | 17 | 1,350 | 5 | - |
-| `order-refund-subscribers-1` | 46 | 65 | 91 | 98 | 3 | - |
-| `order-status-change-subscribers-3` | 32 | 50 | 22 | 49 | 1 | - |
-| `order-refund-subscribers-3` | 44 | 63 | 129 | 166 | 3 | - |
+| `order-status-change-subscribers-1` | 29 | 49 | 17 | 51 | 1 | - |
+| `order-refund-subscribers-1` | 41 | 65 | 91 | 98 | 3 | - |
+| `order-status-change-subscribers-3` | 32 | 50 | 22 | 58 | 1 | - |
+| `order-refund-subscribers-3` | 39 | 63 | 129 | 166 | 3 | - |
 | `order-3-line-commit-app-subscriber` | 24 | 84 | 76 | 97 | 18 | - |
+| `order-cancel-stock-subscribers-0` | 30 | 66 | 36 | 80 | 9 | - |
+| `order-full-refund-cancel-subscribers-0` | 32 | 68 | 61 | 72 | 7 | - |
+| `order-cancel-stock-subscribers-1` | 41 | 82 | 45 | 99 | 9 | - |
+| `order-full-refund-cancel-subscribers-1` | 43 | 84 | 97 | 118 | 7 | - |
+| `order-cancel-stock-subscribers-3` | 39 | 80 | 49 | 103 | 9 | - |
+| `order-full-refund-cancel-subscribers-3` | 41 | 82 | 122 | 164 | 7 | - |
 
 <!-- free-plan-budgets:end -->
 

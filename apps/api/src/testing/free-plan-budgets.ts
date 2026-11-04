@@ -164,6 +164,25 @@
  * an OTP request counts the store-wide ceiling atomically after its cooldown
  * (13 -> 16 calls). The Paid sweep tick also sweeps lapsed attempt windows in
  * the OTP rate-limit cleanup job (56 -> 58 calls).
+ *
+ * Stock in one read (2026-11-04, final audit F1): a cancel that releases a
+ * 3-line order's stock, or a full refund that cancels it, needed 52 to 56 D1
+ * calls on Free with any webhook subscriber, its after-response work
+ * included: preparing the stock read the order, its lines, then each SKU's
+ * counters, movement generation and ledger context one at a time (12 calls
+ * for 3 lines), and the low-stock check after it 2 calls a SKU. The order,
+ * lines, SKUs, movements and an open return are now one read batch, and the
+ * alerts one read (plus one write batch only when an alert changes). New
+ * cases, Free worst run: cancel with stock 28 / 39 / 37 calls at 0 / 1 / 3
+ * webhooks, full refund that cancels 30 / 41 / 39 (before: 48 / 54 / 52 and
+ * 42 / 56 / 54); budgets carry the subscriber cases' 2 calls and 4 statements
+ * of headroom. Lowered with it: status change 24 -> 18 calls, and its rows
+ * read 1,339 -> 34 (the per-SKU generation count walked the movement type
+ * index), refund rows read 1,341 -> 27, the subscriber status changes and
+ * refunds 2 to 7 calls each. Raised: bulk-confirm-repair +2 statements
+ * (its restored order's read batch has 5 statements where 3 calls read the
+ * order, its line and its generation), and the status change with 3
+ * webhooks reads 5 rows more (the order's movements and SKUs come whole).
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -208,10 +227,10 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 21, d1Statements: 36, externalFetches: 0, rowsWritten: 539, rowsRead: 164, fullScans: 26 },
-    "order-status-change": { d1Calls: 24, d1Statements: 37, externalFetches: 0, rowsWritten: 10, rowsRead: 1339, fullScans: 5 },
+    "order-status-change": { d1Calls: 18, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
-    "bulk-confirm-repair": { d1Calls: 21, d1Statements: 124, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
-    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 1341, fullScans: 7 },
+    "bulk-confirm-repair": { d1Calls: 19, d1Statements: 126, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
+    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 51, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.68 },
@@ -227,11 +246,17 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
     "order-3-line-commit-subscribers-3": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 82, rowsRead: 113, fullScans: 18 },
     "order-3-line-commit-subscribers-8": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 98, rowsRead: 134, fullScans: 18 },
-    "order-status-change-subscribers-1": { d1Calls: 35, d1Statements: 53, externalFetches: 1, rowsWritten: 17, rowsRead: 1350, fullScans: 5 },
-    "order-refund-subscribers-1": { d1Calls: 46, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 98, fullScans: 3 },
-    "order-status-change-subscribers-3": { d1Calls: 32, d1Statements: 50, externalFetches: 2, rowsWritten: 22, rowsRead: 49, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 44, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 166, fullScans: 3 },
+    "order-status-change-subscribers-1": { d1Calls: 29, d1Statements: 49, externalFetches: 1, rowsWritten: 17, rowsRead: 51, fullScans: 1 },
+    "order-refund-subscribers-1": { d1Calls: 41, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 98, fullScans: 3 },
+    "order-status-change-subscribers-3": { d1Calls: 32, d1Statements: 50, externalFetches: 2, rowsWritten: 22, rowsRead: 58, fullScans: 1 },
+    "order-refund-subscribers-3": { d1Calls: 39, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 166, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
+    "order-cancel-stock-subscribers-0": { d1Calls: 30, d1Statements: 66, externalFetches: 0, rowsWritten: 36, rowsRead: 80, fullScans: 9 },
+    "order-full-refund-cancel-subscribers-0": { d1Calls: 32, d1Statements: 68, externalFetches: 0, rowsWritten: 61, rowsRead: 72, fullScans: 7 },
+    "order-cancel-stock-subscribers-1": { d1Calls: 41, d1Statements: 82, externalFetches: 2, rowsWritten: 45, rowsRead: 99, fullScans: 9 },
+    "order-full-refund-cancel-subscribers-1": { d1Calls: 43, d1Statements: 84, externalFetches: 2, rowsWritten: 97, rowsRead: 118, fullScans: 7 },
+    "order-cancel-stock-subscribers-3": { d1Calls: 39, d1Statements: 80, externalFetches: 2, rowsWritten: 49, rowsRead: 103, fullScans: 9 },
+    "order-full-refund-cancel-subscribers-3": { d1Calls: 41, d1Statements: 82, externalFetches: 2, rowsWritten: 122, rowsRead: 164, fullScans: 7 },
   },
   paid: {
     "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
@@ -255,10 +280,10 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 35, d1Statements: 57, externalFetches: 0, rowsWritten: 1240, rowsRead: 348, fullScans: 54 },
-    "order-status-change": { d1Calls: 24, d1Statements: 37, externalFetches: 0, rowsWritten: 10, rowsRead: 1339, fullScans: 5 },
+    "order-status-change": { d1Calls: 18, d1Statements: 33, externalFetches: 0, rowsWritten: 10, rowsRead: 34, fullScans: 1 },
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
-    "bulk-confirm-repair": { d1Calls: 97, d1Statements: 314, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
-    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 1342, fullScans: 7 },
+    "bulk-confirm-repair": { d1Calls: 95, d1Statements: 316, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
+    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 27, fullScans: 3 },
     "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 51, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 61, d1Statements: 71, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
@@ -274,10 +299,16 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
     "order-3-line-commit-subscribers-3": { d1Calls: 44, d1Statements: 115, externalFetches: 6, rowsWritten: 94, rowsRead: 126, fullScans: 18 },
     "order-3-line-commit-subscribers-8": { d1Calls: 74, d1Statements: 165, externalFetches: 16, rowsWritten: 142, rowsRead: 179, fullScans: 18 },
-    "order-status-change-subscribers-1": { d1Calls: 35, d1Statements: 53, externalFetches: 1, rowsWritten: 17, rowsRead: 1350, fullScans: 5 },
-    "order-refund-subscribers-1": { d1Calls: 117, d1Statements: 175, externalFetches: 18, rowsWritten: 141, rowsRead: 200, fullScans: 3 },
-    "order-status-change-subscribers-3": { d1Calls: 35, d1Statements: 55, externalFetches: 3, rowsWritten: 26, rowsRead: 52, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 126, d1Statements: 195, externalFetches: 25, rowsWritten: 201, rowsRead: 274, fullScans: 3 },
+    "order-status-change-subscribers-1": { d1Calls: 29, d1Statements: 49, externalFetches: 1, rowsWritten: 17, rowsRead: 51, fullScans: 1 },
+    "order-refund-subscribers-1": { d1Calls: 112, d1Statements: 175, externalFetches: 18, rowsWritten: 141, rowsRead: 200, fullScans: 3 },
+    "order-status-change-subscribers-3": { d1Calls: 35, d1Statements: 55, externalFetches: 3, rowsWritten: 26, rowsRead: 61, fullScans: 1 },
+    "order-refund-subscribers-3": { d1Calls: 121, d1Statements: 193, externalFetches: 25, rowsWritten: 201, rowsRead: 274, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
+    "order-cancel-stock-subscribers-0": { d1Calls: 30, d1Statements: 66, externalFetches: 0, rowsWritten: 36, rowsRead: 80, fullScans: 9 },
+    "order-full-refund-cancel-subscribers-0": { d1Calls: 32, d1Statements: 68, externalFetches: 0, rowsWritten: 61, rowsRead: 72, fullScans: 7 },
+    "order-cancel-stock-subscribers-1": { d1Calls: 41, d1Statements: 82, externalFetches: 2, rowsWritten: 45, rowsRead: 99, fullScans: 9 },
+    "order-full-refund-cancel-subscribers-1": { d1Calls: 87, d1Statements: 152, externalFetches: 12, rowsWritten: 129, rowsRead: 175, fullScans: 7 },
+    "order-cancel-stock-subscribers-3": { d1Calls: 53, d1Statements: 102, externalFetches: 6, rowsWritten: 61, rowsRead: 120, fullScans: 9 },
+    "order-full-refund-cancel-subscribers-3": { d1Calls: 122, d1Statements: 213, externalFetches: 25, rowsWritten: 195, rowsRead: 260, fullScans: 7 },
   },
 };
