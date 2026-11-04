@@ -37,7 +37,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { CardRowContext } from "./RowLink";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { DataTableInitialCards, DataTableInitialRows } from "./DataTableInitialLoading";
-import { useShownAfter } from "./use-shown-after";
+import { useShownAfter } from "../states/loading-sign";
 import type { SortableDataTableContentProps } from "./SortableDataTableContent";
 
 // Only a failed read shows it: its own chunk, off the list's first render.

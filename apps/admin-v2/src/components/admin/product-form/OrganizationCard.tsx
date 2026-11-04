@@ -14,7 +14,7 @@ import { categoryStatusLabel } from "./category-status-label";
 import type { Category, ProductFormValues } from "./types";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
 import { useFieldControl } from "~/components/ui/field";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 interface OrganizationCardProps {
   form: UseFormReturn<ProductFormValues>;

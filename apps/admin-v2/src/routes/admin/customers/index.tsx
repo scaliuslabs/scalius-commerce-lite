@@ -35,7 +35,7 @@ import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { getCustomerColumns, type CustomerListItem } from "~/components/admin/customers/customer-columns";
 import { pageHead } from "~/i18n/page-titles";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 type Customer = CustomerListItem;
 

@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const WarrantyPolicyPicker = React.lazy(() =>
   import("./WarrantyPolicyPicker").then((module) => ({ default: module.WarrantyPolicyPicker })));

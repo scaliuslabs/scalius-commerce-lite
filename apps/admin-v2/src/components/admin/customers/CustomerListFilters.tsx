@@ -12,7 +12,7 @@ import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CUSTOMER_CHANNELS, type CustomerChannel, type CustomerListSearch } from "./customer-list-search";
 import { filterCustomerSegments } from "./segment-list-search";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 
 // Loads only when an active app has a column to filter by.

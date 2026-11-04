@@ -7,7 +7,7 @@ import { DataTableSortMenu, type SortField } from "~/components/admin/data-table
 import { useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
 import { CLEARED_ORDER_FILTERS, countOrderFilters, type OrderListSearch } from "./order-list-search";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const OrderListFilters = lazy(() => import("./OrderListFilters").then((module) => ({ default: module.OrderListFilters })));
 

@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const PublishingChannels = React.lazy(() =>
   import("./PublishingChannels").then((module) => ({ default: module.PublishingChannels })));

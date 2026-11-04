@@ -16,7 +16,7 @@ import { storeSettingsMessages } from "~/i18n/settings-store";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { ADVANCED_URL_KEYS, MAIN_URL_KEYS, SettingsAdvanced, URL_LABELS, currencyName, useCanEditStore } from "./store-settings-shared";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const loadStoreDefaultsFields = () => import("./StoreDefaultsFields");
 const TimeZoneFields = lazy(() => loadStoreDefaultsFields().then((module) => ({ default: module.TimeZoneFields })));

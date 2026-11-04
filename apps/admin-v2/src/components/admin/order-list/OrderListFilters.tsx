@@ -31,7 +31,7 @@ import {
   type OrderListSearch,
 } from "./order-list-search";
 import { Field, FieldSet } from "~/components/ui/field";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const DateRangePickerWithPresets = lazy(() =>
   import("./DateRangePickerWithPresets").then((module) => ({

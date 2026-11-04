@@ -49,7 +49,7 @@ import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { pageHead } from "~/i18n/page-titles";
 import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const STATUSES = ["active", "draft"] as const;
 const CHANNEL_STATES = ["published", "unpublished"] as const;

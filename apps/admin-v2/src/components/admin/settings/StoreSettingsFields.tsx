@@ -61,7 +61,7 @@ import {
   type SocialLink,
   type UrlKey,
 } from "./store-settings-shared";
-import { LazyPart } from "~/components/admin/states/LazyPart";
+import { LazyPart } from "~/components/admin/states/loading-sign";
 
 const ImageField = lazy(() => import("../online-store/ImageField").then((module) => ({ default: module.ImageField })));
 
