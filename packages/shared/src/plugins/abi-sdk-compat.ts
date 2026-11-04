@@ -161,6 +161,76 @@ function canonical(node: ts.TypeNode, source: ts.SourceFile): string {
   }
 }
 
+function unparenthesized(node: ts.TypeNode): ts.TypeNode {
+  return ts.isParenthesizedTypeNode(node) ? unparenthesized(node.type) : node;
+}
+
+/** A union's literal members as text (`"a" | "b"`); null when any member is not a string literal. */
+function stringLiterals(node: ts.TypeNode): string[] | null {
+  const inner = unparenthesized(node);
+  const members = ts.isUnionTypeNode(inner) ? inner.types.map(unparenthesized) : [inner];
+  const values: string[] = [];
+  for (const member of members) {
+    if (!ts.isLiteralTypeNode(member) || !ts.isStringLiteral(member.literal)) return null;
+    values.push(member.literal.text);
+  }
+  return values;
+}
+
+/** `{ prop: "a" | "b" } & rest…`: a discriminant literal, then the rest of the intersection. */
+function discriminated(node: ts.TypeNode, source: ts.SourceFile): { key: string; values: string[]; rest: readonly ts.TypeNode[] } | null {
+  const inner = unparenthesized(node);
+  if (!ts.isIntersectionTypeNode(inner) || inner.types.length < 2) return null;
+  const first = unparenthesized(inner.types[0]!);
+  if (!ts.isTypeLiteralNode(first) || first.members.length !== 1) return null;
+  const member = first.members[0]!;
+  if (!ts.isPropertySignature(member) || member.questionToken || !member.type) return null;
+  const values = stringLiterals(member.type);
+  return values ? { key: memberKey(member, source), values, rest: inner.types.slice(1) } : null;
+}
+
+function compatibleTypeLists(
+  before: readonly ts.TypeNode[], after: readonly ts.TypeNode[], oldSource: ts.SourceFile, newSource: ts.SourceFile,
+): boolean {
+  return before.length === after.length && before.every((node, index) => compatibleType(node, after[index], oldSource, newSource));
+}
+
+/**
+ * A union keeps every member (each may grow, in any order) and gains none,
+ * because a host that returns the type would hand apps a member they never
+ * handled. One exception: a member discriminated by a string literal union
+ * (`{ kind: "a" | "b" } & rest`) may be split into members that partition
+ * those literals exactly, each keeping `rest` (and so able to grow it): every
+ * old value still belongs to exactly one new member.
+ */
+function compatibleUnion(
+  before: readonly ts.TypeNode[], after: readonly ts.TypeNode[], oldSource: ts.SourceFile, newSource: ts.SourceFile,
+): boolean {
+  const unmatchedBefore = before.filter((old) => !after.some((next) => compatibleType(old, next, oldSource, newSource)));
+  const unmatchedAfter = after.filter((next) => !before.some((old) => compatibleType(old, next, oldSource, newSource)));
+  const claimed = new Set<ts.TypeNode>();
+  for (const old of unmatchedBefore) {
+    const was = discriminated(old, oldSource);
+    if (!was) return false;
+    const parts = unmatchedAfter.filter((next) => {
+      const now = discriminated(next, newSource);
+      return now !== null && now.key === was.key && now.values.every((value) => was.values.includes(value))
+        && compatibleTypeLists(was.rest, now.rest, oldSource, newSource);
+    });
+    const covered = parts.flatMap((next) => discriminated(next, newSource)!.values);
+    if (covered.length !== was.values.length || new Set(covered).size !== was.values.length) return false;
+    for (const part of parts) claimed.add(part);
+  }
+  return unmatchedAfter.every((next) => claimed.has(next));
+}
+
+/**
+ * The same type, or one that only grows where apps cannot notice: an object
+ * literal gains optional members, and that holds inside a union member, an
+ * intersection member (same arity), an array's elements and parentheses, at
+ * any depth. A removed or narrowed union member, a new required member and a
+ * different primitive stay breaks.
+ */
 function compatibleType(
   before: ts.TypeNode | undefined, after: ts.TypeNode | undefined,
   oldSource: ts.SourceFile, newSource: ts.SourceFile,
@@ -168,8 +238,13 @@ function compatibleType(
   if (!before || !after) return before === after;
   if (print(before, oldSource) === print(after, newSource)) return true;
   if (canonical(before, oldSource) === canonical(after, newSource)) return true;
-  return ts.isTypeLiteralNode(before) && ts.isTypeLiteralNode(after)
-    && compatibleMembers(before.members, after.members, oldSource, newSource);
+  const was = unparenthesized(before);
+  const now = unparenthesized(after);
+  if (ts.isTypeLiteralNode(was) && ts.isTypeLiteralNode(now)) return compatibleMembers(was.members, now.members, oldSource, newSource);
+  if (ts.isArrayTypeNode(was) && ts.isArrayTypeNode(now)) return compatibleType(was.elementType, now.elementType, oldSource, newSource);
+  if (ts.isUnionTypeNode(was) && ts.isUnionTypeNode(now)) return compatibleUnion(was.types, now.types, oldSource, newSource);
+  if (ts.isIntersectionTypeNode(was) && ts.isIntersectionTypeNode(now)) return compatibleTypeLists(was.types, now.types, oldSource, newSource);
+  return false;
 }
 
 /** A readonly tuple's elements (`readonly [a, b]`); null for any other type. */
