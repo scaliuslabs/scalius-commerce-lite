@@ -66336,6 +66336,10 @@ export type DeleteApiV1AdminAuthUsersByIdErrors = {
      */
     404: ErrorResponse;
     /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
