@@ -46,9 +46,14 @@ import { appendClearThemePreviewCookies, readThemePreviewCookie, THEME_PREVIEW_C
 import { catalogRedirectBeforeReads } from "@/lib/listing-url-redirect";
 import { presenceOfRenderRequest } from "@/lib/market-presence";
 import { buyerPageForbidsFraming } from "@/lib/middleware-helper/buyer-page-framing";
+import { themePreviewBuyerPageNotice } from "@/lib/middleware-helper/theme-preview-buyer-page";
 
 interface PreviewFramingLocals {
-  /** Set by the response policy: the page rendered a valid theme preview. */
+  /**
+   * The answer is a valid theme preview's, which the dashboard may frame: the
+   * page it rendered (set by the response policy), or the notice it shows in
+   * place of a buyer's own page.
+   */
   themePreviewRender?: boolean;
 }
 
@@ -211,12 +216,20 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 // when that read resolves). Storefront pages start the layout read together
 // with their own reads, so the whole render is one API batch; every other
 // route waits for the origins first. Nothing is read from Wrangler vars or
-// build-time env, and nothing is retained across requests.
-const requestRuntimeMiddleware = defineMiddleware(({ request, url, routePattern }, next) => {
+// build-time env, and nothing is retained across requests. A buyer's own page
+// asked for under a live theme preview never renders: the preview's notice
+// answers in its place (`themePreviewBuyerPageNotice`).
+const requestRuntimeMiddleware = defineMiddleware(({ request, url, routePattern, locals }, next) => {
   const early = redirectBeforeReads(request, url, routePattern);
   if (early) return early;
   return runWithRequestRuntime(request, getEnv(), async () => {
     const layout = getLayoutData();
+    const previewNotice = await themePreviewBuyerPageNotice({ request, url, locals }, layout);
+    if (previewNotice) {
+      (locals as PreviewFramingLocals).themePreviewRender = true;
+      previewNotice.headers.set("X-Storefront-Build", BUILD_ID);
+      return previewNotice;
+    }
     const batchedPage =
       request.method === "GET" && isLayoutBatchedPagePath(url.pathname);
     if (!batchedPage) await layout;
