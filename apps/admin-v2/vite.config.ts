@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import viteReact from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { adminChunkGraphPlugin } from "../../scripts/admin-chunk-graph.mjs";
 import { DEFAULT_DEV_PORTS, devOrigins, previewProxyOrigin, readDevPorts } from "../../scripts/dev-ports.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -153,5 +154,8 @@ export default defineConfig(({ command }) => ({
     // (scripts/admin-perf-check.mjs). Retry when its output shrinks.
     viteReact(),
     tailwindcss(),
+    // Records the build's chunk graph beside the Vite cache so scripts/admin-perf-check.mjs
+    // measures this build instead of building the dashboard again.
+    adminChunkGraphPlugin(),
   ],
 }));

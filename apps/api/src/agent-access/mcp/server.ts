@@ -1000,7 +1000,7 @@ export function createAgentMcpServer(deps: McpServerDependencies, options: Agent
   });
 
   server.registerTool("scalius_search", {
-    description: "Find how to do a goal: ranked reviewed workflows (a confident one inlines its plan) and operations this connection can run. Honour control hits that ask or refuse.",
+    description: "Find how to do a goal: ranked reviewed workflows (a confident one inlines its plan) and operations this connection can run. A control hit is routing advice (guidance: true) unless it says enforced: true, where server code also enforces the rule it states; either way the operations' own checks and confirmation decide what runs.",
     inputSchema: listed(z.object({
       query: z.string().trim().min(1).max(500),
       limit: z.number().int().min(1).max(10).optional(),

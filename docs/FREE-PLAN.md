@@ -51,11 +51,15 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 | Subrequests per invocation | 50 external, 1,000 to Cloudflare services |
 | D1 queries per invocation (a `batch()` is one) | 50 |
 | D1 per day | 5M rows read, 100,000 rows written |
+| D1 database size | 500 MB per database (10 GB on Paid) |
+| D1 databases and storage per account | 10 databases and 5 GB on Free (Paid: 1,000,000 databases, 1 TB) |
 | Requests per day | 100,000 |
 | Worker script size | 64 MiB uncompressed, no compressed limit |
 | Worker startup (global scope) | 1 s |
 
 Paid raises these to 30 s of CPU as configured, 1,000 D1 queries and 10,000 subrequests per invocation. The Paid daily quotas are (unverified).
+
+**Database size.** A Scalius store is one database, so the 500 MB cap is per store. A write that would grow a Free database past it fails; the dashboard and the API do not show the database size or warn before the cap (`docs/platform/FEATURE-ROADMAP.md` lists it as open). The tables that grow without a retention sweep are `checkout_attempts`, `notification_outbox`, `order_receipts` and `order_review_requests`. Moving to Paid raises the cap to 10 GB, and the SQLite-to-PostgreSQL path (`docs/DATABASE-PORTABILITY.md`) is the exit past that. Checked 2026-11-03 against Cloudflare's D1 limits page (`developers.cloudflare.com/d1/platform/limits/`, read through a page summariser, not a raw copy): 500 MB Free and 10 GB Paid per database, 10 databases and 5 GB per Free account. The 2026-10-03 date above still covers the other rows.
 
 ## Measuring
 
