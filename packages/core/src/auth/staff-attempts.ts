@@ -57,7 +57,9 @@ export async function reserveStaffAttempt(
   const lapsed = sql`${rateLimit.lastRequest} <= ${lapsedBefore}`;
   const [row] = await db
     .insert(rateLimit)
-    .values({ id: key, key, count: 1, lastRequest: nowMs })
+    // A random id: the key index must be the only unique index a concurrent
+    // insert can collide on, or PostgreSQL raises instead of updating.
+    .values({ id: crypto.randomUUID(), key, count: 1, lastRequest: nowMs })
     .onConflictDoUpdate({
       target: rateLimit.key,
       set: {
