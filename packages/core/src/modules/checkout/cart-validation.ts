@@ -37,7 +37,8 @@ import {
 import { hasFulfiller } from "../fulfilment";
 import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 import { giftCardLineRecipientIssue } from "../gift-cards";
-import { digitalDeliverableSql, digitalUnusedKeysSql } from "../digital";
+import { digitalDeliverableSql } from "../digital";
+import { licenceKeyStockSql } from "../inventory";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, type AppLinePrice, type ResolvedPriceSource } from "@scalius/shared/market-pricing";
@@ -401,7 +402,7 @@ function availableForVariant(variant: StorefrontCartVariantRow, pool: InventoryP
             : Number.POSITIVE_INFINITY;
     }
 
-    // Licence keys are a key-delivered SKU's stock: never sell more than are left.
+    // Licence keys are a key-delivered SKU's stock: never sell more than they stand behind.
     const onHand = typeof variant.digitalKeys === "number" ? Math.min(variant.stock, variant.digitalKeys) : variant.stock;
     return Math.max(0, onHand - variant.reservedStock);
 }
@@ -508,7 +509,7 @@ export function selectStorefrontCartVariantRows(
             digitalDeliverable: sql<boolean>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${digitalDeliverableSql(productVariants.id)} ELSE 0 END`
                 .mapWith((value) => Number(value) === 1),
             // A key-delivered SKU sells at most its unused keys (null for every other SKU).
-            digitalKeys: sql<number | null>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${digitalUnusedKeysSql(productVariants.id)} ELSE NULL END`
+            digitalKeys: sql<number | null>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${licenceKeyStockSql(productVariants.id)} ELSE NULL END`
                 .mapWith((value) => (value === null || value === undefined ? null : Number(value))),
             // Its list prices in every market (null without any): no extra statement.
             listPrices: checkoutListPricesSql(),

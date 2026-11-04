@@ -273,6 +273,10 @@ export function assertOrderCodActionAllowed(
     context: { requiresShipping?: boolean } = {},
 ): void {
     if (canProcessOrderCodAction(status, action, context)) return;
+    // A second click from a tab opened before the first: say what happened, not what is allowed.
+    if (action === "returned" && status === OrderStatus.RETURNED) {
+        throw new ConflictError("This order is already marked returned.");
+    }
     throw new ValidationError(action === "collected" && context.requiresShipping === false
         ? "Confirm the order before recording the cash."
         : COD_ACTION_REFUSALS[action]);

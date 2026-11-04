@@ -4,7 +4,7 @@
 // Stock is permanently deducted only on payment confirmation.
 
 import { catalogBuyerStateRefreshStatementsForSkus, channelUnlinkedOnHandSql, effectiveLowStockThresholdSql } from "../products";
-import { eq, and, sql, inArray, isNull, type SQL } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull, type SQL, type SQLWrapper } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import {
   buildBatchGuard,
@@ -398,26 +398,46 @@ export type ReservationVariantState = {
   trackInventory: boolean;
   stockVersion: number;
   lowStockThreshold?: number | null;
+  /** A key-delivered SKU's key-backed units ({@link licenceKeyStockSql}); null or absent for every other SKU. */
+  keyStock?: number | null;
 };
 
 /**
- * A regular reservation of a SKU that delivers licence keys (digital, with a
- * ready key pool) leaves no more units reserved than unused keys: checkout
- * never sells a key that doesn't exist, even where an old typed-in quantity
- * outgrew the keys (its stock is its keys otherwise). Every other SKU passes.
- * Part of the reservation's own availability check: no extra statement.
+ * The units a key-delivered SKU's licence keys stand behind, or NULL when it
+ * has no ready key pool: its unused keys, plus the keys already handed to
+ * stock-tracked lines of orders that still hold their reservation. Those
+ * units stay in reserved stock until the order is sent, so counting their
+ * keys here keeps a sold key from being counted twice (once as reserved, once
+ * as gone from the pool). Compared with reserved stock, it is what checkout
+ * may still sell, even where an old typed-in quantity outgrew the keys.
+ * Driven by `digital_licence_keys_pool_idx`, `order_items_variant_id_idx` and
+ * `digital_licence_keys_order_item_idx`.
  */
-function licenceKeysCoverSql(variantId: SQL, fulfillmentKind: SQL, reservedStock: SQL, quantity: number): SQL {
-  return sql`(${fulfillmentKind} <> 'digital'
-    OR NOT EXISTS (
+export function licenceKeyStockSql(variantId: SQLWrapper): SQL {
+  return sql`(CASE WHEN EXISTS (
       SELECT 1 FROM digital_assets rka
       WHERE rka.variant_id = ${variantId} AND rka.kind = 'licence_keys' AND rka.status = 'ready'
-    )
-    OR ${reservedStock} + ${quantity} <= (
+    ) THEN (
       SELECT count(*) FROM digital_licence_keys rkk
       JOIN digital_assets rka ON rka.id = rkk.asset_id
       WHERE rka.variant_id = ${variantId} AND rka.kind = 'licence_keys' AND rkk.status = 'available'
-    ))`;
+    ) + (
+      SELECT count(*) FROM order_items rki
+      JOIN orders rko ON rko.id = rki.order_id
+      JOIN digital_licence_keys rkh ON rkh.order_item_id = rki.id
+      WHERE rki.variant_id = ${variantId} AND rki.inventory_tracked = 1
+        AND rko.inventory_action = 'reserved' AND rkh.status = 'assigned'
+    ) ELSE NULL END)`;
+}
+
+/**
+ * A regular reservation of a key-delivered SKU leaves no more units reserved
+ * than its keys stand behind ({@link licenceKeyStockSql}); every other SKU
+ * passes. Part of the reservation's own availability check: no extra statement.
+ */
+function licenceKeysCoverSql(variantId: SQL, fulfillmentKind: SQL, reservedStock: SQL, quantity: number): SQL {
+  return sql`(${fulfillmentKind} <> 'digital'
+    OR ${reservedStock} + ${quantity} <= COALESCE(${licenceKeyStockSql(variantId)}, ${reservedStock} + ${quantity}))`;
 }
 
 /** Units a regular reservation may not take: the SKU's on-hand at locations its channel does not sell. */
@@ -955,6 +975,7 @@ export function selectReservationVariantStates(
       trackInventory: productVariants.trackInventory,
       stockVersion: productVariants.stockVersion,
       lowStockThreshold: effectiveLowStockThresholdSql(),
+      keyStock: sql<number | null>`CASE WHEN ${productVariants.fulfillmentKind} = 'digital' THEN ${licenceKeyStockSql(productVariants.id)} ELSE NULL END`,
     })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))
@@ -1056,6 +1077,7 @@ function validateStockAvailability(
     allowBackorder: boolean;
     backorderLimit: number;
     trackInventory: boolean;
+    keyStock?: number | null;
   },
   quantity: number,
   pool: "regular" | "preorder" | "backorder"
@@ -1079,7 +1101,9 @@ function validateStockAvailability(
       return `Backorder limit exceeded for variant ${variant.id}`;
     }
   } else {
-    const available = variant.stock - variant.reservedStock;
+    // A key-delivered SKU sells no more than its keys stand behind.
+    const onHand = typeof variant.keyStock === "number" ? Math.min(variant.stock, variant.keyStock) : variant.stock;
+    const available = onHand - variant.reservedStock;
     if (available < quantity) {
       return `Insufficient stock for variant ${variant.id}. Available: ${available}, Requested: ${quantity}`;
     }

@@ -241,7 +241,7 @@ export function mapShopifyProducts(table: CsvTable, options: ProductMappingOptio
       }
       const tracked = at("Variant Inventory Tracker").toLowerCase() === "shopify";
       if (at("Variant Inventory Policy").toLowerCase() === "continue") {
-        context.unsupported.add("continue_selling", "\"Continue selling when out of stock\" (set backorders per SKU after import).", sku || ref);
+        context.unsupported.add("continue_selling", "\"Continue selling when out of stock\" (not imported: the SKU stops selling at zero stock).", sku || ref);
       }
       if (parseImportBoolean(at("Variant Taxable")) === false) {
         context.unsupported.add("not_taxable", "Variants marked not taxable (assign a tax class after import).", sku || ref);

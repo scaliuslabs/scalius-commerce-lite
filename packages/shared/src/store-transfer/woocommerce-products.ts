@@ -178,7 +178,7 @@ export function mapWooCommerceProducts(table: CsvTable, options: ProductMappingO
       context.unsupported.add("catalog_visibility", "Catalog visibility (search-only or hidden products are imported as visible).", ref);
     }
     if (parseImportBoolean(get("Backorders allowed?")) === true || get("Backorders allowed?").toLowerCase() === "notify") {
-      context.unsupported.add("backorders", "Backorders (set them per SKU after import).", ref);
+      context.unsupported.add("backorders", "Backorders (not imported: the SKU stops selling at zero stock).", ref);
     }
     if (get("Date sale price starts") || get("Date sale price ends")) {
       context.unsupported.add("scheduled_sales", "Scheduled sale dates (the sale price applies now).", ref);
