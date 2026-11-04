@@ -3,6 +3,7 @@
 // through GiftCardLineDelivery.astro). Never a code: the last 4, the value and
 // where the card was sent (a masked contact from the API). The code reaches the
 // recipient by email or SMS, and the owner can show it under Account → Gift cards.
+import { pageDigits } from "@/lib/checkout-text";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatMoney } from "@/lib/currency";
 import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
@@ -77,7 +78,7 @@ export function readLineGiftCards(value: unknown): LineGiftCard[] {
 /** "Gift card •••• 7K2Q · ৳500" */
 export function lineGiftCardText(card: LineGiftCard): string {
   return giftCardLineCopy().card
-    .replace("{card}", `•••• ${card.last4}`)
+    .replace("{card}", `•••• ${pageDigits(card.last4)}`)
     .replace("{amount}", formatMoney(card.initialAmount, { code: card.currencyCode }));
 }
 

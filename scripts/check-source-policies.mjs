@@ -109,8 +109,20 @@ export const policies = [
     forbid: [
       /import\s*\{[^}]*\b(?:formatCheckoutLanguageText|formatOrderNumber)\b[^}]*\}\s*from\s*["']@scalius\/shared\/(?:checkout-language(?:-format)?|order-utils)["']/,
       /\.textContent\s*=[^;\n]*\bString\(\s*[A-Za-z_$][\w$.]*\s*\)/,
+      // A number made text before it fills a template: String(n), `${n}` or `${n}%`, n.toFixed().
+      /checkoutText\([^;\n]*:\s*(?:String\(|`\$\{[^}`]+\}%?`)/,
+      /checkoutText\([^;\n]*\.toFixed\(/,
+      /=>\s*String\(Math\./,
     ],
     sample: 'badge.textContent = String(count);',
+  },
+  {
+    rule: "storefront pages keep no unload or beforeunload listener, so Back restores them from the back/forward cache",
+    why: "an unload listener, and in Firefox a beforeunload one, makes a page ineligible for the back/forward cache, so Back reloads it; the lazy-script loader once added one on every page (apps/storefront/src/scripts/lazy-script.ts listens only for the moment a stale page reloads)",
+    paths: [storefront, "plugins"],
+    allow: { "apps/storefront/src/scripts/lazy-script.ts": "listens only from a stale page's reload to its notice, then removes the listener" },
+    forbid: [/addEventListener\(\s*["'](?:before)?unload["']/, /\bon(?:before)?unload\s*=/],
+    sample: 'window.addEventListener("beforeunload", () => { leaving = true; });',
   },
   {
     rule: "a saved order's money and free-line presentation is defined once, in @scalius/shared/order-money-presentation",

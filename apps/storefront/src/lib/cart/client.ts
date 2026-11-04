@@ -45,6 +45,7 @@ import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
 import { cartPaymentCopy } from "@/lib/cart-payment-copy";
+import { cartLineCopy } from "@/lib/cart-line-copy";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { formatCount, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
@@ -574,10 +575,20 @@ function deliveryDestinationPayload(): Record<string, string | undefined> | null
       shippingPostalCode: formStringValue("shippingPostalCode") || undefined,
     };
   }
-  const city = latestCheckoutLocation?.cityId || formStringValue("city");
-  const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
+  // The form's own fields win, cleared ones included: a City cleared by a country switch or set by
+  // a saved address without a location event is what the buyer sees. The last location event
+  // stands in only where the page has no such field.
+  const city = addressField("city", latestCheckoutLocation?.cityId);
+  const zone = addressField("zone", latestCheckoutLocation?.zoneId);
   if (!city || !zone) return null;
-  return { city, zone, area: latestCheckoutLocation?.areaId || formStringValue("area") || undefined };
+  return { city, zone, area: addressField("area", latestCheckoutLocation?.areaId) || undefined };
+}
+
+/** A Bangladesh address field as the form holds it now ("" when cleared), else `fallback` when the page has no such field. */
+function addressField(name: string, fallback: string | undefined): string {
+  if (typeof document === "undefined") return fallback ?? "";
+  const field = document.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`);
+  return field ? field.value.trim() : fallback ?? "";
 }
 
 function formCanonicalPhoneValue(): string | null {
@@ -1470,6 +1481,12 @@ function freeCartLine(cartKey: string, item: VariantCartItem): boolean {
   return isFreeOrderLine({ grossSubtotalMinor: toMinor(item.price * item.quantity, quoted.decimalPlaces), discountMinor: quoted.discountMinor });
 }
 
+/** A free line's price as the receipt draws it, struck then zero, and heard as one phrase ("Free, was ৳150"). */
+function freeLinePrice(amount: number): string {
+  const was = formatMoney(amount);
+  return `<span class="sr-only">${escapeHtml(cartLineCopy().freeLine(was))}</span><span aria-hidden="true"><s class="me-1.5 text-muted-foreground">${was}</s>${formatMoney(0)}</span>`;
+}
+
 function renderCartLine(
   cartKey: string,
   item: VariantCartItem,
@@ -1543,7 +1560,7 @@ function renderCartLine(
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
-              <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${freeCartLine(cartKey, item) ? `<s class="me-1.5 text-muted-foreground">${formatMoney(item.price * item.quantity)}</s>${formatMoney(0)}` : formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
+              <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${freeCartLine(cartKey, item) ? freeLinePrice(item.price * item.quantity) : formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
             </div>`}
             ${ruleBlock}
           </div>

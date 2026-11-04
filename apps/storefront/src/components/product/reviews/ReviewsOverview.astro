@@ -2,7 +2,7 @@
 // The summary column of a review list: the stars and "4.6 out of 5", the
 // count, and five bars (Amazon's percentages) that each link to that star's
 // reviews. A bar with no reviews is not a link.
-import { checkoutText } from "@/lib/checkout-text";
+import { checkoutText, pageDigits } from "@/lib/checkout-text";
 import type { ProductReviewSummary } from "@/lib/api";
 
 import {
@@ -37,7 +37,7 @@ const descriptionId = `reviews-bar-${slug.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   <ul class="product-reviews-histogram">
     {reviewHistogram(summary).map((row) => {
       const label = checkoutText(copy.reviewsStarRowText, { stars: row.rating });
-      const share = checkoutText(copy.reviewsStarShareText, { percent: `${row.percent}%`, stars: row.rating });
+      const share = checkoutText(copy.reviewsStarShareText, { percent: pageDigits(`${row.percent}%`), stars: row.rating });
       const selected = selectedRating === row.rating;
       return (
         <li>

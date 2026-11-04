@@ -8,6 +8,7 @@
 // what each card pays and what is left (`amountDue`). No handles means the
 // request is exactly the pre-gift-card payload.
 
+import { pageDigits } from "@/lib/checkout-text";
 import { normalizeGiftCardCode } from "@scalius/shared/gift-card-code";
 import { MAX_GIFT_CARDS_PER_ORDER } from "@scalius/shared/gift-card-tender";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
@@ -235,7 +236,7 @@ export async function requestGiftCardApply(
 
 /** `•••• 7K2Q`, the only part of a code the page shows. */
 export function giftCardChipLabel(last4: string): string {
-  return `•••• ${last4}`;
+  return `•••• ${pageDigits(last4)}`;
 }
 
 // ── Copy ─────────────────────────────────────────────────────────────────────

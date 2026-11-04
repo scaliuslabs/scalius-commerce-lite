@@ -56,15 +56,9 @@ export function buyerHasTyped(doc: Document = document): boolean {
   return typed.has(doc);
 }
 
-/** The page has started to leave (a reload under way): no notice may flash before it goes. */
-let leaving = false;
-
-// Every page that can load a lazy script notes typing from the start, and when it leaves.
-if (typeof document !== "undefined") {
-  trackBuyerInput();
-  window.addEventListener("beforeunload", () => { leaving = true; });
-  window.addEventListener("pageshow", () => { leaving = false; });
-}
+// Every page that can load a lazy script notes typing from the start. No unload listener is
+// added here: one makes every page ineligible for the back/forward cache in some browsers.
+if (typeof document !== "undefined") trackBuyerInput();
 
 /** The wait between adding the notice's empty status region and its words, so screen readers announce them. */
 const ANNOUNCE_DELAY_MS = 100;
@@ -158,10 +152,15 @@ export async function loadLazyScript<T>(load: () => Promise<T>, options: LazyScr
       const notice = () => showStalePageNotice({ draftRestores: options.draftRestores });
       if ((options.typed ?? buyerHasTyped)()) notice();
       else {
-        window.dispatchEvent(new Event(STALE_ASSET_EVENT));
         // The recovery reloads at most every 30 s: a page it did not reload offers the notice instead,
-        // never one that is already leaving (a slow reload under way).
+        // never one that is already leaving (a slow reload under way). The page listens for its own
+        // leaving only from here to the notice, so no page keeps an unload listener (bfcache).
+        let leaving = false;
+        const markLeaving = () => { leaving = true; };
+        window.addEventListener("beforeunload", markLeaving, { once: true });
+        window.dispatchEvent(new Event(STALE_ASSET_EVENT));
         setTimeout(() => {
+          window.removeEventListener("beforeunload", markLeaving);
           if (!leaving) notice();
         }, STALE_NOTICE_FALLBACK_MS);
       }

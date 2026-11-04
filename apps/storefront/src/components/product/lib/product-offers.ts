@@ -1,4 +1,5 @@
 
+import { pageDigits } from "@/lib/checkout-text";
 import { checkoutText } from "@/lib/checkout-text";
 import type { ProductBundleTier, ProductBuyGetOffer } from "@/lib/api/types";
 import type { ProductActionCopy } from "./product-actions";
@@ -56,7 +57,7 @@ export function describeBundleTiers(
         const percent = Number.isInteger(tier.discountPercentage)
           ? String(tier.discountPercentage)
           : tier.discountPercentage.toFixed(2).replace(/\.?0+$/, "");
-        return [{ tier, text: checkoutText(copy.productBundleTierText, { quantity: tier.quantity, saving: `${percent}%` }) }];
+        return [{ tier, text: checkoutText(copy.productBundleTierText, { quantity: tier.quantity, saving: pageDigits(`${percent}%`) }) }];
       }
       if (tier.discountType === "fixed_price" && tier.price !== null && tier.price > 0) {
         return [{ tier, text: checkoutText(copy.productBundleSetPriceText, { quantity: tier.quantity, price: formatPrice(tier.price) }) }];

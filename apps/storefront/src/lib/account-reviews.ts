@@ -528,7 +528,7 @@ export function buyerReviewSummaryMarkup(
   review: { rating: number; status: BuyerReviewStatus; title?: string | null; body?: string | null },
   copy: ReviewFormCopy,
 ): string {
-  const rated = checkoutText(copy.reviewsRatedText, { average: String(review.rating) });
+  const rated = checkoutText(copy.reviewsRatedText, { average: review.rating });
   return `<p class="flex flex-wrap items-center gap-2">${reviewStarsMarkup(review.rating)}<span class="sr-only">${escapeHtml(rated)}</span>${reviewStatusBadgeMarkup(review.status, copy)}</p>`
     + (review.title ? `<p class="mt-1.5 font-semibold text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.title)}</p>` : "")
     + (review.body ? `<p class="mt-1 whitespace-pre-line leading-relaxed text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.body)}</p>` : "");

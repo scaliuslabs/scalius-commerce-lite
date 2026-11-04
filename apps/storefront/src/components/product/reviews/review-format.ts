@@ -3,7 +3,7 @@
 // the /products/<slug>/reviews page and the "Show more" script. Review text
 // is buyer content: it is escaped on the way into HTML and never goes into a
 // URL, a log line or analytics.
-import { checkoutText } from "@/lib/checkout-text";
+import { checkoutText, pageDigits } from "@/lib/checkout-text";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import { formatCount, formatStoreDateTime, storeTimeZone } from "@/lib/store-time-zone";
@@ -154,7 +154,8 @@ export function readProductReviews(value: unknown): ProductReviews | null {
 /** The average as buyers and JSON-LD read it: one decimal ("4.7"). */
 export function formatReviewAverage(average: number): string {
   const clamped = Math.min(Math.max(average, 0), 5);
-  return (Math.round(clamped * 10) / 10).toFixed(1);
+  // In the page's digits ("৪.৫" on a Bangla page).
+  return pageDigits((Math.round(clamped * 10) / 10).toFixed(1));
 }
 
 /** The star fill for an average, to the nearest half star (Amazon's rounding): "90%" for 4.6. */
@@ -264,7 +265,7 @@ function paragraphs(body: string): string {
  */
 export function publicReviewMarkup(review: PublicProductReview, options: ReviewRenderOptions): string {
   const { copy, language, storeName } = options;
-  const rated = checkoutText(copy.reviewsRatedText, { average: String(review.rating) });
+  const rated = checkoutText(copy.reviewsRatedText, { average: review.rating });
   const date = formatReviewDate(review.publishedAt, language);
   const meta = [
     `<time datetime="${escapeHtml(review.publishedAt)}">${escapeHtml(date)}</time>`,

@@ -19,6 +19,7 @@
  * ones to show (`applyQuotedRates`), in its order, with its names and fees.
  */
 
+import { formatCount } from "@/lib/store-time-zone";
 import { checkoutText } from "@/lib/checkout-text";
 import type { ShippingMethod } from "@/lib/api";
 import type { CheckoutDeliveryMode } from "./delivery-mode";
@@ -544,7 +545,8 @@ export function enhanceShippingMethods(
       : checkoutText(copy.goneText, { old: previous.name });
   };
 
-  const kilograms = (grams: number) => String(Math.round(grams / 100) / 10);
+  // In the page's digits ("১.৫" on a Bangla page).
+  const kilograms = (grams: number) => formatCount(Math.round(grams / 100) / 10);
   /** Why no delivery option is left for this address and cart. */
   const noOptionText = () => {
     const country = options.readNoDeliveryReason?.();
