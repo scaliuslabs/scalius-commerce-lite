@@ -126,8 +126,9 @@
  * (a known gap the file asserts with `it.fails`). Paid sends up to 25: 30, 81
  * and 146.
  *
- * Status change and refund with 1 and 3 webhooks (2026-11-04): Free 52 and 58
- * calls for a status change (cold RBAC marker at one subscriber), 66 for a
+ * Status change and refund with 1 and 3 webhooks (2026-11-04, after the
+ * bulk-confirm status rework): Free 48 and 54 calls for a status change (cold
+ * RBAC marker at one subscriber: inside 50 at one, over it at three), 66 for a
  * refund at both, over the 50 (the same known gap). Paid's refund cases drain
  * up to 25 due deliveries the earlier cases left (249 and 293 calls). One
  * uploaded app subscribed to every order event: 48 calls on Free, inside 50.
@@ -178,12 +179,12 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1319, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 24, d1Statements: 39, externalFetches: 0, rowsWritten: 549, rowsRead: 161, fullScans: 29 },
-    "order-status-change": { d1Calls: 40, d1Statements: 44, externalFetches: 0, rowsWritten: 18, rowsRead: 1342, fullScans: 5 },
+    "order-status-change": { d1Calls: 36, d1Statements: 43, externalFetches: 0, rowsWritten: 17, rowsRead: 1341, fullScans: 5 },
     "bulk-confirm": { d1Calls: 14, d1Statements: 104, externalFetches: 0, rowsWritten: 322, rowsRead: 70, fullScans: 0 },
-    "bulk-confirm-repair": { d1Calls: 26, d1Statements: 122, externalFetches: 0, rowsWritten: 325, rowsRead: 85, fullScans: 5 },
-    "order-refund": { d1Calls: 48, d1Statements: 56, externalFetches: 0, rowsWritten: 22, rowsRead: 1344, fullScans: 7 },
+    "bulk-confirm-repair": { d1Calls: 26, d1Statements: 123, externalFetches: 0, rowsWritten: 325, rowsRead: 87, fullScans: 5 },
+    "order-refund": { d1Calls: 48, d1Statements: 56, externalFetches: 0, rowsWritten: 22, rowsRead: 1343, fullScans: 7 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 18, meanRowsWritten: 0, meanRowsRead: 15.79 },
+    "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.89 },
     "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 430, rowsRead: 25782, fullScans: 77 },
     "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 103, rowsRead: 882, fullScans: 21 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
@@ -193,14 +194,14 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
-    "order-3-line-commit-subscribers-0": { d1Calls: 30, d1Statements: 76, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 18 },
-    "order-3-line-commit-subscribers-3": { d1Calls: 58, d1Statements: 108, externalFetches: 2, rowsWritten: 93, rowsRead: 104, fullScans: 18 },
-    "order-3-line-commit-subscribers-8": { d1Calls: 58, d1Statements: 108, externalFetches: 2, rowsWritten: 103, rowsRead: 125, fullScans: 18 },
-    "order-status-change-subscribers-1": { d1Calls: 54, d1Statements: 61, externalFetches: 1, rowsWritten: 26, rowsRead: 1354, fullScans: 5 },
-    "order-refund-subscribers-1": { d1Calls: 68, d1Statements: 78, externalFetches: 2, rowsWritten: 41, rowsRead: 56, fullScans: 3 },
-    "order-status-change-subscribers-3": { d1Calls: 60, d1Statements: 68, externalFetches: 2, rowsWritten: 36, rowsRead: 62, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 68, d1Statements: 78, externalFetches: 2, rowsWritten: 46, rowsRead: 64, fullScans: 3 },
-    "order-3-line-commit-app-subscriber": { d1Calls: 48, d1Statements: 96, externalFetches: 0, rowsWritten: 119, rowsRead: 85, fullScans: 18 },
+    "order-3-line-commit-subscribers-0": { d1Calls: 30, d1Statements: 76, externalFetches: 0, rowsWritten: 74, rowsRead: 74, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 58, d1Statements: 108, externalFetches: 2, rowsWritten: 93, rowsRead: 99, fullScans: 18 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 58, d1Statements: 108, externalFetches: 2, rowsWritten: 103, rowsRead: 126, fullScans: 18 },
+    "order-status-change-subscribers-1": { d1Calls: 50, d1Statements: 60, externalFetches: 1, rowsWritten: 25, rowsRead: 1353, fullScans: 5 },
+    "order-refund-subscribers-1": { d1Calls: 68, d1Statements: 78, externalFetches: 2, rowsWritten: 41, rowsRead: 57, fullScans: 3 },
+    "order-status-change-subscribers-3": { d1Calls: 56, d1Statements: 67, externalFetches: 2, rowsWritten: 35, rowsRead: 62, fullScans: 1 },
+    "order-refund-subscribers-3": { d1Calls: 68, d1Statements: 78, externalFetches: 2, rowsWritten: 46, rowsRead: 66, fullScans: 3 },
+    "order-3-line-commit-app-subscriber": { d1Calls: 48, d1Statements: 96, externalFetches: 0, rowsWritten: 83, rowsRead: 87, fullScans: 18 },
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
@@ -224,12 +225,12 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1319, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
     "admin-product-save": { d1Calls: 38, d1Statements: 60, externalFetches: 0, rowsWritten: 1254, rowsRead: 345, fullScans: 57 },
-    "order-status-change": { d1Calls: 40, d1Statements: 44, externalFetches: 0, rowsWritten: 18, rowsRead: 1342, fullScans: 5 },
+    "order-status-change": { d1Calls: 36, d1Statements: 43, externalFetches: 0, rowsWritten: 17, rowsRead: 1341, fullScans: 5 },
     "bulk-confirm": { d1Calls: 187, d1Statements: 455, externalFetches: 0, rowsWritten: 1051, rowsRead: 256, fullScans: 0 },
-    "bulk-confirm-repair": { d1Calls: 197, d1Statements: 293, externalFetches: 0, rowsWritten: 425, rowsRead: 145, fullScans: 5 },
+    "bulk-confirm-repair": { d1Calls: 197, d1Statements: 294, externalFetches: 0, rowsWritten: 425, rowsRead: 146, fullScans: 5 },
     "order-refund": { d1Calls: 48, d1Statements: 56, externalFetches: 0, rowsWritten: 22, rowsRead: 1344, fullScans: 7 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 53, d1Statements: 63, externalFetches: 0, rowsWritten: 101, rowsRead: 7889, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 30.1 },
+    "cron-idle": { d1Calls: 54, d1Statements: 64, externalFetches: 0, rowsWritten: 106, rowsRead: 7892, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.31 },
     "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 430, rowsRead: 28348, fullScans: 453 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 118, rowsRead: 890, fullScans: 27 },
     "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
@@ -239,13 +240,13 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 867, rowsRead: 992, fullScans: 0 },
-    "order-3-line-commit-subscribers-0": { d1Calls: 30, d1Statements: 76, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 18 },
-    "order-3-line-commit-subscribers-3": { d1Calls: 83, d1Statements: 137, externalFetches: 6, rowsWritten: 105, rowsRead: 124, fullScans: 18 },
-    "order-3-line-commit-subscribers-8": { d1Calls: 148, d1Statements: 212, externalFetches: 16, rowsWritten: 147, rowsRead: 203, fullScans: 18 },
-    "order-status-change-subscribers-1": { d1Calls: 54, d1Statements: 61, externalFetches: 1, rowsWritten: 26, rowsRead: 1354, fullScans: 5 },
-    "order-refund-subscribers-1": { d1Calls: 251, d1Statements: 284, externalFetches: 18, rowsWritten: 142, rowsRead: 218, fullScans: 3 },
-    "order-status-change-subscribers-3": { d1Calls: 60, d1Statements: 67, externalFetches: 3, rowsWritten: 34, rowsRead: 61, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 296, d1Statements: 334, externalFetches: 25, rowsWritten: 202, rowsRead: 349, fullScans: 3 },
-    "order-3-line-commit-app-subscriber": { d1Calls: 44, d1Statements: 92, externalFetches: 0, rowsWritten: 117, rowsRead: 83, fullScans: 18 },
+    "order-3-line-commit-subscribers-0": { d1Calls: 30, d1Statements: 76, externalFetches: 0, rowsWritten: 74, rowsRead: 74, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 83, d1Statements: 137, externalFetches: 6, rowsWritten: 105, rowsRead: 125, fullScans: 18 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 148, d1Statements: 212, externalFetches: 16, rowsWritten: 147, rowsRead: 204, fullScans: 18 },
+    "order-status-change-subscribers-1": { d1Calls: 50, d1Statements: 60, externalFetches: 1, rowsWritten: 25, rowsRead: 1353, fullScans: 5 },
+    "order-refund-subscribers-1": { d1Calls: 251, d1Statements: 284, externalFetches: 18, rowsWritten: 142, rowsRead: 219, fullScans: 3 },
+    "order-status-change-subscribers-3": { d1Calls: 56, d1Statements: 66, externalFetches: 3, rowsWritten: 33, rowsRead: 61, fullScans: 1 },
+    "order-refund-subscribers-3": { d1Calls: 296, d1Statements: 335, externalFetches: 25, rowsWritten: 202, rowsRead: 350, fullScans: 3 },
+    "order-3-line-commit-app-subscriber": { d1Calls: 44, d1Statements: 92, externalFetches: 0, rowsWritten: 81, rowsRead: 84, fullScans: 18 },
   },
 };
