@@ -8,6 +8,7 @@ import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-fo
 import { fromMinor } from "@scalius/shared/money";
 import type { CartLineAdjustment, CartLineProperty } from "@/store/cart";
 import { pagePath } from "@/lib/presence-url";
+import { cartLineName } from "./item-options";
 
 function escapeHtml(value: string): string {
   return value
@@ -53,7 +54,7 @@ export function cartLineEditHref(item: { slug?: string; variantId?: string }): s
  * page (`window.editCartLine`), which replaces it on "Update cart".
  */
 export function renderCartLineProperties(
-  item: { properties?: CartLineProperty[]; adjustments?: CartLineAdjustment[]; slug?: string; variantId?: string; name: string },
+  item: Parameters<typeof cartLineName>[0] & { properties?: CartLineProperty[]; adjustments?: CartLineAdjustment[]; slug?: string; variantId?: string },
   options: {
     surchargeText: string;
     editText: string;
@@ -72,7 +73,7 @@ export function renderCartLineProperties(
     .join("");
   const href = properties.length > 0 ? cartLineEditHref(item) : null;
   const edit = href
-    ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(formatCheckoutLanguageText(options.editLabelText, { item: item.name }))}" onclick="return window.editCartLine ? window.editCartLine(${options.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(options.editText)}</a>`
+    ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(formatCheckoutLanguageText(options.editLabelText, { item: cartLineName(item) }))}" onclick="return window.editCartLine ? window.editCartLine(${options.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(options.editText)}</a>`
     : "";
   return `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul>${rows}</ul>${edit}</div>`;
 }

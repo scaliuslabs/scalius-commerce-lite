@@ -119,6 +119,7 @@ import type {
 } from "../checkout/tax-quote-contract";
 import {
   cartItemVariantLabel as optionVariantLabel,
+  cartLineName,
   normalizeCartItemOptions,
 } from "./item-options";
 import {
@@ -1422,6 +1423,8 @@ function renderCartLine(
 ): string {
   const rawName = item.name || "";
   const safeName = escapeHtml(rawName);
+  // The controls name this line, not just its product: two sizes are two lines.
+  const lineName = cartLineName({ ...item, name: rawName });
   const safeImage = escapeHtml(getProductImageUrl(item.image, 96));
   const jsCartKey = inlineJsString(cartKey);
   const copy = activeCheckoutCopy();
@@ -1444,7 +1447,7 @@ function renderCartLine(
       : atLimit
         ? copy.maximumAvailableQuantityText
         : copy.increaseQuantityText,
-    { item: rawName },
+    { item: lineName },
   ));
   const variantInfo = options
     .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
@@ -1470,11 +1473,11 @@ function renderCartLine(
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
-              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: rawName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: lineName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
-                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
+                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: lineName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
@@ -1752,7 +1755,7 @@ function removeLineWithUndo(cartKey: string): void {
   const snapshot = cartStore.get();
   const item = snapshot.items[cartKey];
   if (!item || !removeCartItemByKey(cartKey)) return;
-  offerUndo(formatCheckoutLanguageText(activeCheckoutCopy().itemRemovedText, { item: item.name }), snapshot);
+  offerUndo(formatCheckoutLanguageText(activeCheckoutCopy().itemRemovedText, { item: cartLineName(item) }), snapshot);
 }
 
 // --- Initialization ---

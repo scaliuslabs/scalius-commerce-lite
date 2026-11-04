@@ -47,7 +47,7 @@ import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
 import { groupCartRuleErrors } from "@/lib/cart/rule-errors";
 import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
-import { cartItemVariantLabel } from "@/lib/cart/item-options";
+import { cartItemVariantLabel, cartLineName } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
   fetchRecommendationsFromBrowser,
@@ -652,7 +652,7 @@ export default function CartFlyout({ onReady }: Props) {
                                 <a
                                   href={cartLineEditHref(item)!}
                                   className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
-                                  aria-label={copy.editItem(item.name)}
+                                  aria-label={copy.editItem(cartLineName(item))}
                                   onClick={() => {
                                     // Session storage, not the URL: the inputs are buyer content.
                                     writeCartLineEdit({
@@ -688,7 +688,7 @@ export default function CartFlyout({ onReady }: Props) {
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
                                   onClick={() => {
-                                    removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
+                                    removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
                                   }}
                                 >
                                   {copy.remove}
@@ -713,11 +713,11 @@ export default function CartFlyout({ onReady }: Props) {
                       <div className="flex items-end justify-between mt-1">
                         <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8">
                           <button
-                            aria-label={copy.decrease(item.name)}
+                            aria-label={copy.decrease(cartLineName(item))}
                             onClick={() => {
                               const newQ = Math.max(0, item.quantity - 1);
                               if (newQ === 0)
-                                removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
+                                removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
                               else
                                 updateCartItemByKey(key, { quantity: newQ });
                             }}
@@ -729,7 +729,7 @@ export default function CartFlyout({ onReady }: Props) {
                             {formatCount(item.quantity)}
                           </span>
                           <button
-                            aria-label={copy.increase(item.name)}
+                            aria-label={copy.increase(cartLineName(item))}
                             onClick={() => {
                               updateCartItemByKey(key, {
                                 quantity: item.quantity + 1,
@@ -742,9 +742,9 @@ export default function CartFlyout({ onReady }: Props) {
                         </div>
 
                         <button
-                          aria-label={copy.removeItem(item.name)}
+                          aria-label={copy.removeItem(cartLineName(item))}
                           onClick={() => {
-                            removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
+                            removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
                           }}
                           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
                         >

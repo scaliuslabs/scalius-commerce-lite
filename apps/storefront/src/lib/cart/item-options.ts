@@ -62,6 +62,24 @@ export function normalizeCartItemOptions(
   return options.length > 0 ? options : undefined;
 }
 
+/**
+ * A cart line's name in its controls and announcements ("Increase {item}
+ * quantity", "Remove {item} from cart"): the product, then what tells it from
+ * another line of the same product, its option labels and its purchase option,
+ * so two sizes of one shirt read "Shirt (M)" and "Shirt (L)". A line with
+ * neither reads as its product. Only punctuation joins the parts, the same in
+ * English and Bangla; the phrase around the name comes from the catalogue.
+ */
+export function cartLineName(item: {
+  name: string;
+  options?: unknown;
+  purchaseOption?: { title: string } | null;
+}): string {
+  const parts = (normalizeCartItemOptions(item.options) ?? []).map((option) => option.label);
+  if (item.purchaseOption?.title) parts.push(item.purchaseOption.title);
+  return parts.length > 0 ? `${item.name} (${parts.join(", ")})` : item.name;
+}
+
 export function cartItemVariantLabel(value: unknown): string | null {
   const options = normalizeCartItemOptions(value);
   if (!options) return null;
