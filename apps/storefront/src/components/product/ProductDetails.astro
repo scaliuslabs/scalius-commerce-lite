@@ -48,18 +48,6 @@ const tabbed = tabs.length > 1;
           class="product-details-tab-rail sticky z-[var(--scalius-z-content-bar,40)] flex border-b border-border bg-background"
           data-tab-rail
         >
-          {hasManyTabs && (
-            <button
-              type="button"
-              id="scroll-left"
-              disabled
-              class="flex w-10 shrink-0 items-center justify-center transition-opacity duration-200"
-              aria-label={copy.previousTabs}
-            >
-              <Icon name="chevron-left" class="h-5 w-5 text-muted-foreground rtl:rotate-180" />
-            </button>
-          )}
-
           <div class="relative min-w-0 flex-1">
             <nav
               id="tab-nav"
@@ -105,15 +93,26 @@ const tabbed = tabs.length > 1;
           </div>
 
           {hasManyTabs && (
-            <button
-              type="button"
-              id="scroll-right"
-              disabled
-              class="flex w-10 shrink-0 items-center justify-center transition-opacity duration-200"
-              aria-label={copy.moreTabs}
-            >
-              <Icon name="chevron-right" class="h-5 w-5 text-muted-foreground rtl:rotate-180" />
-            </button>
+            <div data-tab-hints class="flex shrink-0">
+              <button
+                type="button"
+                id="scroll-left"
+                disabled
+                class="flex w-10 shrink-0 items-center justify-center transition-opacity duration-200"
+                aria-label={copy.previousTabs}
+              >
+                <Icon name="chevron-left" class="h-5 w-5 text-muted-foreground rtl:rotate-180" />
+              </button>
+              <button
+                type="button"
+                id="scroll-right"
+                disabled
+                class="flex w-10 shrink-0 items-center justify-center transition-opacity duration-200"
+                aria-label={copy.moreTabs}
+              >
+                <Icon name="chevron-right" class="h-5 w-5 text-muted-foreground rtl:rotate-180" />
+              </button>
+            </div>
           )}
         </div>}
 
@@ -215,7 +214,8 @@ const tabbed = tabs.length > 1;
   }
 
   /* The scroll hints sit beside the tab strip, never over a tab, so every tab keeps its whole hit
-     area and each hint stays a real button. The strip takes the full width when every tab fits. */
+     area and each hint stays a real button. The pair sits after the strip, at the inline end, and stays hidden until the script finds overflow:
+     tabs start at the strip's start, so showing or hiding it only shortens the strip from its end and moves no tab. */
   #fade-left,
   #fade-right {
     pointer-events: none;
@@ -236,8 +236,7 @@ const tabbed = tabs.length > 1;
     opacity: 0;
   }
 
-  [data-tab-rail][data-fits] > #scroll-left,
-  [data-tab-rail][data-fits] > #scroll-right {
+  [data-tab-rail]:not([data-overflow]) [data-tab-hints] {
     display: none;
   }
 
