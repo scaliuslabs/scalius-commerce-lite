@@ -42,7 +42,8 @@ const presenceOnly = (url: URL) => url.searchParams.size === 0
 
 const MAX_PUBLIC_CACHE_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
-const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
+/** The longest query value a cached read keys; a longer one is served, uncached. */
+export const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
 
 export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   // Prices (step 4a): a presence's market may price its own way (FX, price
@@ -178,21 +179,25 @@ const QUERY_KEY_MATCHERS = PUBLIC_API_QUERY_KEYS.map((entry) => ({
   allowed: new Set(entry.keys),
 }));
 
-/** An attribute filter key of a listing: `<slug>`, `<slug>.min`/`.max`, `option.<axis>` (`brand` is a slug). */
-const FACET_QUERY_KEY = /^(?:[a-z0-9][a-z0-9-]{0,79}(?:\.(?:min|max))?|option\.[^\s&=#?]{1,80})$/;
+/**
+ * An attribute filter key of a listing: `<slug>`, `<slug>.min`/`.max`,
+ * `option.<axis>` (`brand` is a slug). As long as `resolvePublicAttributeFilters`
+ * reads one (an attribute slug of up to 120 characters).
+ */
+const FACET_QUERY_KEY = /^(?:[a-z0-9][a-z0-9-]{0,119}(?:\.(?:min|max))?|option\.[^\s&=#?]{1,120})$/;
 
 /**
  * Why a GET of this URL is refused before any read: a query key the public
- * cached read it addresses does not accept, or a query past the bounded size.
- * Null for an acceptable query, and for a URL that is no public cached read
- * (its own route decides).
+ * cached read it addresses does not accept. Null for an acceptable query, and
+ * for a URL that is no public cached read (its own route decides). A declared
+ * key's size is the route's schema to judge: a query past the cache's bounds
+ * is served, only not cached (`hasBoundedPublicQuery`).
  */
 export function publicApiQueryRefusal(url: URL): string | null {
   const pathname = url.pathname.replace(/\/$/, "") || "/";
   const matching = PUBLIC_API_CACHE_ROUTES.filter((candidate) => routeMatches(pathname, candidate));
   const route = matching.find((candidate) => !candidate.isEligible || candidate.isEligible(url)) ?? matching[0];
   if (!route) return null;
-  if (!hasBoundedPublicQuery(url)) return "The query is too long.";
   const operation = QUERY_KEY_MATCHERS.find((entry) => entry.pattern.test(pathname));
   for (const key of new Set(url.searchParams.keys())) {
     if (key === MARKET_PRESENCE_QUERY_PARAM && "keyed" in route.market) continue;

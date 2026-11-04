@@ -4,6 +4,7 @@ import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { AGENTS_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import { isPublicFeedCursor } from "@scalius/shared/public-cursor";
+import { MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH } from "@scalius/shared/public-api-cache-routes";
 import { getLayoutData, type CurrencyData, type LayoutData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
 import { renderForPresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -1103,19 +1104,45 @@ function lookupInputs(ids: unknown, context: UcpCatalogContext): LookupInput[] {
     .filter((input) => input.normalized.length > 0);
 }
 
+/**
+ * The identifier lists of a lookup, each short enough for one cached public
+ * read (`ids` at most `MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH` characters); an
+ * identifier longer than that alone is its own, uncached, read.
+ */
+export function lookupIdChunks(identifiers: readonly string[]): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let length = 0;
+  for (const identifier of identifiers) {
+    const added = current.length === 0 ? identifier.length : length + 1 + identifier.length;
+    if (current.length > 0 && added > MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH) {
+      chunks.push(current);
+      current = [identifier];
+      length = identifier.length;
+    } else {
+      current.push(identifier);
+      length = added;
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
 async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[] | null> {
   if (inputs.length === 0) return [];
 
-  const result = await loadFeedProducts({
-    limit: Math.max(inputs.length, DEFAULT_SEARCH_LIMIT),
-    ids: inputs.map((input) => input.normalized).join(","),
-  });
-  // No cursor is sent, so the API cannot refuse one.
-  if (!result || result === "invalid_cursor") return null;
-
-  return Array.from(
-    new Map(result.data.map((product) => [product.id, product])).values(),
-  );
+  const products = new Map<string, Product>();
+  // One read per chunk, in sequence: a lookup of 25 identifiers is a few reads, each cacheable.
+  for (const ids of lookupIdChunks(inputs.map((input) => input.normalized))) {
+    const result = await loadFeedProducts({
+      limit: Math.max(ids.length, DEFAULT_SEARCH_LIMIT),
+      ids: ids.join(","),
+    });
+    // No cursor is sent, so the API cannot refuse one.
+    if (!result || result === "invalid_cursor") return null;
+    for (const product of result.data) products.set(product.id, product);
+  }
+  return [...products.values()];
 }
 
 function buildInputMatches(products: Product[], inputs: LookupInput[]) {

@@ -1882,8 +1882,8 @@ export const PUBLIC_API_READS = [
   "/storefront/markets",
   "/checkout/config",
   "/products?limit=24",
-  "/categories?limit=24",
-  "/collections?limit=24",
+  "/categories",
+  "/collections",
 ];
 
 async function checkPublicApiReads(options, { fetchImpl, logger }) {
