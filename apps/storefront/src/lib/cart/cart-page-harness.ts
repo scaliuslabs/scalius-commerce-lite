@@ -81,10 +81,12 @@ import {
   hideCheckoutLoadingOverlay,
   showCheckoutLoadingOverlay,
 } from "../checkout/loading-overlay";
+import { loadLazyScript } from "@/scripts/lazy-script";
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
   BILLING_ADDRESS_FIELDS,
+  loadLazyScript,
   addressAutocompleteService,
   applyCheckoutContactNeeds,
   applyCheckoutDeliveryMode,
