@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   computePaymentStateFromLedger,
   finalizeAcceptedRefundAttemptIds,
+  processRefund,
 } from "./refund-service";
 import { PaymentRecordStatus, PaymentStatus, PaymentPlanStatus, OrderStatus } from "@scalius/database/schema";
 
@@ -151,6 +152,19 @@ vi.mock("../../notifications", () => ({
   buildReconciledRefundNotificationDedupeKey: vi.fn().mockReturnValue("dedupe_key"),
 }));
 
+vi.mock("../order-kernel", () => ({
+  assertNoActiveShipmentClaim: vi.fn(),
+  assertNoActivePaymentSessionAttempt: vi.fn().mockResolvedValue(undefined),
+  assertNoActiveRefundAttempt: vi.fn().mockResolvedValue(undefined),
+  findActiveRefundAttempt: vi.fn().mockResolvedValue(null),
+  hasLegacyPendingRefund: vi.fn().mockResolvedValue(false),
+  ACTIVE_REFUND_ATTEMPT_STATUSES: [],
+  noActiveRefundAttemptForOrderIdCondition: vi.fn(),
+  noActivePaymentSessionAttemptForOrderIdCondition: vi.fn(),
+  REFUND_IN_PROGRESS_MESSAGE: "Refund in progress",
+  canTransitionTo: vi.fn().mockReturnValue(true),
+}));
+
 import { paymentPlans, orders, orderPayments, refundAttempts } from "@scalius/database/schema";
 
 function refundDb(overrides: {
@@ -250,6 +264,128 @@ function refundDb(overrides: {
             results.push([{ changes: 1 }]);
           } else {
             // Guard SELECT — return success (batchGuard = 1).
+            results.push([{ batchGuard: 1 }]);
+          }
+        } catch {
+          results.push([{ changes: 1 }]);
+        }
+      }
+      return results as unknown[];
+    }),
+    __setCalls: setCalls,
+    __batchCalls: batchCalls,
+  } as any;
+}
+
+/** Mock DB for processRefund tests — matches processRefund's query order:
+ *  1. orders (by id)
+ *  2. orderPayments (by createdAt desc, id desc)
+ *  3. paymentPlans (where orderId and kind="manual")
+ *  4. refundAttempts (for assertNoActiveRefundAttempt) - returns empty (no active refund)
+ */
+function processRefundDb(overrides: {
+  order?: Record<string, unknown>;
+  plan?: Record<string, unknown> | null;
+  ledgerRows?: Array<Record<string, unknown>>;
+  batchError?: Error;
+} = {}): any {
+  const order = overrides.order ?? {
+    id: "order_1",
+    totalAmountMinor: 10000,
+    paymentTermsDays: null,
+    status: OrderStatus.CONFIRMED,
+    version: 1,
+    currencyCode: "EGP",
+    currencyDecimalPlaces: 2,
+  };
+  const plan = overrides.plan ?? null;
+  const ledgerRows = overrides.ledgerRows ?? [
+    { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 2000, currency: "EGP", paymentMethod: "cod" },
+  ];
+
+  let selectCount = 0;
+  const setCalls: Array<[unknown, Record<string, unknown>]> = [];
+  const batchCalls: Array<unknown[]> = [];
+
+  function makeQuery(arrayResult: unknown[], singleResult: unknown): any {
+    const result: any = {
+      get: vi.fn().mockResolvedValue(singleResult),
+      all: vi.fn().mockResolvedValue(arrayResult),
+    };
+    result.then = vi.fn().mockImplementation((resolve: (value: unknown[]) => void) => resolve(arrayResult));
+    return result;
+  }
+
+  return {
+    select: vi.fn().mockImplementation(() => ({
+      from: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => {
+          selectCount++;
+          const queryResult = (() => {
+            if (selectCount === 1) return makeQuery([order], order);            // orders
+            if (selectCount === 2) return makeQuery(ledgerRows, ledgerRows[0]); // orderPayments
+            if (selectCount === 3) return makeQuery(plan ? [plan] : [], plan);  // paymentPlans
+            if (selectCount === 4) return makeQuery([], null);                  // refundAttempts (active refund check) - none
+            return makeQuery([], null);
+          })();
+          // Support .orderBy() for orderPayments query
+          return {
+            ...queryResult,
+            orderBy: vi.fn().mockReturnValue(queryResult),
+          };
+        }),
+      })),
+    })),
+    insert: vi.fn().mockImplementation((table) => ({
+      values: vi.fn().mockImplementation((values) => {
+        setCalls.push([table, values]);
+        return {
+          returning: vi.fn().mockResolvedValue([{ id: "new_id" }]),
+          then: vi.fn().mockImplementation((resolve: (value: unknown[]) => void) =>
+            resolve([{ id: "new_id" }]),
+          ),
+        };
+      }),
+    })),
+    update: vi.fn().mockImplementation((table) => ({
+      set: vi.fn().mockImplementation((values) => {
+        setCalls.push([table, values]);
+        return {
+          where: vi.fn().mockImplementation(() => {
+            const result: any = {
+              returning: vi.fn().mockResolvedValue([{ id: "order_1" }]),
+            };
+            result.then = vi.fn().mockImplementation((resolve: (value: unknown[]) => void) =>
+              resolve([{ id: "order_1" }]),
+            );
+            return result;
+          }),
+        };
+      }),
+    })),
+    batch: vi.fn().mockImplementation(async (statements: unknown[]) => {
+      if (overrides.batchError) throw overrides.batchError;
+      batchCalls.push(statements);
+      const results: unknown[] = [];
+      for (const stmt of statements) {
+        try {
+          const sql = (stmt as { toSQL?: () => { sql: string } }).toSQL?.().sql ?? "";
+          const isWrite = /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b/i.test(sql);
+          if (isWrite) {
+            const tableMatch = sql.match(/UPDATE (\w+) /i);
+            const tableName = tableMatch?.[1];
+            const tableMap: Record<string, unknown> = {
+              order_payments: orderPayments,
+              orders,
+              payment_plans: paymentPlans,
+              refund_attempts: refundAttempts,
+            };
+            const table = tableMap[tableName ?? ""] ?? null;
+            if (table) {
+              setCalls.push([table, {}]);
+            }
+            results.push([{ changes: 1 }]);
+          } else {
             results.push([{ batchGuard: 1 }]);
           }
         } catch {
@@ -400,21 +536,220 @@ describe("finalizeAcceptedRefundAttemptIds — CAS conflict rollback (Fix A)", (
 });
 
 describe("processRefund — manual COD deposit amount validation (Fix B)", () => {
-  it("validates refund against plan.depositAmountMinor not order.paidAmountMinor", () => {
-    // Verified by code review: processRefund line ~1740 now validates
-    // refundAmount < manualDepositPlan.depositAmountMinor instead of
-    // refundAmount < order.paidAmountMinor. Full processRefund test
-    // requires gateway mocks beyond this unit test's scope.
-    expect(true).toBe(true);
+  it("validates refund against plan.depositAmountMinor not order.paidAmountMinor", async () => {
+    // Setup: manual COD deposit plan with depositAmountMinor = 2000
+    // order.paidAmountMinor = 10000 (includes COD balance collected after deposit)
+    // Refund amount = 2000 (exactly the deposit) should PASS even though 2000 < 10000
+    const db = processRefundDb({
+      plan: { id: "plan_1", depositAmountMinor: 2000, status: PaymentPlanStatus.DEPOSIT_PAID, kind: "manual" },
+      order: {
+        id: "order_1",
+        totalAmountMinor: 10000,
+        paidAmountMinor: 10000,  // COD balance collected after deposit
+        status: OrderStatus.CONFIRMED,
+        version: 1,
+        currencyCode: "EGP",
+        currencyDecimalPlaces: 2,
+        paymentTermsDays: null
+      },
+      ledgerRows: [
+        { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 2000, currency: "EGP", paymentMethod: "cod" },
+        { id: "payment_2", paymentType: "full", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 8000, currency: "EGP", paymentMethod: "cod" },
+      ],
+    });
+
+    // Mock the claim batch to succeed (manual settlement returns undefined from dispatchRefund)
+    (db.batch as any).mockResolvedValueOnce([[{ changes: 1 }]]); // claim batch
+
+    const params = {
+      orderId: "order_1",
+      amountMinor: 2000, // exactly the deposit amount
+      reason: "Customer returned item",
+      manualSettlementConfirmed: true,
+      actorUserId: "admin_1",
+      caller: "staff",
+    };
+
+    // Should not throw the deposit validation error - it may fail later at finalize
+    // but the key validation (depositAmountMinor check) passes
+    await expect(processRefund(db as any, params)).rejects.not.toThrow(
+      "Partial refunds of a manual COD deposit are not supported"
+    );
   });
 
-  it("accepts full deposit refund even when COD balance was collected", () => {
-    // When order.paidAmountMinor > plan.depositAmountMinor (COD balance collected
-    // after deposit), refundAmount === plan.depositAmountMinor must still pass.
-    expect(true).toBe(true);
+  it("accepts full deposit refund even when COD balance was collected", async () => {
+    // When order.paidAmountMinor > plan.depositAmountMinor (COD balance collected after deposit),
+    // refundAmount === plan.depositAmountMinor must still pass
+    const db = processRefundDb({
+      plan: { id: "plan_1", depositAmountMinor: 3000, status: PaymentPlanStatus.DEPOSIT_PAID, kind: "manual" },
+      order: {
+        id: "order_1",
+        totalAmountMinor: 10000,
+        paidAmountMinor: 10000,  // COD balance collected (total = deposit + balance)
+        status: OrderStatus.CONFIRMED,
+        version: 1,
+        currencyCode: "EGP",
+        currencyDecimalPlaces: 2,
+        paymentTermsDays: null
+      },
+      ledgerRows: [
+        { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 3000, currency: "EGP", paymentMethod: "cod" },
+        { id: "payment_2", paymentType: "full", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 7000, currency: "EGP", paymentMethod: "cod" },
+      ],
+    });
+
+    (db.batch as any).mockResolvedValueOnce([[{ changes: 1 }]]); // claim batch
+
+    const params = {
+      orderId: "order_1",
+      amountMinor: 3000, // exactly the deposit amount
+      reason: "Customer returned item",
+      manualSettlementConfirmed: true,
+      actorUserId: "admin_1",
+      caller: "staff",
+    };
+
+    // Should not throw the deposit validation error
+    await expect(processRefund(db as any, params)).rejects.not.toThrow(
+      "Partial refunds of a manual COD deposit are not supported"
+    );
   });
 
-  it("rejects partial deposit refund when refundAmount < plan.depositAmountMinor", () => {
-    expect(true).toBe(true);
+  it("rejects partial deposit refund when deposit allocation < plan.depositAmountMinor", async () => {
+    // Deposit allocation is 1500 but plan.depositAmountMinor = 2000
+    // Only deposit paid (2000), refund 1500 -> deposit allocation 1500 < 2000 -> FAIL
+    const db = processRefundDb({
+      plan: { id: "plan_1", depositAmountMinor: 2000, status: PaymentPlanStatus.DEPOSIT_PAID, kind: "manual" },
+      order: {
+        id: "order_1",
+        totalAmountMinor: 10000,
+        paidAmountMinor: 2000,  // only deposit paid
+        status: OrderStatus.CONFIRMED,
+        version: 1,
+        currencyCode: "EGP",
+        currencyDecimalPlaces: 2,
+        paymentTermsDays: null
+      },
+      ledgerRows: [
+        { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 2000, currency: "EGP", paymentMethod: "cod" },
+      ],
+    });
+
+    const params = {
+      orderId: "order_1",
+      amountMinor: 1500, // less than depositAmountMinor
+      reason: "Partial refund attempt",
+      manualSettlementConfirmed: true,
+      actorUserId: "admin_1",
+      caller: "staff",
+    };
+
+    await expect(processRefund(db as any, params)).rejects.toThrow(
+      "Partial refunds of a manual COD deposit are not supported. The deposit allocation must equal the full deposit amount."
+    );
+  });
+
+  it("rejects over-allocation of deposit (deposit allocation > plan.depositAmountMinor)", async () => {
+    // Plan depositAmountMinor = 1000, but deposit payment = 2000
+    // Refund 2000 -> deposit allocation 2000 > plan.depositAmountMinor 1000 -> FAIL
+    const db = processRefundDb({
+      plan: { id: "plan_1", depositAmountMinor: 1000, status: PaymentPlanStatus.DEPOSIT_PAID, kind: "manual" },
+      order: {
+        id: "order_1",
+        totalAmountMinor: 10000,
+        paidAmountMinor: 2000,
+        status: OrderStatus.CONFIRMED,
+        version: 1,
+        currencyCode: "EGP",
+        currencyDecimalPlaces: 2,
+        paymentTermsDays: null
+      },
+      ledgerRows: [
+        { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 2000, currency: "EGP", paymentMethod: "cod" },
+      ],
+    });
+
+    const params = {
+      orderId: "order_1",
+      amountMinor: 2000,
+      reason: "Over-refund attempt",
+      manualSettlementConfirmed: true,
+      actorUserId: "admin_1",
+      caller: "staff",
+    };
+
+    await expect(processRefund(db as any, params)).rejects.toThrow(
+      "Partial refunds of a manual COD deposit are not supported. The deposit allocation must equal the full deposit amount."
+    );
+  });
+
+  it("allows mixed refund: full deposit + other allocation when deposit allocation equals plan.depositAmountMinor", async () => {
+    // Mixed refund: deposit allocation = 2000 (exact), plus another allocation = 1000
+    // Total refundAmount = 3000, deposit allocation = 2000 (exact) -> should PASS
+    const db = processRefundDb({
+      plan: { id: "plan_1", depositAmountMinor: 2000, status: PaymentPlanStatus.DEPOSIT_PAID, kind: "manual" },
+      order: {
+        id: "order_1",
+        totalAmountMinor: 10000,
+        paidAmountMinor: 10000,
+        status: OrderStatus.CONFIRMED,
+        version: 1,
+        currencyCode: "EGP",
+        currencyDecimalPlaces: 2,
+        paymentTermsDays: null
+      },
+      ledgerRows: [
+        { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 2000, currency: "EGP", paymentMethod: "cod" },
+        { id: "payment_2", paymentType: "full", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 8000, currency: "EGP", paymentMethod: "cod" },
+      ],
+    });
+
+    (db.batch as any).mockResolvedValueOnce([[{ changes: 1 }]]); // claim batch
+
+    const params = {
+      orderId: "order_1",
+      amountMinor: 3000, // total refund (deposit 2000 + balance 1000)
+      reason: "Mixed refund",
+      manualSettlementConfirmed: true,
+      actorUserId: "admin_1",
+      caller: "staff",
+    };
+
+    // Should not throw the deposit validation error
+    await expect(processRefund(db as any, params)).rejects.not.toThrow(
+      "Partial refunds of a manual COD deposit are not supported"
+    );
+  });
+
+  it("rejects when manualSettlementConfirmed is not true for manual COD deposit", async () => {
+    const db = processRefundDb({
+      plan: { id: "plan_1", depositAmountMinor: 2000, status: PaymentPlanStatus.DEPOSIT_PAID, kind: "manual" },
+      order: {
+        id: "order_1",
+        totalAmountMinor: 10000,
+        paidAmountMinor: 2000,
+        status: OrderStatus.CONFIRMED,
+        version: 1,
+        currencyCode: "EGP",
+        currencyDecimalPlaces: 2,
+        paymentTermsDays: null
+      },
+      ledgerRows: [
+        { id: "payment_1", paymentType: "deposit", status: PaymentRecordStatus.SUCCEEDED, amountMinor: 2000, currency: "EGP", paymentMethod: "cod" },
+      ],
+    });
+
+    const params = {
+      orderId: "order_1",
+      amountMinor: 2000,
+      reason: "Missing confirmation",
+      manualSettlementConfirmed: false, // NOT confirmed
+      actorUserId: "admin_1",
+      caller: "staff",
+    };
+
+    await expect(processRefund(db as any, params)).rejects.toThrow(
+      "Confirm that the customer has already received the refund by hand"
+    );
   });
 });

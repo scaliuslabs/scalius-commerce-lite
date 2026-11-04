@@ -842,7 +842,7 @@ export async function finalizeAcceptedRefundAttemptIds(
     // Read orders, payment ledger, and manual COD deposit plans. Compute
     // payment state per order before any mutation so all values are ready
     // for the atomic batch.
-    const manualPlansByOrder = new Map<string, { id: string; depositAmountMinor: number; status: string } | null>();
+    const manualPlansByOrder = new Map<string, { id: string; depositAmountMinor: number; status: string; kind: string } | null>();
     for (const orderId of new Set(attempts.map((attempt) => attempt.orderId))) {
         const order = await db
             .select({
@@ -913,6 +913,7 @@ export async function finalizeAcceptedRefundAttemptIds(
                 id: paymentPlans.id,
                 depositAmountMinor: paymentPlans.depositAmountMinor,
                 status: paymentPlans.status,
+                kind: paymentPlans.kind,
             })
             .from(paymentPlans)
             .where(and(
@@ -983,13 +984,15 @@ export async function finalizeAcceptedRefundAttemptIds(
     // from a lost in-memory parameter.
     for (const [orderId, reconciliation] of reconciliationByOrder) {
         const plan = manualPlansByOrder.get(orderId);
-        const attemptMetadata = attempts.find((a) => a.orderId === orderId)?.metadata;
-        const manualDepositRefund = attemptMetadata
-            ? (() => {
-                  try { return JSON.parse(attemptMetadata as string).manualDepositRefund === true; }
-                  catch { return false; }
-              })()
-            : false;
+        const orderAttempts = attempts.filter((a) => a.orderId === orderId);
+        const manualDepositRefund = orderAttempts.some((attempt) => {
+            if (!attempt.metadata) return false;
+            try {
+                return JSON.parse(attempt.metadata as string).manualDepositRefund === true;
+            } catch {
+                return false;
+            }
+        });
         if (plan && plan.kind === "manual" && plan.status === PaymentPlanStatus.DEPOSIT_PAID && manualDepositRefund) {
             batchStatements.push(
                 db.update(paymentPlans).set({
@@ -1822,25 +1825,25 @@ export async function processRefund(
             eq(paymentPlans.kind, "manual"),
         ))
         .get();
+    const depositAllocations = allocations.filter(
+        (allocation) => allocationSettlementMode(allocation) === "manual_external"
+            && allocation.sourcePayment.paymentType === "deposit",
+    );
+    const totalDepositRefundAmount = depositAllocations.reduce((sum, a) => sum + a.amountMinor, 0);
     const hasManualCodAllocation = manualDepositPlan !== undefined
         && manualDepositPlan.status === PaymentPlanStatus.DEPOSIT_PAID
-        && allocations.some(
-            (allocation) => allocationSettlementMode(allocation) === "manual_external"
-                && allocation.sourcePayment.paymentType === "deposit",
-        );
+        && depositAllocations.length > 0;
     if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
         throw new ValidationError(
             "Confirm that the customer has already received the refund by hand (cash or transfer) before recording it.",
         );
     }
-    // A manual COD deposit can only be refunded in full — a partial refund would
-    // leave the order's deposit plan in an ambiguous state. Validate against
-    // plan.depositAmountMinor, not order.paidAmountMinor: the latter may
-    // include COD balance payments collected after the deposit, which would
-    // wrongly reject a full deposit refund.
-    if (hasManualCodAllocation && manualDepositPlan && refundAmount < manualDepositPlan.depositAmountMinor) {
+    // A manual COD deposit can only be refunded in full — the total amount
+    // allocated to the deposit must exactly equal the plan's depositAmountMinor.
+    // This prevents partial deposit refunds and double-counting across attempts.
+    if (hasManualCodAllocation && manualDepositPlan && totalDepositRefundAmount !== manualDepositPlan.depositAmountMinor) {
         throw new ValidationError(
-            "Partial refunds of a manual COD deposit are not supported. Refund the full deposit instead.",
+            "Partial refunds of a manual COD deposit are not supported. The deposit allocation must equal the full deposit amount.",
         );
     }
     const refundRequestHash = await buildRefundRequestHash({
