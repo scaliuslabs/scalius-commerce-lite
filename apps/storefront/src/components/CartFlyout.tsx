@@ -32,11 +32,12 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { cartDrawerCopy, type CartDrawerCopy } from "@/lib/cart-drawer-copy";
+import { cartLineCopy } from "@/lib/cart-line-copy";
 import { priceCopy as storefrontPriceCopy } from "@/lib/price-copy";
 import { formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
@@ -47,7 +48,7 @@ import type { CartRuleError, CartValidationIssue } from "@/lib/api/orders";
 import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
 import { groupCartRuleErrors } from "@/lib/cart/rule-errors";
 import { isFollowedQuantityIssue, quantitiesByVariant } from "@/lib/cart/quantity-issues";
-import { cartItemVariantLabel } from "@/lib/cart/item-options";
+import { cartItemVariantLabel, cartLineName } from "@/lib/cart/item-options";
 import type { ProductRecommendations } from "@/lib/api/types";
 import {
   fetchRecommendationsFromBrowser,
@@ -293,6 +294,11 @@ function offerSaving(percentOff: number, copy: CartDrawerCopy): string {
 export default function CartFlyout({ onReady }: Props) {
   // The page's language: Bangla words and digits on a Bangla page.
   const copy = cartDrawerCopy();
+  const lineCopy = cartLineCopy();
+  // A line's buyer inputs describe its controls: two engravings of one SKU are two lines.
+  const inputsIdBase = useId();
+  const inputsId = (index: number, item: { properties?: unknown[] }) =>
+    item.properties && item.properties.length > 0 ? `${inputsIdBase}-inputs-${index}` : undefined;
   const priceCopy = storefrontPriceCopy(pageLanguage());
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
@@ -585,7 +591,7 @@ export default function CartFlyout({ onReady }: Props) {
             ) : (
               // Mobile: gap-2 (tighter), Desktop: gap-3
               <div className="space-y-2 sm:space-y-3 pb-4">
-                {lineEntries.map(([key, item]) => (
+                {lineEntries.map(([key, item], index) => (
                   <div
                     key={key}
                     aria-current={key === addedKey ? "true" : undefined}
@@ -636,7 +642,7 @@ export default function CartFlyout({ onReady }: Props) {
                           )}
                           {item.properties && item.properties.length > 0 && (
                             <div className="text-xs text-muted-foreground">
-                              <ul>
+                              <ul id={inputsId(index, item)}>
                                 {item.properties.map((property) => (
                                   <li key={property.key} className="break-words">
                                     {cartLinePropertyText(property, "+{price}")}
@@ -652,7 +658,8 @@ export default function CartFlyout({ onReady }: Props) {
                                 <a
                                   href={cartLineEditHref(item)!}
                                   className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
-                                  aria-label={copy.editItem(item.name)}
+                                  aria-label={copy.editItem(cartLineName(item))}
+                                  aria-describedby={inputsId(index, item)}
                                   onClick={() => {
                                     // Session storage, not the URL: the inputs are buyer content.
                                     writeCartLineEdit({
@@ -677,21 +684,25 @@ export default function CartFlyout({ onReady }: Props) {
                                 <button
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
+                                  aria-label={lineCopy.updateQuantityFor(formatCount(Math.floor(issues[key].availableQuantity!)), cartLineName(item))}
+                                  aria-describedby={inputsId(index, item)}
                                   onClick={() => {
                                     updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
                                   }}
                                 >
-                                  {copy.updateQuantity(formatCount(Math.floor(issues[key].availableQuantity!)))}
+                                  {lineCopy.updateQuantity(formatCount(Math.floor(issues[key].availableQuantity!)))}
                                 </button>
                               ) : issues[key].action === "remove" || issues[key].action === "reduce_quantity" ? (
                                 <button
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer"
+                                  aria-label={lineCopy.removeFor(cartLineName(item))}
+                                  aria-describedby={inputsId(index, item)}
                                   onClick={() => {
-                                    removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
+                                    removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
                                   }}
                                 >
-                                  {copy.remove}
+                                  {lineCopy.remove}
                                 </button>
                               ) : null}
                             </div>
@@ -713,11 +724,12 @@ export default function CartFlyout({ onReady }: Props) {
                       <div className="flex items-end justify-between mt-1">
                         <div className="flex h-11 items-center overflow-hidden rounded-md bg-muted/50 ring-1 ring-inset ring-input sm:h-8">
                           <button
-                            aria-label={copy.decrease(item.name)}
+                            aria-label={copy.decrease(cartLineName(item))}
+                            aria-describedby={inputsId(index, item)}
                             onClick={() => {
                               const newQ = Math.max(0, item.quantity - 1);
                               if (newQ === 0)
-                                removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
+                                removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
                               else
                                 updateCartItemByKey(key, { quantity: newQ });
                             }}
@@ -729,7 +741,8 @@ export default function CartFlyout({ onReady }: Props) {
                             {formatCount(item.quantity)}
                           </span>
                           <button
-                            aria-label={copy.increase(item.name)}
+                            aria-label={copy.increase(cartLineName(item))}
+                            aria-describedby={inputsId(index, item)}
                             onClick={() => {
                               updateCartItemByKey(key, {
                                 quantity: item.quantity + 1,
@@ -742,9 +755,10 @@ export default function CartFlyout({ onReady }: Props) {
                         </div>
 
                         <button
-                          aria-label={copy.removeItem(item.name)}
+                          aria-label={lineCopy.removeFor(cartLineName(item))}
+                          aria-describedby={inputsId(index, item)}
                           onClick={() => {
-                            removeWithUndo(copy.removed(item.name), () => removeCartItemByKey(key));
+                            removeWithUndo(copy.removed(cartLineName(item)), () => removeCartItemByKey(key));
                           }}
                           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
                         >

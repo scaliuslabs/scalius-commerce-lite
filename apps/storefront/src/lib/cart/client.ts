@@ -25,7 +25,7 @@ import {
 } from "@/store/cart";
 import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
-import { renderCartLineProperties } from "./line-properties-view";
+import { cartLineInputsId, renderCartLineProperties } from "./line-properties-view";
 import type {
   CartRuleError,
   CartValidationIssue,
@@ -119,6 +119,7 @@ import type {
 } from "../checkout/tax-quote-contract";
 import {
   cartItemVariantLabel as optionVariantLabel,
+  cartLineName,
   normalizeCartItemOptions,
 } from "./item-options";
 import {
@@ -1189,11 +1190,13 @@ function scheduleCartValidation() {
 export function renderIssueAction(
   cartKey: string,
   issue: CartValidationIssue,
+  describedBy = "",
 ): string {
   return renderCartIssueAction(
     cartKey,
     issue,
-    cartStore.get().items[cartKey]?.slug,
+    cartStore.get().items[cartKey],
+    describedBy,
   );
 }
 
@@ -1203,14 +1206,14 @@ export function renderIssueAction(
  * changes the line's height. The first issue is shown with its repair
  * action; the full message stays available as the slot's title.
  */
-function renderCartItemIssues(cartKey: string): string {
+function renderCartItemIssues(cartKey: string, describedBy: string): string {
   const issues = cartValidationIssues[cartKey] ?? [];
   const issue = issues[0];
   if (!issue) return "";
   const message = issues.map((entry) => entry.message).join(" ");
   return `<div class="mt-2 flex min-h-11 items-center justify-between gap-2" role="alert" data-cart-line-issue title="${escapeHtml(message)}">
         <p class="line-clamp-2 min-w-0 text-xs font-medium text-destructive">${escapeHtml(issue.message)}</p>
-        <div class="shrink-0">${renderIssueAction(cartKey, issue)}</div>
+        <div class="shrink-0">${renderIssueAction(cartKey, issue, describedBy)}</div>
       </div>`;
 }
 
@@ -1422,15 +1425,20 @@ function renderCartLine(
 ): string {
   const rawName = item.name || "";
   const safeName = escapeHtml(rawName);
+  // The controls name this line, not just its product: two sizes are two lines.
+  const lineName = cartLineName({ ...item, name: rawName });
   const safeImage = escapeHtml(getProductImageUrl(item.image, 96));
   const jsCartKey = inlineJsString(cartKey);
   const copy = activeCheckoutCopy();
   const options = normalizeCartItemOptions(item.options) ?? [];
-  const issueBlock = renderCartItemIssues(cartKey);
   // A store app's rule about this line: under its controls, which name it for assistive technology.
   const ruleErrorsId = cartLineRuleErrorsId(position);
   const ruleBlock = renderCartLineRuleErrors(ruleErrors, ruleErrorsId);
-  const describedBy = ruleBlock ? ` aria-describedby="${ruleErrorsId}"` : "";
+  // The line's buyer inputs describe its controls too: two engravings of one SKU are two lines.
+  const inputsId = cartLineInputsId(position);
+  const descriptions = [(item.properties?.length ?? 0) > 0 ? inputsId : "", ruleBlock ? ruleErrorsId : ""].filter(Boolean);
+  const describedBy = descriptions.length > 0 ? ` aria-describedby="${descriptions.join(" ")}"` : "";
+  const issueBlock = renderCartItemIssues(cartKey, describedBy);
   const quantityKnown = Object.prototype.hasOwnProperty.call(
     cartQuantityLimits,
     cartKey,
@@ -1444,7 +1452,7 @@ function renderCartLine(
       : atLimit
         ? copy.maximumAvailableQuantityText
         : copy.increaseQuantityText,
-    { item: rawName },
+    { item: lineName },
   ));
   const variantInfo = options
     .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
@@ -1455,6 +1463,8 @@ function renderCartLine(
       editText: copy.editLineText,
       editLabelText: copy.editLineLabelText,
       jsCartKey,
+      inputsId,
+      describedBy,
     }) + (mixed && (item.fulfillmentKind === "digital" || item.fulfillmentKind === "service")
       ? `<span class="block" data-cart-line-fulfilment>${escapeHtml(item.fulfillmentKind === "digital" ? copy.cartLineDigitalText : copy.cartLineServiceText)}</span>`
       // A free-delivery product's own delivery is free (its shipping profile), whatever the rest pays.
@@ -1470,11 +1480,11 @@ function renderCartLine(
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
-              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: rawName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: lineName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
-                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
+                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: lineName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
@@ -1752,7 +1762,7 @@ function removeLineWithUndo(cartKey: string): void {
   const snapshot = cartStore.get();
   const item = snapshot.items[cartKey];
   if (!item || !removeCartItemByKey(cartKey)) return;
-  offerUndo(formatCheckoutLanguageText(activeCheckoutCopy().itemRemovedText, { item: item.name }), snapshot);
+  offerUndo(formatCheckoutLanguageText(activeCheckoutCopy().itemRemovedText, { item: cartLineName(item) }), snapshot);
 }
 
 // --- Initialization ---
