@@ -2,6 +2,7 @@ import type { AddToCartEventDetail, OpenCartEventDetail } from "@/components/Car
 import type { AuthModalOpenDetail } from "@/components/AuthModal";
 import { installRailFocus } from "@/scripts/rail-focus";
 import { loadLazyScript, type LazyScriptOptions } from "@/scripts/lazy-script";
+import { pagePath } from "@/lib/presence-url";
 
 function hasCustomerAuthMirrorCookie(): boolean {
   return document.cookie
@@ -9,17 +10,23 @@ function hasCustomerAuthMirrorCookie(): boolean {
     .some((cookie) => cookie.trim() === "cs_auth=1");
 }
 
-/** The three parts every page loads on first use: sign-in, search and the cart flyout. */
+/**
+ * The three parts every page loads on first use (sign-in, search and the
+ * cart flyout), and the cart itself, which adds a queued line when the
+ * flyout cannot load.
+ */
 export interface LazyGlobalUiLoaders {
   auth: () => Promise<{ mountAuthModal: () => unknown }>;
   search: () => Promise<{ mountCommandPalette: () => unknown }>;
   cart: () => Promise<{ mountCartFlyout: () => unknown }>;
+  cartStore: () => Promise<{ addToCart: (line: AddToCartEventDetail) => Promise<boolean> }>;
 }
 
 const LOADERS: LazyGlobalUiLoaders = {
   auth: () => import("@/components/client/mount-auth-modal"),
   search: () => import("@/components/client/mount-command-palette"),
   cart: () => import("@/components/client/mount-cart-flyout"),
+  cartStore: () => import("@/store/cart"),
 };
 
 /**
@@ -28,8 +35,10 @@ const LOADERS: LazyGlobalUiLoaders = {
  * once more, or the page reloads when the store serves a newer build and
  * nothing typed would be lost. When it still fails, the attempt is
  * forgotten (its pending open dropped), so the next reach tries again: the
- * part is never dead for the rest of the visit. A failed cart flyout never
- * stops a line reaching the cart; only the flyout waits for the next add.
+ * part is never dead for the rest of the visit. A queued add is never
+ * dropped: the flyout performs it once it loads, and when the flyout cannot
+ * load the cart adds it without the flyout (it stays queued if the cart
+ * cannot load either, for the next attempt).
  */
 export function installLazyGlobalUi(loaders: LazyGlobalUiLoaders = LOADERS, options: LazyScriptOptions = {}): void {
   if (window.__scaliusLazyGlobalUiInstalled) return;
@@ -99,11 +108,30 @@ export function installLazyGlobalUi(loaders: LazyGlobalUiLoaders = LOADERS, opti
         cartReady = true;
       },
       () => {
-        // The lines are in the cart already; the flyout opens on the next reach.
+        // The flyout opens on the next reach; its queued adds are made now, without it.
         cartLoading = null;
-        window.__scaliusCartPendingEvents = [];
+        void addQueuedLines();
       },
     );
+  };
+  const addQueuedLines = async () => {
+    const queued = window.__scaliusCartPendingEvents ?? [];
+    // An open needs the flyout; an add never waits for it.
+    window.__scaliusCartPendingEvents = queued.filter((pending) => pending.type === "add");
+    if (window.__scaliusCartPendingEvents.length === 0) return;
+    let store: Awaited<ReturnType<LazyGlobalUiLoaders["cartStore"]>>;
+    try {
+      store = await loadLazyScript(loaders.cartStore, options);
+    } catch {
+      return; // Still queued: the next attempt adds them.
+    }
+    const adds = (window.__scaliusCartPendingEvents ?? []).splice(0);
+    for (const pending of adds) {
+      if (pending.type !== "add") continue;
+      if (await store.addToCart(pending.detail).catch(() => false) && pending.detail.redirectToCart) {
+        window.location.href = pagePath("/cart");
+      }
+    }
   };
   const queueCartEvent = (
     event: Event,

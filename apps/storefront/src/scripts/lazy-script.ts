@@ -1,44 +1,88 @@
 import { BUILD_ID } from "@/config/build-id";
 import { STALE_ASSET_EVENT } from "@/scripts/browser-events";
+import { stalePageCopy } from "@/lib/stale-page-copy";
 
-/** How `loadLazyScript` judges a failure (tests replace the store's answers). */
+/** How `loadLazyScript` judges a failure (tests replace the store's answers and the wait). */
 export interface LazyScriptOptions {
-  /** Whether a reload would lose what the buyer typed (default: any changed field on the page). */
+  /** Whether a reload would lose what the buyer typed (default: `buyerHasTyped`). */
   typed?: () => boolean;
   /** The build the store serves now, or null when it cannot say. */
   servedBuild?: () => Promise<string | null>;
   /** This page's build. */
   pageBuild?: string;
+  /** The wait before the second try, in milliseconds. */
+  retryDelayMs?: number;
+  /** The page keeps what the buyer typed across a reload (the checkout's draft): the notice says so. */
+  draftRestores?: boolean;
+}
+
+/** The wait before trying a failed download again: long enough for a dropped connection to come back. */
+const RETRY_DELAY_MS = 800;
+/** How long a stale page waits for the stale-asset recovery's reload before offering its own notice. */
+const STALE_NOTICE_FALLBACK_MS = 2000;
+
+const tracked = new WeakSet<Document>();
+const typed = new WeakSet<Document>();
+
+function isField(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+}
+
+/**
+ * Notes the buyer's first input or choice on the page: any field's `input`
+ * or `change`, heard on the document in the capture phase before a component
+ * handles it. Values cannot tell instead: React keeps a controlled field's
+ * text in its `defaultValue` too, so a typed field looks untouched.
+ */
+export function trackBuyerInput(doc: Document = document): void {
+  if (tracked.has(doc)) return;
+  tracked.add(doc);
+  const mark = (event: Event) => {
+    if (isField(event.target)) typed.add(doc);
+  };
+  doc.addEventListener("input", mark, true);
+  doc.addEventListener("change", mark, true);
 }
 
 /** Whether the buyer has typed or chosen something on the page that a reload would lose. */
-export function pageHasTypedInput(root: ParentNode = document): boolean {
-  for (const field of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")) {
-    if (field instanceof HTMLSelectElement) {
-      const options = Array.from(field.options);
-      if (options.length === 0) continue;
-      if (field.multiple) {
-        if (options.some((option) => option.selected !== option.defaultSelected)) return true;
-        continue;
-      }
-      // A one-choice list opens on its last option marked selected, else its first.
-      let drawn = 0;
-      options.forEach((option, index) => {
-        if (option.defaultSelected) drawn = index;
-      });
-      if (field.selectedIndex !== drawn) return true;
-      continue;
-    }
-    if (field instanceof HTMLInputElement) {
-      if (["hidden", "submit", "button", "reset", "image"].includes(field.type)) continue;
-      if (field.type === "checkbox" || field.type === "radio") {
-        if (field.checked !== field.defaultChecked) return true;
-        continue;
-      }
-    }
-    if (field.value !== field.defaultValue) return true;
+export function buyerHasTyped(doc: Document = document): boolean {
+  return typed.has(doc);
+}
+
+// Every page that can load a lazy script notes typing from the start.
+if (typeof document !== "undefined") trackBuyerInput();
+
+/**
+ * The notice a page shows when the store was updated after it loaded, the
+ * part the buyer reached for cannot load, and a reload would lose what they
+ * typed: they choose when to reload. One per page; it never takes focus.
+ */
+export function showStalePageNotice(options: { draftRestores?: boolean } = {}, doc: Document = document): void {
+  if (doc.querySelector("[data-stale-page-notice]")) return;
+  const copy = stalePageCopy(doc.documentElement.lang);
+  const notice = doc.createElement("div");
+  notice.setAttribute("data-stale-page-notice", "");
+  notice.setAttribute("role", "status");
+  notice.className = "fixed inset-x-3 bottom-3 z-[80] mx-auto flex max-w-md flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground shadow-lg";
+  const words = doc.createElement("div");
+  words.className = "min-w-0 flex-1";
+  const updated = doc.createElement("p");
+  updated.textContent = copy.updated;
+  words.append(updated);
+  if (options.draftRestores) {
+    const kept = doc.createElement("p");
+    kept.className = "text-muted-foreground";
+    kept.textContent = copy.draftKept;
+    words.append(kept);
   }
-  return false;
+  const reload = doc.createElement("button");
+  reload.type = "button";
+  reload.className = "min-h-11 shrink-0 rounded-[var(--theme-button-radius,var(--radius))] bg-primary px-4 font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  reload.textContent = copy.reload;
+  reload.addEventListener("click", () => doc.defaultView?.location.reload());
+  notice.append(words, reload);
+  doc.body.append(notice);
 }
 
 /** The build the store serves now (its health answer, never cached), or null when it cannot say. */
@@ -60,11 +104,18 @@ export async function storeServedBuild(): Promise<string | null> {
  * can fail to download, and that part of the page must not stay dead.
  *
  * - When the store now serves another build (`/health`), the page was cached
- *   before a deploy and its build files are gone: the page's stale-asset
- *   recovery (lib/inline-boot-scripts.ts) reloads it, unless the buyer typed
- *   or chose something on it that a reload would lose.
+ *   before a deploy and its build files are gone, so no retry can work: the
+ *   page's stale-asset recovery (lib/inline-boot-scripts.ts) reloads it, or,
+ *   when the buyer has typed or chosen something a reload would lose, a
+ *   notice lets them reload when they choose (saying so where the checkout's
+ *   draft keeps their details).
  * - Otherwise (the same build, or the store cannot say: a dropped
- *   connection) it is tried once more.
+ *   connection) it is tried once more after a short wait. The retry is the
+ *   same request: the bundler resolves each lazy import to its hashed file
+ *   at build time, so the page cannot ask for that file under another
+ *   address (a query would also make a second copy of a module that holds
+ *   state, such as the cart). A browser that remembers the failed file fails
+ *   the retry at once; the next reach asks for the build again.
  *
  * The promise still rejects when that fails too, so the caller forgets the
  * attempt and a later reach for the part tries again; a caller with nothing
@@ -76,9 +127,16 @@ export async function loadLazyScript<T>(load: () => Promise<T>, options: LazyScr
   } catch (error) {
     const served = await (options.servedBuild ?? storeServedBuild)();
     if (served !== null && served !== (options.pageBuild ?? BUILD_ID)) {
-      if (!(options.typed ?? pageHasTypedInput)()) window.dispatchEvent(new Event(STALE_ASSET_EVENT));
+      const notice = () => showStalePageNotice({ draftRestores: options.draftRestores });
+      if ((options.typed ?? buyerHasTyped)()) notice();
+      else {
+        window.dispatchEvent(new Event(STALE_ASSET_EVENT));
+        // The recovery reloads at most every 30 s: a page it did not reload offers the notice instead.
+        setTimeout(notice, STALE_NOTICE_FALLBACK_MS);
+      }
       throw error;
     }
+    await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs ?? RETRY_DELAY_MS));
     return await load();
   }
 }

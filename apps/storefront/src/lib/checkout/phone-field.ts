@@ -102,7 +102,8 @@ let intlLoad: Promise<PhoneIntl | null> | null = null;
 let intlFailed = false;
 
 function loadIntl(): Promise<PhoneIntl | null> {
-  intlLoad ??= loadLazyScript(() => import("./phone-intl"))
+  // On checkout the draft keeps the typed details across the reload a newer build needs.
+  intlLoad ??= loadLazyScript(() => import("./phone-intl"), { draftRestores: true })
     .then((module) => {
       intlModule = module;
       intlFailed = false;

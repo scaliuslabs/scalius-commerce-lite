@@ -2380,7 +2380,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   const streetLine = document.getElementById("shippingAddress");
   if (addressApp && (streetLine instanceof HTMLTextAreaElement || streetLine instanceof HTMLInputElement)) {
     // Without its script the street line is a plain field, as it is without the app.
-    loadLazyScript(() => import("@/lib/checkout/address-autocomplete")).then(({ apiPost, enhanceAddressAutocomplete }) => {
+    loadLazyScript(() => import("@/lib/checkout/address-autocomplete"), { draftRestores: true }).then(({ apiPost, enhanceAddressAutocomplete }) => {
       enhanceAddressAutocomplete({
         root: document,
         input: streetLine,
