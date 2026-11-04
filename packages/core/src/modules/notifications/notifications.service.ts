@@ -14,6 +14,7 @@ import { getEmailRuntimeSettings, sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailResult } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
+import { pushCollapseKey } from "../../integrations/push-collapse-key";
 import { readFirebaseServiceAccountJson } from "../../integrations/firebase/settings";
 import {
     normalizeWhatsAppRecipient,
@@ -250,12 +251,13 @@ function getFcmProviderSetupFailureReason(error: FcmSendError | undefined): stri
 }
 
 /**
- * FCM takes no idempotency key, so only its quota rejection proves nothing was
- * sent. A server error or a lost answer may follow a delivered push: it is
- * recorded as skipped and never sent again.
+ * FCM takes no idempotency key, so only its quota rejection and its 503
+ * ("not processed") prove nothing was sent. Any other server error or a lost
+ * answer may follow a delivered push: it is recorded as skipped and never sent
+ * again.
  */
 function fcmFailureIsRepeatable(error: FcmSendError | undefined): boolean {
-    return error?.code === "messaging/message-rate-exceeded";
+    return error?.code === "messaging/message-rate-exceeded" || error?.code === "messaging/server-unavailable";
 }
 
 /**
@@ -443,7 +445,7 @@ async function sendStaffWebPush(db: Database, env: Env, spec: AdminPushSpec, per
                 outcomes.push(outcomeFromUnclaimedReceipt(target, claim.reason));
                 continue;
             }
-            const outcome = await deliverWebPush(db, sender, subscription, payload, { staffRequirement: permission });
+            const outcome = await deliverWebPush(db, sender, subscription, payload, { staffRequirement: permission, topic: pushCollapseKey(spec.outboxId) });
             const result = { provider: "webpush", providerStatus: outcome, rawResponse: outcome };
             outcomes.push(outcome === "sent"
                 ? await markAcceptedOutcome(db, target, claim.receipt, { success: true, ...result })
@@ -520,6 +522,8 @@ async function sendAdminFcmPush(
                 ...(spec.link ? { link: spec.link } : {}),
                 ...(options.outboxId ? { deliveryKey: `${options.outboxId}:push` } : {}),
             },
+            // A repeat after a 503 replaces a still-queued first copy on the device.
+            ...(options.outboxId ? { collapseKey: pushCollapseKey(options.outboxId) } : {}),
             tokens,
         };
 
@@ -1289,7 +1293,7 @@ async function sendOrderWebPush(options: {
                 outcomes.push(outcomeFromUnclaimedReceipt(target, claim.reason));
                 continue;
             }
-            const outcome = await deliverWebPush(db, sender, subscription, payload, { urgency: "high" });
+            const outcome = await deliverWebPush(db, sender, subscription, payload, { urgency: "high", topic: pushCollapseKey(options.receipt.outboxId) });
             const result = { provider: "webpush", providerStatus: outcome, rawResponse: outcome };
             outcomes.push(outcome === "sent"
                 ? await markAcceptedOutcome(db, target, claim.receipt, { success: true, ...result })

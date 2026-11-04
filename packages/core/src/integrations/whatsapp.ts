@@ -130,8 +130,9 @@ export async function getWhatsAppCloudApiSettings(
  * idempotency key, so a send whose outcome is unknown (the request did not
  * complete, the answer was lost, a timeout or server error of Meta's, an
  * answer without a message id) answers `retryable: false`: the message may
- * already be on the buyer's phone and is never sent twice. Only a rate limit
- * (429), which proves nothing was sent, is `retryable`.
+ * already be on the buyer's phone and is never sent twice. Only an answer that
+ * proves Meta took nothing is `retryable`: a rate limit (HTTP 429, or a Graph
+ * throttling code on a 400), HTTP 503 and code 131016 "Service unavailable".
  */
 export async function sendWhatsAppTemplateMessage(
   input: SendWhatsAppTemplateMessageInput,
@@ -205,7 +206,7 @@ export async function sendWhatsAppTemplateMessage(
       success: false,
       rawStatus: `HTTP ${response.status}`,
       rawResponse: summarizeWhatsAppErrorResponse(responseText, response.status),
-      retryable: isRetryableWhatsAppStatus(response.status),
+      retryable: isRetryableWhatsAppFailure(response.status, responseText),
     };
   }
 
@@ -279,9 +280,27 @@ function summarizeWhatsAppErrorResponse(value: string, status: number): string {
   });
 }
 
-/** Only a rate limit proves Meta took nothing; a timeout or a server error may follow a message it sent. */
-function isRetryableWhatsAppStatus(status: number): boolean {
-  return status === 429;
+/**
+ * Graph error codes that mean Meta took nothing: 4 (API too many calls),
+ * 80007 (rate limit issues), 130429 (Cloud API throughput reached), 131056
+ * (pair rate limit) and 131016 (service unavailable). They usually arrive as
+ * HTTP 400.
+ */
+const NOT_PROCESSED_GRAPH_CODES = new Set([4, 80007, 130429, 131056, 131016]);
+
+/**
+ * Only an answer that proves Meta took nothing is repeated: HTTP 429, HTTP 503
+ * ("not processed") or one of the Graph throttling codes. A timeout, a 408/409
+ * or any other server error may follow a message it sent.
+ */
+function isRetryableWhatsAppFailure(status: number, responseText: string): boolean {
+  if (status === 429 || status === 503) return true;
+  try {
+    const code = (JSON.parse(responseText) as { error?: { code?: unknown } }).error?.code;
+    return typeof code === "number" && NOT_PROCESSED_GRAPH_CODES.has(code);
+  } catch {
+    return false;
+  }
 }
 
 export function looksLikeWhatsAppPlaceholderCredential(

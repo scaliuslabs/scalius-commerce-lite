@@ -9,11 +9,12 @@ export interface WebPushSubscription {
 }
 
 /**
- * - `retry`: the push service took nothing (a rate limit, or the message never
- *   left), so sending again cannot show it twice.
- * - `uncertain`: the request may have been taken (a server error, a timeout, a
- *   lost connection). Web Push has no idempotency key, so it is never sent
- *   again: a second push would alert the person twice.
+ * - `retry`: the push service took nothing (a rate limit, a 503 "not
+ *   processed", or the message never left), so sending again cannot show it
+ *   twice; a sender that sets `Topic` also lets a repeat replace a queued copy.
+ * - `uncertain`: the request may have been taken (any other server error, a
+ *   timeout, a lost connection). Web Push has no idempotency key, so it is
+ *   never sent again: a second push would alert the person twice.
  */
 export type WebPushOutcome = "sent" | "gone" | "retry" | "uncertain" | "rejected";
 
@@ -67,7 +68,7 @@ export function isAllowedPushEndpoint(value: string): boolean {
 function classify(status: number): WebPushOutcome {
   if (status === 201 || status === 202) return "sent";
   if (status === 404 || status === 410) return "gone";
-  if (status === 429) return "retry";
+  if (status === 429 || status === 503) return "retry";
   if (status >= 500) return "uncertain";
   return "rejected";
 }
