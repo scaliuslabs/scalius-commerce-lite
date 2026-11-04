@@ -81,7 +81,7 @@ if (isPost && orderId) {
       orderNumber = result.data.orderNumber;
       resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
-      ({ message, codeSent, resendAfterSeconds, needsStoreContact } = describeOrderCodeSendRefusal(copy, result.failure, copy.paymentRecoveryCodesUnavailableText));
+      ({ message, codeSent, resendAfterSeconds, needsStoreContact } = describeOrderCodeSendRefusal(copy, result.failure, copy.paymentRecoveryCodesUnavailableText, copy.paymentRecoveryEnterCodeText));
     }
   }
 }

@@ -5,6 +5,8 @@ CREATE TABLE "staff_auth_attempts" (
 	"window_started_at" bigint NOT NULL
 );
 --> statement-breakpoint
+CREATE INDEX "staff_auth_attempts_window_idx" ON "staff_auth_attempts" ("window_started_at");
+--> statement-breakpoint
 DELETE FROM "rate_limit" WHERE "key" >= 'scalius:' AND "key" < 'scalius;';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (194, '0194_staff_auth_attempts', '34fae90c1a5c7b813a1f2a090f1603f5e7fbb0322084d923a3da9cc20c4c8d28');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (194, '0194_staff_auth_attempts', 'e70823b18e8320a9b048ca6c32c1314ef2cf4f5ff4b74b09528d06ac2898615b');

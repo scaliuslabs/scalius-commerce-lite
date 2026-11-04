@@ -750,7 +750,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 194,
     name: "0194_staff_auth_attempts",
-    sourceSha256: "34fae90c1a5c7b813a1f2a090f1603f5e7fbb0322084d923a3da9cc20c4c8d28",
+    sourceSha256: "e70823b18e8320a9b048ca6c32c1314ef2cf4f5ff4b74b09528d06ac2898615b",
   },
 ] as const;
 

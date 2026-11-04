@@ -206,12 +206,13 @@ export function enhanceOrderCodeForm(
       message: typeof data.message === "string" ? data.message : undefined,
       retryAfterSeconds: positiveSeconds(data.retryAfterSeconds),
       attemptsLeft: typeof data.attemptsLeft === "number" ? data.attemptsLeft : undefined,
+      reason: typeof data.reason === "string" ? data.reason : undefined,
     };
     if (storeContact && failureNeedsStoreContact({ status: failure.status, errorCode: typeof data.errorCode === "string" ? data.errorCode : undefined })) storeContact.hidden = false;
     const operation = intent === "verify" ? "verify" : "send";
     if (intent === "send" && failure.status === 429) {
       // The code already sent still works: open its field, wait on the resend button.
-      const refusal = describeOrderCodeSendRefusal(copy, failure, text.unavailable);
+      const refusal = describeOrderCodeSendRefusal(copy, failure, text.unavailable, text.codeSent);
       showCodeStep();
       submit.disabled = false;
       setMessage(refusal.message, "danger");

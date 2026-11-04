@@ -120,10 +120,17 @@ function StaffMemberPage() {
 function ResendInvite({ member, status }: { member: AdminUser; status: StaffStatus }) {
   const t = useMessages(usersMessages);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const resend = useMutation({
     mutationFn: () => apiData(postApiV1AdminAuthUsersByIdResendSetup({ path: { id: member.id } })),
     onSuccess: () => toast.success(t("inviteSent")),
-    onError: (error) => toast.error(failure(error, t, t("actionFailed"))),
+    onError: async (error) => {
+      const status = error instanceof AdminApiResponseError ? error.status : null;
+      if (status !== 409 && status !== 404) return toast.error(failure(error, t, t("actionFailed")));
+      // Accepted or cancelled since this page loaded: the reload below shows where it stands.
+      toast.error(t("inviteNotPending"));
+      if (status === 404) await navigate({ to: "/admin/settings/users" });
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers.all }),
   });
   return (

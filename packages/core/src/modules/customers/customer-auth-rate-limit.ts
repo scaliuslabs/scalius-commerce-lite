@@ -4,6 +4,7 @@ import type { Database } from "@scalius/database/client";
 import { and, eq, gt, lt, lte, sql } from "drizzle-orm";
 import { RateLimitError } from "@scalius/core/errors";
 import { hmacSha256Hex, sha256Hex } from "@scalius/shared/hash";
+import { CODE_LIMIT_REACHED_REASON, CODE_RECENTLY_SENT_REASON } from "@scalius/shared/customer-auth-policy";
 
 /**
  * Rate limits that can't be turned against a buyer.
@@ -47,9 +48,9 @@ export interface OtpSendAllowance {
 }
 
 /** The refusal's `details.reason` while a contact's last code is still in its resend cooldown. */
-export const OTP_RESEND_COOLDOWN_REASON = "code_recently_sent";
+export const OTP_RESEND_COOLDOWN_REASON = CODE_RECENTLY_SENT_REASON;
 /** The refusal's `details.reason` once a contact's overall ceiling is reached (its latest code still works). */
-export const OTP_CONTACT_CEILING_REASON = "code_limit_reached";
+export const OTP_CONTACT_CEILING_REASON = CODE_LIMIT_REACHED_REASON;
 
 /** Thrown when a contact's overall ceiling (not one sender's) is reached. */
 export class OtpContactCeilingError extends RateLimitError {

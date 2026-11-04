@@ -297,8 +297,12 @@ export default function AuthModal() {
       setLimit(result.error);
       startSendWait(result.retryAfterSeconds);
       startResendWait(result.retryAfterSeconds);
-      // The code already sent to this contact still works: stay on it.
-      if (checked.value === sentTo) setStep("code");
+      // The code already sent to this contact still works (even one sent before
+      // this page loaded): open its field.
+      if (result.codeStillValid || checked.value === sentTo) {
+        setSentTo(checked.value);
+        setStep("code");
+      }
       return;
     }
     setSentTo(checked.value);

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4c19e263-6989-4d94-92e0-748f7b7fd43e",
+  "id": "cb9b5550-92c4-49cc-8210-8081e7e07a45",
   "prevId": "ebe21943-acda-41d4-8a0b-5adfc80eb4cc",
   "tables": {
     "account": {
@@ -898,7 +898,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "staff_auth_attempts_window_idx": {
+          "name": "staff_auth_attempts_window_idx",
+          "columns": [
+            "window_started_at"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

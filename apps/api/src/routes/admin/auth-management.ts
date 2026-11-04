@@ -570,6 +570,7 @@ const resendAdminSetupRoute = createRoute({
     responses: {
         200: { description: "Setup link sent", content: { "application/json": { schema: messageResponse } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     },
 });
@@ -611,11 +612,13 @@ app.openapi(resendAdminSetupRoute, async (c) => {
     if (targetAdminPrincipal.length === 0) {
         throw new ValidationError("Can only resend setup for administrator accounts");
     }
+    // A page opened before the invitee accepted (or the invite was cancelled)
+    // still offers Resend: the state moved on, so this is a conflict.
     if (!invitedUser.mustChangePassword) {
-        throw new ValidationError("Password setup is already complete");
+        throw new ConflictError("They already accepted the invite, so there is nothing to resend.");
     }
     if (!invitedUser.invitationId || invitedUser.invitationStatus !== "pending") {
-        throw new ValidationError("This administrator does not have a pending invitation");
+        throw new ConflictError("There is no pending invite to resend.");
     }
 
     const auth = createAuth(env, { appProviders: requestAppProviders(c) });

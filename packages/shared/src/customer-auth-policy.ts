@@ -16,6 +16,20 @@
 import type { FulfillmentKind } from "./fulfilment";
 
 export const CUSTOMER_AUTH_OTP_CHANNELS = ["email", "sms", "whatsapp"] as const;
+
+/**
+ * `details.reason` of a refused code request whose last code still works: the
+ * resend cooldown, or a contact's overall ceiling. Every code surface (sign-in,
+ * Track your order, payment recovery) opens the code field and says a code was
+ * sent, never "too many attempts".
+ */
+export const CODE_RECENTLY_SENT_REASON = "code_recently_sent";
+export const CODE_LIMIT_REACHED_REASON = "code_limit_reached";
+
+/** The refusal leaves the code already sent usable. */
+export function isCodeStillValidRefusal(reason: unknown): boolean {
+  return reason === CODE_RECENTLY_SENT_REASON || reason === CODE_LIMIT_REACHED_REASON;
+}
 export const EMAIL_COLLECTION_MODES = ["required", "optional", "hidden"] as const;
 export const WHATSAPP_COLLECTION_MODES = ["off", "same_as_phone", "separate"] as const;
 

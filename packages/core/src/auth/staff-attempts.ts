@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, lt, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { staffAuthAttempts as attempts } from "@scalius/database/schema";
 import { sha256Hex } from "@scalius/shared/hash";
@@ -29,7 +29,8 @@ const WINDOW_MS = 15 * 60_000;
 export const STAFF_PROOF_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-proof", maxAttempts: 10, windowMs: WINDOW_MS };
 /** Wrong sign-in passwords for one email from browsers it never signed in on, any email alike. */
 export const STAFF_SIGN_IN_ATTEMPTS: StaffAttemptPolicy = { scope: "staff-sign-in", maxAttempts: 20, windowMs: WINDOW_MS };
-const STAFF_ATTEMPT_POLICIES = [STAFF_PROOF_ATTEMPTS, STAFF_SIGN_IN_ATTEMPTS] as const;
+/** The sweep keeps every window until the longest one has lapsed (a shorter one is already refused nothing). */
+const LONGEST_WINDOW_MS = Math.max(STAFF_PROOF_ATTEMPTS.windowMs, STAFF_SIGN_IN_ATTEMPTS.windowMs);
 
 /** One reserved attempt: refused (with the honest wait) or held until `refund`. */
 export interface StaffAttempt {
@@ -103,9 +104,9 @@ export interface SweepExpiredStaffAttemptsResult {
 }
 
 /**
- * Deletes lapsed attempt windows in bounded batches, each scope with its own
- * window. A scope's keys are one key range (`<scope>:` up to `<scope>;`, as
- * `;` sorts right after `:`), so the sweep walks the primary key.
+ * Deletes lapsed attempt windows in bounded batches: every row whose window
+ * started before the longest window, by `staff_auth_attempts_window_idx`, so
+ * live windows (an email spray leaves many) are never walked.
  */
 export async function sweepExpiredStaffAttempts(
   db: Database,
@@ -113,24 +114,7 @@ export async function sweepExpiredStaffAttempts(
   options: { limit?: number } = {},
 ): Promise<SweepExpiredStaffAttemptsResult> {
   const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
-  const total: SweepExpiredStaffAttemptsResult = { scanned: 0, deleted: 0, limit, hasMore: false };
-  for (const policy of STAFF_ATTEMPT_POLICIES) {
-    const swept = await sweepExpiredRows(
-      db,
-      attempts,
-      attempts.key,
-      and(
-        gte(attempts.key, `${policy.scope}:`),
-        lt(attempts.key, `${policy.scope};`),
-        lte(attempts.windowStartedAt, nowMs - policy.windowMs),
-      ),
-      limit,
-    );
-    total.scanned += swept.scanned;
-    total.deleted += swept.deleted;
-    total.hasMore ||= swept.hasMore;
-  }
-  return total;
+  return sweepExpiredRows(db, attempts, attempts.key, lte(attempts.windowStartedAt, nowMs - LONGEST_WINDOW_MS), limit);
 }
 
 /** For tests and reports: the subject's live count in its window, 0 when none. */

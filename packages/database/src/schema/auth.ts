@@ -144,7 +144,10 @@ export const staffAuthAttempts = sqliteTable("staff_auth_attempts", {
     key: text("key").primaryKey(),
     attempts: integer("attempts").notNull(),
     windowStartedAt: integer("window_started_at").notNull(),
-});
+}, (table) => [
+    // The sweep seeks lapsed windows, however many live ones an email spray leaves.
+    index("staff_auth_attempts_window_idx").on(table.windowStartedAt),
+]);
 
 export const adminSetupClaims = sqliteTable("admin_setup_claims", {
     singletonKey: text("singleton_key").primaryKey(),
