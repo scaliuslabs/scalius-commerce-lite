@@ -28,6 +28,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { resolveThemePreview, type ThemePreviewData } from "./api/storefront";
 import { readThemePreviewCookie } from "./theme-preview-cookie";
+import { isBuyerOwnPagePath } from "./theme-preview-route";
 import { storefrontLanguage, type StorefrontLanguage } from "./storefront-language";
 
 export interface RequestTheme {
@@ -201,7 +202,11 @@ export function resolveRequestTheme(
 ): Promise<RequestTheme> {
   const locals = astro.locals as ThemeLocals;
   locals.storefrontTheme ??= (async () => {
-    const previewToken = readThemePreviewCookie(astro.request.headers.get("cookie")) || null;
+    // A buyer's own page never draws a draft, whatever asked for it (a frame,
+    // a fetch, an object): the preview cookie is not even read there.
+    const previewToken = isBuyerOwnPagePath(new URL(astro.request.url).pathname)
+      ? null
+      : readThemePreviewCookie(astro.request.headers.get("cookie")) || null;
     const resolution = previewToken ? await resolveThemePreview(previewToken) : null;
     const preview = resolution?.state === "live" ? resolution.preview : null;
     // A live preview renders the draft and its brand images; its validation

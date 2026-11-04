@@ -105,6 +105,11 @@ function lab(hex: string): [number, number, number] {
   return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
 }
 
+/** CIE Lab of a `#rrggbb` colour, as the chroma and distance rules measure it. */
+export function storefrontThemeLab(hex: string): [number, number, number] {
+  return lab(hex);
+}
+
 /** Lab chroma of a `#rrggbb` colour (0 is grey). */
 export function storefrontThemeChroma(hex: string): number {
   const [, a, b] = lab(hex);

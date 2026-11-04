@@ -46,9 +46,15 @@ import { appendClearThemePreviewCookies, readThemePreviewCookie, THEME_PREVIEW_C
 import { catalogRedirectBeforeReads } from "@/lib/listing-url-redirect";
 import { presenceOfRenderRequest } from "@/lib/market-presence";
 import { buyerPageForbidsFraming } from "@/lib/middleware-helper/buyer-page-framing";
+import { themePreviewBuyerPageNotice } from "@/lib/middleware-helper/theme-preview-buyer-page";
+import { isBuyerOwnPagePath } from "@/lib/theme-preview-route";
 
 interface PreviewFramingLocals {
-  /** Set by the response policy: the page rendered a valid theme preview. */
+  /**
+   * The answer is a valid theme preview's, which the dashboard may frame: the
+   * page it rendered (set by the response policy), or the notice it shows in
+   * place of a buyer's own page.
+   */
   themePreviewRender?: boolean;
 }
 
@@ -61,13 +67,15 @@ interface PreviewFramingLocals {
  * cookie here: a layout cannot, as a streamed page's headers leave before it
  * renders. Without an answer (a timeout, 429 or 5xx) the cookie stays and the
  * next page asks again. Either way the response is private (the cookie
- * bypasses the shared cache).
+ * bypasses the shared cache). A buyer's own page is never a preview, so the
+ * dashboard never frames it, whatever the request.
  */
 async function themePreviewFrameAncestors(
-  context: { request: Request; locals: object },
+  context: { request: Request; url: URL; locals: object },
   response: Response,
 ): Promise<string[]> {
   if (!readThemePreviewCookie(context.request.headers.get("cookie"))) return [];
+  if (isBuyerOwnPagePath(context.url.pathname)) return [];
   if (!response.headers.get("Content-Type")?.toLowerCase().includes("text/html")) return [];
   try {
     const theme = await resolveRequestTheme(context, await getLayoutData());
@@ -176,7 +184,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   }
 
   // A theme preview may be framed by the dashboard's editor; a buyer's page never.
-  const frameAncestors = await themePreviewFrameAncestors({ request, locals }, response);
+  const frameAncestors = await themePreviewFrameAncestors({ request, url, locals }, response);
   // The theme the page drew (the draft in a preview) names the apps whose hosts may be reached;
   // none on a buyer's page, where app components never render.
   const themeConnectHosts = themeAppConnectHosts(
@@ -211,12 +219,20 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 // when that read resolves). Storefront pages start the layout read together
 // with their own reads, so the whole render is one API batch; every other
 // route waits for the origins first. Nothing is read from Wrangler vars or
-// build-time env, and nothing is retained across requests.
-const requestRuntimeMiddleware = defineMiddleware(({ request, url, routePattern }, next) => {
+// build-time env, and nothing is retained across requests. A buyer's own page
+// asked for under a live theme preview never renders: the preview's notice
+// answers in its place (`themePreviewBuyerPageNotice`).
+const requestRuntimeMiddleware = defineMiddleware(({ request, url, routePattern, locals }, next) => {
   const early = redirectBeforeReads(request, url, routePattern);
   if (early) return early;
   return runWithRequestRuntime(request, getEnv(), async () => {
     const layout = getLayoutData();
+    const previewNotice = await themePreviewBuyerPageNotice({ request, url }, layout);
+    if (previewNotice) {
+      (locals as PreviewFramingLocals).themePreviewRender = true;
+      previewNotice.headers.set("X-Storefront-Build", BUILD_ID);
+      return previewNotice;
+    }
     const batchedPage =
       request.method === "GET" && isLayoutBatchedPagePath(url.pathname);
     if (!batchedPage) await layout;

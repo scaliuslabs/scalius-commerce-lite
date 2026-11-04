@@ -25,7 +25,8 @@ export function WarrantyCard({ form, readOnly }: {
         <CardTitle>{t("warranty")}</CardTitle>
       </CardHeader>
       <CardContent>
-        <React.Suspense fallback={<Skeleton className="h-9 w-full" />}>
+        {/* While its code loads: a skeleton of the select, as high as the field. */}
+        <React.Suspense fallback={<Skeleton className="h-11 w-full sm:pointer-fine:h-9" />}>
           <WarrantyPolicyPicker form={form} readOnly={readOnly} />
         </React.Suspense>
       </CardContent>

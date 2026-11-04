@@ -1,12 +1,22 @@
 ---
-import { resolveThemePreview } from "@/lib/api";
+// The merchant's draft preview in a tab of its own: a bar (the revisions, the
+// width, Exit) over the requested public page in a frame. A page it never
+// draws (a buyer's own page, an endpoint) is refused with a notice and a way
+// to home, never swapped silently. Without a live preview it says why: ended
+// (the cookie goes) or no answer from the API (the cookie stays; Try again).
+// Its words follow the store's language.
+import { getLayoutData, resolveThemePreview } from "@/lib/api";
+import { getRuntimeDashboardUrl } from "@/lib/api/runtime";
+import { storefrontLanguage } from "@/lib/storefront-language";
+import { formatCount } from "@/lib/store-time-zone";
 import {
   appendClearThemePreviewCookies,
   readThemePreviewCookie,
 } from "@/lib/theme-preview-cookie";
+import { themePreviewCopy } from "@/lib/theme-preview-copy";
 import {
   normalizeThemePreviewDevice,
-  normalizeThemePreviewRoutePath,
+  themePreviewTarget,
 } from "@/lib/theme-preview-route";
 
 export const prerender = false;
@@ -28,25 +38,39 @@ if (method !== "GET") {
   Astro.response.headers.set("Allow", "GET");
 }
 
-const routePath = normalizeThemePreviewRoutePath(requestedPath);
+const target = themePreviewTarget(requestedPath);
+const routePath = target.kind === "page" ? target.path : null;
 const initialDevice = normalizeThemePreviewDevice(requestedDevice);
-const resolution = token ? await resolveThemePreview(token) : null;
+const [layoutData, resolution] = await Promise.all([
+  getLayoutData(),
+  token ? resolveThemePreview(token) : null,
+]);
+const languageCode = layoutData?.storefrontCopy?.languageCode;
+const lang = storefrontLanguage(languageCode);
+const copy = themePreviewCopy(languageCode);
 const preview = resolution?.state === "live" ? resolution.preview : null;
-// Only the API's "ended" drops the cookie; no answer keeps it for a reload.
+// Only the API's "ended" drops the cookie; no answer keeps it for a retry.
 const ended = !token || resolution?.state === "ended";
+// Platform settings' dashboard address (it may sit below a path prefix).
+const dashboardUrl = getRuntimeDashboardUrl() ?? "";
+const homePreviewUrl = `/theme-preview?${new URLSearchParams({ path: "/", device: initialDevice })}`;
 
 if (token && ended) {
   appendClearThemePreviewCookies(Astro.response.headers);
 }
+if (method === "GET" && !preview && !ended) {
+  Astro.response.status = 503;
+  Astro.response.headers.set("Retry-After", "5");
+}
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>Storefront draft preview</title>
+    <title>{copy.documentTitle}</title>
     <style>
       :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
       * { box-sizing: border-box; }
@@ -72,6 +96,15 @@ if (token && ended) {
       .unavailable article { width: min(100%, 30rem); border: 1px solid #d4d4d8; border-radius: .8rem; background: white; padding: 1.25rem; box-shadow: 0 10px 32px rgba(0,0,0,.08); }
       .unavailable h1 { margin: 0; font-size: 1.15rem; }
       .unavailable p { margin: .55rem 0 0; color: #52525b; font-size: .875rem; line-height: 1.45; }
+      .refused { min-height: calc(100vh - 4.75rem); display: grid; place-items: center; padding: 1.25rem; background: #27272a; }
+      .refused article { width: min(100%, 30rem); border: 1px solid #3f3f46; border-radius: .8rem; background: #18181b; padding: 1.25rem; }
+      .refused h1 { margin: 0; font-size: 1.15rem; }
+      .refused p { margin: .55rem 0 0; color: #a1a1aa; font-size: .875rem; line-height: 1.45; }
+      .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+      .actions a { display: inline-flex; align-items: center; min-height: 2.5rem; border: 1px solid #a1a1aa; border-radius: .45rem; padding: 0 .9rem; color: inherit; font-size: .85rem; font-weight: 600; text-decoration: none; }
+      .actions a.primary { border-color: #18181b; background: #18181b; color: #fafafa; }
+      .refused .actions a.primary { border-color: #fafafa; background: #fafafa; color: #18181b; }
+      .actions a:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
       @media (max-width: 42rem) {
         .preview-badge { display: none; }
         .preview-bar { align-items: flex-start; }
@@ -89,41 +122,54 @@ if (token && ended) {
       <div class="preview-shell">
         <header class="preview-bar">
           <div class="preview-title">
-            <strong>Draft preview</strong>
-            <span>{routePath}</span>
+            <strong>{copy.title}</strong>
+            {routePath && <span>{routePath}</span>}
           </div>
-          <span class="preview-badge">Draft r{preview.draftRevision} · published r{preview.basePublishedRevision}</span>
-          <div class="device-switch" role="group" aria-label="Preview width">
+          <span class="preview-badge">{copy.revisions(formatCount(preview.draftRevision), formatCount(preview.basePublishedRevision))}</span>
+          <div class="device-switch" role="group" aria-label={copy.width}>
             {(["full", "desktop", "mobile"] as const).map((device) => (
               <button type="button" data-device={device} aria-pressed={initialDevice === device ? "true" : "false"}>
-                {device === "full" ? "Full" : device === "desktop" ? "Desktop" : "Mobile"}
+                {copy.devices[device]}
               </button>
             ))}
           </div>
           <form method="post" action="/theme-preview/exit">
-            <button class="exit-button" type="submit">Exit</button>
+            <button class="exit-button" type="submit">{copy.exit}</button>
           </form>
         </header>
-        <main class="preview-stage">
-          <div class="preview-frame-wrap" data-preview-frame data-device={initialDevice}>
-            <iframe
-              src={routePath}
-              title={`Storefront draft preview of ${routePath}`}
-              referrerpolicy="no-referrer"
-              sandbox="allow-same-origin allow-scripts"
-            ></iframe>
-          </div>
-        </main>
+        {routePath ? (
+          <main class="preview-stage">
+            <div class="preview-frame-wrap" data-preview-frame data-device={initialDevice}>
+              <iframe
+                src={routePath}
+                title={copy.frameTitle(routePath)}
+                referrerpolicy="no-referrer"
+                sandbox="allow-same-origin allow-scripts"
+              ></iframe>
+            </div>
+          </main>
+        ) : (
+          <main class="refused" data-preview-refused={target.kind}>
+            <article>
+              <h1>{target.kind === "buyer-page" ? copy.buyerPageTitle : copy.notAPageTitle}</h1>
+              <p>{target.kind === "buyer-page" ? copy.buyerPage : copy.notAPage}</p>
+              <div class="actions">
+                <a class="primary" href={homePreviewUrl}>{copy.openHome}</a>
+              </div>
+            </article>
+          </main>
+        )}
       </div>
     ) : (
-      <main class="unavailable">
+      <main class="unavailable" data-preview-unavailable={ended ? "ended" : "no-answer"}>
         <article>
-          <h1>Draft preview unavailable</h1>
-          {ended ? (
-            <p>This preview expired or is no longer valid. Return to Theme settings and open a new preview.</p>
-          ) : (
-            <p>This preview could not be loaded just now. Reload the page to try again.</p>
-          )}
+          <h1>{copy.unavailableTitle}</h1>
+          <p>{ended ? copy.ended : copy.noAnswer}</p>
+          <div class="actions">
+            {!ended && <a class="primary" href="">{copy.retry}</a>}
+            {dashboardUrl && <a class={ended ? "primary" : undefined} href={dashboardUrl}>{copy.dashboard}</a>}
+            <a href="/">{copy.openStore}</a>
+          </div>
         </article>
       </main>
     )}

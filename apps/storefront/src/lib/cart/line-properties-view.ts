@@ -8,6 +8,7 @@ import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-fo
 import { fromMinor } from "@scalius/shared/money";
 import type { CartLineAdjustment, CartLineProperty } from "@/store/cart";
 import { pagePath } from "@/lib/presence-url";
+import { cartLineName } from "./item-options";
 
 function escapeHtml(value: string): string {
   return value
@@ -48,18 +49,31 @@ export function cartLineEditHref(item: { slug?: string; variantId?: string }): s
 }
 
 /**
+ * The element that describes a line's controls with its buyer inputs: the
+ * inputs are what tell two lines of one SKU apart ("Engraving: Ana"), and
+ * they stay out of the controls' short names (`cartLineName`).
+ */
+export function cartLineInputsId(position: number): string {
+  return `cartLineInputs-${position}`;
+}
+
+/**
  * The inputs block as HTML (every value escaped). The Edit link works as a
  * plain link; with the cart script it also hands the line to the product
- * page (`window.editCartLine`), which replaces it on "Update cart".
+ * page (`window.editCartLine`), which replaces it on "Update cart". With
+ * `inputsId`, a line with inputs gives their list that id; `describedBy` is
+ * the Edit link's ` aria-describedby="…"` attribute (or "").
  */
 export function renderCartLineProperties(
-  item: { properties?: CartLineProperty[]; adjustments?: CartLineAdjustment[]; slug?: string; variantId?: string; name: string },
+  item: Parameters<typeof cartLineName>[0] & { properties?: CartLineProperty[]; adjustments?: CartLineAdjustment[]; slug?: string; variantId?: string },
   options: {
     surchargeText: string;
     editText: string;
     editLabelText: string;
     /** The line key as an escaped inline-JS string literal. */
     jsCartKey: string;
+    inputsId?: string;
+    describedBy?: string;
   },
 ): string {
   const properties = item.properties ?? [];
@@ -71,8 +85,9 @@ export function renderCartLineProperties(
       `<li class="break-words">${escapeHtml(cartLinePropertyText(property, options.surchargeText))}</li>`)
     .join("");
   const href = properties.length > 0 ? cartLineEditHref(item) : null;
+  const listId = properties.length > 0 && options.inputsId ? ` id="${escapeHtml(options.inputsId)}"` : "";
   const edit = href
-    ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(formatCheckoutLanguageText(options.editLabelText, { item: item.name }))}" onclick="return window.editCartLine ? window.editCartLine(${options.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(options.editText)}</a>`
+    ? `<a href="${escapeHtml(href)}" class="mt-0.5 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary sm:min-h-0" aria-label="${escapeHtml(formatCheckoutLanguageText(options.editLabelText, { item: cartLineName(item) }))}"${options.describedBy ?? ""} onclick="return window.editCartLine ? window.editCartLine(${options.jsCartKey}) : true" data-cart-line-edit>${escapeHtml(options.editText)}</a>`
     : "";
-  return `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul>${rows}</ul>${edit}</div>`;
+  return `<div class="mt-0.5 text-sm text-muted-foreground" data-cart-line-properties><ul${listId}>${rows}</ul>${edit}</div>`;
 }
