@@ -147,6 +147,13 @@
  * bulk confirm and its repair now batch more statements into fewer calls
  * (Free 14 -> 9 calls, 104 -> 105 statements; Paid 455 -> 475 statements);
  * the Paid sweep tick measures 2 calls more (56), not traced to one change.
+ *
+ * Staff and buyer limits (2026-11-04, after the auth hardening merged): a
+ * staff password sign-in reserves its per-email and per-network attempts in
+ * D1 before the check and gives a right answer's attempt back (6 -> 9 calls);
+ * an OTP request counts the store-wide ceiling atomically after its cooldown
+ * (13 -> 16 calls). The Paid sweep tick also sweeps lapsed attempt windows in
+ * the OTP rate-limit cleanup job (56 -> 58 calls).
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -170,11 +177,11 @@ export interface Budget {
 
 export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
   free: {
-    "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
+    "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
     "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 10, fullScans: 17 },
-    "customer-otp-request": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
+    "customer-otp-request": { d1Calls: 16, d1Statements: 20, externalFetches: 0, rowsWritten: 10, rowsRead: 21, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 14, rowsRead: 6, fullScans: 1 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 1, rowsRead: 18, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
@@ -216,11 +223,11 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
   },
   paid: {
-    "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
+    "staff-sign-in": { d1Calls: 9, d1Statements: 9, externalFetches: 0, rowsWritten: 6, rowsRead: 10, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
     "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 10, fullScans: 17 },
-    "customer-otp-request": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
+    "customer-otp-request": { d1Calls: 16, d1Statements: 20, externalFetches: 0, rowsWritten: 10, rowsRead: 21, fullScans: 2 },
     "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 14, rowsRead: 6, fullScans: 1 },
     "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 1, rowsRead: 18, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
@@ -242,7 +249,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-confirm-repair": { d1Calls: 97, d1Statements: 314, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
     "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1342, fullScans: 7 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
-    "cron-idle": { d1Calls: 56, d1Statements: 66, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
+    "cron-idle": { d1Calls: 58, d1Statements: 68, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
     "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 430, rowsRead: 28348, fullScans: 451 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },

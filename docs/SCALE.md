@@ -29,9 +29,9 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 
 | Operation | D1 calls | Statements | Rows written | Rows read | Full scans | Steady mean written / read |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `staff-sign-in` | 6 | 6 | 4 | 8 | 0 | - |
+| `staff-sign-in` | 9 | 9 | 6 | 10 | 0 | - |
 | `staff-sign-up` | 5 | 5 | 5 | 10 | 17 | - |
-| `customer-otp-request` | 13 | 17 | 9 | 20 | 2 | - |
+| `customer-otp-request` | 16 | 20 | 10 | 21 | 2 | - |
 | `customer-otp-verify` | 8 | 19 | 14 | 6 | 1 | - |
 | `page-home-miss` | 11 | 25 | 1 | 18 | 11 | - |
 | `page-home-hit` | 1 | 1 | 1 | 3 | 0 | - |
