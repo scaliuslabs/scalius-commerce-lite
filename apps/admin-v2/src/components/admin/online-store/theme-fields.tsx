@@ -71,12 +71,15 @@ const formatRatio = (ratio: number) =>
 function ColorField({
   id,
   label,
+  name,
   value,
   problems,
   onChange,
 }: {
   id: string;
   label: string;
+  /** The field's name where its label is not in view (the dark colours' fields say so). */
+  name: string;
   value: string;
   /** Text this colour leaves below AA, in plain words. */
   problems: readonly ContrastProblem[];
@@ -114,7 +117,7 @@ function ColorField({
           style={{ "--swatch": value } as CSSProperties}
           className="relative size-11 shrink-0 cursor-pointer rounded-lg border bg-(--swatch) sm:pointer-fine:size-9"
         >
-          <span className="sr-only">{t("pickColor", { name: label })}</span>
+          <span className="sr-only">{t("pickColor", { name })}</span>
           <input
             type="color"
             value={value}
@@ -147,9 +150,9 @@ function ColorField({
           {errors.map((error) => <p key={error} className="text-body text-destructive">{error}</p>)}
         </div>
       ) : null}
-      {/* Always in the page, so a screen reader hears the note when it appears. */}
+      {/* Always in the page, so a screen reader hears the note when it appears; it names its field, as focus has moved on. */}
       <p id={`${id}-kept`} role="status" className={discarded ? "text-body text-muted-foreground" : "sr-only"}>
-        {discarded ? t("colorKept", { typed: discarded, kept: value }) : null}
+        {discarded ? t("colorKept", { name, typed: discarded, kept: value }) : null}
       </p>
     </Field>
   );
@@ -177,6 +180,7 @@ function ColorSetFields({ theme, set, setDraft }: { theme: Theme; set: Storefron
           key={role}
           id={colorFieldId(role, set)}
           label={t(label)}
+          name={set === "darkColors" ? t("darkColorName", { name: t(label) }) : t(label)}
           value={colors[COLOR_ROLE_TOKEN[role]]}
           problems={problems.filter((problem) => problem.role === role)}
           onChange={(value) => setDraft((current) => setThemeColor(current, role, value, set))}
