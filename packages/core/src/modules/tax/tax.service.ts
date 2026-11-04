@@ -59,6 +59,12 @@ function markTrustedStorefrontTaxAuthority(
     return snapshot;
 }
 
+export function markTrustedStorefrontTaxAuthorityForTest(
+    snapshot: StorefrontTaxAuthoritySnapshot,
+): StorefrontTaxAuthoritySnapshot {
+    return markTrustedStorefrontTaxAuthority(snapshot);
+}
+
 export function isTrustedStorefrontTaxAuthority(
     snapshot: StorefrontTaxAuthoritySnapshot | undefined,
 ): snapshot is StorefrontTaxAuthoritySnapshot {

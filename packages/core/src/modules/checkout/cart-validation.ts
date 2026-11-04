@@ -243,7 +243,7 @@ export interface StorefrontCartValidationResult {
 
 const STOREFRONT_CART_VALIDATION_RESULT_PROOF = Symbol("scalius.storefrontCartValidationResult");
 
-function markTrustedStorefrontCartValidationResult(
+export function markTrustedStorefrontCartValidationResult(
     result: StorefrontCartValidationResult,
 ): StorefrontCartValidationResult {
     Object.defineProperty(result, STOREFRONT_CART_VALIDATION_RESULT_PROOF, {

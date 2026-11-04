@@ -207,7 +207,7 @@ export interface StorefrontCheckoutPolicySnapshot {
 const STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF = Symbol("scalius.storefrontDeliveryPreflightResult");
 const STOREFRONT_CHECKOUT_POLICY_SNAPSHOT_PROOF = Symbol("scalius.storefrontCheckoutPolicySnapshot");
 
-function markTrustedStorefrontDeliveryPreflightResult(
+export function markTrustedStorefrontDeliveryPreflightResult(
     result: StorefrontDeliveryPreflightResult,
 ): StorefrontDeliveryPreflightResult {
     Object.defineProperty(result, STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF, {
