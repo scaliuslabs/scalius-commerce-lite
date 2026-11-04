@@ -495,10 +495,15 @@ export const policies = [
     sample: "db.select().from(products).where(and(sql`${products.id} IN (SELECT value FROM json_each(${ids}))`, isNull(products.deletedAt)))",
   },
   {
-    rule: "SQL reads JSON by member name ('$.name'), never by array index ('$[0]')",
-    why: "PostgreSQL runs SQLite's json_extract through scalius_compat.json_path_value, which takes '$.name' paths only: an index path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard did); bind objects instead",
+    rule: "a JSON path in SQL is $.name(.name)*: no array index, no quoted or punctuated member",
+    why: "PostgreSQL runs SQLite's JSON functions (json_extract, json_each, json_type, json_array_length, json_set...) through scalius_compat.json_path_value, which takes '$.name' paths only: any other path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard and the related-objects read did). Bind objects and read members by name, or walk an array with json_each and its key",
     paths: ["apps/api/src", "packages/core/src", "packages/database/src", "plugins"],
-    forbid: [/json_(?:extract|each|tree)\([^)]*'\$\[/],
+    forbid: [
+      // A path literal (quoted, or a template, bound or inline) that starts with an index: '$[0]', `$[${i}]`.
+      /(['"`])\$\[/,
+      // A member path whose members are not plain names: '$.a[0]', '$.a-b', '$."a b"', `$.${key}[0]`.
+      /(['"`])\$\.(?:[A-Za-z0-9_.]|\$\{[^}`\n]*\})*(?:(?!\1)[^A-Za-z0-9_.$]|\$(?!\{))/,
+    ],
     sample: "WHERE json_extract(seen.value, '$[0]') = ra.id",
   },
   {
