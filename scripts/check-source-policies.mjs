@@ -37,6 +37,37 @@ const storefront = "apps/storefront/src";
  * allow: repo-relative files the policy does not cover, each with its reason.
  * sample: text that must violate the policy.
  */
+/**
+ * A `$.` literal (quoted or a template) that is not `$.member(.member)*`
+ * directly followed by its closing quote, a member being a plain name or a
+ * template slot: '$.a[0]', '$.a-b', '$."a b"', '$.a..b', '$.a.', '$..a', and
+ * a path glued to an index ('$.a' || '[0]'). A bare '$.' (a prefix joined to
+ * a name) passes, and so does prose ("$.50 off": it has a space and no
+ * quote or bracket inside). Duck-typed like a RegExp for `policyViolations`.
+ */
+const JSON_MEMBER_PATH_LITERAL = {
+  test(text) {
+    const member = String.raw`(?:[A-Za-z0-9_]+|\$\{[^}\n]*\})`;
+    const wellFormed = new RegExp(String.raw`^\$\.(?:${member}(?:\.${member})*)?$`);
+    const literal = /(['"`])(\$\.(?:(?!\1)[^\n\\])*)\1/g;
+    for (const match of text.matchAll(literal)) {
+      const body = match[2];
+      if (wellFormed.test(body)) {
+        // A path glued to an index: '$.a' || '[0]'.
+        if (/^\s*\|\|\s*(['"`])\[/.test(text.slice(match.index + match[0].length))) return true;
+        continue;
+      }
+      const words = body.replace(/\$\{[^}\n]*\}/g, "x");
+      if (/\s/.test(words) && !/["'\[\]]/.test(words)) continue;
+      return true;
+    }
+    return false;
+  },
+  toString() {
+    return "a JSON path literal that is not $.member(.member)* (JSON_MEMBER_PATH_LITERAL)";
+  },
+};
+
 export const policies = [
   {
     rule: "numbers, money, dates, lists and plurals are formatted through @scalius/shared/locale-format",
@@ -496,13 +527,12 @@ export const policies = [
   },
   {
     rule: "a JSON path in SQL is $.name(.name)*: no array index, no quoted or punctuated member",
-    why: "PostgreSQL runs SQLite's JSON functions (json_extract, json_each, json_type, json_array_length, json_set...) through scalius_compat.json_path_value, which takes '$.name' paths only: any other path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard and the related-objects read did). Bind objects and read members by name, or walk an array with json_each and its key",
+    why: "PostgreSQL runs SQLite's JSON readers (json_extract, json_each, json_type, json_array_length) through scalius_compat.json_path_value, which takes '$.name' paths only: any other path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard and the related-objects read did). Bind objects and read members by name, or walk an array with json_each and its key. json_set has no PostgreSQL compat at all (a known gap: digital uploads, modules/digital/README.md)",
     paths: ["apps/api/src", "packages/core/src", "packages/database/src", "plugins"],
     forbid: [
       // A path literal (quoted, or a template, bound or inline) that starts with an index: '$[0]', `$[${i}]`.
       /(['"`])\$\[/,
-      // A member path whose members are not plain names: '$.a[0]', '$.a-b', '$."a b"', `$.${key}[0]`.
-      /(['"`])\$\.(?:[A-Za-z0-9_.]|\$\{[^}`\n]*\})*(?:(?!\1)[^A-Za-z0-9_.$]|\$(?!\{))/,
+      JSON_MEMBER_PATH_LITERAL,
     ],
     sample: "WHERE json_extract(seen.value, '$[0]') = ra.id",
   },
