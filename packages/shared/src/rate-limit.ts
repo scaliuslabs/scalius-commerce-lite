@@ -1,29 +1,14 @@
 /**
- * Client addresses for rate limiting. Rate limiting itself uses the native
- * Workers Rate Limiting bindings (apps/api/src/utils/rate-limit.ts).
+ * Client addresses for rate limiting. The API reads the client address only
+ * through apps/api/src/utils/client-ip.ts, which trusts `cf-connecting-ip`
+ * (and `x-forwarded-for` only on a loopback platform); rate limiting itself
+ * uses the native Workers Rate Limiting bindings (apps/api/src/utils/rate-limit.ts).
  *
  * A limiter subject groups an IPv6 client by its /64: one subscriber or host
  * gets a whole /64 and can rotate through it at will, so a per-address bucket
  * would give it billions of fresh budgets. IPv4 addresses stay as they are, and
  * an IPv4-mapped IPv6 address counts as its IPv4 address.
  */
-
-/** The limiter subject of a request: CF-Connecting-IP (else the first x-forwarded-for, local dev), IPv6 grouped by /64. */
-export function getClientIp(request: Request): string {
-  return rateLimitIpSubject(getClientAddress(request));
-}
-
-/**
- * The request's literal client address, for the few callers that must pass the
- * address on (ad-platform match keys). Never a limiter subject: use getClientIp.
- */
-export function getClientAddress(request: Request): string {
-  return (
-    request.headers.get("cf-connecting-ip")?.trim() ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unknown"
-  );
-}
 
 /**
  * The limiter subject of one address: an IPv6 address becomes its /64 prefix

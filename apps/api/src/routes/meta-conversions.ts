@@ -5,7 +5,7 @@ import { createId } from "@paralleldrive/cuid2";
 import {
   sendCapiEvent,
 } from "@scalius/core/integrations/meta/conversions-api";
-import { getClientAddress, getClientIp } from "@scalius/shared/rate-limit";
+import { getTrustedClientAddress, getTrustedClientIp } from "../utils/client-ip";
 import { trackingPageUrl } from "@scalius/shared/tracking-url";
 
 import { ok } from "../utils/api-response";
@@ -163,13 +163,12 @@ app.openapi(postEventRoute, async (c) => {
   }
 
   // Browser tracking fires on every page view; the native limiter costs no database work.
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "meta-events", getClientIp(c.req.raw)))) {
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "meta-events", getTrustedClientIp(c)))) {
     throw new RateLimitError("Too many tracking events. Please try again later.");
   }
 
-  const clientIp = getClientAddress(c.req.raw);
-  const clientIpForMeta =
-    clientIp === "unknown" ? c.req.header("x-real-ip") : clientIp;
+  const clientIp = getTrustedClientAddress(c);
+  const clientIpForMeta = clientIp === "unknown" ? undefined : clientIp;
 
   const eventTime = Math.floor(Date.now() / 1000);
   const encryptionKey = getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>);
