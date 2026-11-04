@@ -32,6 +32,11 @@ import {
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import { publicCursorSigner } from "../utils/public-cursor";
+import { AppError } from "@scalius/core/errors";
+import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
+
+/** A continuation this store did not sign: a client error with its own code, so a caller restarts at page one. */
+const unsignedContinuation = (message: string) => new AppError(400, LIST_CURSOR_ERROR_CODE, message);
 import { SITEMAP_PAGE_SIZE } from "@scalius/shared/sitemap-pagination";
 import {
   successEnvelope,
@@ -743,7 +748,7 @@ app.openapi(feedProductsRoute, async (c) => {
   let cursor: string | undefined;
   if (publicCursor) {
     const position = await signer.verify(scope, publicCursor.slice(PUBLIC_FEED_CURSOR_PREFIX.length));
-    if (!position) throw new ValidationError("Invalid product feed cursor. Start again from the first page.");
+    if (!position) throw unsignedContinuation("Invalid product feed cursor. Start again from the first page.");
     cursor = `${CORE_FEED_CURSOR_PREFIX}${position}`;
   }
   const db = c.get("db");
@@ -808,7 +813,7 @@ app.openapi(sitemapProductsRoute, async (c) => {
   if (page > 1) {
     const signed = after ? await signer.verify(sitemapAfterScope(page, limit), after) : null;
     position = signed ? decodeSitemapPosition(signed) : null;
-    if (!position) throw new ValidationError("Sitemap pages after the first need the `after` their sitemap index lists.");
+    if (!position) throw unsignedContinuation("Sitemap pages after the first need the `after` their sitemap index lists.");
   } else if (after) {
     throw new ValidationError("The first sitemap page takes no `after`.");
   }

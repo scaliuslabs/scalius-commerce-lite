@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
+import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
 import {
   getApiV1ProductsBySlug,
   getApiV1Products,
@@ -336,6 +337,12 @@ function normalizeSitemapProductListPayload(
  * (one it did not sign: forged, stale after a secret rotation, or for another
  * channel), or null when the page could not be read.
  */
+/** The `error.code` of an API error envelope, if any. */
+function apiErrorCode(error: unknown): string | null {
+  const code = (error as { error?: { code?: unknown } } | null)?.error?.code;
+  return typeof code === "string" ? code : null;
+}
+
 async function readDedicatedFeedProducts(
   options: ProductListOptions,
 ): Promise<FeedProductPage | "invalid_cursor" | null> {
@@ -351,7 +358,7 @@ async function readDedicatedFeedProducts(
       query: options as Record<string, unknown>,
     });
     if (error) {
-      if (response?.status === 400 && options.cursor) return "invalid_cursor";
+      if (response?.status === 400 && apiErrorCode(error) === LIST_CURSOR_ERROR_CODE) return "invalid_cursor";
       console.error("Error fetching feed products:", error);
       return null;
     }
@@ -524,7 +531,7 @@ export async function getSitemapProducts(
           query: { page, limit, ...(after ? { after } : {}) },
         });
         if (error) {
-          if (response?.status === 400) return "not_found" as const;
+          if (response?.status === 400 && apiErrorCode(error) === LIST_CURSOR_ERROR_CODE) return "not_found" as const;
           console.error("Error fetching sitemap products:", error);
           return null;
         }
