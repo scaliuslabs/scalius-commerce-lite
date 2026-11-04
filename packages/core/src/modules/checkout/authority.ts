@@ -284,7 +284,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     // shipping country, the billing country (an order that ships nothing is
     // taxed there); the store's own (pickup, no address) rides on the statement.
     const taxPlan = createStorefrontTaxAuthorityReadPlan(db, [
-        ...destinationCountries,
+        ...destinations.map((destination) => destination.countryCode),
         ...inputs.map((input) => input.billingCountryCode),
     ]);
     const statements = [
