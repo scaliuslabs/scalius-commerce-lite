@@ -437,14 +437,54 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // confirmation on the order, an empty one is released.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
+      // Money first. A refund worked on here (finalizing one can cancel its
+      // order and release its stock) costs what finishing a booking does, so
+      // it takes one of the run's bookings: on Free (one a run) a run with a
+      // refund leaves the dead booking first in line for the next run. A
+      // failed refund pass counts as its whole share, and the claims still run.
+      const refundLimit = scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT);
+      let refundsWorked = refundLimit;
+      let refundFailure: unknown = null;
+      try {
+        const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
+          reconcileDueRefundAttempts(db, {
+            encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+            limit: refundLimit,
+            providers: appPaymentProvidersLoader(env, db),
+          }),
+        );
+        refundsWorked = refundReconciliation.claimed;
+        if (refundReconciliation.refundNotifications.length > 0) {
+          await timed("refund_reconciliation_notification_record", () =>
+            recordReconciledRefundNotifications(db, refundReconciliation.refundNotifications),
+          );
+        }
+        if (
+          refundReconciliation.scanned > 0 ||
+          refundReconciliation.failed > 0 ||
+          refundReconciliation.deferred > 0 ||
+          refundReconciliation.errors.length > 0 ||
+          refundReconciliation.hasMore
+        ) {
+          console.log(
+            `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
+              `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
+              `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
+              `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
+              `hasMore=${refundReconciliation.hasMore}`,
+          );
+        }
+      } catch (error) {
+        refundFailure = error;
+      }
       // A cursor walks the expired claims, so one that keeps failing never holds the others back.
       const claimCursor = await readMaintenanceCursor(db, "shipment-claims");
       const claims = await timed("expired_shipment_claim_sweep", () =>
         sweepExpiredShipmentClaims(db, {
           limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT),
           afterOrderId: claimCursor.value.orders,
-          // Finishing a booking ships its order: Free affords one a run.
-          maxFinalized: planLimits().maintenance.bookedClaimsPerRun,
+          // Finishing a booking ships its order: Free affords one a run, less the refunds worked on.
+          maxFinalized: Math.max(0, planLimits().maintenance.bookedClaimsPerRun - refundsWorked),
         }),
       );
       await claimCursor.save({ orders: claims.lastOrderId });
@@ -467,33 +507,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}`,
         );
       }
-      const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
-        reconcileDueRefundAttempts(db, {
-          encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-          limit: scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT),
-          providers: appPaymentProvidersLoader(env, db),
-        }),
-      );
-      if (refundReconciliation.refundNotifications.length > 0) {
-        await timed("refund_reconciliation_notification_record", () =>
-          recordReconciledRefundNotifications(db, refundReconciliation.refundNotifications),
-        );
-      }
-      if (
-        refundReconciliation.scanned > 0 ||
-        refundReconciliation.failed > 0 ||
-        refundReconciliation.deferred > 0 ||
-        refundReconciliation.errors.length > 0 ||
-        refundReconciliation.hasMore
-      ) {
-        console.log(
-          `[scheduled] Refund reconciliation: scanned=${refundReconciliation.scanned}, ` +
-            `claimed=${refundReconciliation.claimed}, finalized=${refundReconciliation.finalized}, ` +
-            `failed=${refundReconciliation.failed}, deferred=${refundReconciliation.deferred}, ` +
-            `errors=${refundReconciliation.errors.length}, limit=${refundReconciliation.limit}, ` +
-            `hasMore=${refundReconciliation.hasMore}`,
-        );
-      }
+      // The refund pass's failure (already logged by its operation) fails the job.
+      if (refundFailure) throw refundFailure;
     },
   },
   {

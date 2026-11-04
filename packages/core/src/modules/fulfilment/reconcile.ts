@@ -762,10 +762,13 @@ export interface ExpiredShipmentClaimSweepResult {
  */
 export async function sweepExpiredShipmentClaims(
     db: Database,
-    /** `maxFinalized`: booked claims one run finishes (each ships an order: the plan's budget). */
+    /**
+     * `maxFinalized`: booked claims one run finishes (each ships an order: the
+     * plan's budget). 0 finishes none: the first booked claim leads the next run.
+     */
     options: { limit?: number; afterOrderId?: string | null; maxFinalized?: number } = {},
 ): Promise<ExpiredShipmentClaimSweepResult> {
-    const maxFinalized = Math.max(1, Math.floor(options.maxFinalized ?? EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT));
+    const maxFinalized = Math.max(0, Math.floor(options.maxFinalized ?? EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT));
     const limit = Math.max(1, Math.min(EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT * 4, Math.floor(options.limit ?? EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT)));
     // The cursor and order use `id || ''` so the planner reads the partial
     // claim index (claimed orders only), never the primary key's whole range.
