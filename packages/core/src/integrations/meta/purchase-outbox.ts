@@ -362,6 +362,8 @@ async function processMetaPurchaseOutboxById(
 
         const result = await sendCapiEvent(db, payload.event, {
             encryptionKey: options.encryptionKey,
+            // A purchase per order: every success is logged.
+            successLog: "every",
         });
         await markMetaPurchaseOutboxAfterSend(db, claim.row.id, claim.claimId, claim.row.attempts, result);
         return {

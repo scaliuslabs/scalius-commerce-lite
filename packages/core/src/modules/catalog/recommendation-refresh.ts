@@ -198,25 +198,23 @@ export async function recommendationRotationBatch(
 /**
  * Units sold per product in the last 30 days, from real orders (placed and
  * kept: not cancelled, refunded, returned or unfinished), reconciling the
- * table in one batch. Unchanged projections only refresh their timestamp.
+ * table in one batch. The upsert stamps every product sold in the window with
+ * this refresh's time (unchanged projections only refresh their timestamp),
+ * so the rows it did not stamp are the products that no longer sold: the
+ * delete reads the stats table alone, never each product's line history.
  */
 export async function refreshProductSalesStats(db: Database): Promise<{ products: number }> {
     // Both reconciliation statements use the same database time, including
     // when an order reaches the 30-day boundary between their executions.
-    const [clock] = await db.select({ now: sql<number>`unixepoch()` })
-        .from(sql`(SELECT 1) AS refresh_clock`).all();
-    const refreshAt = Number(clock!.now);
+    // The stamp is also later than every earlier refresh's, so a second
+    // refresh within one second still tells its rows from the last one's.
+    const [clock] = await db.select({
+        now: sql<number>`unixepoch()`,
+        last: sql<number | null>`(SELECT max(${productSalesStats.computedAt}) FROM ${productSalesStats})`,
+    }).from(sql`(SELECT 1) AS refresh_clock`).all();
+    const refreshAt = Math.max(Number(clock!.now), Number(clock!.last ?? 0) + 1);
     const statuses = sql.join(REAL_ORDER_STATUSES.map((status) => sql`${status}`), sql`, `);
     const results = await safeBatch(db, [
-        db.delete(productSalesStats).where(sql`NOT EXISTS (
-            SELECT 1 FROM ${orders} AS sales_order
-            INNER JOIN ${orderItems} AS sales_line ON sales_line.order_id = sales_order.id
-            WHERE sales_line.product_id = ${productSalesStats.productId}
-              AND sales_order.status IN (${statuses})
-              AND sales_order.deleted_at IS NULL
-              AND sales_order.created_at >= ${refreshAt - SALES_WINDOW_SECONDS}
-              AND sales_line.quantity > 0
-        )`),
         db.insert(productSalesStats).select(sql`
             SELECT sales_line.product_id, SUM(sales_line.quantity), ${refreshAt}
             FROM ${orders} AS sales_order
@@ -231,6 +229,7 @@ export async function refreshProductSalesStats(db: Database): Promise<{ products
             target: productSalesStats.productId,
             set: { sold30d: sql`excluded.sold_30d`, computedAt: sql`${refreshAt}` },
         }),
+        db.delete(productSalesStats).where(sql`${productSalesStats.computedAt} < ${refreshAt}`),
         db.select({ count: sql<number>`count(*)` }).from(productSalesStats),
     ] as never) as unknown[];
     const [countRow] = (results[2] as Array<{ count: number }> | undefined) ?? [];

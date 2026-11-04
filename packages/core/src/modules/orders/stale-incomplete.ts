@@ -141,15 +141,19 @@ export async function archiveStaleIncompleteOrders(
         releasedGiftCardHoldOrderIds: [],
     };
 
+    // The status index is the only one this read may use: the unary `+` keeps
+    // `deleted_at`, `created_at` and the cursor's `id` off every other index
+    // (deleted_at and created_at lead several, the id is the primary key),
+    // whose range would walk every live order the store ever took.
     const candidates = await db.select().from(orders).where(
         and(
             eq(orders.status, OrderStatus.INCOMPLETE),
-            options.afterOrderId ? gt(orders.id, options.afterOrderId) : undefined,
+            options.afterOrderId ? sql`+${orders.id} > ${options.afterOrderId}` : undefined,
             onlinePaymentMethodCondition(orders.paymentMethod),
             inArray(orders.paymentStatus, STALE_INCOMPLETE_PAYMENT_STATUSES),
             onlyGiftCardMoneyCondition,
-            sql`${orders.createdAt} <= ${cutoffTimestamp}`,
-            isNull(orders.deletedAt),
+            sql`+${orders.createdAt} <= ${cutoffTimestamp}`,
+            sql`+${orders.deletedAt} IS NULL`,
             noActiveShipmentClaimCondition(),
             noActivePaymentClaimCondition,
             noActivePaymentSessionClaimCondition,

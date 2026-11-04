@@ -235,12 +235,11 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):
             // SQLite's `+` keeps it off the status index, whose open orders
-            // are mostly shipped ones.
-            const status = getDatabaseProviderForClient(db) === "postgres" ? sql`${orders.status}` : sql`+${orders.status}`;
+            // are mostly shipped ones (PostgreSQL's compiler drops the `+`).
             return sql`${orders.shippingMethodKind} = 'pickup'
                 AND ${orders.pickupReadyAt} IS NOT NULL
                 AND ${orders.fulfillmentStatus} <> ${FulfillmentStatus.COMPLETE}
-                AND ${status} IN (${sql.join([OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED].map((value) => sql`${value}`), sql`, `)})`;
+                AND +${orders.status} IN (${sql.join([OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED].map((value) => sql`${value}`), sql`, `)})`;
         }
     }
 }

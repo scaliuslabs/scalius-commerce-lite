@@ -493,6 +493,9 @@ function DestinationHealth({ name, children }: { name: Destination; children?: R
           })}
         </ul>
       )}
+      {name === "meta" && events.some((event) => event.event.toLowerCase() !== "purchase") ? (
+        <p className="text-body text-muted-foreground">{t("metaBrowserEstimate")}</p>
+      ) : null}
       {destination && destination.skippedByConsent > 0 ? (
         <p className="text-body text-muted-foreground">{t("skippedByConsent", { count: destination.skippedByConsent })}</p>
       ) : null}

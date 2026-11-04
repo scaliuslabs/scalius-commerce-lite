@@ -76,6 +76,8 @@ interface CapiPayload {
 
 interface SendCapiEventOptions {
   encryptionKey?: string;
+  /** `every` for the server's own events (order purchases, staff tests); browser events sample (`CapiLogOptions`). */
+  successLog?: "every" | "sample";
 }
 
 export interface SendCapiEventResult {
@@ -236,7 +238,7 @@ export async function sendCapiEvent(
       ...logPayload,
       status: "success",
       responsePayload: JSON.stringify(responseData, null, 2),
-    }, retentionHours);
+    }, retentionHours, { successLog: options.successLog });
     return { success: true, response: responseData };
   } catch (error: unknown) {
     const capiError = error as CapiSendError;
@@ -254,7 +256,7 @@ export async function sendCapiEvent(
       responsePayload: capiError.responsePayload
         ? JSON.stringify(capiError.responsePayload, null, 2)
         : "",
-    }, retentionHours);
+    }, retentionHours, { successLog: options.successLog });
     return {
       success: false,
       error: message,

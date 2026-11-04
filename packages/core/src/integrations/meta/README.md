@@ -65,7 +65,8 @@ The route opens the circuit when `sendCapiEvent()` fails with `retryable: false`
 - Table `meta_conversions_logs`: unique `event_id`, `event_name`, `status` (`success`, `failed`), summaries of the request and response, a fixed-sentence `error_message`.
 - A log stores summaries, not payloads. The request summary has the event count and, per event, the name, action source, source origin and path, which match-signal fields were sent, and commerce facts. It holds no user data and no `test_event_code`. The response summary has `eventsReceived`, error type and code, and the Meta trace ID.
 - A repeated `event_id` updates its row. A later failure never replaces a success.
-- Each log write starts a cleanup of rows older than `logRetentionDays`.
+- Every failure is logged. A browser success is logged for one event in 100, drawn by server randomness (`logCapiEvent`), so an anonymous page view writes no row whatever event id it sends; the row stores `sampleWeight: 100` in its request summary and tracking health counts it as 100. The purchase outbox and the staff test event pass `successLog: "every"` and log every success. Rows written before sampling have no weight and count once.
+- A log write never deletes. The `event_outbox_retention` maintenance job deletes rows older than `logRetentionDays`, at most `CAPI_LOG_PURGE_LIMIT` a run (scaled on Free); the dashboard's cleanup deletes them all at once.
 
 ## Purchase outbox (`purchase-outbox.ts`)
 

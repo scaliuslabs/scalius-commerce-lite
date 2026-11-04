@@ -24,5 +24,5 @@ export async function assertRollupProjection(db: Database): Promise<void> {
 export async function sealEveryFactDay(db: Database): Promise<void> {
   const days = await span(db);
   if (!days) return;
-  while (await sealAnalyticsDays(db, new Date(days[1] * 1000)) > 0) { /* oldest first, bounded per call */ }
+  while (await sealAnalyticsDays(db, new Date(days[1] * 1000), { holes: true }) > 0) { /* oldest first, bounded per call */ }
 }

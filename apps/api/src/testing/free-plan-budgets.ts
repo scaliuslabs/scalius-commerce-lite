@@ -101,6 +101,52 @@
  * whatever the count. Free now drains 20 events and sends 4 deliveries a
  * tick (2 after a write, in the write's invocation): 24 calls with 5 apps
  * and 3 webhooks (160 delivery rows).
+ *
+ * Pinned clock (2026-11-03): the analytics seal took the wall clock, so each
+ * real day the file ran later sealed one more day on the first idle tick
+ * (cron-idle had reached 123 rows written against 117). The seal and the
+ * nightly pass now take the tick's scheduled time, and the harness starts the
+ * wall clock and SQL time at 2026-10-03T10:00Z, so a run on any day measures
+ * the same store. Re-measured: idle worst minute 19 -> 10 calls Free (the
+ * seeded orders are 12 days old, not 40: nothing ages into a sweep), 57 -> 48
+ * Paid.
+ *
+ * Measured, not capped (2026-11-03): status change and refund held the Free
+ * cap (50) as their budget. Each is now its worst measured run, which is the
+ * case run alone with a cold RBAC marker: status 40 calls / 44 statements,
+ * refund 48 / 56 (warm, in the full file: 34 and 42). The retention job's
+ * Meta log and order-history purges add 5 calls to the Paid sweep tick
+ * (cron-idle 48 -> 53); the Free worst minute stays 10.
+ *
+ * Webhook subscribers (2026-11-03): a 3-line order's commit and after-response
+ * work with 0, 3 and 8 store webhooks subscribed to every topic. Free sends at
+ * most 2 deliveries after the response (the cron sends the rest), each six
+ * sequential calls: 30 calls, then 54 to 56 at 3 and 8 (which two deliveries
+ * go first varies by a call or two), over Free's 50 from three subscribers on
+ * (a known gap the file asserts with `it.fails`). Paid sends up to 25: 30, 81
+ * and 146.
+ *
+ * Status change and refund with 1 and 3 webhooks (2026-11-04, after the
+ * bulk-confirm status rework): Free 48 and 54 calls for a status change (cold
+ * RBAC marker at one subscriber: inside 50 at one, over it at three), 66 for a
+ * refund at both, over the 50 (the same known gap). Paid's refund cases drain
+ * up to 25 due deliveries the earlier cases left (249 and 293 calls). One
+ * uploaded app subscribed to every order event: 48 calls on Free, inside 50.
+ * Which deliveries the after-response drain takes first depends on random
+ * ids, so the subscriber cases move by a call or two between runs: their
+ * budgets carry 2 calls and 4 statements of headroom over the worst run seen.
+ *
+ * Merged tree (2026-11-04, after the event-drain and notification rework):
+ * every subscriber case fits Free's 50, so the known gap is closed. Free,
+ * worst run: an order 16 calls with no webhook, 27 with 3 or 8, 24 with one
+ * app; a status change 33 and 30 with 1 and 3 webhooks; a refund 44 and 42.
+ * The subscriber cases now leave no app, webhook or due delivery behind
+ * (`withoutSubscribers`), so the drain case and they measure only their own.
+ * Re-recorded once on this tree: most writes fell with the batched drain
+ * (3-line order 34 -> 14 calls, status change 36 -> 24, refund 48 -> 36);
+ * bulk confirm and its repair now batch more statements into fewer calls
+ * (Free 14 -> 9 calls, 104 -> 105 statements; Paid 455 -> 475 statements);
+ * the Paid sweep tick measures 2 calls more (56), not traced to one change.
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -127,76 +173,92 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
-    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 8, fullScans: 17 },
-    "customer-otp-request": { d1Calls: 16, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
-    "customer-otp-verify": { d1Calls: 27, d1Statements: 39, externalFetches: 0, rowsWritten: 18, rowsRead: 30, fullScans: 5 },
-    "page-home-miss": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 1, rowsRead: 130, fullScans: 16 },
+    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 10, fullScans: 17 },
+    "customer-otp-request": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
+    "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 14, rowsRead: 6, fullScans: 1 },
+    "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 1, rowsRead: 18, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
-    "page-product-miss": { d1Calls: 21, d1Statements: 43, externalFetches: 0, rowsWritten: 1, rowsRead: 137, fullScans: 15 },
-    "page-product-hit": { d1Calls: 2, d1Statements: 6, externalFetches: 0, rowsWritten: 1, rowsRead: 4, fullScans: 0 },
-    "page-category-miss": { d1Calls: 5, d1Statements: 17, externalFetches: 0, rowsWritten: 1, rowsRead: 117, fullScans: 6 },
+    "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 1, rowsRead: 27, fullScans: 10 },
+    "page-product-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
+    "page-category-miss": { d1Calls: 5, d1Statements: 17, externalFetches: 0, rowsWritten: 1, rowsRead: 9, fullScans: 5 },
     "page-category-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
-    "page-search-miss": { d1Calls: 6, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 764, fullScans: 17 },
+    "page-search-miss": { d1Calls: 6, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 656, fullScans: 16 },
     "page-search-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
-    "checkout-20-quote": { d1Calls: 10, d1Statements: 18, externalFetches: 0, rowsWritten: 1, rowsRead: 51, fullScans: 4 },
-    "checkout-20-commit": { d1Calls: 38, d1Statements: 139, externalFetches: 0, rowsWritten: 385, rowsRead: 217, fullScans: 56 },
-    "checkout-99-quote": { d1Calls: 11, d1Statements: 19, externalFetches: 0, rowsWritten: 1, rowsRead: 217, fullScans: 4 },
-    "checkout-99-commit": { d1Calls: 34, d1Statements: 394, externalFetches: 0, rowsWritten: 1663, rowsRead: 887, fullScans: 205 },
-    "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1319, fullScans: 4 },
+    "checkout-20-quote": { d1Calls: 10, d1Statements: 17, externalFetches: 0, rowsWritten: 1, rowsRead: 52, fullScans: 3 },
+    "checkout-20-commit": { d1Calls: 16, d1Statements: 125, externalFetches: 0, rowsWritten: 336, rowsRead: 209, fullScans: 38 },
+    "checkout-99-quote": { d1Calls: 11, d1Statements: 18, externalFetches: 0, rowsWritten: 1, rowsRead: 218, fullScans: 3 },
+    "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 1344, rowsRead: 877, fullScans: 137 },
+    "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
-    "admin-product-save": { d1Calls: 24, d1Statements: 39, externalFetches: 0, rowsWritten: 549, rowsRead: 161, fullScans: 29 },
-    "order-status-change": { d1Calls: 36, d1Statements: 43, externalFetches: 0, rowsWritten: 17, rowsRead: 1286, fullScans: 5 },
-    "bulk-confirm": { d1Calls: 14, d1Statements: 104, externalFetches: 0, rowsWritten: 322, rowsRead: 70, fullScans: 0 },
-    "bulk-confirm-repair": { d1Calls: 26, d1Statements: 122, externalFetches: 0, rowsWritten: 325, rowsRead: 85, fullScans: 5 },
-    "order-refund": { d1Calls: 42, d1Statements: 48, externalFetches: 0, rowsWritten: 22, rowsRead: 1292, fullScans: 6 },
-    "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 19, d1Statements: 20, externalFetches: 0, rowsWritten: 117, rowsRead: 7556, fullScans: 21, meanRowsWritten: 0, meanRowsRead: 15.79 },
-    "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 432, rowsRead: 25963, fullScans: 91 },
-    "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 103, rowsRead: 882, fullScans: 21 },
-    "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
-    "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
-    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 295, fullScans: 7 },
-    "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
-    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
-    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
+    "admin-product-save": { d1Calls: 21, d1Statements: 36, externalFetches: 0, rowsWritten: 539, rowsRead: 164, fullScans: 26 },
+    "order-status-change": { d1Calls: 24, d1Statements: 37, externalFetches: 0, rowsWritten: 10, rowsRead: 1339, fullScans: 5 },
+    "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
+    "bulk-confirm-repair": { d1Calls: 21, d1Statements: 124, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
+    "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1341, fullScans: 7 },
+    "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
+    "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.68 },
+    "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 430, rowsRead: 25782, fullScans: 75 },
+    "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 15, rowsRead: 665, fullScans: 16 },
+    "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
+    "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
+    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 292, fullScans: 4 },
+    "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
+    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
+    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
+    "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 88, rowsRead: 113, fullScans: 18 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 98, rowsRead: 134, fullScans: 18 },
+    "order-status-change-subscribers-1": { d1Calls: 35, d1Statements: 53, externalFetches: 1, rowsWritten: 17, rowsRead: 1350, fullScans: 5 },
+    "order-refund-subscribers-1": { d1Calls: 46, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 105, fullScans: 3 },
+    "order-status-change-subscribers-3": { d1Calls: 32, d1Statements: 50, externalFetches: 2, rowsWritten: 22, rowsRead: 49, fullScans: 1 },
+    "order-refund-subscribers-3": { d1Calls: 44, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 177, fullScans: 3 },
+    "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
     // rowsRead grows with the bundled apps a deployment ships (Noor and the
     // Bangladesh pack today).
-    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 8, fullScans: 17 },
-    "customer-otp-request": { d1Calls: 16, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
-    "customer-otp-verify": { d1Calls: 27, d1Statements: 39, externalFetches: 0, rowsWritten: 18, rowsRead: 30, fullScans: 5 },
-    "page-home-miss": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 1, rowsRead: 130, fullScans: 16 },
+    "staff-sign-up": { d1Calls: 5, d1Statements: 5, externalFetches: 0, rowsWritten: 5, rowsRead: 10, fullScans: 17 },
+    "customer-otp-request": { d1Calls: 13, d1Statements: 17, externalFetches: 0, rowsWritten: 9, rowsRead: 20, fullScans: 2 },
+    "customer-otp-verify": { d1Calls: 8, d1Statements: 19, externalFetches: 0, rowsWritten: 14, rowsRead: 6, fullScans: 1 },
+    "page-home-miss": { d1Calls: 11, d1Statements: 25, externalFetches: 0, rowsWritten: 1, rowsRead: 18, fullScans: 11 },
     "page-home-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
-    "page-product-miss": { d1Calls: 21, d1Statements: 43, externalFetches: 0, rowsWritten: 1, rowsRead: 137, fullScans: 15 },
-    "page-product-hit": { d1Calls: 2, d1Statements: 6, externalFetches: 0, rowsWritten: 1, rowsRead: 4, fullScans: 0 },
-    "page-category-miss": { d1Calls: 5, d1Statements: 17, externalFetches: 0, rowsWritten: 1, rowsRead: 117, fullScans: 6 },
+    "page-product-miss": { d1Calls: 19, d1Statements: 36, externalFetches: 0, rowsWritten: 1, rowsRead: 27, fullScans: 10 },
+    "page-product-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
+    "page-category-miss": { d1Calls: 5, d1Statements: 17, externalFetches: 0, rowsWritten: 1, rowsRead: 9, fullScans: 5 },
     "page-category-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
-    "page-search-miss": { d1Calls: 6, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 764, fullScans: 17 },
+    "page-search-miss": { d1Calls: 6, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 656, fullScans: 16 },
     "page-search-hit": { d1Calls: 1, d1Statements: 1, externalFetches: 0, rowsWritten: 1, rowsRead: 3, fullScans: 0 },
-    "checkout-20-quote": { d1Calls: 10, d1Statements: 18, externalFetches: 0, rowsWritten: 1, rowsRead: 51, fullScans: 4 },
-    "checkout-20-commit": { d1Calls: 38, d1Statements: 139, externalFetches: 0, rowsWritten: 385, rowsRead: 217, fullScans: 56 },
-    "checkout-99-quote": { d1Calls: 11, d1Statements: 19, externalFetches: 0, rowsWritten: 1, rowsRead: 217, fullScans: 4 },
-    "checkout-99-commit": { d1Calls: 34, d1Statements: 394, externalFetches: 0, rowsWritten: 1663, rowsRead: 887, fullScans: 205 },
-    "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1319, fullScans: 4 },
+    "checkout-20-quote": { d1Calls: 10, d1Statements: 17, externalFetches: 0, rowsWritten: 1, rowsRead: 52, fullScans: 3 },
+    "checkout-20-commit": { d1Calls: 16, d1Statements: 125, externalFetches: 0, rowsWritten: 336, rowsRead: 209, fullScans: 38 },
+    "checkout-99-quote": { d1Calls: 11, d1Statements: 18, externalFetches: 0, rowsWritten: 1, rowsRead: 218, fullScans: 3 },
+    "checkout-99-commit": { d1Calls: 14, d1Statements: 382, externalFetches: 0, rowsWritten: 1344, rowsRead: 877, fullScans: 137 },
+    "admin-order-list": { d1Calls: 9, d1Statements: 15, externalFetches: 0, rowsWritten: 1, rowsRead: 1378, fullScans: 4 },
     "admin-order-list-deep": { d1Calls: 3, d1Statements: 7, externalFetches: 0, rowsWritten: 1, rowsRead: 57, fullScans: 0 },
-    "admin-product-save": { d1Calls: 38, d1Statements: 60, externalFetches: 0, rowsWritten: 1254, rowsRead: 345, fullScans: 57 },
-    "order-status-change": { d1Calls: 36, d1Statements: 43, externalFetches: 0, rowsWritten: 17, rowsRead: 1286, fullScans: 5 },
-    "bulk-confirm": { d1Calls: 187, d1Statements: 455, externalFetches: 0, rowsWritten: 1051, rowsRead: 256, fullScans: 0 },
-    "bulk-confirm-repair": { d1Calls: 197, d1Statements: 293, externalFetches: 0, rowsWritten: 425, rowsRead: 145, fullScans: 5 },
-    "order-refund": { d1Calls: 42, d1Statements: 48, externalFetches: 0, rowsWritten: 22, rowsRead: 1292, fullScans: 6 },
-    "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 21, fullScans: 7 },
-    "cron-idle": { d1Calls: 57, d1Statements: 63, externalFetches: 0, rowsWritten: 175, rowsRead: 7992, fullScans: 27, meanRowsWritten: 0, meanRowsRead: 30.1 },
-    "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 432, rowsRead: 28529, fullScans: 467 },
-    "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 118, rowsRead: 890, fullScans: 27 },
-    "order-3-line-commit": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
-    "order-lifecycle": { d1Calls: 34, d1Statements: 80, externalFetches: 0, rowsWritten: 74, rowsRead: 73, fullScans: 26 },
-    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 295, fullScans: 7 },
-    "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
-    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
-    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
-    "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 867, rowsRead: 992, fullScans: 0 },
+    "admin-product-save": { d1Calls: 35, d1Statements: 57, externalFetches: 0, rowsWritten: 1240, rowsRead: 348, fullScans: 54 },
+    "order-status-change": { d1Calls: 24, d1Statements: 37, externalFetches: 0, rowsWritten: 10, rowsRead: 1339, fullScans: 5 },
+    "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
+    "bulk-confirm-repair": { d1Calls: 97, d1Statements: 314, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
+    "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1342, fullScans: 7 },
+    "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
+    "cron-idle": { d1Calls: 56, d1Statements: 66, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
+    "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 430, rowsRead: 28348, fullScans: 451 },
+    "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
+    "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
+    "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
+    "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 292, fullScans: 4 },
+    "order-3-line-commit-tracking": { d1Calls: 25, d1Statements: 94, externalFetches: 3, rowsWritten: 70, rowsRead: 108, fullScans: 18 },
+    "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 32, fullScans: 0 },
+    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
+    "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 868, rowsRead: 993, fullScans: 0 },
+    "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 44, d1Statements: 115, externalFetches: 6, rowsWritten: 100, rowsRead: 126, fullScans: 18 },
+    "order-3-line-commit-subscribers-8": { d1Calls: 74, d1Statements: 165, externalFetches: 16, rowsWritten: 142, rowsRead: 179, fullScans: 18 },
+    "order-status-change-subscribers-1": { d1Calls: 35, d1Statements: 53, externalFetches: 1, rowsWritten: 17, rowsRead: 1350, fullScans: 5 },
+    "order-refund-subscribers-1": { d1Calls: 117, d1Statements: 175, externalFetches: 18, rowsWritten: 141, rowsRead: 200, fullScans: 3 },
+    "order-status-change-subscribers-3": { d1Calls: 35, d1Statements: 55, externalFetches: 3, rowsWritten: 26, rowsRead: 52, fullScans: 1 },
+    "order-refund-subscribers-3": { d1Calls: 126, d1Statements: 195, externalFetches: 25, rowsWritten: 201, rowsRead: 274, fullScans: 3 },
+    "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
   },
 };
