@@ -70,6 +70,8 @@ export const customers = sqliteTable("customers", {
     index("customers_email_idx").on(table.email),
     index("customers_merged_into_idx").on(table.mergedIntoCustomerId),
     index("customers_phone_idx").on(table.phone),
+    // Store import dedupe matches emails as typed: trimmed, any case.
+    index("customers_email_norm_idx").on(sql`lower(trim(${table.email}))`),
     uniqueIndex("customers_verified_phone_unique")
         .on(table.phone)
         .where(sql`${table.phoneVerifiedAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
@@ -79,6 +81,11 @@ export const customers = sqliteTable("customers", {
     uniqueIndex("customers_guest_phone_unique")
         .on(table.phone)
         .where(sql`${table.accountClaimedAt} IS NULL AND ${table.deletedAt} IS NULL AND ${table.phone} <> ''`),
+    // Email sign-in's "was this a deleted account?" answer: soft-deleted claimed
+    // accounts with a verified email (merged guest records are never purged).
+    index("customers_deleted_verified_email_idx")
+        .on(sql`lower(${table.email})`)
+        .where(sql`${table.deletedAt} IS NOT NULL AND ${table.emailVerifiedAt} IS NOT NULL AND ${table.accountClaimedAt} IS NOT NULL`),
     // A guest record without a phone (NO_PHONE) is keyed by its email, as Shopify keys guests.
     uniqueIndex("customers_guest_email_unique")
         .on(sql`lower(${table.email})`)

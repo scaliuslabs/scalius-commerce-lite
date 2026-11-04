@@ -1345,6 +1345,13 @@
       "when": 1792800000000,
       "tag": "0191_erased_customers_frozen",
       "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "6",
+      "when": 1792810000000,
+      "tag": "0192_lean_indexes_and_triggers",
+      "breakpoints": true
     }
   ]
 }
