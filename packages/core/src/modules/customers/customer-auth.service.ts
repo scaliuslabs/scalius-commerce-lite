@@ -413,16 +413,18 @@ async function resolveProofOwner(
             ))
             .limit(1);
         if (verified) return { kind: "account", row: verified.customer, address: verified.address };
-        // Only on a miss: is this the email of a closed account? It reads the
-        // trash range of the deleted_at indexes, never the live customers.
+        // Only on a miss: is this the email of a closed account? Exactly the
+        // terms of the partial index `customers_deleted_verified_email_idx`
+        // (lower(email); deleted, email verified, claimed), so it is one index
+        // SEARCH of the closed verified accounts, never a walk of the trash.
         const [closed] = await db
             .select({ id: customers.id })
             .from(customers)
             .where(and(
                 sql`lower(${customers.email}) = ${identifier}`,
+                isNotNull(customers.deletedAt),
                 isNotNull(customers.emailVerifiedAt),
                 isNotNull(customers.accountClaimedAt),
-                isNotNull(customers.deletedAt),
             ))
             .limit(1);
         return closed ? { kind: "deleted" } : { kind: "none" };
