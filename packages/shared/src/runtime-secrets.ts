@@ -35,6 +35,8 @@ export const RUNTIME_SECRET_PURPOSES = {
   FRONT_PROXY_SECRET: "front-proxy",
   /** HS256 key for operator-minted dashboard identity handoff tokens. */
   IDENTITY_HANDOFF_SECRET: "identity-handoff",
+  /** HMAC key for refund attempt metadata integrity (manualDepositRefund flag). */
+  REFUND_METADATA_HMAC: "refund-metadata-hmac",
 } as const;
 
 export type RuntimeSecretName = keyof typeof RUNTIME_SECRET_PURPOSES;

@@ -340,12 +340,15 @@ export async function executeOrderRefund(
     // app or agent may not turn a COD or recorded payment into store credit.
     const caller: RefundCaller = c.get("pluginPrincipal") ? "app" : c.get("agentPrincipal") ? "agent" : "staff";
     try {
+        // Pass master secret for HMAC integrity on refund metadata
+        const masterSecret = (c.env as Record<string, unknown>).SCALIUS_SECRET as string | undefined;
         result = await processRefund(
             db,
             { ...request, caller },
             encryptionKey,
             // App gateways refund through the same port as built-in ones (read only when one is named).
             () => requestPaymentProviders(c),
+            masterSecret,
         );
     } catch (error: unknown) {
         if (error instanceof PartialRefundProcessedError) {
