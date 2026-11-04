@@ -16,15 +16,16 @@ import { RESET_TOKEN_MARKER_TTL_MS, resetTokenMarkerIdentifier } from "@scalius/
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
-import { adminInvitations, session as sessionTable, user as userTable, verification } from "@scalius/database/schema";
+import { account, adminInvitations, session as sessionTable, user as userTable, verification } from "@scalius/database/schema";
 import { getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader } from "../middleware/admin-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 import { detachedAppProviders } from "../plugins/providers/app-providers";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { RateLimitError } from "../utils/api-error";
 import { isWithinRateLimit } from "../utils/rate-limit";
-import { enforceStaffProofLimit, recordStaffProofFailure, staffProofs } from "../utils/staff-proofs";
-import { STAFF_SIGN_IN_FAILURES, recordStaffFailure, staffFailuresExhausted } from "@scalius/core/auth/staff-attempts";
+import { reserveStaffProof, staffProofs } from "../utils/staff-proofs";
+import { STAFF_SIGN_IN_ATTEMPTS, reserveStaffAttempt, type StaffAttempt } from "@scalius/core/auth/staff-attempts";
+import { STAFF_KNOWN_DEVICE_PURPOSE, deriveRuntimeSecret, readMasterSecret, type MasterSecretEnvironment } from "@scalius/shared/runtime-secrets";
 import { hmacSha256Hex } from "@scalius/shared/hash";
 import { getTrustedClientIpFromRequest } from "../utils/client-ip";
 import { withEnvFields } from "../runtime/runtime-env";
@@ -509,9 +510,10 @@ async function markTwoFactorVerified(env: Env, response: Response): Promise<void
 }
 
 const SIGN_IN_NETWORK_LIMIT_PURPOSE = "staff-sign-in-network";
-/** Set after a right password; the account's failure budget never holds this browser out. */
+/** Set after a right password; the account's attempt budget never holds this browser out. */
 const KNOWN_DEVICE_COOKIE = "__Host-scalius-staff-device";
-const KNOWN_DEVICE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
+/** Checked on the server from the signed issue time, whatever the browser keeps. */
+const KNOWN_DEVICE_MAX_AGE_SECONDS = 180 * 24 * 60 * 60;
 
 /**
  * The only Better Auth routes the dashboard writes to. Anything else that
@@ -539,19 +541,65 @@ function tooManyAttempts(waitSeconds = 60): Response {
   );
 }
 
-function knownDeviceTag(env: Env, email: string): Promise<string> {
-  return hmacSha256Hex(env.BETTER_AUTH_SECRET ?? "", `staff-known-device\0${email}`);
+/** The known-device key, derived from the master secret under its own label; none without it (no mark is issued or honoured). */
+async function knownDeviceKey(env: Env): Promise<string | null> {
+  const master = readMasterSecret(env as unknown as MasterSecretEnvironment);
+  return master ? deriveRuntimeSecret(master, STAFF_KNOWN_DEVICE_PURPOSE) : null;
 }
 
-type SignInGate = { refused: Response } | { email: string | null; knownDevice: boolean };
+/** The staff account behind an email and its credential's current version (the stored password hash). */
+async function credentialOf(env: Env, email: string): Promise<{ userId: string; version: string } | null> {
+  const row = await getDb(env)
+    .select({ userId: userTable.id, version: account.password })
+    .from(userTable)
+    .innerJoin(account, and(eq(account.userId, userTable.id), eq(account.providerId, "credential")))
+    .where(eq(userTable.email, email))
+    .get();
+  return row?.version ? { userId: row.userId, version: row.version } : null;
+}
+
+function knownDeviceSignature(key: string, userId: string, issuedAt: number, version: string): Promise<string> {
+  return hmacSha256Hex(key, `staff-known-device\0${userId}\0${issuedAt}\0${version}`);
+}
+
+/**
+ * `v1.<userId>.<issuedAt>.<signature>`: the person, when the mark was issued,
+ * and an HMAC over both and the credential's version. A password change (a new
+ * hash) voids every mark issued before it; a mark older than its server-side
+ * age, for another person, or forged, is no mark. Read only when presented.
+ */
+async function hasKnownDeviceMark(env: Env, request: Request, email: string, nowSeconds: number): Promise<boolean> {
+  const presented = readCookie(request, KNOWN_DEVICE_COOKIE);
+  const parts = presented?.split(".");
+  if (!parts || parts.length !== 4 || parts[0] !== "v1") return false;
+  const [, userId, issued, signature] = parts as [string, string, string, string];
+  const issuedAt = Number(issued);
+  if (!Number.isSafeInteger(issuedAt) || issuedAt > nowSeconds + 60 || nowSeconds - issuedAt > KNOWN_DEVICE_MAX_AGE_SECONDS) return false;
+  const key = await knownDeviceKey(env);
+  if (!key) return false;
+  const credential = await credentialOf(env, email);
+  if (!credential || credential.userId !== userId) return false;
+  return constantTimeEqual(signature, await knownDeviceSignature(key, userId, issuedAt, credential.version));
+}
+
+async function knownDeviceCookie(env: Env, email: string, nowSeconds: number): Promise<string | null> {
+  const key = await knownDeviceKey(env);
+  const credential = key ? await credentialOf(env, email) : null;
+  if (!key || !credential) return null;
+  const signature = await knownDeviceSignature(key, credential.userId, nowSeconds, credential.version);
+  return `${KNOWN_DEVICE_COOKIE}=v1.${credential.userId}.${nowSeconds}.${signature}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${KNOWN_DEVICE_MAX_AGE_SECONDS}`;
+}
+
+type SignInGate = { refused: Response } | { email: string | null; attempt: StaffAttempt | null };
 
 /**
  * Dashboard sign-in, before Better Auth's own per-IP limit: the caller's
- * network spends the strict budget (5 a minute), and an account takes at most
- * 20 wrong passwords per 15 minutes from browsers that never signed in to it,
- * counted in the database across every location. A browser where the right
- * password was entered before is never held out by that account budget, so
- * an outsider's failures cannot lock the owner out.
+ * network spends the strict budget (5 a minute), and then, from a browser
+ * without a valid known-device mark, the email reserves one of its 20 attempts
+ * per 15 minutes in the database, atomically, before the password is checked.
+ * Every email is counted alike, so the answer never tells staff from anyone
+ * else; a right password gives the attempt back. A marked browser is never
+ * held out, so an outsider's guesses cannot lock the owner out.
  */
 async function gateSignIn(env: Env, request: Request): Promise<SignInGate> {
   if (!(await isWithinRateLimit(env, "RL_STRICT", SIGN_IN_NETWORK_LIMIT_PURPOSE, getTrustedClientIpFromRequest(request, env)))) {
@@ -559,30 +607,22 @@ async function gateSignIn(env: Env, request: Request): Promise<SignInGate> {
   }
   const raw = (await readJson(request)).email;
   const email = typeof raw === "string" && raw.trim() ? raw.trim().toLowerCase() : null;
-  if (!email) return { email: null, knownDevice: false };
-  const presented = readCookie(request, KNOWN_DEVICE_COOKIE);
-  const knownDevice = presented !== null && constantTimeEqual(presented, await knownDeviceTag(env, email));
-  if (!knownDevice) {
-    const waitSeconds = await staffFailuresExhausted(getDb(env), STAFF_SIGN_IN_FAILURES, email);
-    if (waitSeconds !== null) return { refused: tooManyAttempts(waitSeconds) };
-  }
-  return { email, knownDevice };
+  if (!email) return { email: null, attempt: null };
+  if (await hasKnownDeviceMark(env, request, email, Math.floor(Date.now() / 1000))) return { email, attempt: null };
+  const attempt = await reserveStaffAttempt(getDb(env), STAFF_SIGN_IN_ATTEMPTS, email);
+  if (attempt.waitSeconds !== null) return { refused: tooManyAttempts(attempt.waitSeconds) };
+  return { email, attempt };
 }
 
-/** Counts a wrong password for a staff account from an unknown browser; marks the browser after a right one. */
-async function settleSignIn(env: Env, gate: { email: string | null; knownDevice: boolean }, response: Response): Promise<Response> {
-  if (!gate.email) return response;
-  if (response.ok) {
-    const headers = new Headers(response.headers);
-    headers.append("Set-Cookie", `${KNOWN_DEVICE_COOKIE}=${await knownDeviceTag(env, gate.email)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${KNOWN_DEVICE_MAX_AGE_SECONDS}`);
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-  }
-  if (response.status === 401 && !gate.knownDevice) {
-    const db = getDb(env);
-    const staff = await db.select({ id: userTable.id }).from(userTable).where(eq(userTable.email, gate.email)).get();
-    if (staff) await recordStaffFailure(db, STAFF_SIGN_IN_FAILURES, gate.email);
-  }
-  return response;
+/** Gives a right password's attempt back and marks the browser; a wrong one keeps its attempt. */
+async function settleSignIn(env: Env, gate: { email: string | null; attempt: StaffAttempt | null }, response: Response): Promise<Response> {
+  if (!gate.email || !response.ok) return response;
+  await gate.attempt?.refund();
+  const mark = await knownDeviceCookie(env, gate.email, Math.floor(Date.now() / 1000));
+  if (!mark) return response;
+  const headers = new Headers(response.headers);
+  headers.append("Set-Cookie", mark);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
@@ -593,7 +633,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 }
 
 type SessionHolder = NonNullable<Awaited<ReturnType<typeof getAdminSessionFromCookieHeader>>>;
-type HolderLookup = { kind: "none" } | { kind: "dead" } | { kind: "live"; holder: SessionHolder };
+type HolderLookup = { kind: "none" } | { kind: "dead"; cookieName: string } | { kind: "live"; holder: SessionHolder };
 
 /**
  * The session behind Better Auth's own session cookie (only the name Better
@@ -605,16 +645,31 @@ async function sessionHolder(env: Env, auth: ReturnType<typeof createAuth>, requ
   const value = readCookie(request, name);
   if (value === null) return { kind: "none" };
   const holder = await getAdminSessionFromCookieHeader(getDb(env), `${name}=${encodeURIComponent(value)}`, env.BETTER_AUTH_SECRET);
-  return holder ? { kind: "live", holder } : { kind: "dead" };
+  return holder ? { kind: "live", holder } : { kind: "dead", cookieName: name };
 }
 
-/** Spends the person's in-session proof budget; Better Auth's session path counts no failed codes. */
-async function limitSessionProof(env: Env, holder: SessionHolder): Promise<Response | null> {
+/**
+ * The request without its dead session: the session token and Better Auth's
+ * cached copy of it are dropped, so Better Auth answers as for a browser with
+ * no session (a sign-in challenge still verifies through its own cookie).
+ */
+function withoutSessionCookies(request: Request): Request {
+  const kept = (request.headers.get("cookie") ?? "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part && !/(?:^|[.-])session_(?:token|data)=/.test(part.slice(0, part.indexOf("=") + 1)));
+  const headers = new Headers(request.headers);
+  if (kept.length) headers.set("cookie", kept.join("; "));
+  else headers.delete("cookie");
+  return new Request(request, { headers });
+}
+
+/** Reserves one of the person's in-session proof attempts; Better Auth's session path counts no failed codes. */
+async function reserveSessionProof(env: Env, holder: SessionHolder): Promise<{ refused: Response } | { attempt: StaffAttempt }> {
   try {
-    await enforceStaffProofLimit(env, getDb(env), holder.user.id);
-    return null;
+    return { attempt: await reserveStaffProof(env, getDb(env), holder.user.id) };
   } catch (error) {
-    if (error instanceof RateLimitError) return tooManyAttempts(error.retryAfterSeconds ?? 60);
+    if (error instanceof RateLimitError) return { refused: tooManyAttempts(error.retryAfterSeconds ?? 60) };
     throw error;
   }
 }
@@ -697,10 +752,14 @@ export async function handleDashboardAuthRequest(
   }
 
   let holder: SessionHolder | null = null;
+  let proofAttempt: StaffAttempt | null = null;
+  let routed = request;
   const provesInSession = verifiesSecondFactor || (method === "POST" && route === TWO_FACTOR_ENABLE_PATH);
   if (method === "POST" && route.startsWith(TWO_FACTOR_PATH_PREFIX)) {
     const lookup = await sessionHolder(authEnv, auth, request);
-    if (lookup.kind === "dead") return json({ code: "SESSION_EXPIRED", message: "Your session ended. Sign in again." }, 401);
+    // A dead session never reaches Better Auth (its cookie cache would still
+    // honour it); the rest of the request goes on as a browser without one.
+    if (lookup.kind === "dead") routed = withoutSessionCookies(request);
     holder = lookup.kind === "live" ? lookup.holder : null;
     if (route === TWO_FACTOR_ENABLE_PATH) {
       if (!holder) return json({ code: "SESSION_EXPIRED", message: "Sign in to set up two-step verification." }, 401);
@@ -709,21 +768,20 @@ export async function handleDashboardAuthRequest(
       }
     }
     if (provesInSession && holder) {
-      const refused = await limitSessionProof(authEnv, holder);
-      if (refused) return refused;
+      const reserved = await reserveSessionProof(authEnv, holder);
+      if ("refused" in reserved) return reserved.refused;
+      proofAttempt = reserved.attempt;
     }
   }
 
   const isSignIn = method === "POST" && route === SIGN_IN_EMAIL_PATH;
   const signInGate = isSignIn ? await gateSignIn(authEnv, request) : null;
   if (signInGate && "refused" in signInGate) return signInGate.refused;
-  let response = await runWithRetry((attempt) => auth.handler(attempt), request, isSignIn);
+  let response = await runWithRetry((attempt) => auth.handler(attempt), routed, isSignIn);
   if (isSignIn) response = await offerAccountTwoFactorMethods(authEnv, request, response);
   if (signInGate) response = await settleSignIn(authEnv, signInGate, response);
   if (verifiesSecondFactor) await markTwoFactorVerified(authEnv, response);
-  if (holder && provesInSession && response.status >= 400 && response.status < 500 && response.status !== 429) {
-    await recordStaffProofFailure(getDb(authEnv), holder.user.id);
-  }
+  if (proofAttempt && response.ok) await proofAttempt.refund();
   if (holder) await signOutOthersIfTwoStepTurnedOn(authEnv, holder, response);
   return withNoStore(response);
 }
