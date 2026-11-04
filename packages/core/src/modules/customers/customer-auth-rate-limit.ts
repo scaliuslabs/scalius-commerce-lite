@@ -99,7 +99,8 @@ const storeChannelSubject = (channel: string) => `store-channel|${channel.trim()
 /**
  * Counts one code the store sends on this channel, atomically (a burst cannot
  * pass the ceiling); false when the hour's ceiling is full and nothing was
- * counted. Call it only once the send will happen.
+ * counted. A counted code that then does not go out (the resend cooldown
+ * refused it) is given back with refundOtpStoreChannelSend.
  */
 export async function countOtpStoreChannelSend(
     db: Database,
@@ -113,6 +114,23 @@ export async function countOtpStoreChannelSend(
         nowSeconds: input.nowSeconds ?? currentUnixSeconds(),
     });
     return !("retryAfterSeconds" in counted);
+}
+
+/** Gives back one counted code that did not go out, in the same window only. */
+export async function refundOtpStoreChannelSend(
+    db: Database,
+    input: { channel: string; hashKey?: string; nowSeconds?: number },
+): Promise<void> {
+    const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
+    const key = await buildCustomerAuthOtpRateLimitKey("identifier", storeChannelSubject(input.channel), input.hashKey);
+    await db
+        .update(customerAuthOtpRateLimits)
+        .set({ attempts: sql`${customerAuthOtpRateLimits.attempts} - 1`, updatedAt: nowSeconds })
+        .where(and(
+            eq(customerAuthOtpRateLimits.key, key),
+            gt(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
+            gt(customerAuthOtpRateLimits.attempts, 0),
+        ));
 }
 
 /**

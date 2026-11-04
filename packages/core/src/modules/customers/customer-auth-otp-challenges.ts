@@ -38,6 +38,13 @@ export interface PersistCustomerAuthOtpChallengeInput {
     ttlSeconds: number;
     resendCooldownSeconds: number;
     maxAttempts: number;
+    /**
+     * The code is held back (the store's hourly ceiling): only the resend
+     * cooldown is written, through the same cooldown gate. An existing
+     * challenge keeps its code, attempts and expiry, so a code already
+     * delivered still works; a new row holds a code nobody receives.
+     */
+    holdBack?: boolean;
 }
 
 export interface PersistedCustomerAuthOtpChallenge {
@@ -116,7 +123,7 @@ export async function persistCustomerAuthOtpChallenge(
         .values(values)
         .onConflictDoUpdate({
             target: customerAuthOtpChallenges.otpKey,
-            set: {
+            set: input.holdBack ? { resendAvailableAt: values.resendAvailableAt, updatedAt: values.updatedAt } : {
                 deliveryKey: values.deliveryKey,
                 method: values.method,
                 channel: values.channel,
@@ -261,14 +268,6 @@ export async function claimCustomerAuthOtpChallenge(
     }
 
     throw new ValidationError("That code couldn't be checked. Send a new code.", { attemptsLeft: 0 });
-}
-
-/** Removes a challenge just stored for a code that will not be sent (only that delivery's row). */
-export async function discardCustomerAuthOtpChallenge(db: Database, otpKey: string, deliveryKey: string): Promise<void> {
-    await db.delete(customerAuthOtpChallenges).where(and(
-        eq(customerAuthOtpChallenges.otpKey, otpKey),
-        eq(customerAuthOtpChallenges.deliveryKey, deliveryKey),
-    ));
 }
 
 /** Keeps the latest pending code usable, at most 30 minutes from its issuance. */

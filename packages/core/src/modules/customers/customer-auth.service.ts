@@ -29,13 +29,13 @@ import {
     persistCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
     buildCustomerAuthOtpStorageKey,
-    discardCustomerAuthOtpChallenge,
     extendPendingCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
     countOtpStoreChannelSend,
     enforceOtpSendRateLimits,
+    refundOtpStoreChannelSend,
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
@@ -504,39 +504,45 @@ export async function sendOtp(
         }
         throw error;
     }
+    // The store's hourly ceiling for this channel is counted atomically before
+    // the code is stored, so a burst cannot pass it. Over the ceiling, only a
+    // contact that already proved itself (a buyer with an account) is sent its
+    // code; for anyone else only the resend cooldown is written (any code it
+    // already holds stays usable) and nothing is delivered, with the same
+    // answer and the same cooldown, so neither reveals who has an account.
+    const counted = await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
+    const holdBack = !counted && (await resolveProofOwner(db, input.method, identifier)).kind !== "account";
+    if (holdBack) console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
         deliveryKey,
         encryptionKey: input.encryptionKey,
     });
-    const challenge = await persistCustomerAuthOtpChallenge(db, {
-        otpKey,
-        deliveryKey,
-        method: input.method,
-        channel,
-        identifier,
-        deliveryTarget: identifier,
-        code,
-        encryptionKey: input.encryptionKey,
-        contactEncryptionKey: input.credentialEncryptionKey,
-        ttlSeconds: OTP_TTL_SECONDS,
-        resendCooldownSeconds: allowance.resendCooldownSeconds,
-        maxAttempts: OTP_MAX_ATTEMPTS,
-    });
-    const resendAfterSeconds = Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000));
-    // Past the cooldown, the code is counted against the store's hourly ceiling
-    // for this channel, atomically, so a burst cannot pass it. Over the
-    // ceiling, only a contact that already proved itself (a buyer with an
-    // account) is sent its code; for anyone else the challenge is discarded and
-    // nothing is delivered, with the same answer, so the reply never tells who
-    // has an account.
-    if (!(await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey }))
-        && (await resolveProofOwner(db, input.method, identifier)).kind !== "account") {
-        await discardCustomerAuthOtpChallenge(db, otpKey, deliveryKey);
-        console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
-        return { message: "We sent you a code.", resendAfterSeconds, otpDelivery: null };
+    let challenge: Awaited<ReturnType<typeof persistCustomerAuthOtpChallenge>>;
+    try {
+        challenge = await persistCustomerAuthOtpChallenge(db, {
+            otpKey,
+            deliveryKey,
+            method: input.method,
+            channel,
+            identifier,
+            deliveryTarget: identifier,
+            code,
+            encryptionKey: input.encryptionKey,
+            contactEncryptionKey: input.credentialEncryptionKey,
+            ttlSeconds: OTP_TTL_SECONDS,
+            resendCooldownSeconds: allowance.resendCooldownSeconds,
+            maxAttempts: OTP_MAX_ATTEMPTS,
+            holdBack,
+        });
+    } catch (error) {
+        // The resend cooldown refused it: no code goes out, so it is not counted.
+        if (counted) await refundOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
+        throw error;
     }
+    const resendAfterSeconds = Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000));
+    if (holdBack) return { message: "We sent you a code.", resendAfterSeconds, otpDelivery: null };
 
     return {
         message: "We sent you a code.",
