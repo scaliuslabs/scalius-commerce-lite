@@ -437,13 +437,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // confirmation on the order, an empty one is released.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
-      // Money first. A refund worked on here (finalizing one can cancel its
-      // order and release its stock) costs what finishing a booking does, so
-      // it takes one of the run's bookings: on Free (one a run) a run with a
-      // refund leaves the dead booking first in line for the next run. A
-      // failed refund pass counts as its whole share, and the claims still run.
+      // Money first. A refund this pass finalized (which can cancel its order
+      // and release its stock) or failed costs what finishing a booking does,
+      // so it takes one of the run's bookings: on Free (one a run) such a run
+      // leaves the dead booking first in line for the next. A refund the
+      // provider still reports processing is a cheap re-check and takes none,
+      // so a long-pending refund never starves the bookings. A refund pass
+      // that throws stopped before its work (its due read), and the claims
+      // still run in full.
       const refundLimit = scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT);
-      let refundsWorked = refundLimit;
+      let refundsWorked = 0;
       let refundFailure: unknown = null;
       try {
         const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
@@ -453,7 +456,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             providers: appPaymentProvidersLoader(env, db),
           }),
         );
-        refundsWorked = refundReconciliation.claimed;
+        refundsWorked = refundReconciliation.finalized + refundReconciliation.failed;
         if (refundReconciliation.refundNotifications.length > 0) {
           await timed("refund_reconciliation_notification_record", () =>
             recordReconciledRefundNotifications(db, refundReconciliation.refundNotifications),
@@ -504,7 +507,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
       if (claims.scanned > 0) {
         console.log(
           `[scheduled] Expired shipment claims: scanned=${claims.scanned}, released=${claims.released}, ` +
-            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}`,
+            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}, waiting=${claims.waiting}`,
         );
       }
       // The refund pass's failure (already logged by its operation) fails the job.

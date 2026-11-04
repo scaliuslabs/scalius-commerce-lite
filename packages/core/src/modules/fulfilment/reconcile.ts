@@ -747,7 +747,12 @@ export interface ExpiredShipmentClaimSweepResult {
     /** Held for staff: an unknown courier outcome, or a booking that could not be finished. */
     held: number;
     failed: number;
-    /** The cursor: the last order looked at, or null once the range wrapped. */
+    /** Booked attempts left for a later run: the run's budget of finished bookings was spent. */
+    waiting: number;
+    /**
+     * The cursor: the last order looked at, or null once the range wrapped;
+     * just before the first booked attempt left waiting, so it leads the next run.
+     */
     lastOrderId: string | null;
 }
 
@@ -764,7 +769,8 @@ export async function sweepExpiredShipmentClaims(
     db: Database,
     /**
      * `maxFinalized`: booked claims one run finishes (each ships an order: the
-     * plan's budget). 0 finishes none: the first booked claim leads the next run.
+     * plan's budget). Past it, booked claims wait (the first leads the next
+     * run) and the claims behind them are still released or held; 0 finishes none.
      */
     options: { limit?: number; afterOrderId?: string | null; maxFinalized?: number } = {},
 ): Promise<ExpiredShipmentClaimSweepResult> {
@@ -786,10 +792,13 @@ export async function sweepExpiredShipmentClaims(
         finalized: [],
         held: 0,
         failed: 0,
+        waiting: 0,
         // A short page means the range ended: the next run starts over.
         lastOrderId: rows.length === limit ? rows.at(-1)!.id : null,
     };
     let previousId: string | null = options.afterOrderId ?? null;
+    /** Where the next run starts when a booked claim was left waiting. */
+    let resumeAfter: string | null = null;
     let finishing = 0;
     for (const row of rows) {
         if (!row.shipmentClaimId) continue;
@@ -808,11 +817,13 @@ export async function sweepExpiredShipmentClaims(
                 previousId = row.id;
                 continue;
             }
-            // The run's budget of finished bookings is spent: this one leads the next run.
+            // The run's budget of finished bookings is spent: this one waits (the
+            // first that waits leads the next run), and the sweep goes on, so a
+            // claim behind it is still released or held.
             if (finishing >= maxFinalized) {
-                result.scanned = rows.indexOf(row);
-                result.lastOrderId = previousId ?? "";
-                break;
+                if (result.waiting === 0) resumeAfter = previousId ?? "";
+                result.waiting += 1;
+                continue;
             }
             previousId = row.id;
             finishing += 1;
@@ -835,6 +846,7 @@ export async function sweepExpiredShipmentClaims(
             console.error(`[fulfilment] Expired shipment claim ${row.shipmentClaimId} of order ${row.id} could not be resolved:`, error);
         }
     }
+    if (resumeAfter !== null) result.lastOrderId = resumeAfter;
     return result;
 }
 
