@@ -23373,6 +23373,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     title: string;
                 };
                 propertiesHash: string;
+                /**
+                 * The line's own share of the order's discounts, as the order will keep it; present only where the quoted line is the buyer's own (not one a store app rewrote). A line it pays in full (a free gift) reads zero with its price struck.
+                 */
+                discountMinor?: number;
             }>;
         };
     };

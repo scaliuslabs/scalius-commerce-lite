@@ -1147,6 +1147,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
 <script>
   import { readBuyerAttributes } from "@/lib/buyer-ui";
+  import { checkoutText } from "@/lib/checkout-text";
   import { pagePath } from "@/lib/presence-url";
   import { loadLazyScript } from "@/scripts/lazy-script";
   import {
@@ -1205,7 +1206,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { rememberSubmittedCart } from "@/lib/checkout/receipt-finalization";
   import { readStoredGiftCards } from "@/lib/checkout/gift-cards";
   import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
-  import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+  
   import { shippingCountryName } from "@/lib/checkout/shipping-country";
   import { enhanceShippingCountry } from "@/lib/checkout/country-address";
   import { addressAutocompleteService, pageLocale } from "@/lib/app-services";
@@ -1344,7 +1345,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       const served = zoneCountries();
       return countryCode === "BD" || !served || served.has(countryCode)
         ? null
-        : formatCheckoutLanguageText(checkoutCopy.deliveryCountryUnavailableText, {
+        : checkoutText(checkoutCopy.deliveryCountryUnavailableText, {
             country: shippingCountryName(countryCode, document.documentElement.lang || "en"),
           });
     },
@@ -2380,7 +2381,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   const streetLine = document.getElementById("shippingAddress");
   if (addressApp && (streetLine instanceof HTMLTextAreaElement || streetLine instanceof HTMLInputElement)) {
     // Without its script the street line is a plain field, as it is without the app.
-    loadLazyScript(() => import("@/lib/checkout/address-autocomplete"), { draftRestores: true }).then(({ apiPost, enhanceAddressAutocomplete }) => {
+    loadLazyScript(() => import("@/lib/checkout/address-autocomplete"), { needed: false }).then(({ apiPost, enhanceAddressAutocomplete }) => {
       enhanceAddressAutocomplete({
         root: document,
         input: streetLine,

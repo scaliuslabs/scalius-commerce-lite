@@ -68,6 +68,18 @@ function normalizeOptions(payload: unknown): CartValidationOptions {
   // The page's presence (`en-in`): its market prices the cart before an address.
   const presenceValue = optionalString(payload, "presence");
   const presence = isMarketSubfolder(presenceValue) ? { presence: presenceValue } : {};
+  // Another country's delivery: its rate is checked against its region and postal code, never a Bangladesh City/Thana.
+  const country = optionalString(payload, "shippingCountryCode")?.toUpperCase() ?? null;
+  if (country && country !== "BD" && /^[A-Z]{2}$/.test(country)) {
+    return {
+      shippingCountryCode: country,
+      shippingAdminArea: optionalString(payload, "shippingAdminArea"),
+      shippingPostalCode: optionalString(payload, "shippingPostalCode"),
+      shippingMethodId,
+      ...rateQuote,
+      ...presence,
+    };
+  }
   if (city && zone) {
     return {
       city,

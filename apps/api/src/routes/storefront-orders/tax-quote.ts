@@ -186,6 +186,9 @@ const taxQuoteResponseSchema = z.object({
     adjustments: z.array(orderLinePropertySchema),
     purchaseOption: linePurchaseOptionSchema.optional(),
     propertiesHash: z.string(),
+    discountMinor: z.number().int().min(0).optional().openapi({
+      description: "The line's own share of the order's discounts, as the order will keep it; present only where the quoted line is the buyer's own (not one a store app rewrote). A line it pays in full (a free gift) reads zero with its price struck.",
+    }),
   })),
 });
 
@@ -402,6 +405,12 @@ app.openapi(taxQuoteRoute, async (c) => {
       offeredDeferredMethods(deferred),
     ), paymentProviders, deferred.gated);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
+  // Each priced line's share of the discounts, by its allocation id (what the order line keeps).
+  const discountByLine = new Map(quote.lines.map((line) => [line.lineId, line.discountMinor]));
+  const lineDiscountMinor = (item: { index: number; variantId: string }) => {
+    const discountMinor = discountByLine.get(buildStorefrontTaxAllocationLineId(item.index, item.variantId));
+    return typeof discountMinor === "number" ? { discountMinor } : {};
+  };
   return ok(c, {
     buyerUi: await apps.buyerUi?.({ language: c.req.header("x-storefront-language"), locale: c.req.header("x-storefront-locale"), targets: TAX_QUOTE_UI_SLOTS, currency: quote.currencyCode, cart: pricing.appCart, attributes, customer: sessionCustomer?.customerId ? { id: sessionCustomer.customerId } : null }) ?? [],
     valid: true as const,
@@ -473,6 +482,8 @@ app.openapi(taxQuoteRoute, async (c) => {
       })),
       ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
       propertiesHash: linePropertiesHashes[position]!,
+      // The line's share of the discounts, as the order keeps it (a rewritten line's share is not the buyer's line).
+      ...(buyerView ? {} : lineDiscountMinor(cartValidation.items[position]!)),
       };
     }),
   });
