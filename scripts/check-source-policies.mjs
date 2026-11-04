@@ -414,11 +414,18 @@ export const policies = [
     sample: 'console.warn("gift card redeem failed", code);',
   },
   {
-    rule: "an outbound request URL never interpolates a secret into its query string (access_token, api_key, apikey, token)",
-    why: "a query string lands in provider and proxy access logs, error reports and traces; send the credential in an Authorization header (packages/core/src/integrations/meta/conversions-api.ts, whatsapp.ts). A URL fragment (#token=) is never sent, so it is outside this check",
+    rule: "an outbound request URL never puts a secret into its query string (access_token, api_key, apikey, token, key) by interpolation, concatenation or searchParams",
+    why: "a query string lands in provider and proxy access logs, error reports and traces; send the credential in an Authorization header (packages/core/src/integrations/meta/conversions-api.ts, whatsapp.ts). Rejected: a template literal `?key=${x}` / `&token=${x}`, a string concatenation `\"?access_token=\" + x`, and `url.searchParams.set/append(\"token\", x)`. A URL fragment (#token=) is never sent, so it is outside this check",
     paths: ["apps/api/src", "apps/admin-v2/src", storefront, "packages/core/src", "packages/shared/src", "packages/plugin-sdk/src", "packages/cli/src", "plugins"],
     optionalPaths: ["plugins", "packages/cli/src"],
-    forbid: [/[?&](?:access_token|api_key|apikey|token)=\$\{/i],
+    allow: {
+      "packages/core/src/modules/customer-marketing/links.ts": "builds the signed ?token= confirm and unsubscribe links the platform emails to its own customers (rules/privacy/sensitive-values-never-in-urls.md); each does one consent action for one customer and no outbound request carries it",
+    },
+    forbid: [
+      /[?&](?:access_token|api_key|apikey|token|key)=\$\{/i,
+      /[?&](?:access_token|api_key|apikey|token|key)=["'`]\s*\+/i,
+      /\bsearchParams\s*\.\s*(?:set|append)\(\s*["'`](?:access_token|api_key|apikey|token|key)["'`]\s*,/i,
+    ],
     sample: "const url = `https://graph.facebook.com/v1/${id}/events?access_token=${accessToken}`;",
   },
   {
