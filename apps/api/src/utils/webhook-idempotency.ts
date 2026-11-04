@@ -1,8 +1,9 @@
 import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
-import { webhookEvents } from "@scalius/database/schema";
+import { orders, webhookEvents } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
 import { duePaymentCommandProbes, onlinePaymentMethodCondition } from "@scalius/core/modules/payments";
+import { SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT } from "@scalius/core/modules/order-kernel";
 
 /**
  * `retrying`: a payment event whose last attempt failed, due again at
@@ -292,6 +293,40 @@ export async function markPaymentEventAttemptFailed(
       : { status: "retrying", nextAttemptAt: sql`unixepoch() + ${paymentEventRetryDelaySeconds(attempts)}`, result: JSON.stringify({ attempts, error }), processedAt: sql`unixepoch()` })
     .where(eq(webhookEvents.id, id));
   return exhausted ? "failed" : "retrying";
+}
+
+/** A parked payment event looks again after this long, if nothing made it due sooner. */
+export const PAYMENT_EVENT_PARKED_RECHECK_SECONDS = 60 * 60;
+
+/**
+ * Records an attempt refused only because a shipment claim locks the order
+ * (a booking in flight, or a dead one waiting for the claim sweep or staff):
+ * the event waits as `retrying` without spending the attempt, so it can never
+ * run out of retries while money it carries is captured. Whatever ends the
+ * claim makes it due at once (`requeueShipmentClaimParkedPaymentEvents`); it
+ * also looks again hourly. Due at once if the claim already went.
+ */
+export async function parkPaymentEventForShipmentClaim(
+  db: Database,
+  id: string,
+  attempts: number,
+  error: string,
+): Promise<void> {
+  const counted = Math.max(0, attempts - 1);
+  await db
+    .update(webhookEvents)
+    .set({
+      status: "retrying",
+      attempts: counted,
+      // Qualified by hand: an update renders its own columns unqualified.
+      nextAttemptAt: sql`CASE WHEN EXISTS (
+        SELECT 1 FROM ${orders} AS parked_order
+        WHERE parked_order.id = ${sql.raw(`"webhook_events"."order_id"`)} AND parked_order.shipment_claim_id IS NOT NULL
+      ) THEN unixepoch() + ${PAYMENT_EVENT_PARKED_RECHECK_SECONDS} ELSE unixepoch() END`,
+      result: JSON.stringify({ reason: SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT, attempts: counted, error }),
+      processedAt: sql`unixepoch()`,
+    })
+    .where(eq(webhookEvents.id, id));
 }
 
 /** Payment events due again, or whose attempt died with its invocation (lease expired). */

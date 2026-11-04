@@ -20,6 +20,7 @@ import {
   isShipmentClaimLeaseLive,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
+  requeueShipmentClaimParkedPaymentEvents,
   validateTransition,
 } from "../order-kernel";
 import { sql, eq, and } from "drizzle-orm";
@@ -427,7 +428,9 @@ export async function resolveUnknownOrderShipment(
                   AND json_extract(${deliveryShipments.metadata}, '$.unknownOutcomeResolution.operationKey') = ${input.operationKey}
             )`,
         )).returning({ version: orders.version }),
-    ] as any) as [{ id: string }[], { version: number }[]];
+        // The claim ends here: the payment events it parked are due now.
+        requeueShipmentClaimParkedPaymentEvents(db, input.orderId),
+    ] as any) as [{ id: string }[], { version: number }[], unknown];
     if (!shipmentResult[0] || !orderResult[0]) {
         throw new ConflictError("Order or shipment changed. Reload before resolving shipment recovery.");
     }

@@ -1,5 +1,6 @@
-import { and, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
-import { orders } from "@scalius/database/schema";
+import { and, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { orders, webhookEvents } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
 import { ConflictError } from "@scalius/core/errors";
 
 export const SHIPMENT_CLAIM_LEASE_SECONDS = 15 * 60;
@@ -72,7 +73,7 @@ export function hasActiveShipmentClaim(
 
 export function assertNoActiveShipmentClaim(snapshot: ShipmentClaimSnapshot): void {
     if (hasActiveShipmentClaim(snapshot)) {
-        throw new ConflictError(SHIPMENT_CLAIM_CONFLICT_MESSAGE);
+        throw new ShipmentClaimConflictError();
     }
 }
 
@@ -117,4 +118,42 @@ export function expiredShipmentClaimCondition() {
         isNotNull(orders.shipmentClaimExpiresAt),
         lte(orders.shipmentClaimExpiresAt, sql`unixepoch()`),
     );
+}
+
+/**
+ * A refusal because a shipment claim locks the order (a booking in flight, or
+ * a dead one waiting for the sweep or staff): nothing else was wrong, so a
+ * caller that retries waits for the claim instead of counting attempts.
+ */
+export class ShipmentClaimConflictError extends ConflictError {
+    constructor() {
+        super(SHIPMENT_CLAIM_CONFLICT_MESSAGE);
+    }
+}
+
+export function isShipmentClaimConflictError(error: unknown): error is ShipmentClaimConflictError {
+    return error instanceof ShipmentClaimConflictError;
+}
+
+/**
+ * The `result.reason` of a payment event parked because a shipment claim
+ * locked its order: it waits without spending its attempts (apps/api
+ * utils/webhook-idempotency.ts) until the claim goes.
+ */
+export const SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT = "shipment_claim";
+
+/**
+ * The order's parked payment events, due now. Every write that ends an
+ * order's claim sends it in the same batch (`clearShipmentClaim`, a staff
+ * resolution, a deleted attempt), so a payment that waited for a booking is
+ * recorded on the payment drain's next tick, not after its backstop delay.
+ * The order's events only (its index); harmless when none is parked, and a
+ * claim that still locks parks them again.
+ */
+export function requeueShipmentClaimParkedPaymentEvents(db: Database, orderId: string) {
+    return db.update(webhookEvents).set({ nextAttemptAt: sql`unixepoch()` }).where(and(
+        eq(webhookEvents.orderId, orderId),
+        eq(webhookEvents.status, "retrying"),
+        sql`json_extract(${webhookEvents.result}, '$.reason') = ${SHIPMENT_CLAIM_PARKED_PAYMENT_EVENT}`,
+    ));
 }

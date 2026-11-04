@@ -29,6 +29,7 @@ import {
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
   isShipmentClaimLeaseLive,
+  requeueShipmentClaimParkedPaymentEvents,
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { assertOrderStockCoverable, InventoryLocationShortfallError } from "../inventory";
@@ -910,14 +911,17 @@ export async function deleteShipmentRecord(db: Database, id: string) {
         throw new ConflictError("Cannot delete a shipment linked to an unresolved expired shipment claim");
       }
 
-      await db
-        .update(orders)
-        .set({
-          shipmentClaimId: null,
-          shipmentClaimExpiresAt: null,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(and(eq(orders.id, shipment.orderId), eq(orders.shipmentClaimId, shipment.id)));
+      await safeBatch(db, [
+        db
+          .update(orders)
+          .set({
+            shipmentClaimId: null,
+            shipmentClaimExpiresAt: null,
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(and(eq(orders.id, shipment.orderId), eq(orders.shipmentClaimId, shipment.id))),
+        requeueShipmentClaimParkedPaymentEvents(db, shipment.orderId),
+      ]);
     }
   }
 
