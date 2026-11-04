@@ -100,7 +100,9 @@ export const BUNDLE_BUDGETS = {
     // -53.3: the dialogs' fields (email check, phone input, image pickers, the
     // web-address check) load after the page, so zod and their widgets do too;
     // the contact row formats a landline without them. Measured 237.3.
-    "admin/settings/store.tsx": 237.7,
+    // -25.7: the contact row's phone formatting (libphonenumber and its metadata)
+    // loads beside the page's data, not before it; measured 236.2 -> 210.5.
+    "admin/settings/store.tsx": 213,
   },
 };
 
@@ -126,7 +128,7 @@ export const LAZY_ONLY_MODULES = [
   { name: "html5-qrcode", pattern: /node_modules\/html5-qrcode\//, allow: ["scanner.tsx"] },
   { name: "html2pdf", pattern: /node_modules\/html2pdf/ },
   { name: "@dnd-kit", pattern: /node_modules\/@dnd-kit\//, only: HOT_ROUTES },
-  { name: "libphonenumber-js metadata", pattern: /node_modules\/libphonenumber-js\/.*metadata/, only: HOT_ROUTES },
+  { name: "libphonenumber-js metadata", pattern: /node_modules\/libphonenumber-js\/.*metadata/, only: [...HOT_ROUTES, "admin/settings/store.tsx"] },
   { name: "store settings editing copy", pattern: /\/i18n\/settings-store-fields\.ts$/, only: ["admin/settings/store.tsx"] },
   { name: "invoice printing copy", pattern: /\/i18n\/order-invoice\.ts$/, only: HOT_ROUTES },
   { name: "order address editing copy", pattern: /\/i18n\/order-address-edit\.ts$/, only: ["admin/orders/$orderId/index.tsx"] },
