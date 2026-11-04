@@ -583,7 +583,11 @@ app.openapi(getCategoryProductsRoute, async (c) => {
 
   // Keep the recursive custom-field codec behind the public JSON schema.
   const response: z.infer<typeof getCategoryProductsRoute.responses[200]["content"]["application/json"]["schema"]>["data"] = {
-    category: categoryForProducts,
+    // The category's handle in every language: the page's hreflang alternates and canonical (MARKETS-DESIGN D9).
+    category: {
+      ...categoryForProducts,
+      ...(category.localizedSlugs ? { localizedSlugs: category.localizedSlugs, sourceSlug: category.sourceSlug } : {}),
+    },
     products: result.products,
     shelfProducts: result.shelfProducts,
     pagination: result.pagination,
