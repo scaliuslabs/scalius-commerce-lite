@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import {
   PaymentRecordStatus,
   notificationOutbox,
@@ -415,7 +415,8 @@ async function markAttemptReconcileRequired(
     nextProbeAt: nowSeconds + REFUND_RECONCILIATION_RETRY_SECONDS,
     lastError: serializeError(error),
     updatedAt: sql`unixepoch()`,
-  }).where(eq(refundAttempts.id, attempt.id));
+  // An attempt another run settled meanwhile stays refunded.
+  }).where(and(eq(refundAttempts.id, attempt.id), ne(refundAttempts.status, "refunded")));
 }
 
 async function markAcceptedBeforeFinalize(

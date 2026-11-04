@@ -59951,6 +59951,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 dueAt: string;
                 overdue: boolean;
             } | null;
+            stockHeld?: {
+                reason: 'location_short' | 'stock_changed' | 'refused';
+                skus: Array<string>;
+            } | null;
             moneyChain?: {
                 shopCurrencyCode: string;
                 /**

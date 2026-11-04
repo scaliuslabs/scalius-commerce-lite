@@ -46,6 +46,7 @@ import {
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
   REFUND_IN_PROGRESS_MESSAGE,
+  type StockHeldReason,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";
@@ -838,8 +839,9 @@ export async function refundNotificationOutboxId(dedupeKey: string): Promise<str
  * guard on the order's version. Stock the location refuses to take back
  * (when the release is prepared or in its batch) never stops the money: the
  * batch records the money and the cancel without it, with a `stock_held`
- * timeline line naming the refusal, and the stock stays held for staff
- * (nothing after the commit throws).
+ * timeline line naming the refusal (its reason code and SKUs), and the stock
+ * stays held until staff put it back from the order (the cancel's stock
+ * applied again); nothing after the commit throws.
  * `actorUserId` is the staff member the line and the settlement name.
  */
 export async function finalizeAcceptedRefundAttemptIds(
@@ -876,7 +878,7 @@ export async function finalizeAcceptedRefundAttemptIds(
         let orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
         let read = reads.get(orderId)!;
         // Why the location refused the stock, once it did: the batch then records the money without it.
-        let stockHeld: string | null = null;
+        let stockHeld: StockHeldRefusal | null = null;
         for (let round = 0; ; round += 1) {
             const { order, currency, paymentRows } = read;
             const paymentState = computePaymentStateFromLedger({
@@ -928,8 +930,8 @@ export async function finalizeAcceptedRefundAttemptIds(
                     id: await stockHeldEventId(orderId, orderAttempts.map((attempt) => attempt.id)),
                     orderId,
                     kind: "stock_held",
-                    body: stockHeld,
-                    data: JSON.stringify({ status: nextOrderStatus ?? order.status }),
+                    body: stockHeld.detail,
+                    data: JSON.stringify({ status: nextOrderStatus ?? order.status, reason: stockHeld.reason, skus: stockHeld.skus }),
                     actorId: null,
                     createdAt: sql`unixepoch()`,
                 }).onConflictDoNothing({ target: orderEvents.id })
@@ -972,7 +974,7 @@ export async function finalizeAcceptedRefundAttemptIds(
             } catch (error: unknown) {
                 const refusal = inventory?.translateError(error);
                 if (refusal) {
-                    stockHeld = stockRefusal(refusal) ?? String(refusal);
+                    stockHeld = stockRefusal(refusal) ?? { reason: "refused", detail: String(refusal), skus: [] };
                     continue;
                 }
                 if (!isBatchGuardError(error, REFUND_FINALIZE_CONFLICT) && !isOrderInventoryConflictError(error)) throw error;
@@ -1006,9 +1008,22 @@ export async function finalizeAcceptedRefundAttemptIds(
 /** How many times a settlement batch that lost its guard re-reads and tries again. */
 const FINALIZE_CONFLICT_RETRIES = 2;
 
-/** The merchant-facing reason a stock release was refused (a location short of units, a stale plan), or null for any other error. */
-function stockRefusal(error: unknown): string | null {
-    return error instanceof AppError && error.status < 500 ? error.message : null;
+interface StockHeldRefusal {
+    reason: StockHeldReason;
+    /** The refusal as the server words it (the timeline line's body, for the API and audit). */
+    detail: string;
+    skus: string[];
+}
+
+/** Why a stock release was refused (a location short of units, stock that moved, another refusal), or null for any other error. */
+function stockRefusal(error: unknown): StockHeldRefusal | null {
+    if (!(error instanceof AppError) || error.status >= 500) return null;
+    const shortfalls = (error.details as { shortfalls?: Array<{ sku?: unknown }> } | undefined)?.shortfalls;
+    const skus = Array.isArray(shortfalls)
+        ? [...new Set(shortfalls.map((item) => item.sku).filter((sku): sku is string => typeof sku === "string"))].slice(0, 10)
+        : [];
+    const reason: StockHeldReason = error.code === "inventory_location_shortfall" ? "location_short" : error.status === 409 ? "stock_changed" : "refused";
+    return { reason, detail: error.message, skus };
 }
 
 async function stockHeldEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {

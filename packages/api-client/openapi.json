@@ -212014,6 +212014,30 @@
                             "overdue"
                           ]
                         },
+                        "stockHeld": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "location_short",
+                                "stock_changed",
+                                "refused"
+                              ]
+                            },
+                            "skus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "reason",
+                            "skus"
+                          ]
+                        },
                         "moneyChain": {
                           "type": "object",
                           "nullable": true,

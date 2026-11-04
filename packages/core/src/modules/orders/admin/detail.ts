@@ -13,9 +13,11 @@ import {
     deliveryProviders,
     codTracking,
     inventoryLocations,
+    orderEvents,
 } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "../../promotions";
-import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../../order-kernel";
+import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows, STOCK_HELD_REASONS, type StockHeldReason } from "../../order-kernel";
+import { qualifiedColumn } from "../../../utils/qualified-column";
 import { listOrderHolds } from "../holds";
 import { sql, desc, eq, type SQL } from "drizzle-orm";
 import { customerKind } from "../../customers";
@@ -225,6 +227,13 @@ async function getOrderDetailsOnce(
                 recordPhone: customers.phone,
                 recordAccountClaimedAt: customers.accountClaimedAt,
                 recordOrigin: customers.origin,
+                inventoryAction: orders.inventoryAction,
+                // Why a refund's cancel left the stock held (its latest `stock_held` line), read only for such an order.
+                stockHeldData: sql<string | null>`CASE WHEN ${qualifiedColumn(orders.status)} = 'cancelled' AND ${qualifiedColumn(orders.inventoryAction)} IN ('reserved', 'deducted') THEN (
+                    SELECT held.data FROM ${orderEvents} AS held
+                    WHERE held.order_id = ${qualifiedColumn(orders.id)} AND held.kind = 'stock_held'
+                    ORDER BY held.created_at DESC, held.id DESC LIMIT 1
+                ) END`,
             })
             .from(orders)
             .leftJoin(customers, eq(customers.id, orders.customerId))
@@ -254,6 +263,8 @@ async function getOrderDetailsOnce(
         discountShopMinor,
         taxShopMinor,
         totalShopMinor,
+        inventoryAction,
+        stockHeldData,
     } = orderExtras;
     const customerRecord = recordId && recordName !== null && recordPhone !== null
         ? { id: recordId, name: recordName, phone: recordPhone, accountClaimedAt: recordAccountClaimedAt, origin: recordOrigin }
@@ -395,5 +406,28 @@ async function getOrderDetailsOnce(
         customerRecord: customerRecord
             ? { id: customerRecord.id, name: customerRecord.name, phone: customerRecord.phone, kind: customerKind(customerRecord) }
             : null,
+        stockHeld: presentStockHeld(order.status, inventoryAction, stockHeldData),
     };
+}
+
+/**
+ * A cancelled order that still holds its stock (a refund's cancel the
+ * location refused): why, and which SKUs. Staff put it back by applying the
+ * cancel's stock again (the status change to cancelled). Null otherwise.
+ */
+export function presentStockHeld(
+    status: string,
+    inventoryAction: string,
+    data: string | null,
+): { reason: StockHeldReason; skus: string[] } | null {
+    if (status !== "cancelled" || (inventoryAction !== "reserved" && inventoryAction !== "deducted")) return null;
+    let parsed: { reason?: unknown; skus?: unknown } = {};
+    try {
+        parsed = data ? JSON.parse(data) as typeof parsed : {};
+    } catch {
+        parsed = {};
+    }
+    const reason = (STOCK_HELD_REASONS as readonly unknown[]).includes(parsed.reason) ? parsed.reason as StockHeldReason : "refused";
+    const skus = Array.isArray(parsed.skus) ? parsed.skus.filter((sku): sku is string => typeof sku === "string") : [];
+    return { reason, skus };
 }

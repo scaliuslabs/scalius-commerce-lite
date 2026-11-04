@@ -566,6 +566,11 @@ export const orderDetailSchema = z.object({
    * (MARKETS-DESIGN D3, step 6): its shop-currency amounts at the locked
    * rate, shown beside the presentment amounts. Null: same-currency.
    */
+  /** A cancelled order that still holds its stock (a refund's cancel its location refused): staff put it back by setting the status to cancelled again. Null otherwise. */
+  stockHeld: z.object({
+    reason: z.enum(["location_short", "stock_changed", "refused"]),
+    skus: z.array(z.string()),
+  }).nullable().optional(),
   moneyChain: z.object({
     shopCurrencyCode: z.string(),
     rate: z.string().openapi({ description: "Shop currency units per order currency unit, locked at checkout." }),

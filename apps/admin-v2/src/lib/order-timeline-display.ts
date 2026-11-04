@@ -93,9 +93,15 @@ export function describeTimelineEvent(
       };
     case "refund_kept":
       return { text: t("timeline.refundKept", { amount: money(count(data.amount)) }), detail: null };
-    case "stock_held":
-      // A refund cancelled the order; the location's refusal is the detail.
-      return { text: t("timeline.stockHeld"), detail: body };
+    case "stock_held": {
+      // A refund cancelled the order; why the location refused, worded here (its server words stay in `body`).
+      const reason = ["location_short", "stock_changed", "refused"].includes(text(data.reason) ?? "") ? text(data.reason)! : "refused";
+      const skus = Array.isArray(data.skus) ? data.skus.filter((sku): sku is string => typeof sku === "string") : [];
+      return {
+        text: t("timeline.stockHeld"),
+        detail: t(`timeline.stockHeldReason.${reason}` as OrderTimelineMessageKey, { skus: skus.length > 0 ? ` (${skus.join(", ")})` : "" }),
+      };
+    }
     case "refund_recorded":
       return {
         text: t("timeline.refunded", { amount: money(count(data.amount)) }),
