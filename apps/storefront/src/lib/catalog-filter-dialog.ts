@@ -181,7 +181,8 @@ export function setupCatalogFilterDialog({
   };
   const handleDialogClick = (event: MouseEvent) => {
     const target = event.target;
-    if (!(target instanceof Element)) return;
+    // A link that handled itself in place (a facet's "See more") keeps the sheet open.
+    if (event.defaultPrevented || !(target instanceof Element)) return;
     const link = target.closest<HTMLAnchorElement>("a[href]");
     if (
       link &&
