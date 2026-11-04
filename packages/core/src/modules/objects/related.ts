@@ -14,12 +14,24 @@ const titleField = sql`COALESCE(related_type.display_field, (SELECT json_extract
   WHERE json_extract(title_field.value, '$.type') IN (${sql.raw(OBJECT_TITLE_FIELD_TYPES.map((type) => `'${type}'`).join(", "))})
   ORDER BY title_field.id LIMIT 1))`;
 
+/**
+ * The field an index slot leads with: `indexes_json` holds, per slot, a field
+ * key or a compound list of keys (its first leads). Read through json_each by
+ * position, never an array-index path: PostgreSQL's JSON compat takes member names only.
+ */
+export function objectIndexFieldSql(indexesJson: SQL, slot: number): SQL {
+  return sql`(SELECT CASE WHEN object_index.type = 'array'
+      THEN (SELECT object_index_first.value FROM json_each(object_index.value) AS object_index_first WHERE CAST(object_index_first.key AS INTEGER) = 0)
+      ELSE object_index.value END
+    FROM json_each(${indexesJson}) AS object_index WHERE CAST(object_index.key AS INTEGER) = ${slot})`;
+}
+
 /** Fold into the resource's existing read; unused types never read records. */
 export function relatedObjectsJson(resource: "product" | "order" | "customer", id: string): SQL<string | null> {
   const encoded = encodeIndexTuple([id], [resource]);
   const upper = indexPrefixUpperBound(encoded);
   const slots = [1, 2, 3, 4].map((slot) => {
-    const field = sql`COALESCE(json_extract(related_type.indexes_json, ${`$[${slot - 1}][0]`}), json_extract(related_type.indexes_json, ${`$[${slot - 1}]`}))`;
+    const field = objectIndexFieldSql(sql.raw("related_type.indexes_json"), slot - 1);
     const column = sql.raw(`related_record.k${slot}`);
     return sql`SELECT entry FROM (SELECT json_object(
         'typeId', related_type.id,

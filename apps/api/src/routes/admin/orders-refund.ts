@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
-import { recordOrderEvent } from "@scalius/core/modules/orders";
 import type { Database } from "@scalius/database/client";
 import {
     PartialRefundProcessedError,
@@ -19,6 +18,8 @@ import type { NotificationSender } from "@scalius/core/modules/notifications";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { requiredRequestKey } from "./idempotency-key";
 import {
     conflictResponse,
     errorResponses,
@@ -103,36 +104,11 @@ const adminRefundRecoveryErrorResponses = {
     404: errorResponses[404],
 } as const;
 
-async function notifyRefundResult(options: {
-    db: Database;
-    send: NotificationSender | undefined;
-    orderId: string;
-    result: {
-        gateway: string;
-        refundId?: string;
-        refundNotification?: {
-            notificationType: "order_refunded" | "order_partially_refunded";
-            dedupeKey: string;
-            amount: number;
-            refundId?: string;
-        };
-        storeCredit?: { last4: string };
-    };
-    source: string;
-}) {
-    const notification = options.result.refundNotification;
-    if (!notification) return;
-    await notifyRefundFact({
-        db: options.db,
-        send: options.send,
-        orderId: options.orderId,
-        gateway: options.result.gateway,
-        notification,
-        storeCreditLast4: options.result.storeCredit?.last4,
-        source: options.source,
-    });
-}
-
+/**
+ * Records (idempotently, by its dedupe key) and sends one refund notice. A
+ * completed refund's row already exists (its finalization committed it), so
+ * this only sends it; a `refund_processing` or `refund_failed` notice is new.
+ */
 async function notifyRefundFact(options: {
     db: Database;
     send: NotificationSender | undefined;
@@ -223,32 +199,22 @@ async function recordReconciledRefundAttemptSideEffects(options: {
     return { notificationCount, sideEffectErrors };
 }
 
-async function recordDirectRefundSideEffects(options: {
-    db: Database;
+/**
+ * Hands the notices a refund committed to the sender. A failure leaves them
+ * due for the scheduled drain, never lost.
+ */
+async function sendCommittedRefundNotices(options: {
     send: NotificationSender | undefined;
-    orderId: string;
-    result: RefundServiceResult;
+    outboxIds: readonly string[];
 }): Promise<{ notificationCount: number; sideEffectErrors: number }> {
-    let notificationCount = 0;
-    let sideEffectErrors = 0;
-
-    if (options.result.refundNotification) {
-        try {
-            await notifyRefundResult({
-                db: options.db,
-                send: options.send,
-                orderId: options.orderId,
-                result: options.result,
-                source: "orders-refund",
-            });
-            notificationCount += 1;
-        } catch (error: unknown) {
-            sideEffectErrors += 1;
-            console.error("[orders-refund] Direct refund notification failed after local commit:", error);
-        }
+    if (options.outboxIds.length === 0 || !options.send) return { notificationCount: options.outboxIds.length, sideEffectErrors: 0 };
+    try {
+        await options.send(options.outboxIds);
+        return { notificationCount: options.outboxIds.length, sideEffectErrors: 0 };
+    } catch (error: unknown) {
+        console.error("[orders-refund] Refund notice send failed after local commit:", error instanceof Error ? error.name : "error");
+        return { notificationCount: 0, sideEffectErrors: 1 };
     }
-
-    return { notificationCount, sideEffectErrors };
 }
 
 /**
@@ -267,11 +233,13 @@ async function sendStoreCreditNotification(options: {
 
 export function publicRefundResult<T extends {
     refundNotification?: unknown;
+    notificationOutboxIds?: unknown;
     availabilityTransitionVariantIds?: unknown;
     storeCredit?: { giftCardId: string; last4: string; amount: number; amountMinor: number; notificationOutboxId?: string };
-}>(result: T): Omit<T, "refundNotification" | "availabilityTransitionVariantIds"> {
+}>(result: T): Omit<T, "refundNotification" | "notificationOutboxIds" | "availabilityTransitionVariantIds"> {
     const {
         refundNotification: _refundNotification,
+        notificationOutboxIds: _outboxIds,
         availabilityTransitionVariantIds: _cacheSignal,
         ...publicResult
     } = result;
@@ -290,6 +258,11 @@ const refundOrderRoute = createRoute({
     summary: "Process order refund",
     request: {
         params: z.object({ id: z.string() }),
+        headers: z.object({
+            "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].openapi({
+                description: "One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required.",
+            }),
+        }),
         body: {
             content: {
                 "application/json": {
@@ -306,7 +279,7 @@ const refundOrderRoute = createRoute({
                             description: "original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.",
                         }),
                         requestKey: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional().openapi({
-                            description: "One key per refund (per dialog opening). Repeating it returns the first refund.",
+                            description: "One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it.",
                         }),
                         lines: refundLinesSchema.optional(),
                     })
@@ -330,7 +303,8 @@ const refundOrderRoute = createRoute({
  */
 export async function executeOrderRefund(
     c: Context<{ Bindings: Env }>,
-    request: RefundRequest,
+    // A refund moves money that can't be taken back: every caller names its retry key.
+    request: RefundRequest & { requestKey: string },
 ): Promise<{ result: RefundServiceResult; notificationCount: number; sideEffectErrors: number }> {
     const db = c.get("db");
     // The durable key also seals a store-credit card's code (fails closed when missing).
@@ -360,34 +334,15 @@ export async function executeOrderRefund(
     }
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
     if (result.replayed) {
-        // A repeated click: the first request already logged, notified and refreshed.
+        // A repeated click: the first request committed the timeline line and
+        // the notice with the refund; the scheduled drain sends a notice it
+        // didn't get to.
         return { result, notificationCount: 0, sideEffectErrors: 0 };
     }
-    if (result.amount > 0) {
-        await recordOrderEvent(db, {
-            orderId: request.orderId,
-            kind: "refund_recorded",
-            actorId: request.actorUserId ?? null,
-            body: request.reason.trim() || null,
-            requestKey: request.requestKey,
-            data: {
-                amount: result.amount,
-                full: result.isFullRefund,
-                ...(request.lines?.length ? { lines: request.lines.length } : {}),
-                // Ids and last 4 only: the code never enters the timeline.
-                ...(result.storeCredit ? {
-                    settlement: "store_credit",
-                    giftCardId: result.storeCredit.giftCardId,
-                    giftCardLast4: result.storeCredit.last4,
-                } : {}),
-            },
-        });
-    }
-    const sideEffects = await recordDirectRefundSideEffects({
-        db,
+    // The refund's own batch wrote its timeline line and the notice's outbox row: send it now.
+    const sideEffects = await sendCommittedRefundNotices({
         send: notificationSender(c),
-        orderId: request.orderId,
-        result,
+        outboxIds: result.notificationOutboxIds ?? [],
     });
     const storeCreditSideEffects = await sendStoreCreditNotification({
         db,
@@ -407,6 +362,8 @@ export async function executeOrderRefund(
 app.openapi(refundOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
+    // A refund with no key is refused: its retry would refund again.
+    const requestKey = await requiredRequestKey(c, "dashboard.orders.refund", c.req.valid("header")["idempotency-key"], data.requestKey, "requestKey");
     const actorId = (c.get("user") as { id?: string } | undefined)?.id ?? null;
     const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
         orderId,
@@ -414,7 +371,7 @@ app.openapi(refundOrderRoute, async (c) => {
         reason: data.reason ?? "Refund requested",
         gateway: data.gateway,
         manualSettlementConfirmed: data.manualSettlementConfirmed,
-        requestKey: data.requestKey,
+        requestKey,
         settlement: data.settlement,
         actorUserId: actorId,
         ...(data.lines ? { lines: data.lines } : {}),

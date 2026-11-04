@@ -105787,7 +105787,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "supported",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -106358,7 +106358,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "supported",
+          "idempotency": "required",
           "revision": "required",
           "batch": "forbidden",
           "transport": "json",
@@ -200524,6 +200524,17 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required."
+            },
+            "required": false,
+            "description": "One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -200559,7 +200570,7 @@
                     "minLength": 8,
                     "maxLength": 128,
                     "pattern": "^[A-Za-z0-9_-]+$",
-                    "description": "One key per refund (per dialog opening). Repeating it returns the first refund."
+                    "description": "One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it."
                   },
                   "lines": {
                     "type": "array",
@@ -200773,7 +200784,7 @@
           ],
           "risk": "financial",
           "openWorld": true,
-          "idempotency": "none",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -210960,7 +210971,8 @@
                                   "invoice_issued",
                                   "fulfillment_location_changed",
                                   "prices_set",
-                                  "app_event"
+                                  "app_event",
+                                  "stock_held"
                                 ]
                               },
                               "body": {
@@ -211164,7 +211176,8 @@
                             "invoice_issued",
                             "fulfillment_location_changed",
                             "prices_set",
-                            "app_event"
+                            "app_event",
+                            "stock_held"
                           ]
                         },
                         "body": {
@@ -211999,6 +212012,30 @@
                             "days",
                             "dueAt",
                             "overdue"
+                          ]
+                        },
+                        "stockHeld": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "location_short",
+                                "stock_changed",
+                                "refused"
+                              ]
+                            },
+                            "skus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "reason",
+                            "skus"
                           ]
                         },
                         "moneyChain": {
@@ -267977,7 +268014,20 @@
           "Admin - Gift cards"
         ],
         "summary": "Issue a gift card",
-        "description": "Issues a manual gift card. Idempotent by `requestKey`. The response carries the full code once; afterwards staff see the last 4 characters only.",
+        "description": "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required. The response carries the full code once; afterwards staff see the last 4 characters only.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "The retry key, instead of body.requestKey."
+            },
+            "required": false,
+            "description": "The retry key, instead of body.requestKey.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -267989,7 +268039,8 @@
                     "type": "string",
                     "minLength": 8,
                     "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9:_-]+$"
+                    "pattern": "^[A-Za-z0-9:_-]+$",
+                    "description": "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent."
                   },
                   "amount": {
                     "type": "number",
@@ -268045,7 +268096,6 @@
                   }
                 },
                 "required": [
-                  "requestKey",
                   "amount"
                 ],
                 "additionalProperties": false
@@ -268180,7 +268230,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -269082,7 +269132,7 @@
           "Admin - Gift cards"
         ],
         "summary": "Adjust a gift card balance",
-        "description": "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey`.",
+        "description": "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required.",
         "parameters": [
           {
             "schema": {
@@ -269093,6 +269143,17 @@
             "required": true,
             "name": "giftCardId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "The retry key, instead of body.requestKey."
+            },
+            "required": false,
+            "description": "The retry key, instead of body.requestKey.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -269106,7 +269167,8 @@
                     "type": "string",
                     "minLength": 8,
                     "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9:_-]+$"
+                    "pattern": "^[A-Za-z0-9:_-]+$",
+                    "description": "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent."
                   },
                   "amount": {
                     "type": "number"
@@ -269118,7 +269180,6 @@
                   }
                 },
                 "required": [
-                  "requestKey",
                   "amount",
                   "reason"
                 ],
@@ -269249,7 +269310,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",

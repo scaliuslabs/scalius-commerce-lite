@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useOpenedOnce } from "~/hooks/use-opened-once";
@@ -7,7 +8,7 @@ import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import { useUpdateOrderStatus } from "~/lib/api-mutations/orders";
+import { usePutOrderStockBack, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import {
   getAdminOrderStatusOptions,
@@ -77,6 +78,7 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
   const r = useMessages(resourceMessages);
   const canChangeStatus = useOrderActionPermissions().canChangeOrderStatus;
   const statusMutation = useUpdateOrderStatus();
+  const putStockBack = usePutOrderStockBack();
   const cancelRequest = useCancelRequestGuard(order);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const cancelLoaded = useOpenedOnce(confirmCancel);
@@ -147,6 +149,31 @@ export function OrderStatusCard({ order, request }: { order: Order; request?: Or
           <p className="font-medium">{orderStatusLabel(o, status)}</p>
         )}
         {help ? <p className="text-muted-foreground">{help}</p> : null}
+        {order.stockHeld ? (
+          // A refund cancelled the order but its location refused the stock: why, and the remedy.
+          <div role="note" className="space-y-2 border-t pt-2">
+            <p className="font-medium">{t("stockHeld.title")}</p>
+            <p className="text-muted-foreground">
+              {t(`stockHeld.reason.${order.stockHeld.reason}`, {
+                skus: order.stockHeld.skus.length > 0 ? t("stockHeld.skus", { skus: order.stockHeld.skus.join(", ") }) : "",
+              })}
+            </p>
+            {canChangeStatus && !order.archivedAt ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={putStockBack.isPending}
+                onClick={() => {
+                  clearOrderNotice(order.id);
+                  putStockBack.mutate({ orderId: order.id });
+                }}
+              >
+                {t("stockHeld.action")}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {nextStep && cancelBlock ? (
           <p className="text-muted-foreground">
             {statusBlockText(cancelBlock, order, t)}{" "}

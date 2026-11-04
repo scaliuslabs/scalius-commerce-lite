@@ -17,6 +17,16 @@
  * calls, the commit and its after-response work together; with the queue it
  * was 40 (13 for the commit, the rest in the queue consumer).
  *
+ * Refund announcement (2026-11-03): the settlement batch also carries its
+ * guard, the announced marker, the timeline line and the notice's outbox row
+ * (the route no longer writes them in calls of their own). The recorded
+ * 53 statements / 6 full scans were already stale: the base measured 48 calls,
+ * 56 statements and 7 full scans (the 7th, the notice delivery's read of the
+ * settings table's revision, predates this change). Now 43 calls, 56
+ * statements, 7 full scans: the attempts turn refunded inside the settlement
+ * batch. A refund of a gift-card purchase (`order-refund-gift-card`, a ৳1,000
+ * card partly refunded in cash) measures 29 calls, 51 statements, 2 full scans:
+ * the claim's clawback and the settlement ride batches that run anyway.
  * Status/refund (2026-10-15): 32/41 calls with RBAC warm, 38/47 in isolation
  * with a cold marker. Both retain a 50-call cap; other counters cover both runs.
  * Earlier 71/80 counts included the next run's setup.
@@ -201,10 +211,11 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 24, d1Statements: 37, externalFetches: 0, rowsWritten: 10, rowsRead: 1339, fullScans: 5 },
     "bulk-confirm": { d1Calls: 9, d1Statements: 105, externalFetches: 0, rowsWritten: 131, rowsRead: 73, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 21, d1Statements: 124, externalFetches: 0, rowsWritten: 134, rowsRead: 90, fullScans: 5 },
-    "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1341, fullScans: 7 },
+    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 1341, fullScans: 7 },
+    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 51, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
     "cron-idle": { d1Calls: 10, d1Statements: 20, externalFetches: 0, rowsWritten: 98, rowsRead: 7453, fullScans: 16, meanRowsWritten: 0, meanRowsRead: 15.68 },
-    "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 430, rowsRead: 25782, fullScans: 75 },
+    "cron-nightly": { d1Calls: 25, d1Statements: 32, externalFetches: 0, rowsWritten: 408, rowsRead: 25782, fullScans: 75 },
     "drain-busy": { d1Calls: 7, d1Statements: 17, externalFetches: 0, rowsWritten: 15, rowsRead: 665, fullScans: 16 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
     "order-lifecycle": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
@@ -214,12 +225,12 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
-    "order-3-line-commit-subscribers-3": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 88, rowsRead: 113, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 82, rowsRead: 113, fullScans: 18 },
     "order-3-line-commit-subscribers-8": { d1Calls: 29, d1Statements: 92, externalFetches: 2, rowsWritten: 98, rowsRead: 134, fullScans: 18 },
     "order-status-change-subscribers-1": { d1Calls: 35, d1Statements: 53, externalFetches: 1, rowsWritten: 17, rowsRead: 1350, fullScans: 5 },
-    "order-refund-subscribers-1": { d1Calls: 46, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 105, fullScans: 3 },
+    "order-refund-subscribers-1": { d1Calls: 46, d1Statements: 65, externalFetches: 2, rowsWritten: 91, rowsRead: 98, fullScans: 3 },
     "order-status-change-subscribers-3": { d1Calls: 32, d1Statements: 50, externalFetches: 2, rowsWritten: 22, rowsRead: 49, fullScans: 1 },
-    "order-refund-subscribers-3": { d1Calls: 44, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 177, fullScans: 3 },
+    "order-refund-subscribers-3": { d1Calls: 44, d1Statements: 63, externalFetches: 2, rowsWritten: 129, rowsRead: 166, fullScans: 3 },
     "order-3-line-commit-app-subscriber": { d1Calls: 24, d1Statements: 84, externalFetches: 0, rowsWritten: 76, rowsRead: 97, fullScans: 18 },
   },
   paid: {
@@ -247,9 +258,10 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "order-status-change": { d1Calls: 24, d1Statements: 37, externalFetches: 0, rowsWritten: 10, rowsRead: 1339, fullScans: 5 },
     "bulk-confirm": { d1Calls: 87, d1Statements: 475, externalFetches: 0, rowsWritten: 442, rowsRead: 319, fullScans: 0 },
     "bulk-confirm-repair": { d1Calls: 97, d1Statements: 314, externalFetches: 0, rowsWritten: 194, rowsRead: 209, fullScans: 5 },
-    "order-refund": { d1Calls: 36, d1Statements: 50, externalFetches: 0, rowsWritten: 21, rowsRead: 1342, fullScans: 7 },
+    "order-refund": { d1Calls: 25, d1Statements: 42, externalFetches: 0, rowsWritten: 19, rowsRead: 1342, fullScans: 7 },
+    "order-refund-gift-card": { d1Calls: 28, d1Statements: 60, externalFetches: 0, rowsWritten: 48, rowsRead: 51, fullScans: 2 },
     "sku-stock-change": { d1Calls: 9, d1Statements: 17, externalFetches: 0, rowsWritten: 8, rowsRead: 18, fullScans: 4 },
-    "cron-idle": { d1Calls: 58, d1Statements: 68, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
+    "cron-idle": { d1Calls: 59, d1Statements: 69, externalFetches: 0, rowsWritten: 106, rowsRead: 7888, fullScans: 19, meanRowsWritten: 0, meanRowsRead: 30.03 },
     "cron-nightly": { d1Calls: 213, d1Statements: 314, externalFetches: 0, rowsWritten: 430, rowsRead: 28348, fullScans: 451 },
     "drain-busy": { d1Calls: 8, d1Statements: 23, externalFetches: 0, rowsWritten: 17, rowsRead: 669, fullScans: 19 },
     "order-3-line-commit": { d1Calls: 14, d1Statements: 68, externalFetches: 0, rowsWritten: 58, rowsRead: 69, fullScans: 18 },
@@ -260,7 +272,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 13, rowsRead: 34, fullScans: 5 },
     "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 868, rowsRead: 993, fullScans: 0 },
     "order-3-line-commit-subscribers-0": { d1Calls: 18, d1Statements: 74, externalFetches: 0, rowsWritten: 87, rowsRead: 89, fullScans: 18 },
-    "order-3-line-commit-subscribers-3": { d1Calls: 44, d1Statements: 115, externalFetches: 6, rowsWritten: 100, rowsRead: 126, fullScans: 18 },
+    "order-3-line-commit-subscribers-3": { d1Calls: 44, d1Statements: 115, externalFetches: 6, rowsWritten: 94, rowsRead: 126, fullScans: 18 },
     "order-3-line-commit-subscribers-8": { d1Calls: 74, d1Statements: 165, externalFetches: 16, rowsWritten: 142, rowsRead: 179, fullScans: 18 },
     "order-status-change-subscribers-1": { d1Calls: 35, d1Statements: 53, externalFetches: 1, rowsWritten: 17, rowsRead: 1350, fullScans: 5 },
     "order-refund-subscribers-1": { d1Calls: 117, d1Statements: 175, externalFetches: 18, rowsWritten: 141, rowsRead: 200, fullScans: 3 },

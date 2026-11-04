@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 192,
-  name: "0192_lean_indexes_and_triggers",
+  version: 193,
+  name: "0193_withheld_units",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -741,6 +741,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 192,
     name: "0192_lean_indexes_and_triggers",
     sourceSha256: "3232b15951c34cd992c88ec330a1d3332b4055540a0786814bbba6916e891c3f",
+  },
+  {
+    version: 193,
+    name: "0193_withheld_units",
+    sourceSha256: "2daaecd645600f5e06090e2d4830af36491a634975aa45febd90f887f9cb1333",
   },
 ] as const;
 

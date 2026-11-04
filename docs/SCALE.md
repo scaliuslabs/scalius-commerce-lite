@@ -51,10 +51,11 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `order-status-change` | 24 | 37 | 10 | 1,339 | 5 | - |
 | `bulk-confirm` | 9 | 105 | 131 | 73 | 0 | - |
 | `bulk-confirm-repair` | 21 | 124 | 134 | 90 | 5 | - |
-| `order-refund` | 36 | 50 | 21 | 1,341 | 7 | - |
+| `order-refund` | 25 | 42 | 19 | 1,341 | 7 | - |
+| `order-refund-gift-card` | 28 | 60 | 48 | 51 | 2 | - |
 | `sku-stock-change` | 9 | 17 | 8 | 18 | 4 | - |
 | `cron-idle` | 10 | 20 | 98 | 7,453 | 16 | 0 / 15.68 |
-| `cron-nightly` | 25 | 32 | 430 | 25,782 | 75 | - |
+| `cron-nightly` | 25 | 32 | 408 | 25,782 | 75 | - |
 | `drain-busy` | 7 | 17 | 15 | 665 | 16 | - |
 | `order-3-line-commit` | 14 | 68 | 58 | 69 | 18 | - |
 | `order-lifecycle` | 14 | 68 | 58 | 69 | 18 | - |
@@ -64,12 +65,12 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `notification-order-created` | 12 | 26 | 13 | 34 | 5 | - |
 | `event-drain-5-apps-3-webhooks` | 24 | 38 | 250 | 375 | 0 | - |
 | `order-3-line-commit-subscribers-0` | 18 | 74 | 87 | 89 | 18 | - |
-| `order-3-line-commit-subscribers-3` | 29 | 92 | 88 | 113 | 18 | - |
+| `order-3-line-commit-subscribers-3` | 29 | 92 | 82 | 113 | 18 | - |
 | `order-3-line-commit-subscribers-8` | 29 | 92 | 98 | 134 | 18 | - |
 | `order-status-change-subscribers-1` | 35 | 53 | 17 | 1,350 | 5 | - |
-| `order-refund-subscribers-1` | 46 | 65 | 91 | 105 | 3 | - |
+| `order-refund-subscribers-1` | 46 | 65 | 91 | 98 | 3 | - |
 | `order-status-change-subscribers-3` | 32 | 50 | 22 | 49 | 1 | - |
-| `order-refund-subscribers-3` | 44 | 63 | 129 | 177 | 3 | - |
+| `order-refund-subscribers-3` | 44 | 63 | 129 | 166 | 3 | - |
 | `order-3-line-commit-app-subscriber` | 24 | 84 | 76 | 97 | 18 | - |
 
 <!-- free-plan-budgets:end -->

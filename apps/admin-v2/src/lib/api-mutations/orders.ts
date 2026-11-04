@@ -261,6 +261,25 @@ export function useDeleteOrderComment() {
   });
 }
 
+/**
+ * Puts a cancelled order's held stock back (a refund's cancel its location
+ * refused): the same status change to cancelled, which applies the cancel's
+ * stock again and sends the customer nothing.
+ */
+export function usePutOrderStockBack() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId }: { orderId: string }) =>
+      apiData(putApiV1AdminOrdersByIdStatus({ path: { id: orderId }, body: { status: "cancelled", notifyCustomer: false } })),
+    onSuccess: (_result, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      invalidateOrderInventoryQueries(queryClient);
+      toast.success(msg("toast.stockPutBack"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
+  });
+}
+
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useSingleFlightMutation({

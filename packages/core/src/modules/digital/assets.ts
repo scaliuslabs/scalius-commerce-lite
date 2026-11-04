@@ -414,8 +414,10 @@ export async function uploadDigitalAssetPart(
     const multipart = requireBucket(bucket).resumeMultipartUpload(upload.r2Key, upload.r2UploadId);
     const stored = await multipart.uploadPart(input.partNumber, input.body);
     // One JSON path per part: re-sending replaces, parallel parts never overwrite each other.
+    // The part number is a plain member name (`$.parts.3`), the only path form the source policy allows.
+    // `json_set` itself has no PostgreSQL compat yet: uploads fail there (a known gap, README.md).
     await db.update(digitalAssetUploads).set({
-        parts: sql`json_set(${digitalAssetUploads.parts}, ${`$.parts."${input.partNumber}"`}, ${stored.etag})`,
+        parts: sql`json_set(${digitalAssetUploads.parts}, ${`$.parts.${input.partNumber}`}, ${stored.etag})`,
         updatedAt: sql`unixepoch()`,
     }).where(and(eq(digitalAssetUploads.id, upload.id), eq(digitalAssetUploads.status, "uploading"))).run();
     return { partNumber: input.partNumber, size: input.size };

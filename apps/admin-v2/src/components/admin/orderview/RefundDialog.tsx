@@ -223,6 +223,9 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
               <p className="text-body text-muted-foreground">{t("refund.linesHelp")}</p>
             </div>
           ) : null}
+          {order.items.some((item) => item.fulfillmentType === "gift_card") ? (
+            <p className="text-body text-muted-foreground">{g("refundTo.boughtCards")}</p>
+          ) : null}
           <RefundSettlementField order={order} value={settlement} onChange={setSettlement} disabled={locked} />
           {manual ? (
             <ChoiceField

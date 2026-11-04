@@ -186,6 +186,12 @@ function appLimitRefusal(c: Context, pluginId: string | undefined, limitMinor: n
 }
 
 const giftCardId = z.object({ id: z.string().min(4).max(80) });
+/** Issuing or moving value: the key is required, so a retry after a lost response never issues twice. */
+const valueKeyHeaders = z.object({
+  "idempotency-key": idempotencyKeyHeaderSchema.shape["idempotency-key"].unwrap().openapi({
+    description: "Required: one key makes one change; a repeat returns the first.",
+  }),
+});
 const expectedRevision = z.number().int().positive().openapi({ description: "The card's `revision` you read; a card changed since is refused with 409." });
 const giftCardEnvelope = successEnvelope(z.object({ giftCard: GiftCardResource }));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
@@ -247,7 +253,7 @@ app.openapi(createRoute({
   summary: "Issue a gift card",
   description: "Issues a gift card in the store currency, in minor units at its price increment. The code is never returned: with `notify` the store sends it to the recipient, else the owning customer. An app's `notify` reaches only the owning customer's own contact (set `customerId`, no recipient email or phone), and what one app issues and tops up per UTC date stays within the store's limit (403 `app_gift_card_limit`, Gift cards > Settings). Send an Idempotency-Key: a repeat returns the first card.",
   request: {
-    headers: idempotencyKeyHeaderSchema,
+    headers: valueKeyHeaders,
     body: {
       required: true,
       content: { "application/json": { schema: z.object({
@@ -331,7 +337,7 @@ app.openapi(createRoute({
   description: "One ledger movement with a reason: a positive `amountMinor` adds value, a negative one removes it (never below zero), in minor units of the card's currency. An app adds value only to cards in the store currency, within its limit per UTC date (403 `app_gift_card_limit`). Send an Idempotency-Key: a repeat moves the balance once.",
   request: {
     params: giftCardId,
-    headers: idempotencyKeyHeaderSchema,
+    headers: valueKeyHeaders,
     body: {
       required: true,
       content: { "application/json": { schema: z.object({

@@ -14,8 +14,9 @@ const storedValue = (overrides: Partial<OperationRegistryEntry> = {}): Operation
 });
 
 export const DASHBOARD_GIFT_CARD_OPERATIONS = {
-  "dashboard.gift_cards.adjust": storedValue(),
-  "dashboard.gift_cards.create": storedValue({ sensitive: true }),
+  // Issuing or moving value takes one retry key (body or Idempotency-Key header).
+  "dashboard.gift_cards.adjust": storedValue({ idempotency: "required" }),
+  "dashboard.gift_cards.create": storedValue({ sensitive: true, idempotency: "required" }),
   "dashboard.gift_cards.get": {},
   "dashboard.gift_cards.list": {},
   "dashboard.gift_cards.resend": storedValue(),
