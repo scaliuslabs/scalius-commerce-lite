@@ -1,17 +1,16 @@
 // The Warranty card's body, loaded lazily: the policy select ("No warranty"
 // first), the chosen policy's buyer-facing line and "Manage policies". An
 // archived policy the product still points at stays shown, marked archived;
-// other archived policies can't be picked.
-import { useQuery } from "@tanstack/react-query";
+// other archived policies can't be picked. The policies load as a variant's
+// warranty field loads them (useWarrantyPolicies).
 import { Link } from "@tanstack/react-router";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { Field, ReadOnlyValue } from "@/components/ui/field";
 import { standaloneLinkClassName } from "@/components/ui/link";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useMessages } from "~/i18n";
 import { warrantyMessages } from "~/i18n/warranty";
-import { warrantyPoliciesQueryOptions } from "../warranty/warranty-api";
+import { useWarrantyPolicies } from "../warranty/use-warranty-policies";
 import { warrantySummary } from "../warranty/warranty-format";
 import type { ProductFormValues } from "./types";
 
@@ -23,10 +22,9 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
 }) {
   const t = useMessages(warrantyMessages);
   const value = useWatch({ control: form.control, name: "warrantyPolicyId" });
-  const { data: policies, isError } = useQuery(warrantyPoliciesQueryOptions(true));
-  if (!policies && !isError && !(readOnly && value == null)) return <Skeleton className="h-9 w-full" />;
-
-  const list = policies ?? [];
+  // A read-only "No warranty" names no policy: it shows at once.
+  const { policies: list, placeholder } = useWarrantyPolicies(!(readOnly && value == null));
+  if (placeholder) return placeholder;
   const selected = list.find((policy) => policy.id === value) ?? null;
   const options: SearchableSelectOption[] = [
     { value: NONE, label: t("none") },
@@ -44,10 +42,10 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
       {readOnly ? (
         <ReadOnlyValue
           label={t("policy")}
-          value={value == null ? t("none") : isError ? t("loadFailed") : selected
+          value={value == null ? t("none") : selected
             ? (selected.archivedAt ? t("archivedPolicy", { name: selected.name }) : selected.name)
             : t("policyUnavailable")}
-          help={!isError && selected ? warrantySummary(t, selected) : undefined}
+          help={selected ? warrantySummary(t, selected) : undefined}
         />
       ) : (
         <Field id="product-warranty-policy" className="self-stretch" help={selected ? warrantySummary(t, selected) : undefined}>
@@ -56,7 +54,7 @@ export function WarrantyPolicyPicker({ form, readOnly }: {
             triggerClassName="w-full"
             options={options}
             value={value ?? NONE}
-            selectedLabel={value && !selected ? t(isError ? "loadFailed" : "policyUnavailable") : undefined}
+            selectedLabel={value && !selected ? t("policyUnavailable") : undefined}
             placeholder={t("choose")}
             searchPlaceholder={t("searchPolicies")}
             emptyMessage={t("noPolicies")}

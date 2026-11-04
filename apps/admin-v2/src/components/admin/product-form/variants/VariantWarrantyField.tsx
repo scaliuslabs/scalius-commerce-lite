@@ -2,18 +2,16 @@
 // product's ("Same as product (…)"), a live policy of its own, or none. An
 // archived policy the variant still names stays shown, marked archived; it
 // sells without a warranty until the merchant picks another.
-import { useQuery } from "@tanstack/react-query";
 import { useFormContext, useWatch, type Control } from "react-hook-form";
 import { Field, ReadOnlyValue } from "@/components/ui/field";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { warrantyMessages } from "~/i18n/warranty";
-import { warrantyPoliciesQueryOptions, type WarrantyPolicy } from "../../warranty/warranty-api";
+import type { WarrantyPolicy } from "../../warranty/warranty-api";
+import { useWarrantyPolicies } from "../../warranty/use-warranty-policies";
 import { warrantySummary } from "../../warranty/warranty-format";
 import type { ProductFormValues } from "../types";
 import type { DraftVariant } from "./option-matrix-editor-model";
-import { useWarrantyFieldPending } from "./variant-fields";
-import { InlineError } from "../../states/InlineError";
 
 const INHERIT = "inherit";
 const NONE = "none";
@@ -39,14 +37,8 @@ function WithProductPolicy({ control, ...props }: FieldProps & { control: Contro
 
 function WarrantySelect({ readOnly, variant, name, error, onChange, productPolicyId }: FieldProps & { productPolicyId: string | null }) {
   const t = useMessages(warrantyMessages);
-  const { data: policies, isError, isPending, error: loadError, refetch } = useQuery(warrantyPoliciesQueryOptions(true));
-  // Names come from the list: nothing reads "unavailable" before it arrives.
-  const pending = useWarrantyFieldPending(isPending);
-  if (pending) return pending;
-  if (isError) {
-    return <InlineError title={t("loadFailed")} error={loadError} onRetry={() => void refetch()} />;
-  }
-  const list = policies ?? [];
+  const { policies: list, placeholder } = useWarrantyPolicies();
+  if (placeholder) return placeholder;
   const policyName = (id: string | null) => {
     if (!id) return t("none");
     const policy = list.find((candidate) => candidate.id === id);
