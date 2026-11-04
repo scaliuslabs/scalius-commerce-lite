@@ -40,6 +40,8 @@ const MAX_SEARCH_LIMIT = 50;
 export const MAX_LOOKUP_IDS = 25;
 const MAX_UCP_BODY_BYTES = 64 * 1024;
 const MAX_ECHOED_IDENTIFIER_LENGTH = 256;
+/** The longest identifier a lookup reads (a longer one names nothing in the catalogue). */
+const MAX_LOOKUP_IDENTIFIER_LENGTH = MAX_ECHOED_IDENTIFIER_LENGTH;
 const GID_PREFIX = "gid://scalius/";
 type UcpStatus = "success" | "error";
 type UcpMessageType = "info" | "warning" | "error";
@@ -1131,13 +1133,18 @@ export function lookupIdChunks(identifiers: readonly string[]): string[][] {
 async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[] | null> {
   if (inputs.length === 0) return [];
 
+  // No product, variant, SKU or handle is longer than an echoed identifier:
+  // a longer one is not found, without a read.
+  const identifiers = inputs
+    .map((input) => input.normalized)
+    .filter((identifier) => identifier.length <= MAX_LOOKUP_IDENTIFIER_LENGTH);
+  // One cacheable read per chunk, all at once, so the render's read batch joins them.
+  const results = await Promise.all(lookupIdChunks(identifiers).map((ids) => loadFeedProducts({
+    limit: Math.max(ids.length, DEFAULT_SEARCH_LIMIT),
+    ids: ids.join(","),
+  })));
   const products = new Map<string, Product>();
-  // One read per chunk, in sequence: a lookup of 25 identifiers is a few reads, each cacheable.
-  for (const ids of lookupIdChunks(inputs.map((input) => input.normalized))) {
-    const result = await loadFeedProducts({
-      limit: Math.max(ids.length, DEFAULT_SEARCH_LIMIT),
-      ids: ids.join(","),
-    });
+  for (const result of results) {
     // No cursor is sent, so the API cannot refuse one.
     if (!result || result === "invalid_cursor") return null;
     for (const product of result.data) products.set(product.id, product);
