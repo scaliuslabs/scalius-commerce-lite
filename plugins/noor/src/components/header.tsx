@@ -135,7 +135,7 @@ function Menu({ items, style, limit, context, current }: { items: StorefrontMenu
           <li class={cx("noor-nav-item", children.length > 0 && "has-menu")} data-nav-index={String(index)}
             data-disclosure-item={children.length > 0 ? "" : undefined}>
             {linked(item) ? (
-              <a class="noor-nav-link" href={item.url} title={item.title} data-nav-link aria-current={current(item)}><span>{item.title}</span></a>
+              <a class={cx("noor-nav-link", children.length > 0 && "has-toggle")} href={item.url} title={item.title} data-nav-link aria-current={current(item)}><span>{item.title}</span></a>
             ) : (
               // A heading is the button that opens its links; it goes nowhere itself.
               <button type="button" class="noor-nav-link noor-nav-heading" title={item.title} data-nav-link {...disclosure}>

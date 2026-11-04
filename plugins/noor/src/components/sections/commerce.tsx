@@ -163,7 +163,8 @@ export function ShopTheLook({ settings, context }: SectionProps<LookSettings>) {
           <Image image={settings.image} sizes="(min-width: 768px) 50vw, 100vw" class="noor-cover" />
           {spots.map((spot, index) => (
             <details class={cx("noor-spot", ...spotPlacement(spot.x, spot.y))} style={{ left: `${spot.x}%`, top: `${spot.y}%` }}>
-              <summary aria-label={spot.title!}><span aria-hidden="true">{index + 1}</span></summary>
+              {/* Its name is the number it shows, then the product's title. */}
+              <summary>{index + 1}<span class="noor-sr"> {spot.title}</span></summary>
               <div class="noor-spot-card">
                 <strong>{spot.title}</strong>
                 {text(spot.text) ? <p>{spot.text}</p> : null}

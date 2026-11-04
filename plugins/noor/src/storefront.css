@@ -427,6 +427,8 @@
     position: absolute;
     inset-block-start: calc(var(--rail-media, 38%) - 1.375rem);
     inset-inline: -1.375rem;
+    /* Above the cards' photos (z-index 2), so the half of an arrow over a card is the arrow's, not the photo's link. */
+    z-index: 3;
     display: flex;
     justify-content: space-between;
     pointer-events: none;
@@ -620,9 +622,13 @@
 .noor-nav-link > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .noor-nav-more-item, .noor-nav-more-item > .noor-nav-link { flex: none; }
 .noor-nav-more, .noor-nav-heading, .noor-nav-toggle { border: 0; background: transparent; color: inherit; font-family: inherit; line-height: inherit; cursor: pointer; }
-.noor-nav-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; min-inline-size: 1.75rem; margin-inline-start: -0.5rem; padding: 0; }
+/* A link with a menu toggle ends close to its name and the toggle's box starts
+   there: neither covers the other, so every pixel of the chevron opens the menu. */
+.noor-nav-link.has-toggle { padding-inline-end: 0.25rem; }
+.noor-nav-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; min-inline-size: 1.75rem; padding: 0; }
 .noor-nav-toggle:focus-visible, .noor-nav-link:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: var(--n-radius); }
 .noor-nav-link::after { content: ""; position: absolute; inset-inline: 0.75rem; inset-block-end: 0.25rem; block-size: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform var(--n-base) var(--n-ease); }
+.noor-nav-link.has-toggle::after { inset-inline-end: 0.25rem; }
 .noor-nav-item:is(:hover, :focus-within, :has(> [aria-expanded="true"])) > .noor-nav-link::after { transform: scaleX(1); }
 .noor-nav-item .noor-icon { opacity: 0.6; transition: transform var(--n-fast); }
 [aria-expanded="true"] > .noor-icon { transform: rotate(180deg); }
