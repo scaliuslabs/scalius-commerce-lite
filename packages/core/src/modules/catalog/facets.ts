@@ -19,6 +19,7 @@ import { brands, productAttributes, attributeValues, categoryClosure } from "@sc
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import {
     OPTION_FACET_KEY_PREFIX,
+    FACET_FILTER_KEY_MAX_LENGTH,
     canonicalAttributeNumber,
     normalizeAttributeValue,
     parseAttributeNumber,
@@ -175,7 +176,7 @@ export async function resolvePublicAttributeFilters(
     let brandSlugs: string[] = [];
     for (const { key, values } of requested) {
         if (key.startsWith(OPTION_FACET_PREFIX)) {
-            if (key.length <= OPTION_FACET_PREFIX.length || key.length > 120) continue;
+            if (key.length <= OPTION_FACET_PREFIX.length || key.length > OPTION_FACET_PREFIX.length + FACET_FILTER_KEY_MAX_LENGTH) continue;
             const keys = uniqueStrings(values
                 .map((value) => normalizeProductOptionIdentity(value).slice(0, FACET_KEY_MAX_LENGTH))
                 .filter(Boolean));

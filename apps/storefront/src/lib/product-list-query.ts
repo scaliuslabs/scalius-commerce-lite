@@ -6,6 +6,7 @@ import {
 import { normalizeSearchQuery } from "./search-query";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { formatList } from "@scalius/shared/locale-words";
+import { FACET_FILTER_KEY_PATTERN, FACET_RANGE_KEY_PATTERN } from "@scalius/shared/catalog-attributes";
 import { catalogCopy } from "./catalog-copy";
 import { storefrontLanguage } from "./storefront-language";
 import { pageLanguage } from "./store-time-zone";
@@ -59,11 +60,27 @@ const PRICE_FILTER_SET = new Set<string>(PRODUCT_LIST_PRICE_FILTERS);
 
 export type ProductListSort = NonNullable<ProductListOptions["sort"]>;
 // Attribute slugs, or merchant option axes as `option.<axis>` (option.size).
-const FACET_KEY_PATTERN = /^(?:[a-z0-9][a-z0-9-]{0,79}|option\.[^\s&=#?]{1,80})$/;
+const FACET_KEY_PATTERN = FACET_FILTER_KEY_PATTERN;
 // A range facet's bounds: `<attribute slug>.min` and `<attribute slug>.max`.
-const RANGE_KEY_PATTERN = /^([a-z0-9][a-z0-9-]{0,79})\.(min|max)$/;
+const RANGE_KEY_PATTERN = FACET_RANGE_KEY_PATTERN;
 
 export type ProductListRangeBound = "min" | "max";
+
+/**
+ * Whether a listing reads this URL key: navigation, a boolean or price filter,
+ * the rating filter, or a filter key's shape (an attribute slug, its range
+ * bound, `option.<axis>`). Anything else on the page URL (an ad-click or
+ * campaign tag, a newsletter token) is the browser's, never the API's.
+ */
+export function isProductListQueryKey(key: string): boolean {
+  if (isStorefrontIgnoredQueryParam(key)) return false;
+  return NAVIGATION_PARAM_SET.has(key)
+    || BOOLEAN_FILTER_SET.has(key)
+    || PRICE_FILTER_SET.has(key)
+    || key === PRODUCT_LIST_MIN_RATING_PARAM
+    || FACET_KEY_PATTERN.test(key)
+    || RANGE_KEY_PATTERN.test(key);
+}
 
 /** The URL key of one bound of a range facet (`display-size.min`). */
 export function productListRangeKey(slug: string, bound: ProductListRangeBound): string {

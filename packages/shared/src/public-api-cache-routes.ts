@@ -24,6 +24,7 @@
  */
 import type { StorefrontBatchPartCache } from "./cache-frontier";
 import { MARKET_PRESENCE_QUERY_PARAM } from "./markets";
+import { LISTING_FILTER_KEY_PATTERN } from "./catalog-attributes";
 import { parseBindingResourceSelector } from "./storefront-theme/bindings";
 
 /** How a public read relates to markets: keyed by the page's presence, or the same in every market (with the reason). */
@@ -179,12 +180,8 @@ const QUERY_KEY_MATCHERS = PUBLIC_API_QUERY_KEYS.map((entry) => ({
   allowed: new Set(entry.keys),
 }));
 
-/**
- * An attribute filter key of a listing: `<slug>`, `<slug>.min`/`.max`,
- * `option.<axis>` (`brand` is a slug). As long as `resolvePublicAttributeFilters`
- * reads one (an attribute slug of up to 120 characters).
- */
-const FACET_QUERY_KEY = /^(?:[a-z0-9][a-z0-9-]{0,119}(?:\.(?:min|max))?|option\.[^\s&=#?]{1,120})$/;
+/** An attribute filter key of a listing, as the storefront and the filter resolution read it. */
+const FACET_QUERY_KEY = LISTING_FILTER_KEY_PATTERN;
 
 /**
  * Why a GET of this URL is refused before any read: a query key the public

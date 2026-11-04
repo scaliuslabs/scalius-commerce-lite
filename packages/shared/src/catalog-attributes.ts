@@ -112,6 +112,22 @@ export function attributeFacetValueKey(value: TypedAttributeValue): string {
 /** URL/facet key prefix for merchant option axes; matches the storefront `option.<axis>` filters. */
 export const OPTION_FACET_KEY_PREFIX = "option.";
 
+/**
+ * The longest name a listing filter key carries: an attribute slug, or the
+ * axis of `option.<axis>`. One length for the storefront's URL parsing, the
+ * API's query allowlist and the filter resolution, so a key one of them
+ * reads is never one another refuses.
+ */
+export const FACET_FILTER_KEY_MAX_LENGTH = 120;
+const FACET_SLUG = `[a-z0-9][a-z0-9-]{0,${FACET_FILTER_KEY_MAX_LENGTH - 1}}`;
+const FACET_OPTION = `option\\.[^\\s&=#?]{1,${FACET_FILTER_KEY_MAX_LENGTH}}`;
+/** An attribute slug or `option.<axis>` filter key. */
+export const FACET_FILTER_KEY_PATTERN = new RegExp(`^(?:${FACET_SLUG}|${FACET_OPTION})$`);
+/** One bound of a range facet: `<attribute slug>.min` or `.max`. */
+export const FACET_RANGE_KEY_PATTERN = new RegExp(`^(${FACET_SLUG})\\.(min|max)$`);
+/** Any filter key a listing reads: a slug, its range bound, or `option.<axis>` (`brand` is a slug). */
+export const LISTING_FILTER_KEY_PATTERN = new RegExp(`^(?:${FACET_SLUG}(?:\\.(?:min|max))?|${FACET_OPTION})$`);
+
 /** The facet key of a merchant option axis ("Screen size" -> "option.screen-size"). */
 export function optionFacetKey(axisName: string): string {
   return `${OPTION_FACET_KEY_PREFIX}${normalizeProductOptionIdentity(axisName).replaceAll(" ", "-")}`;
