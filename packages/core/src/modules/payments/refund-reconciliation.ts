@@ -7,7 +7,7 @@ import {
   webhookEvents,
   type RefundAttempt,
 } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { sha256Hex } from "@scalius/shared/hash";
 import { fromMinor } from "@scalius/shared/money";
@@ -26,7 +26,7 @@ import {
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { canOperateExistingPayments, type GatewayProviderRefund, type GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus } from "./refund-service";
-import { buildGiftCardClawbackSettlement, orderHasPurchasedGiftCards } from "./refund-gift-card-clawback";
+import { buildGiftCardClawbackSettlement, orderHasPurchasedGiftCardsSql, type GiftCardClawbackSettlement } from "./refund-gift-card-clawback";
 import type { RefundNotificationFact } from "./refund-service";
 import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel";
 
@@ -72,6 +72,8 @@ type RefundAttemptProbeRow = Pick<
 
 interface RefundProviderReconciliationContext {
   currency: OrderCurrencySnapshot;
+  /** The order bought gift cards that were issued: ending its refund settles their clawback. */
+  hasPurchasedGiftCards: boolean;
 }
 
 type ProviderProbeOutcome = GatewayRefundProbe;
@@ -230,6 +232,7 @@ async function assertRefundAttemptOrderCurrency(
     .select({
       currencyCode: orders.currencyCode,
       currencyDecimalPlaces: orders.currencyDecimalPlaces,
+      hasPurchasedGiftCards: orderHasPurchasedGiftCardsSql(attempt.orderId),
     })
     .from(orders)
     .where(eq(orders.id, attempt.orderId))
@@ -254,7 +257,7 @@ async function assertRefundAttemptOrderCurrency(
   if (!ledgerRows.some((payment) => payment.id === attempt.refundPaymentId)) {
     throw new Error(`Refund payment ${attempt.refundPaymentId} was not found for reconciliation.`);
   }
-  return { currency };
+  return { currency, hasPurchasedGiftCards: Boolean(order.hasPurchasedGiftCards) };
 }
 
 async function claimRefundAttempt(
@@ -312,17 +315,40 @@ async function markAttemptFailed(
   attempt: RefundAttemptProbeRow,
   outcome: Extract<ProviderProbeOutcome, { outcome: "rejected" }>,
   nowSeconds: number,
+  context: RefundProviderReconciliationContext,
 ): Promise<void> {
-  // The refund's gift-card clawback settles against the money that went back,
-  // in the batch that fails the attempt (nothing for an order that bought no cards).
-  const clawbackSettlement = await orderHasPurchasedGiftCards(db, attempt.orderId)
-    ? await buildGiftCardClawbackSettlement(db, {
-      orderId: attempt.orderId,
-      refundGroupId: attempt.refundGroupId,
-      outcomes: new Map([[attempt.id, "failed" as const]]),
-    })
-    : [];
+  // An order that bought gift cards: when this failure ends its refund, the
+  // clawback settles in the same batch, guarded on the refund's other
+  // attempts still being as read (a sibling ending at once makes this lose,
+  // read again and settle).
+  for (let round = 0; ; round += 1) {
+    const settlement = context.hasPurchasedGiftCards
+      ? await buildGiftCardClawbackSettlement(db, {
+        orderId: attempt.orderId,
+        refundGroupId: attempt.refundGroupId,
+        outcomes: new Map([[attempt.id, "failed" as const]]),
+      })
+      : null;
+    try {
+      await writeAttemptFailed(db, attempt, outcome, nowSeconds, settlement);
+      return;
+    } catch (error: unknown) {
+      if (!settlement || !isBatchGuardError(error, ATTEMPT_FAILED_CONFLICT) || round >= 2) throw error;
+    }
+  }
+}
+
+const ATTEMPT_FAILED_CONFLICT = "refund_attempt_failed_conflict";
+
+async function writeAttemptFailed(
+  db: Database,
+  attempt: RefundAttemptProbeRow,
+  outcome: Extract<ProviderProbeOutcome, { outcome: "rejected" }>,
+  nowSeconds: number,
+  settlement: GiftCardClawbackSettlement | null,
+): Promise<void> {
   await db.batch([
+    ...(settlement ? [buildBatchGuard(db, settlement.guard, ATTEMPT_FAILED_CONFLICT)] : []),
     db.update(orderPayments).set({
       status: PaymentRecordStatus.FAILED,
       updatedAt: sql`unixepoch()`,
@@ -339,7 +365,7 @@ async function markAttemptFailed(
       failedAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
     }).where(eq(refundAttempts.id, attempt.id)),
-    ...clawbackSettlement,
+    ...(settlement?.statements ?? []),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
   ] as any);
 }
@@ -928,7 +954,7 @@ export async function reconcileRefundAttemptById(
       outcome: "rejected",
       providerStatus: "not_dispatched",
       error: "Refund attempt expired before provider dispatch and was released for retry.",
-    }, nowSeconds);
+    }, nowSeconds, context);
     return { status: "failed", orderIds: [], refundNotifications: [] };
   }
 
@@ -958,7 +984,7 @@ export async function reconcileRefundAttemptById(
   }
 
   if (outcome.outcome === "rejected") {
-    await markAttemptFailed(db, attempt, outcome, nowSeconds);
+    await markAttemptFailed(db, attempt, outcome, nowSeconds, context);
     return {
       status: "failed",
       orderIds: [],
@@ -971,10 +997,14 @@ export async function reconcileRefundAttemptById(
   }
 
   await markAttemptDeferred(db, attempt, outcome, nowSeconds);
+  // "Your refund is processing" is said once, on the way into provider_unknown
+  // (the request that left it unknown wrote it with that transition): a probe
+  // that finds it still processing says nothing again, even after the outbox
+  // row was pruned.
   return {
     status: "deferred",
     orderIds: [],
-    refundNotifications: outcome.outcome === "processing"
+    refundNotifications: outcome.outcome === "processing" && attempt.status !== "provider_unknown"
       ? [
           buildRefundAttemptStateNotificationFact(attempt, "refund_processing", {
             providerRefundId: outcome.providerRefundId,
