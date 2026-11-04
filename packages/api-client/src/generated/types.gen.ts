@@ -38215,6 +38215,93 @@ export type GetApiV1AdminMediaResponses = {
 
 export type GetApiV1AdminMediaResponse = GetApiV1AdminMediaResponses[keyof GetApiV1AdminMediaResponses];
 
+export type GetApiV1AdminMediaPendingRenditionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/media/pending-renditions';
+};
+
+export type GetApiV1AdminMediaPendingRenditionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMediaPendingRenditionsError = GetApiV1AdminMediaPendingRenditionsErrors[keyof GetApiV1AdminMediaPendingRenditionsErrors];
+
+export type GetApiV1AdminMediaPendingRenditionsResponses = {
+    /**
+     * Pending images
+     */
+    200: {
+        success: true;
+        data: {
+            files: Array<{
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                variantWidth?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                posterUrl: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
+            }>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaPendingRenditionsResponse = GetApiV1AdminMediaPendingRenditionsResponses[keyof GetApiV1AdminMediaPendingRenditionsResponses];
+
 export type PostApiV1AdminMediaUploadsData = {
     body: {
         filename: string;
@@ -78278,11 +78365,11 @@ export type GetApiV1AdminAbandonedCheckoutsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search term
          */
@@ -78290,11 +78377,11 @@ export type GetApiV1AdminAbandonedCheckoutsData = {
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'updatedAt' | 'customerPhone' | 'checkoutId';
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/abandoned-checkouts';
 };
@@ -78342,12 +78429,12 @@ export type GetApiV1AdminAbandonedCheckoutsResponses = {
                 checkoutData: string;
                 createdAt: string | number;
                 updatedAt: string | number;
-                [key: string]: unknown;
             }>;
             pagination: {
                 page: number;
                 limit: number;
                 total: number;
+                totalIsCapped: boolean;
                 totalPages: number;
             };
         };
@@ -78421,6 +78508,7 @@ export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
                 page: number;
                 limit: number;
                 total: number;
+                totalIsCapped: boolean;
                 totalPages: number;
             };
         };

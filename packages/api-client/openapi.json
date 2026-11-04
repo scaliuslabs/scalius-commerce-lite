@@ -137499,6 +137499,294 @@
         }
       }
     },
+    "/api/v1/admin/media/pending-renditions": {
+      "get": {
+        "tags": [
+          "Admin - Media"
+        ],
+        "summary": "List images still waiting for pre-generated renditions",
+        "description": "Oldest first, for the dashboard's background renderer. Files carry no usage counts; the Files list (`variants=missing`) has them.",
+        "operationId": "dashboard.media.pending_renditions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "files": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "video"
+                                ]
+                              },
+                              "objectKey": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "mimeType": {
+                                "type": "string"
+                              },
+                              "altText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "caption": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "variantWidth": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "durationMs": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "posterMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "posterUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "folderId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ready",
+                                  "trashed",
+                                  "deleting",
+                                  "deleted"
+                                ]
+                              },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "Send it as `expectedRevision` to change the file; every change advances it."
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "trashedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              },
+                              "deletedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "filename",
+                              "url",
+                              "kind",
+                              "objectKey",
+                              "size",
+                              "mimeType",
+                              "posterUrl",
+                              "folderId",
+                              "status",
+                              "revision",
+                              "createdAt",
+                              "updatedAt",
+                              "trashedAt",
+                              "deletedAt"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "files",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The dashboard's background WebP renderer's own queue, paired with the binary original read; agents list pending images with dashboard.media.list (variants=missing).",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "media.view"
+        }
+      }
+    },
     "/api/v1/admin/media/uploads": {
       "post": {
         "tags": [
@@ -273098,8 +273386,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "default": 1,
               "description": "Page number"
             },
@@ -273110,8 +273398,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 100,
               "default": 20,
               "description": "Items per page"
@@ -273135,6 +273423,11 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "updatedAt",
+                "customerPhone",
+                "checkoutId"
+              ],
               "default": "updatedAt",
               "description": "Sort field"
             },
@@ -273146,6 +273439,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "default": "desc",
               "description": "Sort order"
             },
@@ -273219,30 +273516,33 @@
                               "checkoutData",
                               "createdAt",
                               "updatedAt"
-                            ],
-                            "additionalProperties": {}
+                            ]
                           }
                         },
                         "pagination": {
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "integer"
                             },
                             "limit": {
-                              "type": "number"
+                              "type": "integer"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "integer"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean"
                             },
                             "totalPages": {
-                              "type": "number"
+                              "type": "integer"
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
+                            "totalIsCapped",
                             "totalPages"
                           ]
                         }
@@ -273598,6 +273898,9 @@
                             "total": {
                               "type": "integer"
                             },
+                            "totalIsCapped": {
+                              "type": "boolean"
+                            },
                             "totalPages": {
                               "type": "integer"
                             }
@@ -273606,6 +273909,7 @@
                             "page",
                             "limit",
                             "total",
+                            "totalIsCapped",
                             "totalPages"
                           ]
                         }
