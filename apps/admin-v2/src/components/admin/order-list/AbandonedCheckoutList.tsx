@@ -43,7 +43,7 @@ import {
   abandonedCheckoutRouteStateToQuery,
   type AbandonedCheckoutRouteState,
 } from "@/lib/abandoned-checkout-route-state";
-import { createDataSelector, getCanonicalPageForPagination } from "@/lib/list-helpers";
+import { createDataSelector, getCanonicalPageForPagination, isPagingRefusal } from "@/lib/list-helpers";
 import { useListSearch } from "~/lib/list-search";
 import { queryKeys } from "@/lib/query-keys";
 import { translate, useLocale, useMessages } from "~/i18n";
@@ -169,7 +169,7 @@ function CheckoutSheet({
 
   const createOrder = () => {
     if (!checkout || !display) return;
-    writeOrderPrefill(buildOrderPrefill(checkout.checkoutData, display));
+    writeOrderPrefill(buildOrderPrefill(checkout.checkoutData, display, checkout.checkoutId));
     void navigate({ to: "/admin/orders/new" });
   };
 
@@ -379,6 +379,12 @@ export function AbandonedCheckoutList({
     if (canonicalPage !== routeState.page) onRouteStateChange({ page: canonicalPage }, { replace: true });
   }, [onRouteStateChange, pagination, rawData, routeState.page]);
 
+  // A page deeper than the API reaches (an old bookmark) starts the list again.
+  const refused = isPagingRefusal(error);
+  useEffect(() => {
+    if (refused) onRouteStateChange({ page: 1 }, { replace: true });
+  }, [onRouteStateChange, refused]);
+
   // Keep the last opened checkout while the sheet slides closed.
   const [shown, setShown] = useState<AbandonedCheckout | null>(null);
   const openCheckout = openId
@@ -470,6 +476,7 @@ export function AbandonedCheckoutList({
         what={t("checkoutsLabel")}
         itemLabel={t("checkoutsLabel")}
         mobileCardRenderer={mobileCardRenderer}
+        totalIsCapped={pagination.totalIsCapped === true}
         layoutKey="abandoned-checkouts"
         sortMenu={(
           <DataTableSortMenu

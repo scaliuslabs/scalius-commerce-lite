@@ -158,8 +158,8 @@ const EN: MessageCopy = {
       body: (order) => `A review for order ${order} is waiting for approval.`,
     },
     digital_keys_exhausted: {
-      title: "Licence keys ran out",
-      body: (order) => `Order ${order} is waiting for licence keys. Import more keys to deliver it.`,
+      title: "Automatic delivery waiting",
+      body: (order) => `Part of order ${order} could not be delivered automatically. Import licence keys, make its file ready or fix the gift card's value; it is delivered on the next run.`,
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "View order",
@@ -262,8 +262,8 @@ const BN: MessageCopy = {
       body: (order) => `অর্ডার ${order}-এর একটি রিভিউ অনুমোদনের অপেক্ষায় আছে।`,
     },
     digital_keys_exhausted: {
-      title: "লাইসেন্স কী শেষ হয়ে গেছে",
-      body: (order) => `অর্ডার ${order} লাইসেন্স কী-এর অপেক্ষায় আছে। ডেলিভারি দিতে আরও কী যোগ করুন।`,
+      title: "স্বয়ংক্রিয় ডেলিভারি অপেক্ষায়",
+      body: (order) => `অর্ডার ${order}-এর একটি অংশ স্বয়ংক্রিয়ভাবে ডেলিভারি করা যায়নি। লাইসেন্স কী যোগ করুন, ফাইলটি প্রস্তুত করুন বা গিফট কার্ডের মূল্য ঠিক করুন; পরের রানে ডেলিভারি হবে।`,
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "অর্ডার দেখুন",

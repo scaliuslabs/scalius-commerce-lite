@@ -1,14 +1,13 @@
 // src/server/routes/abandoned-checkouts.ts
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { abandonedCheckouts } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { getClientIp } from "@scalius/shared/rate-limit";
+import { getTrustedClientIp } from "../utils/client-ip";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
-import { normalizeAbandonedCheckoutSnapshot } from "@scalius/core/modules/checkout";
+import { normalizeAbandonedCheckoutSnapshot, saveAbandonedCheckoutSnapshot } from "@scalius/core/modules/checkout";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -45,7 +44,7 @@ const saveAbandonedCheckoutRoute = createRoute({
 app.openapi(saveAbandonedCheckoutRoute, async (c) => {
   // The storefront saves a debounced snapshot as the buyer fills each checkout
   // field, so one buyer legitimately sends several saves a minute.
-  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "abandoned-checkout", getClientIp(c.req.raw)))) {
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "abandoned-checkout", getTrustedClientIp(c)))) {
     throw new RateLimitError("Too many requests. Please try again later.");
   }
 
@@ -57,33 +56,9 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
   } catch (error) {
     throw new ValidationError(error instanceof Error ? error.message : "Invalid checkout snapshot");
   }
-  const { checkoutId, customerPhone, checkoutDataString } = snapshot;
-
-  const existingCheckout = await db
-    .select({ id: abandonedCheckouts.id })
-    .from(abandonedCheckouts)
-    .where(eq(abandonedCheckouts.checkoutId, checkoutId))
-    .get();
-
-  if (existingCheckout) {
-    await db
-      .update(abandonedCheckouts)
-      .set({
-        customerPhone: customerPhone,
-        checkoutData: checkoutDataString,
-        updatedAt: sql`(cast(strftime('%s','now') as int))`
-      })
-      .where(eq(abandonedCheckouts.id, existingCheckout.id));
-  } else {
-    await db.insert(abandonedCheckouts).values({
-      id: `ab_ch_${nanoid()}`,
-      checkoutId: checkoutId,
-      customerPhone: customerPhone,
-      checkoutData: checkoutDataString,
-      createdAt: sql`(cast(strftime('%s','now') as int))`,
-      updatedAt: sql`(cast(strftime('%s','now') as int))`
-    });
-  }
+  // A session that already placed its order writes nothing; the answer is the
+  // same either way, so the public route never says whether an order exists.
+  await saveAbandonedCheckoutSnapshot(db, snapshot);
 
   return ok(c, { message: "Abandoned checkout saved." });
 });

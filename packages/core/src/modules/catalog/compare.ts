@@ -210,7 +210,7 @@ export async function getStorefrontProductComparison(
                 id: products.id,
                 name: products.name,
                 slug: products.slug,
-                ...translationColumns(translation, "product", products.id),
+                ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
                 ...buyerStatePricingSelection(cardSku),
                 hasCustomerOptions: buyerState.hasCustomerOptions,
                 availableForSale: buyerState.availableForSale,

@@ -24,6 +24,7 @@ import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import type { QuoteManualOrderInput } from "../validation";
 import {
     checkoutListPricesSql,
+    checkoutMarketCountry,
     marketPricingMatrixSql,
     parseMarketListPrices,
     resolveCheckoutPriceScope,
@@ -447,10 +448,20 @@ export async function prepareManualOrderQuote(
     // records it: the shipping country when a physical line ships (a pickup
     // ships nothing), else the billed country. Segment lists need the buyer,
     // whom a staff quote does not know yet: left for later.
-    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items, {
+    const marketSignals: CheckoutMarketSignals = {
         shippingCountryCode: chosenKind === "pickup" ? null : submittedCountry,
         billingCountryCode: data.billingCountryCode ?? null,
-    });
+        // A pickup ships nothing: the backup market, as the order is placed in.
+        pickup: chosenKind === "pickup",
+    };
+    const resolvedItems = await resolveAdminOrderItemInventory(db, data.items, marketSignals);
+    // The country of that market, for the apps' hooks: priced, hooked and placed in one market.
+    const marketCountry = normalizeMarketCountry(checkoutMarketCountry(
+        resolvedItems.map((item) => ({ productId: item.productId, variantId: item.variantId })),
+        resolvedItems.map((item) => ({ id: item.productId, isGiftCard: item.isGiftCard })),
+        resolvedItems.map((item) => ({ id: item.variantId, fulfillmentKind: item.fulfillmentKind })),
+        { ...marketSignals, placing: true },
+    ));
     const plan = resolveCheckoutFulfilment(resolvedItems.map((item) => ({
         fulfillmentKind: item.fulfillmentKind,
         isGiftCard: item.isGiftCard,
@@ -542,6 +553,7 @@ export async function prepareManualOrderQuote(
         deliveryMethod: deliveryMethod && plan.deliveryMethodKind ? deliveryMethod : null,
         requiresShipping: plan.requiresShipping,
         shippingCountryCode,
+        marketCountry,
         address,
         shippingAdminArea: data.shippingAdminArea ?? null,
         shippingPostalCode: data.shippingPostalCode ?? null,

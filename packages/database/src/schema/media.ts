@@ -76,6 +76,9 @@ export const media = sqliteTable("media", {
     index("media_folder_id_idx").on(table.folderId, table.status, table.createdAt, table.id),
     index("media_status_newest_idx").on(table.status, table.createdAt, table.id),
     index("media_kind_newest_idx").on(table.kind, table.status, table.createdAt, table.id),
+    // Images still waiting for renditions; the pending list repeats this predicate verbatim.
+    index("media_pending_variants_idx").on(table.kind, table.status, table.createdAt, table.id)
+        .where(sql`${table.variantWidth} IS NULL`),
     index("media_poster_id_idx").on(table.posterMediaId),
 ]);
 
@@ -134,7 +137,6 @@ export const mediaUploadParts = sqliteTable("media_upload_parts", {
     check("media_upload_part_number_valid", sql`${table.partNumber} >= 1 AND ${table.partNumber} <= 20`),
     check("media_upload_part_size_valid", sql`${table.size} >= 1 AND ${table.size} <= 5242880`),
     check("media_upload_part_etag_valid", sql`${table.etag} <> '' AND length(${table.etag}) <= 256`),
-    index("media_upload_parts_session_idx").on(table.sessionId, table.partNumber),
 ]);
 
 export type Media = InferSelectModel<typeof media>;

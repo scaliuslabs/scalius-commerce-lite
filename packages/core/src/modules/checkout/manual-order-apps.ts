@@ -48,7 +48,6 @@ import { LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOption } from "@scal
 import {
     applyAppPaymentMethodOperations,
     applyAppShippingRateOperations,
-    appCartMarketCountry,
     buildAppFunctionCart,
     checkoutPurchaseOptions,
     CHECKOUT_RULES_FAILED_REASON,
@@ -107,7 +106,7 @@ function manualDiscountAllocation(lines: readonly ManualOrderAppLine[], discount
     }).allocation;
 }
 
-type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames" | "channel" | "salesChannelId">;
+type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "marketCountry" | "locationNames" | "channel" | "salesChannelId">;
 
 /** Where a manual order ships; null when it ships nothing. */
 function destinationOf(input: CartSource) {
@@ -122,7 +121,8 @@ function loadCartFacts(db: Database, input: CartSource, apps?: CheckoutAppFuncti
         variantIds: input.lines.map((line) => line.variantId),
         // A staff order belongs to no signed-in account: apps see a guest, as at a guest checkout.
         customerId: null,
-        marketCountry: appCartMarketCountry(destinationOf(input)),
+        // The market the order is priced and placed in (the billing country for an order that ships nothing).
+        marketCountry: input.marketCountry,
         ...(apps ? { apps, points: PRICING_POINTS } : {}),
     });
 }

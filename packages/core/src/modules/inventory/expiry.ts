@@ -3,7 +3,7 @@
 // Designed to be called from the cron's sweep rotation.
 
 import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
-import { eq, and, sql, lt, type SQL } from "drizzle-orm";
+import { eq, and, sql, lt, gte, type SQL } from "drizzle-orm";
 import {
   inventoryMovements,
   orders,
@@ -15,6 +15,18 @@ import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-avail
 
 export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;
 export const MAX_EXPIRY_SWEEP_LIMIT = 200;
+/**
+ * An orphan appears within minutes of its checkout, so the routine sweep reads
+ * only reservations this much older than the expiry cutoff: its cost follows
+ * recent checkouts, not the whole ledger. The nightly history pass walks the
+ * older reservations a bounded span at a time (`sweepExpiredReservationHistory`),
+ * e.g. holds left while the sweep was down.
+ */
+export const EXPIRY_SWEEP_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+/** The history the nightly pass reads in one night, at most. */
+export const EXPIRY_HISTORY_SPAN_SECONDS = 30 * 24 * 60 * 60;
+/** The reservations of each type the nightly pass reads in one night, at most (a busy store's span ends sooner). */
+export const EXPIRY_HISTORY_ROWS_PER_NIGHT = 1_000;
 
 /**
  * Result of an expiry sweep, for observability.
@@ -34,11 +46,21 @@ export interface ExpiryResult {
   availabilityTransitionVariantIds: string[];
   /** Any errors encountered (non-fatal) */
   errors: string[];
+  /** The last group read (its first reservation time and group key), for a cursor. */
+  last: { at: number; key: string } | null;
 }
 
 export interface ExpirySweepOptions {
   /** Maximum reservation groups to process in one invocation. Defaults to 50. */
   limit?: number;
+  /**
+   * Read reservations created in [createdFrom, createdBefore) (unix seconds)
+   * instead of the recent window; `createdBefore` never passes the expiry cutoff.
+   */
+  createdFrom?: number;
+  createdBefore?: number;
+  /** Only groups ordered after this one (first reservation time, then group key). */
+  after?: { at: number; key: string | null } | null;
 }
 
 type ReservationMovementType = "reserved" | "preorder_reserved";
@@ -146,7 +168,8 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  *
  * A reservation is "expired" when:
  *   1. It is an inventory_movement of type "reserved" (or "preorder_reserved")
- *   2. It was created more than `maxAgeMinutes` ago
+ *   2. It was created more than `maxAgeMinutes` ago, within
+ *      `EXPIRY_SWEEP_WINDOW_SECONDS` before that (or the given range)
  *   3. It is orphaned from its order row
  *   4. Its pool-specific reserved quantity is greater than the quantity
  *      already deducted or released
@@ -165,6 +188,7 @@ function isDuplicateExpiryReleaseClaimError(err: unknown): boolean {
  * @param db - Drizzle database instance
  * @param maxAgeMinutes - Maximum age in minutes before a reservation expires (default: 30)
  * @param options.limit - Maximum reservation groups to process in one invocation (default: 50, max: 200)
+ * @param options.createdFrom - With createdBefore: the range read instead of the recent window
  */
 export async function releaseExpiredReservations(
   db: Database,
@@ -180,6 +204,7 @@ export async function releaseExpiredReservations(
     releasedVariantIds: [],
     availabilityTransitionVariantIds: [],
     errors: [],
+    last: null,
   };
 
   // Calculate the cutoff timestamp
@@ -195,6 +220,11 @@ export async function releaseExpiredReservations(
   // without mixing the regular and preorder pools. Read one sentinel row
   // beyond the processing limit so cron logs can tell whether another bounded
   // pass is needed.
+  // Drizzle leaves a column of a single-table select list unqualified, so an
+  // outer reference rendered there inside the aliased subquery would bind to
+  // `terminal` instead. The HAVING clause qualifies its columns, and the loop
+  // below re-reads each group's exact outstanding quantity, so the select list
+  // carries only the group key.
   const outstandingQuantitySql = sql<number>`(
     SUM(${inventoryMovements.quantity}) - COALESCE((
       SELECT SUM(${terminalReservationQuantitySql(sql`${inventoryMovements.type}`, "terminal")})
@@ -209,6 +239,9 @@ export async function releaseExpiredReservations(
         )
     ), 0)
   )`;
+  // One group's identity, for a cursor that resumes inside a second of reservations.
+  const groupKeySql = sql<string>`(${inventoryMovements.variantId} || '|' || ${inventoryMovements.orderId} || '|' || ${inventoryMovements.type}
+    || '|' || COALESCE(${inventoryMovements.pool}, '') || '|' || COALESCE(CAST(${inventoryMovements.reservationGeneration} AS TEXT), ''))`;
   const expiredReservationCandidates = await db
     .select({
       variantId: inventoryMovements.variantId,
@@ -216,13 +249,15 @@ export async function releaseExpiredReservations(
       reservationType: inventoryMovements.type,
       pool: inventoryMovements.pool,
       reservationGeneration: inventoryMovements.reservationGeneration,
-      totalQuantity: outstandingQuantitySql.as("total_quantity"),
+      firstCreatedAt: sql<number>`MIN(${inventoryMovements.createdAt})`,
+      groupKey: groupKeySql,
     })
     .from(inventoryMovements)
     .where(
       and(
         sql`${inventoryMovements.type} IN ('reserved', 'preorder_reserved')`,
-        lt(inventoryMovements.createdAt, new Date(cutoffSeconds * 1000)),
+        lt(inventoryMovements.createdAt, new Date(Math.min(cutoffSeconds, options.createdBefore ?? cutoffSeconds) * 1000)),
+        gte(inventoryMovements.createdAt, new Date((options.createdFrom ?? cutoffSeconds - EXPIRY_SWEEP_WINDOW_SECONDS) * 1000)),
         sql`${inventoryMovements.orderId} IS NOT NULL`,
         // Active/live orders may remain reserved for longer than the checkout
         // timeout. Order cancellation must go through order transition logic;
@@ -241,14 +276,22 @@ export async function releaseExpiredReservations(
       inventoryMovements.pool,
       inventoryMovements.reservationGeneration,
     )
-    .having(sql`${outstandingQuantitySql} > 0`)
-    .orderBy(sql`MIN(${inventoryMovements.createdAt})`)
+    .having(and(
+      sql`${outstandingQuantitySql} > 0`,
+      options.after?.key != null
+        ? sql`(MIN(${inventoryMovements.createdAt}) > ${options.after.at}
+            OR (MIN(${inventoryMovements.createdAt}) = ${options.after.at} AND ${groupKeySql} > ${options.after.key}))`
+        : undefined,
+    ))
+    .orderBy(sql`MIN(${inventoryMovements.createdAt})`, groupKeySql)
     .limit(limit + 1)
     .all();
 
   const expiredReservations = expiredReservationCandidates.slice(0, limit);
   result.found = expiredReservations.length;
   result.hasMore = expiredReservationCandidates.length > limit;
+  const lastRead = expiredReservations.at(-1);
+  result.last = lastRead ? { at: Number(lastRead.firstCreatedAt), key: String(lastRead.groupKey) } : null;
 
   if (expiredReservations.length === 0) {
     return result;
@@ -256,7 +299,7 @@ export async function releaseExpiredReservations(
 
   // Release each expired reservation
   for (const reservation of expiredReservations) {
-    const { variantId, orderId, totalQuantity } = reservation;
+    const { variantId, orderId } = reservation;
     const reservationType = reservation.reservationType as ReservationMovementType;
     const reservationGeneration = reservation.reservationGeneration ?? null;
     const movementPool = (reservation.pool
@@ -265,7 +308,6 @@ export async function releaseExpiredReservations(
     if (
       !variantId ||
       !orderId ||
-      totalQuantity <= 0 ||
       (reservationType !== "reserved" && reservationType !== "preorder_reserved")
     ) continue;
 
@@ -433,4 +475,59 @@ export async function releaseExpiredReservations(
   }
 
   return result;
+}
+
+/** Where the nightly history pass resumes: a reservation time, and the last group read in it. */
+export type ExpiryHistoryCursor = { at: number; key: string | null };
+
+/**
+ * The nightly history pass: reservations older than the routine window, a
+ * bounded span at a time from the persisted cursor, each night starting at
+ * the first reservation at or after it. The cursor moves past the last group
+ * it read (by its first reservation time, then its group key, so a page that
+ * ends inside one second resumes there), failures included, and wraps to the
+ * start (null) once it reaches the routine window.
+ */
+export async function sweepExpiredReservationHistory(
+  db: Database,
+  options: { after: ExpiryHistoryCursor | null; limit?: number; spanSeconds?: number; rowsPerNight?: number; maxAgeMinutes?: number },
+): Promise<{ result: ExpiryResult | null; next: ExpiryHistoryCursor | null }> {
+  const maxAgeMinutes = options.maxAgeMinutes ?? 30;
+  const windowStart = Math.floor(Date.now() / 1000) - maxAgeMinutes * 60 - EXPIRY_SWEEP_WINDOW_SECONDS;
+  const after = new Date((options.after?.at ?? 0) * 1000);
+  // The first reservation of each type at or after the cursor: one index row each.
+  const firsts = await Promise.all((["reserved", "preorder_reserved"] as const).map((type) =>
+    db.select({ createdAt: inventoryMovements.createdAt })
+      .from(inventoryMovements)
+      .where(and(eq(inventoryMovements.type, type), gte(inventoryMovements.createdAt, after)))
+      .orderBy(inventoryMovements.createdAt)
+      .limit(1)
+      .get()));
+  const starts = firsts.flatMap((row) => (row?.createdAt ? [Math.floor(row.createdAt.getTime() / 1000)] : []));
+  const from = starts.length > 0 ? Math.min(...starts) : null;
+  if (from === null || from >= windowStart) return { result: null, next: null };
+  // The night ends at the span, the routine window, or each type's Nth reservation
+  // (read through the covering index), whichever comes first: the cost follows the
+  // night's work, not how dense or long the history is.
+  const rowsPerNight = Math.max(1, Math.floor(options.rowsPerNight ?? EXPIRY_HISTORY_ROWS_PER_NIGHT));
+  const ends = await Promise.all((["reserved", "preorder_reserved"] as const).map((type) =>
+    db.select({ createdAt: inventoryMovements.createdAt })
+      .from(inventoryMovements)
+      .where(and(eq(inventoryMovements.type, type), gte(inventoryMovements.createdAt, new Date(from * 1000))))
+      .orderBy(inventoryMovements.createdAt)
+      .limit(1)
+      .offset(rowsPerNight)
+      .get()));
+  const bounds = ends.flatMap((row) => (row?.createdAt ? [Math.floor(row.createdAt.getTime() / 1000)] : []));
+  // A second holding more reservations than a night's share is still read whole.
+  const rowBound = bounds.length > 0 ? Math.max(from + 1, Math.min(...bounds)) : Number.POSITIVE_INFINITY;
+  const before = Math.min(from + (options.spanSeconds ?? EXPIRY_HISTORY_SPAN_SECONDS), windowStart, rowBound);
+  const result = await releaseExpiredReservations(db, maxAgeMinutes, {
+    limit: options.limit,
+    createdFrom: from,
+    createdBefore: before,
+    after: options.after?.key != null && options.after.at === from ? options.after : null,
+  });
+  const next: ExpiryHistoryCursor = result.hasMore && result.last ? result.last : { at: before, key: null };
+  return { result, next: next.at >= windowStart ? null : next };
 }

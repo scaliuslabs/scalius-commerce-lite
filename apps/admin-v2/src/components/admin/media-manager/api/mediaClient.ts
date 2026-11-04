@@ -4,6 +4,7 @@ import {
   deleteApiV1AdminMediaFoldersById,
   deleteApiV1AdminMediaUploadsById,
   getApiV1AdminMedia,
+  getApiV1AdminMediaPendingRenditions,
   getApiV1AdminMediaById,
   getApiV1AdminMediaByIdUsage,
   getApiV1AdminMediaFolders,
@@ -262,11 +263,9 @@ export class MediaApiClient {
     return response.blob();
   }
 
-  /** First page of images that still lack renditions (oldest first). */
+  /** A page of images that still lack renditions (oldest first), without usage counts. */
   static async fetchFilesMissingVariants(cursor: string | undefined, limit: number): Promise<MediaApiResponse> {
-    const data = await apiData(getApiV1AdminMedia({
-      query: { cursor, limit, variants: "missing", sortOrder: "asc" },
-    }));
+    const data = await apiData(getApiV1AdminMediaPendingRenditions({ query: { cursor, limit } }));
     return { files: data.files.map(toMediaFile), pagination: { limit, hasMore: data.nextCursor !== null, nextCursor: data.nextCursor } };
   }
 

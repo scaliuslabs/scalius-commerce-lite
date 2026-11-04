@@ -16,7 +16,7 @@ import {
   buildOrderReadyForPickupNotificationDedupeKey,
   createOrderNotificationOutboxInsertValues,
 } from "../notifications";
-import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel";
+import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition, shipmentClaimShipmentStatusSql } from "../order-kernel";
 
 const PICKUP_READY_GUARD = "order_pickup_ready_conflict";
 const OPEN_PICKUP_STATUSES = [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED] as const;
@@ -54,6 +54,8 @@ export async function markOrderReadyForPickup(
         fulfillmentStatus: orders.fulfillmentStatus,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         deletedAt: orders.deletedAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order || order.deletedAt) throw new NotFoundError("Order not found");

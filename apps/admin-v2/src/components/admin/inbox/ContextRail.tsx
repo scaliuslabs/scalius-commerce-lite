@@ -17,7 +17,7 @@ import { useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
-import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
+import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { formatOrderDate } from "../orderview/formatters";
 import { statusBadgeVariant } from "../orderview/status-badges";
 import type { StaffThread } from "~/lib/api-query-options/inbox";

@@ -39,8 +39,9 @@ import {
     planKeysetPage,
     resolveReferencedBoundary,
 } from "../../utils/keyset";
-import { type Database, getDatabaseProviderForClient } from "@scalius/database/client";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { type Database, getDatabaseProviderForClient, safeBatch } from "@scalius/database/client";
+import { customerNotErasedGuard, erasedCustomerConflict, isCustomerErasedError } from "./erased-guard";
+import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { customerAuthDocument, validateCustomerPhoneCountry } from "../settings";
 import { customerAddressColumns, listCustomerAddresses, resolveAddress } from "./addresses";
 
@@ -194,10 +195,9 @@ export function customerListConditions(db: Database, filter: CustomerListFilter)
     const deletedAt = filter.leadWithMatches ? sql`+${customers.deletedAt}` : sql`${customers.deletedAt}`;
     if (showTrashed) {
         // A retired guest record (all its orders joined an account) is merged, not trashed.
-        // Nearly every customer is unmerged: SQLite's `+` keeps it reading the trash by `deleted_at`.
-        const unmerged = getDatabaseProviderForClient(db) === "postgres"
-            ? sql`${customers.mergedIntoCustomerId} IS NULL`
-            : sql`+${customers.mergedIntoCustomerId} IS NULL`;
+        // Nearly every customer is unmerged: SQLite's `+` keeps it reading the trash by `deleted_at`
+        // (PostgreSQL's compiler drops the `+`).
+        const unmerged = sql`+${customers.mergedIntoCustomerId} IS NULL`;
         whereConditions.push(sql`${deletedAt} IS NOT NULL AND ${unmerged}`);
     } else {
         whereConditions.push(sql`${deletedAt} IS NULL`);
@@ -587,6 +587,7 @@ export async function updateCustomer(
 ) {
     const existing = await getCustomerById(db, id);
     if (!existing) throw new NotFoundError("Customer not found");
+    if (existing.erasedAt) throw erasedCustomerConflict();
 
     if (data.phone && data.phone !== existing.phone) {
         await validateCustomerPhoneCountry(db, data.phone);
@@ -619,46 +620,95 @@ export async function updateCustomer(
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if (taxUnchanged && (Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
-    // Naming a checkout guest record in the dashboard makes it the merchant's customer.
-    const origin = !existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {};
-    await db.batch([
-        db.update(customers).set({ ...next, ...tax, phone: storedPhone(next.phone), ...origin, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
-        db.insert(customerHistory).values({
-            id: "hist_" + nanoid(),
-            customerId: id,
-            ...next,
-            phone: storedPhone(next.phone),
-            changeType: "updated",
-            actor: "staff",
-            actorId,
-            createdAt: sql`unixepoch()`,
-        }),
-    ] as Parameters<Database["batch"]>[0]);
+    // Only the fields the caller sent: a field another writer changed since the read keeps its value.
+    const changes = {
+        ...(data.name != null ? { name: data.name } : {}),
+        ...(data.email !== undefined ? { email: data.email } : {}),
+        ...(data.phone != null ? { phone: storedPhone(data.phone) } : {}),
+        ...(data.taxExempt !== undefined || data.taxExemptionId !== undefined ? tax : {}),
+        // Naming a checkout guest record in the dashboard makes it the merchant's customer.
+        ...(!existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {}),
+    };
+    const live = isNull(customers.erasedAt);
+    await writeUnlessErased(db, id, [
+        // An erasure committed since the read refuses the edit.
+        customerNotErasedGuard(db, id),
+        db.update(customers).set({ ...changes, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+        historyFromLiveRow(db, id, "updated", actorId, live),
+    ]);
+}
 
+/** A change-log entry with the record's contact as the batch left it, never a value read before the batch. */
+function historyFromLiveRow(
+    db: Database,
+    customerId: string,
+    changeType: "updated" | "deleted" | "restored",
+    actorId: string | null,
+    condition: SQL,
+) {
+    const value = (input: string | null) => sql<string | null>`${input}`;
+    return db.insert(customerHistory).select(db.select({
+        id: value(`hist_${nanoid()}`).as("id"),
+        customerId: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        changeType: value(changeType).as("change_type"),
+        orderId: value(null).as("order_id"),
+        relatedCustomerId: value(null).as("related_customer_id"),
+        verifiedContact: value(null).as("verified_contact"),
+        actor: value("staff").as("actor"),
+        actorId: value(actorId).as("actor_id"),
+        createdAt: sql<number>`unixepoch()`.as("created_at"),
+    }).from(customers).where(and(eq(customers.id, customerId), condition)));
+}
+
+type GuardedRecord = { erasedAt: Date | null; deletedAt: Date | null; mergedIntoCustomerId: string | null };
+
+/**
+ * Runs a staff batch on one customer whose guard failed or passed. A failed
+ * guard is read back: an erasure that committed first answers 409, a record
+ * deleted since the read 404, and anything else `settle` decides (it returns
+ * when the write is already done, or throws its own answer).
+ */
+async function writeUnlessErased(
+    db: Database,
+    customerId: string,
+    statements: unknown[],
+    settle?: (current: GuardedRecord) => void,
+): Promise<void> {
+    try {
+        await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
+    } catch (error) {
+        if (!isCustomerErasedError(error)) throw error;
+        const current = await db.select({
+            erasedAt: customers.erasedAt,
+            deletedAt: customers.deletedAt,
+            mergedIntoCustomerId: customers.mergedIntoCustomerId,
+        }).from(customers).where(eq(customers.id, customerId)).get();
+        if (!current) throw new NotFoundError("Customer not found");
+        if (current.erasedAt) throw erasedCustomerConflict();
+        if (settle) return settle(current);
+        throw error;
+    }
 }
 
 export async function deleteCustomer(db: Database, id: string, actorId: string | null = null): Promise<void> {
     const existing = await getCustomerById(db, id);
     if (!existing) throw new NotFoundError("Customer not found");
+    // Erasure already retired the record and removed its sessions.
+    if (existing.erasedAt) return;
 
-    await db.batch([
-        db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+    const live = isNull(customers.erasedAt);
+    await safeBatch(db, [
+        db.update(customers).set({ deletedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
         db
             .update(customerSessions)
             .set({ revokedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
             .where(and(eq(customerSessions.customerId, id), isNull(customerSessions.revokedAt))),
-        db.insert(customerHistory).values({
-            id: "hist_" + nanoid(),
-            customerId: id,
-            name: existing.name,
-            email: existing.email,
-            phone: storedPhone(existing.phone),
-            changeType: "deleted",
-            actor: "staff",
-            actorId,
-            createdAt: sql`unixepoch()`,
-        }),
-    ] as Parameters<Database["batch"]>[0]);
+        // An erasure that committed since the read leaves no entry: its own is the last word.
+        historyFromLiveRow(db, id, "deleted", actorId, live),
+    ] as unknown as Parameters<typeof safeBatch>[1]);
 }
 
 export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {
@@ -683,26 +733,24 @@ export async function restoreCustomer(db: Database, id: string, actorId: string 
     const existing = await getCustomerById(db, id);
     if (!existing) throw new NotFoundError("Customer not found");
     if (!existing.deletedAt) return;
-    if (existing.erasedAt) {
-        throw new ValidationError("This customer's data was erased, so the record can't be restored.");
-    }
+    if (existing.erasedAt) throw erasedCustomerConflict("This customer's data was erased, so the record can't be restored.");
     if (existing.mergedIntoCustomerId) {
         throw new ValidationError("This guest record was merged into an account and can't be restored.");
     }
-    await db.batch([
-        db.update(customers).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
-        db.insert(customerHistory).values({
-            id: "hist_" + nanoid(),
-            customerId: id,
-            name: existing.name,
-            email: existing.email,
-            phone: storedPhone(existing.phone),
-            changeType: "restored",
-            actor: "staff",
-            actorId,
-            createdAt: sql`unixepoch()`,
-        }),
-    ] as Parameters<Database["batch"]>[0]);
+    const live = isNull(customers.erasedAt);
+    await writeUnlessErased(db, id, [
+        // Still trashed, unmerged and not erased when the batch runs.
+        customerNotErasedGuard(db, id, sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`),
+        db.update(customers).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(and(eq(customers.id, id), live)),
+        historyFromLiveRow(db, id, "restored", actorId, live),
+    ], (current) => {
+        // Another restore committed first: nothing left to do.
+        if (!current.deletedAt) return;
+        if (current.mergedIntoCustomerId) {
+            throw new ValidationError("This guest record was merged into an account and can't be restored.");
+        }
+        throw new ConflictError("The customer changed while it was being restored. Please try again.");
+    });
 }
 
 /**

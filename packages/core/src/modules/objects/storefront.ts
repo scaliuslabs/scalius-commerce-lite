@@ -11,6 +11,7 @@ import { deps } from "../../cache-deps";
 import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
 
 import { encodeIndexTuple, indexPrefixUpperBound, type IndexScalar } from "./index-encoding";
+import { objectIndexFieldSql } from "./related";
 
 type BatchStatement = BatchItem<"sqlite">;
 export interface StorefrontObjectEntry {
@@ -57,7 +58,7 @@ export function planStorefrontObjects(db: Database, requests: readonly Storefron
       SELECT 1 FROM json_each(${JSON.stringify(groups)}) AS object_filter_group
       WHERE NOT EXISTS (SELECT 1 FROM json_each(object_filter_group.value) AS object_filter WHERE NOT COALESCE((${sql.join(
         ([objectRecords.k1, objectRecords.k2, objectRecords.k3, objectRecords.k4] as const).map((slot, index) => sql`(
-          COALESCE(json_extract(${objectTypes.indexesJson}, ${`$[${index}][0]`}), json_extract(${objectTypes.indexesJson}, ${`$[${index}]`})) = json_extract(object_filter.value, '$.key')
+          ${objectIndexFieldSql(sql`${objectTypes.indexesJson}`, index)} = json_extract(object_filter.value, '$.key')
           AND ${slot} >= json_extract(object_filter.value, '$.lower') AND ${slot} < json_extract(object_filter.value, '$.upper'))`), sql` OR `,
       )}), 0)))`;
     return db.select({

@@ -3,10 +3,10 @@ import {
   agentNoStoreResponse,
   bufferBoundedAgentRequest,
   checkAgentRateLimit,
-  getAgentClientIp,
   withAgentNoStoreHeaders,
 } from "./limits";
 import { completeOAuthAuthorization, handleOAuthRequest } from "./oauth";
+import { getTrustedClientIpFromRequest } from "../utils/client-ip";
 import {
   DASHBOARD_MCP_PATH,
   DASHBOARD_OAUTH_PROTECTED_RESOURCE_METADATA_PATH,
@@ -148,7 +148,7 @@ export async function handleAgentAccessRequest(
   }
 
   if (isUnauthenticatedAgentEndpoint(url.pathname)) {
-    const key = `unauth:${preAuthRateLimitClass(url.pathname)}:${getAgentClientIp(request)}`;
+    const key = `unauth:${preAuthRateLimitClass(url.pathname)}:${getTrustedClientIpFromRequest(request, env)}`;
     let allowed: boolean;
     try {
       allowed = await checkAgentRateLimit(env, key);

@@ -7,6 +7,7 @@ import { ServiceUnavailableError } from "../../../errors";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { formatAmount, moneyLocale } from "@scalius/shared/money-format";
 import { invoiceRefundSummary } from "@scalius/shared/invoice-refunds";
+import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
 
 export const MAX_PRINTABLE_INVOICE_BYTES = 65_536;
 
@@ -35,9 +36,12 @@ function itemTotal(item: InvoiceOrderItemSnapshot, decimalPlaces: number): numbe
   return item.lineSubtotalMinor ?? Math.round(item.price * item.quantity * (10 ** decimalPlaces));
 }
 
-/** A line its own discount pays in full (a free gift): it prints ৳0 with its price struck. */
+/** A line its own discount pays in full (a free gift) prints ৳0 with its price struck. */
 function isFreeLine(item: InvoiceOrderItemSnapshot): boolean {
-  return (item.lineSubtotalMinor ?? 0) > 0 && (item.discountAmountMinor ?? 0) >= (item.lineSubtotalMinor ?? 0);
+  return isFreeOrderLine({
+    grossSubtotalMinor: item.lineSubtotalMinor ?? 0,
+    discountMinor: item.discountAmountMinor ?? 0,
+  });
 }
 
 /** Long free-text inputs are cut on the printout so an invoice stays one bounded page. */

@@ -1338,6 +1338,27 @@
       "when": 1792790000000,
       "tag": "0190_postgres_json_shapes",
       "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "6",
+      "when": 1792800000000,
+      "tag": "0191_erased_customers_frozen",
+      "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "6",
+      "when": 1792810000000,
+      "tag": "0192_lean_indexes_and_triggers",
+      "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "6",
+      "when": 1792954000000,
+      "tag": "0193_withheld_units",
+      "breakpoints": true
     }
   ]
 }

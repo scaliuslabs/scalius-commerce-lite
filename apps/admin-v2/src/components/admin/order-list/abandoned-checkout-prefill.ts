@@ -29,6 +29,8 @@ export interface OrderPrefill {
     productName?: string;
     variantLabel?: string | null;
   }>;
+  /** The checkout session the order completes: the order deletes its abandoned snapshot. */
+  abandonedCheckoutId?: string;
 }
 
 function text(data: Record<string, unknown>, key: string): string {
@@ -43,6 +45,7 @@ function text(data: Record<string, unknown>, key: string): string {
 export function buildOrderPrefill(
   checkoutData: string,
   display: Pick<ParsedAbandonedCheckoutDisplay, "customerInfo" | "items">,
+  checkoutId?: string | null,
 ): OrderPrefill {
   let data: Record<string, unknown> = {};
   try {
@@ -75,6 +78,7 @@ export function buildOrderPrefill(
         ? item.options.map((option) => `${option.name}: ${option.value}`).join(", ")
         : null,
     })),
+    ...(checkoutId?.trim() ? { abandonedCheckoutId: checkoutId.trim() } : {}),
   };
 }
 

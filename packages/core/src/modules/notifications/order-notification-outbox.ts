@@ -4,9 +4,10 @@
 
 import type { Database } from "@scalius/database/client";
 import { notificationDeliveryReceipts, notificationOutbox } from "@scalius/database/schema";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import type { OrderNotificationType } from "./notification-types";
 import {
+    buildNotificationOutboxInsertWhen,
     createNotificationOutboxInsertValues,
     parseNotificationPayload,
     recordAndSendNotification,
@@ -81,6 +82,14 @@ export function buildOrderBalancePaidNotificationDedupeKey(orderId: string): str
     return `payment_balance_paid:${orderId}`;
 }
 
+/**
+ * The id of the payment_balance_paid row the payment kernel writes in the
+ * batch that lands the balance: fixed by the order, like the order_created one.
+ */
+export function orderBalancePaidNotificationOutboxId(orderId: string): string {
+    return `ono_balance_paid_${orderId}`;
+}
+
 export function buildSupportRequestSubmittedNotificationDedupeKey(requestId: string): string {
     return `support_request:${requestId}:submitted`;
 }
@@ -136,6 +145,28 @@ function orderNotificationInput(input: OrderNotificationInput): NotificationInpu
 /** Insert values for an order notification row (for callers that write it in their own batch). */
 export function createOrderNotificationOutboxInsertValues(input: OrderNotificationInput): NotificationOutboxInsert {
     return createNotificationOutboxInsertValues(orderNotificationInput(input));
+}
+
+/** An order notification row written in the caller's batch only when `landed` holds (see `buildNotificationOutboxInsertWhen`). */
+export function buildOrderNotificationOutboxInsert(db: Database, input: OrderNotificationInput, landed: SQL) {
+    return buildNotificationOutboxInsertWhen(db, orderNotificationInput(input), landed);
+}
+
+/**
+ * A batch statement that writes an order notification row under a fixed id,
+ * only if `when` holds in that batch (the fact it announces landed), and
+ * keeps an existing row with the same id or dedupe key.
+ */
+export function buildOrderNotificationOutboxInsertWhen(
+    db: Database,
+    input: OrderNotificationInput & { id: string; when: SQL },
+) {
+    const values = { ...createOrderNotificationOutboxInsertValues(input), id: input.id } as Record<string, unknown>;
+    // Every column in the table's own order, as Drizzle names them in the insert.
+    const row = Object.keys(getTableColumns(notificationOutbox)).map((key) => sql`${values[key] ?? null}`);
+    return db.insert(notificationOutbox)
+        .select(sql`SELECT ${sql.join(row, sql`, `)} WHERE ${input.when}`)
+        .onConflictDoNothing();
 }
 
 export async function recordAndSendOrderNotification(options: {

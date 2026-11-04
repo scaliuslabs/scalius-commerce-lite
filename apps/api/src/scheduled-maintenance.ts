@@ -3,19 +3,24 @@ import { runWithReadObserver } from "@scalius/database/read-observer";
 import { createEventWriteObserver } from "./middleware/event-dispatch";
 import { publishRealtime, tableChanges } from "./realtime/publish";
 import { compactCacheDeps } from "@scalius/database/cache-dep-writes";
-import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
+import { releaseExpiredReservations, sweepExpiredReservationHistory } from "@scalius/core/modules/inventory";
 import { sweepReviewRequests } from "@scalius/core/modules/reviews";
 import { sweepDigitalUploads } from "@scalius/core/modules/digital";
 import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
 import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
+  ORDER_HISTORY_RETENTION_LIMIT,
+  orderHistoryDailyAllowance,
+  orderHistoryRowsDeleted,
+  pruneOrderHistory,
 } from "@scalius/core/modules/orders";
 import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/modules/notifications";
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
-import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
+import { sweepAutoFulfilment, sweepExpiredShipmentClaims } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
+import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integrations/meta/capi-settings";
 import { planTrackingSweep } from "@scalius/core/integrations/tracking/deliveries";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -29,9 +34,10 @@ import {
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
 import { planLimits } from "@scalius/shared/plan-limits";
+import { sweepExpiredStaffAttempts } from "@scalius/core/auth/staff-attempts";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
-import { sendOrderRefundNotification } from "./utils/order-notifications";
+import { sendOrderNotificationsForStatus, sendOrderRefundNotification } from "./utils/order-notifications";
 import { dueSweepIndexes, firstSweepRunOfHour } from "./scheduled/slices";
 import {
   isNightlyCatalogTick,
@@ -60,9 +66,11 @@ export const TRACKING_PURGE_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_SWEEP_LIMIT = 200;
 export const ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT = 200;
 export const CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT = 200;
+export const STAFF_ATTEMPT_SWEEP_LIMIT = 200;
 export const CUSTOMER_SESSION_SWEEP_LIMIT = 200;
 export const SCANNER_TOKEN_CLAIM_SWEEP_LIMIT = 200;
 export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
+export const EXPIRED_SHIPMENT_CLAIM_LIMIT = 10;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const TAX_DOCUMENT_DRAIN_LIMIT = 10;
 export { DRAIN_TICK_MS, dueSweepIndexes, firstSweepRunOfHour, sweepPeriodMinutes } from "./scheduled/slices";
@@ -78,7 +86,23 @@ type ScheduledRunContext = {
   cron: string;
   scheduledTime: string;
   scheduledAt: number | undefined;
+  /** Whether the tick did work worth a completion line (an idle tick logs nothing). */
+  worked: boolean;
 };
+
+/**
+ * The minute a tick was scheduled for (its start when the trigger gave none):
+ * the clock of work that cuts by day, so a delayed or replayed tick, and the
+ * budget harness on any day, does the same work.
+ */
+function tickDate(runContext: ScheduledRunContext): Date {
+  return new Date(runContext.scheduledAt ?? runContext.startedAt);
+}
+
+/** The hour's first minute (a manual run, without a scheduled time, counts too). */
+function isFirstTickOfHour(runContext: ScheduledRunContext): boolean {
+  return runContext.scheduledAt === undefined || runContext.scheduledAt % 3_600_000 < 60_000;
+}
 
 /** A sweep's row limit under the plan: the full limit on Paid, a fraction on Free. */
 function scaled(limit: number): number {
@@ -100,21 +124,32 @@ function createScheduledRunContext(metadata: ScheduledMaintenanceMetadata): Sche
     cron: metadata.cron ?? "unknown",
     scheduledTime,
     scheduledAt: typeof metadata.scheduledTime === "number" ? metadata.scheduledTime : undefined,
+    worked: false,
   };
 }
 
+/**
+ * Runs one operation of a tick. A failure is always logged; a success only
+ * when `logSuccess` says the operation did work (a drain that had due rows),
+ * so an idle tick logs nothing. Sweeps log their own summary when they found
+ * something.
+ */
 async function timedScheduledOperation<T>(
   runContext: ScheduledRunContext,
   operation: string,
   fn: () => Promise<T>,
+  options: { logSuccess?: boolean } = {},
 ): Promise<T> {
   const startedAt = Date.now();
   try {
     const result = await fn();
-    console.log(
-      `[scheduled] event=scheduled_operation_completed, runId=${runContext.runId}, operation=${operation}, ` +
-        `durationMs=${Date.now() - startedAt}`,
-    );
+    if (options.logSuccess) {
+      runContext.worked = true;
+      console.log(
+        `[scheduled] event=scheduled_operation_completed, runId=${runContext.runId}, operation=${operation}, ` +
+          `durationMs=${Date.now() - startedAt}`,
+      );
+    }
     return result;
   } catch (error) {
     console.error(
@@ -166,21 +201,17 @@ export async function runScheduledMaintenance(
   metadata: ScheduledMaintenanceMetadata = {},
 ): Promise<void> {
   const runContext = createScheduledRunContext(metadata);
-  console.log(
-    `[scheduled] event=scheduled_run_started, runId=${runContext.runId}, cron=${runContext.cron}, ` +
-      `scheduledTime=${runContext.scheduledTime}`,
-  );
+  const run = () => `runId=${runContext.runId}, cron=${runContext.cron}, scheduledTime=${runContext.scheduledTime}, ` +
+    `durationMs=${Date.now() - runContext.startedAt}`;
 
   try {
     await runScheduledMaintenanceInner(env, executionCtx, runContext);
-    console.log(
-      `[scheduled] event=scheduled_run_completed, runId=${runContext.runId}, durationMs=${Date.now() - runContext.startedAt}`,
-    );
+    // An idle tick (nothing due, nothing found) logs nothing: it runs 1,440
+    // times a day. The hour's first tick says it ran anyway (a liveness signal).
+    if (runContext.worked) console.log(`[scheduled] event=scheduled_run_completed, ${run()}`);
+    else if (isFirstTickOfHour(runContext)) console.log(`[scheduled] event=scheduled_heartbeat, ${run()}`);
   } catch (error) {
-    console.error(
-      `[scheduled] event=scheduled_run_failed, runId=${runContext.runId}, durationMs=${Date.now() - runContext.startedAt}`,
-      error,
-    );
+    console.error(`[scheduled] event=scheduled_run_failed, ${run()}`, error);
     throw error;
   }
 }
@@ -190,7 +221,7 @@ export interface SweepContext {
   env: Env;
   executionCtx: ExecutionContext;
   runContext: ScheduledRunContext;
-  timed: <T>(operation: string, fn: () => Promise<T>) => Promise<T>;
+  timed: <T>(operation: string, fn: () => Promise<T>, options?: { logSuccess?: boolean }) => Promise<T>;
 }
 
 export interface MaintenanceSweep {
@@ -216,11 +247,13 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
           limit: planLimits().maintenance.inventoryExpiryPerRun,
         }),
       );
-      console.log(
-        `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
-          `, limit=${result.limit}, hasMore=${result.hasMore}` +
-          (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
-      );
+      if (result.found > 0 || result.hasMore || result.errors.length > 0) {
+        console.log(
+          `[scheduled] Inventory expiry sweep: found=${result.found}, released=${result.released}` +
+            `, limit=${result.limit}, hasMore=${result.hasMore}` +
+            (result.errors.length > 0 ? `, errors=${result.errors.length}` : ""),
+        );
+      }
     },
   },
   {
@@ -398,8 +431,42 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // Order locks a dead invocation left behind: refund attempts, then courier
+    // booking claims whose lease ran out (one job, so the rotation keeps its
+    // length). A booked attempt is finished, a dead one becomes a courier
+    // confirmation on the order, an empty one is released.
     name: "refund_attempt_reconciliation",
     async run({ db, env, timed }) {
+      // A cursor walks the expired claims, so one that keeps failing never holds the others back.
+      const claimCursor = await readMaintenanceCursor(db, "shipment-claims");
+      const claims = await timed("expired_shipment_claim_sweep", () =>
+        sweepExpiredShipmentClaims(db, {
+          limit: scaled(EXPIRED_SHIPMENT_CLAIM_LIMIT),
+          afterOrderId: claimCursor.value.orders,
+          // Finishing a booking ships its order: Free affords one a run.
+          maxFinalized: planLimits().maintenance.bookedClaimsPerRun,
+        }),
+      );
+      await claimCursor.save({ orders: claims.lastOrderId });
+      for (const booked of claims.finalized) {
+        if (!booked.orderStatusChanged) continue;
+        // The notification drain sends it on the next tick.
+        await sendOrderNotificationsForStatus({
+          db,
+          send: undefined,
+          orderIds: [booked.orderId],
+          newStatus: booked.orderStatus,
+          trackingByOrderId: { [booked.orderId]: booked.trackingId },
+          dedupeKeyByOrderId: { [booked.orderId]: `shipment:${booked.shipmentId}:order_${booked.orderStatus}` },
+          source: "expired-shipment-claim-sweep",
+        });
+      }
+      if (claims.scanned > 0) {
+        console.log(
+          `[scheduled] Expired shipment claims: scanned=${claims.scanned}, released=${claims.released}, ` +
+            `finalized=${claims.finalized.length}, held=${claims.held}, failed=${claims.failed}`,
+        );
+      }
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
         reconcileDueRefundAttempts(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
@@ -525,6 +592,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
             `hasMore=${customerAuthOtpRateLimitCleanup.hasMore}`,
         );
       }
+      // Staff sign-in and proof attempt windows: the other auth rate-limit rows, in the same job.
+      const staffAttemptCleanup = await timed("staff_attempt_cleanup", () =>
+        sweepExpiredStaffAttempts(db, Date.now(), { limit: scaled(STAFF_ATTEMPT_SWEEP_LIMIT) }),
+      );
+      if (staffAttemptCleanup.scanned > 0 || staffAttemptCleanup.hasMore) {
+        console.log(
+          `[scheduled] Staff attempt cleanup: scanned=${staffAttemptCleanup.scanned}, ` +
+            `deleted=${staffAttemptCleanup.deleted}, limit=${staffAttemptCleanup.limit}, hasMore=${staffAttemptCleanup.hasMore}`,
+        );
+      }
     },
   },
   {
@@ -565,8 +642,8 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Finished UTC days become analytics buckets; until then reports read their facts.
     name: "analytics_seal",
-    async run({ db, timed }) {
-      const sealed = await timed("analytics_seal", () => sealAnalyticsDays(db));
+    async run({ db, timed, runContext }) {
+      const sealed = await timed("analytics_seal", () => sealAnalyticsDays(db, tickDate(runContext)));
       if (sealed > 0) console.log(`[scheduled] Analytics seal: days=${sealed}`);
     },
   },
@@ -596,15 +673,71 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
   {
     // Retention of settled events and deliveries, after the dispatch sweep.
     name: "event_outbox_retention",
-    async run({ db, timed }) {
-      const { runScheduledEventRetention } = await import("./events/dispatch");
-      const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
-      if (pruned.events > 0 || pruned.deliveries > 0 || pruned.pluginDeliveries > 0) {
-        console.log(
-          `[scheduled] Event outbox retention: prunedEvents=${pruned.events}, prunedDeliveries=${pruned.deliveries}, ` +
-            `prunedPluginDeliveries=${pruned.pluginDeliveries}`,
-        );
+    async run({ db, timed, runContext }) {
+      const nowSeconds = Math.floor(tickDate(runContext).getTime() / 1000);
+      // Three independent purges: a failure of one is logged (by `timed`) and
+      // rethrown after the others ran, so it never skips them.
+      const parts: Array<() => Promise<void>> = [
+        async () => {
+          const { runScheduledEventRetention } = await import("./events/dispatch");
+          const pruned = await timed("event_outbox_retention", () => runScheduledEventRetention(db));
+          if (pruned.events > 0 || pruned.deliveries > 0 || pruned.pluginDeliveries > 0) {
+            console.log(
+              `[scheduled] Event outbox retention: prunedEvents=${pruned.events}, prunedDeliveries=${pruned.deliveries}, ` +
+                `prunedPluginDeliveries=${pruned.pluginDeliveries}`,
+            );
+          }
+        },
+        async () => {
+          // Meta CAPI logs past the store's retention: a bounded share a run (a
+          // browser event never deletes).
+          const capiLogs = await timed("meta_capi_log_retention", () => purgeExpiredCapiLogs(db, {
+            nowSeconds,
+            limit: scaled(CAPI_LOG_PURGE_LIMIT),
+          }));
+          if (capiLogs > 0) console.log(`[scheduled] Meta CAPI log retention: deleted=${capiLogs}`);
+        },
+        async () => {
+          // Per-order history past every window that reads it (checkout replays,
+          // receipts, notification dedupe, review requests): one round trip.
+          // Free caps the rows it deletes a day (planLimits), so a store with a
+          // long history catches up without spending its daily writes.
+          const cursor = await readMaintenanceCursor(db, "order-history");
+          const allowance = orderHistoryDailyAllowance({
+            nowSeconds,
+            rowsPerDay: planLimits().maintenance.retentionRowsPerDay,
+            limit: scaled(ORDER_HISTORY_RETENTION_LIMIT),
+            saved: cursor.value,
+          });
+          if (allowance.limit === 0) return;
+          const history = await timed("order_history_retention", () => pruneOrderHistory(db, {
+            nowSeconds,
+            limit: allowance.limit,
+            checkoutCursor: cursor.value.checkoutAttempts,
+          }));
+          const deleted = orderHistoryRowsDeleted(history);
+          await cursor.save({
+            checkoutAttempts: history.checkoutCursor,
+            day: String(allowance.day),
+            spent: String(allowance.spent + deleted),
+          });
+          if (history.checkoutAttempts + history.receipts + history.notifications + history.reviewRequests > 0) {
+            console.log(
+              `[scheduled] Order history retention: checkoutAttempts=${history.checkoutAttempts}, receipts=${history.receipts}, ` +
+                `notifications=${history.notifications}, reviewRequests=${history.reviewRequests}`,
+            );
+          }
+        },
+      ];
+      let failure: unknown;
+      for (const part of parts) {
+        try {
+          await part();
+        } catch (error) {
+          failure ??= error;
+        }
       }
+      if (failure !== undefined) throw failure;
     },
   },
   {
@@ -654,13 +787,15 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     // browser handoffs. Cleanup, never on a buyer's path; each part retries
     // on the next turn.
     name: "agent_access_housekeeping",
-    async run({ db, env }) {
-      const parts: Array<() => Promise<unknown>> = [
-        async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env),
-        async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env),
-        async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db),
+    async run({ db, env, timed }) {
+      const parts: Array<[string, () => Promise<unknown>]> = [
+        ["agent_access_oauth_purge", async () => (await import("./agent-access/oauth")).purgeExpiredOAuthData(env)],
+        ["agent_access_artifact_purge", async () => (await import("./agent-access/artifact-delivery")).purgeExpiredAgentArtifacts(env)],
+        ["agent_access_handoff_expiry", async () => (await import("./agent-access/browser-handoffs")).expireAgentBrowserHandoffs(db)],
       ];
-      for (const part of parts) await part().catch(() => undefined);
+      // `timed` logs a part's failure; the next part still runs and the
+      // failed one retries on the job's next turn.
+      for (const [operation, part] of parts) await timed(operation, part).catch(() => undefined);
     },
   },
 ];
@@ -755,8 +890,8 @@ async function runScheduledMaintenanceInner(
   runContext: ScheduledRunContext,
 ): Promise<void> {
   const db = getDb(env);
-  const timed = <T>(operation: string, fn: () => Promise<T>) =>
-    timedScheduledOperation(runContext, operation, fn);
+  const timed = <T>(operation: string, fn: () => Promise<T>, options?: { logSuccess?: boolean }) =>
+    timedScheduledOperation(runContext, operation, fn, options);
   const failures: unknown[] = [];
   const writes = createEventWriteObserver();
   const publishChanges = () => publishRealtime(env, tableChanges(writes.realtimeTopics));
@@ -772,6 +907,7 @@ async function runScheduledMaintenanceInner(
   // Once a day (the 02:00 store-time minute) the nightly pass has the
   // invocation to itself; the drains and the rotation continue next minute.
   if (isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env))) {
+    runContext.worked = true;
     await isolated(() => runNightlyPass(context));
     await publishChanges();
     if (failures.length > 0) throw failures[0];
@@ -782,7 +918,9 @@ async function runScheduledMaintenanceInner(
   const due = await timed("due_work_probe", () => readDueDrains(db, BACKGROUND_DRAINS));
   for (const drain of BACKGROUND_DRAINS) {
     if (drain.due && due && !due.has(drain.name)) continue;
-    await isolated(() => timed(drain.name, () => drain.run(context)));
+    // A probed drain runs because it had due rows: its completion is work done.
+    // An unprobed one runs every tick and logs only what it found.
+    await isolated(() => timed(drain.name, () => drain.run(context), { logSuccess: Boolean(drain.due) }));
   }
 
   // A sweep tick: the rotation's next jobs (every job on Paid or a manual run).
@@ -805,10 +943,27 @@ async function runNightlyPass({ db, runContext, timed }: SweepContext): Promise<
       `soldRecommendations=${nightly.soldRecommendations}, projectionsChecked=${nightly.projectionsChecked}, ` +
       `projectionsRepaired=${nightly.projectionsRepaired}`,
   );
+  // The routine expiry sweep reads only recent reservations; once a day the
+  // history pass reads a bounded span of older ones from its cursor (e.g.
+  // holds left while the sweep was down), moving past what it read.
+  const historyCursor = await readMaintenanceCursor(db, "inventory-expiry-history");
+  const history = await timed("inventory_expiry_history_pass", () =>
+    sweepExpiredReservationHistory(db, {
+      after: historyCursor.value.after ? { at: Number(historyCursor.value.after), key: historyCursor.value.afterKey ?? null } : null,
+      limit: planLimits().maintenance.inventoryExpiryPerRun,
+    }),
+  );
+  await historyCursor.save(history.next === null ? {} : { after: String(history.next.at), afterKey: history.next.key });
+  if (history.result && history.result.found > 0) {
+    console.log(
+      `[scheduled] Inventory expiry history pass: found=${history.result.found}, released=${history.result.released}, ` +
+        `hasMore=${history.result.hasMore}`,
+    );
+  }
   const { measurePluginStorage } = await import("./plugins/scheduled");
   await timed("plugin_storage_measure", () => measurePluginStorage(db));
   // A sampled drift check of the derived projections, repaired in place.
-  const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db));
+  const projections = await timed("derived_projection_check", () => maintainDerivedProjections(db, { now: tickDate(runContext) }));
   if (projections.analytics.drift || projections.recommendations.drift || projections.inbox.drift) {
     console.log(
       `[scheduled] Derived projections repaired: analytics=${projections.analytics.drift}, ` +

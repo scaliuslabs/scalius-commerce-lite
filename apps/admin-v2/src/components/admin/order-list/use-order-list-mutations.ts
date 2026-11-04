@@ -12,7 +12,15 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { orderArchiveMessages } from "~/i18n/order-archive";
-import { chunk, summarizeBulkResults, type OrderBulkOutcome } from "./order-bulk-actions";
+import {
+  chunk,
+  nextBulkRequest,
+  queueAfterBulkResponse,
+  summarizeBulkResults,
+  unansweredBulkOrders,
+  type BulkRequestResult,
+  type OrderBulkOutcome,
+} from "./order-bulk-actions";
 
 /** Orders, their details, the home dashboard and stock all change with these actions. */
 function invalidateAfterOrderChange(queryClient: QueryClient) {
@@ -31,9 +39,9 @@ type BulkInput =
   | { action: "send"; orderIds: string[]; requestKey: string; courierName?: string; note?: string }
   | { action: "ship"; orderIds: string[]; providerId: string };
 
-async function runBulkChunk(input: BulkInput, orderIds: string[]) {
+async function runBulkChunk(input: BulkInput, orderIds: string[]): Promise<BulkRequestResult> {
   if (input.action === "confirm") {
-    return (await apiData(postApiV1AdminOrdersBulkConfirm({ body: { orderIds, requestKey: input.requestKey } }))).results;
+    return apiData(postApiV1AdminOrdersBulkConfirm({ body: { orderIds, requestKey: input.requestKey } }));
   }
   if (input.action === "send") {
     const body = {
@@ -42,16 +50,18 @@ async function runBulkChunk(input: BulkInput, orderIds: string[]) {
       courierName: input.courierName || undefined,
       note: input.note || undefined,
     };
-    return (await apiData(postApiV1AdminOrdersBulkFulfill({ body }))).results;
+    return apiData(postApiV1AdminOrdersBulkFulfill({ body }));
   }
   const body = { orderIds, providerId: input.providerId, options: {} };
-  return (await apiData(postApiV1AdminOrdersBulkShip({ body }))).results;
+  return apiData(postApiV1AdminOrdersBulkShip({ body }));
 }
 
 /**
- * Confirm, "Mark as sent" and courier booking for many orders, 90 per request.
+ * Confirm, "Mark as sent" and courier booking for many orders. Each request
+ * sends up to 90; the server handles its plan's share (fewer on Free) and
+ * returns the rest as `remaining`, which go first in the next request.
  * Resolves with every order's outcome; a request that fails outright reports
- * its orders as not done, and earlier chunks keep their results.
+ * its orders as not done, and earlier requests keep their results.
  */
 export function useOrderBulkRun() {
   const queryClient = useQueryClient();
@@ -59,14 +69,31 @@ export function useOrderBulkRun() {
   return useMutation({
     mutationFn: async (input: BulkInput): Promise<OrderBulkOutcome> => {
       const outcome: OrderBulkOutcome = { succeeded: [], failures: [] };
-      for (const orderIds of chunk(input.orderIds)) {
+      let queue = [...input.orderIds];
+      while (queue.length > 0) {
+        const { sent, next } = nextBulkRequest(queue);
         try {
-          const part = summarizeBulkResults(await runBulkChunk(input, orderIds), t("bulkFailedGeneric"));
+          const response = await runBulkChunk(input, sent);
+          const part = summarizeBulkResults(response.results, t("bulkFailedGeneric"));
           outcome.succeeded.push(...part.succeeded);
           outcome.failures.push(...part.failures);
+          // An order the server neither answered nor left for later is not done: say so.
+          const unanswered = unansweredBulkOrders(sent, response);
+          outcome.failures.push(...unanswered.map((orderId) => ({ orderId, error: t("bulkFailedGeneric") })));
+          const after = queueAfterBulkResponse(sent, next, response);
+          if (after) {
+            queue = after;
+          } else {
+            // Nothing handled: report what it left for later instead of asking again (once per order).
+            const reported = new Set([...response.results.map((result) => result.orderId), ...unanswered]);
+            outcome.failures.push(...sent.filter((orderId) => !reported.has(orderId))
+              .map((orderId) => ({ orderId, error: t("bulkRequestFailed") })));
+            queue = next;
+          }
         } catch (error) {
           const message = getServerFnError(error, t("bulkRequestFailed"));
-          outcome.failures.push(...orderIds.map((orderId) => ({ orderId, error: message })));
+          outcome.failures.push(...sent.map((orderId) => ({ orderId, error: message })));
+          queue = next;
         }
       }
       return outcome;

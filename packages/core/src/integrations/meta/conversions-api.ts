@@ -76,6 +76,8 @@ interface CapiPayload {
 
 interface SendCapiEventOptions {
   encryptionKey?: string;
+  /** `every` for the server's own events (order purchases, staff tests); browser events sample (`CapiLogOptions`). */
+  successLog?: "every" | "sample";
 }
 
 export interface SendCapiEventResult {
@@ -203,7 +205,7 @@ export async function sendCapiEvent(
 
   const retentionHours = settings.logRetentionDays * 24;
   const { pixelId, accessToken, testEventCode } = settings;
-  const url = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${pixelId}/events?access_token=${accessToken}`;
+  const url = `https://graph.facebook.com/${META_GRAPH_API_VERSION}/${pixelId}/events`;
 
   const preparedUserData = await prepareUserData(event.user_data);
   const finalEvent: ServerEvent = { ...event, user_data: preparedUserData };
@@ -220,7 +222,12 @@ export async function sendCapiEvent(
   try {
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // The token travels in a header, never the query string, so a proxy,
+      // access log or error report never records it.
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify(payload),
     });
     const responseData = await response.json() as Record<string, unknown>;
@@ -236,7 +243,7 @@ export async function sendCapiEvent(
       ...logPayload,
       status: "success",
       responsePayload: JSON.stringify(responseData, null, 2),
-    }, retentionHours);
+    }, retentionHours, { successLog: options.successLog });
     return { success: true, response: responseData };
   } catch (error: unknown) {
     const capiError = error as CapiSendError;
@@ -254,7 +261,7 @@ export async function sendCapiEvent(
       responsePayload: capiError.responsePayload
         ? JSON.stringify(capiError.responsePayload, null, 2)
         : "",
-    }, retentionHours);
+    }, retentionHours, { successLog: options.successLog });
     return {
       success: false,
       error: message,

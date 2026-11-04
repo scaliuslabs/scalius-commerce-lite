@@ -317,6 +317,8 @@ function OrderEditor({
   const createRequestKey = React.useRef<string | null>(
     isEdit ? null : getOrCreateAdminOrderRequestKey(),
   );
+  // The abandoned checkout this order completes ("Create order" from it): the order deletes its snapshot.
+  const abandonedCheckoutId = React.useRef<string | null>(null);
   const form = useFormWithRefusals<OrderFormInput, unknown, OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
     // Fields validate when the merchant leaves them, then as they fix them.
@@ -509,6 +511,7 @@ function OrderEditor({
     if (isEdit) return;
     const prefill = takeOrderPrefill();
     if (!prefill) return;
+    abandonedCheckoutId.current = prefill.abandonedCheckoutId ?? null;
     const set = { shouldDirty: true };
     for (const name of [
       "customerName", "shippingCountryCode", "shippingAddress", "shippingAddressLine2",
@@ -626,6 +629,7 @@ function OrderEditor({
           return createMutation.mutateAsync({
             ...toCreateOrderInput(enrichedValues, submittedRequestKey, initialBilling),
             ...(reviewed ? { expectedTotal: reviewed.totalAmount } : {}),
+            ...(abandonedCheckoutId.current ? { abandonedCheckoutId: abandonedCheckoutId.current } : {}),
           });
         },
         replaceRequestKey: replaceSubmittedAdminOrderRequestKey,

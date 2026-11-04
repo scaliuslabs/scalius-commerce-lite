@@ -38,6 +38,13 @@ export interface PersistCustomerAuthOtpChallengeInput {
     ttlSeconds: number;
     resendCooldownSeconds: number;
     maxAttempts: number;
+    /**
+     * The code is held back (the store's hourly ceiling): only the resend
+     * cooldown is written, through the same cooldown gate. An existing
+     * challenge keeps its code, attempts and expiry, so a code already
+     * delivered still works; a new row holds a code nobody receives.
+     */
+    holdBack?: boolean;
 }
 
 export interface PersistedCustomerAuthOtpChallenge {
@@ -116,7 +123,7 @@ export async function persistCustomerAuthOtpChallenge(
         .values(values)
         .onConflictDoUpdate({
             target: customerAuthOtpChallenges.otpKey,
-            set: {
+            set: input.holdBack ? { resendAvailableAt: values.resendAvailableAt, updatedAt: values.updatedAt } : {
                 deliveryKey: values.deliveryKey,
                 method: values.method,
                 channel: values.channel,

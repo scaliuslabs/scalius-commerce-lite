@@ -12,7 +12,7 @@ import { sweepExpiredRows } from "../../utils/sweep-expired-rows";
 import { isEmailAddress, trimTrailingCharacter } from "@scalius/shared/text-scan";
 import { nanoid } from "nanoid";
 import { customerAddresses, customerIdentities, customers, customerSessions, firstCustomerAddressId, orders } from "@scalius/database/schema";
-import { and, desc, eq, gt, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
@@ -33,7 +33,9 @@ import {
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
+    countOtpStoreChannelSend,
     enforceOtpSendRateLimits,
+    refundOtpStoreChannelSend,
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
@@ -109,8 +111,11 @@ export interface SendOtpResult {
     message: string;
     /** Seconds until another code can be requested for this contact. */
     resendAfterSeconds: number;
-    /** Opaque references the API sends the code from, after the response. */
-    otpDelivery: OtpDelivery;
+    /**
+     * Opaque references the API sends the code from, after the response; null
+     * when nothing is sent (the store's hourly ceiling held a code back).
+     */
+    otpDelivery: OtpDelivery | null;
 }
 
 /** Name and contact a buyer adds when the proven email/phone has no account yet. */
@@ -398,6 +403,9 @@ async function resolveProofOwner(
     identifier: string,
 ): Promise<ProofOwner> {
     if (method === "email") {
+        // The live owner: exactly the predicates of the partial unique index
+        // `customers_verified_email_unique` (lower(email), email verified, not
+        // deleted), so this is one index SEARCH, never a scan of every customer.
         const [verified] = await db
             .select({ customer: customers, address: customerAddresses })
             .from(customers)
@@ -405,14 +413,26 @@ async function resolveProofOwner(
             .where(and(
                 sql`lower(${customers.email}) = ${identifier}`,
                 isNotNull(customers.emailVerifiedAt),
+                isNull(customers.deletedAt),
                 isNotNull(customers.accountClaimedAt),
             ))
-            .orderBy(sql`${customers.deletedAt} IS NOT NULL`, desc(customers.lastAuthenticatedAt))
             .limit(1);
-        if (!verified) return { kind: "none" };
-        return verified.customer.deletedAt
-            ? { kind: "deleted" }
-            : { kind: "account", row: verified.customer, address: verified.address };
+        if (verified) return { kind: "account", row: verified.customer, address: verified.address };
+        // Only on a miss: is this the email of a closed account? Exactly the
+        // terms of the partial index `customers_deleted_verified_email_idx`
+        // (lower(email); deleted, email verified, claimed), so it is one index
+        // SEARCH of the closed verified accounts, never a walk of the trash.
+        const [closed] = await db
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(
+                sql`lower(${customers.email}) = ${identifier}`,
+                isNotNull(customers.deletedAt),
+                isNotNull(customers.emailVerifiedAt),
+                isNotNull(customers.accountClaimedAt),
+            ))
+            .limit(1);
+        return closed ? { kind: "deleted" } : { kind: "none" };
     }
 
     // A phone owns an account only once proven. Accounts that merely typed
@@ -484,30 +504,49 @@ export async function sendOtp(
         }
         throw error;
     }
+    // The store's hourly ceiling for this channel is counted atomically before
+    // the code is stored, so a burst cannot pass it. Over the ceiling, only a
+    // contact that already proved itself (a buyer with an account) is sent its
+    // code; for anyone else only the resend cooldown is written (any code it
+    // already holds stays usable) and nothing is delivered, with the same
+    // answer and the same cooldown, so neither reveals who has an account.
+    const counted = await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
+    const holdBack = !counted && (await resolveProofOwner(db, input.method, identifier)).kind !== "account";
+    if (holdBack) console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
         deliveryKey,
         encryptionKey: input.encryptionKey,
     });
-    const challenge = await persistCustomerAuthOtpChallenge(db, {
-        otpKey,
-        deliveryKey,
-        method: input.method,
-        channel,
-        identifier,
-        deliveryTarget: identifier,
-        code,
-        encryptionKey: input.encryptionKey,
-        contactEncryptionKey: input.credentialEncryptionKey,
-        ttlSeconds: OTP_TTL_SECONDS,
-        resendCooldownSeconds: allowance.resendCooldownSeconds,
-        maxAttempts: OTP_MAX_ATTEMPTS,
-    });
+    let challenge: Awaited<ReturnType<typeof persistCustomerAuthOtpChallenge>>;
+    try {
+        challenge = await persistCustomerAuthOtpChallenge(db, {
+            otpKey,
+            deliveryKey,
+            method: input.method,
+            channel,
+            identifier,
+            deliveryTarget: identifier,
+            code,
+            encryptionKey: input.encryptionKey,
+            contactEncryptionKey: input.credentialEncryptionKey,
+            ttlSeconds: OTP_TTL_SECONDS,
+            resendCooldownSeconds: allowance.resendCooldownSeconds,
+            maxAttempts: OTP_MAX_ATTEMPTS,
+            holdBack,
+        });
+    } catch (error) {
+        // The resend cooldown refused it: no code goes out, so it is not counted.
+        if (counted) await refundOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
+        throw error;
+    }
+    const resendAfterSeconds = Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000));
+    if (holdBack) return { message: "We sent you a code.", resendAfterSeconds, otpDelivery: null };
 
     return {
         message: "We sent you a code.",
-        resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000)),
+        resendAfterSeconds,
         otpDelivery: buildOtpDelivery({
             channel,
             purpose: "customer_login",
@@ -1216,12 +1255,16 @@ export async function cleanupExpiredCustomerSessions(
     const limit = Math.max(1, Math.min(options.limit ?? 200, 500));
     const revokedRetentionSeconds = options.revokedRetentionSeconds ?? 7 * 24 * 60 * 60;
     const revokedCutoff = nowSeconds - revokedRetentionSeconds;
-    const expired = or(
-        lte(customerSessions.expiresAt, nowSeconds),
-        and(
-            isNotNull(customerSessions.revokedAt),
-            lte(customerSessions.revokedAt, revokedCutoff),
-        ),
-    );
+    // Stale = expired, or revoked longer ago than the retention. One OR across
+    // those plans a SCAN of every session, so the set is split into three
+    // disjoint ranges of customer_sessions_active_expiry_idx (revoked_at, expires_at).
+    const expired = [
+        // never revoked, expired
+        and(isNull(customerSessions.revokedAt), lte(customerSessions.expiresAt, nowSeconds))!,
+        // revoked before the retention cutoff (expired or not)
+        lte(customerSessions.revokedAt, revokedCutoff),
+        // revoked recently, but expired anyway
+        and(gt(customerSessions.revokedAt, revokedCutoff), lte(customerSessions.expiresAt, nowSeconds))!,
+    ];
     return sweepExpiredRows(db, customerSessions, customerSessions.tokenHash, expired, limit);
 }

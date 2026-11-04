@@ -1,7 +1,11 @@
 /** One bounded XML/API chunk, below the sitemap protocol's 50,000 URL ceiling. */
 export const SITEMAP_PAGE_SIZE = 5_000;
-/** Every supported page has an exactly representable SQL offset. */
-export const SITEMAP_MAX_PAGE = Math.floor(Number.MAX_SAFE_INTEGER / SITEMAP_PAGE_SIZE);
+/**
+ * The deepest page a sitemap URL may name: six digits, about five billion
+ * URLs. Every supported page has an exactly representable SQL offset, and a
+ * page number has one spelling of at most six digits.
+ */
+export const SITEMAP_MAX_PAGE = 999_999;
 
 export interface SitemapPageOptions {
   page?: number;

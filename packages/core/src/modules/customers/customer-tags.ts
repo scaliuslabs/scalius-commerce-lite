@@ -102,7 +102,7 @@ export async function addTagsToCustomers(
         SELECT ${customers.id}, tag_list.value, unixepoch()
         FROM ${customers} CROSS JOIN json_each(${JSON.stringify(tags)}) AS tag_list
         WHERE ${customers.id} IN (SELECT value FROM json_each(${JSON.stringify(ids)}))
-          AND ${customers.deletedAt} IS NULL
+          AND +${customers.deletedAt} IS NULL
           AND (SELECT count(*) FROM ${customerTagLinks} AS existing WHERE existing.customer_id = ${customers.id}) + ${tags.length} <= ${CUSTOMER_TAGS_PER_CUSTOMER_MAX}
         ON CONFLICT DO NOTHING`);
     return { customers: ids.length, tags };

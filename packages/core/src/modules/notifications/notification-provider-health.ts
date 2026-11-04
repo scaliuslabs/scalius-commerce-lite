@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { notificationDeliveryReceipts, settings } from "@scalius/database/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { startsWithText } from "../../utils/text-match";
+import { forgetScopedRead, readOnce } from "../../settings-store";
 
 export type NotificationProviderHealthChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -30,17 +31,29 @@ export async function getNotificationProviderBlock(
     provider: string;
   },
 ): Promise<NotificationProviderBlock | null> {
-    const row = await db
-        .select({ value: settings.value })
-        .from(settings)
-        .where(and(
-            eq(settings.category, PROVIDER_HEALTH_CATEGORY),
-            eq(settings.key, providerHealthKey(options.channel, options.provider)),
-        ))
-        .get();
+    // One round trip: the marker and the evidence a lost marker is recovered from.
+    // A dispatch asks once per provider; a block it records drops the answer.
+    return readOnce(db, providerHealthReadKey(options.channel, options.provider), async () => {
+        const marker = db
+            .select({ value: settings.value })
+            .from(settings)
+            .where(and(
+                eq(settings.category, PROVIDER_HEALTH_CATEGORY),
+                eq(settings.key, providerHealthKey(options.channel, options.provider)),
+            ))
+            .limit(1);
+        const recovery = recoveryStatements(db, options);
+        const [markerRows, settingsRows, receiptRows] = recovery
+            ? await db.batch([marker, recovery.settings, recovery.receipts])
+            : [await marker, [], []];
+        const value = markerRows[0]?.value;
+        if (value) return parseProviderBlock(value);
+        return providerBlockFromReceipts(options, settingsRows, receiptRows);
+    });
+}
 
-    if (row?.value) return parseProviderBlock(row.value);
-    return await recoverProviderBlockFromReceipts(db, options);
+function providerHealthReadKey(channel: NotificationProviderHealthChannel, provider: string): string {
+    return `notification-provider-health:${providerHealthKey(channel, provider)}`;
 }
 
 export async function markNotificationProviderBlocked(
@@ -72,6 +85,7 @@ export async function markNotificationProviderBlocked(
             target: [settings.key, settings.category],
             set: { value: JSON.stringify(value), updatedAt: sql`unixepoch()` },
         });
+    forgetScopedRead(db, providerHealthReadKey(value.channel, value.provider));
 }
 
 export async function clearNotificationProviderBlocks(
@@ -160,24 +174,28 @@ function parseProviderBlock(value: string): NotificationProviderBlock | null {
     }
 }
 
-async function recoverProviderBlockFromReceipts(
+function recoveryStatements(
   db: Database,
   options: {
     channel: NotificationProviderHealthChannel;
     provider: string;
   },
-): Promise<NotificationProviderBlock | null> {
+) {
     const settingsCategories = RECOVERABLE_SETTINGS_CATEGORIES[options.channel];
     if (!settingsCategories?.length) return null;
 
     const provider = normalizeProvider(options.provider);
-    const [settingsRows, rows] = await db.batch([
-        db.select({ updatedAt: settings.updatedAt })
+    // Evidence is read only while no marker stands (a constant term: with a
+    // marker neither statement reads a row).
+    const noMarker = sql`NOT EXISTS (SELECT 1 FROM settings AS health_marker
+        WHERE health_marker.category = ${PROVIDER_HEALTH_CATEGORY} AND health_marker.key = ${providerHealthKey(options.channel, provider)})`;
+    return {
+        settings: db.select({ updatedAt: settings.updatedAt })
             .from(settings)
-            .where(inArray(settings.category, settingsCategories))
+            .where(and(inArray(settings.category, settingsCategories), noMarker))
             .orderBy(desc(settings.updatedAt))
             .limit(1),
-        db.select({
+        receipts: db.select({
                 providerStatus: notificationDeliveryReceipts.providerStatus,
                 rawResponse: notificationDeliveryReceipts.rawResponse,
                 lastError: notificationDeliveryReceipts.lastError,
@@ -190,10 +208,23 @@ async function recoverProviderBlockFromReceipts(
                 eq(notificationDeliveryReceipts.channel, options.channel),
                 eq(notificationDeliveryReceipts.provider, provider),
                 inArray(notificationDeliveryReceipts.status, ["skipped", "failed"]),
+                noMarker,
             ))
             .orderBy(desc(notificationDeliveryReceipts.updatedAt))
             .limit(RECENT_RECEIPT_SCAN_LIMIT),
-    ]);
+    };
+}
+
+/** A block a lost marker left in the delivery history: a breaker failure newer than the last settings save. */
+function providerBlockFromReceipts(
+  options: {
+    channel: NotificationProviderHealthChannel;
+    provider: string;
+  },
+  settingsRows: ReadonlyArray<{ updatedAt: unknown }>,
+  rows: ReadonlyArray<{ providerStatus: string | null; rawResponse: string | null; lastError: string | null; skippedAt: unknown; failedAt: unknown; updatedAt: unknown }>,
+): NotificationProviderBlock | null {
+    const provider = normalizeProvider(options.provider);
     const latestSettingsUpdatedAt = timestampSeconds(settingsRows[0]?.updatedAt);
 
     for (const row of rows) {

@@ -1035,11 +1035,9 @@ export const refundAttempts = sqliteTable("refund_attempts", {
     uniqueIndex("refund_attempts_provider_idempotency_key_unique").on(table.providerIdempotencyKey),
     uniqueIndex("refund_attempts_reference_unique").on(table.refundReference),
     uniqueIndex("refund_attempts_group_allocation_unique").on(table.refundGroupId, table.allocationIndex),
-    index("refund_attempts_order_id_idx").on(table.orderId),
     index("refund_attempts_order_status_idx").on(table.orderId, table.status),
     index("refund_attempts_status_probe_idx").on(table.status, table.nextProbeAt, table.createdAt),
     index("refund_attempts_status_claim_idx").on(table.status, table.claimExpiresAt, table.createdAt),
-    index("refund_attempts_source_payment_id_idx").on(table.sourcePaymentId),
     index("refund_attempts_source_payment_status_idx").on(table.sourcePaymentId, table.status),
     index("refund_attempts_refund_payment_id_idx").on(table.refundPaymentId),
     index("refund_attempts_provider_refund_idx").on(table.gateway, table.providerRefundId),
@@ -1098,6 +1096,47 @@ export const orderRefundLines = sqliteTable("order_refund_lines", {
     index("order_refund_lines_order_item_idx").on(table.orderItemId),
     index("order_refund_lines_order_idx").on(table.orderId),
     check("order_refund_lines_quantity_positive", sql`${table.quantity} > 0`),
+]);
+
+/**
+ * Units not handed over yet that a refund's money paid for beyond the units
+ * it named (its lines stay as staff named them): the handover never issues
+ * them. Written once by the refund's settlement, when some of its money went
+ * back; append-only. `refund_group_id` is the refund's attempt group (a refund
+ * recorded from the provider has no `order_refunds` record).
+ */
+export const orderWithheldUnits = sqliteTable("order_withheld_units", {
+    id: text("id").primaryKey(),
+    refundGroupId: text("refund_group_id").notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: text("order_item_id")
+        .notNull()
+        .references(() => orderItems.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_withheld_units_refund_item_unique").on(table.refundGroupId, table.orderItemId),
+    index("order_withheld_units_order_item_idx").on(table.orderItemId),
+    index("order_withheld_units_order_idx").on(table.orderId),
+    check("order_withheld_units_quantity_positive", sql`${table.quantity} > 0`),
+]);
+
+/**
+ * A refund of an order that bought gift cards whose clawback settled: written
+ * once, in the batch that ends the refund's last attempt, even when the
+ * settlement had nothing else to write. Its absence is what the
+ * reconciliation backstop looks for; its presence keeps a settlement once.
+ */
+export const refundGiftCardSettlements = sqliteTable("refund_gift_card_settlements", {
+    refundGroupId: text("refund_group_id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("refund_gift_card_settlements_order_idx").on(table.orderId),
 ]);
 
 export const orderSupportRequests = sqliteTable("order_support_requests", {
@@ -1304,6 +1343,7 @@ export const abandonedCheckouts = sqliteTable(
     (table) => [
         unique("ab_checkout_id_unique").on(table.checkoutId),
         index("abandoned_checkouts_created_at_idx").on(table.createdAt, table.id),
+        index("abandoned_checkouts_updated_idx").on(table.updatedAt, table.id),
         index("abandoned_checkouts_empty_candidate_idx").on(table.customerPhone, table.updatedAt, table.id),
         index("abandoned_checkouts_pending_idx").on(table.abandonedAt, table.updatedAt, table.id),
     ],

@@ -22,7 +22,7 @@ export type {
 } from "./release";
 export { checkAndAlertLowStock, setLowStockThreshold } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";
-export { releaseExpiredReservations } from "./expiry";
+export { releaseExpiredReservations, sweepExpiredReservationHistory } from "./expiry";
 export {
   foldInventoryLedgerV2,
   buildInventoryLedgerV2Edge,

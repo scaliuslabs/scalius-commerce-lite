@@ -9,8 +9,9 @@
 // - A refusal is an answer (`success: false`), retryable only when the same
 //   message can pass later. A request that could not complete (timeout,
 //   network) throws a retryable `ProviderError`, `uncertain` because the
-//   gateway may already have sent it; the platform retries it only with the
-//   message's idempotency key (`idempotencyKey`).
+//   gateway may already have sent it; the platform repeats it only for a
+//   gateway that declares `dedupesOnIdempotencyKey` (GenNet, which dedupes on
+//   `csms_id`); a lost SMS.net.bd, BDBulkSMS or MIM answer is final.
 // - Answers keep no phone number, e-mail address or credential
 //   (sms-diagnostics.ts), and nothing here logs a request or a response.
 

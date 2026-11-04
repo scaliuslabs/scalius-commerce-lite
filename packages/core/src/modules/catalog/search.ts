@@ -148,7 +148,7 @@ export async function searchStorefrontProducts(
                 name: products.name,
                 priceMinor: products.priceMinor,
                 slug: products.slug,
-                ...translationColumns(translation, "product", products.id),
+                ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
                 discountType: products.discountType,
                 discountBps: products.discountBps,
                 discountAmountMinor: products.discountAmountMinor,

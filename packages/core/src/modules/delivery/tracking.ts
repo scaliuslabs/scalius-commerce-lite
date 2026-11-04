@@ -8,6 +8,7 @@ import {
   canTransitionTo,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import type { Database } from "@scalius/database/client";
 import { markShipmentReconciliationRequired } from "./delivery.service";
@@ -142,6 +143,8 @@ export async function updateOrderStatusFromShipment(
         customerEmail: orders.customerEmail,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
       })
       .from(orders)
       .where(eq(orders.id, shipment.orderId));

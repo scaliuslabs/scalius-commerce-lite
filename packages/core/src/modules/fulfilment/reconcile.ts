@@ -10,10 +10,14 @@ import {
   type CourierProvidersSource,
   lookupShipmentByMerchantOrderId,
   PROVIDER_OUTCOME_UNKNOWN,
+  updateOrderStatusFromShipment,
 } from "../delivery";
 import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
+  expiredShipmentClaimCondition,
+  isShipmentClaimHeld,
+  isShipmentClaimLeaseLive,
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
   validateTransition,
@@ -27,7 +31,8 @@ import {
   type UnknownShipmentResolutionResult,
 } from "../orders";
 import { parseShipmentMetadata, clearShipmentClaim } from "./shared";
-import { recordCourierBookingFulfilment } from "./ledger";
+import { recordCourierBookingFulfilment, syncCourierFulfilmentFromShipment } from "./ledger";
+import { resolveExpiredShipmentClaim } from "./bulk";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     return value && typeof value === "object" && !Array.isArray(value)
@@ -329,8 +334,11 @@ export async function resolveUnknownOrderShipment(
     if (replay) throw new ConflictError("This unknown shipment outcome was already resolved.");
     assertCurrentUnknownShipmentResolutionTarget(target, input.expectedOrderVersion);
 
-    // A courier that can look the order up gets the last word on "not created".
-    if (input.outcome === "confirmed_not_created") {
+    // Releasing the lock ("not created" or "cancelled") rests on the staff's
+    // own search of the courier: a lookup only ever vetoes (it is
+    // positive-only, and Pathao has none). A wrong release lets a re-booking
+    // send a second cash-on-delivery parcel.
+    if (input.outcome === "confirmed_not_created" || input.outcome === "confirmed_cancelled") {
         const lookup = await lookupShipmentByMerchantOrderId(
             db,
             target.shipment.providerId!,
@@ -338,9 +346,20 @@ export async function resolveUnknownOrderShipment(
             input.encryptionKey,
             input.couriers,
         );
-        if (lookup.confirmed) {
-            throw new ConflictError(
-                `${lookup.courier} confirms a shipment for this order. Record the confirmed shipment or a courier-confirmed cancellation; it cannot be marked not created.`,
+        if (lookup.confirmed && (input.outcome === "confirmed_not_created" || lookup.status !== ShipmentStatus.CANCELLED)) {
+            throw new ConflictError(input.outcome === "confirmed_not_created"
+                ? `${lookup.courier} confirms a shipment for this order. Record the confirmed shipment or a courier-confirmed cancellation; it cannot be marked not created.`
+                : `${lookup.courier} shows this order's booking as active. Record the confirmed shipment instead.`);
+        }
+        // A lookup that could not run proves nothing: the lock stays, unless
+        // courier support answered (the one way out of a lookup that never comes back).
+        if (!lookup.confirmed && lookup.reason === "unavailable" && input.evidenceSource !== "courier_support") {
+            throw new ConflictError(`${lookup.message} If the lookup stays unavailable, record what courier support confirmed, with their reference.`);
+        }
+        // The note names the order ID the staff searched the courier for.
+        if (!input.evidenceNote.toLowerCase().includes(input.orderId.toLowerCase())) {
+            throw new ValidationError(
+                `Search the courier for order ID ${input.orderId} and note what it showed, including the order ID.`,
             );
         }
     }
@@ -427,11 +446,67 @@ export async function resolveUnknownOrderShipment(
     };
 }
 
+/**
+ * After a booking is finished: a shipment status past "booked" moves the
+ * order as the courier's push would (with the fulfilment ledger following
+ * the parcel). Returns the order status after, or null when nothing applies.
+ */
+async function followCourierStatus(db: Database, orderId: string, shipmentId: string, status: string): Promise<string | null> {
+    if (status === ShipmentStatus.PENDING) return null;
+    await syncCourierFulfilmentFromShipment(db, shipmentId, status);
+    await updateOrderStatusFromShipment(db, shipmentId, status);
+    await syncCourierFulfilmentFromShipment(db, shipmentId, status);
+    return (await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get())?.status ?? null;
+}
+
 export async function reconcileOrderShipment(
     db: Database,
     orderId: string,
     shipmentId: string,
 ): Promise<OrderShipmentReconciliationResult> {
+    // Repair settles an expired booking claim first (as the maintenance sweep
+    // would): released when its attempt booked nothing, otherwise it becomes
+    // the reconciliation or the courier confirmation handled below. A held
+    // claim whose attempt moved on (a courier status written before the claim
+    // was settled) becomes that reconciliation again, with the status it shows.
+    const claim = await db
+        .select({
+            status: orders.status,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+    if (claim?.shipmentClaimId === shipmentId && (!isShipmentClaimLeaseLive(claim) || isShipmentClaimHeld(claim))) {
+        const attempt = await db
+            .select({ orderId: deliveryShipments.orderId, status: deliveryShipments.status })
+            .from(deliveryShipments)
+            .where(eq(deliveryShipments.id, shipmentId))
+            .get();
+        if (attempt && attempt.orderId !== orderId) {
+            throw new ValidationError("Shipment does not belong to this order");
+        }
+        if (attempt?.status !== ShipmentStatus.RECONCILE_REQUIRED) {
+            const outcome = await resolveExpiredShipmentClaim(db, orderId, shipmentId);
+            if (!outcome.blocked) {
+                return {
+                    status: "repaired",
+                    orderId,
+                    shipmentId,
+                    orderStatus: claim.status,
+                    shipmentStatus: attempt?.status ?? ShipmentStatus.FAILED,
+                    orderStatusChanged: false,
+                    inventoryReconciled: false,
+                    claimCleared: true,
+                    trackingId: null,
+                    message: "The expired shipment attempt booked nothing. The shipment lock is released.",
+                    availabilityTransitionVariantIds: [],
+                };
+            }
+        }
+    }
+
     const shipment = await db
         .select({
             id: deliveryShipments.id,
@@ -553,7 +628,34 @@ export async function reconcileOrderShipment(
         };
     }
     if (order.shipmentClaimId !== shipmentId) {
-        throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
+        // A finisher that lost the race to another marked the shipment after
+        // the order was already shipped and its claim cleared: the booking is
+        // done, so the shipment only takes its courier status back.
+        const leftover = !order.shipmentClaimId
+            && (order.status === OrderStatus.SHIPPED || order.status === OrderStatus.DELIVERED)
+            && stringField(asRecord(metadata.reconciliation), "reason") === "expired_order_shipment_claim";
+        if (!leftover) throw new ConflictError("Shipment is no longer the active order shipment recovery claim.");
+        const restored = safeFinalizedShipmentStatus(shipment, metadata).status;
+        await db.update(deliveryShipments).set({
+            status: restored,
+            rawStatus: restored,
+            metadata: cleanShipmentRecoveryMetadata(metadata),
+            updatedAt: sql`unixepoch()`,
+        }).where(and(eq(deliveryShipments.id, shipmentId), eq(deliveryShipments.status, ShipmentStatus.RECONCILE_REQUIRED)));
+        const followed = await followCourierStatus(db, orderId, shipmentId, restored);
+        return {
+            status: "repaired",
+            orderId,
+            shipmentId,
+            orderStatus: followed ?? order.status,
+            shipmentStatus: restored,
+            orderStatusChanged: Boolean(followed && followed !== order.status),
+            inventoryReconciled: false,
+            claimCleared: false,
+            trackingId: shipment.trackingId,
+            message: "The shipment was already finished; its courier status is restored.",
+            availabilityTransitionVariantIds: [],
+        };
     }
 
     const finalizedShipmentStatus = safeFinalizedShipmentStatus(shipment, metadata);
@@ -612,18 +714,162 @@ export async function reconcileOrderShipment(
         ));
 
     await clearShipmentClaim(db, orderId, shipmentId);
+    // A courier status the shipment already moved to (delivered, returned)
+    // moves the order the way a courier push would.
+    const followed = await followCourierStatus(db, orderId, shipmentId, finalizedShipmentStatus.status);
 
     return {
         status: "repaired",
         orderId,
         shipmentId,
-        orderStatus: finalOrderStatus,
+        orderStatus: followed ?? finalOrderStatus,
         shipmentStatus: finalizedShipmentStatus.status,
-        orderStatusChanged,
+        orderStatusChanged: orderStatusChanged || Boolean(followed && followed !== finalOrderStatus),
         inventoryReconciled: true,
         claimCleared: true,
         trackingId: shipment.trackingId,
         message: "Shipment recovery repaired and order finalization completed.",
         availabilityTransitionVariantIds,
     };
+}
+
+export const EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT = 25;
+
+export interface ExpiredShipmentClaimSweepResult {
+    scanned: number;
+    /** Attempts that booked nothing: the order is free again. */
+    released: number;
+    /** Booked attempts finished as Repair would (the order is shipped, the claim cleared). */
+    finalized: Array<{ orderId: string; shipmentId: string; orderStatus: string; orderStatusChanged: boolean; trackingId: string | null }>;
+    /** Held for staff: an unknown courier outcome, or a booking that could not be finished. */
+    held: number;
+    failed: number;
+    /** The cursor: the last order looked at, or null once the range wrapped. */
+    lastOrderId: string | null;
+}
+
+/**
+ * The maintenance backstop for dead courier bookings, over every order whose
+ * shipment claim lease ran out (the partial claim index holds only claimed
+ * orders), after `afterOrderId` so a claim that keeps failing never holds the
+ * others back. An attempt that booked nothing is released; a booked attempt
+ * (the courier's id is on its row) is finished the way Repair finishes it, so
+ * the courier's later pushes apply; an unknown outcome is held for a courier
+ * confirmation. Held claims lose their expiry, so they leave this range.
+ */
+export async function sweepExpiredShipmentClaims(
+    db: Database,
+    /** `maxFinalized`: booked claims one run finishes (each ships an order: the plan's budget). */
+    options: { limit?: number; afterOrderId?: string | null; maxFinalized?: number } = {},
+): Promise<ExpiredShipmentClaimSweepResult> {
+    const maxFinalized = Math.max(1, Math.floor(options.maxFinalized ?? EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT));
+    const limit = Math.max(1, Math.min(EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT * 4, Math.floor(options.limit ?? EXPIRED_SHIPMENT_CLAIM_SWEEP_LIMIT)));
+    // The cursor and order use `id || ''` so the planner reads the partial
+    // claim index (claimed orders only), never the primary key's whole range.
+    const cursorKey = sql<string>`(${orders.id} || '')`;
+    const rows = await db
+        .select({ id: orders.id, shipmentClaimId: orders.shipmentClaimId })
+        .from(orders)
+        .where(and(expiredShipmentClaimCondition(), options.afterOrderId ? sql`${cursorKey} > ${options.afterOrderId}` : undefined))
+        .orderBy(cursorKey)
+        .limit(limit)
+        .all();
+    const result: ExpiredShipmentClaimSweepResult = {
+        scanned: rows.length,
+        released: 0,
+        finalized: [],
+        held: 0,
+        failed: 0,
+        // A short page means the range ended: the next run starts over.
+        lastOrderId: rows.length === limit ? rows.at(-1)!.id : null,
+    };
+    let previousId: string | null = options.afterOrderId ?? null;
+    let finishing = 0;
+    for (const row of rows) {
+        if (!row.shipmentClaimId) continue;
+        try {
+            const attempt = await db
+                .select({ status: deliveryShipments.status, externalId: deliveryShipments.externalId, trackingId: deliveryShipments.trackingId })
+                .from(deliveryShipments)
+                .where(eq(deliveryShipments.id, row.shipmentClaimId))
+                .get();
+            const booked = Boolean(attempt && (attempt.externalId || attempt.trackingId)
+                && attempt.status !== ShipmentStatus.FAILED && attempt.status !== ShipmentStatus.CANCELLED);
+            if (!booked) {
+                const outcome = await resolveExpiredShipmentClaim(db, row.id, row.shipmentClaimId);
+                if (outcome.blocked) result.held += 1;
+                else result.released += 1;
+                previousId = row.id;
+                continue;
+            }
+            // The run's budget of finished bookings is spent: this one leads the next run.
+            if (finishing >= maxFinalized) {
+                result.scanned = rows.indexOf(row);
+                result.lastOrderId = previousId ?? "";
+                break;
+            }
+            previousId = row.id;
+            finishing += 1;
+            try {
+                const repaired = await reconcileOrderShipment(db, row.id, row.shipmentClaimId);
+                result.finalized.push({
+                    orderId: row.id,
+                    shipmentId: row.shipmentClaimId,
+                    orderStatus: repaired.orderStatus,
+                    orderStatusChanged: repaired.orderStatusChanged,
+                    trackingId: repaired.trackingId,
+                });
+            } catch (error) {
+                // The claim is held for staff (Repair); the order stays locked.
+                result.held += 1;
+                console.error(`[fulfilment] Booked shipment ${row.shipmentClaimId} of order ${row.id} could not be finished:`, error);
+            }
+        } catch (error) {
+            result.failed += 1;
+            console.error(`[fulfilment] Expired shipment claim ${row.shipmentClaimId} of order ${row.id} could not be resolved:`, error);
+        }
+    }
+    return result;
+}
+
+/**
+ * Before a courier push for a booked shipment is applied: the push proves the
+ * booking exists, so an order still claimed by it (a booking whose invocation
+ * died before finishing) is finished first. `in_flight`: the booking may still
+ * be finishing, the courier should send again; `unresolved`: the shipment
+ * waits for staff, nothing may be written over it.
+ */
+export async function settleShipmentClaimForCourierPush(
+    db: Database,
+    shipmentId: string,
+    nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<{ state: "ready" | "in_flight" | "unresolved"; finalized?: OrderShipmentReconciliationResult }> {
+    const shipment = await db
+        .select({ orderId: deliveryShipments.orderId, status: deliveryShipments.status })
+        .from(deliveryShipments)
+        .where(eq(deliveryShipments.id, shipmentId))
+        .get();
+    if (!shipment) return { state: "unresolved" };
+    const order = await db
+        .select({ shipmentClaimId: orders.shipmentClaimId, shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt })
+        .from(orders)
+        .where(eq(orders.id, shipment.orderId))
+        .get();
+    if (order?.shipmentClaimId !== shipmentId) {
+        if (shipment.status !== ShipmentStatus.RECONCILE_REQUIRED) return { state: "ready" };
+        // Held for staff, unless it is a finished booking another finisher re-marked.
+        if (order?.shipmentClaimId) return { state: "unresolved" };
+        try {
+            return { state: "ready", finalized: await reconcileOrderShipment(db, shipment.orderId, shipmentId) };
+        } catch {
+            return { state: "unresolved" };
+        }
+    }
+    if (isShipmentClaimLeaseLive(order, nowSeconds) && !isShipmentClaimHeld(order)) return { state: "in_flight" };
+    try {
+        return { state: "ready", finalized: await reconcileOrderShipment(db, shipment.orderId, shipmentId) };
+    } catch (error) {
+        console.error(`[fulfilment] Shipment ${shipmentId} could not be finished before its courier push:`, error);
+        return { state: "unresolved" };
+    }
 }

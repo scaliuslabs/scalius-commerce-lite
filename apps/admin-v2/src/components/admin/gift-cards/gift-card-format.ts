@@ -9,7 +9,7 @@ import { normalizeBdMobile, toLatinDigits } from "@scalius/shared/phone-input";
 import { unixToDate } from "@scalius/shared/timestamps";
 import type { BadgeVariant } from "~/components/ui/badge";
 import { formatDateTime } from "~/i18n";
-import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
+import { formatSavedMinorAmount } from "~/lib/order-money-format";
 
 export type GiftCardTimestamp = string | number | null | undefined;
 

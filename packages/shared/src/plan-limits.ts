@@ -48,11 +48,17 @@ export interface PlanLimits {
    * the rest due for the next tick.
    */
   readonly background: {
-    /** Due events one drain dispatches to their webhook and app subscribers. */
+    /**
+     * Due events one drain dispatches to their webhook and app subscribers.
+     * The drain costs the same few D1 queries whatever the count (one claim,
+     * one fan-out read and write per target, one mark).
+     */
     readonly eventsPerDrain: number;
-    /** Webhook and app deliveries one drain sends (an outbound request and a few D1 queries each). */
+    /** Webhook and app deliveries one scheduled drain sends (an outbound request and about 4 D1 queries each). */
     readonly deliveriesPerDrain: number;
-    /** Notification outbox rows one drain sends (about 30 D1 queries each: settings, templates, receipts). */
+    /** Deliveries sent right after a write, in the write's own invocation (its queries are mostly spent). */
+    readonly deliveriesAfterWrite: number;
+    /** Notification outbox rows one drain sends (about 12 D1 queries each: one context batch, receipts, the staff alert). */
     readonly notificationsPerDrain: number;
     /** Claimed payment events one tick retries from their `webhook_events` rows. */
     readonly paymentEventsPerDrain: number;
@@ -96,8 +102,17 @@ export interface PlanLimits {
     readonly digitalUploadsPerState: number;
     /** Each unattached image requires a guarded row delete. */
     readonly orphanAttachmentsPerRun: number;
+    /** Dead courier bookings one run finishes (each ships its order: about 28 D1 queries). */
+    readonly bookedClaimsPerRun: number;
     /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
     readonly limitScale: number;
+    /**
+     * History rows (checkout attempts, receipts, notifications with their delivery
+     * receipts, review requests) retention deletes a UTC day at most: on Free a store
+     * with a long history catches up within a bounded share of the 100,000 rows
+     * written a day; Paid has no cap.
+     */
+    readonly retentionRowsPerDay: number;
   };
   readonly lists: {
     /** Most rows a list counts for its total: `total` is exact up to it and reads "N+" beyond. */
@@ -120,7 +135,17 @@ export interface PlanLimits {
      * or brand shows its own counts.
      */
     readonly facetLiveProducts: number;
+    /**
+     * Products one catalogue feed request (`/api/product-feed.xml`,
+     * `/api/facebook-feed.xml`) may ask for with `limit`: each 100 is one feed
+     * page read, so a single request is bounded by this many products, never by
+     * the catalogue. The default first page (1,000) fits both plans; the
+     * storefront learns the value from the layout (`platform.feedProductsPerRequest`).
+     */
+    readonly feedProductsPerRequest: number;
   };
+  /** Orders one per-row bulk order action handles per request (see `BulkOrderLimits`). */
+  readonly bulkOrders: BulkOrderLimits;
   /**
    * Items one batch create (`products.batch_create`, `categories.batch_create`,
    * `brands.batch_create`; routes/admin/resources-batch.ts) accepts. Each item
@@ -164,6 +189,26 @@ export interface PlanLimits {
   };
 }
 
+/**
+ * Orders one per-row bulk order action handles per request; the rest come
+ * back as `remaining` and the dashboard sends them next. Each order costs its
+ * own D1 calls and the request's after-response work (one customer message
+ * on Free) counts against the same per-invocation cap (Free: 50 queries).
+ */
+export interface BulkOrderLimits {
+  /** Bulk confirm: one read for the whole slice, then one batch per 30 orders (status, timeline line, message). */
+  readonly confirm: number;
+  /**
+   * Of those, orders whose stock must be reserved again (a restored order):
+   * each runs the full status change with its stock, so few fit a request.
+   */
+  readonly confirmStockRepairs: number;
+  /** "Mark as sent" with your own courier: a fulfilment, its shipped status and its message per order. */
+  readonly send: number;
+  /** Booking a courier: a shipment claim, the courier's API call and the shipped status per order. */
+  readonly ship: number;
+}
+
 export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.freeze({
   free: Object.freeze({
     plan: "free",
@@ -171,8 +216,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     password: Object.freeze({ algorithm: "pbkdf2-sha256", iterations: 30_000 }),
     sameOriginMedia: false,
     background: Object.freeze({
-      eventsPerDrain: 2,
-      deliveriesPerDrain: 2,
+      eventsPerDrain: 20,
+      deliveriesPerDrain: 4,
+      deliveriesAfterWrite: 2,
       notificationsPerDrain: 1,
       paymentEventsPerDrain: 1,
       autoFulfilPerRun: 1,
@@ -193,9 +239,12 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 2,
       digitalUploadsPerState: 6,
       orphanAttachmentsPerRun: 10,
+      bookedClaimsPerRun: 1,
       limitScale: 0.2,
+      retentionRowsPerDay: 6_000,
     }),
-    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300 }),
+    lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
+    bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -218,6 +267,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     background: Object.freeze({
       eventsPerDrain: 50,
       deliveriesPerDrain: 25,
+      deliveriesAfterWrite: 25,
       notificationsPerDrain: 20,
       paymentEventsPerDrain: 10,
       autoFulfilPerRun: 50,
@@ -238,9 +288,12 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       staleOrdersPerRun: 25,
       digitalUploadsPerState: 25,
       orphanAttachmentsPerRun: 50,
+      bookedClaimsPerRun: 10,
       limitScale: 1,
+      retentionRowsPerDay: Number.POSITIVE_INFINITY,
     }),
-    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000 }),
+    lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
+    bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({
       cpuMs: 200,

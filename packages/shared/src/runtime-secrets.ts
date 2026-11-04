@@ -37,6 +37,13 @@ export const RUNTIME_SECRET_PURPOSES = {
   IDENTITY_HANDOFF_SECRET: "identity-handoff",
 } as const;
 
+/**
+ * HKDF label of the key that signs a staff browser's known-device mark
+ * (apps/api/src/dashboard/auth.ts). Derived on demand where it is used, never
+ * installed or exposed as an environment value, so it is not in the map above.
+ */
+export const STAFF_KNOWN_DEVICE_PURPOSE = "staff-known-device";
+
 export type RuntimeSecretName = keyof typeof RUNTIME_SECRET_PURPOSES;
 export type DerivedRuntimeSecrets = Record<RuntimeSecretName, string>;
 

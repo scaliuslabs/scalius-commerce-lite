@@ -21,6 +21,7 @@ import {
     successEnvelope,
     idResponse,
     errorResponses,
+    conflictResponse,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
 
@@ -35,7 +36,7 @@ import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 import { notificationSender } from "../../../background/notification-sender";
 import { sendOrderNotification } from "../../../utils/order-notifications";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
-import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
+import { adminOrderResourceMutationErrorResponses } from "./shared";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
@@ -245,7 +246,9 @@ const createOrderRoute = createRoute({
             description: "Order created",
             content: { "application/json": { schema: idResponse } },
         },
-        ...adminWriteErrorResponses,
+        ...errorResponses,
+        // Another request owns this creation, or the customer record changed while the order was placed.
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });

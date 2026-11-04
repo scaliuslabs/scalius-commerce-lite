@@ -19,7 +19,7 @@ import {
   getSitemapHeaders,
   xmlDataUnavailableResponse,
 } from "@/lib/sitemap-utils";
-import { getSitemapProducts } from "@/lib/api/products";
+import { getSitemapProductsOutline } from "@/lib/api/products";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntimePresence } from "@/lib/api/runtime";
 import type { APIContext } from "astro";
@@ -43,14 +43,21 @@ export const GET: APIRoute = async (_context: APIContext) => {
       ["categories", getSitemapCategories],
       ["brands", getSitemapBrands],
       ["collections", getSitemapCollections],
-      ["products", getSitemapProducts],
     ] as const;
-    const catalogCounts: Array<{ kind: (typeof catalogReads)[number][0]; totalPages: number }> = [];
+    const catalogPages: Array<{ kind: string; pages: string[] }> = [];
     for (const [kind, read] of catalogReads) {
       const response = await read({ limit: 1 });
       if (!response) return xmlDataUnavailableResponse("Sitemap index is temporarily unavailable");
-      catalogCounts.push({ kind, totalPages: Math.max(1, Math.ceil(response.pagination.total / SITEMAP_PAGE_SIZE)) });
+      const totalPages = Math.max(1, Math.ceil(response.pagination.total / SITEMAP_PAGE_SIZE));
+      catalogPages.push({ kind, pages: Array.from({ length: totalPages }, (_, index) => `page=${index + 1}`) });
     }
+    // Products: the only count, with the signed boundary each later page starts after.
+    const productOutline = await getSitemapProductsOutline(SITEMAP_PAGE_SIZE);
+    if (!productOutline) return xmlDataUnavailableResponse("Sitemap index is temporarily unavailable");
+    catalogPages.push({
+      kind: "products",
+      pages: ["page=1", ...productOutline.pages.map(({ page, after }) => `page=${page}&after=${encodeURIComponent(after)}`)],
+    });
     const layout = presence ? null : await getLayoutData();
     if (!presence && !layout) return xmlDataUnavailableResponse("Sitemap index is temporarily unavailable");
 
@@ -64,8 +71,8 @@ export const GET: APIRoute = async (_context: APIContext) => {
         .map((value) => `/${value}`)];
     const sitemaps = prefixes.flatMap((prefix) => [
       ...CHILD_SITEMAPS.map((path) => ({ loc: `${baseUrl}${prefix}/${path}` })),
-      ...catalogCounts.flatMap(({ kind, totalPages }) => Array.from({ length: totalPages }, (_, index) => ({
-        loc: `${baseUrl}${prefix}/sitemap-${kind}.xml?page=${index + 1}`,
+      ...catalogPages.flatMap(({ kind, pages }) => pages.map((query) => ({
+        loc: `${baseUrl}${prefix}/sitemap-${kind}.xml?${query}`,
       }))),
     ]);
 

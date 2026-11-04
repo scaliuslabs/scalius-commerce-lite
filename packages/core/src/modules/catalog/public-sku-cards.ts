@@ -58,7 +58,7 @@ export async function getPublicSkuCards(
     priceIncrementMinor: storePriceIncrementSql(),
     ...(pricing ? { listPrices: marketListPricesSql(sql.raw('"product_variants"."id"'), { presence: pricing.presence }) } : {}),
     ...(translation ? {
-      trRows: translationRowsSql(translation, "product", products.id),
+      trRows: translationRowsSql(translation, "product", products.id, ["name"]),
       trSlug: localizedSlugSql(translation, "product", products.id),
     } : {}),
   }).from(productVariants).innerJoin(products, eq(products.id, productVariants.productId))
@@ -80,8 +80,8 @@ export async function getPublicSkuCards(
       name: productOptionDefinitions.name,
       value: productOptionValues.value,
       ...(translation ? {
-        nameTranslations: translationRowsSql(translation, "product_option", productOptionDefinitions.id),
-        valueTranslations: translationRowsSql(translation, "product_option_value", productOptionValues.id),
+        nameTranslations: translationRowsSql(translation, "product_option", productOptionDefinitions.id, ["name"]),
+        valueTranslations: translationRowsSql(translation, "product_option_value", productOptionValues.id, ["value"]),
       } : {}),
     }).from(productVariantOptionValues)
       .innerJoin(productOptionDefinitions, eq(productOptionDefinitions.id, productVariantOptionValues.optionDefinitionId))

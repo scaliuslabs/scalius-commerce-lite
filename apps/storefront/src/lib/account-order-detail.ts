@@ -47,6 +47,7 @@ import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
+import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
 import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import { readReceiptGiftCardTenders, receiptGiftCardTenderLabel } from "@/lib/order-success-state";
 import { lineExtrasMarkup } from "@/lib/order-line-extras";
@@ -597,12 +598,16 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   if (items) {
     const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
       const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
-      const lineTotal = hasMinor
-        ? minor(presentedLineTotalMinor({
-            grossSubtotalMinor: item.lineSubtotalMinor!,
-            discountMinor: item.discountAmountMinor ?? 0,
-          }, showsLineDiscounts))
+      const amounts = hasMinor
+        ? { grossSubtotalMinor: item.lineSubtotalMinor!, discountMinor: item.discountAmountMinor ?? 0 }
+        : null;
+      const lineTotal = amounts
+        ? minor(presentedLineTotalMinor(amounts, showsLineDiscounts))
         : accountMoney(item.lineTotal, order.currencyCode);
+      // A free gift reads its full price struck, then zero.
+      const struck = amounts && isFreeOrderLine(amounts)
+        ? `<s class="me-1.5 text-muted-foreground">${escapeHtml(minor(amounts.grossSubtotalMinor))}</s>`
+        : "";
       const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || words.product);
       // Buyer inputs: display only, escaped, never in links or data attributes.
@@ -618,7 +623,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
           <p class="text-muted-foreground">${escapeHtml(words.quantity(formatCount(item.quantity), unit))}</p>
           ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">${escapeHtml(words.lineDiscount(minor(item.discountAmountMinor!)))}</p>` : ""}
         </div>
-        <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
+        <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${struck}${escapeHtml(lineTotal)}</p>
       </div>${extras ? `<div class="text-sm sm:ps-[4.75rem]">${extras}</div>` : ""}</li>`;
     };
     const groups = groupOrderLines(detail.items, order, copy);

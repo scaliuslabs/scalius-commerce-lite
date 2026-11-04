@@ -4,38 +4,66 @@
 import { AGENT_OPERATION_POLICIES, AGENT_OPERATION_POLICIES_BY_ID } from "../generated/agent-operation-policies.gen";
 import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 
-function matchPathTemplate(template: string, pathname: string): boolean {
-  const templateSegments = template.split("/").filter(Boolean);
-  const pathSegments = pathname.split("/").filter(Boolean);
-  if (templateSegments.length !== pathSegments.length) return false;
-  return templateSegments.every((segment, index) =>
-    /^\{[^}]+\}$/.test(segment) || segment === pathSegments[index],
-  );
+const PARAM_SEGMENT = /^\{[^}]+\}$/;
+
+interface IndexedOperation {
+  readonly operation: AgentOperationPolicy;
+  /** A literal segment, or null where the template has a `{param}`. */
+  readonly segments: readonly (string | null)[];
+  readonly specificity: number;
 }
 
-function pathTemplateSpecificity(template: string): number {
-  return template.split("/").filter(Boolean).reduce(
-    (score, segment) => score + (/^\{[^}]+\}$/.test(segment) ? 0 : 1),
-    0,
-  );
+function bucketKey(method: string, segmentCount: number): string {
+  return `${method} ${segmentCount}`;
 }
+
+/** The static policy table bucketed by method and segment count, built once at module load. */
+function buildOperationIndex(): ReadonlyMap<string, readonly IndexedOperation[]> {
+  const index = new Map<string, IndexedOperation[]>();
+  for (const operation of AGENT_OPERATION_POLICIES) {
+    const segments = operation.pathTemplate
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => (PARAM_SEGMENT.test(segment) ? null : segment));
+    const key = bucketKey(operation.method, segments.length);
+    const entry: IndexedOperation = {
+      operation,
+      segments,
+      specificity: segments.reduce((score, segment) => score + (segment === null ? 0 : 1), 0),
+    };
+    const bucket = index.get(key);
+    if (bucket) bucket.push(entry);
+    else index.set(key, [entry]);
+  }
+  return index;
+}
+
+const OPERATION_INDEX = buildOperationIndex();
 
 export function resolveDirectAgentOperation(
   method: string,
   pathname: string,
 ): AgentOperationPolicy | null {
-  const normalizedMethod = method.toUpperCase();
-  const matches = AGENT_OPERATION_POLICIES.filter((operation) =>
-    operation.method === normalizedMethod && matchPathTemplate(operation.pathTemplate, pathname),
-  );
-  if (matches.length === 0) return null;
-  const highestSpecificity = Math.max(
-    ...matches.map((operation) => pathTemplateSpecificity(operation.pathTemplate)),
-  );
-  const mostSpecific = matches.filter((operation) =>
-    pathTemplateSpecificity(operation.pathTemplate) === highestSpecificity,
-  );
-  return mostSpecific.length === 1 ? (mostSpecific[0] ?? null) : null;
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const bucket = OPERATION_INDEX.get(bucketKey(method.toUpperCase(), pathSegments.length));
+  if (!bucket) return null;
+  let best: AgentOperationPolicy | null = null;
+  let bestSpecificity = -1;
+  let tied = false;
+  for (const entry of bucket) {
+    if (entry.specificity < bestSpecificity) continue;
+    if (!entry.segments.every((segment, i) => segment === null || segment === pathSegments[i])) {
+      continue;
+    }
+    if (entry.specificity > bestSpecificity) {
+      best = entry.operation;
+      bestSpecificity = entry.specificity;
+      tied = false;
+    } else {
+      tied = true;
+    }
+  }
+  return best && !tied ? best : null;
 }
 
 export function resolveAgentOperationById(

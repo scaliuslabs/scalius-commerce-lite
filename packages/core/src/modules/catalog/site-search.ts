@@ -198,9 +198,9 @@ async function runSearch(
         categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
         categoryName: sql<string | null>`${categories.name}`.as("search_category_name"),
         ...(translation ? {
-          trRows: translationRowsSql(translation, "product", products.id),
+          trRows: translationRowsSql(translation, "product", products.id, Object.values(PRODUCT_CARD_FIELDS)),
           trSlug: localizedSlugSql(translation, "product", products.id),
-          categoryTrRows: translationRowsSql(translation, "category", categories.id),
+          categoryTrRows: translationRowsSql(translation, "category", categories.id, Object.values(NAME_FIELDS)),
         } : {}),
         storeCurrencyCode: storeCurrencyCodeSql().as("search_store_currency_code"),
       })
@@ -235,7 +235,7 @@ async function runSearch(
         id: pages.id,
         title: pages.title,
         slug: pages.slug,
-        ...translationColumns(translation, "page", pages.id),
+        ...translationColumns(translation, "page", pages.id, { fields: { title: "title" } }),
       })
       .from(pages)
       .$dynamic();
@@ -257,7 +257,7 @@ async function runSearch(
         id: categories.id,
         name: categories.name,
         slug: categories.slug,
-        ...translationColumns(translation, "category", categories.id),
+        ...translationColumns(translation, "category", categories.id, { fields: NAME_FIELDS }),
       })
       .from(categories)
       .$dynamic();

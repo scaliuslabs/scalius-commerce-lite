@@ -45,7 +45,7 @@ import {
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
 } from "../../payments";
-import { activePaymentSessionAttemptExistsCondition } from "../../order-kernel";
+import { activePaymentSessionAttemptExistsCondition, noActiveShipmentClaimCondition } from "../../order-kernel";
 import {
     onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,
@@ -235,12 +235,11 @@ function orderListViewCondition(db: Database, view: OrderListView): SQL {
             // Shopify's "Ready for pickup": marked ready, not collected yet.
             // Read from the pickup orders' own index (`orders_list_pickup_idx`):
             // SQLite's `+` keeps it off the status index, whose open orders
-            // are mostly shipped ones.
-            const status = getDatabaseProviderForClient(db) === "postgres" ? sql`${orders.status}` : sql`+${orders.status}`;
+            // are mostly shipped ones (PostgreSQL's compiler drops the `+`).
             return sql`${orders.shippingMethodKind} = 'pickup'
                 AND ${orders.pickupReadyAt} IS NOT NULL
                 AND ${orders.fulfillmentStatus} <> ${FulfillmentStatus.COMPLETE}
-                AND ${status} IN (${sql.join([OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED].map((value) => sql`${value}`), sql`, `)})`;
+                AND +${orders.status} IN (${sql.join([OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED].map((value) => sql`${value}`), sql`, `)})`;
         }
     }
 }
@@ -468,7 +467,6 @@ export async function listMatchingArchivableOrders(
     const leadWithMatches = await orderListLeads(db, { search: filter.search, openRequest: filter.openRequest, view: filter.view });
     const { conditions } = orderListConditions(db, { ...filter, showArchived: false, ids: undefined, leadWithMatches });
     const after = matchingSliceCondition(orders.id, cursor);
-    const nowSeconds = Math.floor(Date.now() / 1000);
     const rows = await db
         .select({ id: orders.id, version: orders.version })
         .from(orders)
@@ -476,7 +474,8 @@ export async function listMatchingArchivableOrders(
             ...conditions,
             ...(after ? [after] : []),
             inArray(orders.status, [...ARCHIVABLE_ORDER_STATUSES]),
-            sql`(${orders.shipmentClaimId} IS NULL OR ${orders.shipmentClaimExpiresAt} IS NULL OR ${orders.shipmentClaimExpiresAt} <= ${nowSeconds})`,
+            // The archive write's own claim guard, so the prefilter offers only what it will archive.
+            noActiveShipmentClaimCondition(),
         ))
         .orderBy(asc(orders.id))
         .limit(limit);

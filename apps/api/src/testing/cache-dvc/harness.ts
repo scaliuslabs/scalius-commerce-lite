@@ -56,7 +56,7 @@ import {
 } from "./recorders";
 import { Rng } from "./rng";
 import { RowLog, type LoggedChange } from "./row-log";
-import { dvcPageCatalogue, dvcPartCatalogue, type DvcPage } from "./routes";
+import { DVC_MASTER_SECRET, dvcPageCatalogue, dvcPartCatalogue, type DvcPage } from "./routes";
 import { loadSchemaModel, type SchemaModel } from "./schema-model";
 import { DVC_IDS, DVC_SEED_EPOCH, seedDvcStore } from "./seed-store";
 import {
@@ -276,6 +276,8 @@ export class DvcHarness {
       const env = {
         DB: binding,
         JWT_SECRET: "dvc-harness-secret-0123456789abcdef0123",
+        // Signed feed cursors and sitemap boundaries (a test value).
+        SCALIUS_SECRET: DVC_MASTER_SECRET,
         CREDENTIAL_ENCRYPTION_KEY: "dvc-harness-credential-key-0123456789abcdef",
         RL_STANDARD: { limit: async () => ({ success: true }) },
         ...(config.provider === "turso" ? { __DVC_DB: db } : {}),

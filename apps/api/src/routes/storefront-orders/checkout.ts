@@ -55,7 +55,7 @@ import {
   CUSTOMER_SIGN_IN_REQUIRED_MESSAGE,
 } from "@scalius/shared/customer-auth-policy";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
-import { getClientIp } from "@scalius/shared/rate-limit";
+import { getTrustedClientIpFromRequest } from "../../utils/client-ip";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import { enforceCheckoutPreparationLimit } from "../../utils/checkout-rate-limit";
 import { created } from "../../utils/api-response";
@@ -130,7 +130,7 @@ async function enforceCheckoutRateLimits(
 ): Promise<void> {
   // The buyer's phone, or their email for an order placed without one.
   const [ipAllowed, phoneAllowed] = await Promise.all([
-    isWithinRateLimit(env, "RL_STANDARD", "checkout-ip", getClientIp(request)),
+    isWithinRateLimit(env, "RL_STANDARD", "checkout-ip", getTrustedClientIpFromRequest(request, env)),
     contact.customerPhone
       ? isWithinRateLimit(env, "RL_STRICT", "checkout-phone", contact.customerPhone)
       : isWithinRateLimit(env, "RL_STRICT", "checkout-email", contact.customerEmail?.trim().toLowerCase() ?? ""),

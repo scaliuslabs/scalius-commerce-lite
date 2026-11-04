@@ -73,6 +73,7 @@ import {
     deps,
     type ListingDependencySet,
 } from "./declare-deps";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 
@@ -618,7 +619,7 @@ async function readStorefrontCatalogResults(
             id: products.id,
             name: products.name,
             productCondition: products.productCondition,
-            ...translationColumns(translation, "product", products.id),
+            ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
             ...buyerStatePricingSelection(cardSku),
             slug: products.slug,
             freeDelivery: products.freeDelivery,
@@ -790,7 +791,7 @@ async function readStorefrontCatalogResults(
                     id: categories.id,
                     name: categories.name,
                     slug: categories.slug,
-                    ...translationColumns(translation, "category", categories.id),
+                    ...translationColumns(translation, "category", categories.id, { fields: NAME_FIELDS }),
                     subcategoryId: subtreeParentId
                         ? sql<string | null>`(
                             SELECT child_link.ancestor_id FROM category_closure AS child_link
@@ -798,7 +799,7 @@ async function readStorefrontCatalogResults(
                                 ON listing_child.descendant_id = child_link.ancestor_id
                                AND listing_child.ancestor_id = ${subtreeParentId}
                                AND listing_child.depth = 1
-                            WHERE child_link.descendant_id = ${categories.id}
+                            WHERE child_link.descendant_id = ${qualifiedColumn(categories.id)}
                             LIMIT 1
                         )`
                         : sql<string | null>`NULL`,

@@ -5,7 +5,7 @@ import { isEmailAddress } from "@scalius/shared/text-scan";
 import type { Database } from "@scalius/database/client";
 import { businessDocument, emailDocument, storeDisplayName } from "../../modules/settings";
 import { platformDocument } from "../../modules/platform";
-import { selectSettingsDocuments } from "../../settings-store";
+import { readSettingsDocuments } from "../../settings-store";
 import {
   readiness,
   readinessIssue,
@@ -74,8 +74,9 @@ export async function getEmailRuntimeSettings(
 
   try {
     const db = await resolveDb(context);
-    // One read for the email document and the store's display name, the sender name.
-    const rows = await selectSettingsDocuments(db, [emailDocument, businessDocument, platformDocument]);
+    // One read for the email document and the store's display name, the sender name
+    // (none on a dispatch's scoped handle that already read them).
+    const rows = await readSettingsDocuments(db, [emailDocument, businessDocument, platformDocument]);
     const ctx = { encryptionKey: encryptionKeyFromContext(context) };
     const [stored, business, platform] = await Promise.all([
       emailDocument.fromRows(rows, ctx),

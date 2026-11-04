@@ -17,6 +17,10 @@
 # 4. Fail closed: a service that exits or does not answer before it is ready
 #    stops the whole stack with an error, and so does one that exits later,
 #    so a half-up stack never looks healthy.
+# 5. Cron: `wrangler dev` never fires its configured `* * * * *` trigger, so
+#    once the API is ready a one-minute tick calls its local scheduled handler
+#    (`scripts/dev-ports.mjs scheduled-tick`) and retries, the outbox and app
+#    crons run as they do deployed. It belongs to the stack and stops with it.
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DRY_RUN="${SCALIUS_DEV_DRY_RUN:-0}"
@@ -93,6 +97,7 @@ ADMIN_PID=""
 STOREFRONT_PID=""
 TURBO_PID=""
 MAILPIT_PID=""
+CRON_TICK_PID=""
 MAILPIT_URL="http://127.0.0.1:8025"
 MAILPIT_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_MAILPIT_READY_TIMEOUT_SECONDS:-10}"
 
@@ -321,6 +326,7 @@ cleanup() {
 
   echo ""
   echo "Shutting down dev servers..."
+  terminate_owned_process "$CRON_TICK_PID" "Scheduled tick"
   terminate_owned_process "$STOREFRONT_PID" "Storefront"
   terminate_owned_process "$ADMIN_PID" "Admin dashboard"
   terminate_owned_process "$API_PID" "API worker"
@@ -425,6 +431,20 @@ wait_for_api_ready() {
   exit 1
 }
 
+# Runs the API's scheduled handler every minute against this stack's API port.
+start_cron_tick() {
+  local url
+  url="$(cd "$ROOT_DIR" && node scripts/dev-ports.mjs scheduled-url)" || exit 1
+  echo "Starting scheduled tick (every ${SCALIUS_DEV_CRON_TICK_SECONDS:-60}s): $url"
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] node scripts/dev-ports.mjs scheduled-tick"
+    return
+  fi
+
+  (cd "$ROOT_DIR" && exec node scripts/dev-ports.mjs scheduled-tick) &
+  CRON_TICK_PID=$!
+}
+
 # Waits until a started app answers HTTP at all (any status: a storefront
 # without a store still answers). If it exits first or never answers, the
 # EXIT trap stops everything this wrapper started.
@@ -504,6 +524,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
     sync_local_platform
     start_api
     wait_for_api_ready
+    start_cron_tick
     echo ""
     echo "API dev server running. Ctrl+C to stop."
     echo "  API:     http://localhost:$API_PORT"
@@ -519,6 +540,7 @@ if [ "$HAS_FILTERS" = "1" ]; then
     sync_local_platform
     start_api
     wait_for_api_ready
+    start_cron_tick
     start_admin
     wait_for_app_ready "Admin dashboard" "$ADMIN_PID" "http://localhost:$ADMIN_PORT/"
     supervise_services
@@ -530,12 +552,23 @@ if [ "$HAS_FILTERS" = "1" ]; then
     sync_local_platform
     start_api
     wait_for_api_ready
+    start_cron_tick
     start_storefront
     wait_for_app_ready "Storefront" "$STOREFRONT_PID" "http://localhost:$STOREFRONT_PORT/health"
     supervise_services
     exit 0
   fi
 
+  # Any other filter set (all three apps, or a subset of the stack): turbo starts them
+  # together. A filter that includes the API gets the tick too; its first call comes a
+  # minute after start, and a call before the API answers only logs.
+  if [ "$HAS_API" = "1" ]; then
+    start_cron_tick
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "[dry-run] $PNPM_BIN exec turbo run dev $*"
+    exit 0
+  fi
   "$PNPM_BIN" exec turbo run dev "$@" &
   TURBO_PID=$!
   wait "$TURBO_PID"
@@ -548,6 +581,7 @@ sync_local_platform
 
 start_api
 wait_for_api_ready
+start_cron_tick
 
 start_admin
 start_storefront

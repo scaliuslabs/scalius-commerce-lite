@@ -10,7 +10,7 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
 import { apiClient, apiData } from "~/lib/api";
-import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
+import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Order } from "./types";
 

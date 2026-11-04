@@ -1,7 +1,7 @@
 // src/modules/payments/process-payment.ts
 // Applies provider-authenticated payment events to orders, for every gateway.
 
-import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import {
   orders,
   orderPayments,
@@ -43,6 +43,7 @@ import {
   noActiveShipmentClaimCondition,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
   validateTransition,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
@@ -53,6 +54,14 @@ import {
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
+import {
+  buildOrderBalancePaidNotificationDedupeKey,
+  buildOrderCreatedNotificationDedupeKey,
+  buildOrderNotificationOutboxInsertWhen,
+  orderBalancePaidNotificationOutboxId,
+  orderCreatedNotificationOutboxId,
+} from "../notifications";
+import { fromMinor } from "@scalius/shared/money";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
 const PAYMENT_FAILURE_SHIPMENT_CLAIM_GUARD = "PAYMENT_FAILURE_SHIPMENT_CLAIM";
@@ -70,6 +79,26 @@ function isConstraintError(error: unknown): boolean {
 
 function isPaymentType(value: unknown): value is PaymentType {
   return value === "full" || value === "deposit" || value === "balance";
+}
+
+/**
+ * The customer message a landed payment announces: a balance's
+ * `payment_balance_paid`, otherwise `order_created` (one per order, so a
+ * checkout that already wrote it keeps its row). Its id is fixed by the
+ * order, so a retried event sends the same row without reading it back.
+ */
+function landedPaymentNotification(orderId: string, paymentType: PaymentType) {
+  return paymentType === "balance"
+    ? {
+      id: orderBalancePaidNotificationOutboxId(orderId),
+      dedupeKey: buildOrderBalancePaidNotificationDedupeKey(orderId),
+      notificationType: "payment_balance_paid" as const,
+    }
+    : {
+      id: orderCreatedNotificationOutboxId(orderId),
+      dedupeKey: buildOrderCreatedNotificationDedupeKey(orderId),
+      notificationType: "order_created" as const,
+    };
 }
 
 function inferFailedPaymentType(input: {
@@ -355,11 +384,14 @@ export async function inferPaymentType(
 /**
  * Whether a provider's payment may land on the order: its own gateway; an
  * order whose failed checkout switched to another online gateway; or an
- * invoice (`net_terms`) with nothing paid on it yet, which the buyer (or an
- * app, charging a saved method) pays through a provider instead. The payment
+ * invoice (`net_terms`) with nothing paid on it yet, which an app or staff
+ * pays by charging the customer's saved method with a provider (a buyer
+ * can't open a hosted session for an invoice). The payment
  * that lands switches the order to the provider in its own batch; a decline
  * leaves the invoice as it was. An invoice partly paid by recorded payments
  * keeps taking recorded payments only. Cash on delivery never switches.
+ * A provider event that switches the order must also name a payment the
+ * platform opened with that provider (`providerMayPayOrderCondition`).
  */
 export function acceptsProviderPayment(
   order: { paymentMethod: string; paymentStatus: string; paidAmountMinor: number },
@@ -373,6 +405,45 @@ export function acceptsProviderPayment(
   return isOnlinePaymentMethod(order.paymentMethod) &&
     order.paymentStatus === PaymentStatus.FAILED &&
     order.paidAmountMinor <= 0;
+}
+
+/**
+ * SQL for an order CAS: the provider is the order's gateway already, or the
+ * platform opened a payment with it for this order (a hosted session or an
+ * off-session command, both `payment_session_attempts` rows, written before
+ * the provider is called). A provider's event alone never moves an order to
+ * the provider that sent it: the order an event names is the app's word.
+ */
+function providerMayPayOrderCondition(orderId: string, provider: string): SQL {
+  return sql`(${orders.paymentMethod} = ${provider} OR EXISTS (
+    SELECT 1 FROM ${paymentSessionAttempts}
+    WHERE ${paymentSessionAttempts.orderId} = ${orderId}
+      AND ${paymentSessionAttempts.gateway} = ${provider}
+  ))`;
+}
+
+/**
+ * Why a provider's payment may not land on the order as read, or null: the
+ * order takes a payment from it (`acceptsProviderPayment`), and a switch to it
+ * names a payment the platform opened with it. The order CAS re-proves both.
+ */
+async function providerPaymentRefusal(
+  db: Database,
+  order: { id: string; paymentMethod: string; paymentStatus: string; paidAmountMinor: number },
+  provider: string,
+  label: string,
+): Promise<string | null> {
+  if (!acceptsProviderPayment(order, provider)) {
+    return `${label} ${provider} payment conflicts with the current order payment method`;
+  }
+  if (order.paymentMethod === provider) return null;
+  const opened = await db
+    .select({ id: paymentSessionAttempts.id })
+    .from(paymentSessionAttempts)
+    .where(and(eq(paymentSessionAttempts.orderId, order.id), eq(paymentSessionAttempts.gateway, provider)))
+    .limit(1)
+    .get();
+  return opened ? null : `${label} ${provider} payment names no payment this store opened with that provider for the order`;
 }
 
 /**
@@ -399,6 +470,11 @@ export async function processPaymentConfirmed(
   paymentType?: PaymentType;
   /** The payment was recorded, but the order's released stock could not be reserved again: staff must resolve it. */
   inventoryShortfall?: true;
+  /**
+   * The customer message the payment's batch wrote (a replay names it too):
+   * send it by id after every attempt; the sender skips a row already sent.
+   */
+  notificationOutboxId?: string;
 }> {
   try {
     const shipmentClaim = await db
@@ -406,6 +482,8 @@ export async function processPaymentConfirmed(
         id: orders.id,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
@@ -441,6 +519,7 @@ export async function processPaymentConfirmed(
         amountMinor: orderPayments.amountMinor,
         status: orderPayments.status,
         currency: orderPayments.currency,
+        paymentType: orderPayments.paymentType,
       })
       .from(orderPayments)
       .where(and(
@@ -457,7 +536,14 @@ export async function processPaymentConfirmed(
         return { success: false, error: "Existing provider payment amount does not match the confirmed amount" };
       }
       if (existing.status === PaymentRecordStatus.SUCCEEDED) {
-        return { success: true, alreadyProcessed: true };
+        // An earlier attempt landed it, and its batch wrote the message: this one sends it.
+        return {
+          success: true,
+          alreadyProcessed: true,
+          ...(isPaymentType(existing.paymentType)
+            ? { notificationOutboxId: landedPaymentNotification(params.orderId, existing.paymentType).id }
+            : {}),
+        };
       }
       paymentId = existing.id;
     }
@@ -491,12 +577,9 @@ export async function processPaymentConfirmed(
     if (initialUnpayableReason) {
       return { success: false, error: initialUnpayableReason, retryable: false };
     }
-    if (!acceptsProviderPayment(initialOrder, params.provider)) {
-      return {
-        success: false,
-        retryable: false,
-        error: `Confirmed ${params.provider} payment conflicts with the current order payment method`,
-      };
+    const initialProviderRefusal = await providerPaymentRefusal(db, initialOrder, params.provider, "Confirmed");
+    if (initialProviderRefusal) {
+      return { success: false, retryable: false, error: initialProviderRefusal };
     }
 
     const paymentType = params.paymentType ?? await inferPaymentType(db, initialOrder, incomingAmountMinor);
@@ -569,6 +652,7 @@ export async function processPaymentConfirmed(
             totalAmountMinor: orders.totalAmountMinor,
             paidAmountMinor: orders.paidAmountMinor,
             balanceDueMinor: orders.balanceDueMinor,
+            paymentMethod: orders.paymentMethod,
             paymentStatus: orders.paymentStatus,
             status: orders.status,
             inventoryPool: orders.inventoryPool,
@@ -591,6 +675,11 @@ export async function processPaymentConfirmed(
         return { success: false, error: unpayableReason, retryable: false };
       }
       if (attempt > 0) {
+        // The order moved since the first read: it must still take this provider's payment.
+        const providerRefusal = await providerPaymentRefusal(db, order, params.provider, "Confirmed");
+        if (providerRefusal) {
+          return { success: false, retryable: false, error: providerRefusal };
+        }
         const paymentStateError = await validateIncomingPaymentState(
           db,
           order,
@@ -658,6 +747,7 @@ export async function processPaymentConfirmed(
           isNull(orders.deletedAt),
           notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
           notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
+          providerMayPayOrderCondition(params.orderId, params.provider),
           paymentPlanReadyPredicate,
           sql`EXISTS (
             SELECT 1 FROM order_payments
@@ -760,42 +850,50 @@ export async function processPaymentConfirmed(
         }));
       }
 
+      // What holds in this batch only once the payment landed: the rows below go with it.
+      const landed = sql`EXISTS (
+        SELECT 1 FROM order_payments
+        WHERE id = ${paymentId} AND order_id = ${params.orderId} AND status = ${PaymentRecordStatus.SUCCEEDED}
+      ) AND EXISTS (
+        SELECT 1 FROM orders AS landed_order
+        WHERE landed_order.id = ${params.orderId} AND landed_order.version = ${nextVersion}
+      )`;
+
       // The method the provider kept with this payment, for the order's
-      // account customer, only once the payment landed.
+      // account customer.
       if (params.savedPaymentMethod) {
         batchStatements.push(buildSavedPaymentMethodUpsert(db, {
           orderId: params.orderId,
           providerId: params.provider,
           method: params.savedPaymentMethod,
           owner: await readSavedPaymentMethodOwner(db, params.orderId),
-          landed: sql`EXISTS (
-            SELECT 1 FROM order_payments
-            WHERE id = ${paymentId}
-              AND order_id = ${params.orderId}
-              AND status = ${PaymentRecordStatus.SUCCEEDED}
-          ) AND EXISTS (
-            SELECT 1 FROM orders AS landed_order
-            WHERE landed_order.id = ${params.orderId} AND landed_order.version = ${nextVersion}
-          )`,
+          landed,
         }));
       }
 
-      // A payment the provider flagged is held for staff review, only once it landed.
+      // A payment the provider flagged is held for staff review.
       if (params.review) {
         batchStatements.push((await buildPaymentReviewHoldInsert(db, {
           orderId: params.orderId,
           paymentId: paymentId!,
           provider: params.provider,
           review: params.review,
-          landed: sql`EXISTS (
-            SELECT 1 FROM order_payments
-            WHERE id = ${paymentId} AND order_id = ${params.orderId} AND status = ${PaymentRecordStatus.SUCCEEDED}
-          ) AND EXISTS (
-            SELECT 1 FROM orders AS landed_order
-            WHERE landed_order.id = ${params.orderId} AND landed_order.version = ${nextVersion}
-          )`,
+          landed,
         })).statement);
       }
+
+      // The buyer's message, committed with the money: a retry after this
+      // batch (alreadyProcessed) sends the same row instead of losing it.
+      const message = landedPaymentNotification(params.orderId, paymentType);
+      batchStatements.push(buildOrderNotificationOutboxInsertWhen(db, {
+        ...message,
+        orderId: params.orderId,
+        source: paymentType === "balance" ? `payment-${params.provider}-balance-paid` : `payment-${params.provider}-confirmed`,
+        data: paymentType === "balance"
+          ? { amount: fromMinor(incomingAmountMinor, currency.decimalPlaces), gateway: params.provider }
+          : undefined,
+        when: landed,
+      }));
 
       // Off-session commands waiting for this payment end with it.
       batchStatements.push(buildSettlePendingCommands(db, {
@@ -803,13 +901,7 @@ export async function processPaymentConfirmed(
         provider: params.provider,
         providerRef: params.providerRef,
         correlationId: params.correlationId ?? null,
-        landed: sql`EXISTS (
-          SELECT 1 FROM order_payments
-          WHERE id = ${paymentId} AND order_id = ${params.orderId} AND status = ${PaymentRecordStatus.SUCCEEDED}
-        ) AND EXISTS (
-          SELECT 1 FROM orders AS landed_order
-          WHERE landed_order.id = ${params.orderId} AND landed_order.version = ${nextVersion}
-        )`,
+        landed,
       }));
 
       // An open order whose stock was released (before payment events were
@@ -872,7 +964,10 @@ export async function processPaymentConfirmed(
       return { success: false, error: "Order was modified concurrently while applying payment; retry required" };
     }
 
-    return inventoryShortfall ? { success: true, paymentType, inventoryShortfall: true } : { success: true, paymentType };
+    const notificationOutboxId = landedPaymentNotification(params.orderId, paymentType).id;
+    return inventoryShortfall
+      ? { success: true, paymentType, inventoryShortfall: true, notificationOutboxId }
+      : { success: true, paymentType, notificationOutboxId };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Payment processing error";
     console.error(`[process-payment] Error for order ${params.orderId}:`, err instanceof Error ? err.name : "error");
@@ -1009,12 +1104,16 @@ async function applyFailedPayment(
         paymentStatus: orders.paymentStatus,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
+        // Bound to the order id itself: a bare outer column would render
+        // unqualified and bind to the plan's own `id` inside the subquery.
         paymentPlanStatus: sql<string | null>`(
           SELECT ${paymentPlans.status}
           FROM ${paymentPlans}
-          WHERE ${paymentPlans.orderId} = ${orders.id}
+          WHERE ${paymentPlans.orderId} = ${orderId}
           LIMIT 1
         )`,
       })
@@ -1199,6 +1298,11 @@ export async function processPaymentAuthorized(
   /** The authorization placed an open checkout (incomplete → pending). */
   placed?: boolean;
   inventoryShortfall?: true;
+  /**
+   * The order_created message a placing batch wrote (a replay names it too):
+   * send it by id after every attempt; the sender skips a row already sent.
+   */
+  notificationOutboxId?: string;
 }> {
   try {
     const order = await db
@@ -1215,6 +1319,8 @@ export async function processPaymentAuthorized(
         deletedAt: orders.deletedAt,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
@@ -1244,16 +1350,16 @@ export async function processPaymentAuthorized(
         return { success: false, retryable: false, error: "Provider payment reference already belongs to another order" };
       }
       // Held, captured, released or refunded already: a late or replayed authorization changes nothing.
+      // An earlier attempt's batch wrote the placement message, if it placed the order: this one sends it.
       if (existing.status !== PaymentRecordStatus.PENDING && existing.status !== PaymentRecordStatus.FAILED) {
-        return { success: true, alreadyProcessed: true };
+        return { success: true, alreadyProcessed: true, notificationOutboxId: orderCreatedNotificationOutboxId(params.orderId) };
       }
     }
 
     const unpayableReason = getUnpayableOrderReason(order);
     if (unpayableReason) return { success: false, retryable: false, error: unpayableReason };
-    if (!acceptsProviderPayment(order, params.provider)) {
-      return { success: false, retryable: false, error: `Authorized ${params.provider} payment conflicts with the current order payment method` };
-    }
+    const providerRefusal = await providerPaymentRefusal(db, order, params.provider, "Authorized");
+    if (providerRefusal) return { success: false, retryable: false, error: providerRefusal };
     const paymentType = params.paymentType ?? await inferPaymentType(db, order, amountMinor);
     if (!paymentType) {
       return { success: false, retryable: false, error: "Authorized amount does not match any payable amount on the order" };
@@ -1282,6 +1388,7 @@ export async function processPaymentAuthorized(
         notInArray(orders.status, [...PAYMENT_BLOCKED_ORDER_STATUSES]),
         notInArray(orders.paymentStatus, [...PAYMENT_BLOCKED_PAYMENT_STATUSES]),
         noActiveShipmentClaimCondition(),
+        providerMayPayOrderCondition(params.orderId, params.provider),
         // One authorization in flight per order, and nothing captured meanwhile for this payment type.
         sql`NOT EXISTS (
           SELECT 1 FROM order_payments
@@ -1349,6 +1456,24 @@ export async function processPaymentAuthorized(
         )`,
       })).statement);
     }
+    // A checkout the hold places tells its buyer, committed with the hold:
+    // a retry after this batch (alreadyProcessed) sends the same row.
+    if (placed) {
+      statements.push(buildOrderNotificationOutboxInsertWhen(db, {
+        id: orderCreatedNotificationOutboxId(params.orderId),
+        dedupeKey: buildOrderCreatedNotificationDedupeKey(params.orderId),
+        notificationType: "order_created",
+        orderId: params.orderId,
+        source: `payment-${params.provider}-authorized`,
+        when: sql`EXISTS (
+          SELECT 1 FROM order_payments
+          WHERE id = ${paymentId} AND order_id = ${params.orderId} AND status = ${PaymentRecordStatus.AUTHORIZED}
+        ) AND EXISTS (
+          SELECT 1 FROM orders AS landed_order
+          WHERE landed_order.id = ${params.orderId} AND landed_order.version = ${nextVersion}
+        )`,
+      }));
+    }
     // A manual-capture charge waiting for this authorization ends with it.
     statements.push(buildSettlePendingCommands(db, {
       orderId: params.orderId,
@@ -1374,6 +1499,7 @@ export async function processPaymentAuthorized(
       success: true,
       paymentType,
       placed,
+      ...(placed ? { notificationOutboxId: orderCreatedNotificationOutboxId(params.orderId) } : {}),
       ...(inventoryShortfall ? { inventoryShortfall: true as const } : {}),
     };
   } catch (err: unknown) {

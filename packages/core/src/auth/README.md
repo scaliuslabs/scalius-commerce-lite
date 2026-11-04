@@ -78,8 +78,14 @@ Format `$sc1$<algorithm>$<params>$<salt>$<hash>`. The plan profile (`planLimits(
 | Wrong 2FA codes | Better Auth locks the 2FA row; the API answers 429 `TWO_FACTOR_LOCKED` ("try again in 15 minutes") | `two_factor.locked_until` |
 | Identity handoff routes | 10 per minute | plugin |
 | First-admin setup | 5 per hour per IP | D1 `admin_setup_rate_limits` |
+| Dashboard sign-in, before Better Auth | 5 per minute per network; from a browser without a valid known-device mark, 20 attempts per 15 minutes per email (any email, reserved atomically before the password check, given back on a right password) | `RL_STRICT`; D1 `rate_limit` (`scalius:` keys, swept by `staff_attempt_cleanup`) |
+| In-session proofs (change password, 2FA setup, method change or off, a code checked against a session) | 5 per minute, and 10 attempts per 15 minutes reserved before the proof (a right answer gives it back), per staff member; 429 before the proof runs (`apps/api/src/utils/staff-proofs.ts`) | `RL_STRICT`; D1 `rate_limit` |
 
-- Better Auth reads the client IP from `cf-connecting-ip`, then `x-forwarded-for`, and groups IPv6 by /64. API routes call `getTrustedClientIp` (`apps/api/src/utils/client-ip.ts`): it trusts `cf-connecting-ip` only, reads `x-forwarded-for` only when a platform origin is loopback, and otherwise returns `unknown`.
+The known-device mark is `v1.<userId>.<issuedAt>.<HMAC>` under a key derived from `SCALIUS_SECRET` (label `staff-known-device`) over the person, the issue time and the current password hash: a password change voids it, and it expires after 180 days by its signed issue time.
+
+Native limiter counters are per Cloudflare location, so every bound that matters is also counted in D1. Better Auth's router takes writes only on the routes the dashboard uses (`apps/api/src/dashboard/auth.ts`); a two-step write reaches Better Auth only with a live session in D1 (a dead one is stripped from the request) and a JSON body. Turning two-step on signs out every other session of the account.
+
+- Better Auth reads the client IP from `cf-connecting-ip`, then `x-forwarded-for`, and groups IPv6 by /64. API routes call `getTrustedClientIp` (`apps/api/src/utils/client-ip.ts`): it trusts `cf-connecting-ip` only, reads `x-forwarded-for` only when a platform origin is loopback, and otherwise returns `unknown`; it groups IPv6 by /64 the same way, and it is the only reader of those headers in `apps/api/src`.
 - Native limiters `RL_STRICT` (5 per 60 s) and `RL_STANDARD` (60 per 60 s; it also limits agent calls) are in `apps/api/wrangler.jsonc`.
 
 ## Dashboard sign-in (`apps/api/src/dashboard/auth.ts`)

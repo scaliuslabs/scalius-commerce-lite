@@ -26,7 +26,7 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | --- | --- | --- |
 | Worker CPU (`limits.cpu_ms`) | not set (fixed 10 ms) | 30,000 ms |
 | New password hash | PBKDF2-SHA256, 30,000 iterations | scrypt N=16384, r=16, p=1 |
-| Rows per drain: events, deliveries, notifications, payment events | 2, 2, 1, 1 | 50, 25, 20, 10 |
+| Rows per drain: events, deliveries (after a write), notifications, payment events | 20, 4 (2), 1, 1 | 50, 25 (25), 20, 10 |
 | Recommendation rotation per run | 4 products | 32 products |
 | Maintenance jobs (the sweep rotation) | one a minute: each job every 23 minutes | every job every 15 minutes |
 | Expired reservations released per run | 4 | 50 |
@@ -35,9 +35,11 @@ Code reads values from the profile and never branches on the plan name. Paid val
 | Deepest numbered page (`maxOffset`) | 1,000 rows | 10,000 rows |
 | Bulk-run and app-job chunks per drain (`bulkRunChunksPerDrain`) | 3 | 12 |
 | Items per app batch create (`batchCreates`: products, categories, brands) | 4, 12, 19 | 20, 50, 50 |
+| Orders per bulk request (`bulkOrders`: confirm, of those whose stock is reserved again, mark as sent, book a courier; the rest return as `remaining`) | 30, 1, 1, 1 | 90, 20, 30, 20 |
 | App jobs running at once (`plugins.runningJobs`) | 3 | 10 |
 | Events an app that is not running keeps (`plugins.heldEventDays`, `heldEvents`) | 7 days, 2,000 | 30 days, 50,000 |
 | Products a narrowed listing counts its facets over (`facetLiveProducts`) | 300 | 5,000 |
+| Products one catalogue feed request reads (`feedProductsPerRequest`) | 1,000 | 5,000 |
 
 The profile also sets the bulk page, the products refreshed after a catalogue write, the nightly sold-products refresh, the catalogue rebuild and band-refresh chunks, the nightly projection drift window and the backfill image limit.
 
@@ -51,11 +53,15 @@ The budget harness encodes the per-invocation limits (`apps/api/src/free-plan-bu
 | Subrequests per invocation | 50 external, 1,000 to Cloudflare services |
 | D1 queries per invocation (a `batch()` is one) | 50 |
 | D1 per day | 5M rows read, 100,000 rows written |
+| D1 database size | 500 MB per database (10 GB on Paid) |
+| D1 databases and storage per account | 10 databases and 5 GB on Free (Paid: 1,000,000 databases, 1 TB) |
 | Requests per day | 100,000 |
 | Worker script size | 64 MiB uncompressed, no compressed limit |
 | Worker startup (global scope) | 1 s |
 
 Paid raises these to 30 s of CPU as configured, 1,000 D1 queries and 10,000 subrequests per invocation. The Paid daily quotas are (unverified).
+
+**Database size.** A Scalius store is one database, so the 500 MB cap is per store. A write that would grow a Free database past it fails; the dashboard and the API do not show the database size or warn before the cap (`docs/platform/FEATURE-ROADMAP.md` lists it as open). The per-order tables that only grow (`checkout_attempts`, `notification_outbox`, `order_receipts` and `order_review_requests`) have a retention sweep (Background work, below). Moving to Paid raises the cap to 10 GB, and the SQLite-to-PostgreSQL path (`docs/DATABASE-PORTABILITY.md`) is the exit past that. Checked 2026-11-03 against Cloudflare's D1 limits page (`developers.cloudflare.com/d1/platform/limits/`, read through a page summariser, not a raw copy): 500 MB Free and 10 GB Paid per database, 10 databases and 5 GB per Free account. The 2026-10-03 date above still covers the other rows.
 
 ## Measuring
 
@@ -69,14 +75,15 @@ pnpm free-plan:budget --json out.json # keep the raw report
 
 - **Node tier** (`apps/api/src/free-plan-budget.test.ts`) drives the real Worker entrypoints (`fetch`, `scheduled`) over an in-memory D1 and meters every binding. It asserts D1 calls and external subrequests against `apps/api/src/testing/free-plan-budgets.ts` and the plan's per-invocation limits. A new query or fan-out fails here first. CPU in this tier is a relative figure.
 - **workerd tier** (`apps/api/src/free-plan-workerd.test.ts`) runs the bundled Worker in workerd, where CPU is wall time minus time waiting on the D1 proxy. Only this tier shows cold route graphs and real hashing cost. The Free password hash and verify must each stay below 5 ms (best of 15 runs).
+- **Sweep tier** (`apps/api/src/sweep-rows-read.test.ts`, 17 to 32 s here) runs every maintenance job and the nightly pass on two stores with the same daily volume and 50 or 500 days of history, counting D1's own `rows_read` in Miniflare. A job whose reads grow with the history fails it: the Node tier's estimate sees only `SCAN` steps, not an index range that walks every order.
 
-The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. In the 100-order run of 2026-10-14, D1 rows written ended a Free store first, at about 270 orders a day (unverified: rerun the command). No Worker encodes images (there is no Images binding), so the transformation allowance is not a limit.
+The daily quota model charges each order with a 3-line checkout, its notifications, tax quotes, sign-in codes and 20 page views, and adds 1,440 cron ticks a day (the steady-state mean of an hour of ticks). D1 rows written count rows changed times 3, for index entries. The model also charges the 13 history rows of each order that retention deletes later, at one row written each (D1 counts a deleted row, not its index entries). In the 2026-11-04 measurement, D1 rows written end a Free store first, at about 400 orders a day in steady state (`DOCUMENTED_FREE_ORDER_CEILING`; unverified live), and at about the same while retention catches up on a long history (its capped 6,000 deleted rows a day replace each order's deletes: `catchUpOrdersToLimit`, 399). No Worker encodes images (there is no Images binding), so the transformation allowance is not a limit.
 
 ## Catalogue ceiling
 
 Every deploy empties the public cache (each key carries the Worker version), so a crawler then misses every page. Free's 5M rows read a day must pay for at least 200 cold misses of each storefront read: a miss may read at most 25,000 D1 rows. `scripts/scale-proof.mjs` fails a run whose D1 read is over that (`FREE_MISS_ROWS_CEILING`) and prints the reads that are, with their misses a day.
 
-At 50,000 products and 156,244 SKUs with 1,000,000 orders (SCALE.md, 2026-10-21) every read the proof measures fits: home 907 rows, product page 8,677, category page 1 10,014 and page 40 8,261, all products by newest 15,579, search 14,415 and a feed page 12,786. They are bounded by the page, the scope's categories and the facet vocabulary, not by the number of products (SCALE.md, finding 2). Known limits on Free: a narrowed listing (a filter or a search) counts its attribute and option facets live only up to 300 products (`facetLiveProducts`; past that a category or brand shows its own counts and a search its brand, category and rating facets), a category subtree of many large categories reads its categories' facet rows (a 6,400-product root of the seed: about 28,000 rows), and a deep numbered page reads its offset.
+At 50,000 products and 156,244 SKUs with 1,000,000 orders (SCALE.md, 2026-10-21) every read the proof measures fits: home 907 rows, product page 8,677, category page 1 10,014 and page 40 8,261, all products by newest 15,579, search 14,415 and a feed page 12,786. They are bounded by the page, the scope's categories and the facet vocabulary, not by the number of products (SCALE.md, finding 2). A crafted discovery URL cannot read more than its canonical file: a feed request reads at most `feedProductsPerRequest` products (on Free the default first page) and accepts only a continuation cursor the API signed; a later product sitemap page starts only at the signed boundary the index lists, and only the index's outline counts (one read of every listed product, at the sitemap's page size, one cache entry for every presence); the storefront drops every parameter a discovery file does not read, and the API refuses with a 400, before any read, every parameter a public cached read does not declare. A listing's attribute-filter keys stay functional: an unknown one costs at most one listing page. Known limits on Free: a narrowed listing (a filter or a search) counts its attribute and option facets live only up to 300 products (`facetLiveProducts`; past that a category or brand shows its own counts and a search its brand, category and rating facets), a category subtree of many large categories reads its categories' facet rows (a 6,400-product root of the seed: about 28,000 rows), and a deep numbered page reads its offset.
 
 ## Rules by area
 
@@ -117,10 +124,13 @@ A store has no queue: a queue is one more resource per store, and Free allows 10
 | Recommendations | `system_kv` `catalog:recommendations:rotation-cursor` | the written products and their peers | a daily lap visits every public product once (up to the per-run size times the runs in a day); the nightly tick refreshes products sold that day |
 | Image renditions | media rows with `variant_width` NULL (pending) | none: no Worker renders images | an open dashboard tab renders them in the background |
 
+History that only grows is deleted once nothing reads it: the `event_outbox_retention` job also purges Meta CAPI logs past their retention, checkout attempts 30 days after their order, receipt proofs a day after they expire, sent notifications after 180 days and finished review requests after a year, 50 rows a table a run on Free (about 3,100 a day, more than the notifications of the Free order ceiling) and 250 on Paid (`packages/core/src/modules/orders/history-retention.ts`). Free also caps the history rows retention deletes a day at 6,000 (`planLimits().maintenance.retentionRowsPerDay`, enough for the 13 rows each of 400 orders a day). On a store with a long history the job then catches up for weeks, but within about 6% of the day's 100,000 rows written: D1 counts a deleted row, not its index entries (`apps/api/src/sweep-rows-read.test.ts` measures a day of catch-up on 500 days of history: the allowance of 6,000 counted rows for about 5,100 rows written).
+
 Rules:
 
 - A drain takes at most its plan batch (`planLimits().background`) and leaves the rest due for the next tick. The drains and the tick's maintenance job share one cron invocation, so on Free the batches keep a tick within 50 D1 queries.
 - A claim with a lease guards each row, and the handlers are idempotent. An after-response run and a tick never deliver the same row twice, and a crashed run is reclaimed when its lease ends.
+- Webhook and app subscribers fit a Free invocation: with 0 to 8 webhooks or one app a 3-line order and its after-response work take at most 27 D1 calls, an admin status change 33 and a refund 44 (`apps/api/src/free-plan-budget.test.ts` checks each case against 50; rule `after-response-fits-free-invocation`).
 - After-response work shares the request's invocation budget. On Free a request sends at most `notificationsPerDrain` committed notifications; the next tick sends the rest.
 
 ### No KV

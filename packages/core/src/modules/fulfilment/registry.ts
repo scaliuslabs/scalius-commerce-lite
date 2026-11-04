@@ -40,9 +40,27 @@ export interface AutoFulfilRuntime {
  * An automatic fulfiller (Wave B: digital downloads, gift-card issue). It
  * returns the statements that deliver the lines; they run in the same batch
  * as the ledger insert, so a delivery and its ledger row commit together.
+ * A fulfiller that can hand over only some lines names them: the ledger
+ * records those, and the others stay owed for the next run.
  */
 export interface AutoFulfiller {
-    prepare(db: Database, context: AutoFulfilContext): Promise<BatchItem<"sqlite">[]>;
+    prepare(db: Database, context: AutoFulfilContext): Promise<BatchItem<"sqlite">[] | AutoFulfilPreparation>;
+}
+
+/** A partial handover: the statements deliver exactly `deliveredLineIds`. */
+export interface AutoFulfilPreparation {
+    statements: BatchItem<"sqlite">[];
+    deliveredLineIds: readonly string[];
+    /** Why the other lines wait (their staff alerts are already raised). */
+    owedReason?: string;
+}
+
+/** Some automatic lines were left owed; the sweep retries them. */
+export class AutoFulfilLinesOwedError extends Error {
+    constructor(readonly type: string, readonly orderItemIds: readonly string[], reason?: string) {
+        super(reason ?? `${orderItemIds.length} ${type} line(s) could not be handed over yet`);
+        this.name = "AutoFulfilLinesOwedError";
+    }
 }
 
 export type FulfillerEntry =

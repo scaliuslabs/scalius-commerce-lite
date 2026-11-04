@@ -1,13 +1,17 @@
 import { sitemapQuerySchema } from "../schemas/sitemap";
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
-import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
+import { CATALOG_CHANNEL_IDS, GOOGLE_CHANNEL_ID } from "@scalius/shared/sales-channels";
+import { PUBLIC_CURSOR_MAX_LENGTH, PUBLIC_FEED_CURSOR_PATTERN, SITEMAP_AFTER_PATTERN } from "@scalius/shared/public-cursor";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { BUYER_AVAILABILITY_BANDS } from "@scalius/shared/buyer-availability";
 import {
   getStorefrontFeedProducts,
   getStorefrontSitemapProducts,
+  getStorefrontSitemapOutline,
+  encodeSitemapPosition,
+  decodeSitemapPosition,
   getStorefrontProducts,
   getStorefrontProductBySlug,
   searchStorefrontProducts,
@@ -27,6 +31,14 @@ import {
 } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
 import { NotFoundError, ValidationError } from "../utils/api-error";
+import { publicCursorSigner } from "../utils/public-cursor";
+import { canonicalIntegerQuery } from "../schemas/query-numbers";
+import { AppError } from "@scalius/core/errors";
+import { LIST_CURSOR_ERROR_CODE } from "@scalius/shared/pagination";
+
+/** A continuation this store did not sign: a client error with its own code, so a caller restarts at page one. */
+const unsignedContinuation = (message: string) => new AppError(400, LIST_CURSOR_ERROR_CODE, message);
+import { SITEMAP_PAGE_SIZE } from "@scalius/shared/sitemap-pagination";
 import {
   successEnvelope,
   paginationSchema,
@@ -52,7 +64,12 @@ import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { storefrontCustomFieldsSchema, storefrontCardFieldsSchema } from "../schemas/custom-fields";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const PRODUCT_FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
+/** The position part of the core feed cursor (`feed-v1.<position>`), signed into `feed-v2.<position>.<signature>`. */
+const CORE_FEED_CURSOR_PREFIX = "feed-v1.";
+const PUBLIC_FEED_CURSOR_PREFIX = "feed-v2.";
+const feedCursorScope = (channel: string | undefined) => `feed:${channel ?? GOOGLE_CHANNEL_ID}`;
+/** A product sitemap page boundary is signed for its page number and page size. */
+const sitemapAfterScope = (page: number, limit: number) => `sitemap-products:${page}:${limit}`;
 
 function validatePriceRange(
   value: { minPrice?: number; maxPrice?: number },
@@ -117,10 +134,10 @@ const productFeedSchema = z.object({
   presence: marketPresenceQueryField,
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
-  cursor: z.string().max(512).regex(PRODUCT_FEED_CURSOR_PATTERN).optional().openapi({
-    description: "Opaque continuation cursor returned by the previous feed response",
+  cursor: z.string().max(PUBLIC_CURSOR_MAX_LENGTH).regex(PUBLIC_FEED_CURSOR_PATTERN).optional().openapi({
+    description: "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.",
   }),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(100).openapi({ description: "Items per page" }),
+  limit: canonicalIntegerQuery(1, 100).optional().default(100).openapi({ description: "Items per page" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   ids: z.string().optional().openapi({
@@ -129,10 +146,28 @@ const productFeedSchema = z.object({
   channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
     description: "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
   }),
-}).superRefine(validatePriceRange);
+}).strict().superRefine(validatePriceRange);
 
 const productSitemapSchema = sitemapQuerySchema.extend({
   limit: sitemapQuerySchema.shape.limit.default(100),
+  after: z.string().max(PUBLIC_CURSOR_MAX_LENGTH).regex(SITEMAP_AFTER_PATTERN).optional().openapi({
+    description: "Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted.",
+  }),
+  outline: z.enum(["true"]).optional().openapi({
+    description: "The sitemap index's read: no rows, the number of listed products, and every later page with its `after`.",
+  }),
+}).strict();
+
+const productSitemapPaginationSchema = z.object({
+  page: z.number().int().min(1),
+  limit: z.number().int().min(1),
+  /** Page reads: whether another page follows. */
+  hasNextPage: z.boolean().optional(),
+  /** The outline only: the listed products and pages. */
+  total: z.number().int().min(0).optional(),
+  totalPages: z.number().int().min(0).optional(),
+  /** The outline only: every page after the first, with the `after` that reads it. */
+  pages: z.array(z.object({ page: z.number().int().min(2), after: z.string() })).optional(),
 });
 
 // Storefront product list item
@@ -706,11 +741,30 @@ const feedProductsRoute = createRoute({
 });
 
 app.openapi(feedProductsRoute, async (c) => {
+  const { presence: _presence, cursor: publicCursor, ...params } = c.req.valid("query");
+  const scope = feedCursorScope(params.channel);
+  const signer = publicCursorSigner(c.env);
+  // Only a continuation this store issued, for this channel: anything else is
+  // refused before any read, so no request can ask for an arbitrary position.
+  let cursor: string | undefined;
+  if (publicCursor) {
+    const position = await signer.verify(scope, publicCursor.slice(PUBLIC_FEED_CURSOR_PREFIX.length));
+    if (!position) throw unsignedContinuation("Invalid product feed cursor. Start again from the first page.");
+    cursor = `${CORE_FEED_CURSOR_PREFIX}${position}`;
+  }
   const db = c.get("db");
-  const { presence: _presence, ...params } = c.req.valid("query");
   const search = normalizePublicListingSearchParam(params.search);
-  const result = await getStorefrontFeedProducts(db, { ...params, search }, publicMarketPricing(c));
-  return ok(c, result);
+  const result = await getStorefrontFeedProducts(db, { ...params, search, ...(cursor ? { cursor } : {}) }, publicMarketPricing(c));
+  const next = result.pagination.cursor;
+  return ok(c, {
+    ...result,
+    pagination: {
+      ...result.pagination,
+      ...(next
+        ? { cursor: `${PUBLIC_FEED_CURSOR_PREFIX}${await signer.sign(scope, next.slice(CORE_FEED_CURSOR_PREFIX.length))}` }
+        : {}),
+    },
+  });
 });
 
 // GET /api/v1/products/sitemap
@@ -727,7 +781,7 @@ const sitemapProductsRoute = createRoute({
       description: "Sitemap product list with pagination",
       content: { "application/json": { schema: successEnvelope(z.object({
         products: z.array(storefrontSitemapProductSchema),
-        pagination: paginationSchema,
+        pagination: productSitemapPaginationSchema,
       })) } },
     },
     400: errorResponses[400],
@@ -737,10 +791,36 @@ const sitemapProductsRoute = createRoute({
 
 app.openapi(sitemapProductsRoute, async (c) => {
   const db = c.get("db");
-  const { presence: _presence, ...params } = c.req.valid("query");
+  const { presence: _presence, page, limit, after, outline } = c.req.valid("query");
+  const signer = publicCursorSigner(c.env);
+  if (outline) {
+    // The index's read only: one page size (the sitemap chunk), so it hands
+    // out at most one boundary per 5,000 products and has one cache entry.
+    if (page !== 1 || after) throw new ValidationError("The sitemap outline takes no page or after.");
+    if (limit !== SITEMAP_PAGE_SIZE) throw new ValidationError(`The sitemap outline is read with limit=${SITEMAP_PAGE_SIZE}.`);
+    const result = await getStorefrontSitemapOutline(db, { limit });
+    const pages = await Promise.all(result.boundaries.map(async (boundary, index) => ({
+      page: index + 2,
+      after: await signer.sign(sitemapAfterScope(index + 2, limit), encodeSitemapPosition(boundary)),
+    })));
+    return ok(c, {
+      products: [],
+      pagination: { page: 1, limit, total: result.total, totalPages: result.totalPages, pages },
+    });
+  }
+  // A later page starts only where the outline said, for this page and size:
+  // a page or boundary it never handed out is refused before any read.
+  let position: ReturnType<typeof decodeSitemapPosition> = null;
+  if (page > 1) {
+    const signed = after ? await signer.verify(sitemapAfterScope(page, limit), after) : null;
+    position = signed ? decodeSitemapPosition(signed) : null;
+    if (!position) throw unsignedContinuation("Sitemap pages after the first need the `after` their sitemap index lists.");
+  } else if (after) {
+    throw new ValidationError("The first sitemap page takes no `after`.");
+  }
   // A presence's sitemap names each product at its handle in the presence's language.
-  const result = await getStorefrontSitemapProducts(db, params, translationScope(publicMarketPresence(c)));
-  return ok(c, result);
+  const result = await getStorefrontSitemapProducts(db, { limit, after: position }, translationScope(publicMarketPresence(c)));
+  return ok(c, { products: result.products, pagination: { page, ...result.pagination } });
 });
 
 // GET /api/v1/products/recommendations

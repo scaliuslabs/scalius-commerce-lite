@@ -36,7 +36,7 @@ export const notificationEventMessages = defineMessages({
     gift_card_sent: "Gift card sent (to the buyer)",
     review_request: "Review request",
     review_pending: "Review waiting for approval",
-    digital_keys_exhausted: "Licence keys ran out",
+    digital_keys_exhausted: "Automatic delivery waiting",
   },
   bn: {
     groupOrders: "অর্ডার",
@@ -72,6 +72,6 @@ export const notificationEventMessages = defineMessages({
     gift_card_sent: "গিফট কার্ড পাঠানো হয়েছে (ক্রেতাকে)",
     review_request: "রিভিউয়ের অনুরোধ",
     review_pending: "অনুমোদনের অপেক্ষায় রিভিউ",
-    digital_keys_exhausted: "লাইসেন্স কী শেষ",
+    digital_keys_exhausted: "স্বয়ংক্রিয় ডেলিভারি অপেক্ষায়",
   },
 });

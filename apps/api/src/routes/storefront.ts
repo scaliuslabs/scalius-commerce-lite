@@ -376,6 +376,8 @@ const layoutDataSchema = z.object({
     mediaUrl: z.string(),
     /** Whether the storefront serves photos from its own origin (`/media/...`): the plan profile's `sameOriginMedia`. */
     sameOriginMedia: z.boolean(),
+    /** Most products one catalogue feed request may ask for (`limit`): the plan profile's `lists.feedProductsPerRequest`. */
+    feedProductsPerRequest: z.number().int().min(1),
   }),
   /** The store's IANA time zone (Settings -> Store details): buyer-facing dates are shown in it. */
   timeZone: z.string().max(64),
@@ -697,6 +699,7 @@ app.openapi(layoutRoute, async (c) => {
       dashboardUrl: platform.dashboardUrl,
       mediaUrl: platform.mediaUrl,
       sameOriginMedia: planLimits().sameOriginMedia,
+      feedProductsPerRequest: planLimits().lists.feedProductsPerRequest,
     },
     // From the tracked platform row inside a dependency scope, so a saved
     // time zone advances this page's `set:platform:document` dependency.

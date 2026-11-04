@@ -1,4 +1,4 @@
-/** Published, indexable products; one bounded page per XML document. */
+/** Published, indexable products; one bounded page per XML document, each later page at the boundary the index lists. */
 import type { APIRoute } from "astro";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { paginatedSitemapResponse } from "@/lib/sitemap-utils";
@@ -11,4 +11,5 @@ export const GET: APIRoute = ({ url }) => paginatedSitemapResponse(
   getSitemapProducts,
   (row) => normalizeResourceCanonicalPath("product", row.canonicalPath) ?? `/products/${row.slug}`,
   "Product sitemap is temporarily unavailable",
+  { boundaries: true },
 );

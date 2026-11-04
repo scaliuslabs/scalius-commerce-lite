@@ -138,6 +138,23 @@ export function createCODTrackingInsertValues(orderId: string) {
   };
 }
 
+/** A cash collection prepared for the caller's own batch (`prepareCODCollection`). */
+export type PreparedCODCollection =
+  /** The same collection is already recorded in full: nothing to write. */
+  | { alreadyRecorded: true }
+  | {
+    alreadyRecorded: false;
+    /** The tracking, order, payment and plan writes, ending with the guard that aborts the batch on a stale order. */
+    statements: SQLiteBatchItem[];
+    /** The order version the batch leaves (one above the version it read). */
+    nextVersion: number;
+  };
+
+/** The batch of a prepared collection aborted: the order's payment changed since it was read. */
+export function isCODCollectionConflictError(error: unknown): boolean {
+  return isBatchGuardError(error, COD_COLLECTION_BATCH_GUARD);
+}
+
 /**
  * Record a successful COD collection by a courier.
  * Updates: codTracking, orderPayments, and orders.paymentStatus.
@@ -147,6 +164,31 @@ export async function recordCODCollection(
   params: RecordCODCollectionParams
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const prepared = await prepareCODCollection(db, params);
+    if (!prepared.alreadyRecorded) await safeBatch(db, prepared.statements as never);
+    return { success: true };
+  } catch (err: unknown) {
+    // Re-throw typed errors so the API layer can handle them
+    if (err instanceof NotFoundError || err instanceof ValidationError || err instanceof ConflictError) throw err;
+    if (isBatchGuardError(err, COD_COLLECTION_BATCH_GUARD)) {
+      throw new ConflictError("Order payment changed while cash collection was being recorded. Reload and try again.");
+    }
+    const message = err instanceof Error ? err.message : "Failed to record COD collection";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * The writes of `recordCODCollection`, without sending them: reads and checks
+ * only, so a caller commits the cash record in the same batch as what depends
+ * on it (a delivered status, its stock, timeline line and customer message).
+ * Throws the same typed errors.
+ */
+export async function prepareCODCollection(
+  db: Database,
+  params: RecordCODCollectionParams,
+): Promise<PreparedCODCollection> {
+  {
     const order = await db
       .select({
         id: orders.id,
@@ -240,7 +282,7 @@ export async function recordCODCollection(
           "Cash collection evidence is incomplete or conflicts with the saved order. Review the payment before retrying.",
         );
       }
-      return { success: true }; // Already recorded — idempotent
+      return { alreadyRecorded: true }; // Already recorded — idempotent
     }
 
     if (tracking?.codStatus === CodStatus.COLLECTED) {
@@ -417,17 +459,7 @@ export async function recordCODCollection(
       AND ${completedPlanCondition}
     `, COD_COLLECTION_BATCH_GUARD));
 
-    await safeBatch(db, batchStatements as never);
-
-    return { success: true };
-  } catch (err: unknown) {
-    // Re-throw typed errors so the API layer can handle them
-    if (err instanceof NotFoundError || err instanceof ValidationError || err instanceof ConflictError) throw err;
-    if (isBatchGuardError(err, COD_COLLECTION_BATCH_GUARD)) {
-      throw new ConflictError("Order payment changed while cash collection was being recorded. Reload and try again.");
-    }
-    const message = err instanceof Error ? err.message : "Failed to record COD collection";
-    return { success: false, error: message };
+    return { alreadyRecorded: false, statements: batchStatements, nextVersion };
   }
 }
 

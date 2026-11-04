@@ -5,13 +5,15 @@
 // outcomes and match-signal coverage. It reads only counts and fixed or
 // bounded error sentences: no identifier, contact or token leaves it.
 // Five bounded statements in one batch, each walking a created_at index
-// (Meta's browser-event logs: their own 30-day retention).
+// (Meta's browser-event logs: their own retention, failures and a 1% sample
+// of browser successes, so their "sent" is an estimate).
 
 import type { Database } from "@scalius/database/client";
 import { metaCapiPurchaseOutbox, metaConversionsLogs, orderTrackingSignals, orders, trackingDeliveries } from "@scalius/database/schema";
 import { and, desc, eq, gte, inArray, SQL, sql } from "drizzle-orm";
 import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { metaConversionsDocument } from "../settings";
+import { capiSuccessWeightSql } from "../../integrations/meta/capi-settings";
 import { selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 import {
   ga4MeasurementDocument,
@@ -138,7 +140,8 @@ export async function getTrackingHealth(
     })).from(metaCapiPurchaseOutbox).where(gte(metaCapiPurchaseOutbox.createdAt, since)),
     db.select(aliased({
       event: metaConversionsLogs.eventName,
-      sent: counted("success", metaConversionsLogs.status),
+      // Browser successes are logged as a sample: each row stands for its share.
+      sent: sql<number>`sum(case when ${metaConversionsLogs.status} = 'success' then ${capiSuccessWeightSql(metaConversionsLogs.requestPayload)} else 0 end)`,
       failed: counted("failed", metaConversionsLogs.status),
     })).from(metaConversionsLogs)
       .where(gte(metaConversionsLogs.createdAt, new Date(since * 1000)))

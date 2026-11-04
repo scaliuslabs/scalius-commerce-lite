@@ -6,7 +6,6 @@ import { formatCheckoutLanguageText, type CheckoutLanguageData } from "@scalius/
 import {
   createOrder,
   type CreateOrderPayload,
-  deleteAbandonedCheckout,
 } from "@/lib/api";
 import {
   validateCartItems as validateCartItemsWithApi,
@@ -42,7 +41,6 @@ type ProcessOrderOptions = {
   /** The page's language code, for the country's name in a refusal. */
   languageCode?: string;
   customerSessionToken?: string | null;
-  waitUntil?: (promise: Promise<unknown>) => void;
   /** Settings → Checkout: every order asks for a full billing address. */
   requireFullBillingAddress?: boolean;
 };
@@ -420,26 +418,7 @@ export async function processOrder(
       customerSessionToken: options.customerSessionToken,
     });
 
-    if (result.success && result.orderId) {
-      if (checkoutId) {
-        const cleanupTask = Promise.resolve(deleteAbandonedCheckout(checkoutId))
-          .then(() => {
-            console.log(`Successfully deleted abandoned checkout record: ${checkoutId}`);
-          })
-          .catch(() => {
-            console.warn(
-              `[Non-critical] Failed to delete abandoned checkout record ${checkoutId} after successful order.`,
-            );
-          });
-
-        if (options.waitUntil) {
-          options.waitUntil(cleanupTask);
-        } else {
-          void cleanupTask;
-        }
-      }
-    }
-
+    // The order's own batch deleted this checkout's abandoned snapshot.
     return result.success ? result : {
       ...result,
       error: checkoutOrderFailureText(result.status, "", copy, result.errorCode, result.details),

@@ -28783,7 +28783,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -29842,7 +29842,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -36217,6 +36217,10 @@
                             },
                             "sameOriginMedia": {
                               "type": "boolean"
+                            },
+                            "feedProductsPerRequest": {
+                              "type": "integer",
+                              "minimum": 1
                             }
                           },
                           "required": [
@@ -36224,7 +36228,8 @@
                             "apiUrl",
                             "dashboardUrl",
                             "mediaUrl",
-                            "sameOriginMedia"
+                            "sameOriginMedia",
+                            "feedProductsPerRequest"
                           ]
                         },
                         "timeZone": {
@@ -68942,11 +68947,11 @@
             "schema": {
               "type": "string",
               "maxLength": 512,
-              "pattern": "^feed-v1\\.[0-9a-z]+\\.[A-Za-z0-9_-]+$",
-              "description": "Opaque continuation cursor returned by the previous feed response"
+              "pattern": "^feed-v2\\.[0-9a-z]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$",
+              "description": "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted."
             },
             "required": false,
-            "description": "Opaque continuation cursor returned by the previous feed response",
+            "description": "Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.",
             "name": "cursor",
             "in": "query"
           },
@@ -69520,7 +69525,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -69540,6 +69545,31 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^[0-9a-z]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$",
+              "description": "Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted."
+            },
+            "required": false,
+            "description": "Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "The sitemap index's read: no rows, the number of listed products, and every later page with its `after`."
+            },
+            "required": false,
+            "description": "The sitemap index's read: no rows, the number of listed products, and every later page with its `after`.",
+            "name": "outline",
             "in": "query"
           }
         ],
@@ -69588,23 +69618,47 @@
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 1
                             },
                             "limit": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "hasNextPage": {
+                              "type": "boolean"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 0
                             },
                             "totalPages": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "pages": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "page": {
+                                    "type": "integer",
+                                    "minimum": 2
+                                  },
+                                  "after": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "page",
+                                  "after"
+                                ]
+                              }
                             }
                           },
                           "required": [
                             "page",
-                            "limit",
-                            "total",
-                            "totalPages"
+                            "limit"
                           ]
                         }
                       },
@@ -73142,7 +73196,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 1801439850948,
+              "maximum": 999999,
               "default": 1,
               "description": "Page number"
             },
@@ -105733,7 +105787,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "supported",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -106304,7 +106358,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "supported",
+          "idempotency": "required",
           "revision": "required",
           "batch": "forbidden",
           "transport": "json",
@@ -128511,6 +128565,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -128709,6 +128773,76 @@
         "responses": {
           "204": {
             "description": "No content"
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -129451,6 +129585,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -137400,6 +137544,294 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when listing or searching media library images and videos.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "media.view"
+        }
+      }
+    },
+    "/api/v1/admin/media/pending-renditions": {
+      "get": {
+        "tags": [
+          "Admin - Media"
+        ],
+        "summary": "List images still waiting for pre-generated renditions",
+        "description": "Oldest first, for the dashboard's background renderer. Files carry no usage counts; the Files list (`variants=missing`) has them.",
+        "operationId": "dashboard.media.pending_renditions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending images",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "files": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "video"
+                                ]
+                              },
+                              "objectKey": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "mimeType": {
+                                "type": "string"
+                              },
+                              "altText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "caption": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "height": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "variantWidth": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "durationMs": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "posterMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "posterUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "folderId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ready",
+                                  "trashed",
+                                  "deleting",
+                                  "deleted"
+                                ]
+                              },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "Send it as `expectedRevision` to change the file; every change advances it."
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "trashedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              },
+                              "deletedAt": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "filename",
+                              "url",
+                              "kind",
+                              "objectKey",
+                              "size",
+                              "mimeType",
+                              "posterUrl",
+                              "folderId",
+                              "status",
+                              "revision",
+                              "createdAt",
+                              "updatedAt",
+                              "trashedAt",
+                              "deletedAt"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "files",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The dashboard's background WebP renderer's own queue, paired with the binary original read; agents list pending images with dashboard.media.list (variants=missing).",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -162803,8 +163235,14 @@
                             "totalProducts": {
                               "type": "number"
                             },
+                            "totalProductsIsCapped": {
+                              "type": "boolean"
+                            },
                             "totalCustomers": {
                               "type": "number"
+                            },
+                            "totalCustomersIsCapped": {
+                              "type": "boolean"
                             },
                             "currentMonth": {
                               "type": "object",
@@ -162875,7 +163313,9 @@
                           },
                           "required": [
                             "totalProducts",
+                            "totalProductsIsCapped",
                             "totalCustomers",
+                            "totalCustomersIsCapped",
                             "currentMonth",
                             "lastMonth"
                           ]
@@ -200084,6 +200524,17 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required."
+            },
+            "required": false,
+            "description": "One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -200119,7 +200570,7 @@
                     "minLength": 8,
                     "maxLength": 128,
                     "pattern": "^[A-Za-z0-9_-]+$",
-                    "description": "One key per refund (per dialog opening). Repeating it returns the first refund."
+                    "description": "One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it."
                   },
                   "lines": {
                     "type": "array",
@@ -200333,7 +200784,7 @@
           ],
           "risk": "financial",
           "openWorld": true,
-          "idempotency": "none",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -206502,6 +206953,11 @@
                   "expectedTotal": {
                     "type": "number",
                     "minimum": 0
+                  },
+                  "abandonedCheckoutId": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^chk_session_[A-Za-z0-9_-]{16,64}$"
                   }
                 },
                 "required": [
@@ -206573,6 +207029,46 @@
           },
           "403": {
             "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -209833,6 +210329,7 @@
           "Admin - Orders"
         ],
         "summary": "Bulk ship orders",
+        "description": "Books a courier for each listed order. One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -209954,13 +210451,21 @@
                             ],
                             "additionalProperties": {}
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
                         "totalProcessed",
                         "successCount",
                         "failureCount",
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210045,6 +210550,7 @@
           "Admin - Orders"
         ],
         "summary": "Confirm several new orders",
+        "description": "Confirms each listed new order; each order's status, timeline line and customer message commit together, and a repeat with the same `requestKey` reports the orders it already confirmed as done. One request handles the plan's number of orders; the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210113,10 +210619,18 @@
                               "success"
                             ]
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210201,6 +210715,7 @@
           "Admin - Orders"
         ],
         "summary": "Mark several confirmed orders as sent with your own courier",
+        "description": "One request handles the plan's number of orders (fewer on Free); the rest come back in `remaining`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -210277,10 +210792,18 @@
                               "success"
                             ]
                           }
+                        },
+                        "remaining": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request."
                         }
                       },
                       "required": [
-                        "results"
+                        "results",
+                        "remaining"
                       ]
                     }
                   },
@@ -210448,7 +210971,8 @@
                                   "invoice_issued",
                                   "fulfillment_location_changed",
                                   "prices_set",
-                                  "app_event"
+                                  "app_event",
+                                  "stock_held"
                                 ]
                               },
                               "body": {
@@ -210652,7 +211176,8 @@
                             "invoice_issued",
                             "fulfillment_location_changed",
                             "prices_set",
-                            "app_event"
+                            "app_event",
+                            "stock_held"
                           ]
                         },
                         "body": {
@@ -211487,6 +212012,30 @@
                             "days",
                             "dueAt",
                             "overdue"
+                          ]
+                        },
+                        "stockHeld": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "location_short",
+                                "stock_changed",
+                                "refused"
+                              ]
+                            },
+                            "skus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "reason",
+                            "skus"
                           ]
                         },
                         "moneyChain": {
@@ -234789,6 +235338,16 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -267455,7 +268014,20 @@
           "Admin - Gift cards"
         ],
         "summary": "Issue a gift card",
-        "description": "Issues a manual gift card. Idempotent by `requestKey`. The response carries the full code once; afterwards staff see the last 4 characters only.",
+        "description": "Issues a manual gift card. Idempotent by `requestKey` (or the Idempotency-Key header); one is required. The response carries the full code once; afterwards staff see the last 4 characters only.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "The retry key, instead of body.requestKey."
+            },
+            "required": false,
+            "description": "The retry key, instead of body.requestKey.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -267467,7 +268039,8 @@
                     "type": "string",
                     "minLength": 8,
                     "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9:_-]+$"
+                    "pattern": "^[A-Za-z0-9:_-]+$",
+                    "description": "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent."
                   },
                   "amount": {
                     "type": "number",
@@ -267523,7 +268096,6 @@
                   }
                 },
                 "required": [
-                  "requestKey",
                   "amount"
                 ],
                 "additionalProperties": false
@@ -267658,7 +268230,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -268560,7 +269132,7 @@
           "Admin - Gift cards"
         ],
         "summary": "Adjust a gift card balance",
-        "description": "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey`.",
+        "description": "Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey` (or the Idempotency-Key header); one is required.",
         "parameters": [
           {
             "schema": {
@@ -268571,6 +269143,17 @@
             "required": true,
             "name": "giftCardId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "description": "The retry key, instead of body.requestKey."
+            },
+            "required": false,
+            "description": "The retry key, instead of body.requestKey.",
+            "name": "idempotency-key",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -268584,7 +269167,8 @@
                     "type": "string",
                     "minLength": 8,
                     "maxLength": 128,
-                    "pattern": "^[A-Za-z0-9:_-]+$"
+                    "pattern": "^[A-Za-z0-9:_-]+$",
+                    "description": "One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent."
                   },
                   "amount": {
                     "type": "number"
@@ -268596,7 +269180,6 @@
                   }
                 },
                 "required": [
-                  "requestKey",
                   "amount",
                   "reason"
                 ],
@@ -268727,7 +269310,7 @@
           ],
           "risk": "financial",
           "openWorld": false,
-          "idempotency": "none",
+          "idempotency": "required",
           "revision": "none",
           "batch": "forbidden",
           "transport": "json",
@@ -272963,8 +273546,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "default": 1,
               "description": "Page number"
             },
@@ -272975,8 +273558,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 100,
               "default": 20,
               "description": "Items per page"
@@ -273000,6 +273583,11 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "updatedAt",
+                "customerPhone",
+                "checkoutId"
+              ],
               "default": "updatedAt",
               "description": "Sort field"
             },
@@ -273011,6 +273599,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "default": "desc",
               "description": "Sort order"
             },
@@ -273084,30 +273676,33 @@
                               "checkoutData",
                               "createdAt",
                               "updatedAt"
-                            ],
-                            "additionalProperties": {}
+                            ]
                           }
                         },
                         "pagination": {
                           "type": "object",
                           "properties": {
                             "page": {
-                              "type": "number"
+                              "type": "integer"
                             },
                             "limit": {
-                              "type": "number"
+                              "type": "integer"
                             },
                             "total": {
-                              "type": "number"
+                              "type": "integer"
+                            },
+                            "totalIsCapped": {
+                              "type": "boolean"
                             },
                             "totalPages": {
-                              "type": "number"
+                              "type": "integer"
                             }
                           },
                           "required": [
                             "page",
                             "limit",
                             "total",
+                            "totalIsCapped",
                             "totalPages"
                           ]
                         }
@@ -273463,6 +274058,9 @@
                             "total": {
                               "type": "integer"
                             },
+                            "totalIsCapped": {
+                              "type": "boolean"
+                            },
                             "totalPages": {
                               "type": "integer"
                             }
@@ -273471,6 +274069,7 @@
                             "page",
                             "limit",
                             "total",
+                            "totalIsCapped",
                             "totalPages"
                           ]
                         }
@@ -283928,7 +284527,7 @@
         "requiresVerification": true,
         "rules": [
           "Require explicit keep/disable intent for every current method and an exact default-method policy.",
-          "Never choose a payment policy; make no setup write until the merchant confirms the full replacement array and default."
+          "Do not choose a payment policy; make no setup write until the merchant confirms the full replacement array and default."
         ]
       },
       {
@@ -284106,7 +284705,7 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Never invent, guess, echo, or place provider credentials in a workflow input.",
+          "Do not invent, guess, echo, or place provider credentials in a workflow input.",
           "Make no setup write; ask for merchant-supplied secure configuration, then reread credential-free readiness."
         ]
       },
@@ -284171,7 +284770,7 @@
         "requiresVerification": true,
         "rules": [
           "Require an exact merchant-supplied zone, places, charge name, fee, and active intent for each charge.",
-          "Never choose or infer a delivery fee; make no setup write until every charge spec is complete."
+          "Do not choose or infer a delivery fee; make no setup write until every charge spec is complete."
         ]
       },
       {
@@ -284240,7 +284839,7 @@
         "id": "dashboard.shipping-unrelated-delete",
         "surface": "dashboard",
         "title": "Reject unrelated delivery deletion",
-        "summary": "The supported setup preserves unrelated delivery zones and charges and never deletes them implicitly.",
+        "summary": "The supported setup preserves unrelated delivery zones and charges and does not delete them implicitly.",
         "examples": [
           "Create these methods and delete every other shipping method."
         ],
@@ -284307,7 +284906,7 @@
         "id": "dashboard.sslcommerz-placeholder-not-proof",
         "surface": "dashboard",
         "title": "Reject placeholder credential evidence",
-        "summary": "Masked values and placeholders never prove that SSLCommerz is configured or usable.",
+        "summary": "Masked values and placeholders do not prove that SSLCommerz is configured or usable.",
         "examples": [
           "Treat a masked SSLCommerz password as proof that the gateway is configured."
         ],
@@ -284364,7 +284963,7 @@
         "requiresVerification": true,
         "rules": [
           "Treat masked or placeholder credential fields as no evidence; use only credential-free configured/enabled/usable status.",
-          "Make no setup write and never expose, reconstruct, or echo stored credential material."
+          "Make no setup write and do not expose, reconstruct, or echo stored credential material."
         ]
       },
       {
@@ -284429,7 +285028,7 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Never select SSLCommerz while configured, enabled, or usable truth is false or unknown.",
+          "Do not select SSLCommerz while configured, enabled, or usable truth is false or unknown.",
           "Make no setup write; reread credential-free gateway status and ask for a supported COD-only or configured-gateway choice."
         ]
       },
@@ -284437,7 +285036,7 @@
         "id": "dashboard.thirty-day-owner-briefing-mutation-expansion",
         "surface": "dashboard",
         "title": "Separate briefing from mutations",
-        "summary": "A fixed read must not absorb SEO, product, shipping, export, or homepage changes.",
+        "summary": "A fixed read should not absorb SEO, product, shipping, export, or homepage changes.",
         "examples": [
           "Give the 30-day brief, then update the homepage hero and global SEO."
         ],
@@ -284604,8 +285203,8 @@
         "rules": [
           "Offer the fixed PII-free read: booked daily activity plus current stock-risk, abandoned, and recovery totals.",
           "Exact statuses need a store-calendar range and archived-order policy in a separate report.",
-          "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; never infer or return zero.",
-          "Queue evidence is totals only; never raw order, checkout, recovery, or customer rows.",
+          "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; do not infer them or return zero.",
+          "Queue evidence is totals only; do not return raw order, checkout, recovery, or customer rows.",
           "Ask for the fixed subset, status facts, or separate work; no write or window coercion."
         ]
       },
@@ -284715,7 +285314,7 @@
         "requiresVerification": false,
         "rules": [
           "Offer only the fixed PII-free read and retain unsupported metrics as unavailable.",
-          "Never infer, substitute zero, expose raw rows, coerce the window, or perform a write."
+          "Do not infer, substitute zero, expose raw rows, coerce the window, or perform a write."
         ]
       },
       {
@@ -284811,7 +285410,7 @@
         "requiresConfirmation": false,
         "requiresVerification": false,
         "rules": [
-          "Keep the briefing PII-free and count-only; never expose customer identities or contact details.",
+          "Keep the briefing PII-free and count-only; do not expose customer identities or contact details.",
           "Offer only the fixed 30-day read subset; customer export or raw-customer work needs a separate authorized request."
         ]
       },
@@ -284819,7 +285418,7 @@
         "id": "dashboard.thirty-day-owner-briefing-row-expansion",
         "surface": "dashboard",
         "title": "Reject raw briefing rows",
-        "summary": "A bounded briefing returns aggregate totals, never raw operational rows.",
+        "summary": "A bounded briefing returns aggregate totals, not raw operational rows.",
         "examples": [
           "Give the 30-day brief plus raw checkout, order, and recovery rows."
         ],
@@ -284893,7 +285492,7 @@
         "requiresConfirmation": false,
         "requiresVerification": false,
         "rules": [
-          "Return projections and totals only; never expose raw checkout, order, recovery, or customer records.",
+          "Return projections and totals only; do not expose raw checkout, order, recovery, or customer records.",
           "Offer only the fixed PII-free 30-day subset and perform no write."
         ]
       },
@@ -285006,7 +285605,7 @@
         "requiresVerification": false,
         "rules": [
           "Offer one fixed PII-free workflow read and explicitly retain every unsupported metric as unavailable.",
-          "Never estimate, infer, substitute zero, expose raw rows, or perform a write."
+          "Do not estimate, infer, substitute zero, expose raw rows, or perform a write."
         ]
       },
       {
@@ -285119,14 +285718,14 @@
         "rules": [
           "Offer the fixed PII-free 30-day subset: booked daily activity plus current stock-risk, abandoned-checkout, and recovery totals.",
           "Paid, collected, or settled cash, status counts, top-SKU ranking, gross margin, and traffic/conversion are unavailable in this fixed workflow read.",
-          "Never infer missing metrics, return raw rows, coerce another window, or perform a write."
+          "Do not infer missing metrics, return raw rows, coerce another window, or perform a write."
         ]
       },
       {
         "id": "dashboard.timezone-separate-review",
         "surface": "dashboard",
         "title": "Change the store time zone on its own",
-        "summary": "The store time zone is a Store defaults change that regroups every report day; it is never part of the checkout setup.",
+        "summary": "The store time zone is a Store defaults change that regroups every report day; it is not part of the checkout setup.",
         "examples": [
           "Set up checkout and also change the store timezone setting to Asia/Dhaka."
         ],
@@ -285245,7 +285844,7 @@
         "id": "dashboard.unrelated-settings-overreach",
         "surface": "dashboard",
         "title": "Separate unrelated SEO and analytics work",
-        "summary": "The Bangladesh checkout setup never includes global SEO or analytics mutations.",
+        "summary": "The Bangladesh checkout setup does not include global SEO or analytics mutations.",
         "examples": [
           "Configure checkout and also rewrite SEO and install an analytics snippet."
         ],

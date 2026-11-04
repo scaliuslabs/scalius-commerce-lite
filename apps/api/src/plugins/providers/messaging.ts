@@ -6,8 +6,9 @@
 // A send always answers, so the notification and OTP queues keep their own
 // retry rules for every provider alike:
 // - `retryable`: retried, unless the provider may already have sent it
-//   (`uncertain`) and the message carries no idempotency key the app can
-//   dedupe on; then it is never sent twice.
+//   (`uncertain`) and the app does not declare `dedupesOnIdempotencyKey`
+//   (a send repeated under the message's key is applied once); then it is
+//   never sent twice. A key on the message alone proves nothing.
 // - `declined`: final for this message.
 // - `misconfigured`: final, worded "not configured" so the provider is
 //   paused until its settings are saved, like a built-in one.
@@ -56,6 +57,8 @@ function appMessagingProvider(
   declaration: PluginProviderDeclaration,
 ): Record<string, unknown> {
   const operations = new Set(declaredProviderOperations(declaration));
+  // Only a provider that says it dedupes on the key may have an uncertain send repeated.
+  const dedupes = "dedupesOnIdempotencyKey" in declaration && declaration.dedupesOnIdempotencyKey === true;
   const invoke = async (operation: "send" | "deliveryStatus" | "testConnection", input: unknown, call: Call = {}): Promise<unknown> => {
     const host = await runtime.host();
     return withSignal(host.invokeProvider(installation, kind, declaration.id, operation, input as never), call.signal);
@@ -73,7 +76,7 @@ function appMessagingProvider(
         const answer = await invoke("send", input, call) as SendAnswer;
         return answer.rawStatus === undefined ? answer : { ...answer, rawStatus: sanitized(answer.rawStatus) };
       } catch (error) {
-        return failedSend(error, declaration.name, typeof input.idempotencyKey === "string");
+        return failedSend(error, declaration.name, dedupes && typeof input.idempotencyKey === "string");
       }
     },
   };

@@ -7,7 +7,11 @@
 // send always answers (never throws for a provider failure), so the
 // notification and OTP queues keep their own retry rules for both kinds:
 // - `retryable`: retried, unless the provider may already have sent it
-//   (`uncertain`) and the message carries no `idempotencyKey` it can dedupe on.
+//   (`uncertain`) and it does not declare `dedupesOnIdempotencyKey` (a send
+//   repeated under the message's key is applied once) with a key on the
+//   message; then it is never sent twice. A key alone proves nothing. The
+//   built-in Meta sender has no key to dedupe on, so a timeout, a lost answer
+//   or a server error of Meta's is final for that message (whatsapp.ts).
 // - `misconfigured`: final, worded "not configured" so the provider is paused
 //   until its settings are saved, like the built-in one.
 // Statuses are sanitized (no phone numbers, addresses or tokens) before they
@@ -126,13 +130,14 @@ export async function resolveWhatsAppSender(
       if (!TEMPLATE_NAME.test(templateName) || !TEMPLATE_LANGUAGE.test(language)) {
         return { success: false, rawStatus: "invalid_whatsapp_template", retryable: false };
       }
-      const idempotent = input.idempotencyKey !== undefined;
+      // An uncertain failure is repeated only under a key the app says it dedupes on.
+      const dedupable = provider.dedupesOnIdempotencyKey === true && input.idempotencyKey !== undefined;
       try {
         const answer = await provider.send({
           channel: "whatsapp",
           to: validateAndFormatPhone(input.to),
           template: { name: templateName, language, parameters: appTemplateParameters(input.bodyParameters) },
-          ...(idempotent ? { idempotencyKey: input.idempotencyKey } : {}),
+          ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
         }, {});
         return {
           success: answer.success,
@@ -151,7 +156,7 @@ export async function resolveWhatsAppSender(
         return {
           success: false,
           rawStatus: sanitized(failure.message),
-          retryable: failure.category === "retryable" && (!failure.uncertain || idempotent),
+          retryable: failure.category === "retryable" && (!failure.uncertain || dedupable),
         };
       }
     },

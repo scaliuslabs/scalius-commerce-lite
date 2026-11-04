@@ -8594,7 +8594,8 @@
             "invoice_issued",
             "fulfillment_location_changed",
             "prices_set",
-            "app_event"
+            "app_event",
+            "stock_held"
            ]
           },
           "body": {
@@ -10369,7 +10370,7 @@
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards/{id}/adjust",
    "risk": "financial",
-   "idempotency": "supported",
+   "idempotency": "required",
    "revision": "required",
    "scopes": [
     "write_gift_cards"
@@ -10466,7 +10467,7 @@
    "method": "POST",
    "path": "/api/v1/admin/resources/gift-cards",
    "risk": "financial",
-   "idempotency": "supported",
+   "idempotency": "required",
    "revision": "none",
    "scopes": [
     "write_gift_cards"

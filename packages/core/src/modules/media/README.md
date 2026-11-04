@@ -53,7 +53,7 @@ Product photos are `product_media` rows that point at `media` with `restrict`. O
 - No server renders images (no Cloudflare Images binding). Who renders:
   - The dashboard browser encodes the ladder on upload and sends it to `POST /{id}/variants` (`components/admin/media-manager/utils/media-variants.ts`).
   - The CLI (`scalius media upload`) encodes the ladder locally with `sharp` and sends it to the same route.
-  - Agent/MCP uploads and URL imports store the original only. The image is "pending" while `variant_width` is NULL (`needsMediaVariants`; the Files list filter `variants=missing`). It serves its original, which is correct but larger. Any open dashboard tab renders pending images in the background (`PendingRenditionsLoader` in the admin shell lazy-loads `components/admin/media-manager/utils/pending-renditions-runner.ts`: idle time, bounded, resumable) with the browser pipeline.
+  - Agent/MCP uploads and URL imports store the original only. The image is "pending" while `variant_width` is NULL (`needsMediaVariants`; the Files list filter `variants=missing`, with usage counts; the renderer's own `GET /admin/media/pending-renditions`, `listMediaPendingRenditions`, without them, served by the partial `media_pending_variants_idx`). It serves its original, which is correct but larger. Any open dashboard tab renders pending images in the background (`PendingRenditionsLoader` in the admin shell lazy-loads `components/admin/media-manager/utils/pending-renditions-runner.ts`: idle time, bounded, resumable) with the browser pipeline.
 - Plan limits: [`docs/FREE-PLAN.md`](../../../../../docs/FREE-PLAN.md).
 
 ## Usage index

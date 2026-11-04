@@ -143,15 +143,24 @@ jobs:
         # The proofs of every rule the change can break, invariants and scenarios included,
         # under their own configs: a skip, a flake or a missing PostgreSQL run fails.
         if: ${{ steps.impact.outputs.rules != '' }}
+        # The cache proofs run the five-seed collecting DVC gate AGENTS.md requires; the
+        # variables are inert for every other proof.
         env:
           RULES: ${{ steps.impact.outputs.rules }}
+          DVC_SEEDS: "5"
+          DVC_COLLECT: "1"
+          # Seeds run in parallel shards (cores - 1) beside the other proofs on a 4-vCPU runner, so a
+          # seed can take longer than the 420 s default; the extra time weakens no check.
+          DVC_TIMEOUT_MS: "900000"
         run: node rules/cli.mjs test $RULES --strict --require postgres
 
       - name: Build
         run: pnpm build
 
       - name: API deploy dry-run
-        run: pnpm run deploy:api -- --dry-run
+        # This job already ran the whole-repo typecheck above and runs the dist scan and the canary
+        # builds below, so the dry run skips its own copies. A real deploy never skips them.
+        run: pnpm run deploy:api -- --dry-run --skip-verified
 
       - name: Dist secret guard
         run: pnpm check:dist-secrets
@@ -239,4 +248,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify every rule
+        # Five seeds with collection: the DVC gate AGENTS.md requires, run weekly in full.
+        env:
+          DVC_SEEDS: "5"
+          DVC_COLLECT: "1"
+          # Same reason as the cited-proof step: five seeds share a 4-vCPU runner with --max-workers 3.
+          DVC_TIMEOUT_MS: "900000"
         run: node rules/cli.mjs verify --strict --require postgres --max-workers 3

@@ -36,6 +36,7 @@ import {
   noActiveRefundAttemptForOrderIdCondition,
   noActiveShipmentClaimCondition,
   validateTransition,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import {
   applyOrderStatusChange,
@@ -348,6 +349,8 @@ async function readOrderForFulfilment(db: Database, orderId: string) {
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         deletedAt: orders.deletedAt,
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order || order.deletedAt) throw new NotFoundError("Order not found");

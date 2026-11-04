@@ -5,8 +5,6 @@
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import {
-    buildOrderBalancePaidNotificationDedupeKey,
-    buildOrderCreatedNotificationDedupeKey,
     buildOrderStatusNotificationDedupeKey,
     buildSupportRequestStatusUpdatedNotificationDedupeKey,
     buildSupportRequestSubmittedNotificationDedupeKey,
@@ -62,51 +60,6 @@ async function orderExists(db: Database, orderId: string, source: string, notifi
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) console.warn(`[${source}] Skipped ${notificationType} notification for missing order ${orderId}`);
     return Boolean(order);
-}
-
-export async function sendOrderCreatedNotification(options: {
-    db: Database;
-    send: NotificationSender | undefined;
-    orderId: string;
-    source: string;
-}): Promise<OrderNotificationResult> {
-    if (!(await orderExists(options.db, options.orderId, options.source, "order_created"))) {
-        return { orderId: options.orderId, enqueued: false, skippedReason: "order_missing" };
-    }
-    return sendOrderNotification({
-        db: options.db,
-        send: options.send,
-        orderId: options.orderId,
-        notificationType: "order_created",
-        dedupeKey: buildOrderCreatedNotificationDedupeKey(options.orderId),
-        source: options.source,
-    });
-}
-
-export async function sendOrderBalancePaidNotification(options: {
-    db: Database;
-    send: NotificationSender | undefined;
-    orderId: string;
-    source: string;
-    amount?: number;
-    gateway?: string;
-}): Promise<OrderNotificationResult> {
-    if (!(await orderExists(options.db, options.orderId, options.source, "payment_balance_paid"))) {
-        return { orderId: options.orderId, enqueued: false, skippedReason: "order_missing" };
-    }
-    const data = {
-        ...(typeof options.amount === "number" && Number.isFinite(options.amount) ? { amount: options.amount } : {}),
-        ...(options.gateway ? { gateway: options.gateway } : {}),
-    };
-    return sendOrderNotification({
-        db: options.db,
-        send: options.send,
-        orderId: options.orderId,
-        notificationType: "payment_balance_paid",
-        data: Object.keys(data).length > 0 ? data : undefined,
-        dedupeKey: buildOrderBalancePaidNotificationDedupeKey(options.orderId),
-        source: options.source,
-    });
 }
 
 export async function sendOrderRefundNotification(options: {

@@ -53,7 +53,7 @@ export async function flushEventsAfterWrite(
     });
     if (result.deliveries.length > 0) {
       const { sendEventDeliveries } = await import("./dispatch");
-      await sendEventDeliveries(db, env, ctx, result.deliveries.slice(0, planLimits().background.deliveriesPerDrain));
+      await sendEventDeliveries(db, env, ctx, result.deliveries.slice(0, planLimits().background.deliveriesAfterWrite));
     }
     return result;
   } finally {

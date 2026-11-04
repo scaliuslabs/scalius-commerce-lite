@@ -15,9 +15,12 @@ export function captureEventStartExclusions(): SQL {
     WHERE ${eventOutbox.occurredAt} >= unixepoch())`;
 }
 
-/** The same durable subscription-start test for webhook and app fan-out. */
+/**
+ * The same durable subscription-start test for webhook and app fan-out. The
+ * event is a literal one, or a drain's event row (`drainEventsSource`).
+ */
 export function eventAfterSubscriptionStart(
-  event: { id: string; occurredAt: number },
+  event: { id: string | SQL; occurredAt: number | SQL },
   startedAt: AnySQLiteColumn,
   exclusions: AnySQLiteColumn,
 ): SQL {
@@ -25,3 +28,23 @@ export function eventAfterSubscriptionStart(
     SELECT 1 FROM json_each(${exclusions}) WHERE CAST(value AS TEXT) = ${event.id}
   )`;
 }
+
+/** The events of one drain as a fan-out read joins them: one bound JSON value (`drain_event`). */
+export function drainEventsSource(events: ReadonlyArray<{ id: string; topic: string; occurredAt: number }>): SQL {
+  const rows = events.map((event) => ({
+    i: event.id,
+    t: event.topic,
+    // A subscriber to `<resource>.*` takes every topic of the resource.
+    p: `${event.topic.split(".", 1)[0]}.*`,
+    o: event.occurredAt,
+  }));
+  return sql`json_each(${JSON.stringify(rows)}) AS drain_event`;
+}
+
+/** One field of the joined drain event: its id, topic, resource filter or occurrence time. */
+export const drainEvent = {
+  id: sql<string>`CAST(json_extract(drain_event.value, '$.i') AS TEXT)`,
+  topic: sql<string>`CAST(json_extract(drain_event.value, '$.t') AS TEXT)`,
+  resourceFilter: sql<string>`CAST(json_extract(drain_event.value, '$.p') AS TEXT)`,
+  occurredAt: sql<number>`CAST(json_extract(drain_event.value, '$.o') AS INTEGER)`,
+} as const;

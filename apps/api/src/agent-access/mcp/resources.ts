@@ -12,7 +12,7 @@ import { describeOperation, getAuthorizedOperation } from "./operations";
 
 const STORE_TTL_MS = 60_000;
 const STATIC_TTL_MS = 3_600_000;
-const RECIPES_MAX_BYTES = 24 * 1024;
+export const RECIPES_MAX_BYTES = 24 * 1024;
 
 interface ResourceDependencies {
   surface: AgentResource;
@@ -25,28 +25,62 @@ function json(uri: URL, value: unknown) {
   return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(value) }] };
 }
 
-type CatalogEntry = { id: string; surface: string; title: string; summary: string; operationIds?: string[]; rules?: string[] };
+export type CatalogEntry = { id: string; surface: string; title: string; summary: string; operationIds?: string[]; rules?: string[] };
 
 function catalogEntries(surface: AgentResource): CatalogEntry[] {
   const catalog = AGENT_WORKFLOW_CATALOG as unknown as { cards: CatalogEntry[]; routes: CatalogEntry[] };
   return [...catalog.cards, ...catalog.routes].filter((entry) => entry.surface === surface);
 }
 
-/** The reviewed routes as terse recipes: title, steps in order, rules. Same source as the skills. */
-export function buildRecipes(surface: AgentResource): string {
+const byteLength = (text: string) => new TextEncoder().encode(text).byteLength;
+
+/**
+ * The reviewed routes as terse recipes. Same source as the skills. Every route of the
+ * surface is listed: as many as fit in full (title, id, steps in order, rules), the rest
+ * in the compact `id: operations` form. Only if even the compact form outgrows the cap,
+ * a closing notice names how many routes were left out and how to find them.
+ */
+export function buildRecipes(surface: AgentResource, limits: { routes?: CatalogEntry[]; maxBytes?: number } = {}): string {
+  const maxBytes = limits.maxBytes ?? RECIPES_MAX_BYTES;
   const catalog = AGENT_WORKFLOW_CATALOG as unknown as { routes: CatalogEntry[] };
+  const routes = (limits.routes ?? catalog.routes).filter((entry) => entry.surface === surface);
+  const steps = (route: CatalogEntry) => (route.operationIds ?? []).join(" -> ");
+  const full = (route: CatalogEntry) => [
+    `\n## ${route.title} (${route.id})`,
+    route.summary,
+    `ops: ${steps(route)}`,
+    ...(route.rules ?? []).slice(0, 3).map((rule) => `- ${rule}`),
+  ].join("\n") + "\n";
+  const compact = (route: CatalogEntry) => `- ${route.id}: ${steps(route)}\n`;
+  const compactHeading = "\n## More recipes (compact: id: operations; read scalius://workflows/{id} for the card)\n";
+  const notice = (omitted: number) => `\n${omitted} more recipe${omitted === 1 ? "" : "s"} omitted to fit the size limit; find them with scalius_search (workflows) or read scalius://workflows/{id}.\n`;
+
   let text = `# Scalius ${surface} recipes (workflow catalog ${String((AGENT_WORKFLOW_CATALOG as { version?: string }).version ?? "")})\n`;
-  for (const route of catalog.routes.filter((entry) => entry.surface === surface)) {
-    const block = [
-      `\n## ${route.title}`,
-      route.summary,
-      `ops: ${(route.operationIds ?? []).join(" -> ")}`,
-      ...(route.rules ?? []).slice(0, 3).map((rule) => `- ${rule}`),
-    ].join("\n");
-    if (new TextEncoder().encode(text + block).byteLength > RECIPES_MAX_BYTES) break;
-    text += `${block}\n`;
+  // Reserve room for the compact form of everything not yet written in full, so the
+  // full blocks never crowd a route out of the list.
+  const compactTail = (from: number) => routes.slice(from).reduce((sum, route) => sum + byteLength(compact(route)), 0);
+  let fullCount = 0;
+  while (fullCount < routes.length) {
+    const block = full(routes[fullCount]!);
+    const rest = fullCount + 1 < routes.length ? byteLength(compactHeading) + compactTail(fullCount + 1) : 0;
+    if (byteLength(text) + byteLength(block) + rest > maxBytes) break;
+    text += block;
+    fullCount += 1;
   }
-  return text;
+  if (fullCount === routes.length) return text;
+  text += compactHeading;
+  let listed = fullCount;
+  // When every remaining route fits compactly there is nothing to say; otherwise keep
+  // room for the notice and list what fits.
+  const everyoneFits = byteLength(text) + compactTail(fullCount) <= maxBytes;
+  for (const route of routes.slice(fullCount)) {
+    const after = routes.length - listed - 1;
+    const reserve = everyoneFits || after === 0 ? 0 : byteLength(notice(after));
+    if (byteLength(text) + byteLength(compact(route)) + reserve > maxBytes) break;
+    text += compact(route);
+    listed += 1;
+  }
+  return listed === routes.length ? text : text + notice(routes.length - listed);
 }
 
 export function registerAgentResources(server: McpServer, deps: ResourceDependencies): void {

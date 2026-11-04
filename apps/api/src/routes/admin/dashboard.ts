@@ -59,8 +59,12 @@ const money = (value: number, sales: boolean) => (sales ? value : null);
 // ─── Response schemas ──
 
 const dashboardStatsSchema = z.object({
+    /** Counted up to the plan's list cap (`totalProductsIsCapped`: at least this many). */
     totalProducts: z.number(),
+    totalProductsIsCapped: z.boolean(),
+    /** Counted up to the plan's list cap (`totalCustomersIsCapped`: at least this many). */
     totalCustomers: z.number(),
+    totalCustomersIsCapped: z.boolean(),
     currentMonth: z.object({
         orders: z.number(),
         /** Null without the "View sales numbers" permission. */

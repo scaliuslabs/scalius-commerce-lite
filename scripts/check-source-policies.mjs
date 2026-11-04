@@ -37,6 +37,37 @@ const storefront = "apps/storefront/src";
  * allow: repo-relative files the policy does not cover, each with its reason.
  * sample: text that must violate the policy.
  */
+/**
+ * A `$.` literal (quoted or a template) that is not `$.member(.member)*`
+ * directly followed by its closing quote, a member being a plain name or a
+ * template slot: '$.a[0]', '$.a-b', '$."a b"', '$.a..b', '$.a.', '$..a', and
+ * a path glued to an index ('$.a' || '[0]'). A bare '$.' (a prefix joined to
+ * a name) passes, and so does prose ("$.50 off": it has a space and no
+ * quote or bracket inside). Duck-typed like a RegExp for `policyViolations`.
+ */
+const JSON_MEMBER_PATH_LITERAL = {
+  test(text) {
+    const member = String.raw`(?:[A-Za-z0-9_]+|\$\{[^}\n]*\})`;
+    const wellFormed = new RegExp(String.raw`^\$\.(?:${member}(?:\.${member})*)?$`);
+    const literal = /(['"`])(\$\.(?:(?!\1)[^\n\\])*)\1/g;
+    for (const match of text.matchAll(literal)) {
+      const body = match[2];
+      if (wellFormed.test(body)) {
+        // A path glued to an index: '$.a' || '[0]'.
+        if (/^\s*\|\|\s*(['"`])\[/.test(text.slice(match.index + match[0].length))) return true;
+        continue;
+      }
+      const words = body.replace(/\$\{[^}\n]*\}/g, "x");
+      if (/\s/.test(words) && !/["'\[\]]/.test(words)) continue;
+      return true;
+    }
+    return false;
+  },
+  toString() {
+    return "a JSON path literal that is not $.member(.member)* (JSON_MEMBER_PATH_LITERAL)";
+  },
+};
+
 export const policies = [
   {
     rule: "numbers, money, dates, lists and plurals are formatted through @scalius/shared/locale-format",
@@ -69,6 +100,13 @@ export const policies = [
     allow: { "apps/storefront/src/lib/currency.ts": "the wrapper itself" },
     forbid: [/import\s*\{[^}]*\bformat(?:Money|Price)\b[^}]*\}\s*from\s*["']@scalius\/shared\/currency["']/],
     sample: 'import { formatMoney } from "@scalius/shared/currency";',
+  },
+  {
+    rule: "a saved order's money and free-line presentation is defined once, in @scalius/shared/order-money-presentation",
+    why: "the dashboard and storefront each kept a copy (order-tax-presentation.ts) and the copies drifted: the receipt showed a free gift at full price while the dashboard and invoice showed it free",
+    paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src"],
+    forbid: [/\b(?:function\s+|(?:const|let|var)\s+)(?:resolveSavedOrderMoneySummary|hasSavedOrderLineMoney|resolveSavedOrderLineMoney|isFreeOrderLine)\b/],
+    sample: "export function resolveSavedOrderMoneySummary(order) { return null; }",
   },
   {
     rule: "a count handed to a dashboard message is the number, never formatNumber(count)",
@@ -407,6 +445,21 @@ export const policies = [
     sample: 'console.warn("gift card redeem failed", code);',
   },
   {
+    rule: "an outbound request URL never puts a secret into its query string (access_token, api_key, apikey, token, key) by interpolation, concatenation or searchParams",
+    why: "a query string lands in provider and proxy access logs, error reports and traces; send the credential in an Authorization header (packages/core/src/integrations/meta/conversions-api.ts, whatsapp.ts). Rejected: a template literal `?key=${x}` / `&token=${x}`, a string concatenation `\"?access_token=\" + x`, and `url.searchParams.set/append(\"token\", x)`. A URL fragment (#token=) is never sent, so it is outside this check",
+    paths: ["apps/api/src", "apps/admin-v2/src", storefront, "packages/core/src", "packages/shared/src", "packages/plugin-sdk/src", "packages/cli/src", "plugins"],
+    optionalPaths: ["plugins", "packages/cli/src"],
+    allow: {
+      "packages/core/src/modules/customer-marketing/links.ts": "builds the signed ?token= confirm and unsubscribe links the platform emails to its own customers (rules/privacy/sensitive-values-never-in-urls.md); each does one consent action for one customer and no outbound request carries it",
+    },
+    forbid: [
+      /[?&](?:access_token|api_key|apikey|token|key)=\$\{/i,
+      /[?&](?:access_token|api_key|apikey|token|key)=["'`]\s*\+/i,
+      /\bsearchParams\s*\.\s*(?:set|append)\(\s*["'`](?:access_token|api_key|apikey|token|key)["'`]\s*,/i,
+    ],
+    sample: "const url = `https://graph.facebook.com/v1/${id}/events?access_token=${accessToken}`;",
+  },
+  {
     rule: "production code never calls the legacy multi-SKU stock helpers",
     why: "deductMultiple/releaseMultiple/restoreDeductedMultiple bypass the ledger-v2 stockVersion CAS batch",
     paths: ["apps/api/src", "packages/core/src"],
@@ -433,6 +486,55 @@ export const policies = [
     paths: ["apps/api/src", "packages/core/src", "plugins"],
     forbid: [/\b(?:LIKE|GLOB)\s+(?:\$\{|'%'\s*\|\|)/i, /\b(?:not)?(?:[iI]l|l)ike\(\s*[^,()]+,(?!\s*["'][^"'`$]*["']\s*\))/],
     sample: "conditions.push(like(products.name, `%${search}%`));",
+  },
+  {
+    rule: "a lower()/trim() expression matched against a json_each() list reads bare values, never SELECT CAST(value AS TEXT)",
+    why: "SQLite uses an expression index (lower(trim(email)), the SKU and barcode identities) for `expr IN (SELECT value FROM json_each(?))` but scans the table once the list is CAST: a customer import read every customer per chunk (store-transfer/customer-import.ts); json_each values of a string list are already TEXT on every provider",
+    paths: ["apps/api/src", "packages/core/src", "packages/database/src"],
+    forbid: [/\b(?:lower|trim|upper)\((?:[^()]|\([^()]*\))*\)\s*IN\s*\(\s*SELECT\s+CAST\(\s*value\s+AS\s+TEXT\s*\)/i],
+    sample: "sql`lower(trim(${customers.email})) IN (SELECT CAST(value AS TEXT) FROM json_each(${emails}))`",
+  },
+  {
+    rule: "an id list bound as one json_each() value beside a live-row filter writes the filter +deleted_at",
+    why: "without planner statistics (D1 keeps none) SQLite estimates a json_each list as large and walks every live row on a deleted_at-led index (products_list_price_idx, customers_list_name_idx) instead of seeking the list; `+deleted_at IS NULL` keeps it a filter (collections.service.ts, customer-tags.ts). A list bound as parameters (inArray) is planned on its index already",
+    paths: ["apps/api/src", "packages/core/src"],
+    allow: Object.fromEntries([
+      ["packages/core/src/modules/store-transfer/product-export.ts", "Its child lookups match the product id list on (product_id, deleted_at) indexes, which seek the list and the live filter together; the product page itself writes +deleted_at (import-lookup-plans.d1.test.ts)."],
+      ["packages/core/src/modules/store-transfer/product-images.ts", "The variant image update leads with product_id = ? on (product_id, deleted_at), which seeks before the id list applies."],
+      ...[
+      "packages/core/src/modules/settings/site-settings.service.ts",
+      "packages/core/src/modules/storefront/theme-handles.ts",
+      "packages/core/src/modules/price-lists/market-pricing.ts",
+      "packages/core/src/modules/price-lists/price-lists.service.ts",
+      "packages/core/src/modules/catalog/compare.ts",
+      "packages/core/src/modules/catalog/public-sku-cards.ts",
+      "packages/core/src/modules/checkout/cart-validation.ts",
+      "packages/core/src/modules/product-admin/read.ts",
+      "packages/core/src/modules/product-admin/semantic-sections.ts",
+      "packages/core/src/modules/product-admin/option-matrix.ts",
+      "packages/core/src/modules/product-admin/write.ts",
+      "packages/core/src/modules/attributes/attributes.service.ts",
+      "packages/core/src/modules/inventory/inventory.service.ts",
+      "packages/core/src/modules/inventory/reserve.ts",
+      "packages/core/src/modules/delivery/zones.ts",
+      ].map((file) => [file, "Not yet swept: each lookup needs its own plan check (some lists drive a joined table, or a unique column outranks the deleted_at index); the sweep follows, file by file, and removes the entry."]),
+    ]),
+    forbid: [
+      /(?:IN\s*\(\s*SELECT\s+(?:CAST\(\s*value\s+AS\s+TEXT\s*\)|value)\s+FROM\s+json_each\(|inJsonArray\()[^;]{0,300}?(?<![+\w])(?:isNull\(\s*\w+\.deletedAt\s*\)|\$\{\s*\w+\.deletedAt\s*\}\s+IS\s+NULL)/i,
+      /(?<![+\w])(?:isNull\(\s*\w+\.deletedAt\s*\)|\$\{\s*\w+\.deletedAt\s*\}\s+IS\s+NULL)[^;]{0,300}?(?:IN\s*\(\s*SELECT\s+(?:CAST\(\s*value\s+AS\s+TEXT\s*\)|value)\s+FROM\s+json_each\(|inJsonArray\()/i,
+    ],
+    sample: "db.select().from(products).where(and(sql`${products.id} IN (SELECT value FROM json_each(${ids}))`, isNull(products.deletedAt)))",
+  },
+  {
+    rule: "a JSON path in SQL is $.name(.name)*: no array index, no quoted or punctuated member",
+    why: "PostgreSQL runs SQLite's JSON readers (json_extract, json_each, json_type, json_array_length) through scalius_compat.json_path_value, which takes '$.name' paths only: any other path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard and the related-objects read did). Bind objects and read members by name, or walk an array with json_each and its key. json_set has no PostgreSQL compat at all (a known gap: digital uploads, modules/digital/README.md)",
+    paths: ["apps/api/src", "packages/core/src", "packages/database/src", "plugins"],
+    forbid: [
+      // A path literal (quoted, or a template, bound or inline) that starts with an index: '$[0]', `$[${i}]`.
+      /(['"`])\$\[/,
+      JSON_MEMBER_PATH_LITERAL,
+    ],
+    sample: "WHERE json_extract(seen.value, '$[0]') = ra.id",
   },
   {
     rule: "request-scoped state never lives in known module globals",

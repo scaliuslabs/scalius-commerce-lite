@@ -130,8 +130,6 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     locationId: text("location_id")
         .references(() => inventoryLocations.id, { onDelete: "restrict" }),
 }, (table) => [
-    index("inventory_movements_variant_idx").on(table.variantId),
-    index("inventory_movements_order_idx").on(table.orderId),
     index("inventory_movements_created_at_idx").on(table.createdAt),
     index("inventory_movements_type_created_at_idx").on(
         table.type,

@@ -97,6 +97,8 @@ interface DataTableProps<TData extends TableRowData> {
    * 1,000+") for a list too large to count; without it the footer pages by number.
    */
   cursorPaging?: DataTableCursorPaging;
+  /** A list paged by number whose total is a lower bound ("1–20 of 1,000+"). */
+  totalIsCapped?: boolean;
   /** What the list is sorted by when no sort is chosen (the sort menu's first choice); false for none. */
   defaultSortLabel?: string | false;
   /** A sort menu of the list's own (orders sort by fields that are not columns); default: the columns' sort. */
@@ -141,6 +143,7 @@ export function DataTable<TData extends TableRowData>({
   layoutKey,
   paginate = true,
   cursorPaging,
+  totalIsCapped,
   defaultSortLabel,
   sortMenu,
   cardLayoutBelow = CARD_LAYOUT_BELOW,
@@ -375,6 +378,7 @@ export function DataTable<TData extends TableRowData>({
           table={table}
           pageSizeOptions={pageSizeOptions}
           cursorPaging={cursorPaging}
+          totalIsCapped={totalIsCapped}
           layoutKey={layoutKey}
           busy={isFetching}
         />

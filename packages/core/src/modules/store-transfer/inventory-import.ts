@@ -75,7 +75,7 @@ export async function importInventory(
       productDeletedAt: products.deletedAt,
     }).from(productVariants)
       .innerJoin(products, sql`${products.id} = ${productVariants.productId}`)
-      .where(sql`lower(trim(${productVariants.sku})) IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(skus)}))`),
+      .where(sql`lower(trim(${productVariants.sku})) IN (SELECT value FROM json_each(${JSON.stringify(skus)}))`),
   ]);
   const variantBySku = new Map(variants.map((variant) => [lower(variant.sku), variant]));
   const defaultLocation = locations.find((location) => location.isDefault && location.status === "active");

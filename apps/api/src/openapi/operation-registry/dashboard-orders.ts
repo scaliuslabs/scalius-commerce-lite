@@ -123,9 +123,11 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   "dashboard.orders.payment_recovery_list": {},
   "dashboard.orders.payments": {},
   "dashboard.orders.quote": { risk: "read" },
+  // Money that leaves through a gateway can't be taken back: one key per refund.
   "dashboard.orders.refund": {
     risk: "financial",
     openWorld: true,
+    idempotency: "required",
     batch: "forbidden",
   },
   "dashboard.orders.refund_reconcile": {

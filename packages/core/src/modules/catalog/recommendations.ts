@@ -184,24 +184,6 @@ type RankedRecommendationRow = {
     popularOrdering: number;
 };
 
-export interface RankedRecommendations {
-    reason: ProductRecommendationReason;
-    rows: RankedRecommendationRow[];
-}
-
-/**
- * The ranking statement alone (no images). Bound parameters stay constant
- * regardless of how many source ids are passed: the id set is one JSON value.
- */
-export async function rankProductRecommendations(
-    db: Database,
-    input: ProductRecommendationInput,
-): Promise<RankedRecommendations> {
-    const sourceIds = normalizeRecommendationSourceIds(input.productIds);
-    const rows = await rankRecommendationRows(db, sourceIds, normalizeLimit(input.limit));
-    return { reason: recommendationReason(rows, sourceIds.length > 0), rows };
-}
-
 
 /**
  * The ranking statement for up to `limit` rows (the request path caps it at
@@ -220,8 +202,9 @@ export async function rankRecommendationRows(
     sourceIds: readonly string[],
     limit: number,
 ): Promise<RankedRecommendationRow[]> {
-    // Only this live fallback reads private order signals. Stored lists use rec:<id>.
-    deps.recommendationSignals();
+    // Private order signals (orders, order lines, recommendation_order_products)
+    // carry no key: only the background refresh ranks, outside any request
+    // scope, and stores the result under rec:<id>.
     deps.listMembership("all");
     // Any candidate may enter the result when its price score or buyability changes.
     deps.listOrder("price", "all");
@@ -467,7 +450,7 @@ async function loadRecommendationCards(
             id: products.id,
             name: products.name,
             slug: products.slug,
-            ...translationColumns(translation, "product", products.id),
+            ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
             ...buyerStatePricingSelection(cardSku),
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
@@ -504,7 +487,8 @@ export function recommendationRowReason(row: {
     return "new_arrivals";
 }
 
-function recommendationReason(
+/** The list reason of ranked rows ("at least half" rules). Internal to the catalog domain. */
+export function recommendationReason(
     rows: readonly RankedRecommendationRow[],
     hasSources: boolean,
 ): ProductRecommendationReason {
@@ -552,7 +536,7 @@ async function readStoredRecommendations(
             id: products.id,
             name: products.name,
             slug: products.slug,
-            ...translationColumns(translation, "product", products.id),
+            ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
             ...buyerStatePricingSelection(cardSku),
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,

@@ -156,8 +156,9 @@ async function readMatches(db: Database, items: readonly ProductImportItem[]): P
       .where(sql`${products.slug} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(handles)}))`),
     names.length === 0 ? [] : db.select(productColumns).from(products)
       .where(and(
-        sql`lower(trim(${products.name})) IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(names)}))`,
-        isNull(products.deletedAt),
+        // A bare `value` and a `+` filter: the name expression index drives, not deleted_at.
+        sql`lower(trim(${products.name})) IN (SELECT value FROM json_each(${JSON.stringify(names)}))`,
+        sql`+${products.deletedAt} IS NULL`,
       )),
     skus.length === 0 ? [] : db.select({
       sku: productVariants.sku,
@@ -167,7 +168,7 @@ async function readMatches(db: Database, items: readonly ProductImportItem[]): P
       productDeletedAt: products.deletedAt,
     }).from(productVariants)
       .innerJoin(products, sql`${products.id} = ${productVariants.productId}`)
-      .where(sql`lower(trim(${productVariants.sku})) IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(skus)}))`),
+      .where(sql`lower(trim(${productVariants.sku})) IN (SELECT value FROM json_each(${JSON.stringify(skus)}))`),
   ]);
   const toMatch = (row: (typeof slugRows)[number], via: ProductMatch["via"]): ProductMatch => ({
     productId: row.id,

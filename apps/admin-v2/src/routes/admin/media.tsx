@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { useListSearch } from "~/lib/list-search";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import {
   mediaRouteSearchToWorkspaceState,
@@ -24,6 +24,21 @@ const MediaManagerPage = lazy(() =>
 
 export const Route = createFileRoute("/admin/media")({
   validateSearch: validateMediaSearch,
+  // The first page's read starts with the navigation, beside the page's code,
+  // not after it; the page's opening read joins it (a failure shows on the
+  // page). Once the page is open ("stay": a filter or folder change) the
+  // page reads for itself, so no second read is started here.
+  loader: ({ context: { queryClient }, location, cause }) => {
+    if (cause === "stay") return;
+    const search = validateMediaSearch(location.search as Record<string, unknown>);
+    import("~/components/admin/media-manager/query")
+      .then(({ mediaWorkspaceFilters, prefetchMediaFirstPage }) =>
+        prefetchMediaFirstPage(
+          queryClient,
+          mediaWorkspaceFilters(mediaRouteSearchToWorkspaceState(search, readListSearch("media"))),
+        ))
+      .catch(() => undefined);
+  },
   head: () => pageHead("files"),
   errorComponent: RouteErrorComponent,
   component: MediaPage,

@@ -4,10 +4,8 @@ import { useCurrency } from "~/hooks/use-currency";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import {
-  formatSavedMinorAmount,
-  resolveSavedOrderMoneySummary,
-} from "~/lib/order-tax-presentation";
+import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
 import type { Order, OrderDiscount } from "./types";

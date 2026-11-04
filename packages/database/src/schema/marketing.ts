@@ -18,7 +18,10 @@ export const metaConversionsLogs = sqliteTable("meta_conversions_logs", {
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
-});
+}, (table) => [
+    // The retention sweep deletes by age.
+    index("meta_conversions_logs_created_idx").on(table.createdAt, table.id),
+]);
 
 export const metaCapiPurchaseOutbox = sqliteTable("meta_capi_purchase_outbox", {
     id: text("id").primaryKey(),

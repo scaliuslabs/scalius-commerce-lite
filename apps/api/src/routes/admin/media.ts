@@ -22,6 +22,7 @@ import {
     initiateMediaUploadSchema,
     listMediaFiles,
     listMediaFolders,
+    listMediaPendingRenditions,
     loadMediaUsage,
     MEDIA_USAGE_KINDS,
     moveMediaFiles,
@@ -133,6 +134,31 @@ const listRoute = createRoute({
 });
 app.openapi(listRoute, async (c) => {
     const page = await listMediaFiles(c.get("db"), c.req.valid("query"));
+    return ok(c, { ...page, files: page.files.map(fileWire) });
+});
+
+// Registered before `/{id}`, which would otherwise take this path as an id.
+const pendingRenditionsRoute = createRoute({
+    method: "get",
+    path: "/pending-renditions",
+    tags: ["Admin - Media"],
+    summary: "List images still waiting for pre-generated renditions",
+    description: "Oldest first, for the dashboard's background renderer. Files carry no usage counts; the Files list (`variants=missing`) has them.",
+    operationId: "dashboard.media.pending_renditions",
+    request: { query: z.object({
+        cursor: z.string().max(2_000).optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+    }) },
+    responses: {
+        200: { description: "Pending images", content: { "application/json": { schema: successEnvelope(z.object({
+            files: z.array(mediaSchema),
+            nextCursor: z.string().nullable().openapi({ description: "Pass it as `cursor` for the next page; null on the last page." }),
+        })) } } },
+        ...mediaErrorResponses,
+    },
+});
+app.openapi(pendingRenditionsRoute, async (c) => {
+    const page = await listMediaPendingRenditions(c.get("db"), c.req.valid("query"));
     return ok(c, { ...page, files: page.files.map(fileWire) });
 });
 

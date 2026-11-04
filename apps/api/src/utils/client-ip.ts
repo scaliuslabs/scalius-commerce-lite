@@ -1,3 +1,9 @@
+import { rateLimitIpSubject } from "@scalius/shared/rate-limit";
+
+/**
+ * The one reader of the client-address headers in the API. Every limiter
+ * subject comes from getTrustedClientIp, which groups IPv6 by /64.
+ */
 export interface ClientIpRuntime {
   req: { header: (name: string) => string | undefined; url: string };
   env: {
@@ -7,7 +13,38 @@ export interface ClientIpRuntime {
   };
 }
 
+/**
+ * The rate-limit subject of the caller: its trusted address (see
+ * getTrustedClientAddress), with an IPv6 address grouped by its /64.
+ */
 export function getTrustedClientIp(c: ClientIpRuntime): string {
+  return rateLimitIpSubject(getTrustedClientAddress(c));
+}
+
+/** getTrustedClientIp for code that holds a Request and the Worker env rather than a Hono context. */
+export function getTrustedClientIpFromRequest(request: Request, env: ClientIpRuntime["env"]): string {
+  return getTrustedClientIp({ req: { header: (name) => request.headers.get(name) ?? undefined, url: request.url }, env });
+}
+
+/**
+ * A log-safe form of the caller's network, never its address: an IPv4 address
+ * as its /24, an IPv6 address as its /48.
+ */
+export function getClientNetworkForLog(c: ClientIpRuntime): string {
+  const subject = getTrustedClientIp(c);
+  const ipv4 = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(subject);
+  if (ipv4) return `${ipv4[1]}.0/24`;
+  const ipv6 = /^([0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}):[0-9a-f]{1,4}::\/64$/.exec(subject);
+  if (ipv6) return `${ipv6[1]}::/48`;
+  return "unknown";
+}
+
+/**
+ * The caller's literal address:`cf-connecting-ip` only, or the first
+ * `x-forwarded-for` address when a platform origin is loopback (local dev);
+ * otherwise `unknown`. Not a limiter subject: use getTrustedClientIp.
+ */
+export function getTrustedClientAddress(c: ClientIpRuntime): string {
   const cloudflareIp = normalizeSingleIp(c.req.header("cf-connecting-ip"));
   if (cloudflareIp) return cloudflareIp;
 

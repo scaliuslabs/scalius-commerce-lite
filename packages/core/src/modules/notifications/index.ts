@@ -5,6 +5,7 @@ export * from "./web-push";
 export { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 export {
   buildNotificationOutboxInsert,
+  buildNotificationOutboxInsertWhen,
   claimNotificationOutboxForProcessing,
   createNotificationOutboxInsertValues,
   listDueNotificationOutbox,
@@ -50,8 +51,11 @@ export {
   buildOrderBalancePaidNotificationDedupeKey,
   buildOrderCreatedNotificationDedupeKey,
   orderCreatedNotificationOutboxId,
+  orderBalancePaidNotificationOutboxId,
+  buildOrderNotificationOutboxInsertWhen,
   buildOrderReadyForPickupNotificationDedupeKey,
   buildManualOrderNotificationResendDedupeKey,
+  buildOrderNotificationOutboxInsert,
   buildOrderStatusNotificationDedupeKey,
   buildSupportRequestStatusUpdatedNotificationDedupeKey,
   buildSupportRequestSubmittedNotificationDedupeKey,
@@ -75,7 +79,8 @@ export type {
   OrderNotificationOutboxView,
   OrderNotificationOutboxStatus,
 } from "./order-notification-outbox";
-export { sendStaffOrderEmails } from "./notifications.service";
+export { readEmailSettingsOnce, sendOrderStaffNotifications, sendStaffOrderEmails, type OrderStaffChannelResult } from "./notifications.service";
+export { findOrderMessageContext, type OrderMessageContext } from "./order-email";
 // The dispatch kit other senders build on (customer marketing): a delivery
 // receipt per recipient and channel, provider pauses, and the result shape.
 export {

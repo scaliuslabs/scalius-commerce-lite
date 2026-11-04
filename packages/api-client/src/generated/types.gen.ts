@@ -8882,6 +8882,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 dashboardUrl: string;
                 mediaUrl: string;
                 sameOriginMedia: boolean;
+                feedProductsPerRequest: number;
             };
             timeZone: string;
             cspAllowedDomains: string;
@@ -18324,7 +18325,7 @@ export type GetApiV1ProductsFeedData = {
          */
         search?: string;
         /**
-         * Opaque continuation cursor returned by the previous feed response
+         * Opaque continuation cursor returned by the previous feed response. Only a cursor this store signed for the same channel is accepted.
          */
         cursor?: string;
         /**
@@ -18480,6 +18481,14 @@ export type GetApiV1ProductsSitemapData = {
          * Items per page
          */
         limit?: number;
+        /**
+         * Where a page after the first starts: the `after` the outline (`outline=true`) gave for that page and page size. Required for every page after the first; only a boundary this store signed is accepted.
+         */
+        after?: string;
+        /**
+         * The sitemap index's read: no rows, the number of listed products, and every later page with its `after`.
+         */
+        outline?: 'true';
     };
     url: '/api/v1/products/sitemap';
 };
@@ -18512,8 +18521,13 @@ export type GetApiV1ProductsSitemapResponses = {
             pagination: {
                 page: number;
                 limit: number;
-                total: number;
-                totalPages: number;
+                hasNextPage?: boolean;
+                total?: number;
+                totalPages?: number;
+                pages?: Array<{
+                    page: number;
+                    after: string;
+                }>;
             };
         };
     };
@@ -35515,6 +35529,10 @@ export type PutApiV1AdminCustomersByIdErrors = {
      */
     404: ErrorResponse;
     /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -35566,6 +35584,39 @@ export type PostApiV1AdminCustomersByIdRestoreData = {
     query?: never;
     url: '/api/v1/admin/customers/{id}/restore';
 };
+
+export type PostApiV1AdminCustomersByIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdRestoreError = PostApiV1AdminCustomersByIdRestoreErrors[keyof PostApiV1AdminCustomersByIdRestoreErrors];
 
 export type PostApiV1AdminCustomersByIdRestoreResponses = {
     /**
@@ -35746,6 +35797,10 @@ export type PostApiV1AdminCustomersByIdAddressesErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
     /**
      * Rate limit exceeded
      */
@@ -38173,6 +38228,93 @@ export type GetApiV1AdminMediaResponses = {
 };
 
 export type GetApiV1AdminMediaResponse = GetApiV1AdminMediaResponses[keyof GetApiV1AdminMediaResponses];
+
+export type GetApiV1AdminMediaPendingRenditionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/media/pending-renditions';
+};
+
+export type GetApiV1AdminMediaPendingRenditionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminMediaPendingRenditionsError = GetApiV1AdminMediaPendingRenditionsErrors[keyof GetApiV1AdminMediaPendingRenditionsErrors];
+
+export type GetApiV1AdminMediaPendingRenditionsResponses = {
+    /**
+     * Pending images
+     */
+    200: {
+        success: true;
+        data: {
+            files: Array<{
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                variantWidth?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                posterUrl: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                /**
+                 * Send it as `expectedRevision` to change the file; every change advances it.
+                 */
+                revision: number;
+                createdAt: string;
+                updatedAt: string;
+                trashedAt: string | null;
+                deletedAt: string | null;
+            }>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaPendingRenditionsResponse = GetApiV1AdminMediaPendingRenditionsResponses[keyof GetApiV1AdminMediaPendingRenditionsResponses];
 
 export type PostApiV1AdminMediaUploadsData = {
     body: {
@@ -45810,7 +45952,9 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
         data: {
             stats: {
                 totalProducts: number;
+                totalProductsIsCapped: boolean;
                 totalCustomers: number;
+                totalCustomersIsCapped: boolean;
                 currentMonth: {
                     orders: number;
                     revenue: number | null;
@@ -56516,7 +56660,7 @@ export type PostApiV1AdminOrdersByIdRefundData = {
          */
         settlement?: 'original' | 'store_credit';
         /**
-         * One key per refund (per dialog opening). Repeating it returns the first refund.
+         * One key per refund (per dialog opening). Repeating it returns the first refund. Required unless the Idempotency-Key header carries it.
          */
         requestKey?: string;
         /**
@@ -56526,6 +56670,12 @@ export type PostApiV1AdminOrdersByIdRefundData = {
             orderItemId: string;
             quantity: number;
         }>;
+    };
+    headers?: {
+        /**
+         * One key per refund: a repeat returns the first refund instead of refunding again. Send it here or as body.requestKey (which wins when both are sent); one of them is required.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         id: string;
@@ -58333,6 +58483,7 @@ export type PostApiV1AdminOrdersData = {
             reference?: string | null;
         };
         expectedTotal?: number;
+        abandonedCheckoutId?: string | null;
     };
     headers?: {
         /**
@@ -58358,6 +58509,22 @@ export type PostApiV1AdminOrdersErrors = {
      * Forbidden
      */
     403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
     /**
      * Service unavailable
      */
@@ -59326,6 +59493,10 @@ export type PostApiV1AdminOrdersBulkShipResponses = {
                 error?: string;
                 [key: string]: unknown;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59371,6 +59542,10 @@ export type PostApiV1AdminOrdersBulkConfirmResponses = {
                 success: boolean;
                 error?: string;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59418,6 +59593,10 @@ export type PostApiV1AdminOrdersBulkFulfillResponses = {
                 success: boolean;
                 error?: string;
             }>;
+            /**
+             * Orders not handled by this request (over the plan's per-request size), in the order sent. Send them again in a next request.
+             */
+            remaining: Array<string>;
         };
     };
 };
@@ -59461,7 +59640,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event' | 'stock_held';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -59530,7 +59709,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event' | 'stock_held';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -59771,6 +59950,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 days: number;
                 dueAt: string;
                 overdue: boolean;
+            } | null;
+            stockHeld?: {
+                reason: 'location_short' | 'stock_changed' | 'refused';
+                skus: Array<string>;
             } | null;
             moneyChain?: {
                 shopCurrencyCode: string;
@@ -66162,6 +66345,10 @@ export type DeleteApiV1AdminAuthUsersByIdErrors = {
      * Not found
      */
     404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
     /**
      * Rate limit exceeded
      */
@@ -76473,7 +76660,10 @@ export type GetApiV1AdminGiftCardsResponse = GetApiV1AdminGiftCardsResponses[key
 
 export type PostApiV1AdminGiftCardsData = {
     body: {
-        requestKey: string;
+        /**
+         * One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.
+         */
+        requestKey?: string;
         amount: number;
         expiresAt?: string | null;
         customerId?: string | null;
@@ -76485,6 +76675,12 @@ export type PostApiV1AdminGiftCardsData = {
         message?: string | null;
         note?: string | null;
         notify?: boolean;
+    };
+    headers?: {
+        /**
+         * The retry key, instead of body.requestKey.
+         */
+        'idempotency-key'?: string;
     };
     path?: never;
     query?: never;
@@ -76847,9 +77043,18 @@ export type PatchApiV1AdminGiftCardsByGiftCardIdResponse = PatchApiV1AdminGiftCa
 
 export type PostApiV1AdminGiftCardsByGiftCardIdAdjustData = {
     body: {
-        requestKey: string;
+        /**
+         * One key per change: a repeat returns the first. Required unless the Idempotency-Key header carries it; it wins when both are sent.
+         */
+        requestKey?: string;
         amount: number;
         reason: string;
+    };
+    headers?: {
+        /**
+         * The retry key, instead of body.requestKey.
+         */
+        'idempotency-key'?: string;
     };
     path: {
         giftCardId: string;
@@ -78220,11 +78425,11 @@ export type GetApiV1AdminAbandonedCheckoutsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search term
          */
@@ -78232,11 +78437,11 @@ export type GetApiV1AdminAbandonedCheckoutsData = {
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'updatedAt' | 'customerPhone' | 'checkoutId';
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/abandoned-checkouts';
 };
@@ -78284,12 +78489,12 @@ export type GetApiV1AdminAbandonedCheckoutsResponses = {
                 checkoutData: string;
                 createdAt: string | number;
                 updatedAt: string | number;
-                [key: string]: unknown;
             }>;
             pagination: {
                 page: number;
                 limit: number;
                 total: number;
+                totalIsCapped: boolean;
                 totalPages: number;
             };
         };
@@ -78363,6 +78568,7 @@ export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
                 page: number;
                 limit: number;
                 total: number;
+                totalIsCapped: boolean;
                 totalPages: number;
             };
         };

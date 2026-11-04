@@ -287,6 +287,8 @@ export async function createManualOrder(
             taxQuote,
             appDiscounts,
             reservationKey: `admin-order-create:v2:${orderId}`,
+            // Created from an abandoned checkout: its snapshot ends with the order.
+            abandonedCheckoutId: data.abandonedCheckoutId ?? null,
         }, {
             async prepare() {
                 const customer = await resolveManualOrderCustomer(db, data);

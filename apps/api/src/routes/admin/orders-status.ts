@@ -16,7 +16,6 @@ import {
     shipmentCreationOptionsSchema,
     unknownShipmentResolutionSchema,
 } from "@scalius/core/modules/orders";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import {
     getShipments,
     getDeliveryProvider,
@@ -36,10 +35,7 @@ import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
-import {
-    sendOrderNotification,
-    sendOrderNotificationsForStatus,
-} from "../../utils/order-notifications";
+import { sendOrderNotificationsForStatus } from "../../utils/order-notifications";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { requestCourierProviders } from "../../plugins/providers/courier";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
@@ -183,38 +179,24 @@ function actorIdOf(c: { get(key: "user"): unknown }): string | null {
     return (c.get("user") as { id?: string } | undefined)?.id ?? null;
 }
 
+/** Hands the message rows a command committed with its change to the sender (the drain sends any it misses). */
+async function sendCommittedNotifications(c: Parameters<typeof notificationSender>[0], outboxIds: readonly string[] | undefined) {
+    if (outboxIds && outboxIds.length > 0) await notificationSender(c)(outboxIds);
+}
+
 app.openapi(updateStatusRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
-    const result = await updateOrderStatus(db, orderId, data.status, { expectedVersion: data.expectedRevision });
-    if (before && before.status !== data.status) {
-        await recordOrderEvent(db, {
-            orderId,
-            kind: "status_changed",
+    // The change, its timeline line and its customer message commit together.
+    const result = await updateOrderStatus(db, orderId, data.status, { expectedVersion: data.expectedRevision }, {
+        event: {
             actorId: actorIdOf(c),
-            data: {
-                from: before.status,
-                to: data.status,
-                ...(data.status === "cancelled" && data.reason ? { reason: data.reason } : {}),
-            },
-        });
-    }
-
-    if (result.notification && data.notifyCustomer !== false) {
-        await sendOrderNotification({
-            db,
-            send: notificationSender(c),
-            orderId: result.notification.orderId,
-            notificationType: result.notification.notificationType,
-            data: result.notification.newStatus === "shipped" && result.notification.trackingId
-                ? { trackingId: result.notification.trackingId }
-                : undefined,
-            dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
-            source: "orders-status-update",
-        });
-    }
+            ...(data.status === "cancelled" && data.reason ? { data: { reason: data.reason } } : {}),
+        },
+        ...(data.notifyCustomer !== false ? { notify: { source: "orders-status-update" } } : {}),
+    });
+    await sendCommittedNotifications(c, result.outboxIds);
 
     return ok(c, { order: await readOrderResource(db, orderId) });
 });
@@ -282,24 +264,11 @@ const markDeliveredRoute = createRoute({
 app.openapi(markDeliveredRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await markOrderDelivered(db, orderId, { expectedVersion: c.req.valid("json").expectedRevision });
-    if (result.notification) {
-        await recordOrderEvent(db, {
-            orderId,
-            kind: "status_changed",
-            actorId: actorIdOf(c),
-            requestKey: `mark-delivered:${result.notification.version}`,
-            data: { from: result.notification.previousStatus, to: "delivered" },
-        });
-        await sendOrderNotification({
-            db,
-            send: notificationSender(c),
-            orderId: result.notification.orderId,
-            notificationType: result.notification.notificationType,
-            dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
-            source: "orders-mark-delivered",
-        });
-    }
+    const result = await markOrderDelivered(db, orderId, { expectedVersion: c.req.valid("json").expectedRevision }, {
+        event: { actorId: actorIdOf(c) },
+        notify: { source: "orders-mark-delivered" },
+    });
+    await sendCommittedNotifications(c, result.outboxIds);
 
     return ok(c, { order: await readOrderResource(db, orderId) });
 });
@@ -384,47 +353,17 @@ app.openapi(postCodRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const result = await processCodAction(db, orderId, data);
-    const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
+    // Collected and returned write their timeline line and customer message
+    // in the same batch as the cash or the status they announce.
+    const result = await processCodAction(db, orderId, data, { actorId: actorIdOf(c) });
+    const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, outboxIds, ...responseData } = result;
 
     // Collected cash settles the order: hand over its automatic lines.
     if (data.action === "collected") await autoFulfilAfterResponse(c, db, orderId, "orders-cod-action");
-    await recordOrderEvent(db, data.action === "collected"
-        ? {
-            orderId,
-            kind: "cod_collected",
-            actorId: actorIdOf(c),
-            data: { amount: data.collectedAmount, collectedBy: data.collectedBy },
-        }
-        : data.action === "failed"
-            ? { orderId, kind: "cod_failed", actorId: actorIdOf(c), body: data.notes || null, data: { reason: data.reason } }
-            : { orderId, kind: "cod_returned", actorId: actorIdOf(c) });
-
-    // Enqueue notification for COD status changes that affect order status
-    const COD_NOTIFICATION_MAP: Partial<Record<typeof data.action, OrderNotificationType>> = {
-        collected: "order_delivered",
-        returned: "order_returned",
-    };
-    const notifType = COD_NOTIFICATION_MAP[data.action];
-    if (notifType) {
-        const order = await db.select({
-            customerEmail: orders.customerEmail,
-            customerName: orders.customerName,
-            status: orders.status,
-            version: orders.version,
-        }).from(orders).where(eq(orders.id, orderId)).get();
-
-        if (order) {
-            await sendOrderNotification({
-                db,
-                send: notificationSender(c),
-                orderId,
-                notificationType: notifType,
-                dedupeKey: `cod:${orderId}:${data.action}:v${order.version}:${order.status}`,
-                source: "orders-cod-action",
-            });
-        }
+    if (data.action === "failed") {
+        await recordOrderEvent(db, { orderId, kind: "cod_failed", actorId: actorIdOf(c), body: data.notes || null, data: { reason: data.reason } });
     }
+    await sendCommittedNotifications(c, outboxIds);
 
     return ok(c, responseData);
 });

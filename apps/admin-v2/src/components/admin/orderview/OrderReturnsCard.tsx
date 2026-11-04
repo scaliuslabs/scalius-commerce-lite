@@ -18,7 +18,8 @@ import { useMessages } from "~/i18n";
 import { orderReturnMessages } from "~/i18n/order-returns";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
-import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
+import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import {
   getRemainingReturnableQuantities,
   type OrderReturnDto,

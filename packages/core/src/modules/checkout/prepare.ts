@@ -443,15 +443,17 @@ export async function validateStorefrontDeliveryPreflight(
         city: data.city,
         zone: data.zone,
         area: data.area,
+        adminArea: data.shippingAdminArea,
+        postalCode: data.shippingPostalCode,
     });
     const readBatch = [
         selectActiveDeliveryLocationRowsByIds(storefrontDb, [destination.city, destination.zone, destination.area]
             .filter((id): id is string => typeof id === "string" && id.trim().length > 0)),
-        // The rate row carries its destination country's zone regions (same statement).
+        // The rate row carries the zone regions that can match the destination (same statement).
         selectDeliveryRateRowsByIds(
             storefrontDb,
             data.shippingMethodId ? [data.shippingMethodId] : [],
-            [destination.countryCode],
+            [destination],
         ),
     ];
 
@@ -855,7 +857,7 @@ export async function createStorefrontOrder(
     // without one reads it now, and the order is priced with that read.
     const handedOverAtStore = paymentCountryIsStore(deliveryPreflight.fulfilment);
     const taxAuthority = taxAuthoritySnapshot
-        ?? (handedOverAtStore ? await readStorefrontTaxAuthority(storefrontDb) : undefined);
+        ?? (handedOverAtStore ? await readStorefrontTaxAuthority(storefrontDb, [data.billingCountryCode]) : undefined);
     const paymentCountry = paymentCountryOf(
         deliveryPreflight.fulfilment,
         deliveryPreflight.address?.countryCode,

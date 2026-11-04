@@ -282,6 +282,8 @@ export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
     returnDeliveryShare?: number;
     /** An invoice's terms (pay later): null when the order is not paid by invoice. */
     paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
+    /** A cancelled order that still holds its stock (the location refused it back): why, and which SKUs; null otherwise. */
+    stockHeld?: { reason: "location_short" | "stock_changed" | "refused"; skus: string[] } | null;
     /** Shop-currency amounts of an order paid in a market's own currency (MARKETS-DESIGN D3); null: same-currency. */
     moneyChain?: {
         shopCurrencyCode: string;
@@ -729,4 +731,6 @@ export interface StatusUpdateResult {
         newStatus?: string;
         version?: number;
     };
+    /** The customer message rows written with the change, for the caller's sender. */
+    outboxIds?: string[];
 }

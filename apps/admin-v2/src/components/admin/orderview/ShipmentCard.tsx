@@ -40,7 +40,8 @@ import {
 } from "~/lib/api-mutations/orders";
 import { orderCodQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
-import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
+import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "@scalius/shared/utils";
 import { getOrderItemName } from "./order-returns/shared";
@@ -140,8 +141,12 @@ function CourierCheckDialog({
     operationKey.current = null;
     onOpenChange(false);
   };
+  // "Not created" and "cancelled" rest on the staff's own search of the
+  // courier (a lookup can only veto them), so the note names the order ID searched.
+  const needsOrderNumber = outcome !== "confirmed_existing";
   const ready = confirmed
     && evidenceNote.trim().length >= 8
+    && (!needsOrderNumber || evidenceNote.toLowerCase().includes(order.id.toLowerCase()))
     && (outcome !== "confirmed_existing" || externalId.trim().length > 0);
   const submit = () => {
     if (!ready) return;
@@ -199,7 +204,11 @@ function CourierCheckDialog({
               options={EVIDENCE_SOURCES.map((value) => ({ value, label: t(`courier.source.${value}`) }))}
             />
           </Field>
-          <Field id="courier-evidence" label={t("courier.details")}>
+          <Field
+            id="courier-evidence"
+            label={t("courier.details")}
+            help={needsOrderNumber ? t("courier.notCreatedEvidence", { order: order.id }) : undefined}
+          >
             <Textarea
               id="courier-evidence"
               value={evidenceNote}

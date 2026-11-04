@@ -1,5 +1,5 @@
 // Delivery outcomes: delivered, and COD collected, failed or returned.
-import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     orders,
     orderItems,
@@ -10,7 +10,7 @@ import {
 } from "@scalius/database/schema";
 import {
   markCODReturned,
-  recordCODCollection,
+  prepareCODCollection,
   recordCODFailure,
   resolveOrderCurrencySnapshot,
   toCashOnDeliveryMinor,
@@ -20,9 +20,8 @@ import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
-  noActivePaymentSessionAttemptForOrderIdCondition,
-  noActiveRefundAttemptForOrderIdCondition,
   validateTransition,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
@@ -31,18 +30,28 @@ import {
   applyOrderStatusChange,
   approveOrderReturn,
   assertOrderCodActionAllowed,
-  assertOrderLinesHandedOver,
+  buildOrderEventInsert,
   createOrderReturn,
   getOrderReturn,
   getRecordedCodCollection,
   listOrderReturns,
-  markManualDeliveryEvidence,
-  reconcileInventoryForStatus,
-  rollbackOrderStatusIfInventoryUnchanged,
+  orderEventIdForRequest,
+  type OrderStatusChangeOptions,
   type StatusUpdateResult,
 } from "../orders";
+import { buildOrderNotificationOutboxInsert } from "../notifications";
 
-export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
+/**
+ * Records a cash on delivery outcome. Collected and returned write their
+ * timeline line and customer message (`outboxIds`, for the caller's sender)
+ * in the same batch as the change.
+ */
+export async function processCodAction(
+    db: Database,
+    orderId: string,
+    body: Record<string, unknown>,
+    context: { actorId?: string | null } = {},
+): Promise<{ message: string; availabilityTransitionVariantIds: string[]; outboxIds: string[]; returnId?: string }> {
     const order = await db.select({
         status: orders.status,
         fulfillmentStatus: orders.fulfillmentStatus,
@@ -56,6 +65,8 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
         inventoryAction: orders.inventoryAction,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     const currency = resolveOrderCurrencySnapshot(order);
@@ -103,68 +114,41 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             }
 
             // Cash is handed over at the door, so a shipped order becomes
-            // delivered. Collection never skips the shipment (ORD-01).
-            const currentVersion = order.version;
-            const currentStatus = order.status;
-            let statusClaim: { claimedStatus: string; claimedVersion: number } | null = null;
-            const rollbackStatusClaim = async () => {
-                if (!statusClaim) return;
-                await rollbackOrderStatusIfInventoryUnchanged(db, {
-                    orderId,
-                    previousStatus: order.status,
-                    claimedStatus: statusClaim.claimedStatus,
-                    claimedVersion: statusClaim.claimedVersion,
-                    previousInventoryAction: order.inventoryAction as string,
-                });
+            // delivered. Collection never skips the shipment (ORD-01). The
+            // cash record, the delivered status, its stock, the timeline line
+            // and the customer message are one batch: a death between them
+            // cannot leave a delivered order without its cash or its stock.
+            const collected = {
+                orderId,
+                collectedBy: collection?.collectedBy ?? existingCodCollection!.collectedBy,
+                collectedAmountMinor: collection?.collectedAmountMinor ?? existingCodCollection!.amountMinor,
+                receiptUrl: body.receiptUrl as string | undefined,
             };
-            if (currentStatus !== OrderStatus.DELIVERED) {
-                validateTransition("order", currentStatus, OrderStatus.DELIVERED);
-                // Cash at the counter or the service delivers the order only
-                // once every line was handed over (F7).
-                await assertOrderLinesHandedOver(db, orderId, order.requiresShipping);
-                const deliveredVersion = currentVersion + 1;
-                const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
-                    eq(orders.id, orderId),
-                    eq(orders.version, currentVersion),
-                    noActiveRefundAttemptForOrderIdCondition(orderId),
-                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
-                )).returning({ id: orders.id });
-                if (delResult.length === 0) {
-                    await rollbackStatusClaim();
-                    throw new ConflictError("This order changed. Reload to see the latest.");
-                }
-                statusClaim = {
-                    claimedStatus: OrderStatus.DELIVERED,
-                    claimedVersion: deliveredVersion,
-                };
-            }
-            try {
-                const colResult = await recordCODCollection(db, {
-                    orderId,
-                    collectedBy: collection?.collectedBy ?? existingCodCollection!.collectedBy,
-                    collectedAmountMinor: collection?.collectedAmountMinor ?? existingCodCollection!.amountMinor,
-                    receiptUrl: body.receiptUrl as string | undefined,
-                });
-                if (!colResult.success) throw new ValidationError(colResult.error || "COD collection failed");
-            } catch (error: unknown) {
-                await rollbackStatusClaim();
-                throw error;
-            }
-            try {
-                const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
-                    db,
-                    orderId,
-                    OrderStatus.DELIVERED,
-                );
-                await markManualDeliveryEvidence(db, orderId);
-                return {
-                    message: "COD collection recorded",
-                    availabilityTransitionVariantIds,
-                };
-            } catch (error: unknown) {
-                await rollbackStatusClaim();
-                throw error;
-            }
+            const result = await applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, undefined, {
+                generic: false,
+                before: async () => {
+                    const prepared = await prepareCODCollection(db, collected);
+                    return prepared.alreadyRecorded ? null : prepared;
+                },
+                announceUnchanged: true,
+                event: {
+                    kind: "cod_collected",
+                    actorId: context.actorId ?? null,
+                    // One collection per order: a repeat writes no second line.
+                    requestKey: "cod-collected",
+                    data: { amount: fromMinor(collected.collectedAmountMinor, currency.decimalPlaces), collectedBy: collected.collectedBy },
+                },
+                notify: {
+                    source: "orders-cod-action",
+                    notificationType: "order_delivered",
+                    dedupeKey: `cod:${orderId}:collected`,
+                },
+            });
+            return {
+                message: "COD collection recorded",
+                availabilityTransitionVariantIds: result.availabilityTransitionVariantIds,
+                outboxIds: result.outboxIds ?? [],
+            };
         }
         case "failed": {
             // A part-sent order has a parcel out too: its failed attempt is recorded the same way.
@@ -176,6 +160,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return {
                 message: "COD failure recorded",
                 availabilityTransitionVariantIds: [],
+                outboxIds: [],
             };
         }
         case "returned": {
@@ -232,11 +217,12 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             // Returned to sender is a closing state right away: no cash is
             // owed and the order leaves the courier views. Stock comes back
             // only when the parcel is received on the return (ORD-02).
-            await markOrderReturnedToSender(db, orderId);
+            const outboxIds = await markOrderReturnedToSender(db, orderId, context.actorId ?? null);
             return {
                 message: "Order returned. Receive the items when they arrive.",
                 returnId: returnRecord.id,
                 availabilityTransitionVariantIds: [],
+                outboxIds,
             };
         }
         default:
@@ -257,10 +243,18 @@ async function setOpenOwnCourierParcels(
     orderId: string,
     status: typeof ShipmentStatus.DELIVERY_FAILED | typeof ShipmentStatus.RETURNED,
 ): Promise<void> {
+    await openOwnCourierParcelsUpdate(db, orderId, status);
+}
+
+function openOwnCourierParcelsUpdate(
+    db: Database,
+    orderId: string,
+    status: typeof ShipmentStatus.DELIVERY_FAILED | typeof ShipmentStatus.RETURNED,
+) {
     const settled = status === ShipmentStatus.RETURNED
         ? [ShipmentStatus.DELIVERED, ShipmentStatus.RETURNED, ShipmentStatus.CANCELLED, ShipmentStatus.FAILED]
         : [ShipmentStatus.DELIVERED, ShipmentStatus.RETURNED, ShipmentStatus.CANCELLED, ShipmentStatus.FAILED, ShipmentStatus.DELIVERY_FAILED];
-    await db.update(deliveryShipments).set({
+    return db.update(deliveryShipments).set({
         status,
         rawStatus: status,
         updatedAt: sql`unixepoch()`,
@@ -272,25 +266,60 @@ async function setOpenOwnCourierParcels(
     ));
 }
 
-async function markOrderReturnedToSender(db: Database, orderId: string): Promise<void> {
+/** Returned to sender, with its parcels, timeline line and customer message in one batch. */
+async function markOrderReturnedToSender(db: Database, orderId: string, actorId: string | null): Promise<string[]> {
     const current = await db.select({ status: orders.status, version: orders.version })
         .from(orders).where(eq(orders.id, orderId)).get();
-    if (!current || current.status === OrderStatus.RETURNED) return;
+    if (!current || current.status === OrderStatus.RETURNED) return [];
     validateTransition("order", current.status, OrderStatus.RETURNED);
-    const updated = await db.update(orders).set({
-        status: OrderStatus.RETURNED,
-        version: current.version + 1,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
+    const version = current.version + 1;
+    const landed = sql`EXISTS (
+        SELECT 1 FROM ${orders}
+        WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${version} AND ${orders.status} = ${OrderStatus.RETURNED}
+    )`;
+    const outbox = buildOrderNotificationOutboxInsert(db, {
+        orderId,
+        notificationType: "order_returned",
+        dedupeKey: `cod:${orderId}:returned`,
+        source: "orders-cod-action",
+    }, landed);
+    const returnable = and(
         eq(orders.id, orderId),
         eq(orders.version, current.version),
         inArray(orders.status, [OrderStatus.SHIPPED, OrderStatus.DELIVERED]),
-    )).returning({ id: orders.id });
-    if (updated.length === 0) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+    )!;
+    try {
+        await safeBatch(db, [
+            // The CAS's own precondition first: a lost CAS writes nothing,
+            // even when another writer reached the same version and status.
+            buildBatchGuard(db, sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${returnable})`, RETURNED_TO_SENDER_CONFLICT),
+            db.update(orders).set({
+                status: OrderStatus.RETURNED,
+                version,
+                updatedAt: sql`unixepoch()`,
+            }).where(returnable),
+            openOwnCourierParcelsUpdate(db, orderId, ShipmentStatus.RETURNED),
+            buildOrderEventInsert(db, {
+                id: await orderEventIdForRequest(orderId, "cod_returned", "cod-returned"),
+                orderId,
+                kind: "cod_returned",
+                actorId,
+            }, landed),
+            outbox.statement,
+        ] as never);
+    } catch (error: unknown) {
+        if (isBatchGuardError(error, RETURNED_TO_SENDER_CONFLICT)) {
+            // A repeat (double click) that lost to the first: it is returned, as asked.
+            const now = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+            if (now?.status === OrderStatus.RETURNED) return [];
+            throw new ConflictError("This order changed. Reload to see the latest.");
+        }
+        throw error;
     }
-    await setOpenOwnCourierParcels(db, orderId, ShipmentStatus.RETURNED);
+    return [outbox.outboxId];
 }
+
+const RETURNED_TO_SENDER_CONFLICT = "returned_to_sender_conflict";
 
 /**
  * Delivered for an order paid online and sent in full by the merchant's own
@@ -301,6 +330,8 @@ export async function markOrderDelivered(
     orderId: string,
     /** The order version the caller read; a change since refuses (exact under the status write's version CAS). */
     options: { expectedVersion?: number } = {},
+    /** The timeline line and customer message, written with the change. */
+    record: Pick<OrderStatusChangeOptions, "event" | "notify"> = {},
 ): Promise<StatusUpdateResult> {
     const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
@@ -323,5 +354,5 @@ export async function markOrderDelivered(
     }
     // A cash on delivery order may be delivered before its cash is remitted;
     // Collect cash records the money later (allowed on a delivered order).
-    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, { expectedVersion: options.expectedVersion }, { generic: false, codCashPending: true });
+    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, { expectedVersion: options.expectedVersion }, { generic: false, codCashPending: true, ...record });
 }

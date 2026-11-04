@@ -41,7 +41,7 @@ The triggers keep these rules:
 A key is `kind:id[:facet]` or a bare constant. Ids are database row ids. The key builders are `cacheDep` in `packages/shared/src/cache-deps.ts`.
 
 ```text
-p:<productId>   rec:<productId>   sold:<productId>   popular   recommendation-signals
+p:<productId>   rec:<productId>   sold:<productId>   popular
 lm:all  lm:cat:<id>  lm:brand:<id>  lm:seo  lm:shape
 lo:<facet>:<scope>   lf:<scope>   srch
 c|b|col|pg|attr|promo : <id> or *    (categories, brands, collections, CMS pages, attributes, promotions)
@@ -54,7 +54,7 @@ t:<table>   store
 ```
 
 - `p` advances on any buyer-visible fact of the product (page, card, JSON-LD, feed row). `lm` covers membership and newest order of a public product set, sitemap and feed flags and lastmods, and the store-shape counts (`lm:shape`). `lo` facets are `price`, `band`, `disc`, `name`, `rating` and `sale` (scope `all` only).
-- `sold` advances only when the visible sold count changes (10 or more units in 30 days), `popular` only at 2 or more units. `recommendation-signals` advances on any order or order line change; no request reads it any more (the ranking runs only in the refresh jobs, outside a scope), so its triggers are a later migration's to drop.
+- `sold` advances only when the visible sold count changes (10 or more units in 30 days), `popular` only at 2 or more units. Orders and order lines advance no key: no public read touches them, and the ranking that reads their signals runs only in the refresh jobs, outside a scope (migration 0192 dropped their triggers; every key kind a trigger advances is declared by a cached public route, `apps/api/src/cache-deps-coverage.test.ts`).
 - `mk:<marketId>` advances on any change of a market's row, countries or presences, and `mk:*` on any market change (the active presence matrix). `mk:backup` advances only when the backup market's `price_increment_minor` changes. Every reader that prices at the increment declares it (`deps.backupMarketPricing()`). `mk:selling` is the set of countries the active markets sell to (`deps.sellingCountries()`): it advances when a country of an active market or a market's status changes, never for a rename or a presence edit; the checkout config declares it beside its own `mk:<id>`.
 - `pl:<marketId>` advances when a market's price mode, FX policy or active public price lists change; `pl:<marketId>:<productId>` when the active list prices of that product's SKUs in the market change. `tr:<type>:<id>` advances on one resource's translations and localized handles; `tr:slugs:<type>:<locale>` on which resource a localized handle names; `tr:locales` on the locale and market of each presence. `obj:<typeId>` advances on a public object type and its published records. `rd` advances on any URL redirect and is read only on the storefront's not-found path. The key list is `CACHE_DEP_KINDS`.
 - `t:<table>` is the coarse fallback for any buyer-visible change of the table. `store` is everything.
@@ -125,7 +125,7 @@ Inside core, import `deps` from the `cache-deps` folder (`../../cache-deps` in a
 
 3. For a scheduled switch such as a promotion `starts_at` or `ends_at`, call `deps.validUntil(nextTransition)` with the next future instant among the facts read.
 4. Facts no key can validate (a KV hint, a live provider call, a per-buyer value) make the output uncacheable. Call `deps.uncacheable("short-code")`. Never put a value in the reason.
-5. Ordering projections. Stored recommendation readers declare `deps.recommendations(sourceId)` even when rows are missing. Card fact readers declare `deps.sold(productId)`, and the popular home list also declares `deps.popular()`. An unchanged refresh only updates `computed_at`, which advances no key. The request-path fallback (no stored list) declares its list memberships, `deps.popular()` and the products it read, never order signals. The refresh's ranking still declares `deps.recommendationSignals()` and `validUntil` (the earliest included order's 30-day popularity exit or 365-day co-purchase exit, plus one second), which matter only inside a scope.
+5. Ordering projections. Stored recommendation readers declare `deps.recommendations(sourceId)` even when rows are missing. Card fact readers declare `deps.sold(productId)`, and the popular home list also declares `deps.popular()`. An unchanged refresh only updates `computed_at`, which advances no key. The request-path fallback (no stored list) declares its list memberships, `deps.popular()` and the products it read, never order signals. The refresh's ranking declares no order key, only `validUntil` (the earliest included order's 30-day popularity exit or 365-day co-purchase exit, plus one second), which matter only inside a scope.
 6. Run the reader under `withDependencyScope(render, { strict: true })`. Strict mode throws `CacheDepCoverageError` when a table has no covering key, a table is neither registered nor exempt, or a key is malformed. A nested scope inherits strict mode.
 
 ## Validate and serve

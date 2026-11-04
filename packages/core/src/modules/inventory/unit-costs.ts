@@ -4,12 +4,13 @@
 // (stock-commands.ts). Order lines snapshot it at creation (a trigger).
 // Costs may carry minor units (paisa) even in BDT: they are not cash amounts.
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { inJsonArray } from "../../utils/in-json-array";
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
 
@@ -84,7 +85,8 @@ export async function setSkuCosts(db: Database, input: SetSkuCostsInput): Promis
   }));
   const live = await db.select({ id: productVariants.id })
     .from(productVariants)
-    .where(and(inArray(productVariants.id, planned.map((item) => item.variantId)), isNull(productVariants.deletedAt)))
+    // The id list leads (`+deleted_at`), so the check reads the SKUs by primary key.
+    .where(and(inJsonArray(productVariants.id, planned.map((item) => item.variantId)), sql`+${productVariants.deletedAt} IS NULL`))
     .all();
   if (live.length !== planned.length) throw new NotFoundError("A SKU in this change no longer exists.");
 

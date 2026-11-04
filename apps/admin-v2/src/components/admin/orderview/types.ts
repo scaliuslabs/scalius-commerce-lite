@@ -236,6 +236,8 @@ export interface Order {
   items: OrderItem[];
   totalAmount: number;
   currencyCode?: string | null;
+  /** A cancelled order that still holds its stock (a refund's cancel its location refused): why, and which SKUs. */
+  stockHeld?: { reason: "location_short" | "stock_changed" | "refused"; skus: string[] } | null;
   /** Shop-currency amounts of an order paid in a market's own currency (MARKETS-DESIGN D3); null: same-currency. */
   moneyChain?: {
     shopCurrencyCode: string;

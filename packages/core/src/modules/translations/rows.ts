@@ -28,11 +28,12 @@ export function translationColumns(
   scope: TranslationScope | null,
   type: TranslatableResourceType,
   id: SQLWrapper,
-  options: { slug?: boolean } = {},
+  /** `fields`: the record key → translation field map the reader passes to `translateRows`; only those fields are folded. */
+  options: { slug?: boolean; fields?: Readonly<Record<string, string>> } = {},
 ) {
   if (!scope) return {};
   return {
-    trRows: translationRowsSql(scope, type, id),
+    trRows: translationRowsSql(scope, type, id, options.fields ? Object.values(options.fields) : undefined),
     ...(options.slug === false ? {} : { trSlug: localizedSlugSql(scope, type, id) }),
   };
 }

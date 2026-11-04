@@ -202,10 +202,22 @@ export function parseTrigger(sql: string): ParsedTrigger | null {
   };
 }
 
+/** Separates a scanned table from the WHERE of the partial index its scan reads. */
+const PARTIAL = "\u0000";
+
 /** Reads each statement's `EXPLAIN QUERY PLAN` (cached per SQL text) for `SCAN <table>` steps. */
 export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
   const plans = new Map<string, string[]>();
   const counts = new Map<string, number>();
+  const partials = new Map<string, string | null>();
+  /** A partial index's WHERE clause (null for a full index). */
+  const partialIndexWhere = (index: string): string | null => {
+    if (!partials.has(index)) {
+      const sql = (sqlite.prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?").get(index) as { sql: string | null } | undefined)?.sql ?? "";
+      partials.set(index, /\)\s+WHERE\s+([\s\S]+)$/i.exec(sql)?.[1]?.trim() ?? null);
+    }
+    return partials.get(index)!;
+  };
   const tables = () => new Set((sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((row) => row.name));
   let known: Set<string> | undefined;
   let triggers: Map<string, ParsedTrigger[]> | undefined;
@@ -217,11 +229,15 @@ export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
     try {
       known ??= tables();
       for (const row of sqlite.prepare(`EXPLAIN QUERY PLAN ${query}`).all() as Array<{ detail: string }>) {
-        const name = /^SCAN (\S+)/.exec(row.detail)?.[1];
+        const step = /^SCAN (\S+)(?: USING (?:COVERING )?INDEX (\S+))?/.exec(row.detail);
+        const name = step?.[1];
         if (!name || name === "CONSTANT" || name.startsWith("(")) continue;
         // An alias names its table in the SQL (`FROM products p`); a CTE or subquery names none.
         const table = known.has(name) ? name : new RegExp(`\\b(?:from|join)\\s+"?(\\w+)"?\\s+(?:as\\s+)?"?${name}"?(?![\\w"])`, "i").exec(query)?.[1];
-        if (table && known.has(table)) plan.push(table);
+        if (!table || !known.has(table)) continue;
+        // A partial index holds only the rows its WHERE admits: its scan reads those, not the table.
+        const partial = step?.[2] ? partialIndexWhere(step[2]) : null;
+        plan.push(partial ? `${table}${PARTIAL}${partial}` : table);
       }
     } catch {
       // Not plannable (a PRAGMA, a script): no scan to count.
@@ -270,15 +286,19 @@ export function createScanEstimator(sqlite: DatabaseSync): ScanEstimator {
         if (target) scanned.push(...triggerScans(target, 0));
       }
       let rows = 0;
-      for (const table of scanned) {
-        let count = counts.get(table);
+      let scans = 0;
+      for (const entry of scanned) {
+        const [table, where] = entry.split(PARTIAL) as [string, string | undefined];
+        // A full scan grows with its table; a partial index's only with the rows it admits.
+        if (where === undefined) scans += 1;
+        let count = counts.get(entry);
         if (count === undefined) {
-          count = Number((sqlite.prepare(`SELECT count(*) AS n FROM "${table}"`).get() as { n: number | bigint }).n);
-          counts.set(table, count);
+          count = Number((sqlite.prepare(`SELECT count(*) AS n FROM "${table}"${where === undefined ? "" : ` WHERE ${where}`}`).get() as { n: number | bigint }).n);
+          counts.set(entry, count);
         }
         rows += count;
       }
-      return { scans: scanned.length, rows };
+      return { scans, rows };
     },
     reset: () => counts.clear(),
   };

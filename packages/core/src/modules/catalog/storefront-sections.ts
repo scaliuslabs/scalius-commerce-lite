@@ -58,6 +58,7 @@ import {
 } from "./recommendations";
 import { unixToDate } from "@scalius/shared/utils";
 import { deps } from "./declare-deps";
+import { qualifiedColumn } from "../../utils/qualified-column";
 
 export const STOREFRONT_PRODUCT_TEXT_CHUNK_MAX = 12_000;
 export const STOREFRONT_PRODUCT_SECTION_RESULT_MAX_BYTES = 60 * 1024;
@@ -665,7 +666,7 @@ export async function getStorefrontProductSection(
                 standardMapping: productOptionDefinitions.standardMapping,
                 valueCount: sql<number>`(
                     SELECT count(*) FROM product_option_values AS public_option_value
-                    WHERE public_option_value.option_definition_id = ${productOptionDefinitions.id}
+                    WHERE public_option_value.option_definition_id = ${qualifiedColumn(productOptionDefinitions.id)}
                       AND public_option_value.deleted_at IS NULL
                 )`,
             }).from(productOptionDefinitions).where(and(

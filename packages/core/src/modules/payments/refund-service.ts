@@ -6,15 +6,19 @@
 import { inJsonArray } from "../../utils/in-json-array";
 import { orderPricePolicy, readGiftCardSettings, toStoreMinor } from "../settings";
 import { readStoreCurrency } from "../markets";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, ne, sql, desc, and, type SQL } from "drizzle-orm";
 import {
     orders,
+    orderEvents,
     orderItems,
     orderPayments,
     orderRefundLines,
     orderRefunds,
+    orderWithheldUnits,
     refundAttempts,
     giftCards,
+    notificationOutbox,
+    user,
     PaymentStatus,
     OrderStatus,
     PaymentRecordStatus,
@@ -30,9 +34,9 @@ import {
 import { canOperateExistingPayments } from "./gateways/port";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
-import { applyInventoryForStatusChangeWithImpact } from "../inventory";
+import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
   ACTIVE_REFUND_ATTEMPT_STATUSES,
   assertNoActivePaymentSessionAttempt,
@@ -42,6 +46,8 @@ import {
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
   REFUND_IN_PROGRESS_MESSAGE,
+  type StockHeldReason,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";
@@ -50,7 +56,7 @@ import {
     resolveOrderCurrencySnapshot,
     type OrderCurrencySnapshot,
 } from "./order-currency";
-import { buildNotificationOutboxInsert, type OrderNotificationType } from "../notifications";
+import { buildNotificationOutboxInsert, createOrderNotificationOutboxInsertValues, type OrderNotificationType } from "../notifications";
 import { readPromotionRefundSnapshot } from "../promotions";
 import {
     GIFT_CARD_PAYMENT_METHOD,
@@ -59,8 +65,22 @@ import {
     deriveGiftCardKeys,
     giftCardExpiryFromMonths,
     giftCardIdsForTenderPayments,
+    isGiftCardLedgerError,
     normalizeGiftCardRecipient,
 } from "../gift-cards";
+import {
+    GIFT_CARD_VALUE_SPENT_REASON,
+    buildGiftCardClawbackStatements,
+    giftCardPurchaseReads,
+    giftCardPurchaseState,
+    planGiftCardClawback,
+    buildClaimTakesRelease,
+    buildGiftCardClawbackSettlement,
+    giftCardHandoverPending,
+    orderHasPurchasedGiftCardsSql,
+    type GiftCardClawbackSettlement,
+    type GiftCardPurchaseState,
+} from "./refund-gift-card-clawback";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { sha256Hex } from "@scalius/shared/hash";
 import { allocateRefundAcrossSources, type RefundSourceSettlement } from "@scalius/shared/refund-sources";
@@ -148,15 +168,20 @@ export interface RefundResult {
     settlement?: RefundSettlement;
     /** Set when the refund was issued as store credit. */
     storeCredit?: RefundStoreCredit;
+    /** Unspent value taken back from gift cards the order bought (minor units), and how many cards. */
+    giftCardsTakenBack?: { cards: number; amountMinor: number };
     error?: string;
     /** Internal cache signal; API responses must not expose this field. */
     availabilityTransitionVariantIds: string[];
+    /** Internal: the customer's notice, committed with the refund (its outbox row exists). */
     refundNotification?: {
         notificationType: RefundCompletionNotificationType;
         dedupeKey: string;
         amount: number;
         refundId?: string;
     };
+    /** Internal: the outbox rows the refund committed, for the sender. API responses omit it. */
+    notificationOutboxIds?: string[];
 }
 
 export type RefundCompletionNotificationType = Extract<
@@ -408,12 +433,13 @@ function normalizeRefundLines(lines: RefundRequest["lines"]): RefundLineInput[] 
 /**
  * Each line is one of the order's and within what is left of it: its
  * quantity less what refunds that did not fail already named (the
- * `order_refund_lines_bounds_insert` trigger keeps it so under races).
+ * `order_refund_lines_bounds_insert` trigger keeps it so under races) and
+ * the units a settlement withheld (their money already went back).
  */
 async function assertRefundableLines(db: Database, orderId: string, lines: readonly RefundLineInput[]): Promise<void> {
     if (lines.length === 0) return;
     const ids = lines.map((line) => line.orderItemId);
-    const [items, refunded] = await db.batch([
+    const [items, refunded, withheld] = await db.batch([
         db.select({ id: orderItems.id, quantity: orderItems.quantity })
             .from(orderItems)
             .where(and(eq(orderItems.orderId, orderId), inJsonArray(orderItems.id, ids))),
@@ -422,9 +448,14 @@ async function assertRefundableLines(db: Database, orderId: string, lines: reado
             .innerJoin(orderRefunds, eq(orderRefunds.id, orderRefundLines.refundId))
             .where(and(eq(orderRefundLines.orderId, orderId), inJsonArray(orderRefundLines.orderItemId, ids), sql`${orderRefunds.status} <> 'failed'`))
             .groupBy(orderRefundLines.orderItemId),
+        db.select({ orderItemId: orderWithheldUnits.orderItemId, quantity: sql<number>`sum(${orderWithheldUnits.quantity})` })
+            .from(orderWithheldUnits)
+            .where(and(eq(orderWithheldUnits.orderId, orderId), inJsonArray(orderWithheldUnits.orderItemId, ids)))
+            .groupBy(orderWithheldUnits.orderItemId),
     ]);
     const quantities = new Map(items.map((item) => [item.id, item.quantity]));
     const already = new Map(refunded.map((row) => [row.orderItemId, Number(row.quantity) || 0]));
+    for (const row of withheld) already.set(row.orderItemId, (already.get(row.orderItemId) ?? 0) + (Number(row.quantity) || 0));
     for (const line of lines) {
         const quantity = quantities.get(line.orderItemId);
         if (quantity === undefined) throw new ValidationError(`Order line ${line.orderItemId} is not a line of this order.`);
@@ -474,14 +505,6 @@ function buildRefundReference(orderId: string, sourcePaymentId: string, claimVer
         .slice(-24)
         .toUpperCase();
     return `REF${suffix}`.slice(0, 30);
-}
-
-function buildFullRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
-    return `refund:${orderId}:${refundGroupId}:full`;
-}
-
-function buildPartialRefundNotificationDedupeKey(orderId: string, refundGroupId: string): string {
-    return `refund:${orderId}:${refundGroupId}:partial`;
 }
 
 function buildRefundStateNotificationDedupeKey(
@@ -713,7 +736,10 @@ function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean)
 export interface FinalizeAcceptedRefundAttemptsResult {
     orderIds: string[];
     finalizedAttemptIds: string[];
+    /** The notices this finalization committed (their outbox rows exist; recording them again is a no-op). */
     refundNotifications: RefundNotificationFact[];
+    /** Their outbox rows, for the caller to hand to the sender (the scheduled drain sends them otherwise). */
+    notificationOutboxIds: string[];
     availabilityTransitionVariantIds: string[];
 }
 
@@ -786,190 +812,396 @@ export function computePaymentStateFromLedger(params: {
     };
 }
 
+/** The `refund_recorded` timeline line of the attempts a finalization announces: one id per set, so a re-run adds nothing. */
+async function refundRecordedEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {
+    const key = `refund-attempts:${[...attemptIds].sort().join(",")}`;
+    return `oev_k${(await sha256Hex(`order-event\0${orderId}\0refund_recorded\0${key}`)).slice(0, 32)}`;
+}
+
+/** The outbox row of a refund's customer notice, fixed by its dedupe key so any caller can send it by id. */
+export async function refundNotificationOutboxId(dedupeKey: string): Promise<string> {
+    return `ono_refund_${(await sha256Hex(dedupeKey)).slice(0, 32)}`;
+}
+
+/**
+ * Settles accepted refund attempts: the refund payments and the attempts
+ * become refunded and the order's money and status follow, in one batch per
+ * order guarded on the order's version and on the attempts still having the
+ * status read. The same batch writes, for the attempts no earlier settlement
+ * announced, the order's `refund_recorded` timeline line and the customer's
+ * notice outbox row, and, for an order that bought gift cards, the settlement
+ * of each refund it ends (`buildGiftCardClawbackSettlement`, guarded on every
+ * attempt of that refund still having the status read). Every path that
+ * settles a refund (the request, the reconciliation sweep, staff's check, an
+ * import from the provider) runs it, so each gets the line, the notice and
+ * the settlement exactly once. A batch that loses its guard re-reads and
+ * tries again (an attempt finished meanwhile is left as it is). Stock of a
+ * fully refunded, cancelled order is released in that batch, behind its
+ * guard on the order's version. Stock the location refuses to take back
+ * (when the release is prepared or in its batch) never stops the money: the
+ * batch records the money and the cancel without it, with a `stock_held`
+ * timeline line naming the refusal (its reason code and SKUs), and the stock
+ * stays held until staff put it back from the order (the cancel's stock
+ * applied again); nothing after the commit throws.
+ * `actorUserId` is the staff member the line and the settlement name.
+ */
 export async function finalizeAcceptedRefundAttemptIds(
     db: Database,
     attemptIds: string[],
+    options: { actorUserId?: string | null } = {},
 ): Promise<FinalizeAcceptedRefundAttemptsResult> {
     const uniqueAttemptIds = [...new Set(attemptIds.filter(Boolean))];
-    if (uniqueAttemptIds.length === 0) {
-        return {
-            orderIds: [],
-            finalizedAttemptIds: [],
-            refundNotifications: [],
-            availabilityTransitionVariantIds: [],
-        };
+    const result: FinalizeAcceptedRefundAttemptsResult = {
+        orderIds: [],
+        finalizedAttemptIds: [],
+        refundNotifications: [],
+        notificationOutboxIds: [],
+        availabilityTransitionVariantIds: [],
+    };
+    if (uniqueAttemptIds.length === 0) return result;
+
+    const attempts = await readFinalizeAttempts(db, uniqueAttemptIds);
+    if (attempts.length !== uniqueAttemptIds.length) {
+        throw new NotFoundError("One or more refund attempts could not be found for reconciliation.");
+    }
+    // Validate every immutable order/payment currency before mutating refund rows.
+    const orderIds = [...new Set(attempts.map((attempt) => attempt.orderId))];
+    const reads = new Map<string, FinalizeOrderRead>();
+    for (const orderId of orderIds) {
+        reads.set(orderId, await readFinalizeOrder(db, orderId, attempts.filter((attempt) => attempt.orderId === orderId)));
     }
 
-    const attempts = await db
+    const availabilityTransitionVariantIds = new Set<string>();
+    const actor = options.actorUserId
+        ? { type: "admin" as const, id: options.actorUserId }
+        : { type: "system" as const, id: null };
+    for (const orderId of orderIds) {
+        let orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
+        let read = reads.get(orderId)!;
+        // Why the location refused the stock, once it did: the batch then records the money without it.
+        let stockHeld: StockHeldRefusal | null = null;
+        for (let round = 0; ; round += 1) {
+            const { order, currency, paymentRows } = read;
+            const paymentState = computePaymentStateFromLedger({
+                totalAmountMinor: order.totalAmountMinor,
+                deferred: order.paymentTermsDays !== null,
+                payments: paymentRows,
+                paymentTermsDays: order.paymentTermsDays,
+            });
+            const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
+            const shouldReleaseInventory = paymentState.isFullRefund
+                && (nextOrderStatus === OrderStatus.CANCELLED || order.status === OrderStatus.CANCELLED);
+
+            // The attempts this finalization announces (none an earlier one announced).
+            const announced = orderAttempts.filter((attempt) => !attempt.refundedAt);
+            const announcement = announced.length > 0
+                ? await buildRefundAnnouncement(db, {
+                    orderId,
+                    attempts: announced,
+                    isFullRefund: paymentState.isFullRefund,
+                    currency,
+                    actorUserId: options.actorUserId ?? null,
+                })
+                : null;
+            const settlements: GiftCardClawbackSettlement[] = [];
+            if (order.hasPurchasedGiftCards) {
+                for (const refundGroupId of new Set(orderAttempts.map((attempt) => attempt.refundGroupId))) {
+                    settlements.push(await buildGiftCardClawbackSettlement(db, {
+                        orderId,
+                        refundGroupId,
+                        outcomes: new Map(orderAttempts
+                            .filter((attempt) => attempt.refundGroupId === refundGroupId)
+                            .map((attempt) => [attempt.id, "refunded" as const])),
+                        actor,
+                    }));
+                }
+            }
+            // The stock of the cancel moves in the cancel's batch, behind its guard on the order's version.
+            let inventory: Awaited<ReturnType<typeof prepareInventoryForStatusChange>> | null = null;
+            if (shouldReleaseInventory && stockHeld === null) {
+                try {
+                    inventory = await prepareInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED);
+                } catch (error: unknown) {
+                    stockHeld = stockRefusal(error);
+                    if (stockHeld === null) throw error;
+                }
+            }
+            const stockHeldLine = shouldReleaseInventory && stockHeld !== null
+                ? db.insert(orderEvents).values({
+                    id: await stockHeldEventId(orderId, orderAttempts.map((attempt) => attempt.id)),
+                    orderId,
+                    kind: "stock_held",
+                    body: stockHeld.detail,
+                    data: JSON.stringify({ status: nextOrderStatus ?? order.status, reason: stockHeld.reason, skus: stockHeld.skus }),
+                    actorId: null,
+                    createdAt: sql`unixepoch()`,
+                }).onConflictDoNothing({ target: orderEvents.id })
+                : null;
+            const guard = sql.join([
+                sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`,
+                attemptsStillAsRead(orderAttempts),
+                ...settlements.map((settlement) => settlement.guard),
+            ], sql` AND `);
+
+            try {
+                await db.batch([
+                    buildBatchGuard(db, guard, REFUND_FINALIZE_CONFLICT),
+                    db.update(orderPayments).set({
+                        status: PaymentRecordStatus.REFUNDED,
+                        updatedAt: sql`unixepoch()`,
+                    }).where(inJsonArray(orderPayments.id, orderAttempts.map((attempt) => attempt.refundPaymentId))),
+                    db.update(orders).set({
+                        paidAmountMinor: paymentState.paidAmountMinor,
+                        balanceDueMinor: paymentState.balanceDueMinor,
+                        paymentStatus: paymentState.paymentStatus,
+                        ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
+                        version: sql`${orders.version} + 1`,
+                        updatedAt: sql`unixepoch()`,
+                    }).where(and(eq(orders.id, orderId), eq(orders.version, order.version))),
+                    // Refunded in the same write, so a sibling ending at once sees it (or loses its guard).
+                    db.update(refundAttempts).set({
+                        status: "refunded",
+                        claimId: null,
+                        claimExpiresAt: null,
+                        refundedAt: sql`coalesce(${refundAttempts.refundedAt}, unixepoch())`,
+                        updatedAt: sql`unixepoch()`,
+                    }).where(inJsonArray(refundAttempts.id, orderAttempts.map((attempt) => attempt.id))),
+                    ...(announcement?.statements ?? []),
+                    ...settlements.flatMap((settlement) => settlement.statements),
+                    ...(inventory?.statements ?? []),
+                    ...(stockHeldLine ? [stockHeldLine] : []),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+                ] as any);
+            } catch (error: unknown) {
+                const refusal = inventory?.translateError(error);
+                if (refusal) {
+                    stockHeld = stockRefusal(refusal) ?? { reason: "refused", detail: String(refusal), skus: [] };
+                    continue;
+                }
+                if (!isBatchGuardError(error, REFUND_FINALIZE_CONFLICT) && !isOrderInventoryConflictError(error)) throw error;
+                if (round >= FINALIZE_CONFLICT_RETRIES) {
+                    throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
+                }
+                // Something moved: read again; an attempt another run finished is no longer this one's to finish.
+                orderAttempts = (await readFinalizeAttempts(db, orderAttempts.map((attempt) => attempt.id)))
+                    .filter((attempt) => attempt.status !== "refunded");
+                if (orderAttempts.length === 0) break;
+                read = await readFinalizeOrder(db, orderId, orderAttempts);
+                continue;
+            }
+            if (inventory) {
+                for (const variantId of inventory.availabilityTransitionVariantIds) availabilityTransitionVariantIds.add(variantId);
+                await inventory.afterCommit();
+            }
+            result.orderIds.push(orderId);
+            result.finalizedAttemptIds.push(...orderAttempts.map((attempt) => attempt.id));
+            if (announcement) {
+                result.refundNotifications.push(announcement.notification);
+                result.notificationOutboxIds.push(announcement.outboxId);
+            }
+            break;
+        }
+    }
+    result.availabilityTransitionVariantIds = [...availabilityTransitionVariantIds];
+    return result;
+}
+
+/** How many times a settlement batch that lost its guard re-reads and tries again. */
+const FINALIZE_CONFLICT_RETRIES = 2;
+
+interface StockHeldRefusal {
+    reason: StockHeldReason;
+    /** The refusal as the server words it (the timeline line's body, for the API and audit). */
+    detail: string;
+    skus: string[];
+}
+
+/** Why a stock release was refused (a location short of units, stock that moved, another refusal), or null for any other error. */
+function stockRefusal(error: unknown): StockHeldRefusal | null {
+    if (!(error instanceof AppError) || error.status >= 500) return null;
+    const shortfalls = (error.details as { shortfalls?: Array<{ sku?: unknown }> } | undefined)?.shortfalls;
+    const skus = Array.isArray(shortfalls)
+        ? [...new Set(shortfalls.map((item) => item.sku).filter((sku): sku is string => typeof sku === "string"))].slice(0, 10)
+        : [];
+    const reason: StockHeldReason = error.code === "inventory_location_shortfall" ? "location_short" : error.status === 409 ? "stock_changed" : "refused";
+    return { reason, detail: error.message, skus };
+}
+
+async function stockHeldEventId(orderId: string, attemptIds: readonly string[]): Promise<string> {
+    const key = `refund-attempts:${[...attemptIds].sort().join(",")}`;
+    return `oev_k${(await sha256Hex(`order-event\0${orderId}\0stock_held\0${key}`)).slice(0, 32)}`;
+}
+
+async function readFinalizeAttempts(db: Database, attemptIds: readonly string[]) {
+    return db
         .select({
             id: refundAttempts.id,
             orderId: refundAttempts.orderId,
+            refundGroupId: refundAttempts.refundGroupId,
             refundPaymentId: refundAttempts.refundPaymentId,
             providerRefundId: refundAttempts.providerRefundId,
             amountMinor: refundAttempts.amountMinor,
             currency: refundAttempts.currency,
+            gateway: refundAttempts.gateway,
+            reason: refundAttempts.reason,
+            metadata: refundAttempts.metadata,
+            status: refundAttempts.status,
+            refundedAt: refundAttempts.refundedAt,
         })
         .from(refundAttempts)
-        .where(inJsonArray(refundAttempts.id, uniqueAttemptIds));
+        .where(inJsonArray(refundAttempts.id, attemptIds));
+}
 
-    if (attempts.length !== uniqueAttemptIds.length) {
-        throw new NotFoundError("One or more refund attempts could not be found for reconciliation.");
+type FinalizeAttempt = Awaited<ReturnType<typeof readFinalizeAttempts>>[number];
+
+interface FinalizeOrderRead {
+    order: {
+        id: string;
+        totalAmountMinor: number;
+        paymentTermsDays: number | null;
+        status: string;
+        version: number;
+        currencyCode: string;
+        currencyDecimalPlaces: number;
+        hasPurchasedGiftCards: number;
+    };
+    currency: OrderCurrencySnapshot;
+    /** The ledger as it reads once these attempts' refund payments are refunded. */
+    paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
+}
+
+async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: readonly FinalizeAttempt[]): Promise<FinalizeOrderRead> {
+    const order = await db
+        .select({
+            id: orders.id,
+            totalAmountMinor: orders.totalAmountMinor,
+            paymentTermsDays: orders.paymentTermsDays,
+            status: orders.status,
+            version: orders.version,
+            currencyCode: orders.currencyCode,
+            currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            hasPurchasedGiftCards: orderHasPurchasedGiftCardsSql(orderId),
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get();
+    if (!order) {
+        throw new NotFoundError(`Order ${orderId} not found while reconciling refund attempts.`);
     }
-
-    const refundPaymentIds = attempts.map((attempt) => attempt.refundPaymentId);
-    const refundPaymentIdSet = new Set(refundPaymentIds);
-    const reconciliationByOrder = new Map<string, {
-        order: {
-            id: string;
-            totalAmountMinor: number;
-            paymentTermsDays: number | null;
-            status: string;
-            version: number;
-            currencyCode: string;
-            currencyDecimalPlaces: number;
-        };
-        currency: OrderCurrencySnapshot;
-        paymentRows: Array<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>;
-    }>();
-
-    // Validate every immutable order/payment currency before mutating refund rows.
-    for (const orderId of new Set(attempts.map((attempt) => attempt.orderId))) {
-        const order = await db
-            .select({
-                id: orders.id,
-                totalAmountMinor: orders.totalAmountMinor,
-                paymentTermsDays: orders.paymentTermsDays,
-                status: orders.status,
-                version: orders.version,
-                currencyCode: orders.currencyCode,
-                currencyDecimalPlaces: orders.currencyDecimalPlaces,
-            })
-            .from(orders)
-            .where(eq(orders.id, orderId))
-            .get();
-        if (!order) {
-            throw new NotFoundError(`Order ${orderId} not found while reconciling refund attempts.`);
-        }
-        const currency = resolveOrderCurrencySnapshot(order);
-        const orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
-        for (const attempt of orderAttempts) {
-            assertOrderPaymentCurrency(attempt.currency, currency, "Refund attempt");
-        }
-
-        const ledgerRows = await db
-            .select({
-                id: orderPayments.id,
-                paymentType: orderPayments.paymentType,
-                status: orderPayments.status,
-                amountMinor: orderPayments.amountMinor,
-                currency: orderPayments.currency,
-            })
-            .from(orderPayments)
-            .where(eq(orderPayments.orderId, orderId));
-        for (const payment of ledgerRows) {
-            assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
-        }
-        reconciliationByOrder.set(orderId, {
-            order,
-            currency,
-            paymentRows: ledgerRows.map((payment) => ({
-                paymentType: payment.paymentType,
-                status: refundPaymentIdSet.has(payment.id)
-                    ? PaymentRecordStatus.REFUNDED
-                    : payment.status,
-                amountMinor: payment.amountMinor,
-            })),
-        });
+    const currency = resolveOrderCurrencySnapshot(order);
+    for (const attempt of orderAttempts) {
+        assertOrderPaymentCurrency(attempt.currency, currency, "Refund attempt");
     }
-
-    await db.update(orderPayments).set({
-        status: PaymentRecordStatus.REFUNDED,
-        updatedAt: sql`unixepoch()`,
-    }).where(inJsonArray(orderPayments.id, refundPaymentIds));
-
-    const finalizedOrderIds = new Set<string>();
-    const finalizedAttemptIds: string[] = [];
-    const refundNotifications: RefundNotificationFact[] = [];
-    const availabilityTransitionVariantIds = new Set<string>();
-
-    for (const orderId of new Set(attempts.map((attempt) => attempt.orderId))) {
-        const orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
-        const reconciliation = reconciliationByOrder.get(orderId)!;
-        const { order, currency, paymentRows } = reconciliation;
-
-        const paymentState = computePaymentStateFromLedger({
-            totalAmountMinor: order.totalAmountMinor,
-            deferred: order.paymentTermsDays !== null,
-            payments: paymentRows,
-            paymentTermsDays: order.paymentTermsDays,
-        });
-        const nextOrderStatus = getOrderStatusAfterRefund(order.status, paymentState.isFullRefund);
-        const shouldReleaseInventory =
-            paymentState.isFullRefund &&
-            (nextOrderStatus === OrderStatus.CANCELLED || order.status === OrderStatus.CANCELLED);
-
-        const updateResult = await db.update(orders).set({
-            paidAmountMinor: paymentState.paidAmountMinor,
-            balanceDueMinor: paymentState.balanceDueMinor,
-            paymentStatus: paymentState.paymentStatus,
-            ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(orders.id, orderId),
-            eq(orders.version, order.version),
-        )).returning({ id: orders.id });
-
-        if (updateResult.length === 0) {
-            throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
-        }
-
-        if (shouldReleaseInventory) {
-            const impact = await applyInventoryForStatusChangeWithImpact(
-                db,
-                orderId,
-                OrderStatus.CANCELLED,
-            );
-            for (const variantId of impact.availabilityTransitionVariantIds) {
-                availabilityTransitionVariantIds.add(variantId);
-            }
-        }
-
-        finalizedOrderIds.add(orderId);
-        const notificationAttemptIds = orderAttempts.map((attempt) => attempt.id);
-        const notificationRefundIds = orderAttempts
-            .map((attempt) => attempt.providerRefundId)
-            .filter((refundId): refundId is string => Boolean(refundId));
-        refundNotifications.push({
-            orderId,
-            notificationType: paymentState.isFullRefund ? "order_refunded" : "order_partially_refunded",
-            dedupeKey: buildReconciledRefundNotificationDedupeKey(
-                orderId,
-                notificationAttemptIds,
-                paymentState.isFullRefund,
-            ),
-            amount: fromMinor(
-                orderAttempts.reduce((sum, attempt) => sum + attempt.amountMinor, 0),
-                currency.decimalPlaces,
-            ),
-            refundId: notificationRefundIds.join(",") || undefined,
-        });
+    const ledgerRows = await db
+        .select({
+            id: orderPayments.id,
+            paymentType: orderPayments.paymentType,
+            status: orderPayments.status,
+            amountMinor: orderPayments.amountMinor,
+            currency: orderPayments.currency,
+        })
+        .from(orderPayments)
+        .where(eq(orderPayments.orderId, orderId));
+    for (const payment of ledgerRows) {
+        assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
     }
-
-    await db.update(refundAttempts).set({
-        status: "refunded",
-        claimId: null,
-        claimExpiresAt: null,
-        refundedAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-    }).where(inJsonArray(refundAttempts.id, uniqueAttemptIds));
-    finalizedAttemptIds.push(...uniqueAttemptIds);
-
+    const refunding = new Set(orderAttempts.map((attempt) => attempt.refundPaymentId));
     return {
-        orderIds: [...finalizedOrderIds],
-        finalizedAttemptIds,
-        refundNotifications,
-        availabilityTransitionVariantIds: [...availabilityTransitionVariantIds],
+        order,
+        currency,
+        paymentRows: ledgerRows.map((payment) => ({
+            paymentType: payment.paymentType,
+            status: refunding.has(payment.id) ? PaymentRecordStatus.REFUNDED : payment.status,
+            amountMinor: payment.amountMinor,
+        })),
+    };
+}
+
+/**
+ * The attempts still have the status they were read with (explicit aliases:
+ * no outer column leaks in). Objects read by name: PostgreSQL's JSON path
+ * profile takes `$.name` paths only.
+ */
+function attemptsStillAsRead(attempts: ReadonlyArray<{ id: string; status: string }>): SQL {
+    const read = JSON.stringify(attempts.map((attempt) => ({ id: attempt.id, status: attempt.status })));
+    return sql`(SELECT count(*) FROM ${refundAttempts} AS ra JOIN json_each(${read}) AS seen
+        ON json_extract(seen.value, '$.id') = ra.id AND json_extract(seen.value, '$.status') = ra.status) = ${attempts.length}`;
+}
+
+/** Batch-guard marker: the order moved since finalization read it. */
+const REFUND_FINALIZE_CONFLICT = "refund_finalize_conflict";
+
+/**
+ * The timeline line and the customer's notice for refund attempts a
+ * finalization announces, as statements for its batch. Ids and last 4 only:
+ * a store-credit card's code never enters either.
+ */
+async function buildRefundAnnouncement(
+    db: Database,
+    input: {
+        orderId: string;
+        attempts: ReadonlyArray<{ id: string; amountMinor: number; providerRefundId: string | null; gateway: string; reason: string | null; metadata: string | null }>;
+        isFullRefund: boolean;
+        currency: OrderCurrencySnapshot;
+        actorUserId: string | null;
+    },
+): Promise<{ statements: unknown[]; notification: RefundCompletionNotificationFact; outboxId: string }> {
+    const attemptIds = input.attempts.map((attempt) => attempt.id);
+    const amountMinor = input.attempts.reduce((sum, attempt) => sum + attempt.amountMinor, 0);
+    const amount = fromMinor(amountMinor, input.currency.decimalPlaces);
+    const refundId = input.attempts.map((attempt) => attempt.providerRefundId).filter(Boolean).join(",") || undefined;
+    const gateways = [...new Set(input.attempts.map((attempt) => attempt.gateway))];
+    const storeCreditAttemptIds = input.attempts
+        .filter((attempt) => parseRefundMetadata(attempt.metadata).settlementMode === "store_credit")
+        .map((attempt) => attempt.id);
+    const storeCredit = storeCreditAttemptIds.length > 0
+        ? await db.select({ id: giftCards.id, last4: giftCards.codeLast4 }).from(giftCards)
+            .where(and(eq(giftCards.source, "refund"), inJsonArray(giftCards.sourceRefundAttemptId, storeCreditAttemptIds)))
+            .get()
+        : undefined;
+    const notificationType: RefundCompletionNotificationType = input.isFullRefund ? "order_refunded" : "order_partially_refunded";
+    const dedupeKey = buildReconciledRefundNotificationDedupeKey(input.orderId, attemptIds, input.isFullRefund);
+    const outboxId = await refundNotificationOutboxId(dedupeKey);
+    const outbox = {
+        ...createOrderNotificationOutboxInsertValues({
+            orderId: input.orderId,
+            notificationType,
+            dedupeKey,
+            source: "refund-finalized",
+            data: {
+                amount,
+                ...(gateways.length === 1 ? { gateway: gateways[0] } : {}),
+                ...(refundId ? { refundId } : {}),
+                ...(storeCredit ? { settlement: "store_credit", storeCreditLast4: storeCredit.last4 } : {}),
+            },
+        }),
+        id: outboxId,
+    };
+    const reason = input.attempts.find((attempt) => attempt.reason?.trim())?.reason?.trim() ?? null;
+    const eventData = JSON.stringify({
+        amount,
+        full: input.isFullRefund,
+        ...(storeCredit ? { settlement: "store_credit", giftCardId: storeCredit.id, giftCardLast4: storeCredit.last4 } : {}),
+    });
+    // A staff account only; an agent, app or the sweep records no name.
+    const actor = input.actorUserId
+        ? sql`(SELECT ${user.id} FROM ${user} WHERE ${user.id} = ${input.actorUserId})`
+        : null;
+    return {
+        statements: [
+            db.insert(orderEvents).values({
+                id: await refundRecordedEventId(input.orderId, attemptIds),
+                orderId: input.orderId,
+                kind: "refund_recorded",
+                body: reason,
+                data: eventData,
+                actorId: actor,
+                createdAt: sql`unixepoch()`,
+            }).onConflictDoNothing({ target: orderEvents.id }),
+            db.insert(notificationOutbox).values(outbox).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
+        ],
+        notification: { orderId: input.orderId, notificationType, dedupeKey, amount, ...(refundId ? { refundId } : {}) },
+        outboxId,
     };
 }
 
@@ -1166,7 +1398,8 @@ async function markRefundAttemptsReconcileRequired(
             nextProbeAt: sql`unixepoch()`,
             lastError: serializeRefundAttemptError(error),
             updatedAt: sql`unixepoch()`,
-        }).where(eq(refundAttempts.id, getRefundAttemptId(allocation)))
+        // A settlement that committed before the error keeps its attempts refunded.
+        }).where(and(eq(refundAttempts.id, getRefundAttemptId(allocation)), ne(refundAttempts.status, "refunded")))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     ) as any);
 }
@@ -1180,12 +1413,15 @@ async function markRefundAllocationsFailed(
         claimVersion: number;
         allocationCount: number;
         error: unknown;
+        /** The refund's gift-card settlement: its guard leads the batch, its writes follow the failures. */
+        settlement?: GiftCardClawbackSettlement;
     },
 ): Promise<void> {
     if (params.allocations.length === 0) return;
 
-    await db.batch(
-        params.allocations.flatMap((allocation) => [
+    await db.batch([
+        ...(params.settlement ? [buildBatchGuard(db, params.settlement.guard, REFUND_FINALIZE_CONFLICT)] : []),
+        ...params.allocations.flatMap((allocation) => [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.FAILED,
             metadata: buildRefundMetadata({
@@ -1208,9 +1444,10 @@ async function markRefundAllocationsFailed(
             failedAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        ]) as any,
-    );
+        ]),
+        ...(params.settlement?.statements ?? []),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any);
 }
 
 async function markRefundAllocationsProviderUnknown(
@@ -1222,6 +1459,7 @@ async function markRefundAllocationsProviderUnknown(
         claimVersion: number;
         allocationCount: number;
         error: unknown;
+        currency: OrderCurrencySnapshot;
     },
 ): Promise<void> {
     if (params.allocations.length === 0) return;
@@ -1229,9 +1467,29 @@ async function markRefundAllocationsProviderUnknown(
     const originalError = isProviderRefundOutcomeUnknownError(params.error)
         ? params.error.originalError
         : params.error;
+    // The buyer hears once that the refund is processing, with the move into
+    // provider_unknown (reconciliation never repeats it on a later probe).
+    const processing = buildRefundStateNotificationFact({
+        orderId: params.request.orderId,
+        refundGroupId: params.groupId,
+        notificationType: "refund_processing",
+        amountMinor: params.allocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0),
+        currency: params.currency,
+    });
+    const processingOutbox = {
+        ...createOrderNotificationOutboxInsertValues({
+            orderId: processing.orderId,
+            notificationType: processing.notificationType,
+            dedupeKey: processing.dedupeKey,
+            source: "refund-provider-unknown",
+            data: { amount: processing.amount },
+        }),
+        id: await refundNotificationOutboxId(processing.dedupeKey),
+    };
 
-    await db.batch(
-        params.allocations.flatMap((allocation) => [
+    await db.batch([
+        db.insert(notificationOutbox).values(processingOutbox).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
+        ...params.allocations.flatMap((allocation) => [
         db.update(orderPayments).set({
             status: PaymentRecordStatus.PENDING,
             metadata: buildRefundMetadata({
@@ -1255,9 +1513,9 @@ async function markRefundAllocationsProviderUnknown(
             lastError: serializeRefundAttemptError(originalError),
             updatedAt: sql`unixepoch()`,
         }).where(eq(refundAttempts.id, getRefundAttemptId(allocation))),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-        ]) as any,
-    );
+        ]),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    ] as any);
 }
 
 // ---------------------------------------------------------------------------
@@ -1345,25 +1603,6 @@ function getCompletedRefundIds(allocations: CompletedRefundAllocation[]): string
     return allocations.map((allocation) => allocation.refundId).filter(Boolean).join(",") || undefined;
 }
 
-function buildDirectRefundNotificationFact(params: {
-    orderId: string;
-    refundGroupId: string;
-    amountMinor: number;
-    isFullRefund: boolean;
-    refundId?: string;
-    currency: OrderCurrencySnapshot;
-}): RefundCompletionNotificationFact {
-    return {
-        orderId: params.orderId,
-        notificationType: params.isFullRefund ? "order_refunded" : "order_partially_refunded",
-        dedupeKey: params.isFullRefund
-            ? buildFullRefundNotificationDedupeKey(params.orderId, params.refundGroupId)
-            : buildPartialRefundNotificationDedupeKey(params.orderId, params.refundGroupId),
-        amount: fromMinor(params.amountMinor, params.currency.decimalPlaces),
-        refundId: params.refundId,
-    };
-}
-
 function buildRefundStateNotificationFact(params: {
     orderId: string;
     refundGroupId: string;
@@ -1382,6 +1621,20 @@ function buildRefundStateNotificationFact(params: {
 
 /** Batch-guard marker: the refund claim predicate no longer holds. */
 const REFUND_CLAIM_CONFLICT = "refund_claim_conflict";
+const REFUND_LINES_CONFLICT = "refund_lines_withheld_conflict";
+
+/** Every named line still has room: units named by refunds that did not fail, this one's included, plus withheld units. */
+function refundLinesFitCondition(orderId: string, lines: readonly RefundLineInput[]): SQL {
+    return sql`NOT EXISTS (
+        SELECT 1 FROM ${orderItems} AS line
+        WHERE line.order_id = ${orderId}
+          AND line.id IN (SELECT value FROM json_each(${JSON.stringify(lines.map((item) => item.orderItemId))}))
+          AND (SELECT coalesce(sum(rl.quantity), 0) FROM ${orderRefundLines} AS rl
+               INNER JOIN ${orderRefunds} AS r ON r.id = rl.refund_id
+               WHERE rl.order_item_id = line.id AND r.status <> 'failed')
+            + (SELECT coalesce(sum(w.quantity), 0) FROM ${orderWithheldUnits} AS w WHERE w.order_item_id = line.id) > line.quantity
+    )`;
+}
 const GIFT_CARD_LEDGER_REASON_MAX_LENGTH = 500;
 
 function refundLedgerReason(reason: string): string | null {
@@ -1534,6 +1787,8 @@ export async function processRefund(
             version: orders.version,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+            shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
             currencyCode: orders.currencyCode,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
             discountAmountMinor: orders.discountAmountMinor,
@@ -1541,6 +1796,8 @@ export async function processRefund(
             customerEmail: orders.customerEmail,
             customerPhone: orders.customerPhone,
             accountOwnerCustomerId: orders.accountOwnerCustomerId,
+            // The order id is bound as a value: an outer column would bind to the line's own id here.
+            buysGiftCards: sql<number>`EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${params.orderId} AND ${orderItems.fulfillmentType} = 'gift_card')`,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -1574,12 +1831,23 @@ export async function processRefund(
     // Validate the complete ledger before any local mutation or provider call.
     // A wrong-currency failed/pending row would otherwise surface only during
     // finalization, after inventory repair or an external refund was accepted.
-    const paymentLedgerRows = await db
+    // An order that bought gift cards reads them with its ledger (one call): a
+    // refund takes their unspent value back (refund-gift-card-clawback.ts).
+    const ledgerRead = db
         .select()
         .from(orderPayments)
         .where(eq(orderPayments.orderId, params.orderId))
         // Newest first, id breaking a same-second tie: the refund order `listRefundSources()` previews.
         .orderBy(desc(orderPayments.createdAt), desc(orderPayments.id));
+    let paymentLedgerRows: Awaited<typeof ledgerRead>;
+    let giftCardState: GiftCardPurchaseState = { lines: [], cards: [] };
+    if (order.buysGiftCards) {
+        const [ledger, items, refundedUnits, cards, spent] = await db.batch([ledgerRead, ...giftCardPurchaseReads(db, params.orderId)]);
+        paymentLedgerRows = ledger;
+        giftCardState = giftCardPurchaseState(items, refundedUnits, cards, spent);
+    } else {
+        paymentLedgerRows = await ledgerRead;
+    }
     for (const payment of paymentLedgerRows) {
         assertOrderPaymentCurrency(payment.currency, currency, "Order payment ledger");
     }
@@ -1642,6 +1910,30 @@ export async function processRefund(
     // A partly paid invoice still owes the rest after its payments go back.
     const isFullRefund = refundAmount >= paidAmount
         && !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL);
+
+    // Gift cards the order bought: the refund takes back their unspent value,
+    // and never gives back value the buyer already spent from them.
+    const giftCardClawback = planGiftCardClawback({
+        state: giftCardState,
+        refundLines,
+        receivedMinor: paymentLedgerRows.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        refundedBeforeMinor: paymentLedgerRows.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        refundMinor: refundAmount,
+        // Units not issued yet count only while the handover will still issue them.
+        closesOrder: !giftCardHandoverPending(order, isFullRefund),
+    });
+    if (giftCardClawback.shortfallMinor > 0) {
+        const display = (minor: number) => fromMinor(minor, currency.decimalPlaces);
+        const maxMinor = Math.max(0, refundAmount - giftCardClawback.shortfallMinor);
+        const why = [
+            giftCardClawback.spentMinor > 0 ? `${display(giftCardClawback.spentMinor)} of the gift cards this order bought was already spent` : null,
+            giftCardClawback.unissuedMinor > 0 ? `${display(giftCardClawback.unissuedMinor)} in gift cards is still to be issued (name those units in the refund lines to cancel them)` : null,
+        ].filter(Boolean).join(", and ");
+        throw new ValidationError(
+            `This refund gives back more than the order kept: ${why}. Refund at most ${display(maxMinor)}.`,
+            { reason: GIFT_CARD_VALUE_SPENT_REASON, maxRefundAmount: display(maxMinor) },
+        );
+    }
 
     const capturedPayments = paymentLedgerRows
         .filter((payment) =>
@@ -1758,6 +2050,9 @@ export async function processRefund(
                 quantity: line.quantity,
                 createdAt: sql`unixepoch()`,
             })),
+            // The lines' bounds trigger counts named units only: a settlement that withheld units
+            // since the lines were read must leave room too (named + withheld <= the line's quantity).
+            ...(refundLines.length > 0 ? [buildBatchGuard(db, refundLinesFitCondition(params.orderId, refundLines), REFUND_LINES_CONFLICT)] : []),
             ...allocations.flatMap((allocation) => {
                 const mode = allocationSettlementMode(allocation);
                 const internal = isInternalSettlement(mode);
@@ -1809,9 +2104,25 @@ export async function processRefund(
             }),
             // One new card for the whole refund, after the attempt it belongs to.
             ...(storeCredit?.statements ?? []),
+            // The bought cards' value goes back with the money, after the attempt it names.
+            ...buildGiftCardClawbackStatements(db, {
+                plan: giftCardClawback,
+                orderId: params.orderId,
+                refundAttemptId: getRefundAttemptId(allocations[0]!),
+                actor,
+            }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         ] as any);
     } catch (error: unknown) {
+        if (giftCardClawback.clawbacks.length > 0 && isGiftCardLedgerError(error)) {
+            // A card the order bought was spent between the read and the claim: nothing was written.
+            throw new ConflictError("A gift card this order bought was used while the refund was being recorded. Reload and try again.");
+        }
+        if (isBatchGuardError(error, REFUND_LINES_CONFLICT)) {
+            // Name the line that no longer fits, as the read before the claim does.
+            await assertRefundableLines(db, params.orderId, refundLines);
+            throw new ConflictError("The order's lines changed while this refund was prepared; review them and try again.");
+        }
         if (isBatchGuardError(error, REFUND_CLAIM_CONFLICT)) {
             // Lost the claim: another refund, payment or edit got there first.
             const replay = requestKey
@@ -1894,16 +2205,64 @@ export async function processRefund(
                 claimVersion,
                 allocationCount: allocations.length,
                 error,
+                currency,
             });
         } else {
-            await markRefundAllocationsFailed(db, {
+            // When these failures end the refund (nothing went back), what it
+            // took from the order's gift cards is settled in the same batch;
+            // when some allocations went through, their finalization settles.
+            // The failures are written whatever the settlement planning does.
+            const failure = {
                 request: params,
                 allocations: unresolvedAllocations,
                 groupId: refundGroupId,
                 claimVersion,
                 allocationCount: allocations.length,
                 error,
-            });
+            };
+            let written = false;
+            let planned = true;
+            for (let round = 0; giftCardClawback.clawbacks.length > 0 && !written && round <= FINALIZE_CONFLICT_RETRIES; round += 1) {
+                const settlement = await buildGiftCardClawbackSettlement(db, {
+                    orderId: params.orderId,
+                    refundGroupId,
+                    outcomes: new Map(unresolvedAllocations.map((allocation) => [getRefundAttemptId(allocation), "failed"] as const)),
+                    actor,
+                }).catch((settleError: unknown) => {
+                    console.error("[refund-service] Gift card settlement of a failed refund could not be planned:", settleError instanceof Error ? settleError.name : "error");
+                    return null;
+                });
+                if (!settlement) {
+                    planned = false;
+                    break;
+                }
+                try {
+                    await markRefundAllocationsFailed(db, { ...failure, settlement });
+                    written = true;
+                } catch (writeError: unknown) {
+                    if (isBatchGuardError(writeError, REFUND_FINALIZE_CONFLICT)) continue;
+                    console.error("[refund-service] Gift card settlement of a failed refund could not be written:", writeError instanceof Error ? writeError.name : "error");
+                    break;
+                }
+            }
+            if (!written && !planned && completedAllocations.length === 0) {
+                // Nothing went back and the settlement couldn't be planned: the
+                // claim's own takes (known here) go back with the failures.
+                await markRefundAllocationsFailed(db, {
+                    ...failure,
+                    settlement: buildClaimTakesRelease(db, {
+                        orderId: params.orderId,
+                        refundGroupId,
+                        firstAttemptId: getRefundAttemptId(allocations[0]!),
+                        clawbacks: giftCardClawback.clawbacks,
+                        actor,
+                    }),
+                }).then(() => { written = true; }, (releaseError: unknown) => {
+                    console.error("[refund-service] The claim's gift card takes are left to the reconciliation backstop:", releaseError instanceof Error ? releaseError.name : "error");
+                });
+            }
+            // The failures are written whatever the settlement did (the backstop settles what's left).
+            if (!written) await markRefundAllocationsFailed(db, failure);
         }
 
         const completedAmount = completedAllocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0);
@@ -1914,6 +2273,7 @@ export async function processRefund(
                 finalizedResult = await finalizeAcceptedRefundAttemptIds(
                     db,
                     completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
+                    { actorUserId: params.actorUserId ?? null },
                 );
             } catch (finalizeError: unknown) {
                 await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
@@ -1973,27 +2333,19 @@ export async function processRefund(
         throw error;
     }
 
-    let availabilityTransitionVariantIds: string[];
+    let finalized: FinalizeAcceptedRefundAttemptsResult;
     try {
-        const finalizedResult = await finalizeAcceptedRefundAttemptIds(
+        // Its batch writes the timeline line and the customer's notice with the money.
+        finalized = await finalizeAcceptedRefundAttemptIds(
             db,
             completedAllocations.map((allocation) => getRefundAttemptId(allocation)),
+            { actorUserId: params.actorUserId ?? null },
         );
-        availabilityTransitionVariantIds =
-            finalizedResult.availabilityTransitionVariantIds;
     } catch (finalizeError: unknown) {
         await markRefundAttemptsReconcileRequired(db, completedAllocations, finalizeError);
         throw finalizeError;
     }
-
-    const refundNotification = buildDirectRefundNotificationFact({
-        orderId: params.orderId,
-        refundGroupId,
-        amountMinor: refundAmount,
-        isFullRefund,
-        refundId: getCompletedRefundIds(completedAllocations),
-        currency,
-    });
+    const refundNotification = finalized.refundNotifications[0] as RefundCompletionNotificationFact | undefined;
     const storeCreditCard = storeCredit
         ? await db.select({ last4: giftCards.codeLast4 }).from(giftCards).where(eq(giftCards.id, storeCredit.giftCardId)).get()
         : undefined;
@@ -2016,12 +2368,21 @@ export async function processRefund(
                 notificationOutboxId: storeCredit.notificationOutboxId,
             },
         } : {}),
-        availabilityTransitionVariantIds,
-        refundNotification: {
-            notificationType: refundNotification.notificationType,
-            dedupeKey: refundNotification.dedupeKey,
-            amount: refundNotification.amount,
-            refundId: refundNotification.refundId,
-        },
+        ...(giftCardClawback.clawbacks.length > 0 ? {
+            giftCardsTakenBack: {
+                cards: giftCardClawback.clawbacks.length,
+                amountMinor: giftCardClawback.clawbacks.reduce((sum, clawback) => sum + clawback.amountMinor, 0),
+            },
+        } : {}),
+        availabilityTransitionVariantIds: finalized.availabilityTransitionVariantIds,
+        notificationOutboxIds: finalized.notificationOutboxIds,
+        ...(refundNotification ? {
+            refundNotification: {
+                notificationType: refundNotification.notificationType,
+                dedupeKey: refundNotification.dedupeKey,
+                amount: refundNotification.amount,
+                refundId: refundNotification.refundId,
+            },
+        } : {}),
     };
 }

@@ -6,6 +6,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
+import { capTotal } from "@scalius/shared/pagination";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import {
     commerceCalendarDateKey,
@@ -16,6 +17,7 @@ import {
 } from "@scalius/shared/commerce-time";
 import { merchantDaySql } from "./reports/sales-sql";
 import { retryTransientD1 } from "../../utils/transient-d1";
+import { COUNT_PROBE_COLUMN, cappedCountQuery } from "../../utils/keyset";
 
 const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
 
@@ -132,14 +134,20 @@ function getDashboardSummaryQueries(
     }: ReturnType<typeof getDashboardMonthBounds>,
 ) {
     return [
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(products)
-            .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`),
-        db
-            .select({ count: sql<number>`count(*)` })
-            .from(customers)
-            .where(sql`${customers.deletedAt} is null`),
+        // Totals read at most the plan's count cap + 1 index entries, never the
+        // whole catalogue or customer list (Home loads them on every visit).
+        cappedCountQuery(
+            db,
+            db.select(COUNT_PROBE_COLUMN).from(products)
+                .where(sql`${products.deletedAt} is null AND ${products.isActive} = 1`)
+                .$dynamic(),
+        ),
+        cappedCountQuery(
+            db,
+            db.select(COUNT_PROBE_COLUMN).from(customers)
+                .where(sql`${customers.deletedAt} is null`)
+                .$dynamic(),
+        ),
         db
             .select({
                 count: sql<number>`count(*)`,
@@ -198,8 +206,9 @@ function mapDashboardSummaryStats([
     currentMonthArr,
     lastMonthArr,
 ]: [CountRow[], CountRow[], CurrentMonthRow[], MonthComparisonRow[]]) {
-    const totalProducts = totalProductsArr[0]?.count ?? 0;
-    const totalCustomers = totalCustomersArr[0]?.count ?? 0;
+    // Exact up to the plan's count cap; above it the cap, flagged.
+    const { total: totalProducts, totalIsCapped: totalProductsIsCapped } = capTotal(totalProductsArr[0]?.count ?? 0);
+    const { total: totalCustomers, totalIsCapped: totalCustomersIsCapped } = capTotal(totalCustomersArr[0]?.count ?? 0);
     const currentMonthStats = currentMonthArr[0];
     const lastMonthStats = lastMonthArr[0];
 
@@ -213,7 +222,9 @@ function mapDashboardSummaryStats([
 
     return {
         totalProducts,
+        totalProductsIsCapped,
         totalCustomers,
+        totalCustomersIsCapped,
         currentMonth: {
             orders: currentMonthStats?.count ?? 0,
             revenue: currentRevenue,
