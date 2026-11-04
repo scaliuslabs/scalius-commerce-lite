@@ -12,7 +12,7 @@ import {
     PaymentStatus,
 } from "@scalius/database/schema";
 import { prepareInventoryForStatusChange } from "../inventory";
-import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel";
+import { isShipmentClaimHeld, isShipmentClaimLeaseLive, noActiveShipmentClaimCondition } from "../order-kernel";
 import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
 import {
     GIFT_CARD_PAYMENT_METHOD,
@@ -177,7 +177,9 @@ export async function archiveStaleIncompleteOrders(
                 continue;
             }
 
-            if (hasActiveShipmentClaim(order)) {
+            // The read's SQL guard vetted an expired claim's attempt; a running or
+            // held claim on a row a stale plan returned still locks.
+            if (isShipmentClaimLeaseLive(order) || isShipmentClaimHeld(order)) {
                 continue;
             }
 

@@ -29,6 +29,7 @@ import {
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
   isShipmentClaimLeaseLive,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { assertOrderStockCoverable, InventoryLocationShortfallError } from "../inventory";
 import { getDeliveryProviderReadinessSummary } from "./provider-readiness";
@@ -768,6 +769,8 @@ export async function checkShipmentStatus(
     .select({
       shipmentClaimId: orders.shipmentClaimId,
       shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+      // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+      shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
     })
     .from(orders)
     .where(eq(orders.id, shipment.orderId))

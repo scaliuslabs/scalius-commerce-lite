@@ -43,6 +43,7 @@ import {
   noActiveShipmentClaimCondition,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
   validateTransition,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
@@ -481,6 +482,8 @@ export async function processPaymentConfirmed(
         id: orders.id,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })
@@ -1101,6 +1104,8 @@ async function applyFailedPayment(
         paymentStatus: orders.paymentStatus,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         // Bound to the order id itself: a bare outer column would render
@@ -1314,6 +1319,8 @@ export async function processPaymentAuthorized(
         deletedAt: orders.deletedAt,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
       })

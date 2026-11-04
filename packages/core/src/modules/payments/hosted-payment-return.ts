@@ -17,14 +17,11 @@ import {
   desc,
   eq,
   inArray,
-  isNotNull,
-  isNull,
-  lte,
   notInArray,
-  or,
   sql,
 } from "drizzle-orm";
 import type { PaymentType } from "./types";
+import { noActiveShipmentClaimCondition } from "../order-kernel";
 
 export type HostedPaymentReturnResult = "failed" | "cancelled";
 
@@ -101,13 +98,8 @@ export async function reconcileHostedPaymentReturn(
   const attemptStatus = "failed";
   const isBalanceReturn = input.paymentType === "balance";
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const noActiveShipmentClaim = or(
-    isNull(orders.shipmentClaimId),
-    and(
-      isNotNull(orders.shipmentClaimExpiresAt),
-      lte(orders.shipmentClaimExpiresAt, sql`${nowSeconds}`),
-    ),
-  );
+  // The one shipment-claim guard: an expired claim still locks unless its attempt booked nothing.
+  const noActiveShipmentClaim = noActiveShipmentClaimCondition();
   const eligibleOrderPaymentState = isBalanceReturn
     ? sql`
         ${orders.status} NOT IN (

@@ -11,6 +11,7 @@ import {
   noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveShipmentClaimCondition,
   noActiveRefundAttemptForOrderIdCondition,
+  shipmentClaimShipmentStatusSql,
 } from "../../order-kernel";
 import { assertNoActiveReturnReceipt } from "../returns/returns";
 import { ARCHIVABLE_ORDER_STATUSES, getOrderArchiveStatusBlockedReason } from "../archive-policy";
@@ -86,6 +87,8 @@ export async function archiveOrders(
             deletedAt: orders.deletedAt,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+            shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         })
         .from(orders)
         .where(inArray(orders.id, requestedIds));

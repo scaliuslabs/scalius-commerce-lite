@@ -21,6 +21,7 @@ import {
   assertNoActiveRefundAttempt,
   assertNoActiveShipmentClaim,
   validateTransition,
+  shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
@@ -64,6 +65,8 @@ export async function processCodAction(
         inventoryAction: orders.inventoryAction,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+        // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+        shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     const currency = resolveOrderCurrencySnapshot(order);

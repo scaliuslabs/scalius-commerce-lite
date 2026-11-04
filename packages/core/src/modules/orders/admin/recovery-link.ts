@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import type { OrderPaymentRecoverySummary } from "../types";
-import { hasActiveShipmentClaim } from "../../order-kernel";
+import { hasActiveShipmentClaim, shipmentClaimShipmentStatusSql } from "../../order-kernel";
 import { createOrderReceiptToken, recordOrderReceipt } from "../receipts";
 import {
     findLatestAttempt,
@@ -81,6 +81,8 @@ async function resolveOrderPaymentRecoveryPreview(
             deletedAt: orders.deletedAt,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            // The claim's own attempt row: an expired claim with none (or a failed one) does not lock.
+            shipmentClaimShipmentStatus: shipmentClaimShipmentStatusSql(),
         })
         .from(orders)
         .where(eq(orders.id, orderId))

@@ -98,6 +98,18 @@ export function noActiveShipmentClaimCondition() {
     );
 }
 
+/**
+ * The status of an order row's claimed attempt (NULL: no claim, or no such
+ * row), for an order read: select it as `shipmentClaimShipmentStatus` beside
+ * the claim columns, so `hasActiveShipmentClaim` answers exactly as
+ * `noActiveShipmentClaimCondition` does, in the same query.
+ */
+export function shipmentClaimShipmentStatusSql() {
+    // Qualified by hand: it lands in single-table select lists.
+    return sql<string | null>`(SELECT claim_attempt.status FROM delivery_shipments AS claim_attempt
+        WHERE claim_attempt.id = ${sql.raw(`"orders"."shipment_claim_id"`)})`;
+}
+
 /** Orders whose shipment claim lease has run out (the partial claim index holds only claimed orders). */
 export function expiredShipmentClaimCondition() {
     return and(
