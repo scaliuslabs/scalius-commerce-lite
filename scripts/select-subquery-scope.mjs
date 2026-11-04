@@ -52,6 +52,8 @@ function fileInfo(fileName, text, schemaTables) {
   for (const [name, table] of schemaTables) tables.set(name, { name: table, base: table });
   const functions = new Map();
   const consts = new Map();
+  const namespaces = new Set(); // `import * as h from "..."`
+  const importedAs = new Map(); // local name -> imported name (`import { rowsSql as rows }`)
   for (const statement of source.statements) {
     // `import { orders as orderTable } from "@scalius/database/schema"` (any module re-exporting a schema table)
     if (ts.isImportDeclaration(statement)) {
@@ -59,9 +61,11 @@ function fileInfo(fileName, text, schemaTables) {
       if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
           const imported = (element.propertyName ?? element.name).text;
+          if (element.propertyName) importedAs.set(element.name.text, imported);
           if (schemaTables.has(imported)) tables.set(element.name.text, { name: schemaTables.get(imported), base: schemaTables.get(imported) });
         }
       }
+      if (bindings && ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
     }
   }
   const collect = (node) => {
@@ -69,6 +73,14 @@ function fileInfo(fileName, text, schemaTables) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const init = unwrap(node.initializer);
       if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) functions.set(node.name.text, init);
+      // `const helperBag = { rows(id) { ... } }`: its methods as `helperBag.rows`.
+      if (ts.isObjectLiteralExpression(init)) {
+        for (const property of init.properties) {
+          const fn = ts.isMethodDeclaration(property) ? property
+            : ts.isPropertyAssignment(property) && (ts.isArrowFunction(unwrap(property.initializer)) || ts.isFunctionExpression(unwrap(property.initializer))) ? unwrap(property.initializer) : null;
+          if (fn && property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))) functions.set(`${node.name.text}.${property.name.text}`, fn);
+        }
+      }
       // `const terminal = alias(inventoryMovements, "terminal")`
       if (ts.isCallExpression(init) && ts.isIdentifier(init.expression) && init.expression.text === "alias"
         && init.arguments.length >= 2 && ts.isStringLiteralLike(init.arguments[1])) {
@@ -80,7 +92,7 @@ function fileInfo(fileName, text, schemaTables) {
     ts.forEachChild(node, collect);
   };
   collect(source);
-  return { fileName, source, tables, functions, consts };
+  return { fileName, source, tables, functions, consts, namespaces, importedAs };
 }
 
 /** Every function's returned expressions (not those of nested functions). */
@@ -98,8 +110,9 @@ function returnedExpressions(fn) {
 }
 
 class Analyzer {
-  constructor(files) {
+  constructor(files, schemaTables) {
     this.files = files;
+    this.schemaTables = schemaTables;
     this.byName = new Map();
     for (const info of files) {
       for (const [name, fn] of info.functions) {
@@ -128,8 +141,18 @@ class Analyzer {
       return { kind: "other" };
     }
     if (ts.isPropertyAccessExpression(expr)) {
+      // `schema.categories` through `import * as schema`
+      if (ts.isIdentifier(expr.expression) && ctx.info.namespaces.has(expr.expression.text)) {
+        const table = this.schemaTables.get(expr.name.text);
+        if (table) return { kind: "table", name: table, base: table };
+      }
       const owner = this.value(expr.expression, ctx, depth + 1);
       if (owner.kind === "table") return { kind: "column", name: owner.name, text: expr.getText(ctx.info.source) };
+    }
+    // `getTableColumns(categories)`: a bag of the table's columns.
+    if (ts.isCallExpression(expr) && ts.isIdentifier(expr.expression) && expr.expression.text === "getTableColumns" && expr.arguments[0]) {
+      const table = this.value(expr.arguments[0], ctx, depth + 1);
+      if (table.kind === "table") return table;
     }
     return { kind: "other" };
   }
@@ -140,6 +163,12 @@ class Analyzer {
     if (!expr || depth > MAX_DEPTH) return [];
     if (isSqlTag(expr, ctx.info.source)) return [{ template: expr.template, ctx }];
     if (ts.isConditionalExpression(expr)) return [...this.fieldTemplates(expr.whenTrue, ctx, depth + 1), ...this.fieldTemplates(expr.whenFalse, ctx, depth + 1)];
+    if (ts.isBinaryExpression(expr) && [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken].includes(expr.operatorToken.kind)) {
+      return [...this.fieldTemplates(expr.left, ctx, depth + 1), ...this.fieldTemplates(expr.right, ctx, depth + 1)];
+    }
+    if (ts.isElementAccessExpression(expr) && ts.isArrayLiteralExpression(unwrap(expr.expression))) {
+      return unwrap(expr.expression).elements.flatMap((element) => this.fieldTemplates(element, ctx, depth + 1));
+    }
     if (ts.isIdentifier(expr)) {
       if (ctx.env.has(expr.text)) return [];
       const init = ctx.info.consts.get(expr.text);
@@ -148,9 +177,20 @@ class Analyzer {
     if (ts.isCallExpression(expr)) {
       const callee = unwrap(expr.expression);
       if (ts.isPropertyAccessExpression(callee) && ["as", "mapWith"].includes(callee.name.text)) return this.fieldTemplates(callee.expression, ctx, depth + 1);
-      if (ts.isIdentifier(callee)) return this.call(callee.text, expr.arguments, ctx, depth, (ret, inner) => this.fieldTemplates(ret, inner, depth + 1));
+      const name = this.calleeName(callee, ctx);
+      if (name) return this.call(name, expr.arguments, ctx, depth, (ret, inner) => this.fieldTemplates(ret, inner, depth + 1));
     }
     return [];
+  }
+
+  /** A callee as a helper name: `rows` (renamed import resolved), `h.rowsSql` (namespace), `bag.rows` (object method). */
+  calleeName(callee, ctx) {
+    if (ts.isIdentifier(callee)) return ctx.info.importedAs.get(callee.text) ?? callee.text;
+    if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
+      if (ctx.info.namespaces.has(callee.expression.text)) return callee.name.text;
+      return `${callee.expression.text}.${callee.name.text}`;
+    }
+    return null;
   }
 
   /** The fields of a select argument: object literals, spreads, consts and helper calls. */
@@ -171,21 +211,36 @@ class Analyzer {
       const init = ctx.info.consts.get(expr.text);
       return init && !ctx.seen.has(init) ? this.fields(init, { ...ctx, seen: new Set([...ctx.seen, init]) }, depth + 1) : [];
     }
-    if (ts.isCallExpression(expr) && ts.isIdentifier(unwrap(expr.expression))) {
-      return this.call(unwrap(expr.expression).text, expr.arguments, ctx, depth, (ret, inner) => this.fields(ret, inner, depth + 1));
+    if (ts.isCallExpression(expr)) {
+      const name = this.calleeName(unwrap(expr.expression), ctx);
+      if (name) return this.call(name, expr.arguments, ctx, depth, (ret, inner) => this.fields(ret, inner, depth + 1));
     }
     return [];
   }
 
   /** Follows a helper call: its parameters bound to the call's arguments, through each of its returns. */
   call(name, args, ctx, depth, follow) {
-    if (["sql", "eq", "and", "or", "not", "count", "sum", "max", "min", "avg", "countDistinct", "coalesce", "alias"].includes(name)) return [];
+    if (["sql", "eq", "and", "or", "not", "count", "sum", "max", "min", "avg", "countDistinct", "coalesce", "alias", "getTableColumns"].includes(name)) return [];
     const out = [];
     for (const { info, fn } of this.resolve(name, ctx.info)) {
       if (ctx.stack.includes(fn)) continue;
       const env = new Map();
       const inner = { info, env, seen: new Set(), stack: [...ctx.stack, fn] };
       fn.parameters.forEach((parameter, index) => {
+        // `function objRows({ id })` called with `{ id: categories.id }`
+        if (ts.isObjectBindingPattern(parameter.name)) {
+          const arg = index < args.length ? unwrap(args[index]) : null;
+          for (const element of parameter.name.elements) {
+            if (!ts.isIdentifier(element.name)) continue;
+            const key = element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName.text : element.name.text;
+            const property = arg && ts.isObjectLiteralExpression(arg)
+              ? arg.properties.find((candidate) => (ts.isPropertyAssignment(candidate) || ts.isShorthandPropertyAssignment(candidate)) && candidate.name.getText(ctx.info.source) === key)
+              : undefined;
+            const source = property ? (ts.isPropertyAssignment(property) ? property.initializer : property.name) : null;
+            env.set(element.name.text, source ? this.value(source, ctx) : { kind: "other" });
+          }
+          return;
+        }
         if (!ts.isIdentifier(parameter.name)) return;
         // An omitted argument takes the parameter's default, read in the helper's own file.
         const value = index < args.length ? this.value(args[index], ctx)
@@ -260,7 +315,18 @@ export function scopeFindings(text, refs) {
   return [...new Set(findings)];
 }
 
-/** Whether the enclosing function joins onto the query held in `name`. */
+/** Whether a node runs only on some paths of its function (an if, a loop, a ternary, a short-circuit). */
+function conditional(node, scope) {
+  for (let current = node.parent; current && current !== scope; current = current.parent) {
+    if (ts.isIfStatement(current) || ts.isConditionalExpression(current) || ts.isSwitchStatement(current)
+      || ts.isForStatement(current) || ts.isForOfStatement(current) || ts.isForInStatement(current)
+      || ts.isWhileStatement(current) || ts.isDoStatement(current) || ts.isCatchClause(current)) return true;
+    if (ts.isBinaryExpression(current) && [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken].includes(current.operatorToken.kind)) return true;
+  }
+  return false;
+}
+
+/** Whether the enclosing function always joins onto the query held in `name`. */
 function joinedLater(name, node) {
   let scope = node.parent;
   while (scope && !ts.isFunctionLike(scope) && !ts.isSourceFile(scope)) scope = scope.parent;
@@ -273,7 +339,7 @@ function joinedLater(name, node) {
     if (found) return;
     if (ts.isPropertyAccessExpression(current) && JOINS.has(current.name.text)) {
       const root = rootOf(current.expression);
-      if (ts.isIdentifier(root) && root.text === name) found = true;
+      if (ts.isIdentifier(root) && root.text === name && !conditional(current, scope)) found = true;
     }
     ts.forEachChild(current, visit);
   };
@@ -282,8 +348,8 @@ function joinedLater(name, node) {
 }
 
 /** Every finding of the given parsed files: the select site, the field and where the template is. */
-export function scanFiles(infos) {
-  const analyzer = new Analyzer(infos);
+export function scanFiles(infos, schemaTables = readSchemaTables()) {
+  const analyzer = new Analyzer(infos, schemaTables);
   const findings = [];
   for (const info of infos) {
     if (!/\.(select|selectDistinct|returning)\(/.test(info.source.text)) continue;
@@ -326,7 +392,7 @@ export function scanFiles(infos) {
 
 /** Findings of one or more in-memory sources (fixtures): `{ fileName: text }`. */
 export function scanSources(sources, schemaTables = readSchemaTables()) {
-  return scanFiles(Object.entries(sources).map(([fileName, text]) => fileInfo(fileName, text, schemaTables)));
+  return scanFiles(Object.entries(sources).map(([fileName, text]) => fileInfo(fileName, text, schemaTables)), schemaTables);
 }
 
 /** The findings of the whole repository's production sources. */
@@ -344,7 +410,7 @@ export function scanRepository(root = ROOT, dirs = SCANNED_DIRS) {
     }
   };
   for (const dir of dirs) walk(path.join(root, dir));
-  return scanFiles(infos);
+  return scanFiles(infos, schemaTables);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
