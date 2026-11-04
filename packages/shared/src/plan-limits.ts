@@ -48,11 +48,17 @@ export interface PlanLimits {
    * the rest due for the next tick.
    */
   readonly background: {
-    /** Due events one drain dispatches to their webhook and app subscribers. */
+    /**
+     * Due events one drain dispatches to their webhook and app subscribers.
+     * The drain costs the same few D1 queries whatever the count (one claim,
+     * one fan-out read and write per target, one mark).
+     */
     readonly eventsPerDrain: number;
-    /** Webhook and app deliveries one drain sends (an outbound request and a few D1 queries each). */
+    /** Webhook and app deliveries one scheduled drain sends (an outbound request and about 4 D1 queries each). */
     readonly deliveriesPerDrain: number;
-    /** Notification outbox rows one drain sends (about 30 D1 queries each: settings, templates, receipts). */
+    /** Deliveries sent right after a write, in the write's own invocation (its queries are mostly spent). */
+    readonly deliveriesAfterWrite: number;
+    /** Notification outbox rows one drain sends (about 12 D1 queries each: one context batch, receipts, the staff alert). */
     readonly notificationsPerDrain: number;
     /** Claimed payment events one tick retries from their `webhook_events` rows. */
     readonly paymentEventsPerDrain: number;
@@ -193,8 +199,9 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     password: Object.freeze({ algorithm: "pbkdf2-sha256", iterations: 30_000 }),
     sameOriginMedia: false,
     background: Object.freeze({
-      eventsPerDrain: 2,
-      deliveriesPerDrain: 2,
+      eventsPerDrain: 20,
+      deliveriesPerDrain: 4,
+      deliveriesAfterWrite: 2,
       notificationsPerDrain: 1,
       paymentEventsPerDrain: 1,
       autoFulfilPerRun: 1,
@@ -241,6 +248,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     background: Object.freeze({
       eventsPerDrain: 50,
       deliveriesPerDrain: 25,
+      deliveriesAfterWrite: 25,
       notificationsPerDrain: 20,
       paymentEventsPerDrain: 10,
       autoFulfilPerRun: 50,

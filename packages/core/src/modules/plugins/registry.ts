@@ -7,10 +7,10 @@ import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
 import type { PluginRunPoint } from "@scalius/shared/plugins";
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
-import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 import type { FunctionCircuitState } from "./function-circuit";
-import { eventAfterSubscriptionStart, type OutboxEvent } from "../events";
+import { drainEvent, drainEventsSource, eventAfterSubscriptionStart, type OutboxEvent } from "../events";
 
 /** The registration's circuit columns, selected beside it (no extra read). */
 const circuitColumns = {
@@ -159,6 +159,39 @@ export async function listApprovedEventPlugins(db: Database, topic: string, even
     result.push({ installation, priority: row.priority, name: row.name });
   }
   return result;
+}
+
+/**
+ * `listApprovedEventPlugins` for every event of one drain in one read: each
+ * event's approved subscribers (one per plugin, by priority), each fenced at
+ * its own first approval.
+ */
+export async function listApprovedEventPluginsForEvents(
+  db: Database,
+  events: ReadonlyArray<Pick<OutboxEvent, "id" | "topic" | "occurredAt">>,
+): Promise<Map<string, RegisteredPlugin[]>> {
+  const byEvent = new Map<string, RegisteredPlugin[]>();
+  if (events.length === 0) return byEvent;
+  const rows = await db.select({ eventId: drainEvent.id, priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
+    .from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .innerJoin(drainEventsSource(events), and(
+      sql`${pluginRegistrations.name} IN (${drainEvent.topic}, ${drainEvent.resourceFilter}, '*')`,
+      eventAfterSubscriptionStart(drainEvent, pluginInstallations.activatedAt, pluginInstallations.eventStartExclusions),
+    ))
+    .where(and(eq(pluginRegistrations.kind, "event"), isNotNull(pluginInstallations.grantJson)))
+    .orderBy(asc(pluginRegistrations.priority), asc(pluginRegistrations.pluginId))
+    .all();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const key = `${row.eventId}\u0000${row.installation.pluginId}`;
+    if (seen.has(key)) continue;
+    const installation = toPluginInstallation(row.installation);
+    if (!installation) continue;
+    seen.add(key);
+    byEvent.set(row.eventId, [...(byEvent.get(row.eventId) ?? []), { installation, priority: row.priority, name: row.name }]);
+  }
+  return byEvent;
 }
 
 /** Whether any approved plugin subscribes to any topic: the event pipeline's "nobody listens" check. */

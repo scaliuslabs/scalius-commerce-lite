@@ -13,12 +13,11 @@ import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoic
 import { orderMessages, paymentMethodLabel, paymentStatusLabel } from "~/i18n/orders";
 import type { ApiResult } from "~/lib/api";
 import {
-  formatSavedMajorAmount,
-  formatSavedMinorAmount,
   isFreeOrderLine,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
-} from "~/lib/order-tax-presentation";
+} from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount, formatSavedMinorAmount } from "~/lib/order-money-format";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
 import { formatBillingAddressLines, formatShippingAddress } from "~/lib/location-presentation";

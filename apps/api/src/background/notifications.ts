@@ -10,19 +10,22 @@ import { orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import {
   claimNotificationOutboxForProcessing,
+  findOrderMessageContext,
   listDueNotificationOutbox,
   markNotificationOutboxDeadLettered,
   markNotificationOutboxProcessingFailed,
   markNotificationOutboxSent,
+  readEmailSettingsOnce,
   recordNothingToSend,
   sendConversationNotification,
-  sendOrderNotification,
   sendOrderNotificationEmail,
+  sendOrderStaffNotifications,
   sendResolvedNotification,
   sendStaffAlertNotification,
-  sendStaffOrderEmails,
   type ClaimedNotificationOutbox,
+  type OrderMessageContext,
 } from "@scalius/core/modules/notifications";
+import { withScopedReads } from "@scalius/core/settings-store";
 import {
   isOrderNotificationType,
   isStaffAlertNotificationType,
@@ -54,92 +57,76 @@ function messagingRuntime(db: Db, env: Env) {
   return { env, encryptionKey, appProviders: detachedAppProviders(env, db, encryptionKey) };
 }
 
-/** Dispatches one order notification to buyer channels, staff push and staff email. Returns retryable failures. */
+/**
+ * Dispatches one order notification to buyer channels, staff push and staff
+ * email. Every channel shares the dispatch's reads: the order's message
+ * context with its documents (one batch) and the email settings. Returns
+ * retryable failures.
+ */
 async function dispatchOrderNotification(
   db: Db,
   env: Env,
   input: {
     outboxId?: string;
     orderId: string;
-    customerEmail?: string | null;
-    customerName: string;
+    /** The order's message context, read once by the first channel that needs it. */
+    orderContext: () => Promise<OrderMessageContext>;
     notificationType: OrderNotificationType;
     data?: Record<string, unknown>;
   },
 ): Promise<string[]> {
   const { encryptionKey, appProviders } = messagingRuntime(db, env);
+  const runtimeEnv = env as unknown as Record<string, unknown>;
+  const shared = {
+    encryptionKey,
+    env: runtimeEnv,
+    outboxId: input.outboxId,
+    appProviders,
+    orderContext: input.orderContext,
+    emailSettings: readEmailSettingsOnce(db, { env: runtimeEnv, encryptionKey, appProviders }),
+  };
+  // The recipient comes from the shared context (undefined: the order's own address).
   const customerNotificationResult = await sendOrderNotificationEmail(
-    input.customerEmail,
-    input.customerName,
+    undefined,
+    "Customer",
     input.orderId,
     input.notificationType,
     input.data,
     db,
-    {
-      encryptionKey,
-      env: env as unknown as Record<string, unknown>,
-      outboxId: input.outboxId,
-      appProviders,
-    },
+    shared,
   );
   const retryableFailures: string[] = customerNotificationResult?.hasRetryableFailure
     ? [`customer channels: ${summarizeNotificationFailures(customerNotificationResult.outcomes)}`]
     : [];
 
-  // Admin push notification — check admin channel settings before sending
+  // The staff side: the staff alert recorded once, then staff push and staff
+  // emails. A failed order read fails only the channel that needed it.
   try {
-    const { getAdminNotificationChannels } = await import("@scalius/core/modules/notifications");
-    const adminChannels = await getAdminNotificationChannels(db);
-    const enabledAdminChannels = adminChannels[input.notificationType] || [];
-
-    if (enabledAdminChannels.includes("push")) {
-      // Push payloads deep-link into the dashboard through the public
-      // API origin. Background work has no request URL, so the origin
-      // must come from Platform settings; never invent a domain.
-      const requestUrl = env.PUBLIC_API_BASE_URL;
-      if (!requestUrl) {
-        logOpsEvent("warn", "notification.order.admin_push_skipped", {
-          orderId: input.orderId,
-          notificationType: input.notificationType,
-          outboxId: input.outboxId,
-          reason: "platform apiUrl is not configured (Settings > Store details > Web addresses > Advanced > Payment return address)",
-        });
-      } else {
-        const adminPushResult = await sendOrderNotification(db, {
-          id: input.orderId,
-          customerName: input.customerName,
-          notificationType: input.notificationType,
-        }, env, requestUrl, {
-          outboxId: input.outboxId,
-        });
-        if (adminPushResult?.hasRetryableFailure) {
-          retryableFailures.push(`admin push: ${summarizeNotificationFailures(adminPushResult.outcomes)}`);
-        }
-      }
-    }
-  } catch (fcmError) {
-    console.error(`[notifications] Admin notification check/send failed for ${input.orderId}:`, fcmError instanceof Error ? fcmError.name : "error");
-    retryableFailures.push(`admin push: ${fcmError instanceof Error ? fcmError.message : String(fcmError)}`);
-  }
-
-  // Staff order emails (new orders only); receipts keep retries from resending.
-  try {
-    const staffEmailResult = await sendStaffOrderEmails(db, {
+    const staff = await sendOrderStaffNotifications(db, env, {
       id: input.orderId,
-      customerName: input.customerName,
       notificationType: input.notificationType,
     }, {
-      encryptionKey,
-      env: env as unknown as Record<string, unknown>,
-      outboxId: input.outboxId,
-      appProviders,
+      ...shared,
+      onAdminPushSkipped: () => logOpsEvent("warn", "notification.order.admin_push_skipped", {
+        orderId: input.orderId,
+        notificationType: input.notificationType,
+        outboxId: input.outboxId,
+        reason: "platform apiUrl is not configured (Settings > Store details > Web addresses > Advanced > Payment return address)",
+      }),
     });
-    if (staffEmailResult.hasRetryableFailure) {
-      retryableFailures.push(`staff email: ${summarizeNotificationFailures(staffEmailResult.outcomes)}`);
+    for (const { channel, result, error } of staff) {
+      if (error !== undefined) {
+        console.error(`[notifications] ${channel} failed for ${input.orderId}:`, error instanceof Error ? error.name : "error");
+        retryableFailures.push(channel === "staff email"
+          ? "staff email: settings or order read failed"
+          : `${channel}: ${error instanceof Error ? error.message : String(error)}`);
+      } else if (result?.hasRetryableFailure) {
+        retryableFailures.push(`${channel}: ${summarizeNotificationFailures(result.outcomes)}`);
+      }
     }
-  } catch (staffEmailError) {
-    console.error(`[notifications] Staff order email failed for ${input.orderId}:`, staffEmailError instanceof Error ? staffEmailError.name : "error");
-    retryableFailures.push("staff email: settings or order read failed");
+  } catch (error) {
+    console.error(`[notifications] Staff alert for ${input.orderId} was not recorded:`, error instanceof Error ? error.name : "error");
+    retryableFailures.push("staff channels: settings read or staff alert failed");
   }
 
   return retryableFailures;
@@ -161,7 +148,8 @@ export async function deliverNotification(
   }
 
   try {
-    const outcome = await dispatchClaimedNotification(claim, db, env);
+    // One dispatch reads each settings document and provider's health once.
+    const outcome = await dispatchClaimedNotification(claim, withScopedReads(db), env);
     if (outcome.kind === "retry") {
       throw new Error(`Notification delivery failed for outbox ${claim.outboxId}: ${outcome.failures.join("; ")}`);
     }
@@ -299,20 +287,30 @@ async function dispatchClaimedNotification(
     if (!isOrderNotificationType(claim.notificationType)) {
       return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
     }
-    const order = await db
-      .select({ customerEmail: orders.customerEmail, customerName: orders.customerName })
-      .from(orders)
-      .where(eq(orders.id, claim.subjectId))
-      .get();
-    if (!order) return { kind: "unsupported", reason: "order_missing" };
+    const orderType = claim.notificationType;
+    // The order's one read (its facts, contact and the store's identity),
+    // made by the first channel that needs it.
+    let contextRead: Promise<OrderMessageContext | null> | undefined;
+    const readContext = () => (contextRead ??= findOrderMessageContext({
+      orderId: claim.subjectId,
+      type: orderType,
+      name: "Customer",
+      data: claim.data,
+      storefrontUrl: env.STOREFRONT_URL,
+    }, db));
     const failures = await dispatchOrderNotification(db, env, {
       outboxId: claim.outboxId,
       orderId: claim.subjectId,
-      customerEmail: order.customerEmail,
-      customerName: order.customerName || "Customer",
+      orderContext: async () => {
+        const context = await readContext();
+        if (!context) throw new Error("order_missing");
+        return context;
+      },
       notificationType: claim.notificationType,
       data: claim.data,
     });
+    // A deleted order is dead-lettered, whatever its channels made of it.
+    if (contextRead && await contextRead.catch(() => undefined) === null) return { kind: "unsupported", reason: "order_missing" };
     return failures.length > 0 ? { kind: "retry", failures } : { kind: "done" };
   }
 

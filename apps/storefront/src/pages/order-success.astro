@@ -53,9 +53,10 @@ import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
+  isFreeOrderLine,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
-} from "@/lib/order-tax-presentation";
+} from "@scalius/shared/order-money-presentation";
 import { getGatewayPresentation, isAppGatewayId } from "@/lib/checkout/gateway-presentation";
 import {
   formatOrderReceiptDate,
@@ -833,6 +834,9 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                   <div class="shrink-0 text-end">
                     {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
+                      {savedLine && savedMoneySummary && isFreeOrderLine(savedLine) && (
+                        <s class="me-1.5 text-muted-foreground">{formatReceiptMinor(savedLine.grossSubtotalMinor)}</s>
+                      )}
                       {savedLine && savedMoneySummary
                         ? formatReceiptMinor(presentedLineTotalMinor(savedLine, showsLineDiscounts))
                         : formatReceiptAmount(item.quantity * item.price)}

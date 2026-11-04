@@ -3,6 +3,7 @@ import { toast } from "~/lib/toast";
 import { mediaText as t } from "~/i18n/media";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { MediaApiClient } from "../api";
+import { mediaWorkspaceFilters } from "../query";
 import { useFolders, useMediaFiles, useMediaUpload } from ".";
 import {
   canDeletePermanently,
@@ -115,15 +116,9 @@ export function useMediaManager({
 
   const filters = useMemo(() => {
     if (!routeControlled || !workspaceState) return media.filters;
-    return {
-      search: workspaceState.search,
-      sortBy: workspaceState.sortBy,
-      sortOrder: workspaceState.sortOrder,
-      kind: capabilityKind(capability) ?? workspaceState.kind,
-      folderId: folderFilter(workspaceState.folderId),
-      view: workspaceState.view,
-    };
+    return mediaWorkspaceFilters(workspaceState, capability);
   }, [capability, media.filters, routeControlled, workspaceState]);
+  const openingReadDone = useRef(false);
   const activeFiltersRef = useRef(filters);
   activeFiltersRef.current = filters;
 
@@ -148,9 +143,12 @@ export function useMediaManager({
     setSelectionMode(!!onSelectMultiple);
     selectionAnchorId.current = null;
     if (autoLoad) {
+      // Only the page's opening read may take the one the route's loader started.
+      const opening = !openingReadDone.current;
+      openingReadDone.current = true;
       void media.loadFiles(undefined, routeControlled
         ? filters
-        : { ...media.filters, ...baseFilters });
+        : { ...media.filters, ...baseFilters }, { reuseRouteRead: opening && routeControlled });
     }
     // Filters are deliberately reset by these navigation changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

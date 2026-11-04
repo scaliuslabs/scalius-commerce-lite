@@ -317,7 +317,7 @@ export async function sendStaffAlertNotification(
     console.warn(`[Notifications] Failed to read ${type} staff channels, using the defaults:`, compactProviderLogDetail(error));
   }
   if (channels.length === 0) return buildDispatchResult(outcomes);
-  await recordStaffAlert(db, input.outboxId, true);
+  await recordStaffAlert(db, { outboxId: input.outboxId, kind: type }, true);
 
   const [order, store] = await Promise.all([
     db.select({ orderNumber: orders.orderNumber }).from(orders).where(eq(orders.id, input.orderId)).get(),

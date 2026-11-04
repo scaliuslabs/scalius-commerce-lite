@@ -9,16 +9,18 @@
 // resource with `ctx.api`). `id` is the idempotency key: the same event may
 // arrive more than once.
 
-import type { Database } from "@scalius/database/client";
-import { eventOutbox } from "@scalius/database/schema";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { eventOutbox, pluginInstallations, type EventOutboxRow } from "@scalius/database/schema";
+
+type PluginInstallationRow = typeof pluginInstallations.$inferSelect;
 import {
   cancelPluginEventDelivery,
   claimPluginEventDelivery,
   completePluginEventDelivery,
   failPluginEventDelivery,
-  getPluginInstallation,
   holdPluginEventDelivery,
   releasePluginEventDelivery,
+  toPluginInstallation,
 } from "@scalius/core/modules/plugins";
 import { toOutboxEvent, type OutboxEvent } from "@scalius/core/modules/events";
 import { EVENTS_API_VERSION, topicMatchesAnyFilter } from "@scalius/shared/events";
@@ -64,10 +66,14 @@ export async function processPluginEventDelivery(options: {
   }
   const { delivery, claimId } = claim;
 
-  const [installation, eventRow] = await Promise.all([
-    getPluginInstallation(db, delivery.pluginId),
-    delivery.eventId ? db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId)).get() : Promise.resolve(undefined),
+  // The app and the event in one round trip.
+  const [installationRows, eventRows] = await safeBatch(db, [
+    db.select().from(pluginInstallations).where(eq(pluginInstallations.pluginId, delivery.pluginId)).limit(1),
+    db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId ?? "")).limit(1),
   ]);
+  const installationRow = (installationRows as PluginInstallationRow[])[0];
+  const installation = installationRow ? toPluginInstallation(installationRow) : null;
+  const eventRow = (eventRows as EventOutboxRow[])[0];
   // Only an uninstall or a grant that no longer covers the topic ends a
   // delivery; an app that is off keeps it until it runs again (held).
   if (!installation || !installation.grant || !topicMatchesAnyFilter(delivery.topic as never, installation.grant.events)) {

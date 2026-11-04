@@ -924,8 +924,26 @@ const factString = (event: OutboxEvent, key: string): string | null => {
   return typeof value === "string" ? value : null;
 };
 
-/** Each event's sealed representation, in full; the delivery applies its subscription's customer data. */
+/**
+ * Each event's sealed representation, in full; the delivery applies its
+ * subscription's customer data. One resolver serves one drain: an event's
+ * representation is read once for all its endpoints (a failed read is not kept).
+ */
 export function createWebhookRepresentationResolver(db: Database): WebhookRepresentationResolver {
+  const read = representationReader(db);
+  const known = new Map<string, Promise<EventRepresentation | null>>();
+  return (event: OutboxEvent) => {
+    const key = `${event.id} ${event.resourceType} ${event.resourceId}`;
+    const cached = known.get(key);
+    if (cached) return cached;
+    const pending = read(event);
+    known.set(key, pending);
+    pending.catch(() => known.delete(key));
+    return pending;
+  };
+}
+
+function representationReader(db: Database): WebhookRepresentationResolver {
   return async (event: OutboxEvent): Promise<EventRepresentation | null> => {
     switch (event.resourceType) {
       case "order":

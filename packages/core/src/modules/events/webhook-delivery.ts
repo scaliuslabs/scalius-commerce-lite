@@ -13,9 +13,10 @@
 
 import { replaceEmailAddresses } from "@scalius/shared/text-scan";
 import type { Database } from "@scalius/database/client";
-import { chunkInsertRowsForD1, safeBatch } from "@scalius/database/client";
+import { safeBatch } from "@scalius/database/client";
 import {
   eventOutbox,
+  type EventOutboxRow,
   pluginEventDeliveries,
   pluginInstallations,
   webhookDeliveries,
@@ -44,13 +45,14 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import {
   toOutboxEvent,
-  type EventDelivery,
   type EventFanOutTarget,
+  type FannedOutDelivery,
   type OutboxEvent,
 } from "./event-outbox";
 import { parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
-import { eventAfterSubscriptionStart } from "./event-start-fence";
+import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
+import { jsonChunks } from "../../utils/json-chunks";
 
 export const WEBHOOK_MAX_ATTEMPTS = 8;
 /** Delay after attempt n (1-based) fails; 7 waits over about 22.6 hours. */
@@ -253,44 +255,57 @@ export const webhookFanOutTarget: EventFanOutTarget = {
       .get();
     return Boolean(row);
   },
-  async fanOut(db, event) {
-    // Endpoints created after the event never receive it, and an app's only
-    // while the app is active (each delivery re-checks its grant).
-    const subscriptions = await db
-      .select({ id: webhookSubscriptions.id, topics: webhookSubscriptions.topics })
+  async fanOut(db, events) {
+    if (events.length === 0) return [];
+    // One read for the whole drain: each active endpoint paired with each
+    // event it started before. Endpoints created after an event never receive
+    // it, and an app's only while the app is active (each delivery re-checks
+    // its grant).
+    const pairs = await db
+      .select({ id: webhookSubscriptions.id, topics: webhookSubscriptions.topics, eventId: drainEvent.id })
       .from(webhookSubscriptions)
+      .innerJoin(drainEventsSource(events), eventAfterSubscriptionStart(
+        drainEvent, webhookSubscriptions.createdAt, webhookSubscriptions.eventStartExclusions,
+      ))
       .where(and(
         eq(webhookSubscriptions.status, "active"),
-        eventAfterSubscriptionStart(event, webhookSubscriptions.createdAt, webhookSubscriptions.eventStartExclusions),
         sql`(${webhookSubscriptions.pluginId} IS NULL OR EXISTS (
           SELECT 1 FROM ${pluginInstallations}
           WHERE ${pluginInstallations.pluginId} = ${webhookSubscriptions.pluginId} AND ${pluginInstallations.status} = 'active'
         ))`,
       ))
       .all();
-    const matching = subscriptions.filter((subscription) =>
-      topicMatchesAnyFilter(event.topic, parseStoredTopicFilters(subscription.topics)));
-    if (matching.length === 0) return [];
-
+    const byId = new Map(events.map((event) => [event.id, event]));
     const nowMs = Date.now();
-    const rows = matching.map((subscription, index) => ({
-      id: newDeliveryId(nowMs + index),
-      subscriptionId: subscription.id,
-      eventId: event.id,
-      topic: event.topic,
-      resourceType: event.resourceType,
-      resourceId: event.resourceId,
-    }));
-    for (const chunk of chunkInsertRowsForD1(rows, (row) => db.insert(webhookDeliveries).values(row))) {
-      await db.insert(webhookDeliveries).values(chunk).onConflictDoNothing();
-    }
-    // A redelivered event re-sends only deliveries still waiting.
-    const pending = await db
-      .select({ id: webhookDeliveries.id })
-      .from(webhookDeliveries)
-      .where(and(eq(webhookDeliveries.eventId, event.id), eq(webhookDeliveries.status, "pending")))
-      .all();
-    return pending.map((row): EventDelivery => ({ type: "webhooks.deliver", deliveryId: row.id }));
+    const rows = pairs.flatMap((pair) => {
+      const event = byId.get(pair.eventId);
+      if (!event || !topicMatchesAnyFilter(event.topic, parseStoredTopicFilters(pair.topics))) return [];
+      return [{ i: pair.id, e: event.id, t: event.topic, rt: event.resourceType, r: event.resourceId }];
+    }).map((row, index) => ({ ...row, d: newDeliveryId(nowMs + index) }));
+    if (rows.length === 0) return [];
+
+    // One round trip: every delivery row (a bound JSON value per part, each
+    // far below D1's value limit), then those still waiting. A redelivered
+    // event adds nothing and re-sends only its waiting deliveries.
+    const inserts = jsonChunks(rows).map((part) =>
+      // Every column, in the table's order (an INSERT ... SELECT names them all).
+      db.insert(webhookDeliveries).select(sql`
+        SELECT CAST(json_extract(value, '$.d') AS TEXT), CAST(json_extract(value, '$.i') AS TEXT), CAST(json_extract(value, '$.e') AS TEXT),
+          'event', CAST(json_extract(value, '$.t') AS TEXT), CAST(json_extract(value, '$.rt') AS TEXT), CAST(json_extract(value, '$.r') AS TEXT),
+          'pending', 0, unixepoch(), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, unixepoch(), unixepoch()
+        FROM json_each(${part}) WHERE 1 = 1`).onConflictDoNothing() as unknown as BatchItem<"sqlite">);
+    const results = await safeBatch(db, [
+      ...inserts,
+      db.select({ id: webhookDeliveries.id, eventId: webhookDeliveries.eventId })
+        .from(webhookDeliveries)
+        .where(and(
+          sql`${webhookDeliveries.eventId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(rows.map((row) => row.e))])}))`,
+          eq(webhookDeliveries.status, "pending"),
+        )) as unknown as BatchItem<"sqlite">,
+    ] as unknown as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+    const pending = results[results.length - 1];
+    return (pending as Array<{ id: string; eventId: string }>)
+      .map((row): FannedOutDelivery => ({ type: "webhooks.deliver", deliveryId: row.id, eventId: row.eventId }));
   },
 };
 
@@ -361,12 +376,13 @@ export async function processWebhookDelivery(options: {
     return { status: "skipped", deliveryId, reason: exists ? "not_due" : "missing" };
   }
 
-  const [subscription, eventRow] = await Promise.all([
-    db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, delivery.subscriptionId)).get(),
-    delivery.eventId
-      ? db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId)).get()
-      : Promise.resolve(undefined),
+  // The endpoint and the event in one round trip.
+  const [subscriptionRows, eventRows] = await safeBatch(db, [
+    db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, delivery.subscriptionId)).limit(1),
+    db.select().from(eventOutbox).where(eq(eventOutbox.id, delivery.eventId ?? "")).limit(1),
   ]);
+  const subscription = (subscriptionRows as WebhookSubscription[])[0];
+  const eventRow = delivery.eventId ? (eventRows as EventOutboxRow[])[0] : undefined;
   if (!subscription || subscription.status !== "active") {
     await finishDelivery(db, delivery, claimId, { status: "cancelled", error: "subscription_disabled" });
     return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };

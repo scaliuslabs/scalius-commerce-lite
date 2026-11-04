@@ -107,9 +107,42 @@ export function normalizeDeliveryDestination(input: DeliveryDestination): Delive
     };
 }
 
-/** Region rows as a JSON text column: `[{ "zoneId", "countryCode", "adminArea", "postalPrefix" }]`. */
-function regionRowsJsonSql(countries: readonly string[]): SQL<string | null> {
-    return sql<string | null>`(SELECT '[' || group_concat(json_object('zoneId', destination_region.zone_id, 'countryCode', destination_region.country_code, 'adminArea', destination_region.admin_area, 'postalPrefix', destination_region.postal_prefix), ',') || ']' FROM ${deliveryZoneRegions} AS destination_region WHERE ${inJsonArray(sql`destination_region.country_code`, countries)})`;
+/**
+ * The region keys that can match a destination (`resolveDestinationZoneId`):
+ * its whole country, its admin area, and every prefix of its postal code.
+ * Admin areas are stored as their rules' code; a destination's is that code
+ * too (`normalizeDeliveryDestination`), or its text in upper case.
+ */
+export function destinationRegionKeys(destinations: readonly DeliveryDestination[]): Array<{ c: string; a: string; p: string }> {
+    const keys = new Map<string, { c: string; a: string; p: string }>();
+    const add = (c: string, a: string, p: string) => keys.set(`${c}|${a}|${p}`, { c, a, p });
+    for (const input of destinations) {
+        const destination = normalizeDeliveryDestination(input);
+        const country = destination.countryCode;
+        add(country, "", "");
+        if (destination.adminArea) {
+            add(country, destination.adminArea, "");
+            add(country, destination.adminArea.toLocaleUpperCase(), "");
+        }
+        const postal = destination.postalCode ?? "";
+        for (let length = 1; length <= Math.min(postal.length, MAX_POSTAL_PREFIX_LENGTH); length += 1) add(country, "", postal.slice(0, length));
+    }
+    return [...keys.values()];
+}
+
+/**
+ * The region rows that can match the destinations, as a JSON text column
+ * (`[{ "zoneId", "countryCode", "adminArea", "postalPrefix" }]`): one key seek
+ * each (at most 13 a destination: its country, its admin area as stored and
+ * in upper case, ten postal prefixes), never every region of the country.
+ */
+function regionRowsJsonSql(keys: ReadonlyArray<{ c: string; a: string; p: string }>): SQL<string | null> {
+    return sql<string | null>`(SELECT '[' || group_concat(json_object('zoneId', destination_region.zone_id, 'countryCode', destination_region.country_code, 'adminArea', destination_region.admin_area, 'postalPrefix', destination_region.postal_prefix), ',') || ']'
+        FROM json_each(${JSON.stringify(keys)}) AS region_key
+        INNER JOIN ${deliveryZoneRegions} AS destination_region
+          ON destination_region.country_code = CAST(json_extract(region_key.value, '$.c') AS TEXT)
+          AND destination_region.admin_area = CAST(json_extract(region_key.value, '$.a') AS TEXT)
+          AND destination_region.postal_prefix = CAST(json_extract(region_key.value, '$.p') AS TEXT))`;
 }
 
 /**
@@ -172,17 +205,17 @@ export interface DeliveryRateRow {
 }
 
 /**
- * Live, active rates by id. With `destinationCountries`, each row also
- * carries those countries' zone regions (`destinationRegions`), so checkout
- * resolves the destination's zone without another statement.
+ * Live, active rates by id. With `destinations`, each row also carries the
+ * zone regions that can match them (`destinationRegions`, keyed reads), so
+ * checkout resolves each destination's zone without another statement.
  */
 export function selectDeliveryRateRowsByIds(
     db: Database,
     rawIds: readonly string[],
-    destinationCountries: readonly string[] = [],
+    destinations: readonly DeliveryDestination[] = [],
 ) {
     const ids = [...new Set(rawIds.map((id) => id.trim()).filter(Boolean))];
-    const countries = [...new Set(destinationCountries.map((code) => normalizeMarketCountry(code)).filter((code): code is string => Boolean(code)))].sort();
+    const regionKeys = destinationRegionKeys(destinations);
     const query = db
         .select({
             id: shippingMethods.id,
@@ -199,7 +232,7 @@ export function selectDeliveryRateRowsByIds(
             kind: shippingMethods.kind,
             pickupAddress: shippingMethods.pickupAddress,
             pickupHours: shippingMethods.pickupHours,
-            destinationRegions: countries.length > 0 ? regionRowsJsonSql(countries) : sql<string | null>`NULL`,
+            destinationRegions: regionKeys.length > 0 ? regionRowsJsonSql(regionKeys) : sql<string | null>`NULL`,
             profileRates: profileRatesJsonSql(),
         })
         .from(shippingMethods);

@@ -108,37 +108,36 @@ export async function claimOrderNotificationDeliveryReceipt(
   | { claimed: true; receipt: OrderNotificationDeliveryReceiptClaim }
   | { claimed: false; reason: "accepted" | "delivered" | "skipped" | "busy" | "missing" }
 > {
-  await ensureOrderNotificationDeliveryReceipt(db, target);
-
+  // One statement: a new target is inserted already claimed; an existing one
+  // is claimed only while it is due (pending or failed past its backoff) or
+  // its processing lease expired. An accepted, delivered or skipped receipt
+  // never matches, so a target a provider took is never sent again.
   const claimId = createDeliveryReceiptClaimId();
   const rows = await db
-    .update(notificationDeliveryReceipts)
-    .set({
+    .insert(notificationDeliveryReceipts)
+    .values({
+      ...newReceiptValues(target),
       status: "processing",
-      provider: target.provider,
-      recipientMasked: target.recipientMasked,
+      attempts: 1,
       claimId,
       claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
-      attempts: sql`${notificationDeliveryReceipts.attempts} + 1`,
-      lastError: null,
       lastAttemptAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
     })
-    .where(
-      and(
-        eq(notificationDeliveryReceipts.receiptKey, target.receiptKey),
-        or(
-          and(
-            inArray(notificationDeliveryReceipts.status, ["pending", "failed"]),
-            lte(notificationDeliveryReceipts.nextAttemptAt, sql`unixepoch()`),
-          ),
-          and(
-            eq(notificationDeliveryReceipts.status, "processing"),
-            lte(notificationDeliveryReceipts.claimExpiresAt, sql`unixepoch()`),
-          ),
-        ),
-      ),
-    )
+    .onConflictDoUpdate({
+      target: notificationDeliveryReceipts.receiptKey,
+      set: {
+        status: "processing",
+        provider: target.provider,
+        recipientMasked: target.recipientMasked,
+        claimId,
+        claimExpiresAt: sql`unixepoch() + ${PROCESSING_LEASE_SECONDS}`,
+        attempts: sql`${notificationDeliveryReceipts.attempts} + 1`,
+        lastError: null,
+        lastAttemptAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      },
+      setWhere: claimableCondition(),
+    })
     .returning({
       id: notificationDeliveryReceipts.id,
       receiptKey: notificationDeliveryReceipts.receiptKey,
@@ -160,15 +159,74 @@ export async function claimOrderNotificationDeliveryReceipt(
     };
   }
 
-  const existing = await selectDeliveryReceiptByKey(db, target.receiptKey);
-  if (!existing) return { claimed: false, reason: "missing" };
+  return { claimed: false, reason: await unclaimedReason(db, target.receiptKey) };
+}
+
+/** Why a target could not be claimed: it is settled, another worker holds it, or it is gone. */
+async function unclaimedReason(db: Database, receiptKey: string): Promise<"accepted" | "delivered" | "skipped" | "busy" | "missing"> {
+  const existing = await selectDeliveryReceiptByKey(db, receiptKey);
+  if (!existing) return "missing";
   if (TERMINAL_STATUSES.has(existing.status as OrderNotificationDeliveryReceiptStatus)) {
-    return {
-      claimed: false,
-      reason: existing.status as "accepted" | "delivered" | "skipped",
-    };
+    return existing.status as "accepted" | "delivered" | "skipped";
   }
-  return { claimed: false, reason: "busy" };
+  return "busy";
+}
+
+/**
+ * A target that will not be sent (no recipient, a paused provider, the
+ * message turned off), recorded skipped in one statement under the same
+ * claim rule as `claimOrderNotificationDeliveryReceipt`: a settled or busy
+ * receipt is left as it is and its state returned.
+ */
+export async function recordSkippedOrderNotificationDeliveryReceipt(
+  db: Database,
+  target: OrderNotificationDeliveryTarget,
+  reason: string,
+  result: OrderNotificationDeliveryReceiptResult = {},
+): Promise<
+  | { recorded: true }
+  | { recorded: false; reason: "accepted" | "delivered" | "skipped" | "busy" | "missing" }
+> {
+  const redacted = isCodeBearingNotificationType(target.notificationType);
+  const skipped = {
+    status: "skipped" as const,
+    provider: result.provider ?? target.provider,
+    recipientMasked: target.recipientMasked,
+    providerMessageId: result.providerMessageId ?? null,
+    providerStatus: normalizeRawResponse(result.providerStatus ?? reason),
+    rawResponse: redacted ? null : normalizeRawResponse(result.rawResponse),
+    claimId: null,
+    claimExpiresAt: null,
+    lastError: normalizeError(reason),
+    lastAttemptAt: sql`unixepoch()`,
+    skippedAt: sql`unixepoch()`,
+    updatedAt: sql`unixepoch()`,
+  };
+  const rows = await db
+    .insert(notificationDeliveryReceipts)
+    .values({ ...newReceiptValues(target), ...skipped, attempts: 1 })
+    .onConflictDoUpdate({
+      target: notificationDeliveryReceipts.receiptKey,
+      set: { ...skipped, attempts: sql`${notificationDeliveryReceipts.attempts} + 1` },
+      setWhere: claimableCondition(),
+    })
+    .returning({ id: notificationDeliveryReceipts.id });
+  if (rows[0]) return { recorded: true };
+  return { recorded: false, reason: await unclaimedReason(db, target.receiptKey) };
+}
+
+/** A receipt a worker may take: due (pending, or failed past its backoff), or processing past its lease. */
+function claimableCondition() {
+  return or(
+    and(
+      inArray(notificationDeliveryReceipts.status, ["pending", "failed"]),
+      lte(notificationDeliveryReceipts.nextAttemptAt, sql`unixepoch()`),
+    ),
+    and(
+      eq(notificationDeliveryReceipts.status, "processing"),
+      lte(notificationDeliveryReceipts.claimExpiresAt, sql`unixepoch()`),
+    ),
+  );
 }
 
 export async function markOrderNotificationDeliveryReceiptAccepted(
@@ -249,13 +307,10 @@ export async function markOrderNotificationDeliveryReceiptFailed(
     ));
 }
 
-async function ensureOrderNotificationDeliveryReceipt(
-  db: Database,
-  target: OrderNotificationDeliveryTarget,
-): Promise<void> {
+function newReceiptValues(target: OrderNotificationDeliveryTarget): DeliveryReceiptInsert {
   const now = Math.floor(Date.now() / 1000);
   const dueNow = Math.max(0, now - 1);
-  const values: DeliveryReceiptInsert = {
+  return {
     id: createDeliveryReceiptId(),
     receiptKey: target.receiptKey,
     outboxId: target.outboxId,
@@ -271,13 +326,6 @@ async function ensureOrderNotificationDeliveryReceipt(
     createdAt: now,
     updatedAt: now,
   };
-
-  try {
-    await db.insert(notificationDeliveryReceipts).values(values);
-  } catch (error) {
-    const existing = await selectDeliveryReceiptByKey(db, target.receiptKey);
-    if (!existing) throw error;
-  }
 }
 
 function receiptSubject(target: OrderNotificationDeliveryTarget): {

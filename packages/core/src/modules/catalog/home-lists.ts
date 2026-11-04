@@ -233,7 +233,7 @@ export function planHomeProductLists(
             name: categories.name,
             slug: categories.slug,
             canonicalPath: categories.canonicalPath,
-            ...translationColumns(translation, "category", categories.id),
+            ...translationColumns(translation, "category", categories.id, { fields: NAME_FIELDS }),
         }).from(categories).where(and(
             sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
             ...publicCategoryConditions(),

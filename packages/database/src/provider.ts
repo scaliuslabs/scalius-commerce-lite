@@ -53,9 +53,17 @@ export function registerDatabaseProvider<T extends object>(database: T, provider
   return database;
 }
 
-/** The provider a composed client was registered with (D1 when none). */
+/**
+ * The provider a composed client was registered with (D1 when none). A handle
+ * derived from a registered client (`Object.create(client)`, such as a
+ * scoped-read handle) reports its client's provider.
+ */
 export function registeredDatabaseProvider(database: object): DatabaseProvider {
-  return providerByDatabase.get(database) ?? "d1";
+  for (let current: object | null = database; current; current = Object.getPrototypeOf(current) as object | null) {
+    const provider = providerByDatabase.get(current);
+    if (provider) return provider;
+  }
+  return "d1";
 }
 
 export interface DatabaseEnvironment extends Record<string, unknown> {

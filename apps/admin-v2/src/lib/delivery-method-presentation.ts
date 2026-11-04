@@ -1,9 +1,7 @@
 import { translate } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import {
-  formatSavedMinorAmount,
-  type SavedOrderMoneySummary,
-} from "./order-tax-presentation";
+import type { SavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMinorAmount } from "./order-money-format";
 
 export interface DeliveryMethodSnapshotFields {
   shippingMethodName?: string | null;

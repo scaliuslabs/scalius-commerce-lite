@@ -1,7 +1,7 @@
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import { countryDisplayName, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { addressRulesFor, formatAddressLines } from "@scalius/shared/address-metadata";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
@@ -23,7 +23,13 @@ import {
   type NotificationVariableValues,
   type OrderEmailFacts,
 } from "./notification-templates";
-import { readStoreIdentity } from "./store-messages";
+import { resolveStoreIdentity, storeIdentityStatements } from "./store-messages";
+import { notificationsDocument, notificationTemplatesDocument } from "./documents";
+import { emailDocument } from "../settings";
+import { rememberSettingsDocuments, selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
+
+/** The notification, template and email documents an order message's channels read. */
+const MESSAGE_DOCUMENTS = [notificationsDocument, notificationTemplatesDocument, emailDocument];
 
 export interface OrderMessageInput {
   orderId: string;
@@ -38,6 +44,8 @@ export interface OrderMessageInput {
 export interface OrderMessageContext {
   event: OrderNotificationType;
   language: MessageLanguage;
+  /** Where the buyer is reached: the order's saved contact and account. */
+  contact: { email: string | null; phone: string | null; customerId: string | null };
   variables: NotificationVariableValues;
   facts: OrderEmailFacts;
 }
@@ -79,10 +87,12 @@ function shippingAddressLines(order: {
 }
 
 // Read only persisted purchase facts, never today's catalog or an invoice issuance.
-async function readOrderFacts(db: Database, orderId: string) {
+function orderFactStatements(db: Database, orderId: string) {
   const rows = db.select({ order: {
     customerName: orders.customerName,
     customerPhone: orders.customerPhone,
+    customerEmail: orders.customerEmail,
+    customerId: orders.customerId,
     shippingAddress: orders.shippingAddress,
     shippingAddressLine2: orders.shippingAddressLine2,
     shippingCountryCode: orders.shippingCountryCode,
@@ -149,16 +159,24 @@ async function readOrderFacts(db: Database, orderId: string) {
     )
     .orderBy(asc(orderDiscountAllocations.promotionName));
   // An installed app's discounts (`app_discount` order facts), after the store's.
-  const appDiscounts = selectOrderAppFactRows(db, [orderId], ["app_discount"]).all() as Promise<OrderAppFactRow[]>;
-  const [orderRows, discountRows, appRows] = await Promise.all([rows, discounts, appDiscounts]);
+  const appDiscounts = selectOrderAppFactRows(db, [orderId], ["app_discount"]);
+  return [rows, discounts, appDiscounts] as const;
+}
+
+type OrderFactRows = {
+  [K in keyof ReturnType<typeof orderFactStatements>]: Awaited<ReturnType<typeof orderFactStatements>[K]>;
+};
+
+/** The order's facts from `orderFactStatements` results; null when the order is gone. */
+function resolveOrderFacts([orderRows, discountRows, appRows]: OrderFactRows) {
   const order = orderRows[0]?.order;
-  if (!order) throw new Error("Order email details are unavailable");
+  if (!order) return null;
   return {
     order,
     items: orderRows.flatMap((row) => row.item ? [row.item] : []),
     discounts: [
       ...discountRows.map((row) => ({ ...row, appId: null as string | null, amountMinor: Number(row.amountMinor) || 0 })),
-      ...resolveOrderAppFacts(appRows).discounts.flatMap((fact, position) => {
+      ...resolveOrderAppFacts(appRows as OrderAppFactRow[]).discounts.flatMap((fact, position) => {
         const id = `app:${fact.pluginId}:${position}`;
         return [
           ...(fact.amountMinor > 0 ? [{ promotionId: id, appId: fact.pluginId, name: fact.title, code: fact.code, target: "line" as const, amountMinor: fact.amountMinor }] : []),
@@ -169,7 +187,7 @@ async function readOrderFacts(db: Database, orderId: string) {
   };
 }
 
-type OrderFacts = Awaited<ReturnType<typeof readOrderFacts>>;
+type OrderFacts = NonNullable<ReturnType<typeof resolveOrderFacts>>;
 
 /**
  * The line's frozen buyer inputs as "Engraving: Anika (+৳200)", read from the
@@ -257,8 +275,8 @@ const CLOSED_STATUSES = new Set(["cancelled", "returned", "refunded", "partially
 
 /** The order's facts and variable values in the store's language, for every channel. */
 /** The parcel a shipped message is about: the one with the queued tracking ID, else the newest. */
-async function readShipment(db: Database, orderId: string, trackingId: string) {
-  const shipments = await db.select({
+function shipmentStatement(db: Database, orderId: string) {
+  return db.select({
     providerType: deliveryShipments.providerType,
     trackingId: deliveryShipments.trackingId,
     trackingUrl: deliveryShipments.trackingUrl,
@@ -267,6 +285,9 @@ async function readShipment(db: Database, orderId: string, trackingId: string) {
     .where(eq(deliveryShipments.orderId, orderId))
     .orderBy(desc(deliveryShipments.createdAt), desc(deliveryShipments.id))
     .limit(10);
+}
+
+function resolveShipment(shipments: Awaited<ReturnType<typeof shipmentStatement>>, trackingId: string) {
   const shipment = shipments.find((row) => trackingId && row.trackingId === trackingId) ?? shipments[0];
   if (!shipment) return null;
   const tracking = trackingId || shipment.trackingId?.trim() || "";
@@ -295,12 +316,33 @@ export function pendingDownloadNames(
 }
 
 export async function readOrderMessageContext(input: OrderMessageInput, db: Database): Promise<OrderMessageContext> {
+  const context = await findOrderMessageContext(input, db);
+  if (!context) throw new Error("Order email details are unavailable");
+  return context;
+}
+
+/**
+ * The order's message context in one round trip (its facts, the store's
+ * identity and, for a shipped message, its parcel); null when the order is gone.
+ */
+export async function findOrderMessageContext(input: OrderMessageInput, db: Database): Promise<OrderMessageContext | null> {
   const queuedTrackingId = String(input.data?.trackingId ?? "").trim();
-  const [facts, store, shipment] = await Promise.all([
-    readOrderFacts(db, input.orderId),
-    readStoreIdentity(db),
-    input.type === "order_shipped" ? readShipment(db, input.orderId, queuedTrackingId) : null,
+  const factStatements = orderFactStatements(db, input.orderId);
+  const identityStatements = storeIdentityStatements(db);
+  const results = await safeBatch(db, [
+    ...factStatements,
+    ...identityStatements,
+    // The documents every channel of the message reads next: one statement here, none later on a scoped handle.
+    selectSettingsDocuments(db, MESSAGE_DOCUMENTS),
+    ...(input.type === "order_shipped" ? [shipmentStatement(db, input.orderId)] : []),
   ]);
+  const facts = resolveOrderFacts(results.slice(0, factStatements.length) as unknown as OrderFactRows);
+  if (!facts) return null;
+  const documentsAt = factStatements.length + identityStatements.length;
+  const store = await resolveStoreIdentity(results.slice(factStatements.length, documentsAt), db);
+  rememberSettingsDocuments(db, MESSAGE_DOCUMENTS, results[documentsAt] as SettingsDocumentRow[]);
+  const shipmentRows = results[documentsAt + 1] as Awaited<ReturnType<typeof shipmentStatement>> | undefined;
+  const shipment = shipmentRows ? resolveShipment(shipmentRows, queuedTrackingId) : null;
   const { order, items } = facts;
   const { language } = store;
 
@@ -350,6 +392,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
   return {
     event: input.type,
     language,
+    contact: { email: order.customerEmail, phone: order.customerPhone, customerId: order.customerId },
     variables: {
       customer_name: order.customerName?.trim() || input.name?.trim() || "",
       order_number: formatOrderNumber(order.orderNumber, input.orderId),

@@ -271,8 +271,12 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         destination.zone,
         destination.area,
     ]));
-    // The zone regions of every destination country ride on the rate rows.
-    const destinationCountries = [...new Set(destinations.map((destination) => destination.countryCode))];
+    // The zone regions that can match each destination ride on the rate rows.
+    const regionDestinations = inputs.map((input, index) => ({
+        ...destinations[index]!,
+        adminArea: input.shippingAdminArea ?? null,
+        postalCode: input.shippingPostalCode ?? null,
+    }));
     const shippingMethodIds = uniqueNonEmpty(
         inputs.map((input) => input.shippingMethodId),
     );
@@ -284,7 +288,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectStorefrontCartVariantRows(db, productIds, variantIds, salesChannelId),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
-        selectDeliveryRateRowsByIds(db, shippingMethodIds, destinationCountries),
+        selectDeliveryRateRowsByIds(db, shippingMethodIds, regionDestinations),
         // Quantity bundle tiers price the cart; any change bumps the revision below.
         selectActiveProductBundleRows(db, productIds),
         db.select({

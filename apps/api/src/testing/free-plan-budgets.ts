@@ -84,6 +84,23 @@
  * checks the event's legacy key in its own insert batch (exact event ids,
  * one round trip), and the batch that lands a payment closes the
  * off-session commands it settles (39 statements, 25 calls).
+ *
+ * Order notification (2026-11-03): one order_created message (buyer email,
+ * staff push without Firebase, one staff email) was 37 D1 calls: the settings
+ * documents read 9 times, the order and its context 6, provider health twice
+ * per channel, 3 calls per receipt and the staff alert recorded twice. A
+ * dispatch now reads its context and documents in one batch on a scoped
+ * handle, each receipt claim or skip is one statement and the staff alert is
+ * one batch recorded once: 12 calls.
+ *
+ * Event drain (2026-11-03): a drain claimed and fanned out each event on its
+ * own (a claim, a subscriber read, an insert and a re-read per target, a
+ * mark: about 8 calls an event), so Free took 2 events a tick. One statement
+ * now claims the drain, each target reads its subscribers once and writes
+ * every delivery in one round trip, and one batch marks the drain: 6 calls
+ * whatever the count. Free now drains 20 events and sends 4 deliveries a
+ * tick (2 after a write, in the write's invocation): 24 calls with 5 apps
+ * and 3 webhooks (160 delivery rows).
  */
 import type { WorkersPlan } from "@scalius/shared/plan-limits";
 
@@ -141,6 +158,8 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 295, fullScans: 7 },
     "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
+    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
+    "event-drain-5-apps-3-webhooks": { d1Calls: 24, d1Statements: 38, externalFetches: 3, rowsWritten: 250, rowsRead: 375, fullScans: 0 },
   },
   paid: {
     "staff-sign-in": { d1Calls: 6, d1Statements: 6, externalFetches: 0, rowsWritten: 4, rowsRead: 8, fullScans: 0 },
@@ -177,5 +196,7 @@ export const BUDGETS: Record<WorkersPlan, Record<string, Budget>> = {
     "bulk-run-chunk": { d1Calls: 7, d1Statements: 195, externalFetches: 0, rowsWritten: 1142, rowsRead: 295, fullScans: 7 },
     "order-3-line-commit-tracking": { d1Calls: 45, d1Statements: 108, externalFetches: 3, rowsWritten: 153, rowsRead: 102, fullScans: 28 },
     "payment-webhook-confirmed": { d1Calls: 25, d1Statements: 39, externalFetches: 1, rowsWritten: 14, rowsRead: 31, fullScans: 1 },
+    "notification-order-created": { d1Calls: 12, d1Statements: 26, externalFetches: 0, rowsWritten: 12, rowsRead: 31, fullScans: 5 },
+    "event-drain-5-apps-3-webhooks": { d1Calls: 109, d1Statements: 166, externalFetches: 25, rowsWritten: 867, rowsRead: 992, fullScans: 0 },
   },
 };

@@ -26,7 +26,8 @@ import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment } from "~/
 import { orderTimelineWindowOptions } from "~/lib/api-query-options/orders";
 import { readAdminApiErrorCode } from "~/lib/admin-api-error";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
-import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
+import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
 import { formatOrderDay, formatOrderTime, formatOrderTimestamp } from "./formatters";
 import type { Order } from "./types";

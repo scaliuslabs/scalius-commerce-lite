@@ -3,7 +3,7 @@
 // store-credit cards refunds issued. Cards are shown by their last 4 only.
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
-import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
+import { formatSavedMinorAmount } from "~/lib/order-money-format";
 import { useMessages } from "~/i18n";
 import { giftCardTenderMessages as giftCardOrderMessages } from "~/i18n/gift-card-tenders";
 import type { Order } from "./types";

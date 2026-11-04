@@ -454,7 +454,7 @@ async function sendMessageToStaff(
     console.warn("[Notifications] Failed to read staff message channels, defaulting to push:", compactProviderLogDetail(error));
   }
   if (channels.length === 0) return buildDispatchResult(outcomes);
-  await recordStaffAlert(db, claim.outboxId, true);
+  await recordStaffAlert(db, { outboxId: claim.outboxId, kind: claim.notificationType }, true);
 
   const [party, store] = await Promise.all([readThreadParty(db, thread), readStoreIdentity(db)]);
   const copy = MESSAGE_COPY[store.language].conversation;

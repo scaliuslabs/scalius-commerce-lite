@@ -36,7 +36,7 @@ export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingPr
     id: products.id,
     name: products.name,
     slug: products.slug,
-    ...translationColumns(translation, "product", products.id),
+    ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
     ...buyerPricingSelection(buyerPricing),
     availableForSale: buyerPricing.availableForSale,
     quickAddEligible: quickAddEligibleSql(buyerPricing).as("collection_quick_add_eligible"),

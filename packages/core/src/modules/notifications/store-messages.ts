@@ -9,7 +9,7 @@ import { and, eq, notInArray, sql } from "drizzle-orm";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { businessDocument, type BusinessInfo, storeDisplayName } from "../settings";
 import { platformDocument } from "../platform";
-import { selectSettingsDocuments } from "../../settings-store";
+import { rememberSettingsDocuments, selectSettingsDocuments } from "../../settings-store";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
 
@@ -32,12 +32,19 @@ export async function readStoreName(db: Database): Promise<string | null> {
   }
 }
 
-/** Bangla when the store default language (the root presence's, MARKETS-DESIGN D9) is Bangla, else English. */
-export async function readStoreLanguage(db: Database): Promise<MessageLanguage> {
-  const [root] = await db.select({ locale: marketPresences.locale }).from(marketPresences)
+function selectStoreLanguage(db: Database) {
+  return db.select({ locale: marketPresences.locale }).from(marketPresences)
     .where(and(eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, "")))
     .limit(1);
-  return checkoutLanguageBaseCode(root?.locale) === "bn" ? "bn" : "en";
+}
+
+function languageOf(rows: ReadonlyArray<{ locale: string | null }>): MessageLanguage {
+  return checkoutLanguageBaseCode(rows[0]?.locale) === "bn" ? "bn" : "en";
+}
+
+/** Bangla when the store default language (the root presence's, MARKETS-DESIGN D9) is Bangla, else English. */
+export async function readStoreLanguage(db: Database): Promise<MessageLanguage> {
+  return languageOf(await selectStoreLanguage(db));
 }
 
 /**
@@ -51,28 +58,45 @@ function selectPublishedLogo(db: Database) {
   )).limit(1);
 }
 
-export async function readStoreIdentity(db: Database): Promise<StoreIdentity> {
-  const [[rows, logoRows], language] = await Promise.all([
-    safeBatch(db, [
-      selectSettingsDocuments(db, [businessDocument, platformDocument]),
-      selectPublishedLogo(db),
-    ]),
-    readStoreLanguage(db),
-  ]);
+/** The statements a store identity is read from, for a caller's own batch (`resolveStoreIdentity`). */
+export function storeIdentityStatements(db: Database) {
+  return [
+    selectSettingsDocuments(db, [businessDocument, platformDocument]),
+    selectPublishedLogo(db),
+    selectStoreLanguage(db),
+  ] as const;
+}
+
+/**
+ * The store identity from the results of `storeIdentityStatements`, in order.
+ * With `db`, a scoped handle keeps the documents it read (`withScopedReads`).
+ */
+export async function resolveStoreIdentity(results: readonly unknown[], db?: Database): Promise<StoreIdentity> {
+  const [rows, logoRows, languageRows] = results as [
+    Awaited<ReturnType<typeof selectSettingsDocuments>>,
+    Array<{ objectKey: string; kind: string }>,
+    Array<{ locale: string | null }>,
+  ];
+  if (db) rememberSettingsDocuments(db, [businessDocument, platformDocument], rows);
   const [business, platform] = await Promise.all([
-    businessDocument.fromRows(rows as Awaited<ReturnType<typeof selectSettingsDocuments>>),
-    platformDocument.fromRows(rows as Awaited<ReturnType<typeof selectSettingsDocuments>>),
+    businessDocument.fromRows(rows),
+    platformDocument.fromRows(rows),
   ]);
-  const logo = (logoRows as Array<{ objectKey: string; kind: string }>).find((row) => row.kind === "image");
+  const logo = logoRows.find((row) => row.kind === "image");
   const name = storeDisplayName(business.value, platform.value.storefrontUrl);
   return {
     name,
     // Messages leave the request (queues, cron): the Platform media URL makes the logo absolute.
     logoUrl: logo ? absoluteHttpUrl(getCurrentPublicMediaUrl(logo.objectKey, platform.value.mediaUrl.trim() || undefined)) : null,
-    language,
+    language: languageOf(languageRows),
     business: business.value,
     nameFromAddress: name !== null && !storeDisplayName(business.value, ""),
   };
+}
+
+/** The store's name, logo and message language: one round trip. */
+export async function readStoreIdentity(db: Database): Promise<StoreIdentity> {
+  return resolveStoreIdentity(await safeBatch(db, storeIdentityStatements(db)), db);
 }
 
 function absoluteHttpUrl(value: string): string | null {

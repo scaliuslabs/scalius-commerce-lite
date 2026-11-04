@@ -618,7 +618,7 @@ async function readStorefrontCatalogResults(
             id: products.id,
             name: products.name,
             productCondition: products.productCondition,
-            ...translationColumns(translation, "product", products.id),
+            ...translationColumns(translation, "product", products.id, { fields: PRODUCT_CARD_FIELDS }),
             ...buyerStatePricingSelection(cardSku),
             slug: products.slug,
             freeDelivery: products.freeDelivery,
@@ -790,7 +790,7 @@ async function readStorefrontCatalogResults(
                     id: categories.id,
                     name: categories.name,
                     slug: categories.slug,
-                    ...translationColumns(translation, "category", categories.id),
+                    ...translationColumns(translation, "category", categories.id, { fields: NAME_FIELDS }),
                     subcategoryId: subtreeParentId
                         ? sql<string | null>`(
                             SELECT child_link.ancestor_id FROM category_closure AS child_link

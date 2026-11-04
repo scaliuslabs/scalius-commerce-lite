@@ -39,12 +39,11 @@ import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import {
-  formatSavedMajorAmount,
-  formatSavedMinorAmount,
   isFreeOrderLine,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
-} from "~/lib/order-tax-presentation";
+} from "@scalius/shared/order-money-presentation";
+import { formatSavedMajorAmount, formatSavedMinorAmount } from "~/lib/order-money-format";
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { LineProperties } from "./LineProperties";
 import { OrderFulfillmentLocation } from "./OrderFulfillmentLocation";
