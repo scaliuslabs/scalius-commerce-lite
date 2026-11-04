@@ -76,6 +76,13 @@ const ROW_GRID_KIND = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items
 const ROW_GRID_NO_QUANTITY = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_2.25rem]";
 const ROW_GRID_NO_QUANTITY_KIND = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_7.5rem_2.25rem]";
 
+/**
+ * A phone's second line of a row: price and quantity side by side across the
+ * whole row, so a price like "৳ 60,000.00" reads in full at 360px (under the
+ * name alone, half of it is too narrow). Wider, they are the row's own columns.
+ */
+const PHONE_FIELDS = "col-span-full row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents";
+
 /** The table's columns: the grid, where the row menu sits, and how wide the bulk bar is. */
 type RowLayout = { grid: string; actions: string; bulkSpan: string; kind: boolean; quantity: boolean };
 const ROW_LAYOUTS: Record<"base" | "kind" | "noQuantity" | "noQuantityKind", RowLayout> = {
@@ -690,7 +697,7 @@ const VariantRow = React.memo(function VariantRow({
         </div>
         {photoError ? <p className="text-body text-destructive">{photoError}</p> : null}
       </div>
-      <div className="col-span-2 col-start-3 row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents">
+      <div className={PHONE_FIELDS}>
         <div className="min-w-0">
           <span className="block text-body text-muted-foreground md:hidden">{t("price")}</span>
           {readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("priceFor", { name })}: </span>{money.fmt(variant.price)}</p> : <MoneyInput
@@ -837,14 +844,15 @@ const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated,
         type="button"
         onClick={() => onToggle(group.valueId)}
         aria-expanded={open}
-        className="inline-flex max-w-full items-center gap-1 justify-self-start rounded-sm text-start font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        // The variant rows' name target: 44px to touch, 36px with a mouse, the height of the fields beside it (C2, C6).
+        className="inline-flex h-11 max-w-full items-center gap-1 justify-self-start rounded-sm text-start font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:pointer-fine:h-9"
       >
         {open ? <ChevronDown aria-hidden="true" className="size-4 shrink-0" /> : <ChevronRight aria-hidden="true" className="size-4 shrink-0" />}
         <span className="truncate">{group.label}</span>
         <span className="shrink-0 font-normal text-muted-foreground">{t("variantCount", { count: group.variants.length })}</span>
         <InheritedPhotoNote value={commonImage} images={images} className="font-normal text-muted-foreground" />
       </button>
-      <div className="col-span-2 col-start-3 row-start-2 grid grid-cols-2 gap-2 pt-2 md:contents">
+      <div className={PHONE_FIELDS}>
         {readOnly ? <p className="py-2 text-body tabular-nums"><span className="sr-only">{t("priceForGroup", { name: group.label })}: </span>{commonPrice === undefined ? prices.length ? `${money.fmt(Math.min(...prices))}–${money.fmt(Math.max(...prices))}` : "—" : money.fmt(commonPrice)}</p> : <MoneyInput
           currencyCode={money.code}
           value={commonPrice ?? null}
