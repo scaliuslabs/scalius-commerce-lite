@@ -5,7 +5,8 @@
  * autosave status. Centre: the page switcher, the previewed market and
  * language, the device and the frame's size. Right: the inspector, undo and
  * redo, history, more, and Publish. Narrower windows move the less used
- * controls into More.
+ * controls into More; a phone moves Redo there too, so the page switcher
+ * keeps room for the page's name.
  */
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -266,9 +267,12 @@ export function EditorTopBar({
         <TopBarButton label={t("undo")} shortcut={shortcutCaps("undo")} disabled={!canUndo || !canEdit} onClick={onUndo} aria-keyshortcuts="Meta+Z Control+Z">
           <Undo2 aria-hidden="true" />
         </TopBarButton>
-        <TopBarButton label={t("redo")} shortcut={shortcutCaps("redo")} disabled={!canRedo || !canEdit} onClick={onRedo} aria-keyshortcuts="Meta+Shift+Z Control+Y">
-          <Redo2 aria-hidden="true" />
-        </TopBarButton>
+        {/* A phone keeps the bar's room for the page's name: Redo waits in More there. */}
+        {phone ? null : (
+          <TopBarButton label={t("redo")} shortcut={shortcutCaps("redo")} disabled={!canRedo || !canEdit} onClick={onRedo} aria-keyshortcuts="Meta+Shift+Z Control+Y">
+            <Redo2 aria-hidden="true" />
+          </TopBarButton>
+        )}
         {phone ? null : (
           <TopBarButton label={t("versions")} onClick={onHistory} className="hidden lg:grid">
             <History aria-hidden="true" />
@@ -281,6 +285,7 @@ export function EditorTopBar({
             </TopBarButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {phone ? <DropdownMenuItem disabled={!canRedo || !canEdit} onSelect={onRedo}><Redo2 aria-hidden="true" />{t("redo")}</DropdownMenuItem> : null}
             <DropdownMenuItem className="lg:hidden" onSelect={onHistory}><History aria-hidden="true" />{t("versions")}</DropdownMenuItem>
             <DropdownMenuItem className="lg:hidden" onSelect={() => onInspector(!inspector)}>
               <MousePointer2 aria-hidden="true" />{t(inspector ? "inspectorOff" : "inspectorOn")}
