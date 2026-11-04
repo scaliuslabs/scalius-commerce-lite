@@ -33,7 +33,7 @@ import {
 import { canOperateExistingPayments } from "./gateways/port";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
-import { applyInventoryForStatusChangeWithImpact } from "../inventory";
+import { applyInventoryForStatusChangeWithImpact, isOrderInventoryConflictError, prepareInventoryForStatusChange } from "../inventory";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import {
@@ -827,8 +827,9 @@ export async function refundNotificationOutboxId(dedupeKey: string): Promise<str
  * import from the provider) runs it, so each gets the line, the notice and
  * the settlement exactly once. A batch that loses its guard re-reads and
  * tries again (an attempt finished meanwhile is left as it is). Stock of a
- * fully refunded, cancelled order is released once its batch committed (a
- * repeat refund of the order releases what a stopped run left).
+ * fully refunded, cancelled order is released in that batch, behind its
+ * guard on the order's version; only stock its location refuses to take back
+ * is released after the batch, which then reports the refusal.
  * `actorUserId` is the staff member the line and the settlement name.
  */
 export async function finalizeAcceptedRefundAttemptIds(
@@ -864,6 +865,8 @@ export async function finalizeAcceptedRefundAttemptIds(
     for (const orderId of orderIds) {
         let orderAttempts = attempts.filter((attempt) => attempt.orderId === orderId);
         let read = reads.get(orderId)!;
+        // Stock the location can't take back is released after the batch instead (its refusal reaches the caller).
+        let stockInBatch = true;
         for (let round = 0; ; round += 1) {
             const { order, currency, paymentRows } = read;
             const paymentState = computePaymentStateFromLedger({
@@ -900,6 +903,10 @@ export async function finalizeAcceptedRefundAttemptIds(
                     }));
                 }
             }
+            // The stock of the cancel moves in the cancel's batch, behind its guard on the order's version.
+            const inventory = shouldReleaseInventory && stockInBatch
+                ? await prepareInventoryForStatusChange(db, orderId, OrderStatus.CANCELLED)
+                : null;
             const guard = sql.join([
                 sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version})`,
                 attemptsStillAsRead(orderAttempts),
@@ -931,10 +938,15 @@ export async function finalizeAcceptedRefundAttemptIds(
                     }).where(inJsonArray(refundAttempts.id, orderAttempts.map((attempt) => attempt.id))),
                     ...(announcement?.statements ?? []),
                     ...settlements.flatMap((settlement) => settlement.statements),
+                    ...(inventory?.statements ?? []),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
                 ] as any);
             } catch (error: unknown) {
-                if (!isBatchGuardError(error, REFUND_FINALIZE_CONFLICT)) throw error;
+                if (inventory?.translateError(error)) {
+                    stockInBatch = false;
+                    continue;
+                }
+                if (!isBatchGuardError(error, REFUND_FINALIZE_CONFLICT) && !isOrderInventoryConflictError(error)) throw error;
                 if (round >= FINALIZE_CONFLICT_RETRIES) {
                     throw new ConflictError("Refund settlement was recorded, but local order reconciliation lost a concurrent update.");
                 }
@@ -945,8 +957,10 @@ export async function finalizeAcceptedRefundAttemptIds(
                 read = await readFinalizeOrder(db, orderId, orderAttempts);
                 continue;
             }
-            // Stock goes back only once the cancel won (the order's status CAS).
-            if (shouldReleaseInventory) {
+            if (inventory) {
+                for (const variantId of inventory.availabilityTransitionVariantIds) availabilityTransitionVariantIds.add(variantId);
+                await inventory.afterCommit();
+            } else if (shouldReleaseInventory) {
                 const impact = await applyInventoryForStatusChangeWithImpact(db, orderId, OrderStatus.CANCELLED);
                 for (const variantId of impact.availabilityTransitionVariantIds) availabilityTransitionVariantIds.add(variantId);
             }
