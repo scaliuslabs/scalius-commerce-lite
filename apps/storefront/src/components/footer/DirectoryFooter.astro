@@ -10,6 +10,7 @@ import { mediaImageUrl } from "@/lib/media-url";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { formatCount } from "@/lib/store-time-zone";
+import { pageDigits } from "@/lib/checkout-text";
 
 interface Props {
   model: FooterModel;
@@ -32,7 +33,7 @@ const copy = storefrontCopy(language).chrome;
         phoneHref && (
           <li>
             <a href={phoneHref} data-footer-contact>
-              {copy.footer.call(ltr(storePhone))}
+              {copy.footer.call(ltr(pageDigits(storePhone)))}
             </a>
           </li>
         )

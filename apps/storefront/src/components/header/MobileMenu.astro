@@ -15,6 +15,7 @@ import { telHref } from "@/lib/store-identity";
 import { socialGlyph, socialGlyphMarkup } from "../footer/social-icons";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { pageDigits } from "@/lib/checkout-text";
 import NavTree from "./NavTree.astro";
 import DrillDrawer from "./DrillDrawer.astro";
 
@@ -226,7 +227,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
               {copy.nav.callSupport}
             </p>
             <p class="text-sm font-bold text-foreground tracking-tight truncate">
-              <bdi dir="ltr">{phone}</bdi>
+              <bdi dir="ltr">{pageDigits(phone)}</bdi>
             </p>
           </div>
           <Icon name="chevron-right" class="h-4 w-4 text-muted-foreground group-hover:text-foreground" />

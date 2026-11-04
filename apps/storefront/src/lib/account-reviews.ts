@@ -11,8 +11,9 @@
 // never a URL, a log line or analytics. A form carries ids, a same-origin
 // return path and, on a receipt, the order id (the proof stays in its
 // httpOnly cookie).
+import { checkoutText } from "@/lib/checkout-text";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { REVIEW_LIMITS } from "@scalius/shared/reviews";
 
@@ -464,7 +465,7 @@ export function reviewFormMarkup(options: ReviewFormOptions): string {
   const id = (name: string) => `${idPrefix}-${name}`;
   const stars = [5, 4, 3, 2, 1].map((stars) => {
     const inputId = id(`star-${stars}`);
-    const label = formatCheckoutLanguageText(copy.reviewStarOptionText, { stars });
+    const label = checkoutText(copy.reviewStarOptionText, { stars });
     return `<input type="radio" id="${inputId}" name="rating" value="${stars}" required${review?.rating === stars ? " checked" : ""} class="${CLASS.starInput}">`
       + `<label for="${inputId}" class="${CLASS.starLabel}" title="${escapeHtml(label)}"><svg viewBox="-1 -1 26 26" class="h-8 w-8 fill-current" aria-hidden="true"><path d="${STAR_PATH}"/></svg><span class="sr-only">${escapeHtml(label)}</span></label>`;
   }).join("");
@@ -527,7 +528,7 @@ export function buyerReviewSummaryMarkup(
   review: { rating: number; status: BuyerReviewStatus; title?: string | null; body?: string | null },
   copy: ReviewFormCopy,
 ): string {
-  const rated = formatCheckoutLanguageText(copy.reviewsRatedText, { average: String(review.rating) });
+  const rated = checkoutText(copy.reviewsRatedText, { average: String(review.rating) });
   return `<p class="flex flex-wrap items-center gap-2">${reviewStarsMarkup(review.rating)}<span class="sr-only">${escapeHtml(rated)}</span>${reviewStatusBadgeMarkup(review.status, copy)}</p>`
     + (review.title ? `<p class="mt-1.5 font-semibold text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.title)}</p>` : "")
     + (review.body ? `<p class="mt-1 whitespace-pre-line leading-relaxed text-foreground [overflow-wrap:anywhere]">${escapeHtml(review.body)}</p>` : "");
@@ -602,7 +603,7 @@ const RETURN_TO_ACCOUNT_REVIEWS = "/account/reviews";
 
 function orderLabel(copy: ReviewFormCopy, orderNumber: string, orderId: string): string {
   const number = orderNumber ? (orderNumber.startsWith("#") ? orderNumber : `#${orderNumber}`) : `#${orderId}`;
-  return formatCheckoutLanguageText(copy.reviewOrderText, { order: number });
+  return checkoutText(copy.reviewOrderText, { order: number });
 }
 
 function productHeader(
@@ -628,7 +629,7 @@ export function toReviewListMarkup(lines: readonly ReviewableLine[], options: Ac
   const { copy, notice } = options;
   return lines.map((line, index) => {
     const delivered = options.formatDate(line.fulfilledAt);
-    const meta = [orderLabel(copy, line.orderNumber, line.orderId), delivered ? formatCheckoutLanguageText(copy.reviewDeliveredOnText, { date: delivered }) : ""]
+    const meta = [orderLabel(copy, line.orderNumber, line.orderId), delivered ? checkoutText(copy.reviewDeliveredOnText, { date: delivered }) : ""]
       .filter(Boolean).join(" · ");
     const form = lineReviewMarkup(line.orderItemId, { eligible: true, review: null }, {
       access: { kind: "account" },
@@ -654,7 +655,7 @@ export function writtenReviewListMarkup(reviews: readonly BuyerReview[], options
     const meta = [dated, review.editedAt ? copy.reviewsEditedText : ""]
       .filter(Boolean).join(" · ");
     const replyTitle = storeName
-      ? formatCheckoutLanguageText(copy.reviewsReplyText, { store: storeName })
+      ? checkoutText(copy.reviewsReplyText, { store: storeName })
       : copy.reviewsReplyFallbackText;
     const reply = review.reply
       ? `<div class="mt-3 rounded-e-lg border-s-4 border-primary bg-muted/50 px-3 py-2"><p class="text-xs font-semibold text-foreground">${escapeHtml(replyTitle)}</p>`

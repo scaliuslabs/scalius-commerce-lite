@@ -9,6 +9,7 @@ import NewsletterForm from "@/components/newsletter/NewsletterForm.astro";
 import FooterMenus from "./FooterMenus.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { pageDigits } from "@/lib/checkout-text";
 import { mediaImageUrl } from "@/lib/media-url";
 import type { NewsletterFormModel } from "@/lib/newsletter-form";
 import type { FooterModel } from "./footer-model";
@@ -64,7 +65,7 @@ const groups = [
         <div>
           {phoneHref && (
             <a href={phoneHref} class="newsletter-phone">
-              <bdi dir="ltr">{storePhone}</bdi>
+              <bdi dir="ltr">{pageDigits(storePhone)}</bdi>
             </a>
           )}
           {chatHref && (

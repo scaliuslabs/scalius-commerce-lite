@@ -102,6 +102,17 @@ export const policies = [
     sample: 'import { formatMoney } from "@scalius/shared/currency";',
   },
   {
+    rule: "storefront templates, order numbers and counts are written in the page's digits through @/lib/checkout-text and @/lib/store-time-zone",
+    why: "the shared template filler writes a number with String(n) and the shared order number is Latin, so a Bangla page read '1টি কিনলে', 'অর্ডার #1105' and a cart badge '1' (apps/storefront/src/lib/checkout-text.ts)",
+    paths: [storefront],
+    allow: { "apps/storefront/src/lib/checkout-text.ts": "the wrapper itself" },
+    forbid: [
+      /import\s*\{[^}]*\b(?:formatCheckoutLanguageText|formatOrderNumber)\b[^}]*\}\s*from\s*["']@scalius\/shared\/(?:checkout-language(?:-format)?|order-utils)["']/,
+      /\.textContent\s*=[^;\n]*\bString\(\s*[A-Za-z_$][\w$.]*\s*\)/,
+    ],
+    sample: 'badge.textContent = String(count);',
+  },
+  {
     rule: "a saved order's money and free-line presentation is defined once, in @scalius/shared/order-money-presentation",
     why: "the dashboard and storefront each kept a copy (order-tax-presentation.ts) and the copies drifted: the receipt showed a free gift at full price while the dashboard and invoice showed it free",
     paths: [storefront, "apps/admin-v2/src", "apps/api/src", "packages/core/src"],

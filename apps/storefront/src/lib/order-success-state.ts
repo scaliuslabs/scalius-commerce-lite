@@ -1,13 +1,11 @@
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import type { OrderItem, OrderReceipt } from "./api/types";
 import {
   formatOrderSuccessLabel,
   formatOrderSuccessPaymentMethod as formatGatewayPaymentMethod,
 } from "./order-success-localization";
-import {
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+
 import { baseLanguage, numberLocale } from "@scalius/shared/locale-format";
 import { formatUnitRange } from "@scalius/shared/locale-words";
 import { pageLanguage, storeRegion } from "./store-time-zone";
@@ -48,7 +46,7 @@ export function readReceiptGiftCardTenders(order: OrderGiftCardFacts): ReceiptGi
 
 /** "Gift card •••• 7K2Q": one tender row's label. */
 export function receiptGiftCardTenderLabel(tender: ReceiptGiftCardTender, copy: CheckoutLanguageData): string {
-  return formatCheckoutLanguageText(giftCardCheckoutCopy(copy).giftCardLineText, { card: `•••• ${tender.last4}` });
+  return checkoutText(giftCardCheckoutCopy(copy).giftCardLineText, { card: `•••• ${tender.last4}` });
 }
 
 /**
@@ -298,13 +296,13 @@ export function getOrderSuccessViewState(
     && isFailedPaymentResult(callbackResult);
   const kind: OrderSuccessStateKind = failedReturn ? "payment_issue" : durableKind;
   // Copy templates already carry the "#": "We received order #{orderId}."
-  const orderId = formatOrderNumber(order.orderNumber, order.id).slice(1);
+  const orderId = pageOrderNumber(order.orderNumber, order.id).slice(1);
   if (kind === "payment_issue") {
     return {
       kind,
       shouldFinalizeClientSide: false,
       title: failedReturn ? copy.orderReceiptPaymentFailedTitleText : copy.orderReceiptPaymentIssueTitleText,
-      message: formatCheckoutLanguageText(
+      message: checkoutText(
         failedReturn ? copy.orderReceiptPaymentFailedMessageText : copy.orderReceiptPaymentIssueMessageText,
         { orderId },
       ),
@@ -320,7 +318,7 @@ export function getOrderSuccessViewState(
       kind,
       shouldFinalizeClientSide: false,
       title: copy.orderReceiptPaymentPendingTitleText,
-      message: formatCheckoutLanguageText(copy.orderReceiptPaymentPendingMessageText, { orderId }),
+      message: checkoutText(copy.orderReceiptPaymentPendingMessageText, { orderId }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: "bg-warning/15 text-foreground",
@@ -379,7 +377,7 @@ export function getOrderSuccessViewState(
       kind,
       shouldFinalizeClientSide: false,
       title: stateCopy.title,
-      message: formatCheckoutLanguageText(stateCopy.message, { orderId }),
+      message: checkoutText(stateCopy.message, { orderId }),
       orderStatusLabel: formatOrderSuccessLabel(order.status, copy),
       paymentStatusLabel: payment.statusLabel,
       orderBadgeClass: getOrderStatusBadgeClass(order.status),
@@ -391,7 +389,7 @@ export function getOrderSuccessViewState(
     kind,
     shouldFinalizeClientSide: true,
     title: copy.orderReceiptPlacedTitleText,
-    message: formatCheckoutLanguageText(copy.orderReceiptPlacedMessageText, { orderId }),
+    message: checkoutText(copy.orderReceiptPlacedMessageText, { orderId }),
     orderStatusLabel: formatOrderSuccessLabel(
       order.status === "incomplete" ? "processing" : order.status,
       copy,
@@ -482,7 +480,7 @@ export function getOrderSuccessNextSteps(
   const estimate = localizedDeliveryEstimate(order.shippingMethodDescription ?? "", pageLanguage(), storeRegion());
   return [
     paid ? copy.orderReceiptNextStepsPaidText : copy.orderReceiptNextStepsCodText,
-    ...(estimate ? [formatCheckoutLanguageText(copy.orderReceiptDeliveryEstimateText, { estimate })] : []),
+    ...(estimate ? [checkoutText(copy.orderReceiptDeliveryEstimateText, { estimate })] : []),
   ];
 }
 

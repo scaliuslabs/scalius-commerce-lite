@@ -88,6 +88,7 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
   // Each tick reads the lines again, so a section the theme editor drew
   // again (astro:page-load) keeps counting.
   import { formatDateTime } from "@scalius/shared/locale-format";
+  import { pageDigits } from "@/lib/checkout-text";
   const DAY_MS = 86_400_000;
   const pad = (value: number) => String(value).padStart(2, "0");
   let timer = 0;
@@ -117,7 +118,7 @@ const line = endsAt ? lineAt(endsAt, Date.now()) : null;
         if (label) label.textContent = line.dataset.labelIn ?? "";
         if (clock) {
           clock.hidden = false;
-          clock.textContent = `${pad(Math.floor(left / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
+          clock.textContent = pageDigits(`${pad(Math.floor(left / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`, line.dataset.locale || "en");
         }
       }
       line.classList.remove("invisible");

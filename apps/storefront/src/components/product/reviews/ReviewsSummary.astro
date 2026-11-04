@@ -4,9 +4,10 @@
 // Nothing when reviews are off or the product has no published review, so a
 // new product never says "0 reviews". It reads the same `product.reviews` as
 // the module and the JSON-LD.
+import { checkoutText } from "@/lib/checkout-text";
 import type { Product } from "@/lib/api";
 import { formatCount } from "@/lib/store-time-zone";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import {
   formatReviewAverage,
   readProductReviews,
@@ -26,7 +27,7 @@ const average = summary ? formatReviewAverage(summary.average) : "";
 const ratings = summary
   ? summary.count === 1
     ? copy.reviewsRatingsCountOneText
-    : formatCheckoutLanguageText(copy.reviewsRatingsCountText, { count: formatCount(summary.count) })
+    : checkoutText(copy.reviewsRatingsCountText, { count: formatCount(summary.count) })
   : "";
 ---
 
@@ -34,7 +35,7 @@ const ratings = summary
   <a href="#reviews" class="review-summary-line" data-review-summary>
     <span class="review-summary-average" aria-hidden="true">{average}</span>
     <span class="sc-stars review-summary-stars" style={`--sc-fill:${reviewStarFill(summary.average)}`} aria-hidden="true"></span>
-    <span class="sr-only">{formatCheckoutLanguageText(copy.reviewsRatedText, { average })}, </span>
+    <span class="sr-only">{checkoutText(copy.reviewsRatedText, { average })}, </span>
     <span class="review-summary-count">{ratings}</span>
   </a>
 )}

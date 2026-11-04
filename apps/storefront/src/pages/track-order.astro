@@ -8,6 +8,7 @@
 // the receipt proof as an httpOnly cookie and opens the receipt. Plain form
 // posts: it works the same without JavaScript, and the order number, contact
 // and code only ever travel in POST bodies.
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import {
@@ -45,14 +46,10 @@ import {
 } from "@/lib/order-tracking-markup";
 import { relabelOrderProgress, relabelOrderTimeline } from "@/lib/order-line-groups";
 import { formatMoney } from "@/lib/currency";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { formatCount } from "@/lib/store-time-zone";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  checkoutLanguageBaseCode,
-  formatCheckoutLanguageText,
-} from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 
 const isPost = Astro.request.method === "POST";
 if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
@@ -126,7 +123,7 @@ if (isPost) {
   }
 }
 
-const orderNumberText = status ? formatOrderNumber(status.orderNumber, reference) : `#${reference}`;
+const orderNumberText = status ? pageOrderNumber(status.orderNumber, reference) : `#${reference}`;
 const money = (amount: number) => formatMoney(amount, { code: status?.currencyCode ?? "BDT" });
 const trackingText: OrderTrackingText = {
   done: copy.orderTrackingStepDoneText,
@@ -165,7 +162,7 @@ const paymentStatusLabel = status
     }, copy).statusLabel
   : "";
 const deliveryLabel = status?.shippingMethodName
-  ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: status.shippingMethodName })
+  ? checkoutText(copy.orderReceiptDeliveryWithMethodText, { method: status.shippingMethodName })
   : copy.orderReceiptDeliveryText;
 
 const fieldClass =
@@ -190,10 +187,10 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
       {status ? (
         <>
           <h1 class="text-2xl font-semibold text-foreground">
-            {formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber: orderNumberText })}
+            {checkoutText(copy.orderStatusTitleText, { orderNumber: orderNumberText })}
           </h1>
           {status.firstName && (
-            <p class="mt-1 text-sm text-muted-foreground">{formatCheckoutLanguageText(copy.trackOrderGreetingText, { name: status.firstName })}</p>
+            <p class="mt-1 text-sm text-muted-foreground">{checkoutText(copy.trackOrderGreetingText, { name: status.firstName })}</p>
           )}
           <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
             {placedAt && (
@@ -242,7 +239,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
                   <span class="min-w-0 flex-1 text-sm">
                     <span class="block font-medium text-foreground">{item.productName}</span>
                     {item.variantLabel && <span class="block text-muted-foreground">{item.variantLabel}</span>}
-                    <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })}</span>
+                    <span class="block text-muted-foreground">{checkoutText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })}</span>
                   </span>
                 </li>
               ))}
@@ -279,7 +276,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
                   <input type="hidden" name="contact" value={contact} />
                   {status.codeOptions.map((option, index) => (
                     <button type="submit" name="channel" value={option.channel} class={index === 0 ? primaryButton : secondaryButton}>
-                      {formatCheckoutLanguageText(copy.trackOrderSendCodeByText, { channel: channelName[option.channel], destination: option.destination })}
+                      {checkoutText(copy.trackOrderSendCodeByText, { channel: channelName[option.channel], destination: option.destination })}
                     </button>
                   ))}
                 </form>
@@ -298,7 +295,7 @@ const invalid = (field: "reference" | "contact" | "code", errorId: string) => fi
       ) : codeStep ? (
         <>
           <h1 class="text-2xl font-semibold text-foreground">
-            {formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber: orderNumberText })}
+            {checkoutText(copy.orderStatusTitleText, { orderNumber: orderNumberText })}
           </h1>
           <form method="post" action="/track-order" class="mt-6 space-y-4" novalidate>
             <input type="hidden" name="reference" value={reference} />

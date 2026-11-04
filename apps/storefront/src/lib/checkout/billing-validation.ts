@@ -7,6 +7,7 @@
  * (billing-address-rules.ts); the no-JavaScript checkout with the rules it
  * read on the server. The API decides either way.
  */
+import { checkoutText } from "@/lib/checkout-text";
 import { validatePostalAddress, type AddressField, type AddressRules } from "@scalius/shared/address";
 import {
   billingAddressFields,
@@ -15,7 +16,7 @@ import {
   type BillingAddressMode,
   type BillingCheckoutPath,
 } from "@scalius/shared/billing-address";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { BILLING_ADDRESS_FIELDS, BILLING_FIELD_RULE, type BillingAddressField } from "./billing-address";
 
@@ -85,10 +86,10 @@ export function billingProblemMessage(
   label: string,
   copy: Pick<CheckoutLanguageData, "billingFieldRequiredText" | "billingPostalCodeInvalidText" | "billingAdminAreaInvalidText">,
 ): string {
-  if (problem === "required") return formatCheckoutLanguageText(copy.billingFieldRequiredText, { field: label });
+  if (problem === "required") return checkoutText(copy.billingFieldRequiredText, { field: label });
   return field === "billingPostalCode"
     ? copy.billingPostalCodeInvalidText
     : field === "billingAdminArea"
       ? copy.billingAdminAreaInvalidText
-      : formatCheckoutLanguageText(copy.billingFieldRequiredText, { field: label });
+      : checkoutText(copy.billingFieldRequiredText, { field: label });
 }

@@ -7,6 +7,7 @@
  *
  * Values are buyer content: never put them in URLs, analytics or logs.
  */
+import { checkoutText } from "@/lib/checkout-text";
 import {
   canonicalizeLineProperties,
   CUSTOMIZATION_SCHEMA_VERSION,
@@ -20,7 +21,7 @@ import {
   type LinePropertyInput,
 } from "@scalius/shared/line-properties";
 import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { fromMinor } from "@scalius/shared/money";
 import { isPurchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { OrderLineProperty, ProductCustomization } from "@/lib/api/types";
@@ -111,7 +112,7 @@ export function characterCount(value: string): number {
 
 /** The "{count}/{max}" counter under a text field. */
 export function counterText(copy: Pick<BuyerInputCopy, "customizationCounterText">, value: string, max: number): string {
-  return formatCheckoutLanguageText(copy.customizationCounterText, { count: characterCount(value), max });
+  return checkoutText(copy.customizationCounterText, { count: characterCount(value), max });
 }
 
 /** "+৳200" for a surcharge, or null when the input is free. */
@@ -122,7 +123,7 @@ export function surchargeText(
   formatMoney: (amount: number) => string,
 ): string | null {
   if (!(priceMinor > 0)) return null;
-  return formatCheckoutLanguageText(copy.customizationSurchargeText, {
+  return checkoutText(copy.customizationSurchargeText, {
     price: formatMoney(fromMinor(priceMinor, places)),
   });
 }
@@ -168,7 +169,7 @@ function requiredMessage(field: CustomizationField, copy: BuyerInputCopy): strin
     : field.type === "checkbox"
       ? copy.customizationRequiredCheckText
       : copy.customizationRequiredText;
-  return formatCheckoutLanguageText(template, { field: field.label });
+  return checkoutText(template, { field: field.label });
 }
 
 /**
@@ -188,7 +189,7 @@ export function validateBuyerInputs(
     return {
       key,
       message: problem.kind === "too_long"
-        ? formatCheckoutLanguageText(copy.customizationTooLongText, { max: problem.maxLength })
+        ? checkoutText(copy.customizationTooLongText, { max: problem.maxLength })
         : requiredMessage(field, copy),
     };
   });

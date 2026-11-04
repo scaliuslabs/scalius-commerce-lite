@@ -1,3 +1,4 @@
+import { checkoutText } from "@/lib/checkout-text";
 import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
 import { cartStore, hydrateCartFromStorage, removeOrderedLines } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
@@ -10,11 +11,7 @@ import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import type { PaymentResult } from "./types";
 import {
   clearCheckoutTransferSession,
@@ -123,7 +120,7 @@ function deferredPresentation(
 ): GatewayPresentation {
   const days = typeof gateway.dueInDays === "number" && gateway.dueInDays > 0 ? gateway.dueInDays : null;
   const language = pageLanguage();
-  const description = days === null ? presentation.description : formatCheckoutLanguageText(checkoutCopy.invoicePaymentDescriptionText, {
+  const description = days === null ? presentation.description : checkoutText(checkoutCopy.invoicePaymentDescriptionText, {
     days: formatPageNumber(days, language),
     date: formatStoreDateTime(Date.now() + days * 86_400_000, language, { dateStyle: "long" }),
   });
@@ -433,7 +430,7 @@ function localizedGatewayPresentation(
         // At the door, at the pickup counter, or when the service is done.
         buyerLabel: cashOnDeliveryLabel(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
         description: due !== null && authoritativeTaxQuote
-          ? formatCheckoutLanguageText(giftCopy.giftCardPayOnDeliveryText, {
+          ? checkoutText(giftCopy.giftCardPayOnDeliveryText, {
               amount: currencyFmt(due, authoritativeTaxQuote),
             })
           : cashOnDeliveryDescription(quoteDeliveryMode(authoritativeTaxQuote), checkoutCopy),
@@ -587,7 +584,7 @@ function appendOrderItemRows(
       "text-xs leading-5 text-muted-foreground",
       [
         item.variantLabel,
-        formatCheckoutLanguageText(checkoutCopy.quantityShortText, {
+        checkoutText(checkoutCopy.quantityShortText, {
           quantity: item.quantity,
         }),
       ].filter(Boolean).join(" · "),
@@ -673,7 +670,7 @@ function appendCheckoutReview(
     appendReviewRow(review, checkoutCopy.pickupReviewText, [
       quote.pickup?.address ?? "",
       quote.pickup?.hours
-        ? formatCheckoutLanguageText(checkoutCopy.pickupHoursText, { hours: quote.pickup.hours })
+        ? checkoutText(checkoutCopy.pickupHoursText, { hours: quote.pickup.hours })
         : "",
     ]);
   } else {
@@ -684,7 +681,7 @@ function appendCheckoutReview(
       method.name,
       method.description ?? "",
       method.feeWaived
-        ? formatCheckoutLanguageText(checkoutCopy.waivedShippingFeeText, {
+        ? checkoutText(checkoutCopy.waivedShippingFeeText, {
             fee: currencyFmt(method.baseAmountMinor / (10 ** quote.decimalPlaces), quote),
           })
         : "",
@@ -707,7 +704,7 @@ function checkoutFreshnessMessage(
   if (issues.length > 0) {
     return issues.length === 1
       ? checkoutCopy.oneCartItemChangedText
-      : formatCheckoutLanguageText(checkoutCopy.cartItemsChangedText, {
+      : checkoutText(checkoutCopy.cartItemsChangedText, {
           count: issues.length,
         });
   }
@@ -903,7 +900,7 @@ export function renderOrderSummaryDetails(
     for (const tender of quote.giftCardTenders ?? []) {
       appendSummaryRow(
         details,
-        formatCheckoutLanguageText(giftCopy.giftCardLineText, { card: giftCardChipLabel(tender.last4) }),
+        checkoutText(giftCopy.giftCardLineText, { card: giftCardChipLabel(tender.last4) }),
         `-${currencyFmt(tender.applied, quote)}`,
         "flex justify-between gap-3 text-primary",
       );
@@ -1025,7 +1022,7 @@ function paymentActionLabel(methodId: string): string {
   if (!checkoutConfig || !authoritativeTaxQuote) return checkoutCopy.continueText;
   if (methodId === "cod" || methodId === GIFT_CARD_PAYMENT_METHOD || isDeferredMethod(methodId)) return checkoutCopy.placeOrderText;
   if (isHostedMethod(methodId)) {
-    return formatCheckoutLanguageText(checkoutCopy.continueToProviderText, {
+    return checkoutText(checkoutCopy.continueToProviderText, {
       provider: providerLabelFor(methodId),
     });
   }
@@ -1037,8 +1034,8 @@ function paymentActionLabel(methodId: string): string {
   );
   const formatted = currencyFmt(payableAmount, authoritativeTaxQuote);
   return paymentRequest.paymentType === "deposit"
-    ? formatCheckoutLanguageText(checkoutCopy.payAmountNowText, { amount: formatted })
-    : formatCheckoutLanguageText(checkoutCopy.payAmountText, { amount: formatted });
+    ? checkoutText(checkoutCopy.payAmountNowText, { amount: formatted })
+    : checkoutText(checkoutCopy.payAmountText, { amount: formatted });
 }
 
 /**
@@ -1050,15 +1047,15 @@ function paymentActionLabel(methodId: string): string {
 function appRedirectOverlay(methodId: string) {
   const provider = { provider: providerLabelFor(methodId) };
   return {
-    title: formatCheckoutLanguageText(checkoutCopy.openingProviderTitle, provider),
-    message: formatCheckoutLanguageText(checkoutCopy.leavingToPayMessage, provider),
-    slowMessage: formatCheckoutLanguageText(checkoutCopy.redirectSlowMessage, provider),
+    title: checkoutText(checkoutCopy.openingProviderTitle, provider),
+    message: checkoutText(checkoutCopy.leavingToPayMessage, provider),
+    slowMessage: checkoutText(checkoutCopy.redirectSlowMessage, provider),
   };
 }
 
 function hostedRedirectMessage(methodId: string): string | null {
   return isHostedMethod(methodId)
-    ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider: providerLabelFor(methodId) })
+    ? checkoutText(checkoutCopy.providerRedirectText, { provider: providerLabelFor(methodId) })
     : null;
 }
 
@@ -1572,7 +1569,7 @@ function renderGiftCardChips(): void {
       "inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
     remove.setAttribute(
       "aria-label",
-      formatCheckoutLanguageText(giftCopy.giftCardRemoveText, { card: label }),
+      checkoutText(giftCopy.giftCardRemoveText, { card: label }),
     );
     remove.textContent = "×";
     remove.addEventListener("click", () => void removeGiftCard(card.handle));
@@ -1682,7 +1679,7 @@ async function removeGiftCard(handle: string): Promise<void> {
     const requoted = await requoteForGiftCards();
     if (requoted) {
       showGiftCardMessage(
-        formatCheckoutLanguageText(giftCopy.giftCardRemovedText, { card: giftCardChipLabel(removed.last4) }),
+        checkoutText(giftCopy.giftCardRemovedText, { card: giftCardChipLabel(removed.last4) }),
         "status",
       );
     }
@@ -1742,7 +1739,7 @@ async function applyGiftCardFromForm(event?: SubmitEvent): Promise<void> {
     const requoted = await requoteForGiftCards();
     if (requoted && appliedGiftCards.some(({ handle }) => handle === outcome.card.handle)) {
       showGiftCardMessage(
-        formatCheckoutLanguageText(giftCopy.giftCardAppliedText, { card: giftCardChipLabel(outcome.card.last4) }),
+        checkoutText(giftCopy.giftCardAppliedText, { card: giftCardChipLabel(outcome.card.last4) }),
         "status",
       );
     }

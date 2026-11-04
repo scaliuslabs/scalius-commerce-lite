@@ -2,8 +2,9 @@
 // The summary column of a review list: the stars and "4.6 out of 5", the
 // count, and five bars (Amazon's percentages) that each link to that star's
 // reviews. A bar with no reviews is not a link.
+import { checkoutText } from "@/lib/checkout-text";
 import type { ProductReviewSummary } from "@/lib/api";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import {
   formatReviewAverage,
   productReviewsPageHref,
@@ -30,13 +31,13 @@ const descriptionId = `reviews-bar-${slug.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 <div class="product-reviews-summary">
   <p class="product-reviews-score">
     <span class="sc-stars product-reviews-score-stars" style={`--sc-fill:${reviewStarFill(summary.average)}`} aria-hidden="true"></span>
-    <span class="product-reviews-score-value">{formatCheckoutLanguageText(copy.reviewsAverageText, { average })}</span>
+    <span class="product-reviews-score-value">{checkoutText(copy.reviewsAverageText, { average })}</span>
   </p>
   <p class="product-reviews-total">{reviewCountText(copy, summary.count)}</p>
   <ul class="product-reviews-histogram">
     {reviewHistogram(summary).map((row) => {
-      const label = formatCheckoutLanguageText(copy.reviewsStarRowText, { stars: row.rating });
-      const share = formatCheckoutLanguageText(copy.reviewsStarShareText, { percent: `${row.percent}%`, stars: row.rating });
+      const label = checkoutText(copy.reviewsStarRowText, { stars: row.rating });
+      const share = checkoutText(copy.reviewsStarShareText, { percent: `${row.percent}%`, stars: row.rating });
       const selected = selectedRating === row.rating;
       return (
         <li>

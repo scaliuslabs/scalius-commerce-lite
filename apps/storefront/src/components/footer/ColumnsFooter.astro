@@ -8,6 +8,7 @@ import FooterMenus from "./FooterMenus.astro";
 import { mediaImageUrl } from "@/lib/media-url";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { pageDigits } from "@/lib/checkout-text";
 import type { FooterModel } from "./footer-model";
 
 interface Props {
@@ -81,7 +82,7 @@ const copy = storefrontCopy(language).chrome;
             <li>
               {copy.footer.callUs}{" "}
               <a href={phoneHref} class="font-semibold underline underline-offset-4">
-                <bdi dir="ltr">{storePhone}</bdi>
+                <bdi dir="ltr">{pageDigits(storePhone)}</bdi>
               </a>
             </li>
           )}

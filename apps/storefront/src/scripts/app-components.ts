@@ -22,6 +22,7 @@ import { productContext } from "./product-context";
 import { DEFERRED_REVEAL_EVENT } from "./browser-events";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 import { loadLazyScript } from "@/scripts/lazy-script";
+import { formatCount } from "@/lib/store-time-zone";
 
 type CartSummary = { count: number; total: StorefrontMoney };
 
@@ -336,7 +337,7 @@ function installCartCount(): void {
   if (counts().length === 0) return;
   onCart(({ count }) => {
     for (const element of counts()) {
-      element.textContent = count > 0 ? String(count) : "";
+      element.textContent = count > 0 ? formatCount(count) : "";
       element.toggleAttribute("data-empty", count === 0);
     }
   });

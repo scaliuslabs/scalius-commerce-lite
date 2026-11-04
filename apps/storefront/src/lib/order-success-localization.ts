@@ -1,13 +1,10 @@
+import { checkoutText } from "@/lib/checkout-text";
 import { formatStoreDateTime, storeTimeZone } from "./store-time-zone";
 import type {
   OrderReceiptSupportRequest,
   OrderReceiptSupportRequestType,
 } from "./api/types";
-import {
-  checkoutLanguageBaseCode,
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { appGatewayName, SSLCOMMERZ_GATEWAY_ID } from "./checkout/gateway-presentation";
 
 function normalize(value: string | null | undefined): string {
@@ -131,7 +128,7 @@ export function getOrderReceiptSupportRequestLabel(
   request: Pick<OrderReceiptSupportRequest, "type" | "status">,
   copy: CheckoutLanguageData,
 ): string {
-  return formatCheckoutLanguageText(copy.orderReceiptRequestLabelText, {
+  return checkoutText(copy.orderReceiptRequestLabelText, {
     action: getOrderReceiptSupportActionLabel(request.type, copy),
     status: getOrderReceiptSupportStatusLabel(request.status, copy),
   });

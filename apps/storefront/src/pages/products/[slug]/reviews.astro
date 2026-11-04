@@ -5,6 +5,7 @@
 // `?after=<cursor>` (the opaque keyset cursor of the page before) shape it;
 // nothing else. It is noindex,follow (the product page carries the review
 // markup), and it is cached like any public page under the store's generation.
+import { checkoutText } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import Container from "@/components/ui/Container.astro";
 import ReviewsOverview from "@/components/product/reviews/ReviewsOverview.astro";
@@ -17,7 +18,7 @@ import { resolveStoreName } from "@/lib/store-identity";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import {
   REVIEW_PAGE_SIZE,
   REVIEW_SORTS,
@@ -54,7 +55,7 @@ const copyData = resolveProductPageCopy(layoutData.storefrontCopy);
 const copy = pickReviewCopy(copyData);
 const language = checkoutLanguageBaseCode(layoutData.storefrontCopy?.languageCode);
 const storeName = resolveStoreName(layoutData.business);
-const title = formatCheckoutLanguageText(copy.reviewsPageTitleText, { product: product.name });
+const title = checkoutText(copy.reviewsPageTitleText, { product: product.name });
 const productHref = `/products/${encodeURIComponent(product.slug)}`;
 const sortLabels = {
   recent: copy.reviewsSortRecentText,
@@ -106,7 +107,7 @@ const firstHref = view.cursor ? productReviewsPageHref(product.slug, { sort: vie
             </nav>
             {view.rating !== null && (
               <p class="product-reviews-filter">
-                <span>{formatCheckoutLanguageText(copy.reviewsFilteredText, { stars: view.rating })}</span>
+                <span>{checkoutText(copy.reviewsFilteredText, { stars: view.rating })}</span>
                 <a href={productReviewsPageHref(product.slug, { sort: view.sort })} class="product-reviews-filter-clear">{copy.reviewsFilterAllText}</a>
               </p>
             )}
@@ -117,7 +118,7 @@ const firstHref = view.cursor ? productReviewsPageHref(product.slug, { sort: vie
           ) : (
             <p class="product-reviews-status">
               {view.rating !== null
-                ? formatCheckoutLanguageText(copy.reviewsFilterEmptyText, { stars: view.rating })
+                ? checkoutText(copy.reviewsFilterEmptyText, { stars: view.rating })
                 : copy.reviewsEmptyText}
             </p>
           )}
