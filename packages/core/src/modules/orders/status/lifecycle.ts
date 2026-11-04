@@ -58,6 +58,72 @@ export async function reconcileInventoryForStatus(
     return impact.availabilityTransitionVariantIds;
 }
 
+/**
+ * Reconciles inventory for orders that were cancelled and refunded but
+ * whose inventory was not restored due to a failure in the refund finalization
+ * inventory release step.
+ *
+ * Finds orders with:
+ *   - status = CANCELLED
+ *   - paymentStatus = REFUNDED
+ *   - inventoryAction IN ('reserved', 'deducted')  (i.e., not yet 'restored')
+ *
+ * For each such order, calls reconcileInventoryForStatus to restore the stock.
+ * This is idempotent: if inventory was already restored, reconcileInventoryForStatus
+ * will detect the current inventoryAction and return without changes.
+ *
+ * Can be called from a scheduled drain to provide durable recovery.
+ */
+export async function reconcileRefundedOrderInventory(
+    db: Database,
+    options: { limit?: number } = {},
+): Promise<{
+    scanned: number;
+    reconciled: number;
+    failed: number;
+    errors: string[];
+    hasMore: boolean;
+}> {
+    const limit = options.limit ?? 25;
+    const pendingActions = ["reserved", "deducted"] as const;
+
+    // Find orders that need inventory reconciliation
+    const candidateOrders = await db
+        .select({
+            id: orders.id,
+            inventoryAction: orders.inventoryAction,
+        })
+        .from(orders)
+        .where(and(
+            eq(orders.status, OrderStatus.CANCELLED),
+            eq(orders.paymentStatus, PaymentStatus.REFUNDED),
+            inArray(orders.inventoryAction, pendingActions),
+        ))
+        .limit(limit)
+        .all();
+
+    const result = {
+        scanned: candidateOrders.length,
+        reconciled: 0,
+        failed: 0,
+        errors: [] as string[],
+        hasMore: candidateOrders.length === limit,
+    };
+
+    for (const order of candidateOrders) {
+        try {
+            await reconcileInventoryForStatus(db, order.id, OrderStatus.CANCELLED);
+            result.reconciled++;
+        } catch (error) {
+            result.failed++;
+            const message = error instanceof Error ? error.message : String(error);
+            result.errors.push(`Order ${order.id}: ${message}`);
+        }
+    }
+
+    return result;
+}
+
 const CANCELLATION_REQUIRES_REFUND_MESSAGE =
     "This order has been paid. Refund the payment first, then cancel.";
 const CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE =

@@ -28,6 +28,7 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
+import { reconcileRefundedOrderInventory } from "@scalius/core/modules/orders";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { appPaymentProvidersLoader } from "./plugins/providers/payment";
@@ -711,6 +712,39 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
     async run({ db, env, executionCtx }) {
       const { drainCustomerErasure } = await import("./background/customer-erasure");
       return drainCustomerErasure(db, env, { ctx: executionCtx });
+    },
+  },
+  {
+    // Refunded order inventory recovery: finds orders that were cancelled and
+    // refunded but whose inventory was not restored (refund finalization
+    // inventory release failed). Runs the reconciliation to restore stock.
+    name: "refund_inventory_recovery_drain",
+    due: async (db) => {
+      const { sql, eq, inArray } = await import("drizzle-orm");
+      const { orders, OrderStatus, PaymentStatus } = await import("@scalius/database/schema");
+      return [
+        sql`EXISTS (
+          SELECT 1 FROM ${orders}
+          WHERE ${orders.status} = ${OrderStatus.CANCELLED}
+            AND ${orders.paymentStatus} = ${PaymentStatus.REFUNDED}
+            AND ${orders.inventoryAction} IN ('reserved', 'deducted')
+          LIMIT 1
+        )`,
+      ];
+    },
+    async run({ db, timed }) {
+      const result: Awaited<ReturnType<typeof reconcileRefundedOrderInventory>> = await timed(
+        "refund_inventory_recovery",
+        () => reconcileRefundedOrderInventory(db, { limit: 25 }),
+      );
+      if (result.scanned > 0 || result.failed > 0 || result.hasMore) {
+        console.log(
+          `[scheduled] Refund inventory recovery: scanned=${result.scanned}, ` +
+            `reconciled=${result.reconciled}, failed=${result.failed}, ` +
+            `errors=${result.errors.length}, hasMore=${result.hasMore}`,
+        );
+      }
+      return result;
     },
   },
   {

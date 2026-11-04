@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { sql } from "drizzle-orm";
+import { sql, eq, inArray } from "drizzle-orm";
 import { assertManualCodDepositVerified, readPaymentPlan } from "../../payments/manual-cod-deposit";
-import { applyOrderStatusChange } from "../status/lifecycle";
+import { applyOrderStatusChange, reconcileRefundedOrderInventory } from "../status/lifecycle";
 import { OrderStatus, PaymentMethod, PaymentPlanStatus, PaymentStatus } from "@scalius/database/schema";
+import { orders } from "@scalius/database/schema";
 
 vi.mock("../../payments", () => ({
   assertManualCodDepositVerified: vi.fn().mockResolvedValue(undefined),
@@ -223,5 +224,192 @@ describe("reconcileInventoryForStatus — inventory recovery path (Fix A mandato
     await expect(
       (await import("../status/lifecycle")).reconcileInventoryForStatus(db, "order_1", OrderStatus.CANCELLED),
     ).rejects.toThrow("Insufficient stock to release");
+  });
+});
+
+describe("reconcileRefundedOrderInventory — refund inventory recovery drain", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("finds and reconciles orders with CANCELLED status, REFUNDED payment, and pending inventoryAction", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    mockedApplyInventory.mockResolvedValue({
+      inventoryAction: "restored",
+      availabilityTransitionVariantIds: ["variant_1"],
+    });
+
+    // Create a mock DB that returns orders needing reconciliation
+    let selectCallCount = 0;
+    const selectMock = vi.fn().mockImplementation(() => ({
+      from: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => ({
+          limit: vi.fn().mockImplementation(() => ({
+            all: vi.fn().mockImplementation(async () => {
+              selectCallCount += 1;
+              if (selectCallCount === 1) {
+                return [
+                  { id: "order_1", inventoryAction: "deducted" },
+                  { id: "order_2", inventoryAction: "reserved" },
+                ];
+              }
+              return [];
+            }),
+          })),
+        })),
+      })),
+    }));
+
+    const updateMock = vi.fn().mockImplementation(() => ({
+      set: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => ({
+          returning: vi.fn().mockResolvedValue([{ id: "order_1" }]),
+        })),
+      })),
+    }));
+
+    const db = {
+      select: selectMock,
+      update: updateMock,
+      batch: vi.fn().mockResolvedValue([]),
+      exec: vi.fn(),
+      prepare: vi.fn(),
+      transaction: vi.fn(),
+    } as unknown as Database;
+
+    const result = await reconcileRefundedOrderInventory(db, { limit: 25 });
+
+    expect(result.scanned).toBe(2);
+    expect(result.reconciled).toBe(2);
+    expect(result.failed).toBe(0);
+    expect(result.hasMore).toBe(false);
+    expect(mockedApplyInventory).toHaveBeenCalledTimes(2);
+    expect(mockedApplyInventory).toHaveBeenCalledWith(db, "order_1", OrderStatus.CANCELLED);
+    expect(mockedApplyInventory).toHaveBeenCalledWith(db, "order_2", OrderStatus.CANCELLED);
+  });
+
+  it("returns hasMore true when limit is reached", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    mockedApplyInventory.mockResolvedValue({
+      inventoryAction: "restored",
+      availabilityTransitionVariantIds: [],
+    });
+
+    // Create a mock DB that returns exactly limit orders
+    const limit = 3;
+    const selectMock = vi.fn().mockImplementation(() => ({
+      from: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => ({
+          limit: vi.fn().mockImplementation(() => ({
+            all: vi.fn().mockResolvedValue(
+              Array.from({ length: limit }, (_, i) => ({ id: `order_${i + 1}`, inventoryAction: "deducted" })),
+            ),
+          })),
+        })),
+      })),
+    }));
+
+    const db = {
+      select: selectMock,
+      update: vi.fn().mockImplementation(() => ({
+        set: vi.fn().mockImplementation(() => ({
+          where: vi.fn().mockImplementation(() => ({
+            returning: vi.fn().mockResolvedValue([{ id: "order_1" }]),
+          })),
+        })),
+      })),
+      batch: vi.fn().mockResolvedValue([]),
+      exec: vi.fn(),
+      prepare: vi.fn(),
+      transaction: vi.fn(),
+    } as unknown as Database;
+
+    const result = await reconcileRefundedOrderInventory(db, { limit });
+
+    expect(result.scanned).toBe(limit);
+    expect(result.hasMore).toBe(true);
+  });
+
+  it("handles reconciliation failures gracefully", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    mockedApplyInventory
+      .mockResolvedValueOnce({ inventoryAction: "restored", availabilityTransitionVariantIds: [] })
+      .mockRejectedValueOnce(new Error("Database connection failed"))
+      .mockResolvedValueOnce({ inventoryAction: "restored", availabilityTransitionVariantIds: [] });
+
+    const selectMock = vi.fn().mockImplementation(() => ({
+      from: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => ({
+          limit: vi.fn().mockImplementation(() => ({
+            all: vi.fn().mockResolvedValue([
+              { id: "order_1", inventoryAction: "deducted" },
+              { id: "order_2", inventoryAction: "reserved" },
+              { id: "order_3", inventoryAction: "deducted" },
+            ]),
+          })),
+        })),
+      })),
+    }));
+
+    const db = {
+      select: selectMock,
+      update: vi.fn().mockImplementation(() => ({
+        set: vi.fn().mockImplementation(() => ({
+          where: vi.fn().mockImplementation(() => ({
+            returning: vi.fn().mockResolvedValue([{ id: "order_1" }]),
+          })),
+        })),
+      })),
+      batch: vi.fn().mockResolvedValue([]),
+      exec: vi.fn(),
+      prepare: vi.fn(),
+      transaction: vi.fn(),
+    } as unknown as Database;
+
+    const result = await reconcileRefundedOrderInventory(db, { limit: 25 });
+
+    expect(result.scanned).toBe(3);
+    expect(result.reconciled).toBe(2);
+    expect(result.failed).toBe(1);
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain("order_2");
+    expect(result.errors[0]).toContain("Database connection failed");
+  });
+
+  it("skips orders that are not CANCELLED or not REFUNDED", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    mockedApplyInventory.mockResolvedValue({
+      inventoryAction: "restored",
+      availabilityTransitionVariantIds: [],
+    });
+
+    const selectMock = vi.fn().mockImplementation(() => ({
+      from: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => ({
+          limit: vi.fn().mockImplementation(() => ({
+            all: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      })),
+    }));
+
+    const db = {
+      select: selectMock,
+      update: vi.fn(),
+      batch: vi.fn().mockResolvedValue([]),
+      exec: vi.fn(),
+      prepare: vi.fn(),
+      transaction: vi.fn(),
+    } as unknown as Database;
+
+    const result = await reconcileRefundedOrderInventory(db, { limit: 25 });
+
+    expect(result.scanned).toBe(0);
+    expect(result.reconciled).toBe(0);
+    expect(result.failed).toBe(0);
   });
 });
