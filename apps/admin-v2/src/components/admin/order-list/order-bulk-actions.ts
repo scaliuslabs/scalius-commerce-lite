@@ -66,10 +66,48 @@ export function planOrderBulkAction<T extends PlannableOrder>(
 }
 
 /** Bulk endpoints take at most 90 orders per request. */
-export function chunk<T>(items: readonly T[], size = 90): T[][] {
+export const BULK_REQUEST_MAX_ORDERS = 90;
+
+/** Bulk endpoints take at most 90 orders per request. */
+export function chunk<T>(items: readonly T[], size = BULK_REQUEST_MAX_ORDERS): T[][] {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
   return chunks;
+}
+
+/** One per-row bulk request's answer: the orders it handled, and those it left for the next request. */
+export interface BulkRequestResult {
+  results: ReadonlyArray<{ orderId: string; success: boolean; error?: string | null }>;
+  /** Absent from an API older than per-request plan sizes: it handled everything it was sent. */
+  remaining?: readonly string[];
+}
+
+/** The orders the next request sends (at most 90), and the rest of the queue. */
+export function nextBulkRequest(queue: readonly string[]): { sent: string[]; next: string[] } {
+  return { sent: queue.slice(0, BULK_REQUEST_MAX_ORDERS), next: queue.slice(BULK_REQUEST_MAX_ORDERS) };
+}
+
+/**
+ * The queue after a request: what the server left (`remaining`, a per-request
+ * plan size) goes first, then the rest. Null when the request handled none of
+ * what it was sent, so the run never asks for the same orders forever.
+ */
+export function queueAfterBulkResponse(
+  sent: readonly string[],
+  next: readonly string[],
+  response: BulkRequestResult,
+): string[] | null {
+  const handled = new Set(response.results.map((result) => result.orderId));
+  const asked = new Set(sent);
+  const left = (response.remaining ?? []).filter((orderId) => asked.has(orderId) && !handled.has(orderId));
+  if (handled.size === 0 && left.length > 0) return null;
+  return [...left, ...next];
+}
+
+/** Orders a request was sent but answered neither in `results` nor in `remaining`: not done. */
+export function unansweredBulkOrders(sent: readonly string[], response: BulkRequestResult): string[] {
+  const answered = new Set([...response.results.map((result) => result.orderId), ...(response.remaining ?? [])]);
+  return sent.filter((orderId) => !answered.has(orderId));
 }
 
 /** What a bulk run did: the orders it finished and a short plain reason for each one it couldn't. */

@@ -729,4 +729,6 @@ export interface StatusUpdateResult {
         newStatus?: string;
         version?: number;
     };
+    /** The customer message rows written with the change, for the caller's sender. */
+    outboxIds?: string[];
 }

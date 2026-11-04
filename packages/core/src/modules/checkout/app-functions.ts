@@ -117,6 +117,9 @@ export const NO_CHECKOUT_APP_FUNCTIONS: CheckoutAppFunctions = {
 };
 
 /** Points that need the app cart. */
+/** The customer row of the facts read, qualified so a correlated subquery cannot bind its own `id`. */
+const OUTER_CUSTOMER_ID = sql.raw('"customers"."id"');
+
 const CART_POINTS: readonly PluginRunPoint[] = [
   "cart.validate",
   "checkout.discounts",
@@ -229,17 +232,19 @@ export async function loadAppFunctionCartFacts(
     db.select({ id: productVariants.id, sku: productVariants.sku, weight: productVariants.weight, fulfillmentKind: productVariants.fulfillmentKind })
       .from(productVariants).where(idList(productVariants.id, variantIds)),
     // Orders that never became sales (cancelled, incomplete) count toward neither.
+    // The outer row is named in full: Drizzle writes a single-table select's
+    // columns bare, and a bare "id" inside these subqueries is the inner row's.
     db.select({
       id: customers.id,
-      orderCount: sql<number>`(SELECT COUNT(*) FROM ${orders} WHERE ${orders.accountOwnerCustomerId} = ${customers.id}
+      orderCount: sql<number>`(SELECT COUNT(*) FROM ${orders} WHERE ${orders.accountOwnerCustomerId} = ${OUTER_CUSTOMER_ID}
         AND ${orders.deletedAt} IS NULL AND ${orders.status} NOT IN ('cancelled', 'incomplete'))`,
       totalSpentMinor: sql<number>`(SELECT COALESCE(SUM(${orders.totalAmountMinor}), 0) FROM ${orders}
-        WHERE ${orders.accountOwnerCustomerId} = ${customers.id}
+        WHERE ${orders.accountOwnerCustomerId} = ${OUTER_CUSTOMER_ID}
         AND ${orders.deletedAt} IS NULL AND ${orders.status} NOT IN ('cancelled', 'incomplete'))`,
       // Tags never contain a comma (customer_tag_links_tag_shape), so the join is lossless.
       tags: sql<string | null>`(SELECT group_concat(tag_link.tag, ',') FROM (
         SELECT ${customerTagLinks.tag} AS tag FROM ${customerTagLinks}
-        WHERE ${customerTagLinks.customerId} = ${customers.id} ORDER BY ${customerTagLinks.tag} LIMIT 50) AS tag_link)`,
+        WHERE ${customerTagLinks.customerId} = ${OUTER_CUSTOMER_ID} ORDER BY ${customerTagLinks.tag} LIMIT 50) AS tag_link)`,
     }).from(customers).where(and(eq(customers.id, customerId ?? ""), isNull(customers.deletedAt))),
     // Legacy/direct callers may have no priced cart. Checkout reuses its scope.
     ...(input.market ? [] : [db.select({ id: orderMarketIdSql(input.marketCountry) }).from(sql`(SELECT 1) AS order_market_scope`)]),

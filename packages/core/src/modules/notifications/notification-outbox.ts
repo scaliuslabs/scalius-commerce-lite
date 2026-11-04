@@ -12,7 +12,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { notificationOutbox } from "@scalius/database/schema";
-import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type {
     NotificationAudience,
     NotificationSubjectType,
@@ -194,6 +194,24 @@ export function buildNotificationOutboxInsert(db: Database, input: NotificationI
     return {
         outboxId: String(values.id),
         statement: db.insert(notificationOutbox).values(values).onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
+    };
+}
+
+/**
+ * The same insert, written only when `landed` holds once the batch's earlier
+ * statements ran (the fact it announces took effect): a command that may or
+ * may not change its row puts the message in the same batch as the change.
+ * An existing row with the same dedupe key is kept.
+ */
+export function buildNotificationOutboxInsertWhen(db: Database, input: NotificationInput, landed: SQL) {
+    const values = createNotificationOutboxInsertValues(input) as Record<string, unknown>;
+    // Every column in the table's own order, as Drizzle names them in the insert.
+    const row = Object.keys(getTableColumns(notificationOutbox)).map((key) => sql`${values[key] ?? null}`);
+    return {
+        outboxId: String(values.id),
+        statement: db.insert(notificationOutbox)
+            .select(sql`SELECT ${sql.join(row, sql`, `)} WHERE ${landed}`)
+            .onConflictDoNothing({ target: notificationOutbox.dedupeKey }),
     };
 }
 

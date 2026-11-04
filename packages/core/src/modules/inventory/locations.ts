@@ -33,6 +33,7 @@ import { addressRulesFor } from "@scalius/shared/address-metadata";
 export const INVENTORY_LOCATION_REQUIRED = "INVENTORY_LOCATION_REQUIRED";
 /** CHECK on `inventory_levels.on_hand`: a location would go below zero. */
 const LEVEL_NONNEGATIVE_CHECK = "inventory_levels_on_hand_nonnegative";
+const LEVEL_SHORTFALL_TRIGGER = "INVENTORY_LEVEL_SHORTFALL";
 const CODE_UNIQUE_INDEX = /inventory_locations_code_unique/i;
 /** Order statuses after which nothing more ships from the order's location. */
 const CLOSED_ORDER_STATUSES = ["cancelled", "refunded", "returned", "delivered", "completed"] as const;
@@ -63,9 +64,14 @@ function collectErrorText(error: unknown, depth = 0): string {
         .join(" ");
 }
 
-/** A batch aborted because a location level would have gone negative. */
+/**
+ * A batch aborted because a location level would have gone negative: the
+ * on_hand CHECK, or the movement trigger that refuses a removal first
+ * (`inventory_movements_level_shortfall`, migration 0102).
+ */
 export function isInventoryLevelShortfallError(error: unknown): boolean {
-    return collectErrorText(error).includes(LEVEL_NONNEGATIVE_CHECK);
+    const text = collectErrorText(error);
+    return text.includes(LEVEL_NONNEGATIVE_CHECK) || text.includes(LEVEL_SHORTFALL_TRIGGER);
 }
 
 /** A batch aborted because a stock movement named no active location. */

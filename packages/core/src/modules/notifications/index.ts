@@ -5,6 +5,7 @@ export * from "./web-push";
 export { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 export {
   buildNotificationOutboxInsert,
+  buildNotificationOutboxInsertWhen,
   claimNotificationOutboxForProcessing,
   createNotificationOutboxInsertValues,
   listDueNotificationOutbox,
@@ -52,6 +53,7 @@ export {
   orderCreatedNotificationOutboxId,
   buildOrderReadyForPickupNotificationDedupeKey,
   buildManualOrderNotificationResendDedupeKey,
+  buildOrderNotificationOutboxInsert,
   buildOrderStatusNotificationDedupeKey,
   buildSupportRequestStatusUpdatedNotificationDedupeKey,
   buildSupportRequestSubmittedNotificationDedupeKey,

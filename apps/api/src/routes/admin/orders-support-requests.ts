@@ -19,7 +19,6 @@ import { updateAdminOrderSupportRequestStatus } from "@scalius/core/modules/conv
 import { orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import {
-    sendOrderNotification,
     sendOrderSupportRequestNotification,
 } from "../../utils/order-notifications";
 
@@ -190,24 +189,13 @@ async function cancelOrderForRequest(
     if (!["incomplete", "pending", "processing", "confirmed"].includes(before.status)) {
         throw new ValidationError("This order was already sent, so it can't be cancelled. Reject the request or start a return.");
     }
-    const result = await updateOrderStatus(db, orderId, "cancelled");
-
-    await recordOrderEvent(db, {
-        orderId,
-        kind: "status_changed",
-        actorId,
-        data: { from: before.status, to: "cancelled", reason: "customer_request" },
+    // The cancel, its timeline line and the buyer's message commit together:
+    // a death after the cancel cannot lose them (a retry stops at "cancelled" above).
+    const result = await updateOrderStatus(db, orderId, "cancelled", undefined, {
+        event: { actorId, data: { reason: "customer_request" } },
+        notify: { source: "orders-support-request-cancel" },
     });
-    if (result.notification) {
-        await sendOrderNotification({
-            db,
-            send: notificationSender(c),
-            orderId: result.notification.orderId,
-            notificationType: result.notification.notificationType,
-            dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
-            source: "orders-support-request-cancel",
-        });
-    }
+    if (result.outboxIds && result.outboxIds.length > 0) await notificationSender(c)(result.outboxIds);
 }
 
 app.openapi(updateSupportRequestStatusRoute, updateSupportRequestStatusHandler);
