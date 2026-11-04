@@ -1,5 +1,6 @@
 import type { BuyerPriceRange, ProductFacet, RatingFacetValue } from "@/lib/api";
 import { browserApiUrl } from "@/lib/api/browser-url";
+import { isStorefrontIgnoredQueryParam } from "./canonical-query";
 import { navigateToCatalogFilterSearch } from "./catalog-filter-dialog";
 import { catalogSwatchPaint } from "./catalog-swatch";
 import {
@@ -314,6 +315,9 @@ export function catalogCountQuery(params: URLSearchParams): URLSearchParams {
   const query = new URLSearchParams();
   for (const [key, value] of params) {
     if (key === "sortBy" || key === "page" || key === "limit") continue;
+    // Ad-click, campaign and freshness parameters are the browser URL's, never the API's
+    // (an undeclared key is refused there).
+    if (isStorefrontIgnoredQueryParam(key)) continue;
     query.append(key === "q" ? "search" : key, value);
   }
   query.set("limit", "1");
