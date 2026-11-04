@@ -15,14 +15,17 @@ export function readLibrarySelection(url: URL): { section: StorefrontSection; sc
     || normalizeThemePreviewRoutePath(raw) !== raw) return null;
   const presence = presenceOfPath(raw);
   const path = presence ? stripPresencePath(raw, presence) : raw;
+  // The page's own editable part, by its exact shape: a page with none (a
+  // product's reviews, the blog, search, compare, an app page) offers no library.
+  const [first, second, ...rest] = path.split("/").filter(Boolean);
   let scope: StorefrontPreviewScope;
   if (path === "/") scope = { kind: "home" };
-  else if (path.startsWith("/pages/")) scope = { kind: "landing", slug: path.slice(7) };
-  else if (path === "/cart") scope = { kind: "template", template: "cart", main: 0 };
-  else if (path.startsWith("/products/")) scope = { kind: "template", template: "product", main: 0 };
-  else if (path.startsWith("/categories/")) scope = { kind: "template", template: "collection", main: 0 };
-  else if (path.startsWith("/collections/")) scope = { kind: "template", template: "collection", main: 0 };
-  else if (/^\/[A-Za-z0-9_-]+$/.test(path) && !["/search", "/products", "/categories", "/collections"].includes(path)) scope = { kind: "template", template: "page", main: 0 };
+  else if (rest.length > 0) return null;
+  else if (first === "pages" && second) scope = { kind: "landing", slug: second };
+  else if (first === "cart" && !second) scope = { kind: "template", template: "cart", main: 0 };
+  else if (first === "products" && second) scope = { kind: "template", template: "product", main: 0 };
+  else if ((first === "categories" || first === "collections" || first === "brands") && second) scope = { kind: "template", template: "collection", main: 0 };
+  else if (first && !second && /^[A-Za-z0-9_-]+$/.test(first) && !["search", "products", "categories", "collections", "blog", "compare"].includes(first)) scope = { kind: "template", template: "page", main: 0 };
   else return null;
   const section: StorefrontSection | null = key !== "app" && (STOREFRONT_SECTION_RENDERERS as readonly string[]).includes(key)
     ? storefrontSectionDefault(key as StorefrontSectionType, "library-section")

@@ -1,15 +1,16 @@
-// A live theme preview never draws a buyer's own page (checkout, account,
-// receipts, tracking...): the draft is the merchant's, the page is a buyer's.
-// Navigating there under a live preview, in a tab or in the theme editor's
-// frame, answers this notice in place of the page, which never renders: it
-// says why, and offers the home page (and, in a tab, to leave the preview).
-// A request without the preview cookie (every buyer's) is never checked; a
-// preview the API says has ended, or gave no answer about, renders the page
-// as usual, under the published theme.
-import type { LayoutData } from "@/lib/api";
+// A buyer's own page (checkout, account, receipts, tracking...) never draws a
+// draft and is never framed by the dashboard, whatever the request: the
+// page's theme resolution and its frame policy both skip the preview there
+// (`resolveRequestTheme`, the middleware's `themePreviewFrameAncestors`).
+// This notice only tells the merchant so: a navigation there under a live
+// preview, in a tab or in the theme editor's frame, answers it in place of
+// the page, with a way home (and, in a tab, out of the preview). A request
+// without the preview cookie (every buyer's) is never checked; a preview the
+// API says has ended, or gave no answer about, renders the page as usual.
+import { resolveThemePreview, type LayoutData } from "@/lib/api";
 import { getRuntimeDashboardUrl } from "@/lib/api/runtime";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
-import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontLanguage } from "@/lib/storefront-language";
 import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 import { themePreviewCopy } from "@/lib/theme-preview-copy";
 import { isBuyerOwnPagePath } from "@/lib/theme-preview-route";
@@ -28,22 +29,21 @@ function escapeHtml(value: string): string {
  * dashboard), so the transport adds no `X-Frame-Options` over it.
  */
 export async function themePreviewBuyerPageNotice(
-  context: { request: Request; url: URL; locals: object },
+  context: { request: Request; url: URL },
   layout: Promise<LayoutData | null>,
 ): Promise<Response | null> {
   const { request, url } = context;
   if (request.method !== "GET" && request.method !== "HEAD") return null;
-  if (!readThemePreviewCookie(request.headers.get("cookie"))) return null;
-  if (!isBuyerOwnPagePath(url.pathname)) return null;
+  const token = readThemePreviewCookie(request.headers.get("cookie"));
+  if (!token || !isBuyerOwnPagePath(url.pathname)) return null;
   const destination = request.headers.get("sec-fetch-dest");
   if (destination && !NAVIGATION_DESTINATIONS.has(destination)) return null;
 
-  const layoutData = await layout;
-  const theme = await resolveRequestTheme(context, layoutData);
-  if (!theme.preview) return null;
+  const [layoutData, resolution] = await Promise.all([layout, resolveThemePreview(token)]);
+  if (resolution.state !== "live") return null;
 
   const copy = themePreviewCopy(layoutData?.storefrontCopy?.languageCode);
-  const lang = theme.language;
+  const lang = storefrontLanguage(layoutData?.storefrontCopy?.languageCode);
   // Leaving the preview is offered in a tab of its own; the editor's frame keeps its session.
   const exit = destination === "document"
     ? `<form method="post" action="/theme-preview/exit"><button type="submit">${escapeHtml(copy.exitPreview)}</button></form>`
