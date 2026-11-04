@@ -34,10 +34,11 @@ const groups = [
     (logo.src || brandName) && (
       <a href="/" class="newsletter-logo">
         {logo.src ? (
-          <img src={mediaImageUrl(logo.src, 480)} alt={brandName || copy.home} width={344} height={256} loading="lazy" decoding="async" />
+          <img src={mediaImageUrl(logo.src, 480)} alt={brandName || copy.home} width={344} height={256} loading="lazy" decoding="async" class:list={[logo.darkSrc && "dark:hidden"]} />
         ) : (
           <span>{brandName}</span>
         )}
+        {logo.darkSrc && <img src={mediaImageUrl(logo.darkSrc, 480)} alt={brandName || copy.home} width={344} height={256} loading="lazy" decoding="async" class="hidden dark:inline" />}
       </a>
     )
   }

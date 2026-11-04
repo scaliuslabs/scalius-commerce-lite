@@ -24,6 +24,8 @@
   --n-muted: var(--muted-foreground, #625a50);
   --n-soft: var(--secondary, #efe8dc);
   --n-line: var(--border, #e3dbce);
+  /* A text field's border: its only edge, so it shows (3:1) where a divider need not (WCAG 1.4.11). */
+  --n-field: var(--input, #90877b);
   --n-brand: var(--primary, #1f3d33);
   --n-brand-ink: var(--primary-foreground, #f7f3ec);
   --n-accent: var(--accent, #e8d9bf);
@@ -520,6 +522,26 @@
 /* Logo first: logo, menu and icons in one row; the menu takes the room left and never runs into them. */
 .noor-header.is-start .noor-header-bar { grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto; grid-template-areas: "start logo nav end"; }
 .noor-header.is-start .noor-header-bar > .noor-logo { justify-self: start; }
+/* Phones and tablets, logo in the middle: both sides are as wide as the
+   icons at the end (the cart, the search button, and the store's light or
+   dark switch where it is in the bar: from 23.75rem, below which it is in the
+   menu), so the logo sits at the bar's centre, and the logo keeps to the room
+   between them, clear of every icon (WCAG 2.5.8). */
+@media (max-width: 63.99rem) {
+  .noor-header.is-center .noor-header-bar {
+    --noor-search: 0;
+    --noor-switch: 0;
+    --noor-side: calc((1 + var(--noor-search) + var(--noor-switch)) * 2.75rem + (var(--noor-search) + var(--noor-switch)) * 0.25rem);
+    --noor-logo-room: calc(100vw - 2 * (var(--n-gutter) - 0.5rem) - 1.5rem - 2 * var(--noor-side));
+  }
+  .noor-header.is-center .noor-header-bar:has(> .noor-header-end > .noor-icon-btn.noor-phone-only) { --noor-search: 1; }
+  .noor-header.is-center :is(.noor-header-start, .noor-header-end) { min-inline-size: var(--noor-side); }
+  .noor-header.is-center .noor-header-bar > .noor-logo { max-inline-size: var(--noor-logo-room); }
+  .noor-header.is-center .noor-logo-img { max-inline-size: min(var(--noor-logo-width, 140px), 44vw, var(--noor-logo-room)); }
+}
+@media (min-width: 23.75rem) and (max-width: 63.99rem) {
+  :root[data-color-scheme-switch]:not([data-color-scheme-switch-yields]) .noor-header.is-center .noor-header-bar:has(> .noor-header-end [data-color-scheme-toggle]) { --noor-switch: 1; }
+}
 @media (min-width: 64rem) {
   .noor-header-bar { min-block-size: 4.25rem; padding-inline: var(--n-gutter); column-gap: 1.5rem; }
   .noor-header.is-start .noor-header-bar { column-gap: 2.5rem; }
@@ -556,15 +578,16 @@
 @media (min-width: 64rem) { .noor-logo-img { max-block-size: 2.75rem; } .noor-logo-text { font-size: 1.875rem; } }
 /* The store's logo for dark pages, while the store paints its dark colours:
    the dark scheme (or the buyer's switch), and the device's dark setting
-   under the `system` scheme before (or without) JavaScript. Screens only. */
-.noor-logo .noor-logo-dark { display: none; }
+   under the `system` scheme before (or without) JavaScript. Screens only.
+   The header and the footer pick the same way. */
+:is(.noor-logo, .noor-footer-logo) .noor-logo-dark { display: none; }
 @media screen {
-  :root[data-color-scheme="dark"] .noor-logo .noor-logo-light { display: none; }
-  :root[data-color-scheme="dark"] .noor-logo .noor-logo-dark { display: block; }
+  :root[data-color-scheme="dark"] :is(.noor-logo, .noor-footer-logo) .noor-logo-light { display: none; }
+  :root[data-color-scheme="dark"] :is(.noor-logo, .noor-footer-logo) .noor-logo-dark { display: block; }
 }
 @media screen and (prefers-color-scheme: dark) {
-  :root[data-color-scheme="system"] .noor-logo .noor-logo-light { display: none; }
-  :root[data-color-scheme="system"] .noor-logo .noor-logo-dark { display: block; }
+  :root[data-color-scheme="system"] :is(.noor-logo, .noor-footer-logo) .noor-logo-light { display: none; }
+  :root[data-color-scheme="system"] :is(.noor-logo, .noor-footer-logo) .noor-logo-dark { display: block; }
 }
 
 .noor-icon-btn {
@@ -712,7 +735,10 @@
     color: #fff;
   }
   .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-search-trigger { color: inherit; }
-  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-header .noor-logo-img { filter: brightness(0) invert(1); }
+  /* Over the photo: the store's logo for dark pages in either scheme, else the logo knocked out in white. */
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-header .noor-logo-img:not(.noor-logo-light, .noor-logo-dark) { filter: brightness(0) invert(1); }
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-header .noor-logo .noor-logo-light { display: none; }
+  .noor-header-shell.is-transparent:not([data-scrolled]):not(:has(.noor-nav-item:hover, .noor-nav-item:focus-within, .noor-nav [aria-expanded="true"])) .noor-header .noor-logo .noor-logo-dark { display: block; }
   @media (min-width: 64rem) {
     .noor-header-shell.is-transparent { margin-block-end: calc((4.25rem + 2.25rem) * -1); }
     .noor-header-shell.is-transparent:not(:has(.noor-announce)) { margin-block-end: -4.25rem; }
@@ -805,7 +831,7 @@
 .noor-search-suggest a { display: inline-flex; padding: 0.4375rem 0.875rem; border: 1px solid var(--n-line); border-radius: 999px; color: inherit; font-size: 0.875rem; text-decoration: none; }
 .noor-search-suggest a:hover { border-color: var(--n-ink); }
 
-.noor-field { display: flex; align-items: center; gap: 0.625rem; padding-inline: 0.875rem 0.25rem; border: 1px solid var(--n-line); border-radius: var(--n-btn-radius); background: var(--n-bg); color: var(--n-muted); }
+.noor-field { display: flex; align-items: center; gap: 0.625rem; padding-inline: 0.875rem 0.25rem; border: 1px solid var(--n-field); border-radius: var(--n-btn-radius); background: var(--n-bg); color: var(--n-muted); }
 .noor-field:focus-within { border-color: var(--n-ink); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, var(--n-brand)) 22%, transparent); }
 .noor-field input:focus-visible { outline: none; }
 .noor-field input { flex: 1; min-inline-size: 0; block-size: 2.75rem; border: 0; outline: 0; background: transparent; color: var(--n-ink); font: inherit; font-size: 1rem; }
@@ -814,7 +840,8 @@
 /* ── Footer ─────────────────────────────────────────────────────────────── */
 
 .noor-footer { --f-pad: clamp(2.5rem, 1.8rem + 2.5vw, 4rem); color: var(--n-ink); background: var(--n-soft); font-size: 0.875rem; }
-.noor-footer.tone-ink { --n-muted: color-mix(in oklab, var(--n-bg) 66%, transparent); --n-line: color-mix(in oklab, var(--n-bg) 16%, transparent); color: var(--n-bg); background: var(--n-ink); }
+/* Dark: the store's ink surface (the darker of page and text), so it stays dark when dark colours show. */
+.noor-footer.tone-ink { --n-ink: var(--theme-ink, var(--foreground, #1a1714)); --n-bg: var(--theme-ink-foreground, var(--background, #f7f3ec)); --n-muted: color-mix(in oklab, var(--n-bg) 66%, transparent); --n-line: color-mix(in oklab, var(--n-bg) 16%, transparent); color: var(--n-bg); background: var(--n-ink); }
 .noor-footer.tone-plain { background: var(--n-bg); border-block-start: 1px solid var(--n-line); }
 :where(.noor-footer) :where(h2, p, ul) { margin: 0; }
 :where(.noor-footer) :where(ul) { padding: 0; list-style: none; }
@@ -829,7 +856,8 @@
   .noor-footer-brand { grid-column: auto; }
 }
 .noor-footer-logo .noor-logo-img { max-block-size: 2.5rem; }
-.noor-footer.tone-ink .noor-footer-logo .noor-logo-img { filter: brightness(0) invert(1); }
+/* The header's logo on the dark footer, when the store has no logo made for one: drawn in white, which reads on it in both schemes. */
+.noor-footer-logo .noor-logo-img.is-knockout { filter: brightness(0) invert(1); }
 .noor-footer-logo .noor-logo-text { font-size: 1.75rem; }
 .noor-footer-tagline { color: var(--n-muted); line-height: 1.6; }
 .noor-contact { display: grid; gap: 0.5rem; color: var(--n-muted); }

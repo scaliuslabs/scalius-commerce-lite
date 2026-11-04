@@ -143,7 +143,8 @@ const sections = [
     name: "Featured product",
     description: "One product in the spotlight: a large photo, the price, a few points and add to cart.",
     settings: [
-      { key: "product", label: "Product", type: "product", required: true },
+      // Optional: a template places this section before the store has chosen a product, and it must still save.
+      { key: "product", label: "Product", type: "product", help: "The section shows once you choose one." },
       { key: "eyebrow", label: "Small heading", type: "text", default: "Featured product", maxLength: 60 },
       { key: "heading", label: "Heading", type: "text", maxLength: 120, help: "Leave empty to use the product's name." },
       { key: "text", label: "Text", type: "textarea", maxLength: 400 },
@@ -541,7 +542,8 @@ const tokens = {
     muted: "#efe8dc", "muted-foreground": "#625a50",
     accent: "#e8d9bf", "accent-foreground": "#3b2c16",
     destructive: "#b42318", "destructive-foreground": "#ffffff",
-    border: "#e3dbce", input: "#cfc4b3", ring: "#1f3d33",
+    // The field border shows (3:1) against the page and the card (WCAG 1.4.11).
+    border: "#e3dbce", input: "#90877b", ring: "#1f3d33",
   },
   typography: "editorial",
   typeScale: "display",

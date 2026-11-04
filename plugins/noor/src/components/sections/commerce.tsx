@@ -18,7 +18,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { Icon } from "../icons";
-import { Button, Products, Rail, Section, SectionHead, Stars, cardActionWords, choice, cx, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
+import { Button, Empty, Products, Rail, Section, SectionHead, Stars, cardActionWords, choice, cx, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
 
 // ── Products with tabs ───────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ export interface FeaturedSettings {
 
 export function FeaturedProduct({ settings, context }: SectionProps<FeaturedSettings>) {
   const product = settings.product;
-  if (!product) return null;
+  if (!product) return <Empty context={context} words={{ en: "Choose the product to feature in the section's settings.", bn: "সেকশনের সেটিংসে যে প্রোডাক্টটি দেখাবেন সেটি বাছুন।" }} />;
   const photo = settings.image ?? product.image;
   const points = settings.points.flatMap((point) => (text(point.text) ? [text(point.text)!] : []));
   return (

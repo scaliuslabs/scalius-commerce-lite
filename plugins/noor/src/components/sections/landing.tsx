@@ -20,7 +20,7 @@ import {
   type StorefrontProductCard,
 } from "@scalius/plugin-sdk/storefront";
 import { ICON_NAMES, Icon, type IconName } from "../icons";
-import { Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
+import { Empty, Section, SectionHead, Stars, choice, cx, percent, ratingLabel, ratingValue, reviewCount, saleBadge, text, type Context } from "../ui";
 import { Countdown, countdownEnd } from "./commerce";
 
 function iconOf(value: unknown): IconName {
@@ -35,10 +35,6 @@ function phoneHref(value: string | null): string | null {
 function whatsappHref(value: string | null): string | null {
   const digits = (value ?? "").replace(/\D/g, "");
   return digits.length >= 8 ? `https://wa.me/${digits}` : null;
-}
-
-function Empty({ context, words }: { context: Context; words: { en: string; bn: string } }) {
-  return context.preview ? <Section name="landing-empty" space="s"><p class="noor-empty">{t(context, words)}</p></Section> : null;
 }
 
 function Savings({ product, context }: { product: StorefrontProductCard; context: Context }) {

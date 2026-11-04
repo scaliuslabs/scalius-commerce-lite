@@ -18,11 +18,35 @@ export interface FooterSettings {
   landing_footer: string;
 }
 
+type FooterStore = FooterProps<FooterSettings>["data"]["store"];
+type Logo = NonNullable<FooterStore["logo"]>;
+
+/**
+ * The footer's logo for its surface. The dark footer (`ink`, the store's ink,
+ * dark in both schemes) takes a logo made for it: the theme's footer logo,
+ * else the logo for dark pages, else the header's logo knocked out in white.
+ * The soft and plain footers follow the page: the footer logo (the header's
+ * when there is none) on light pages and, while the store paints its dark
+ * colours, its logo for dark pages, as the header does. `dark` is set only
+ * when it differs from `light`.
+ */
+export function footerLogos(store: Pick<FooterStore, "logo" | "darkLogo" | "footerLogo">, tone: "ink" | "soft" | "plain"): { light: Logo | null; dark: Logo | null; knockout: boolean } {
+  // The store hands the header's logo as the footer logo when the theme names none.
+  const own = store.footerLogo && store.footerLogo.url !== store.logo?.url ? store.footerLogo : null;
+  if (tone === "ink") {
+    const light = own ?? store.darkLogo ?? store.logo;
+    return { light, dark: null, knockout: light !== null && light === store.logo };
+  }
+  const light = own ?? store.logo;
+  const dark = store.darkLogo && store.darkLogo.url !== light?.url ? store.darkLogo : null;
+  return { light, dark, knockout: false };
+}
+
 export function Footer({ data, settings, context }: FooterProps<FooterSettings>) {
   const heading = text(settings.newsletter_heading);
   const payments = settings.payments.flatMap((payment) => (text(payment.name) ? [text(payment.name)!] : []));
-  const logo = data.store.footerLogo ?? data.store.logo;
   const tone = choice(settings.tone, ["ink", "soft", "plain"] as const, "ink");
+  const logo = footerLogos(data.store, tone);
   const campaign = context.page.kind === "landing" && choice(settings.landing_footer, ["full", "campaign"] as const, "campaign") === "campaign";
   const legal = (
     <div class="noor-footer-legal">
@@ -56,7 +80,11 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
         <div class="noor-footer-main" style={{ "--noor-menus": Math.max(1, Math.min(4, data.menus.length)) }}>
           <div class="noor-footer-brand">
             <a class="noor-footer-logo" href={data.routes.home} aria-label={data.store.name}>
-              {logo ? <Image image={logo} alt={data.store.name} class="noor-logo-img" /> : <span class="noor-logo-text">{data.store.name}</span>}
+              {logo.light ? (
+                <Image image={logo.light} alt={data.store.name} class={cx("noor-logo-img", logo.dark && "noor-logo-light", logo.knockout && "is-knockout")} />
+              ) : <span class={cx("noor-logo-text", logo.dark && "noor-logo-light")}>{data.store.name}</span>}
+              {/* Dark pages show the store's logo for dark pages where the footer turns dark with them (CSS picks one). */}
+              {logo.dark ? <Image image={logo.dark} alt={data.store.name} class="noor-logo-img noor-logo-dark" /> : null}
             </a>
             {text(settings.tagline) ? <p class="noor-footer-tagline" {...editable(context, "tagline")}>{settings.tagline}</p> : null}
             <ul class="noor-contact">

@@ -30,6 +30,8 @@ export interface FooterInput {
   words: FooterWords;
   /** The theme's footer logo; null: the store name in text. */
   logo: StorefrontBrandAsset | null;
+  /** The theme's logo for dark pages. */
+  darkLogo?: StorefrontBrandAsset | null;
   menus: FooterMenu[];
   storeName: string | null;
   storePhone: string | null;
@@ -41,8 +43,14 @@ export interface FooterInput {
 }
 
 export interface FooterModel {
-  /** The footer logo's image (`src` "" without one: the store name in text). */
-  logo: { src: string };
+  /**
+   * The footer logo's image (`src` "" without one: the store name in text),
+   * and the image dark pages show instead (`darkSrc`, "" for the same one).
+   * Every footer surface is dark while the dark colours show, and the footer
+   * logo was chosen for the light ones' footer, so dark pages take the logo
+   * for dark pages, as the header does.
+   */
+  logo: { src: string; darkSrc: string };
   brandName: string;
   storePhone: string | null;
   phoneHref: string | null;
@@ -92,7 +100,7 @@ export function footerModel(input: FooterInput): FooterModel {
     .map((policy) => ({ title: policy.title, href: policy.path }))
     .filter((link) => !linkedHrefs.has(link.href));
   return {
-    logo: { src: logo?.url ?? "" },
+    logo: { src: logo?.url ?? "", darkSrc: logo && input.darkLogo && input.darkLogo.url !== logo.url ? input.darkLogo.url : "" },
     brandName,
     storePhone,
     phoneHref,

@@ -101,10 +101,11 @@ const copy = storefrontCopy(language).chrome;
   {marketplace && (logo.src || brandName) && (
     <div class="directory-identity" data-footer-identity>
       {logo.src ? (
-        <img src={mediaImageUrl(logo.src, 320)} alt={brandName || copy.home} width="160" height="48" loading="lazy" decoding="async" />
+        <img src={mediaImageUrl(logo.src, 320)} alt={brandName || copy.home} width="160" height="48" loading="lazy" decoding="async" class:list={[logo.darkSrc && "dark:hidden"]} />
       ) : (
         <span>{brandName}</span>
       )}
+      {logo.darkSrc && <img src={mediaImageUrl(logo.darkSrc, 320)} alt={brandName || copy.home} width="160" height="48" loading="lazy" decoding="async" class="hidden dark:block" />}
     </div>
   )}
 </div>

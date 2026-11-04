@@ -44,10 +44,24 @@ const copy = storefrontCopy(language).chrome;
               height={256}
               loading="lazy"
               decoding="async"
-              class="h-12 sm:h-14 w-auto object-contain"
+              class:list={["h-12 sm:h-14 w-auto object-contain", logo.darkSrc && "dark:hidden"]}
             />
           ) : (
             <span class="text-lg font-bold">{brandName}</span>
+          )
+        }
+        {/* Dark pages show the logo for dark pages (CSS picks it: a hidden lazy image never loads). */}
+        {
+          logo.darkSrc && (
+            <img
+              src={mediaImageUrl(logo.darkSrc, 480)}
+              alt={brandName || copy.home}
+              width={344}
+              height={256}
+              loading="lazy"
+              decoding="async"
+              class="hidden h-12 sm:h-14 w-auto object-contain dark:block"
+            />
           )
         }
       </a>

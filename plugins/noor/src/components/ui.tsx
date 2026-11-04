@@ -68,6 +68,11 @@ export function Section({ name, tone, space, bleed = false, label, children, id 
   );
 }
 
+/** What a section waiting on a merchant's choice (its product) shows: a note in the theme editor, nothing to buyers. */
+export function Empty({ context, words }: { context: Context; words: { en: string; bn: string } }) {
+  return context.preview ? <Section name="landing-empty" space="s"><p class="noor-empty">{t(context, words)}</p></Section> : null;
+}
+
 export function SectionHead({ eyebrow, heading, body, link, linkLabel, align = "start", level = 2, context, children }: {
   eyebrow?: string | null;
   heading?: string | null;
