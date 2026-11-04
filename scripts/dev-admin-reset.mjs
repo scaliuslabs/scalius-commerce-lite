@@ -22,6 +22,7 @@ export const LOCAL_AUTH_RESET_TABLES = Object.freeze([
   "admin_setup_rate_limits",
   "scanner_token_claims",
   "rate_limit",
+  "staff_auth_attempts",
   "session",
   "account",
   "verification",

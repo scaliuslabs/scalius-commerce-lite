@@ -135,6 +135,17 @@ export const rateLimit = sqliteTable("rate_limit", {
     index("rate_limit_last_request_idx").on(table.lastRequest),
 ]);
 
+/**
+ * Staff password and code attempts per window (`<scope>:<hash>` keys). Kept
+ * apart from Better Auth's `rate_limit`, whose own limiter deletes every row
+ * there older than its longest window whenever one of its windows resets.
+ */
+export const staffAuthAttempts = sqliteTable("staff_auth_attempts", {
+    key: text("key").primaryKey(),
+    attempts: integer("attempts").notNull(),
+    windowStartedAt: integer("window_started_at").notNull(),
+});
+
 export const adminSetupClaims = sqliteTable("admin_setup_claims", {
     singletonKey: text("singleton_key").primaryKey(),
     status: text("status", { enum: ["processing", "completed", "failed"] }).notNull().default("processing"),

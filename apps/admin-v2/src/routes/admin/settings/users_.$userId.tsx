@@ -40,6 +40,7 @@ import {
   type StaffStatus,
 } from "~/components/admin/settings/staff-access";
 import { apiClient, apiData } from "~/lib/api";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import type { AdminUser } from "~/lib/api-query-options/rbac";
 import { rolesQuery, staffQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
@@ -248,7 +249,16 @@ function AccountActions({ member, actions }: { member: AdminUser; actions: Staff
   const cancelInvite = useMutation({
     mutationFn: () => apiData(deleteApiV1AdminAuthUsersById({ path: { id: member.id } })),
     onSuccess: () => leave(t("inviteCancelled")),
-    onError,
+    onError: async (error) => {
+      const status = error instanceof AdminApiResponseError ? error.status : null;
+      if (status !== 409 && status !== 404) return onError(error);
+      // Accepted or cancelled since this page loaded: say so and show where it stands now.
+      toast.error(t("inviteNotPending"));
+      setConfirm(null);
+      await reload();
+      // A cancelled invite took the person with it.
+      if (status === 404) await navigate({ to: "/admin/settings/users" });
+    },
   });
   const remove = useMutation({
     mutationFn: () => removeStaff(member.id),

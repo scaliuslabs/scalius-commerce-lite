@@ -680,11 +680,13 @@ app.openapi(deleteUserRoute, async (c) => {
             .where(eq(user.id, userId)).get();
         if (!userToDelete) throw new NotFoundError("User not found");
         if (userToDelete.isSuperAdmin) throw new ValidationError("Cannot delete a super admin user");
+        // A page opened before the invitee accepted still offers Cancel invite: the
+        // state moved on, so the answer is a conflict the dashboard explains.
         if (!userToDelete.mustChangePassword) {
-            throw new ValidationError("Completed administrator access must be suspended instead of deleted");
+            throw new ConflictError("They already accepted the invite, so it can't be cancelled. Suspend or remove their access instead.");
         }
         if (!userToDelete.invitationId || userToDelete.invitationStatus !== "pending") {
-            throw new ValidationError("Only a pending administrator invitation can be revoked");
+            throw new ConflictError("There is no pending invite to cancel.");
         }
 
         const targetAdminPrincipal = await db
@@ -765,7 +767,7 @@ app.openapi(deleteUserRoute, async (c) => {
         return ok(c, { message: "Administrator invitation revoked" });
     } catch (error: unknown) {
         if (isBatchGuardError(error, "ADMIN_INVITATION_REVOKE_CONFLICT")) {
-            throw new ConflictError("The invitation was accepted or changed before it could be revoked");
+            throw new ConflictError("They accepted the invite before it could be cancelled. Suspend or remove their access instead.");
         }
         console.error("Delete admin user error:", error);
         throw error;
@@ -1669,6 +1671,12 @@ app.openapi(update2faMethodRoute, async (c) => {
                             eq(sessionTable.userId, sessionUser.id),
                             eq(sessionTable.token, proofSession.sessionToken),
                         )),
+                    // A new second factor signs out every other session: each
+                    // must sign in again with the method in use now.
+                    db.delete(sessionTable).where(and(
+                        eq(sessionTable.userId, sessionUser.id),
+                        ne(sessionTable.id, proofSession.sessionId),
+                    )),
                     db.delete(verification).where(and(
                         eq(verification.id, methodInput.challengeId),
                         eq(verification.identifier, identifier),
@@ -1732,6 +1740,10 @@ app.openapi(update2faMethodRoute, async (c) => {
                         eq(sessionTable.id, session.id),
                         eq(sessionTable.userId, sessionUser.id),
                     )),
+                db.delete(sessionTable).where(and(
+                    eq(sessionTable.userId, sessionUser.id),
+                    ne(sessionTable.id, session.id),
+                )),
                 db.delete(verification).where(and(
                     eq(verification.id, methodInput.challengeId),
                     eq(verification.identifier, identifier),

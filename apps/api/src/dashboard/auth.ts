@@ -614,14 +614,37 @@ async function gateSignIn(env: Env, request: Request): Promise<SignInGate> {
   return { email, attempt };
 }
 
-/** Gives a right password's attempt back and marks the browser; a wrong one keeps its attempt. */
-async function settleSignIn(env: Env, gate: { email: string | null; attempt: StaffAttempt | null }, response: Response): Promise<Response> {
-  if (!gate.email || !response.ok) return response;
+/**
+ * Gives back the attempt of a right password, or of one never checked (Better
+ * Auth refused it first), and marks the browser after a right one; a wrong
+ * password keeps its attempt.
+ */
+async function settleSignIn(
+  env: Env,
+  gate: { email: string | null; attempt: StaffAttempt | null },
+  response: Response,
+  checked: boolean,
+): Promise<Response> {
+  if (!gate.email) return response;
+  if (!checked) {
+    await gate.attempt?.refund();
+    return response;
+  }
+  if (!response.ok) return response;
   await gate.attempt?.refund();
   const mark = await knownDeviceCookie(env, gate.email, Math.floor(Date.now() / 1000));
   if (!mark) return response;
   const headers = new Headers(response.headers);
   headers.append("Set-Cookie", mark);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+/** Better Auth's own limit answers 429 with only `X-Retry-After`; the standard header carries the same wait. */
+function withRetryAfter(response: Response): Response {
+  const wait = response.headers.get("X-Retry-After");
+  if (response.status !== 429 || !wait || response.headers.has("Retry-After")) return response;
+  const headers = new Headers(response.headers);
+  headers.set("Retry-After", wait);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -777,11 +800,13 @@ export async function handleDashboardAuthRequest(
   const isSignIn = method === "POST" && route === SIGN_IN_EMAIL_PATH;
   const signInGate = isSignIn ? await gateSignIn(authEnv, request) : null;
   if (signInGate && "refused" in signInGate) return signInGate.refused;
-  let response = await runWithRetry((attempt) => auth.handler(attempt), routed, isSignIn);
+  let response = withRetryAfter(await runWithRetry((attempt) => auth.handler(attempt), routed, isSignIn));
+  // Better Auth answers 429 (its own limit, its two-step lockout) before checking anything.
+  const checked = response.status !== 429;
   if (isSignIn) response = await offerAccountTwoFactorMethods(authEnv, request, response);
-  if (signInGate) response = await settleSignIn(authEnv, signInGate, response);
+  if (signInGate) response = await settleSignIn(authEnv, signInGate, response, checked);
   if (verifiesSecondFactor) await markTwoFactorVerified(authEnv, response);
-  if (proofAttempt && response.ok) await proofAttempt.refund();
+  if (proofAttempt && (response.ok || !checked)) await proofAttempt.refund();
   if (holder) await signOutOthersIfTwoStepTurnedOn(authEnv, holder, response);
   return withNoStore(response);
 }

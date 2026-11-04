@@ -46,10 +46,15 @@ export interface OtpSendAllowance {
     resendCooldownSeconds: number;
 }
 
+/** The refusal's `details.reason` while a contact's last code is still in its resend cooldown. */
+export const OTP_RESEND_COOLDOWN_REASON = "code_recently_sent";
+/** The refusal's `details.reason` once a contact's overall ceiling is reached (its latest code still works). */
+export const OTP_CONTACT_CEILING_REASON = "code_limit_reached";
+
 /** Thrown when a contact's overall ceiling (not one sender's) is reached. */
 export class OtpContactCeilingError extends RateLimitError {
     constructor(retryAfterSeconds: number) {
-        super(OTP_CONTACT_CEILING_MESSAGE, retryAfterSeconds);
+        super(OTP_CONTACT_CEILING_MESSAGE, retryAfterSeconds, OTP_CONTACT_CEILING_REASON);
     }
 }
 
