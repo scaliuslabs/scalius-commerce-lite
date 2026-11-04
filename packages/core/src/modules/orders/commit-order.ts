@@ -5,6 +5,7 @@
 // record) and hands the kernel the statements that policy adds.
 import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
+    abandonedCheckouts,
     codTracking,
     customerHistory,
     customers,
@@ -21,7 +22,7 @@ import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import { BUILT_IN_SALES_CHANNEL_IDS } from "@scalius/shared/sales-channels";
-import { ServiceUnavailableError, ValidationError } from "../../errors";
+import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
 import { linkedOrderHistory, type VerifiedContact } from "../customers";
 import {
     isInventoryReservationConflictError,
@@ -43,6 +44,7 @@ import { nextOrderNumberSql } from "./number";
 import { deferredOrderColumns } from "./payment-terms-columns";
 import { orderShippingAddressInsertColumns, orderShippingCountry } from "./shipping-address";
 import type { OrderFacts, OrderLine } from "./types";
+import { ABANDONED_CHECKOUT_SESSION_ID_PATTERN } from "./validation";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 type ReservationPool = "regular" | "preorder" | "backorder";
@@ -54,6 +56,7 @@ export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
 const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
 const ORDER_CUSTOMER_ACCOUNT_INACTIVE = "ORDER_CUSTOMER_ACCOUNT_INACTIVE";
+const ORDER_CUSTOMER_RETIRED = "ORDER_CUSTOMER_RETIRED";
 
 /** A fully priced order, as every channel commits it. */
 export interface OrderPlan {
@@ -72,6 +75,12 @@ export interface OrderPlan {
     appDiscounts?: readonly AppliedAppDiscount[];
     /** The stable identity of the order's ledger-v2 reservation movements. */
     reservationKey: string;
+    /**
+     * The abandoned-checkout session the order completes (a storefront
+     * checkout's session id, or the snapshot staff created the order from):
+     * its row is deleted in the order batch. Any other id deletes nothing.
+     */
+    abandonedCheckoutId?: string | null;
 }
 
 /** The customer record an order is filed under, resolved by its channel's policy. */
@@ -135,6 +144,7 @@ export async function commitOrder(
 ): Promise<OrderCommitResult> {
     let variantStates = channel.variantStates;
     let customerRaceRetried = false;
+    let customerRetiredRetried = false;
     let inventoryConflicts = 0;
 
     while (true) {
@@ -155,6 +165,7 @@ export async function commitOrder(
             ...before,
             ...reservation.statements,
             ...orderRowStatements(db, plan, prelude.customer),
+            ...abandonedCheckoutStatements(db, plan),
             ...(prelude.after ?? []),
         ];
         let results: readonly unknown[];
@@ -177,6 +188,15 @@ export async function commitOrder(
             if (mapped) throw mapped;
             if (isBatchGuardError(error, ORDER_CUSTOMER_ACCOUNT_INACTIVE)) {
                 throw new ValidationError("Customer account is no longer active. Please sign in again.");
+            }
+            // The record the order was filed under was trashed or erased since the read: resolve
+            // the customer again (a guest order gets a fresh guest record), once.
+            if (isBatchGuardError(error, ORDER_CUSTOMER_RETIRED)) {
+                if (customerRetiredRetried) {
+                    throw new ConflictError("The customer record changed while the order was being placed. Please try again.");
+                }
+                customerRetiredRetried = true;
+                continue;
             }
             if (!customerRaceRetried && prelude.customer.createdBy && isCustomerContactConstraintError(error)) {
                 customerRaceRetried = true;
@@ -206,6 +226,18 @@ export async function commitOrder(
             ),
         };
     }
+}
+
+/**
+ * The abandoned checkout the order completes ends with it: deleted in the same
+ * batch, so no recovery list shows a checkout that became an order. Only a
+ * checkout session id names one (an archived hosted-payment order's row is
+ * keyed by its order id and is never deleted here).
+ */
+function abandonedCheckoutStatements(db: Database, plan: OrderPlan): SQLiteBatchItem[] {
+    const checkoutId = plan.abandonedCheckoutId?.trim();
+    if (!checkoutId || !ABANDONED_CHECKOUT_SESSION_ID_PATTERN.test(checkoutId)) return [];
+    return [db.delete(abandonedCheckouts).where(eq(abandonedCheckouts.checkoutId, checkoutId))];
 }
 
 /** The tracked lines an order reserves: none unless it holds stock from commit. */
@@ -340,6 +372,14 @@ function customerStatements(db: Database, od: OrderFacts, customer: OrderCustome
         }));
         return writes;
     }
+    // An existing record must still be live and not erased when the batch runs: an order never
+    // lands on a trashed or erased record (an erased one keeps no personal data).
+    writes.push(buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${customers}
+        WHERE ${customers.id} = ${customer.id}
+          AND ${customers.deletedAt} IS NULL
+          AND ${customers.erasedAt} IS NULL
+    )`, ORDER_CUSTOMER_RETIRED) as SQLiteBatchItem);
     // Counters only: the order's contact never rewrites the customer.
     writes.push(db.update(customers).set({
         totalOrders: sql`${customers.totalOrders} + 1`,

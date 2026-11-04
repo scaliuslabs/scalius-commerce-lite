@@ -37,6 +37,8 @@ export interface AtomicCheckoutAttempt {
   orderId: string;
   checkoutToken: string;
   statusToken: string;
+  /** The checkout session the buyer submitted; its abandoned-checkout snapshot ends with the order. */
+  checkoutRequestId?: string;
 }
 
 export type CheckoutAttemptReplayResult<TResponse> = { status: "replay"; response: TResponse };
@@ -90,12 +92,11 @@ export async function buildCheckoutAttemptIdentity(
   input: CreateStorefrontOrderInput,
 ): Promise<CheckoutAttemptIdentity> {
   const checkoutRequestId = normalizeCheckoutRequestId(input.checkoutRequestId);
-  const requestKeyHash = await sha256Hex(checkoutRequestId);
+  const requestKey = await checkoutAttemptRequestKey(checkoutRequestId);
   const normalized = normalizeCheckoutRequest(input);
   const customerWhatsapp = normalizeCheckoutWhatsapp(input);
   // A separate number binds the submitted contact even if settings discard it.
   const requestHash = await sha256Hex(stableStringify({ ...normalized, customerWhatsapp }));
-  const requestKey = `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${requestKeyHash}`;
 
   return {
     requestKey,
@@ -104,6 +105,11 @@ export async function buildCheckoutAttemptIdentity(
     checkoutRequestId,
     statusToken: buildCheckoutStatusTokenFromRequestKey(requestKey),
   };
+}
+
+/** The idempotency key (`checkout_attempts.request_key`) of a checkout request id. */
+export async function checkoutAttemptRequestKey(checkoutRequestId: string): Promise<string> {
+  return `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${await sha256Hex(normalizeCheckoutRequestId(checkoutRequestId))}`;
 }
 
 export function buildCheckoutStatusTokenFromRequestKey(requestKey: string): string {
@@ -133,6 +139,7 @@ export function createAtomicCheckoutAttempt(
     orderId: generateOrderId(),
     checkoutToken: createCheckoutToken(),
     statusToken: identity.statusToken,
+    checkoutRequestId: identity.checkoutRequestId,
   };
 }
 

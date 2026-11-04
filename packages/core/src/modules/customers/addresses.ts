@@ -33,6 +33,7 @@ import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/sha
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { customerNotErasedGuard, erasedCustomerConflict, isCustomerErasedError } from "./erased-guard";
 
 /** `details.reason` of every refused address. */
 export const ADDRESS_INVALID_REASON = "address_invalid";
@@ -470,12 +471,23 @@ export async function createCustomerAddress(
         updatedAt: sql`unixepoch()`,
     });
     const writes = [
+        // The record read above is still live and not erased when the batch runs.
+        customerNotErasedGuard(db, customerId, sql`${customers.deletedAt} IS NULL`),
         insert,
         ...(makeDefault ? defaultWrites(db, customerId, id) : []),
         ...(input.isDefaultBilling === true ? defaultBillingWrites(db, customerId, id) : []),
     ];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple typing.
-    await db.batch(writes as any);
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch tuple typing.
+        await db.batch(writes as any);
+    } catch (error) {
+        if (!isCustomerErasedError(error)) throw error;
+        const current = await db.select({ erasedAt: customers.erasedAt, deletedAt: customers.deletedAt })
+            .from(customers).where(eq(customers.id, customerId)).get();
+        if (current?.erasedAt) throw erasedCustomerConflict();
+        if (!current || current.deletedAt) throw new NotFoundError("Customer not found");
+        throw error;
+    }
     const row = await db.select().from(customerAddresses).where(eq(customerAddresses.id, id)).get();
     return customerAddressFromRow(row!);
 }

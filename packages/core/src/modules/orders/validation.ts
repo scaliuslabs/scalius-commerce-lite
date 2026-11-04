@@ -18,6 +18,9 @@ import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
 /** The one order line limit (`@scalius/shared/order-limits`). */
 export const MAX_ORDER_LINE_ITEMS = MAX_ORDER_LINES;
 
+/** A storefront checkout session id (`chk_session_<nanoid>`): an abandoned-checkout snapshot's `checkout_id`. */
+export const ABANDONED_CHECKOUT_SESSION_ID_PATTERN = /^chk_session_[A-Za-z0-9_-]{16,64}$/;
+
 const addressText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 /**
@@ -204,6 +207,11 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
      * is created. Omitted: the order is placed at its current total.
      */
     expectedTotal: z.number().min(0).optional(),
+    /**
+     * The abandoned checkout this order completes (its "Create order"): its
+     * snapshot is deleted in the order's own batch.
+     */
+    abandonedCheckoutId: z.string().regex(ABANDONED_CHECKOUT_SESSION_ID_PATTERN, "Use a checkout session id.").nullable().optional(),
 });
 
 /** Schema for creating a new order (POST /api/orders). */

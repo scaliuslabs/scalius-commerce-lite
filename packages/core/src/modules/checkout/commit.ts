@@ -500,6 +500,8 @@ export async function commitStorefrontOrderPayload(
         taxQuote: payload.taxQuote,
         appDiscounts: payload.appDiscounts,
         reservationKey: CHECKOUT_RESERVATION_KEY,
+        // The buyer's checkout session: its abandoned snapshot ends with the order.
+        abandonedCheckoutId: checkoutCommit?.attempt.checkoutRequestId ?? null,
     }, {
         variantStates: prefetchedReads?.variantStates,
         async prepare() {

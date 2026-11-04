@@ -169,7 +169,7 @@ function CheckoutSheet({
 
   const createOrder = () => {
     if (!checkout || !display) return;
-    writeOrderPrefill(buildOrderPrefill(checkout.checkoutData, display));
+    writeOrderPrefill(buildOrderPrefill(checkout.checkoutData, display, checkout.checkoutId));
     void navigate({ to: "/admin/orders/new" });
   };
 
