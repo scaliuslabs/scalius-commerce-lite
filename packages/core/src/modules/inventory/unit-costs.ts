@@ -85,7 +85,8 @@ export async function setSkuCosts(db: Database, input: SetSkuCostsInput): Promis
   }));
   const live = await db.select({ id: productVariants.id })
     .from(productVariants)
-    .where(and(inJsonArray(productVariants.id, planned.map((item) => item.variantId)), isNull(productVariants.deletedAt)))
+    // The id list leads (`+deleted_at`), so the check reads the SKUs by primary key.
+    .where(and(inJsonArray(productVariants.id, planned.map((item) => item.variantId)), sql`+${productVariants.deletedAt} IS NULL`))
     .all();
   if (live.length !== planned.length) throw new NotFoundError("A SKU in this change no longer exists.");
 

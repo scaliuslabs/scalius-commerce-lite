@@ -60,6 +60,15 @@ export interface CustomerCsvExport {
 }
 
 /** The CSV of live customers matching the filters (or exactly these ids). */
+/**
+ * Live customers only. With an id list the list leads (`+deleted_at`): a bare
+ * `deleted_at IS NULL` would let the planner walk every live customer on a
+ * deleted_at-led index; without one, that index may serve the filtered list.
+ */
+function liveCustomers(byIdList: boolean): SQL {
+    return byIdList ? sql`+${customers.deletedAt} IS NULL` : isNull(customers.deletedAt);
+}
+
 export async function buildCustomerCsvExport(
     db: Database,
     input: { filters?: CustomerListFilters; ids?: readonly string[]; maxRows?: number },
@@ -75,8 +84,7 @@ export async function buildCustomerCsvExport(
 
     while (!limited) {
         const conditions: (SQL | undefined)[] = [
-            // With ids, the id list leads: a bare `deleted_at IS NULL` would let the planner walk every live customer.
-            ids ? sql`+${customers.deletedAt} IS NULL` : isNull(customers.deletedAt),
+            liveCustomers(ids !== null),
             ...customerListFilterSql(input.filters),
             // One bound value: 100 ids plus the page, consent and cursor binds would pass D1's 100-parameter cap.
             ids ? inJsonArray(customers.id, ids) : undefined,
