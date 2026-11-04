@@ -14,6 +14,7 @@ import {
     orderPayments,
     orderRefundLines,
     orderRefunds,
+    orderWithheldUnits,
     refundAttempts,
     giftCards,
     notificationOutbox,
@@ -430,12 +431,13 @@ function normalizeRefundLines(lines: RefundRequest["lines"]): RefundLineInput[] 
 /**
  * Each line is one of the order's and within what is left of it: its
  * quantity less what refunds that did not fail already named (the
- * `order_refund_lines_bounds_insert` trigger keeps it so under races).
+ * `order_refund_lines_bounds_insert` trigger keeps it so under races) and
+ * the units a settlement withheld (their money already went back).
  */
 async function assertRefundableLines(db: Database, orderId: string, lines: readonly RefundLineInput[]): Promise<void> {
     if (lines.length === 0) return;
     const ids = lines.map((line) => line.orderItemId);
-    const [items, refunded] = await db.batch([
+    const [items, refunded, withheld] = await db.batch([
         db.select({ id: orderItems.id, quantity: orderItems.quantity })
             .from(orderItems)
             .where(and(eq(orderItems.orderId, orderId), inJsonArray(orderItems.id, ids))),
@@ -444,9 +446,14 @@ async function assertRefundableLines(db: Database, orderId: string, lines: reado
             .innerJoin(orderRefunds, eq(orderRefunds.id, orderRefundLines.refundId))
             .where(and(eq(orderRefundLines.orderId, orderId), inJsonArray(orderRefundLines.orderItemId, ids), sql`${orderRefunds.status} <> 'failed'`))
             .groupBy(orderRefundLines.orderItemId),
+        db.select({ orderItemId: orderWithheldUnits.orderItemId, quantity: sql<number>`sum(${orderWithheldUnits.quantity})` })
+            .from(orderWithheldUnits)
+            .where(and(eq(orderWithheldUnits.orderId, orderId), inJsonArray(orderWithheldUnits.orderItemId, ids)))
+            .groupBy(orderWithheldUnits.orderItemId),
     ]);
     const quantities = new Map(items.map((item) => [item.id, item.quantity]));
     const already = new Map(refunded.map((row) => [row.orderItemId, Number(row.quantity) || 0]));
+    for (const row of withheld) already.set(row.orderItemId, (already.get(row.orderItemId) ?? 0) + (Number(row.quantity) || 0));
     for (const line of lines) {
         const quantity = quantities.get(line.orderItemId);
         if (quantity === undefined) throw new ValidationError(`Order line ${line.orderItemId} is not a line of this order.`);

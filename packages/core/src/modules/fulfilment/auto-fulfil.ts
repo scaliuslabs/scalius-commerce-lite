@@ -2,7 +2,7 @@
 // with their ledger, entitlements, cards and notifications in one batch.
 // Preparation does no handover; the batch rechecks the authority it read.
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { orderItems, orderPayments, orderRefundLines, orderRefunds, orders, settings, OrderStatus, PaymentStatus } from "@scalius/database/schema";
+import { orderItems, orderPayments, orderRefundLines, orderRefunds, orderWithheldUnits, orders, settings, OrderStatus, PaymentStatus } from "@scalius/database/schema";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gt, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import {
@@ -53,7 +53,9 @@ function refundedLineQuantitySql() {
     return sql<number>`(SELECT coalesce(sum(${qualifiedColumn(orderRefundLines.quantity)}), 0) FROM ${orderRefundLines}
         INNER JOIN ${orderRefunds} ON ${qualifiedColumn(orderRefunds.id)} = ${qualifiedColumn(orderRefundLines.refundId)}
         WHERE ${qualifiedColumn(orderRefundLines.orderItemId)} = ${qualifiedColumn(orderItems.id)}
-          AND ${qualifiedColumn(orderRefunds.status)} <> 'failed')`;
+          AND ${qualifiedColumn(orderRefunds.status)} <> 'failed')
+      + (SELECT coalesce(sum(${qualifiedColumn(orderWithheldUnits.quantity)}), 0) FROM ${orderWithheldUnits}
+        WHERE ${qualifiedColumn(orderWithheldUnits.orderItemId)} = ${qualifiedColumn(orderItems.id)})`;
 }
 
 /** A failed refund can restore owed units, including an entire line omitted from preparation. */

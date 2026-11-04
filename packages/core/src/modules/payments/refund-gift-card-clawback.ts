@@ -22,7 +22,7 @@
 // attempt.
 import { and, eq, gte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
-import { giftCards, giftCardTransactions, orderItems, orderPayments, orderRefundLines, orderRefunds, orders, refundAttempts } from "@scalius/database/schema";
+import { giftCards, giftCardTransactions, orderItems, orderPayments, orderRefundLines, orderRefunds, orders, orderWithheldUnits, refundAttempts, refundGiftCardSettlements } from "@scalius/database/schema";
 import { buildGiftCardTransactionInsertOnce, newGiftCardTransactionId } from "../gift-cards";
 import { qualifiedColumn } from "../../utils/qualified-column";
 
@@ -88,11 +88,9 @@ export function giftCardPurchaseReads(db: Database, orderId: string) {
             unitPriceMinor: orderItems.unitPriceMinor,
             propertiesPriceMinor: orderItems.propertiesPriceMinor,
         }).from(orderItems).where(and(eq(orderItems.orderId, orderId), eq(orderItems.fulfillmentType, "gift_card"))),
-        db.select({ orderItemId: orderRefundLines.orderItemId, quantity: sql<number>`sum(${orderRefundLines.quantity})` })
-            .from(orderRefundLines)
-            .innerJoin(orderRefunds, eq(orderRefunds.id, orderRefundLines.refundId))
-            .where(and(eq(orderRefundLines.orderId, orderId), sql`${orderRefunds.status} <> 'failed'`))
-            .groupBy(orderRefundLines.orderItemId),
+        // Units no longer to hand over: named by a refund that did not fail, or withheld by a settlement.
+        db.select({ orderItemId: orderItems.id, quantity: refundedUnitsSql() })
+            .from(orderItems).where(and(eq(orderItems.orderId, orderId), eq(orderItems.fulfillmentType, "gift_card"))),
         db.select({
             giftCardId: giftCards.id,
             orderItemId: giftCards.sourceOrderItemId,
@@ -107,6 +105,15 @@ export function giftCardPurchaseReads(db: Database, orderId: string) {
             ))
             .groupBy(giftCardTransactions.giftCardId),
     ] as const;
+}
+
+/** A gift-card line's units no longer to hand over (outer columns qualified, aliased inner tables). */
+function refundedUnitsSql() {
+    const line = qualifiedColumn(orderItems.id);
+    return sql<number>`(SELECT coalesce(sum(rl.quantity), 0) FROM ${orderRefundLines} AS rl
+        INNER JOIN ${orderRefunds} AS r ON r.id = rl.refund_id
+        WHERE rl.order_item_id = ${line} AND r.status <> 'failed')
+      + (SELECT coalesce(sum(w.quantity), 0) FROM ${orderWithheldUnits} AS w WHERE w.order_item_id = ${line})`;
 }
 
 /** The state from the reads' results, in their order. */
@@ -282,7 +289,7 @@ export async function buildGiftCardClawbackSettlement(
         actor?: { type: "system" | "admin"; id: string | null };
     },
 ): Promise<GiftCardClawbackSettlement> {
-    const [attempts, ledger, items, refundedUnits, cards, spent, adjusts, groupLines, orderRows] = await db.batch([
+    const [attempts, ledger, items, refundedUnits, cards, spent, adjusts, groupLines, settledRows, orderRows] = await db.batch([
         db.select({
             id: refundAttempts.id,
             status: refundAttempts.status,
@@ -307,8 +314,9 @@ export async function buildGiftCardClawbackSettlement(
             eq(giftCardTransactions.orderId, input.orderId),
             eq(giftCardTransactions.kind, "adjust"),
         )),
-        db.select({ id: orderRefundLines.id, orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
+        db.select({ orderItemId: orderRefundLines.orderItemId, quantity: orderRefundLines.quantity })
             .from(orderRefundLines).where(eq(orderRefundLines.refundId, input.refundGroupId)),
+        db.select({ id: refundGiftCardSettlements.refundGroupId }).from(refundGiftCardSettlements).where(eq(refundGiftCardSettlements.refundGroupId, input.refundGroupId)),
         db.select({ paymentStatus: orders.paymentStatus, status: orders.status }).from(orders).where(eq(orders.id, input.orderId)),
     ]);
     const guard = attemptStatusesGuard(input.refundGroupId, attempts);
@@ -321,10 +329,8 @@ export async function buildGiftCardClawbackSettlement(
     const first = [...after].sort((left, right) => left.allocationIndex - right.allocationIndex)[0]!;
     const isOwn = (row: { idempotencyKey: string; giftCardId: string }, key: (attempt: string, card: string) => string) =>
         row.idempotencyKey === key(first.id, row.giftCardId);
-    const settleLinePrefix = giftCardSettleLineId(input.refundGroupId, "");
-    // Settled once: a second run or a retry writes nothing.
-    if (adjusts.some((row) => isOwn(row, giftCardClawbackReleaseKey) || isOwn(row, giftCardClawbackSettleKey))) return none;
-    if (groupLines.some((line) => line.id.startsWith(settleLinePrefix))) return none;
+    // Settled once (its mark): a second run or a retry writes nothing.
+    if (settledRows.length > 0) return none;
     const claimTakes = new Map<string, { takenMinor: number; emptied: boolean }>();
     for (const row of adjusts) {
         if (!isOwn(row, giftCardClawbackKey)) continue;
@@ -426,8 +432,9 @@ export async function buildGiftCardClawbackSettlement(
     }
 
     // Still over: units not issued yet are the rest of the buyer's value.
-    // The refund names them (its record's lines), so the handover never
-    // hands them over; what the buyer is still owed stays refundable.
+    // The settlement withholds them (beside the lines the refund named,
+    // which stay as named), so the handover never hands them over; what the
+    // buyer is still owed stays refundable.
     for (const line of [...state.lines].sort((left, right) => right.unitValueMinor - left.unitValueMinor)) {
         const over = -slack();
         if (over <= 0) break;
@@ -435,24 +442,30 @@ export async function buildGiftCardClawbackSettlement(
         if (open <= 0 || line.unitValueMinor <= 0) continue;
         const units = Math.min(open, Math.ceil(over / line.unitValueMinor));
         unissued.set(line.orderItemId, open - units);
-        statements.push(db.insert(orderRefundLines).values({
-            id: giftCardSettleLineId(input.refundGroupId, line.orderItemId),
-            refundId: input.refundGroupId,
+        statements.push(db.insert(orderWithheldUnits).values({
+            id: giftCardWithheldUnitsId(input.refundGroupId, line.orderItemId),
+            refundGroupId: input.refundGroupId,
             orderId: input.orderId,
             orderItemId: line.orderItemId,
             quantity: units,
             createdAt: sql`unixepoch()`,
-        }).onConflictDoNothing({ target: orderRefundLines.id }));
+        }).onConflictDoNothing());
     }
-    return { guard: statements.length > 0 ? settledOnceGuard(guard, input.orderId, first.id, input.refundGroupId) : guard, statements };
+    // The mark, even when nothing else moved: the backstop never reads this refund again.
+    statements.push(settlementMark(db, input.orderId, input.refundGroupId));
+    return { guard: settledOnceGuard(guard, input.refundGroupId), statements };
+}
+
+function settlementMark(db: Database, orderId: string, refundGroupId: string) {
+    return db.insert(refundGiftCardSettlements).values({ refundGroupId, orderId, createdAt: sql`unixepoch()` });
 }
 
 /** `attempt_key` of a refund recorded from the provider (refund-reconciliation.ts). */
 const EXTERNAL_ATTEMPT_KEY_PREFIX = "external:";
 
-/** The refund line a settlement writes for units not issued yet that the refund now names. */
-export function giftCardSettleLineId(refundGroupId: string, orderItemId: string): string {
-    return `${refundGroupId}_settle_${orderItemId}`;
+/** The row a settlement writes for units not issued yet that its money paid for. */
+export function giftCardWithheldUnitsId(refundGroupId: string, orderItemId: string): string {
+    return `${refundGroupId}_withheld_${orderItemId}`;
 }
 
 /**
@@ -473,8 +486,8 @@ export function buildClaimTakesRelease(
 ): GiftCardClawbackSettlement {
     const actor = input.actor ?? { type: "system" as const, id: null };
     return {
-        guard: settledOnceGuard(sql`1 = 1`, input.orderId, input.firstAttemptId, input.refundGroupId),
-        statements: input.clawbacks.flatMap((clawback) => {
+        guard: settledOnceGuard(sql`1 = 1`, input.refundGroupId),
+        statements: [settlementMark(db, input.orderId, input.refundGroupId), ...input.clawbacks.flatMap((clawback) => {
             const id = newGiftCardTransactionId();
             return [
                 buildGiftCardTransactionInsertOnce(db, {
@@ -498,15 +511,16 @@ export function buildClaimTakesRelease(
                     sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} WHERE ${giftCardTransactions.id} = ${id})`,
                 ))] : []),
             ];
-        }),
+        })],
     };
 }
 
 /**
  * The backstop: refunds that ended within the last week with a claim's take
- * and no settlement (a request that couldn't plan or write it). Bounded,
- * indexed by attempt status, and only for orders that bought gift cards;
- * settling one twice is refused by its guard.
+ * and no settlement mark (a request that couldn't plan or write it), oldest
+ * first. Bounded, indexed by attempt status, and only for orders that bought
+ * gift cards; settling one twice is refused by its guard, and a candidate
+ * that can't be settled now is left for the next run without stopping this one.
  */
 export async function settleUnsettledGiftCardRefunds(
     db: Database,
@@ -516,32 +530,36 @@ export async function settleUnsettledGiftCardRefunds(
     // Outer columns stay qualified inside the subqueries (their aliased tables have the same names).
     const outerOrderId = qualifiedColumn(refundAttempts.orderId);
     const outerGroupId = qualifiedColumn(refundAttempts.refundGroupId);
-    const candidates = await db.selectDistinct({ orderId: refundAttempts.orderId, refundGroupId: refundAttempts.refundGroupId })
+    const firstEnded = sql<number>`min(${refundAttempts.createdAt})`;
+    const candidates = await db.select({ orderId: refundAttempts.orderId, refundGroupId: refundAttempts.refundGroupId, firstEnded })
         .from(refundAttempts)
         .where(and(
             eq(refundAttempts.status, "failed"),
             isNull(refundAttempts.claimExpiresAt),
             gte(refundAttempts.createdAt, sql`${since}`),
             sql`EXISTS (SELECT 1 FROM ${orderItems} AS oi WHERE oi.order_id = ${outerOrderId} AND oi.fulfillment_type = 'gift_card')`,
+            sql`NOT EXISTS (SELECT 1 FROM ${refundGiftCardSettlements} AS mark WHERE mark.refund_group_id = ${outerGroupId})`,
             sql`NOT EXISTS (SELECT 1 FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId} AND sib.status NOT IN ('refunded', 'failed', 'cancelled'))`,
             sql`EXISTS (SELECT 1 FROM ${giftCardTransactions} AS t WHERE t.order_id = ${outerOrderId} AND t.kind = 'adjust'
                 AND substr(t.idempotency_key, 1, 9) = 'clawback:'
                 AND t.refund_attempt_id IN (SELECT sib.id FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId}))`,
-            sql`NOT EXISTS (SELECT 1 FROM ${giftCardTransactions} AS t WHERE t.order_id = ${outerOrderId} AND t.kind = 'adjust'
-                AND (substr(t.idempotency_key, 1, 17) = 'clawback-release:' OR substr(t.idempotency_key, 1, 16) = 'clawback-settle:')
-                AND t.refund_attempt_id IN (SELECT sib.id FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId}))`,
         ))
+        .groupBy(refundAttempts.orderId, refundAttempts.refundGroupId)
+        .orderBy(firstEnded, refundAttempts.refundGroupId)
         .limit(options.limit ?? UNSETTLED_REFUND_SWEEP_LIMIT)
         .all();
     let settled = 0;
     for (const candidate of candidates) {
-        const settlement = await buildGiftCardClawbackSettlement(db, { orderId: candidate.orderId, refundGroupId: candidate.refundGroupId, outcomes: new Map() });
-        if (settlement.statements.length === 0) continue;
         try {
+            const settlement = await buildGiftCardClawbackSettlement(db, { orderId: candidate.orderId, refundGroupId: candidate.refundGroupId, outcomes: new Map() });
+            if (settlement.statements.length === 0) continue;
             await db.batch([buildBatchGuard(db, settlement.guard, UNSETTLED_REFUND_GUARD), ...settlement.statements] as never);
             settled += 1;
         } catch (error: unknown) {
-            if (!isBatchGuardError(error, UNSETTLED_REFUND_GUARD)) throw error;
+            // Moved meanwhile, or not settleable now: the next run reads it again.
+            if (!isBatchGuardError(error, UNSETTLED_REFUND_GUARD)) {
+                console.error("[refund] gift-card settlement backstop skipped a refund:", candidate.refundGroupId, error instanceof Error ? error.message : String(error));
+            }
         }
     }
     return settled;
@@ -574,17 +592,9 @@ function attemptStatusesGuard(refundGroupId: string, attempts: ReadonlyArray<{ i
     ) AND (SELECT count(*) FROM ${refundAttempts} AS ra WHERE ra.refund_group_id = ${refundGroupId}) = ${attempts.length}`;
 }
 
-/** And no earlier settlement of this refund wrote a give-back, a take or a line for units not issued yet. */
-function settledOnceGuard(guard: SQL, orderId: string, firstAttemptId: string, refundGroupId: string): SQL {
-    const settleLinePrefix = giftCardSettleLineId(refundGroupId, "");
-    return sql`${guard} AND NOT EXISTS (
-        SELECT 1 FROM ${giftCardTransactions} AS t
-        WHERE t.order_id = ${orderId} AND t.refund_attempt_id = ${firstAttemptId} AND t.kind = 'adjust'
-          AND (substr(t.idempotency_key, 1, 17) = 'clawback-release:' OR substr(t.idempotency_key, 1, 16) = 'clawback-settle:')
-    ) AND NOT EXISTS (
-        SELECT 1 FROM ${orderRefundLines} AS rl
-        WHERE rl.refund_id = ${refundGroupId} AND substr(rl.id, 1, ${settleLinePrefix.length}) = ${settleLinePrefix}
-    )`;
+/** And no earlier settlement of this refund left its mark. */
+function settledOnceGuard(guard: SQL, refundGroupId: string): SQL {
+    return sql`${guard} AND NOT EXISTS (SELECT 1 FROM ${refundGiftCardSettlements} AS mark WHERE mark.refund_group_id = ${refundGroupId})`;
 }
 
 /**
