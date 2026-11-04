@@ -34,7 +34,7 @@ import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useMarkOrderDelivered, useMarkPickupReady, useVoidFulfillment } from "~/lib/api-mutations/orders";
-import { canMarkDelivered } from "./primary-action";
+import { canMarkDelivered, resolveOrderPrimaryAction } from "./primary-action";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
@@ -286,17 +286,22 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
   const badge = closed ? null : ready ? t("badge.readyForPickup") : t(group.type === "service" ? "badge.notDone" : "badge.unfulfilled");
 
   let footer: ReactNode = null;
-  if (canAct && group.type === "ship") {
+  const showBook = canBook && couriersKnown && providers.length > 0;
+  // When Mark as sent is the page's next step (header, phone bar), it has that one place.
+  const showSend = resolveOrderPrimaryAction(order, permissions) !== "sendOwnCourier";
+  if (canAct && group.type === "ship" && (showBook || showSend)) {
     footer = (
       <div className="w-full space-y-3">
-        {canBook && couriersKnown && providers.length > 0 ? (
+        {showBook ? (
           <BookCourier order={order} guard={(run) => cancelRequest.guard("send", run)} focusRequest={request?.action === "bookCourier" ? request.id : undefined} />
         ) : null}
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" onClick={() => cancelRequest.guard("send", () => setDialog("ship"))}>
-            {t("fulfill.submit")}
-          </Button>
-        </div>
+        {showSend ? (
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" onClick={() => cancelRequest.guard("send", () => setDialog("ship"))}>
+              {t("fulfill.submit")}
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   } else if (canAct && group.type === "pickup") {

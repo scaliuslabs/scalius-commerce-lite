@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { ExternalLink, ShoppingBag, Trash2 } from "lucide-react";
@@ -31,9 +31,11 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import { apiData } from "@/lib/api";
 import {
+  abandonedCheckoutQueryOptions,
   abandonedCheckoutsQueryOptions,
   type AbandonedCheckout,
 } from "@/lib/api-query-options/abandoned-checkouts";
+import { isAdminApiNotFoundError } from "@/lib/admin-api-error";
 import {
   parseAbandonedCheckoutDisplay,
   type AbandonedCheckoutCustomerInfo,
@@ -149,11 +151,14 @@ function CheckoutRowActions({
 function CheckoutSheet({
   checkout,
   open,
+  gone = false,
   canCreateOrder,
   onClose,
 }: {
   checkout: AbandonedCheckout | null;
   open: boolean;
+  /** The link named a checkout that no longer exists (completed as an order, or deleted). */
+  gone?: boolean;
   canCreateOrder: boolean;
   onClose: () => void;
 }) {
@@ -178,11 +183,12 @@ function CheckoutSheet({
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="flex flex-col">
+      {/* Kept in the address (…/abandoned/<id>): Back and links move through the router's own entry. */}
+      <SheetContent data-url-overlay="" className="flex flex-col">
         <SheetHeader>
-          <SheetTitle className="break-words">{name}</SheetTitle>
+          <SheetTitle className="break-words">{gone ? t("checkoutGoneTitle") : name}</SheetTitle>
           <SheetDescription>
-            {checkout ? (
+            {gone ? t("checkoutGoneBody") : checkout ? (
               <>
                 <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
               </>
@@ -387,9 +393,16 @@ export function AbandonedCheckoutList({
 
   // Keep the last opened checkout while the sheet slides closed.
   const [shown, setShown] = useState<AbandonedCheckout | null>(null);
-  const openCheckout = openId
+  const onPage = openId
     ? table.getRowModel().rows.find((row) => row.original.id === openId)?.original ?? null
     : null;
+  // A link to a checkout this page doesn't hold (another page, or a shared link) reads that checkout.
+  const linked = useQuery({
+    ...abandonedCheckoutQueryOptions(openId ?? ""),
+    enabled: openId !== null && rawData !== undefined && onPage === null,
+  });
+  const openCheckout = onPage ?? (openId && linked.data?.id === openId ? linked.data : null);
+  const gone = openId !== null && onPage === null && linked.isError && isAdminApiNotFoundError(linked.error);
   useEffect(() => {
     if (openCheckout) setShown(openCheckout);
   }, [openCheckout]);
@@ -528,8 +541,9 @@ export function AbandonedCheckoutList({
       />
 
       <CheckoutSheet
-        checkout={openCheckout ?? shown}
-        open={openCheckout !== null}
+        checkout={gone ? null : openCheckout ?? shown}
+        open={openCheckout !== null || gone}
+        gone={gone}
         canCreateOrder={orderActions.canCreateOrders}
         onClose={closeSheet}
       />

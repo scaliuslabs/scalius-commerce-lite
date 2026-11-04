@@ -4,7 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { assertContactSearchAllowed } from "./contact-access";
 import { createId } from "@paralleldrive/cuid2";
-import { sql, inArray, desc, asc } from "drizzle-orm";
+import { sql, inArray, desc, asc, eq } from "drizzle-orm";
 import { containsText } from "@scalius/core/utils/text-match";
 import { COUNT_PROBE_COLUMN, cappedCountQuery } from "@scalius/core/utils/keyset";
 import { AppError } from "@scalius/core/errors";
@@ -17,7 +17,7 @@ import { searchMatch } from "@scalius/core/search";
 import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/checkout";
 
 import { ok, noContent } from "../../utils/api-response";
-import { UnauthorizedError, ForbiddenError } from "../../utils/api-error";
+import { UnauthorizedError, ForbiddenError, NotFoundError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -85,6 +85,17 @@ const abandonedCheckoutPaginationSchema = z.object({
     totalPages: z.number().int(),
 });
 
+const abandonedCheckoutSchema = z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) });
+
+const abandonedCheckoutColumns = {
+    id: abandonedCheckouts.id,
+    checkoutId: abandonedCheckouts.checkoutId,
+    customerPhone: abandonedCheckouts.customerPhone,
+    checkoutData: abandonedCheckouts.checkoutData,
+    createdAt: abandonedCheckouts.createdAt,
+    updatedAt: abandonedCheckouts.updatedAt,
+};
+
 const listAbandonedCheckoutsRoute = createRoute({
     operationId: "dashboard.abandoned_checkouts.list",
     method: "get",
@@ -101,7 +112,7 @@ const listAbandonedCheckoutsRoute = createRoute({
         })
     },
     responses: {
-        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(z.object({ id: z.string(), checkoutId: z.string().nullable(), customerPhone: z.string().nullable(), checkoutData: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) })), pagination: abandonedCheckoutPaginationSchema })) } } },
+        200: { description: "Abandoned checkout list", content: { "application/json": { schema: successEnvelope(z.object({ checkouts: z.array(abandonedCheckoutSchema), pagination: abandonedCheckoutPaginationSchema })) } } },
         ...errorResponses,
     }
 });
@@ -121,14 +132,7 @@ app.openapi(listAbandonedCheckoutsRoute, async (c) => {
         // The count reads at most the plan's count cap + 1 index rows, never the table.
         const [counted, results] = await db.batch([
             cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(abandonedCheckouts).where(combinedWhere).$dynamic()),
-            db.select({
-                id: abandonedCheckouts.id,
-                checkoutId: abandonedCheckouts.checkoutId,
-                customerPhone: abandonedCheckouts.customerPhone,
-                checkoutData: abandonedCheckouts.checkoutData,
-                createdAt: abandonedCheckouts.createdAt,
-                updatedAt: abandonedCheckouts.updatedAt,
-            }).from(abandonedCheckouts).where(combinedWhere)
+            db.select(abandonedCheckoutColumns).from(abandonedCheckouts).where(combinedWhere)
                 .orderBy(...abandonedCheckoutOrderBy(sort, order))
                 .limit(limit).offset(offset),
         ]);
@@ -216,6 +220,29 @@ app.openapi(listAbandonedCheckoutSummariesRoute, async (c) => {
 });
 
 // ── Delete Abandoned Checkouts ──
+
+// A checkout opened from a link (`/orders/abandoned/<id>`) that is not on the list's loaded page.
+// Registered after `/abandoned-checkouts/summaries`, which keeps its own route.
+const getAbandonedCheckoutRoute = createRoute({
+    operationId: "dashboard.abandoned_checkouts.get",
+    method: "get",
+    path: "/abandoned-checkouts/{id}",
+    tags: ["Admin - System Utils"],
+    summary: "Get one abandoned checkout",
+    request: { params: z.object({ id: z.string().min(1).max(160) }) },
+    responses: {
+        200: { description: "Abandoned checkout", content: { "application/json": { schema: successEnvelope(z.object({ checkout: abandonedCheckoutSchema })) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getAbandonedCheckoutRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    const [checkout] = await c.get("db").select(abandonedCheckoutColumns).from(abandonedCheckouts)
+        .where(eq(abandonedCheckouts.id, id)).limit(1);
+    if (!checkout) throw new NotFoundError("Abandoned checkout not found");
+    return ok(c, { checkout });
+});
 
 const bulkDeleteSchema = z.object({
     ids: z.array(z.string()).min(1, "No IDs provided")

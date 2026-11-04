@@ -1,9 +1,11 @@
-// The gift cards this order issued (Wave B §9.1): per card its last 4, value and
-// masked recipient, with "Resend" for staff who manage gift cards. The code is
-// never on this page; resending mails it to the card's contact.
+// The gift cards this order issued (Wave B §9.1): per card its last 4, value (and
+// what it holds now, once spent or taken back by a refund) and masked recipient,
+// with "Resend" for staff who manage gift cards while the card still holds value.
+// The code is never on this page; resending mails it to the card's contact.
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -20,6 +22,9 @@ export interface IssuedGiftCardLine {
   initialAmountMinor: number;
   currencyCode: string;
   sentTo: string | null;
+  /** What the card holds now (null when the read doesn't say): a refund takes value back. */
+  balanceMinor: number | null;
+  disabled: boolean;
   productName: string | null;
   variantLabel: string | null;
 }
@@ -35,7 +40,15 @@ function readIssuedCard(value: unknown): Omit<IssuedGiftCardLine, "productName" 
     initialAmountMinor: card.initialAmountMinor,
     currencyCode: card.currencyCode,
     sentTo: typeof card.sentTo === "string" && card.sentTo ? card.sentTo : null,
+    balanceMinor: typeof card.balanceMinor === "number" ? card.balanceMinor : null,
+    disabled: card.disabled === true,
   };
+}
+
+/** A disabled or emptied card holds nothing to spend: it shows why, and has nothing to resend. */
+function cardState(card: IssuedGiftCardLine): "disabled" | "usedUp" | "active" {
+  if (card.disabled) return "disabled";
+  return card.balanceMinor !== null && card.balanceMinor <= 0 ? "usedUp" : "active";
 }
 
 /** Every card the order's lines issued (`extras.giftCards`), in line order. */
@@ -79,24 +92,30 @@ export function GiftCardLinesCard({ order }: { order: Order }) {
           {cards.map((card) => {
             const product = [card.productName, card.variantLabel].filter(Boolean).join(" · ");
             const sending = resend.isPending && resend.variables?.giftCardId === card.giftCardId;
+            const state = cardState(card);
+            const money = (minor: number) => formatSavedMinorAmount(minor, {
+              currencyCode: card.currencyCode,
+              decimalPlaces: getDecimalPlaces(card.currencyCode),
+            });
+            const value = money(card.initialAmountMinor);
             return (
               <li key={card.giftCardId} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 space-y-1">
                   <p className="flex flex-wrap items-baseline gap-x-2">
                     <span className="font-mono font-medium">{t("lines.card", { last4: card.last4 })}</span>
                     <span className="tabular-nums">
-                      {formatSavedMinorAmount(card.initialAmountMinor, {
-                        currencyCode: card.currencyCode,
-                        decimalPlaces: getDecimalPlaces(card.currencyCode),
-                      })}
+                      {card.balanceMinor === null || card.balanceMinor === card.initialAmountMinor
+                        ? value
+                        : t("lines.balanceOf", { balance: money(card.balanceMinor), value })}
                     </span>
+                    {state === "active" ? null : <Badge variant="secondary">{t(`lines.${state}`)}</Badge>}
                   </p>
                   {product ? <p className="text-muted-foreground">{product}</p> : null}
                   <p className="text-muted-foreground">
                     {card.sentTo ? t("lines.sentTo", { contact: card.sentTo }) : t("lines.sentToBuyer")}
                   </p>
                 </div>
-                {canManage ? (
+                {canManage && state === "active" ? (
                   <Button
                     type="button"
                     variant="outline"

@@ -41,7 +41,7 @@ import { formatCurrencyAmount, formatOrderDate, formatOrderTimestamp } from "./f
 import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
-import { isPartSent, type OrderActionRequest } from "./primary-action";
+import { isPartSent, resolveOrderPrimaryAction, type OrderActionRequest } from "./primary-action";
 import { giftCardTenderLines } from "./gift-card-tender-lines";
 import { OrderSummaryRows } from "./OrderItemsCard";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
@@ -282,6 +282,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   }
 
   const collectTitle = t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected");
+  // Collecting is the page's next step (header, phone bar) when it's due: it has one place.
+  const showCollect = canRecordCodCollection && resolveOrderPrimaryAction(order, orderActions) !== "collectCod";
 
   const refreshButton = (
     <Button type="button" variant="ghost" size="sm" onClick={refetchPayments} disabled={historyFetching}>
@@ -525,9 +527,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 {codTracking.codStatus === "failed" && codTracking.failureNote ? <Row label={t("cod.notes")} value={codTracking.failureNote} /> : null}
               </dl>
             ) : null}
-            {codRead.status === "ready" && codOpen && (canRecordCodCollection || (isCOD && (canRecordCodFailure || canRecordCodReturn))) ? (
+            {codRead.status === "ready" && codOpen && (showCollect || (isCOD && (canRecordCodFailure || canRecordCodReturn))) ? (
               <div className="flex flex-wrap gap-2">
-                {canRecordCodCollection ? (
+                {showCollect ? (
                   <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("collected")}>{collectTitle}</Button>
                 ) : null}
                 {isCOD && canRecordCodFailure ? (

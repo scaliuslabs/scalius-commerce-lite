@@ -30,6 +30,9 @@ export const giftCardOrderMessages = defineMessages({
     "lines.resendLabel": "Resend gift card •••• {last4}",
     "lines.resent": "Gift card resent",
     "lines.resendFailed": "Couldn't resend the gift card. Try again.",
+    "lines.balanceOf": "{balance} left of {value}",
+    "lines.disabled": "Disabled",
+    "lines.usedUp": "Used up",
   },
   bn: {
     ...giftCardTenderMessages.bn,
@@ -51,5 +54,8 @@ export const giftCardOrderMessages = defineMessages({
     "lines.resendLabel": "গিফট কার্ড •••• {last4} আবার পাঠান",
     "lines.resent": "গিফট কার্ড আবার পাঠানো হয়েছে",
     "lines.resendFailed": "গিফট কার্ড আবার পাঠানো যায়নি। আবার চেষ্টা করুন।",
+    "lines.balanceOf": "{value}-এর মধ্যে {balance} বাকি",
+    "lines.disabled": "বন্ধ",
+    "lines.usedUp": "ব্যবহৃত",
   },
 });
