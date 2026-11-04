@@ -287,12 +287,13 @@ async function dispatchClaimedNotification(
     if (!isOrderNotificationType(claim.notificationType)) {
       return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
     }
+    const orderType = claim.notificationType;
     // The order's one read (its facts, contact and the store's identity),
     // made by the first channel that needs it.
     let contextRead: Promise<OrderMessageContext | null> | undefined;
     const readContext = () => (contextRead ??= findOrderMessageContext({
       orderId: claim.subjectId,
-      type: claim.notificationType,
+      type: orderType,
       name: "Customer",
       data: claim.data,
       storefrontUrl: env.STOREFRONT_URL,
