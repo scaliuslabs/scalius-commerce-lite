@@ -25,12 +25,9 @@ export interface CartDrawerCopy {
   startShopping: string;
   edit: string;
   editItem: (name: string) => string;
-  updateQuantity: (count: string) => string;
-  remove: string;
   removed: (name: string) => string;
   decrease: (name: string) => string;
   increase: (name: string) => string;
-  removeItem: (name: string) => string;
   undo: string;
   discount: string;
   /** An offer the cart qualifies for: "free" or "20% off". */
@@ -62,12 +59,9 @@ const EN: CartDrawerCopy = {
   startShopping: "Start shopping",
   edit: "Edit",
   editItem: (name) => `Edit ${name}`,
-  updateQuantity: (count) => `Update quantity to ${count}`,
-  remove: "Remove",
   removed: (name) => `${name} removed`,
   decrease: (name) => `Decrease ${name} quantity`,
   increase: (name) => `Increase ${name} quantity`,
-  removeItem: (name) => `Remove ${name} from cart`,
   undo: "Undo",
   discount: "Discount",
   offerFree: "free",
@@ -98,12 +92,9 @@ const BN: CartDrawerCopy = {
   startShopping: "কেনাকাটা শুরু করুন",
   edit: "বদলান",
   editItem: (name) => `${name} বদলান`,
-  updateQuantity: (count) => `পরিমাণ ${count} করুন`,
-  remove: "সরান",
   removed: (name) => `${name} সরানো হয়েছে`,
   decrease: (name) => `${name}-এর পরিমাণ কমান`,
   increase: (name) => `${name}-এর পরিমাণ বাড়ান`,
-  removeItem: (name) => `কার্ট থেকে ${name} সরান`,
   undo: "ফিরিয়ে আনুন",
   discount: "ছাড়",
   offerFree: "ফ্রি",

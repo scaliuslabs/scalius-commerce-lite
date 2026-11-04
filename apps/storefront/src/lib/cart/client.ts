@@ -25,7 +25,7 @@ import {
 } from "@/store/cart";
 import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
-import { renderCartLineProperties } from "./line-properties-view";
+import { cartLineInputsId, renderCartLineProperties } from "./line-properties-view";
 import type {
   CartRuleError,
   CartValidationIssue,
@@ -1190,11 +1190,13 @@ function scheduleCartValidation() {
 export function renderIssueAction(
   cartKey: string,
   issue: CartValidationIssue,
+  describedBy = "",
 ): string {
   return renderCartIssueAction(
     cartKey,
     issue,
-    cartStore.get().items[cartKey]?.slug,
+    cartStore.get().items[cartKey],
+    describedBy,
   );
 }
 
@@ -1204,14 +1206,14 @@ export function renderIssueAction(
  * changes the line's height. The first issue is shown with its repair
  * action; the full message stays available as the slot's title.
  */
-function renderCartItemIssues(cartKey: string): string {
+function renderCartItemIssues(cartKey: string, describedBy: string): string {
   const issues = cartValidationIssues[cartKey] ?? [];
   const issue = issues[0];
   if (!issue) return "";
   const message = issues.map((entry) => entry.message).join(" ");
   return `<div class="mt-2 flex min-h-11 items-center justify-between gap-2" role="alert" data-cart-line-issue title="${escapeHtml(message)}">
         <p class="line-clamp-2 min-w-0 text-xs font-medium text-destructive">${escapeHtml(issue.message)}</p>
-        <div class="shrink-0">${renderIssueAction(cartKey, issue)}</div>
+        <div class="shrink-0">${renderIssueAction(cartKey, issue, describedBy)}</div>
       </div>`;
 }
 
@@ -1429,11 +1431,14 @@ function renderCartLine(
   const jsCartKey = inlineJsString(cartKey);
   const copy = activeCheckoutCopy();
   const options = normalizeCartItemOptions(item.options) ?? [];
-  const issueBlock = renderCartItemIssues(cartKey);
   // A store app's rule about this line: under its controls, which name it for assistive technology.
   const ruleErrorsId = cartLineRuleErrorsId(position);
   const ruleBlock = renderCartLineRuleErrors(ruleErrors, ruleErrorsId);
-  const describedBy = ruleBlock ? ` aria-describedby="${ruleErrorsId}"` : "";
+  // The line's buyer inputs describe its controls too: two engravings of one SKU are two lines.
+  const inputsId = cartLineInputsId(position);
+  const descriptions = [(item.properties?.length ?? 0) > 0 ? inputsId : "", ruleBlock ? ruleErrorsId : ""].filter(Boolean);
+  const describedBy = descriptions.length > 0 ? ` aria-describedby="${descriptions.join(" ")}"` : "";
+  const issueBlock = renderCartItemIssues(cartKey, describedBy);
   const quantityKnown = Object.prototype.hasOwnProperty.call(
     cartQuantityLimits,
     cartKey,
@@ -1458,6 +1463,8 @@ function renderCartLine(
       editText: copy.editLineText,
       editLabelText: copy.editLineLabelText,
       jsCartKey,
+      inputsId,
+      describedBy,
     }) + (mixed && (item.fulfillmentKind === "digital" || item.fulfillmentKind === "service")
       ? `<span class="block" data-cart-line-fulfilment>${escapeHtml(item.fulfillmentKind === "digital" ? copy.cartLineDigitalText : copy.cartLineServiceText)}</span>`
       // A free-delivery product's own delivery is free (its shipping profile), whatever the rest pays.
