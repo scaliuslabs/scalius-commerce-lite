@@ -35,7 +35,7 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { productBulkEditMessages } from "~/i18n/product-bulk-edit";
-import { productMessages } from "~/i18n/products";
+import { productListMessages } from "~/i18n/product-list";
 
 type BulkProduct = ApiResult<typeof getApiV1AdminProductsBulkEdit>["products"][number];
 
@@ -115,7 +115,7 @@ function BulkEditorSkeleton({ rows }: { rows: number }) {
 
 function BulkEditorGrid({ ids }: { ids: string[] }) {
   const t = useMessages(productBulkEditMessages);
-  const product = useMessages(productMessages);
+  const product = useMessages(productListMessages);
   const { code, salePrice } = useCurrency();
   const decimalPlaces = getDecimalPlaces(code);
   const queryClient = useQueryClient();

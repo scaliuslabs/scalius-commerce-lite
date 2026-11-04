@@ -42,7 +42,7 @@ import type { CodAction } from "./CodDialogs";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, type OrderActionRequest } from "./primary-action";
-import { GiftCardTenderRows, giftCardTenderLines } from "./GiftCardTenderRows";
+import { giftCardTenderLines } from "./gift-card-tender-lines";
 import { OrderSummaryRows } from "./OrderItemsCard";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 
@@ -52,6 +52,8 @@ const RefundDialog = lazy(() => import("./RefundDialog"));
 const CodDialogs = lazy(() => import("./CodDialogs").then((module) => ({ default: module.CodDialogs })));
 // And the invoice's record-a-payment dialog.
 const RecordPaymentDialog = lazy(() => import("./RecordPaymentDialog").then((module) => ({ default: module.RecordPaymentDialog })));
+// Gift-card tender rows (and their words) load only for an order a gift card paid.
+const GiftCardTenderRows = lazy(() => import("./GiftCardTenderRows").then((module) => ({ default: module.GiftCardTenderRows })));
 
 type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
@@ -185,7 +187,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   // Gift-card tender shows as its own rows: "Paid · <method>" counts only
   // the money the order's own method took (never the card's share).
   const paidDecimalPlaces = order.currencyDecimalPlaces ?? 2;
-  const giftCardHeldMinor = giftCardTenderLines(payments)
+  const giftCardLines = giftCardTenderLines(payments);
+  const giftCardHeldMinor = giftCardLines
     .filter((line) => line.kind === "tender" && line.state !== "released")
     .reduce((total, line) => total + line.amountMinor, 0);
   const methodPaidMinor = Math.max(0, Math.round(grossPaid * 10 ** paidDecimalPlaces) - giftCardHeldMinor);
@@ -325,7 +328,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
           ) : order.paymentMethod === "gift_card" && giftCardHeldMinor > 0 ? null : (
             <Row label={t("payment.method")} value={methodLabel(order.paymentMethod ?? "cod")} />
           )}
-          <GiftCardTenderRows order={order} payments={payments} />
+          {giftCardLines.length > 0 ? <Suspense fallback={null}><GiftCardTenderRows order={order} payments={payments} /></Suspense> : null}
           {refundedAmount > 0 ? (
             <>
               <Row label={t("payment.refunded")} value={`−${money(refundedAmount)}`} />

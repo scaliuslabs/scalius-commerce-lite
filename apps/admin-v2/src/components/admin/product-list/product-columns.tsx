@@ -9,7 +9,7 @@ import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActi
 import { ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { translate } from "~/i18n";
-import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { productListMessages, type ProductListMessageKey } from "~/i18n/product-list";
 import { salesChannelNamesMessages } from "~/i18n/sales-channel-names";
 import type { ProductListItemDto } from "~/lib/api-query-options/products";
 import { priceRangeText } from "~/lib/price-range";
@@ -18,8 +18,8 @@ import { availableStockText } from "~/lib/stock-availability";
 export type ProductListItem = ProductListItemDto;
 
 // Cells render inside the page, which re-renders when the dashboard language changes.
-const t = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
-  translate(productMessages, key, vars);
+const t = (key: ProductListMessageKey, vars?: Record<string, string | number>) =>
+  translate(productListMessages, key, vars);
 
 export function productShortcodeAction(slug: string): ExtraAction {
   return {

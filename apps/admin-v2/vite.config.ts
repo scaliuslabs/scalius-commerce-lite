@@ -95,6 +95,11 @@ export default defineConfig(({ command }) => ({
         // reshuffled by any new import; 2 KiB keeps groups per screen set). One
         // unsplit initial group keeps the router's strongly connected
         // runtime together.
+        // An icon payload is named by every screen that shares it
+        // (`admin-icons~orders~products~…`), and each lazy import lists the
+        // files it needs by name: those names alone cost every route kilobytes.
+        // A content hash already makes each file unique.
+        chunkFileNames: (chunk) => `assets/immutable/${chunk.name.startsWith("admin-icons~") ? "admin-icons" : "[name]"}-[hash].js`,
         codeSplitting: {
           groups: [
             { name: "admin-shell", tags: ["$initial"], priority: 100 },

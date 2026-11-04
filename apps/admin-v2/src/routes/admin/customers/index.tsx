@@ -158,7 +158,7 @@ function CustomersPage() {
         countLabel={(count) => (count === 1 ? t("customersCountOne") : t("customersCount", { count }))}
         filterParams={CUSTOMER_FILTER_PARAMS}
         filters={(
-          <LazyPart fallback={<Skeleton className="h-9 w-full sm:w-40" />}>
+          <LazyPart className="w-full sm:w-40" fallback={<Skeleton className="h-9 w-full sm:w-40" />}>
             <CustomerListFilters search={search} />
           </LazyPart>
         )}

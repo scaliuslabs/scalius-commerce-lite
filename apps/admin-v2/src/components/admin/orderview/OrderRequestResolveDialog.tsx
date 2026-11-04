@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderLaterMessages } from "~/i18n/order-detail-later";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useResolveOrderSupportRequest } from "~/lib/api-mutations/orders";
@@ -37,7 +37,7 @@ export function ResolveDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderLaterMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
   const canCancelOrders = useOrderActionPermissions().canChangeOrderStatus;

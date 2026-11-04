@@ -11,7 +11,8 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderConversationMessages } from "~/i18n/order-conversation";
-import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { orderDetailLabel } from "~/i18n/order-detail";
+import { orderLaterMessages } from "~/i18n/order-detail-later";
 import { orderMessages } from "~/i18n/orders";
 import { formatOrderTimestamp } from "./formatters";
 import { openCancellationRequest, type OrderActionRequest } from "./primary-action";
@@ -42,7 +43,7 @@ const ConversationComposer = lazy(() =>
 );
 
 export function OrderConversationCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
-  const t = useMessages(orderDetailMessages);
+  const t = useMessages(orderLaterMessages);
   const tr = useMessages(orderConversationMessages);
   const o = useMessages(orderMessages);
   const actions = useOrderActionPermissions();

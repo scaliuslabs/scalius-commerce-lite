@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import type { ProductRevisionConflict } from "~/lib/admin-api-conflicts";
 import { useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productLaterMessages } from "~/i18n/products-later";
 
 interface ProductRevisionConflictDialogProps {
   open: boolean;
@@ -50,7 +50,7 @@ export function ProductRevisionConflictDialog({
   onReloadLatest,
   onProductUnavailable,
 }: ProductRevisionConflictDialogProps) {
-  const t = useMessages(productMessages);
+  const t = useMessages(productLaterMessages);
   const safeActionRef = useRef<HTMLButtonElement>(null);
   const deleted = conflict?.currentRevision === null;
   const mine = [...new Set([...changedFields, ...(variantsChanged ? [t("variants")] : [])])];

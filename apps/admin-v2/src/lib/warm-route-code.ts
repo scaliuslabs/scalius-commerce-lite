@@ -1,6 +1,3 @@
-import { useEffect } from "react";
-import { useRouter } from "@tanstack/react-router";
-
 interface CodeEntry {
   path: string;
   ids: readonly string[];
@@ -11,7 +8,8 @@ interface CodeEntry {
 /**
  * Every screen in the dashboard sidebar, by the path that guards it and the
  * route ids whose code it needs (layout first). Their code is not in the
- * first download; it is fetched once the first page has settled, so the first
+ * first download; it is fetched once the first page has settled (this list
+ * too: `use-warm-route-code.ts` loads it then), so the first
  * visit to each is as quick as a return visit. Only code: no data is read.
  * A sidebar item missing here fails warm-route-code.test.ts.
  */
@@ -52,22 +50,9 @@ export const EVERYDAY_ROUTES: ReadonlyArray<CodeEntry> = [
   { path: "/admin/settings", ids: ["/admin/settings", "/admin/settings/"] },
 ];
 
-/** After the first page, a moment's quiet: never competes with its own reads. */
-export const ROUTE_CODE_WARM_DELAY_MS = 2_000;
-
 interface RouteChunkLoader {
   routesById: object;
   loadRouteChunk: (route: never) => Promise<void> | undefined;
-}
-
-interface NetworkInformationLike {
-  saveData?: boolean;
-  effectiveType?: string;
-}
-
-/** Data Saver or a 2G connection: pages fetch their code only when opened. */
-export function shouldSkipRouteCodeWarming(connection: NetworkInformationLike | undefined): boolean {
-  return Boolean(connection?.saveData) || connection?.effectiveType === "2g" || connection?.effectiveType === "slow-2g";
 }
 
 export function warmEverydayRouteCode(
@@ -84,26 +69,4 @@ export function warmEverydayRouteCode(
       if (route) void router.loadRouteChunk(route as never)?.catch(() => {});
     }
   }
-}
-
-export function useWarmEverydayRouteCode(canOpen: (path: string) => boolean): void {
-  const router = useRouter();
-  useEffect(() => {
-    const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
-    if (shouldSkipRouteCodeWarming(connection)) return;
-    let idle: number | undefined;
-    // Offline a failed download would stay failed until a reload: warm only online.
-    const warm = () => {
-      if (navigator.onLine !== false) warmEverydayRouteCode(router, canOpen);
-    };
-    const timer = window.setTimeout(() => {
-      // Wait for the browser to be idle too, where it can say (Safari cannot).
-      if (typeof window.requestIdleCallback === "function") idle = window.requestIdleCallback(warm, { timeout: 5_000 });
-      else warm();
-    }, ROUTE_CODE_WARM_DELAY_MS);
-    return () => {
-      window.clearTimeout(timer);
-      if (idle !== undefined) window.cancelIdleCallback(idle);
-    };
-  }, [router, canOpen]);
 }

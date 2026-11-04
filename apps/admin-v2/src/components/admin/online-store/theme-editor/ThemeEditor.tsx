@@ -19,6 +19,7 @@ import { DynamicSourceResource, SettingBindingScope } from "../schema-form/bindi
 import { PresenceSlot } from "~/lib/realtime/store";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import { Plus, Rows3, SlidersHorizontal } from "lucide-react";
 import {
   STOREFRONT_SECTION_REGISTRY,
@@ -155,15 +156,27 @@ function PhoneBottomBar({ label, children }: { label: string; children: ReactNod
 /** Puts the cursor in a field once the (lazy) pane draws it: its code may take a few seconds on a slow connection. */
 function focusWhenShown(id: string, focus = true) {
   const until = Date.now() + 8000;
+  let frame = 0;
+  // The merchant moved on (clicked or typed elsewhere): never take the cursor back.
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    window.removeEventListener("pointerdown", stop, true);
+    window.removeEventListener("keydown", stop, true);
+  };
   const attempt = () => {
     const field = document.getElementById(id);
     const target = field?.matches("input, textarea, button, select") ? field : field?.querySelector<HTMLElement>("input, textarea, button, select");
     if (target) {
+      stop();
       if (focus) target.focus();
       target.scrollIntoView({ block: "center" });
-    } else if (Date.now() < until) requestAnimationFrame(attempt);
+    } else if (Date.now() < until) frame = requestAnimationFrame(attempt);
+    else stop();
   };
-  requestAnimationFrame(attempt);
+  // Capture: the click or key that asked for this has already passed the window.
+  window.addEventListener("pointerdown", stop, true);
+  window.addEventListener("keydown", stop, true);
+  frame = requestAnimationFrame(attempt);
 }
 
 /** Per-browser view choices (research P3: the zoom is remembered). */
@@ -201,9 +214,11 @@ function useHeldSections(held: readonly string[]) {
   }, [held, t]);
 }
 
-export function ThemeEditor({ workspace, refetch }: {
+export function ThemeEditor({ workspace, refetch, staffId = null }: {
   workspace: ThemeWorkspaceDocument;
   refetch: () => Promise<{ data?: ThemeWorkspaceDocument }>;
+  /** The signed-in staff member, whose unsaved edits this browser keeps. */
+  staffId?: string | null;
 }) {
   const t = useMessages(themeEditorMessages);
   const settingText = useMessages(themeSettingMessages);
@@ -217,7 +232,7 @@ export function ThemeEditor({ workspace, refetch }: {
     blocks: appBlocksByKey(workspace.apps),
     skins: appSkinsByKey(workspace.apps),
   }), [appSections, workspace.apps]);
-  const draft = useThemeDraft({ workspace, refetch, canEdit, apps: draftApps });
+  const draft = useThemeDraft({ workspace, refetch, canEdit, apps: draftApps, staffId });
   const theme = draft.working;
   const storeShape = workspace.storeShape;
   const resolved = useMemo(() => resolveThemeForStore(theme, storeShape as Parameters<typeof resolveThemeForStore>[1]), [theme, storeShape]);
@@ -1162,6 +1177,7 @@ export function ThemeEditor({ workspace, refetch }: {
             live={draft.published.theme}
             draft={draft.pending ?? draft.saved.theme}
             held={draft.held.length > 0 || draft.pending === null ? heldCount : 0}
+            keptHere={draft.unsavedEdits}
             unopenedAi={unopened}
             sectionName={sectionName}
             publishing={draft.publishing}
@@ -1278,5 +1294,6 @@ export function ThemeEditor({ workspace, refetch }: {
 
 export function ThemeEditorPage() {
   const { data: workspace, refetch } = useSuspenseQuery(themeWorkspaceQueryOptions());
-  return <ThemeEditor workspace={workspace} refetch={refetch} />;
+  const staffId = useRouteContext({ from: "/admin", select: (context) => context.user?.id ?? null });
+  return <ThemeEditor workspace={workspace} refetch={refetch} staffId={staffId} />;
 }
