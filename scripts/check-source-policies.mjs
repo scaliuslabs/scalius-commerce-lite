@@ -495,6 +495,13 @@ export const policies = [
     sample: "db.select().from(products).where(and(sql`${products.id} IN (SELECT value FROM json_each(${ids}))`, isNull(products.deletedAt)))",
   },
   {
+    rule: "SQL reads JSON by member name ('$.name'), never by array index ('$[0]')",
+    why: "PostgreSQL runs SQLite's json_extract through scalius_compat.json_path_value, which takes '$.name' paths only: an index path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard did); bind objects instead",
+    paths: ["apps/api/src", "packages/core/src", "packages/database/src", "plugins"],
+    forbid: [/json_(?:extract|each|tree)\([^)]*'\$\[/],
+    sample: "WHERE json_extract(seen.value, '$[0]') = ra.id",
+  },
+  {
     rule: "request-scoped state never lives in known module globals",
     why: "Workers reuse isolates across requests and merchants; cached auth/clients/URLs leak between them",
     paths: [

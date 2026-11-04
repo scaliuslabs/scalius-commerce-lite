@@ -1050,11 +1050,15 @@ async function readFinalizeOrder(db: Database, orderId: string, orderAttempts: r
     };
 }
 
-/** The attempts still have the status they were read with (explicit aliases: no outer column leaks in). */
+/**
+ * The attempts still have the status they were read with (explicit aliases:
+ * no outer column leaks in). Objects read by name: PostgreSQL's JSON path
+ * profile takes `$.name` paths only.
+ */
 function attemptsStillAsRead(attempts: ReadonlyArray<{ id: string; status: string }>): SQL {
-    const read = JSON.stringify(attempts.map((attempt) => [attempt.id, attempt.status]));
+    const read = JSON.stringify(attempts.map((attempt) => ({ id: attempt.id, status: attempt.status })));
     return sql`(SELECT count(*) FROM ${refundAttempts} AS ra JOIN json_each(${read}) AS seen
-        ON json_extract(seen.value, '$[0]') = ra.id AND json_extract(seen.value, '$[1]') = ra.status) = ${attempts.length}`;
+        ON json_extract(seen.value, '$.id') = ra.id AND json_extract(seen.value, '$.status') = ra.status) = ${attempts.length}`;
 }
 
 /** Batch-guard marker: the order moved since finalization read it. */

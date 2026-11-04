@@ -424,13 +424,14 @@ function disableEmptied(db: Database, giftCardId: string) {
 
 /** Every attempt of the refund still has the status read (explicit aliases: no outer column leaks in). */
 function attemptStatusesGuard(refundGroupId: string, attempts: ReadonlyArray<{ id: string; status: string }>): SQL {
-    const read = JSON.stringify(attempts.map((attempt) => [attempt.id, attempt.status]));
+    // Objects read by name: PostgreSQL's JSON path profile takes `$.name` paths only.
+    const read = JSON.stringify(attempts.map((attempt) => ({ id: attempt.id, status: attempt.status })));
     return sql`NOT EXISTS (
         SELECT 1 FROM ${refundAttempts} AS ra
         WHERE ra.refund_group_id = ${refundGroupId}
           AND NOT EXISTS (
             SELECT 1 FROM json_each(${read}) AS seen
-            WHERE json_extract(seen.value, '$[0]') = ra.id AND json_extract(seen.value, '$[1]') = ra.status
+            WHERE json_extract(seen.value, '$.id') = ra.id AND json_extract(seen.value, '$.status') = ra.status
           )
     ) AND (SELECT count(*) FROM ${refundAttempts} AS ra WHERE ra.refund_group_id = ${refundGroupId}) = ${attempts.length}`;
 }
