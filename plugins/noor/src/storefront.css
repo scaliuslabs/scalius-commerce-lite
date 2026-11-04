@@ -856,8 +856,15 @@
   .noor-footer-brand { grid-column: auto; }
 }
 .noor-footer-logo .noor-logo-img { max-block-size: 2.5rem; }
-/* The header's logo on the dark footer, when the store has no logo made for one: drawn in white, which reads on it in both schemes. */
+/* A logo on a dark footer surface when the store has no logo for dark pages: drawn in white, which reads on it.
+   The ink footer is dark in both schemes; the soft and plain ones only while the store paints its dark colours. */
 .noor-footer-logo .noor-logo-img.is-knockout { filter: brightness(0) invert(1); }
+@media screen {
+  :root[data-color-scheme="dark"] .noor-footer-logo .noor-logo-img.is-knockout-dark { filter: brightness(0) invert(1); }
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root[data-color-scheme="system"] .noor-footer-logo .noor-logo-img.is-knockout-dark { filter: brightness(0) invert(1); }
+}
 .noor-footer-logo .noor-logo-text { font-size: 1.75rem; }
 .noor-footer-tagline { color: var(--n-muted); line-height: 1.6; }
 .noor-contact { display: grid; gap: 0.5rem; color: var(--n-muted); }

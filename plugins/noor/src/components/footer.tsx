@@ -22,24 +22,26 @@ type FooterStore = FooterProps<FooterSettings>["data"]["store"];
 type Logo = NonNullable<FooterStore["logo"]>;
 
 /**
- * The footer's logo for its surface. The dark footer (`ink`, the store's ink,
- * dark in both schemes) takes a logo made for it: the theme's footer logo,
- * else the logo for dark pages, else the header's logo knocked out in white.
- * The soft and plain footers follow the page: the footer logo (the header's
- * when there is none) on light pages and, while the store paints its dark
- * colours, its logo for dark pages, as the header does. `dark` is set only
- * when it differs from `light`.
+ * The footer's logo for the surface it sits on in each scheme. A dark surface
+ * takes the store's logo for dark pages, the one logo made for dark; without
+ * one, its logo is knocked out in white, as the footer always drew it, since
+ * a footer or header logo may be dark. The dark footer (`ink`, the store's
+ * ink) is dark in both schemes. The soft and plain footers follow the page:
+ * light with the footer logo (the header's when there is none), dark while
+ * the store paints its dark colours. `dark` is the image dark pages show
+ * instead, set only when it differs; `knockout` names where the white
+ * knockout applies.
  */
-export function footerLogos(store: Pick<FooterStore, "logo" | "darkLogo" | "footerLogo">, tone: "ink" | "soft" | "plain"): { light: Logo | null; dark: Logo | null; knockout: boolean } {
+export function footerLogos(store: Pick<FooterStore, "logo" | "darkLogo" | "footerLogo">, tone: "ink" | "soft" | "plain"): { light: Logo | null; dark: Logo | null; knockout: "always" | "dark-pages" | null } {
   // The store hands the header's logo as the footer logo when the theme names none.
   const own = store.footerLogo && store.footerLogo.url !== store.logo?.url ? store.footerLogo : null;
   if (tone === "ink") {
-    const light = own ?? store.darkLogo ?? store.logo;
-    return { light, dark: null, knockout: light !== null && light === store.logo };
+    const light = store.darkLogo ?? own ?? store.logo;
+    return { light, dark: null, knockout: light !== null && light !== store.darkLogo ? "always" : null };
   }
   const light = own ?? store.logo;
-  const dark = store.darkLogo && store.darkLogo.url !== light?.url ? store.darkLogo : null;
-  return { light, dark, knockout: false };
+  if (store.darkLogo) return { light, dark: store.darkLogo.url !== light?.url ? store.darkLogo : null, knockout: null };
+  return { light, dark: null, knockout: light ? "dark-pages" : null };
 }
 
 export function Footer({ data, settings, context }: FooterProps<FooterSettings>) {
@@ -81,7 +83,7 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
           <div class="noor-footer-brand">
             <a class="noor-footer-logo" href={data.routes.home} aria-label={data.store.name}>
               {logo.light ? (
-                <Image image={logo.light} alt={data.store.name} class={cx("noor-logo-img", logo.dark && "noor-logo-light", logo.knockout && "is-knockout")} />
+                <Image image={logo.light} alt={data.store.name} class={cx("noor-logo-img", logo.dark && "noor-logo-light", logo.knockout === "always" && "is-knockout", logo.knockout === "dark-pages" && "is-knockout-dark")} />
               ) : <span class={cx("noor-logo-text", logo.dark && "noor-logo-light")}>{data.store.name}</span>}
               {/* Dark pages show the store's logo for dark pages where the footer turns dark with them (CSS picks one). */}
               {logo.dark ? <Image image={logo.dark} alt={data.store.name} class="noor-logo-img noor-logo-dark" /> : null}
