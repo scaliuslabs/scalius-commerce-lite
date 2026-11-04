@@ -516,9 +516,9 @@ export function buildClaimTakesRelease(
 }
 
 /**
- * The backstop: refunds that ended within the last week with a claim's take
- * and no settlement mark (a request that couldn't plan or write it), oldest
- * first. Bounded, indexed by attempt status, and only for orders that bought
+ * The backstop: refunds whose attempts failed within the last week (created
+ * within the last 30 days) with a claim's take and no settlement mark (a
+ * request that couldn't plan or write it), the earliest failure first. Bounded, indexed by attempt status, and only for orders that bought
  * gift cards; settling one twice is refused by its guard, and a candidate
  * that can't be settled now is left for the next run without stopping this one.
  */
@@ -526,17 +526,21 @@ export async function settleUnsettledGiftCardRefunds(
     db: Database,
     options: { nowSeconds: number; limit?: number },
 ): Promise<number> {
-    const since = options.nowSeconds - UNSETTLED_REFUND_WINDOW_SECONDS;
+    // Refunds whose attempts failed within the window; the attempts' creation
+    // bounds the index range (an attempt fails within days of its creation).
+    const failedSince = options.nowSeconds - UNSETTLED_REFUND_WINDOW_SECONDS;
+    const createdSince = options.nowSeconds - UNSETTLED_REFUND_CREATED_WINDOW_SECONDS;
     // Outer columns stay qualified inside the subqueries (their aliased tables have the same names).
     const outerOrderId = qualifiedColumn(refundAttempts.orderId);
     const outerGroupId = qualifiedColumn(refundAttempts.refundGroupId);
-    const firstEnded = sql<number>`min(${refundAttempts.createdAt})`;
-    const candidates = await db.select({ orderId: refundAttempts.orderId, refundGroupId: refundAttempts.refundGroupId, firstEnded })
+    const firstFailedAt = sql<number>`min(${refundAttempts.failedAt})`;
+    const candidates = await db.select({ orderId: refundAttempts.orderId, refundGroupId: refundAttempts.refundGroupId, firstFailedAt })
         .from(refundAttempts)
         .where(and(
             eq(refundAttempts.status, "failed"),
             isNull(refundAttempts.claimExpiresAt),
-            gte(refundAttempts.createdAt, sql`${since}`),
+            gte(refundAttempts.createdAt, sql`${createdSince}`),
+            gte(refundAttempts.failedAt, sql`${failedSince}`),
             sql`EXISTS (SELECT 1 FROM ${orderItems} AS oi WHERE oi.order_id = ${outerOrderId} AND oi.fulfillment_type = 'gift_card')`,
             sql`NOT EXISTS (SELECT 1 FROM ${refundGiftCardSettlements} AS mark WHERE mark.refund_group_id = ${outerGroupId})`,
             sql`NOT EXISTS (SELECT 1 FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId} AND sib.status NOT IN ('refunded', 'failed', 'cancelled'))`,
@@ -545,7 +549,7 @@ export async function settleUnsettledGiftCardRefunds(
                 AND t.refund_attempt_id IN (SELECT sib.id FROM ${refundAttempts} AS sib WHERE sib.refund_group_id = ${outerGroupId}))`,
         ))
         .groupBy(refundAttempts.orderId, refundAttempts.refundGroupId)
-        .orderBy(firstEnded, refundAttempts.refundGroupId)
+        .orderBy(firstFailedAt, refundAttempts.refundGroupId)
         .limit(options.limit ?? UNSETTLED_REFUND_SWEEP_LIMIT)
         .all();
     let settled = 0;
@@ -566,6 +570,7 @@ export async function settleUnsettledGiftCardRefunds(
 }
 
 const UNSETTLED_REFUND_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+const UNSETTLED_REFUND_CREATED_WINDOW_SECONDS = 30 * 24 * 60 * 60;
 const UNSETTLED_REFUND_SWEEP_LIMIT = 10;
 const UNSETTLED_REFUND_GUARD = "gift_card_unsettled_refund_moved";
 

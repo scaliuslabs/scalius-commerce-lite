@@ -1620,6 +1620,20 @@ function buildRefundStateNotificationFact(params: {
 
 /** Batch-guard marker: the refund claim predicate no longer holds. */
 const REFUND_CLAIM_CONFLICT = "refund_claim_conflict";
+const REFUND_LINES_CONFLICT = "refund_lines_withheld_conflict";
+
+/** Every named line still has room: units named by refunds that did not fail, this one's included, plus withheld units. */
+function refundLinesFitCondition(orderId: string, lines: readonly RefundLineInput[]): SQL {
+    return sql`NOT EXISTS (
+        SELECT 1 FROM ${orderItems} AS line
+        WHERE line.order_id = ${orderId}
+          AND line.id IN (SELECT value FROM json_each(${JSON.stringify(lines.map((item) => item.orderItemId))}))
+          AND (SELECT coalesce(sum(rl.quantity), 0) FROM ${orderRefundLines} AS rl
+               INNER JOIN ${orderRefunds} AS r ON r.id = rl.refund_id
+               WHERE rl.order_item_id = line.id AND r.status <> 'failed')
+            + (SELECT coalesce(sum(w.quantity), 0) FROM ${orderWithheldUnits} AS w WHERE w.order_item_id = line.id) > line.quantity
+    )`;
+}
 const GIFT_CARD_LEDGER_REASON_MAX_LENGTH = 500;
 
 function refundLedgerReason(reason: string): string | null {
@@ -2033,6 +2047,9 @@ export async function processRefund(
                 quantity: line.quantity,
                 createdAt: sql`unixepoch()`,
             })),
+            // The lines' bounds trigger counts named units only: a settlement that withheld units
+            // since the lines were read must leave room too (named + withheld <= the line's quantity).
+            ...(refundLines.length > 0 ? [buildBatchGuard(db, refundLinesFitCondition(params.orderId, refundLines), REFUND_LINES_CONFLICT)] : []),
             ...allocations.flatMap((allocation) => {
                 const mode = allocationSettlementMode(allocation);
                 const internal = isInternalSettlement(mode);
@@ -2097,6 +2114,11 @@ export async function processRefund(
         if (giftCardClawback.clawbacks.length > 0 && isGiftCardLedgerError(error)) {
             // A card the order bought was spent between the read and the claim: nothing was written.
             throw new ConflictError("A gift card this order bought was used while the refund was being recorded. Reload and try again.");
+        }
+        if (isBatchGuardError(error, REFUND_LINES_CONFLICT)) {
+            // Name the line that no longer fits, as the read before the claim does.
+            await assertRefundableLines(db, params.orderId, refundLines);
+            throw new ConflictError("The order's lines changed while this refund was prepared; review them and try again.");
         }
         if (isBatchGuardError(error, REFUND_CLAIM_CONFLICT)) {
             // Lost the claim: another refund, payment or edit got there first.
