@@ -44,6 +44,7 @@ import {
     inventoryLocationErrorFrom,
     isInventoryLevelShortfallError,
     isInventoryLocationRequiredError,
+    InventoryLocationShortfallError,
     resolveActiveInventoryLocation,
     resolveOrderFulfillmentLocation,
     selectActiveInventoryLocationIds,
@@ -230,10 +231,17 @@ type InventoryPhase = {
     operation: StrictMovementOperation;
     entries: ReservationEntry[];
     /**
-     * Digital units (licence keys, downloads): they leave where the SKU's
-     * units are, not the shelf the order ships from (`resolveDigitalUnitLocation`).
+     * A deduct of digital SKUs' units (licence keys, downloads): they leave
+     * where those units are, not the shelf the order ships from. The phase is
+     * planned per SKU into `source` phases (`planDigitalUnitSources`).
      */
-    consumesKeys?: true;
+    digitalUnits?: true;
+    /**
+     * Set by that plan: the location these units leave from (no shelf-coverage
+     * check), and each SKU's part when one SKU's quantity is split over
+     * locations (0 for its first location: the movement id it always had).
+     */
+    source?: { location: InventoryLocationRef; parts: ReadonlyMap<string, number> };
 };
 
 function unchangedInventory(inventoryAction: InventoryAction): PreparedInventoryStatusChange {
@@ -287,7 +295,7 @@ export async function prepareInventoryForStatusChange(
     if (needsRestore && currentAction === "reserved") {
         const lines = await getOrderInventoryLines(db, order);
         return prepareStrictInventoryPhases(db, order, "restored", [
-            { operation: "deduct", entries: keyedEntries(lines), consumesKeys: true },
+            { operation: "deduct", entries: keyedEntries(lines), digitalUnits: true },
             { operation: "release", entries: unkeyedEntries(lines) },
         ], assignedKeyCount(lines));
     }
@@ -309,7 +317,7 @@ export async function prepareInventoryForStatusChange(
         const lines = await getOrderInventoryLines(db, order);
         return prepareStrictInventoryPhases(db, order, "deducted", [
             { operation: "deduct", entries: lines.filter((line) => !line.digital).map((line) => line.entry) },
-            { operation: "deduct", entries: lines.filter((line) => line.digital).map((line) => line.entry), consumesKeys: true },
+            { operation: "deduct", entries: lines.filter((line) => line.digital).map((line) => line.entry), digitalUnits: true },
         ]);
     }
 
@@ -333,18 +341,22 @@ function unkeyedEntries(lines: readonly OrderInventoryLine[]): ReservationEntry[
         : []);
 }
 
+/** Where one deduct of digital units leaves from, with each SKU's part of its split. */
+type DigitalUnitSource = { location: InventoryLocationRef; entries: ReservationEntry[]; parts: Map<string, number> };
+
 /**
- * Where digital units leave from: their units live where the keys were
- * imported (the default location), not on the shelf an order ships from.
- * The order's own location when its levels cover every entry, else the
- * default, else any active location that covers them; the default when none
- * does (the level trigger then refuses the batch as a shortfall, a 409).
+ * Where digital SKUs' units leave from. Their units sit where keys were
+ * imported (whichever location was the default then) and cannot be moved, so
+ * each SKU is taken from its own active locations in a fixed order: the
+ * order's location, the default, then by id, splitting one SKU's quantity
+ * over several locations when no single one holds it all. Refuses (a 409)
+ * when a SKU's active locations together hold too few units. Reads only.
  */
-async function resolveDigitalUnitLocation(
+async function planDigitalUnitSources(
     db: Database,
     order: InventoryTransitionOrder,
     entries: readonly ReservationEntry[],
-): Promise<InventoryLocationRef> {
+): Promise<DigitalUnitSource[]> {
     const levels = await db.select({
         locationId: inventoryLevels.locationId,
         variantId: inventoryLevels.variantId,
@@ -358,19 +370,40 @@ async function resolveDigitalUnitLocation(
             eq(inventoryLocations.status, "active"),
         ))
         .all();
-    const covering = new Map<string, { name: string; isDefault: boolean; covered: number }>();
-    for (const level of levels) {
-        const entry = entries.find((candidate) => candidate.variantId === level.variantId);
-        if (!entry || level.onHand < entry.quantity) continue;
-        const location = covering.get(level.locationId) ?? { name: level.name, isDefault: Boolean(level.isDefault), covered: 0 };
-        location.covered += 1;
-        covering.set(level.locationId, location);
+    const rank = (level: (typeof levels)[number]) =>
+        level.locationId === order.fulfillmentLocationId ? 0 : level.isDefault ? 1 : 2;
+    const sources = new Map<string, DigitalUnitSource>();
+    const short: Array<{ variantId: string; held: number; needed: number }> = [];
+    for (const entry of entries) {
+        const own = levels
+            .filter((level) => level.variantId === entry.variantId && level.onHand > 0)
+            .sort((left, right) => rank(left) - rank(right) || left.locationId.localeCompare(right.locationId));
+        let remaining = entry.quantity;
+        let part = 0;
+        for (const level of own) {
+            if (remaining <= 0) break;
+            const take = Math.min(remaining, level.onHand);
+            const source = sources.get(level.locationId)
+                ?? { location: { id: level.locationId, name: level.name }, entries: [], parts: new Map<string, number>() };
+            source.entries.push({ ...entry, quantity: take });
+            source.parts.set(entry.variantId, part);
+            sources.set(level.locationId, source);
+            remaining -= take;
+            part += 1;
+        }
+        if (remaining > 0) short.push({ variantId: entry.variantId, held: entry.quantity - remaining, needed: entry.quantity });
     }
-    const coversAll = [...covering.entries()].filter(([, location]) => location.covered === entries.length);
-    const pick = coversAll.find(([id]) => id === order.fulfillmentLocationId)
-        ?? coversAll.find(([, location]) => location.isDefault)
-        ?? coversAll.sort(([a], [b]) => a.localeCompare(b))[0];
-    return pick ? { id: pick[0], name: pick[1].name } : resolveActiveInventoryLocation(db, null);
+    if (short.length > 0) {
+        const skus = await db.select({ id: productVariants.id, sku: productVariants.sku }).from(productVariants)
+            .where(inJsonArray(productVariants.id, short.map((item) => item.variantId))).all();
+        const label = (variantId: string) => skus.find((row) => row.id === variantId)?.sku ?? variantId;
+        const first = short[0]!;
+        throw new InventoryLocationShortfallError(
+            `${label(first.variantId)} is a digital product: your locations hold ${first.held} of its units, ${first.needed} needed. Import more keys for it.`,
+            { shortfalls: short.map((item) => ({ ...item, sku: label(item.variantId) })) },
+        );
+    }
+    return [...sources.values()];
 }
 
 /** The keys handed out for the order's lines when it was read: the split between kept and returned units. */
@@ -423,7 +456,21 @@ async function prepareStrictInventoryPhases(
     const replayed = new Set<string>();
     let deductLocationName: string | undefined;
 
+    // A digital deduct becomes one phase per location its units leave from.
+    const planned: InventoryPhase[] = [];
     for (const phase of phases) {
+        if (!phase.digitalUnits || phase.operation !== "deduct") {
+            planned.push(phase);
+            continue;
+        }
+        const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
+        if (entries.length === 0) continue;
+        for (const source of await planDigitalUnitSources(db, order, entries)) {
+            planned.push({ operation: "deduct", entries: source.entries, source: { location: source.location, parts: source.parts } });
+        }
+    }
+
+    for (const phase of planned) {
         const entries = mergeTransitionEntriesByVariant(phase.entries, pool);
         if (entries.length === 0) continue;
         const { operation } = phase;
@@ -446,6 +493,7 @@ async function prepareStrictInventoryPhases(
                     operation,
                     pool,
                     generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, operation),
+                    part: phase.source?.parts.get(entry.variantId) ?? 0,
                 }),
                 variantId: entry.variantId,
                 orderId: order.id,
@@ -464,14 +512,12 @@ async function prepareStrictInventoryPhases(
 
         const deductLocation = operation !== "deduct"
             ? null
-            : phase.consumesKeys
-                ? await resolveDigitalUnitLocation(db, order, entries)
-                : await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
+            : phase.source?.location ?? await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
         if (deductLocation) deductLocationName = deductLocation.name;
         const claims = await buildTransitionMovementClaims(
             db, order, operation, entries, variants, pool, identities, null, deductLocation,
         );
-        if (deductLocation && pool === "regular" && !phase.consumesKeys) {
+        if (deductLocation && pool === "regular" && !phase.source) {
             await assertInventoryLocationCovers(db, deductLocation, entries);
         }
         claims.forEach((claim, index) => {
@@ -557,25 +603,18 @@ async function prepareInventoryReReservation(
  * The deduct itself re-checks (and the level CHECK aborts) on a race.
  */
 export async function assertOrderStockCoverable(db: Database, orderId: string): Promise<void> {
-    const order = await db
-        .select({
-            id: orders.id,
-            status: orders.status,
-            inventoryAction: orders.inventoryAction,
-            inventoryPool: orders.inventoryPool,
-            version: orders.version,
-            fulfillmentLocationId: orders.fulfillmentLocationId,
-            salesChannelId: orders.salesChannelId,
-        })
-        .from(orders)
-        .where(eq(orders.id, orderId))
-        .get() as InventoryTransitionOrder | undefined;
+    const order = await readTransitionOrder(db, orderId);
     if (!order || order.inventoryAction !== "reserved") return;
     if (normalizeInventoryPool(order.inventoryPool) !== "regular") return;
-    const entries = mergeTransitionEntriesByVariant(await getOrderInventoryEntries(db, order), "regular");
-    if (entries.length === 0) return;
-    const location = await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
-    await assertInventoryLocationCovers(db, location, entries);
+    const lines = await getOrderInventoryLines(db, order);
+    // The physical units leave the order's location; digital units leave
+    // where they are, as the deduct itself takes them.
+    const physical = mergeTransitionEntriesByVariant(lines.filter((line) => !line.digital).map((line) => line.entry), "regular");
+    if (physical.length > 0) {
+        await assertInventoryLocationCovers(db, await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId), physical);
+    }
+    const digital = mergeTransitionEntriesByVariant(lines.filter((line) => line.digital).map((line) => line.entry), "regular");
+    if (digital.length > 0) await planDigitalUnitSources(db, order, digital);
 }
 
 /**
@@ -1172,10 +1211,12 @@ async function buildTransitionMovementClaims(
 }
 
 /**
- * Where each SKU's units move: a deduct leaves from the order's location; a
- * restore goes to the named location, else back to where its generation was
- * deducted from (the order's location when that one is archived or unknown);
- * a release moves no units.
+ * Where each SKU's units move: a deduct leaves from the order's location, or
+ * from its phase's planned source (digital units, `planDigitalUnitSources`);
+ * a restore goes to the named location, else back to where its generation
+ * was last deducted from (one location even when a digital deduct was split;
+ * the order's location, else the default, when that one is archived or
+ * unknown); a release moves no units.
  */
 async function resolveTransitionLocations(
     db: Database,
@@ -1621,6 +1662,8 @@ async function createTransitionMovementId(input: {
     pool: InventoryPoolName;
     generation: number;
     claimKey?: string;
+    /** A later location of one SKU's split digital deduct (0, the first, keeps the id it always had). */
+    part?: number;
 }): Promise<string> {
     const namespace = input.claimKey
         ? ["order-inventory-entry:v1", input.claimKey]
@@ -1636,6 +1679,7 @@ async function createTransitionMovementId(input: {
         // the first successful write. Status-driven transitions still need a
         // generation so a later legitimate lifecycle cycle gets a new edge.
         ...(input.claimKey ? [] : [String(input.generation)]),
+        ...(input.part ? [`part:${input.part}`] : []),
     ].join("\0");
     const digest = await crypto.subtle.digest(
         "SHA-256",
