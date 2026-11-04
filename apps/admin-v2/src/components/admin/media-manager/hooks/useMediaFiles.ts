@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState, type SetStateActi
 import { QueryClientContext } from "@tanstack/react-query";
 import { mediaText } from "~/i18n/media";
 import { MediaApiClient } from "../api";
-import { DEFAULT_MEDIA_FILTERS as DEFAULT_FILTERS, MEDIA_PAGE_SIZE, mediaFirstPageQueryOptions } from "../query";
+import { DEFAULT_MEDIA_FILTERS as DEFAULT_FILTERS, forgetMediaFirstPages, MEDIA_PAGE_SIZE, mediaFirstPageQueryOptions } from "../query";
 import type { LibraryMediaFile, MediaFilterOptions } from "../types";
 
 export function useMediaFiles(autoLoad = false) {
@@ -11,12 +11,15 @@ export function useMediaFiles(autoLoad = false) {
   // Keep every loaded row available to selection and preview; only the page
   // window changes. A response updates rows and its visible page atomically.
   const [{ files, pageIndex }, setListing] = useState<{ files: LibraryMediaFile[]; pageIndex: number }>({ files: [], pageIndex: 0 });
+  // Every local change to the rows follows a change to the library: a cached
+  // first page no longer matches it.
   const setFiles = useCallback((update: SetStateAction<LibraryMediaFile[]>) => {
+    forgetMediaFirstPages(queryClient ?? undefined);
     setListing((current) => {
       const next = typeof update === "function" ? update(current.files) : update;
       return { files: next, pageIndex: Math.min(current.pageIndex, Math.max(0, Math.ceil(next.length / MEDIA_PAGE_SIZE) - 1)) };
     });
-  }, []);
+  }, [queryClient]);
   const setPageIndex = useCallback((page: number) => {
     setListing((current) => ({
       ...current,
@@ -51,8 +54,12 @@ export function useMediaFiles(autoLoad = false) {
     // change, retry) never resurrects the previous search.
     setFilters(merged);
     try {
-      // The route's loader may have started this very read: join it (or take its fresh result).
-      const data = !cursor && options.reuseRouteRead && queryClient
+      // The route's loader may have started this very read: join it (or take
+      // its fresh result). Any other first-page read (a refresh after a
+      // change) leaves no older first page to be reused.
+      const reuse = !cursor && options.reuseRouteRead && queryClient;
+      if (!cursor && !reuse) forgetMediaFirstPages(queryClient ?? undefined);
+      const data = reuse
         ? await queryClient.fetchQuery(mediaFirstPageQueryOptions(merged))
         : await MediaApiClient.fetchFiles(cursor, MEDIA_PAGE_SIZE, merged);
       if (requestId !== requestRef.current) return;

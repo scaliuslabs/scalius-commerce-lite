@@ -30,14 +30,22 @@ export function mediaWorkspaceFilters(
   };
 }
 
+/** Every cached first page, whatever its filters. */
+export const MEDIA_FIRST_PAGE_KEY = ["admin", "media", "first-page"] as const;
+
 /** The one key and read of a library's first page (no cursor); the route loader and the hook share it. */
 export function mediaFirstPageQueryOptions(filters: Partial<MediaFilterOptions>) {
   const merged: MediaFilterOptions = { ...DEFAULT_MEDIA_FILTERS, ...filters };
   return {
-    queryKey: ["admin", "media", "first-page", MEDIA_PAGE_SIZE, merged] as const,
+    queryKey: [...MEDIA_FIRST_PAGE_KEY, MEDIA_PAGE_SIZE, merged] as const,
     queryFn: () => MediaApiClient.fetchFiles(undefined, MEDIA_PAGE_SIZE, merged),
     staleTime: MEDIA_FIRST_PAGE_GRACE_MS,
   };
+}
+
+/** Drops every cached first page: the library changed (an upload, a delete, a move, an edit), so none may be reused. */
+export function forgetMediaFirstPages(queryClient: QueryClient | undefined): void {
+  queryClient?.removeQueries({ queryKey: MEDIA_FIRST_PAGE_KEY });
 }
 
 /** Starts the first page's read before the page's code has loaded; a failure is left for the page to show. */
