@@ -7,6 +7,7 @@ import { GALLERY_IMAGE_WIDTHS } from "../lib/gallery-images";
 import { loadVariantsFromDOM } from "../lib/variant-state-machine";
 import { playVideoFacade, stopVideoFacade } from "./video-facade";
 import { formatPageNumber } from "@/lib/store-time-zone";
+import { loadLazyScript } from "@/scripts/lazy-script";
 
 export type ProductMediaSelectionSource = "initial" | "gallery" | "variant";
 
@@ -1058,7 +1059,8 @@ export function bindDesktopZoomWhenEligible(
     if (requested || signal.aborted || !desktopQuery.matches) return;
     requested = true;
     removeChangeListener();
-    void loadController()
+    // Zoom is an extra: without its script the photos stay as they are.
+    void loadLazyScript(loadController)
       .then(({ bindDesktopZoom }) => {
         if (!signal.aborted) bindDesktopZoom(root, signal);
       })

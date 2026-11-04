@@ -59,6 +59,7 @@ import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-forma
 import { currentPresence, pagePath } from "@/lib/presence-url";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
+import { loadLazyScript } from "@/scripts/lazy-script";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -233,9 +234,10 @@ function DrawerBuyerUi({ blocks, onChange }: { blocks: unknown[]; onChange: () =
     const element = mount.current;
     if (!element || (blocks.length === 0 && element.childElementCount === 0)) return;
     let current = true;
-    void import("@/lib/buyer-ui").then(({ renderBuyerUi }) => {
+    // Without its script the drawer shows no app blocks; the next change of blocks tries again.
+    loadLazyScript(() => import("@/lib/buyer-ui")).then(({ renderBuyerUi }) => {
       if (current && element.isConnected) renderBuyerUi(blocks, { root: element, onChange });
-    });
+    }, () => undefined);
     return () => { current = false; };
   }, [blocks, onChange]);
   return <div ref={mount} data-buyer-ui-scope="" data-buyer-ui-target="cart_drawer.footer" className="space-y-2 text-sm" hidden />;

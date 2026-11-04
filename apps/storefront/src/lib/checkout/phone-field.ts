@@ -22,6 +22,7 @@ import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import type { PhoneCountryMeta } from "@scalius/shared/phone-example";
 import { compactPhone } from "@scalius/shared/phone-input";
 import { phoneHints, type PhoneHintCopy } from "./phone-hint";
+import { loadLazyScript } from "@/scripts/lazy-script";
 import {
   readCheckoutFormDraft,
   syncCheckoutTransferSession,
@@ -101,7 +102,7 @@ let intlLoad: Promise<PhoneIntl | null> | null = null;
 let intlFailed = false;
 
 function loadIntl(): Promise<PhoneIntl | null> {
-  intlLoad ??= import("./phone-intl")
+  intlLoad ??= loadLazyScript(() => import("./phone-intl"))
     .then((module) => {
       intlModule = module;
       intlFailed = false;

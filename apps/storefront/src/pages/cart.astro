@@ -1148,6 +1148,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 <script>
   import { readBuyerAttributes } from "@/lib/buyer-ui";
   import { pagePath } from "@/lib/presence-url";
+  import { loadLazyScript } from "@/scripts/lazy-script";
   import {
     initCartFunctionality,
     isDiscountValidationPending,
@@ -2378,7 +2379,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   const addressApp = addressAutocompleteService();
   const streetLine = document.getElementById("shippingAddress");
   if (addressApp && (streetLine instanceof HTMLTextAreaElement || streetLine instanceof HTMLInputElement)) {
-    void import("@/lib/checkout/address-autocomplete").then(({ apiPost, enhanceAddressAutocomplete }) => {
+    // Without its script the street line is a plain field, as it is without the app.
+    loadLazyScript(() => import("@/lib/checkout/address-autocomplete")).then(({ apiPost, enhanceAddressAutocomplete }) => {
       enhanceAddressAutocomplete({
         root: document,
         input: streetLine,
@@ -2388,6 +2390,6 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         post: apiPost(browserApiUrl),
         signal: cartPageSignal,
       });
-    });
+    }, () => undefined);
   }
 </script>
