@@ -19,6 +19,7 @@ import {
     ValidationError,
     ConflictError,
     ForbiddenError,
+    RateLimitError,
     ServiceUnavailableError,
     UnauthorizedError,
 } from "@scalius/core/errors";
@@ -33,8 +34,11 @@ import {
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
+    countOtpStoreChannelSend,
     enforceOtpSendRateLimits,
+    OTP_RATE_LIMIT_MESSAGE,
     OtpContactCeilingError,
+    otpStoreChannelFull,
 } from "./customer-auth-rate-limit";
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
@@ -489,7 +493,6 @@ export async function sendOtp(
         allowance = await enforceOtpSendRateLimits(db, {
             ip: input.ip,
             identifiers: [`${input.method}:${identifier}`],
-            channel,
             hashKey: input.encryptionKey,
         });
     } catch (error) {
@@ -499,6 +502,13 @@ export async function sendOtp(
             await extendPendingCustomerAuthOtpChallenge(db, otpKey, error.retryAfterSeconds ?? OTP_TTL_SECONDS);
         }
         throw error;
+    }
+    // The store's hourly ceiling for this channel: once full, only a contact
+    // that already proved itself (a buyer with an account) still gets a code.
+    const storeWait = await otpStoreChannelFull(db, { channel, hashKey: input.encryptionKey });
+    if (storeWait !== null && (await resolveProofOwner(db, input.method, identifier)).kind !== "account") {
+        console.warn("[customer-auth] The store's hourly sign-in code ceiling was reached", { channel });
+        throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, storeWait);
     }
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
@@ -520,6 +530,8 @@ export async function sendOtp(
         resendCooldownSeconds: allowance.resendCooldownSeconds,
         maxAttempts: OTP_MAX_ATTEMPTS,
     });
+    // Past the cooldown: this code goes out, so it counts.
+    await countOtpStoreChannelSend(db, { channel, hashKey: input.encryptionKey });
 
     return {
         message: "We sent you a code.",
