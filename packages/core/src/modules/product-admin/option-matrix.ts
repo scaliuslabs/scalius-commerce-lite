@@ -685,8 +685,11 @@ export async function planProductOptionMatrix(
     // Each value's swatch after this save: the input's, else the stored one.
     // A swatch image newly named must be a ready image in Files; a stored one
     // stays as it is (even trashed), so an unrelated edit never fails on it.
+    // A removed value brought back keeps its stored swatch, its image only
+    // while that is still ready (Files did not count it while it was removed).
     const swatchByValueId = new Map<string, { color: string | null; mediaId: string | null }>();
     const newSwatchMedia = new Map<string, string>();
+    const revivedSwatchMedia = new Set<string>();
     input.options.forEach((option, optionIndex) => option.values.forEach((value, valueIndex) => {
         const valueId = valueIdMap.get(value.id)!;
         const stored = valueById.get(valueId) ?? existingValues.find((candidate) => candidate.id === valueId);
@@ -694,10 +697,19 @@ export async function planProductOptionMatrix(
             ? (stored ? { color: stored.swatchColor, mediaId: stored.swatchMediaId } : { color: null, mediaId: null })
             : { color: value.swatch?.color ?? null, mediaId: value.swatch?.mediaId ?? null };
         swatchByValueId.set(valueId, swatch);
+        if (value.swatch === undefined && stored?.deletedAt != null && swatch.mediaId) revivedSwatchMedia.add(swatch.mediaId);
         if (swatch.mediaId && swatch.mediaId !== stored?.swatchMediaId && !newSwatchMedia.has(swatch.mediaId)) {
             newSwatchMedia.set(swatch.mediaId, `${fieldPrefix}options.${optionIndex}.values.${valueIndex}.swatch.mediaId`);
         }
     }));
+    if (revivedSwatchMedia.size > 0) {
+        const ready = await readySwatchImageIds(db, [...revivedSwatchMedia]);
+        for (const [valueId, swatch] of swatchByValueId) {
+            const stored = valueById.get(valueId);
+            if (stored?.deletedAt == null || !swatch.mediaId || ready.has(swatch.mediaId) || swatch.mediaId !== stored.swatchMediaId) continue;
+            swatchByValueId.set(valueId, { color: swatch.color, mediaId: null });
+        }
+    }
     await assertReadySwatchImages(db, newSwatchMedia);
 
     const persistedOptions = input.options.map((option) => ({
@@ -1017,13 +1029,12 @@ export async function planProductOptionMatrix(
                 .where(eq(productOptionDefinitions.id, definition.id)));
         }
     }
-    // A removed value drops its swatch: Files never counts a value no one can
-    // see as a use of a file, and a value brought back later starts without
-    // one, as a new value does.
+    // A removed value keeps its swatch, so bringing it back (a SKU moved back,
+    // a retired SKU restored) restores it; Files does not count it meanwhile.
     for (const value of existingValues) {
         if (value.deletedAt === null && !submittedValueIds.has(value.id)) {
             statements.push(db.update(productOptionValues)
-                .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()`, swatchColor: null, swatchMediaId: null })
+                .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
                 .where(eq(productOptionValues.id, value.id)));
         }
     }
