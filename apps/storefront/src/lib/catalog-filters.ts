@@ -550,10 +550,16 @@ function setupFilterBar(form: HTMLFormElement): void {
   const dropdowns = [...form.querySelectorAll<HTMLDetailsElement>("details[data-catalog-dropdown]")];
   const desktop = window.matchMedia("(min-width: 1024px)");
   const wide = { get matches() { return desktop.matches || form.hasAttribute("data-inline"); } };
+  // A skin's bar on phones: an open dropdown is a modal sheet over the page.
+  const phoneSheet = () => form.hasAttribute("data-inline") && !desktop.matches;
+  const sheet = setupFilterSheet(form);
   dropdowns.forEach((dropdown) => {
     dropdown.addEventListener("toggle", () => {
-      if (!dropdown.open || !wide.matches) return;
-      for (const other of dropdowns) if (other !== dropdown) other.open = false;
+      if (dropdown.open && wide.matches) {
+        for (const other of dropdowns) if (other !== dropdown) other.open = false;
+      }
+      if (dropdown.open && phoneSheet()) sheet.open(dropdown);
+      else if (!dropdown.open) sheet.closed(dropdown);
     });
   });
   document.addEventListener("click", (event) => {
@@ -563,11 +569,21 @@ function setupFilterBar(form: HTMLFormElement): void {
     for (const dropdown of dropdowns) if (dropdown.open && !dropdown.contains(event.target)) dropdown.open = false;
   });
   form.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !wide.matches) return;
     const open = dropdowns.find((dropdown) => dropdown.open);
     if (!open) return;
+    if (event.key === "Tab" && phoneSheet()) {
+      sheet.trap(event, open);
+      return;
+    }
+    if (event.key !== "Escape" || !wide.matches) return;
+    event.preventDefault();
     open.open = false;
     open.querySelector("summary")?.focus();
+  });
+  desktop.addEventListener("change", () => {
+    // A sheet becomes a dropdown again on a wide screen: the page is not modal there.
+    const open = dropdowns.find((dropdown) => dropdown.open);
+    if (open && !phoneSheet()) sheet.closed(open, { restoreFocus: false });
   });
   const more = form.querySelector<HTMLButtonElement>("[data-catalog-bar-more]");
   more?.addEventListener("click", () => {
@@ -575,6 +591,92 @@ function setupFilterBar(form: HTMLFormElement): void {
     form.toggleAttribute("data-bar-open", open);
     more.setAttribute("aria-expanded", String(open));
   });
+}
+
+const SHEET_FOCUSABLE = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type=\"hidden\"])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+/**
+ * The phone sheet of a skin's filter bar (catalog-listing.css), modal as the
+ * store's own filter sheet is (catalog-filter-dialog.ts): the form is the
+ * dialog, named by its open group; everything else on the page, and the
+ * bar's other groups, are inert; focus moves into the sheet, Tab stays in it
+ * (the group's toggle, its rows, the apply bar), and closing returns focus
+ * to the group's toggle.
+ */
+function setupFilterSheet(form: HTMLFormElement) {
+  const inertBefore = new Map<HTMLElement, boolean>();
+  let current: HTMLDetailsElement | null = null;
+  let overflowBefore = "";
+  const applyBar = form.querySelector<HTMLElement>("[data-catalog-apply-bar]");
+  const setInert = (open: HTMLDetailsElement | null) => {
+    inertBefore.forEach((was, element) => { element.inert = was; });
+    inertBefore.clear();
+    if (!open) return;
+    const make = (element: Element) => {
+      if (!(element instanceof HTMLElement) || inertBefore.has(element)) return;
+      inertBefore.set(element, element.inert);
+      element.inert = true;
+    };
+    // The page outside the form.
+    let branch: HTMLElement = form;
+    while (branch.parentElement) {
+      const parent = branch.parentElement;
+      for (const sibling of parent.children) if (sibling !== branch) make(sibling);
+      if (parent === document.body) break;
+      branch = parent;
+    }
+    // The bar's other groups and links; the open group and the apply bar stay.
+    for (const child of form.querySelector(".catalog-filter-groups")?.children ?? []) if (child !== open) make(child);
+  };
+  const focusable = (open: HTMLDetailsElement) => [
+    ...[...open.querySelectorAll<HTMLElement>(`summary, ${SHEET_FOCUSABLE}`)],
+    ...(applyBar ? [...applyBar.querySelectorAll<HTMLElement>(SHEET_FOCUSABLE)] : []),
+  ].filter((element) => !element.closest("[inert]") && element.getClientRects().length > 0);
+  return {
+    open(open: HTMLDetailsElement) {
+      if (current === open) return;
+      if (!current) overflowBefore = document.body.style.overflow;
+      current = open;
+      setInert(open);
+      form.setAttribute("role", "dialog");
+      form.setAttribute("aria-modal", "true");
+      form.setAttribute("aria-label", open.querySelector("summary")?.textContent?.trim() ?? "");
+      document.body.style.overflow = "hidden";
+      // Into the sheet: its first row (the toggle when it holds none).
+      const [, first] = focusable(open);
+      (first ?? open.querySelector<HTMLElement>("summary"))?.focus({ preventScroll: true });
+    },
+    closed(closed: HTMLDetailsElement, { restoreFocus = true } = {}) {
+      if (current !== closed) return;
+      current = null;
+      setInert(null);
+      form.removeAttribute("role");
+      form.removeAttribute("aria-modal");
+      form.removeAttribute("aria-label");
+      document.body.style.overflow = overflowBefore;
+      if (restoreFocus) closed.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+    },
+    trap(event: KeyboardEvent, open: HTMLDetailsElement) {
+      const candidates = focusable(open);
+      const first = candidates[0];
+      const last = candidates.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+  };
 }
 
 /**

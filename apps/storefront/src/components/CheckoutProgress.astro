@@ -23,6 +23,14 @@ const allSteps = [
   class:list={["mb-5", paymentStepMayHide && "invisible"]}
   data-checkout-progress-pending={paymentStepMayHide ? "" : undefined}
 >
+  {/* Without JavaScript no quote decides: the row shows as drawn, payment step included (that checkout goes through it). */}
+  {paymentStepMayHide && (
+    <noscript>
+      <style>
+        [data-checkout-progress-pending] { visibility: visible !important; }
+      </style>
+    </noscript>
+  )}
   {/* The steps' padding is their hit and focus area; the list pulls back by it so the first label's text lines up with the cards below. */}
   <ol class="-ms-1.5 flex flex-wrap items-center gap-1.5 text-xs sm:text-sm" role="list">
     {

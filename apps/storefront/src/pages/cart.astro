@@ -1935,6 +1935,17 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     // or the rate of exchange may have changed since): a different total is
     // shown and confirmed again, never placed (shipping-profiles QA D5).
     let confirmedTotal = "";
+    // A press confirms the button it was made on too. A quote that lands
+    // while it waits may change how this buyer pays (cash alone: Place order
+    // and the cash terms; another method: Continue to payment): the press
+    // then stops, and the buyer presses again on the screen that shows it.
+    let confirmedPlacesCash = codOnly;
+    const paymentChangedWhileWaiting = () => {
+      if (codOnly === confirmedPlacesCash) return false;
+      restoreSubmitButton();
+      submitButton.focus({ preventScroll: true });
+      return true;
+    };
     let resubmitting = false;
     const resubmit = () => {
       resubmitting = true;
@@ -2136,6 +2147,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         if (!resubmitting) {
           syncOrderTotal();
           confirmedTotal = lastShownTotal;
+          // What the button meant when the buyer pressed it: place cash here, or go to the payment step.
+          confirmedPlacesCash = codOnly;
         }
         resubmitting = false;
         clearCheckoutFormError();
@@ -2252,6 +2265,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           await shippingMethods?.settled();
           await window.cartTotalsSettled?.();
           refreshPaymentStep();
+          if (paymentChangedWhileWaiting()) return;
           restoreSubmitButton();
           if (quoted()) {
             resubmit();
@@ -2275,6 +2289,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           await shippingMethods?.settled();
           await window.cartTotalsSettled?.();
           refreshPaymentStep();
+          if (paymentChangedWhileWaiting()) return;
           if (codOnly && !quoted()) {
             restoreSubmitButton();
             showCheckoutFormError(checkoutCopy.taxVerificationFailedText, submitButton);
@@ -2319,6 +2334,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             return;
           }
 
+          // A quote that landed while the cart was checked changed the button: press again.
+          if (paymentChangedWhileWaiting()) return;
           if (codOnly) {
             submitAfterCartValidation = true;
             resubmit();
@@ -2332,6 +2349,10 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
         // The payment step's handoff waits for a total still on its way (cash posts only once quoted).
         if (!codOnly) await window.cartTotalsSettled?.();
+        if (paymentChangedWhileWaiting()) {
+          e.preventDefault();
+          return;
+        }
         syncOrderTotal();
         if (lastShownTotal !== confirmedTotal) {
           // The summary already shows the new total; the next press confirms it.
