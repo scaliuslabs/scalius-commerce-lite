@@ -7,7 +7,8 @@
 // knows whose lines the money was for. An app needs the Sensitive
 // `write_refunds`; the money goes back through the payments it came from
 // (or one store-credit gift card), never anywhere the app names.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { orders } from "@scalius/database/schema";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
@@ -23,7 +24,7 @@ import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bou
 /** An order's refunds per page (and by default): an order's refunds are few. */
 const REFUNDS_PAGE_BOUND = 100;
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

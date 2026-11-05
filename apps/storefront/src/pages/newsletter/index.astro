@@ -9,7 +9,8 @@
 import Layout from "@/layouts/Layout.astro";
 import NewsletterForm from "@/components/newsletter/NewsletterForm.astro";
 import { getLayoutData } from "@/lib/api";
-import { newsletterLanguage, type NewsletterStatus } from "@/lib/newsletter-copy";
+import { newsletterLanguage, newsletterStatusWords, type NewsletterStatus } from "@/lib/newsletter-copy";
+import { readRetryAt } from "@/lib/rate-limit-wait";
 import { newsletterFormModel, readNewsletterStatus, themeNewsletterSettings } from "@/lib/newsletter-form";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -29,7 +30,7 @@ const { copy } = model;
 const status = readNewsletterStatus(Astro.url.searchParams);
 const FINISHED: readonly NewsletterStatus[] = ["subscribed", "pending", "confirmed", "unsubscribed"];
 const finished = status !== null && FINISHED.includes(status);
-const words = status ? copy.status[status] : null;
+const words = status ? newsletterStatusWords(copy, status, readRetryAt(Astro.url.searchParams)) : null;
 ---
 
 <Layout title={words?.title ?? copy.pageTitle} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar>

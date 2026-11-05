@@ -4,7 +4,8 @@
 // writes an event line in the claim thread (and an optional public reply) in
 // the same batch; claims never move money, stock or order status. Claims are
 // private and do not affect public cache dependencies.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import { getWarrantyClaim, listWarrantyClaims, updateWarrantyClaim } from "@scalius/core/modules/warranty";
 import { WARRANTY_CLAIM_STATUSES } from "@scalius/shared/warranty";
@@ -19,7 +20,7 @@ import {
 import { UnauthorizedError } from "../../utils/api-error";
 import { notificationSender } from "../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Warranty claims";
 const claimParam = z.object({ id: warrantyClaimIdSchema });

@@ -1,5 +1,6 @@
 // Manual order quotes, creation and COD amendments.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Context } from "hono";
 import {
     buildAppPaymentReviewHoldInsert,
@@ -41,7 +42,7 @@ import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions"
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /**
  * The apps' checkout functions for a staff order (channel "admin"): one

@@ -124,7 +124,9 @@ export function approveAgentAuthorizationRequest(
   requestId: string,
   selection: AgentGrantSelection & { label?: string },
 ): Promise<AgentAuthorizationDecisionResult> {
-  const { resource: _resource, ...approval } = selection;
+  // An approval takes the access only: the resource is the request's, and the
+  // approval policy is set on keys alone.
+  const { resource: _resource, confirmPolicy: _confirmPolicy, ...approval } = selection;
   return typed(apiData(postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove({
     path: { requestId },
     body: approval,
@@ -153,7 +155,7 @@ export function approveAgentDeviceAuthorization(
   deviceId: string,
   selection: AgentGrantSelection & { label?: string },
 ): Promise<AgentDeviceDecisionResult> {
-  const { resource: _resource, ...approval } = selection;
+  const { resource: _resource, confirmPolicy: _confirmPolicy, ...approval } = selection;
   return typed(apiData(postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove({
     path: { deviceId },
     body: approval,

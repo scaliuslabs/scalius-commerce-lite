@@ -14,7 +14,7 @@
 // URL), the token taken out of the address bar; tokens are never logged.
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
-import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
+import { newsletterCopy, newsletterLanguage, newsletterStatusWords } from "@/lib/newsletter-copy";
 import { NEWSLETTER_UNSUBSCRIBE_PATH } from "@/lib/newsletter-form";
 import {
   NEWSLETTER_TOKEN_PAGE_HEADERS,
@@ -43,7 +43,7 @@ if (method === "POST" && contentType === "application/json") {
   if (outcome.status === "unsubscribed") return oneClickText(copy.oneClickDone, 200);
   if (outcome.status === "link_invalid") return oneClickText(copy.oneClickInvalid, 400);
   if (outcome.status === "rate_limited") {
-    const response = oneClickText(copy.status.rate_limited.text, 429);
+    const response = oneClickText(newsletterStatusWords(copy, "rate_limited", outcome.retryAfterSeconds).text, 429);
     response.headers.set("Retry-After", String(outcome.retryAfterSeconds ?? 60));
     return response;
   }
@@ -55,7 +55,7 @@ if (method === "POST") {
   }
   const form = await readNewsletterForm(Astro.request);
   const outcome = await unsubscribeFromNewsletter(Astro.request, form?.get("token"));
-  return newsletterRedirect(outcome.status, { "Referrer-Policy": "no-referrer" });
+  return newsletterRedirect(outcome.status, { "Referrer-Policy": "no-referrer" }, outcome.retryAfterSeconds);
 }
 if (method !== "GET" && method !== "HEAD") {
   return new Response(null, { status: 405, headers: { Allow: "GET, HEAD, POST", ...NEWSLETTER_TOKEN_PAGE_HEADERS } });
@@ -69,11 +69,11 @@ const [layoutData, preview] = await Promise.all([
 ]);
 const language = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
 const copy = newsletterCopy(language);
-const shown = typeof preview === "object" && preview !== null ? preview : null;
+const shown = typeof preview === "object" && preview !== null && "channel" in preview ? preview : null;
 const notice = shown
   ? null
-  : preview === "rate_limited"
-    ? copy.status.rate_limited
+  : typeof preview === "object" && preview !== null && "status" in preview
+    ? newsletterStatusWords(copy, "rate_limited", preview.retryAfterSeconds)
     : preview === null
       ? copy.status.error
       : copy.status.link_invalid;

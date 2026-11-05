@@ -3,7 +3,8 @@
 // attribute sets. Mounted by ./attributes.ts before its own routes, under
 // /api/v1/admin/attributes. Product value rewrites carry the catalogue
 // projection refresh in their own batches (catalogProjectionRefreshStatements).
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     convertAttributeTypeSchema,
     createAttributeGroupSchema,
@@ -37,7 +38,7 @@ import { created, noContent, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, noContentResponse, successEnvelope } from "../../schemas/responses";
 import { timestampSchema } from "../../schemas/timestamps";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAG = "Admin - Attributes";
 
 /** The catalogue projection refresh the attribute writes append to their batches. */

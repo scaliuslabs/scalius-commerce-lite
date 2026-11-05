@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { metaConversionsLogs } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { desc, count } from "drizzle-orm";
@@ -22,7 +23,7 @@ import {
 
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { clearMetaCapiBrowserCircuit } from "../../../utils/meta-capi-circuit";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const MASKED_VALUE = "••••••••••••";
 const PLACEHOLDER_CREDENTIALS = new Set([
     "dummy",

@@ -1,4 +1,4 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
+
 import { siteSettingsRoutes } from "./settings/site";
 import { themeBuilderRoutes } from "./settings/theme-builder";
 import { paymentSettingsRoutes } from "./settings/payments";
@@ -22,8 +22,9 @@ import { marketsSettingsRoutes } from "./settings/markets";
 import { salesChannelsSettingsRoutes } from "./settings/sales-channels";
 import { languagesSettingsRoutes } from "./settings/languages";
 import { storeDefaultsSettingsRoutes } from "./settings/store-defaults";
+import { adminRouter } from "./admin-router";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 // Mount the modular settings routes on the root so they match frontend expectations
 // (Frontend expects /api/v1/admin/settings/stripe, not /api/v1/admin/settings/payments/stripe)

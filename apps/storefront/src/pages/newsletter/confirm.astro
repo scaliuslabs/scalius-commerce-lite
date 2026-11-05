@@ -30,7 +30,7 @@ if (method === "POST") {
   }
   const form = await readNewsletterForm(Astro.request);
   const outcome = await confirmNewsletterSubscription(Astro.request, form?.get("token"));
-  return newsletterRedirect(outcome.status, { "Referrer-Policy": "no-referrer" });
+  return newsletterRedirect(outcome.status, { "Referrer-Policy": "no-referrer" }, outcome.retryAfterSeconds);
 }
 if (method !== "GET" && method !== "HEAD") {
   return new Response(null, { status: 405, headers: { Allow: "GET, HEAD, POST", ...NEWSLETTER_TOKEN_PAGE_HEADERS } });

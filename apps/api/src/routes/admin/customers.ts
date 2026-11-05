@@ -1,7 +1,8 @@
 // src/server/routes/admin/customers.ts
 // Admin OpenAPI routes for customers.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { assertContactSearchAllowed } from "./contact-access";
 import { protectedField as pii } from "../../schemas/protected";
 import {
@@ -53,7 +54,7 @@ import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { drainCustomerErasureAfterResponse } from "../../background/customer-erasure";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /** The signed-in staff member, recorded as the author of customer changes. */
 const staffId = (c: { get: (key: "user") => unknown }) => (c.get("user") as { id?: string } | undefined)?.id ?? null;
@@ -347,6 +348,7 @@ const updateCustomerRoute = createRoute({
     path: "/{id}",
     tags: ["Admin - Customers"],
     summary: "Update a customer",
+    description: "Changes the contact and tax fields sent. Tags are replaced with `PUT /api/v1/admin/customers/{id}/tags` and addresses through `/addresses`; a field this body does not declare is refused (400 `validation_error`), nothing saved.",
     request: {
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateCustomerSchema } } }

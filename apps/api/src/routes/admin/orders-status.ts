@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
     assertShipmentDeletable,
@@ -41,7 +42,7 @@ import { requestCourierProviders } from "../../plugins/providers/courier";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 // ─── Inline response schemas ────────────────────────────────────────────────
 

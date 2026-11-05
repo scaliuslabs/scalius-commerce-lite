@@ -5,7 +5,8 @@
 // most 250 items finishes in its request (200); a larger one answers 202 with
 // the run and finishes right after the response and on the minute cron. One
 // run per Idempotency-Key; `bulk_runs.get` reads its progress.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, desc, eq, lt, or } from "drizzle-orm";
@@ -39,7 +40,7 @@ import {
   type BulkRunRow,
 } from "../../bulk-runs/engine";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const noStore: MiddlewareHandler = async (c, next) => {
   await next();

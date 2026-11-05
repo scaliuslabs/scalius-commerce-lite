@@ -2,7 +2,8 @@
 // Admin OpenAPI routes for product attributes.
 // Thin HTTP layer: validate → delegate to core → respond.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     createAttributeSchema,
     updateAttributeSchema,
@@ -38,7 +39,7 @@ import {
 import { attributeSchema } from "../../schemas/entities";
 
 import { adminAttributesTypedRoutes, projectionRefresh } from "./attributes-typed";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 // Typed-attribute routes (groups, value vocabulary, conversion, category
 // sets) register first so their literal segments win over `/{id}` routes.
 app.route("/", adminAttributesTypedRoutes);

@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Database } from "@scalius/database/client";
 import { ok } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
@@ -39,7 +40,7 @@ import { NET_TERMS_PAYMENT_METHOD, netTermsNamesAnyone, netTermsSettingsSchema }
 
 const NET_TERMS_NOBODY_MESSAGE = "Choose who may pay by invoice: a customer tag, a segment, or let apps decide.";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const MASKED = "••••••••••••";
 const revisionSchema = z.number().int().nonnegative();
 /** A save answers with the document revision the next save must send back. */

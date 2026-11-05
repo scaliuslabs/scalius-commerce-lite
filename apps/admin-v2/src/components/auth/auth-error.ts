@@ -12,6 +12,20 @@ export interface AuthFailure {
   status: number | null;
   code: string;
   offline: boolean;
+  /** The wait a refusal named (`retryAfterSeconds` in its body or `details`), or null. */
+  retryAfterSeconds: number | null;
+}
+
+/** The rate-limit sentence for a wait the server named; the plain one when it named none. */
+export function rateLimitWait(seconds: unknown): {
+  key: "rateLimited" | "rateLimitedSeconds" | "rateLimitedMinutes";
+  vars?: Record<string, number>;
+} {
+  const wait = Math.ceil(Number(seconds));
+  if (seconds === null || seconds === undefined || seconds === "" || !Number.isFinite(wait) || wait <= 0) return { key: "rateLimited" };
+  return wait < 60
+    ? { key: "rateLimitedSeconds", vars: { count: wait } }
+    : { key: "rateLimitedMinutes", vars: { count: Math.ceil(wait / 60) } };
 }
 
 const NETWORK_FAILURE = /failed to fetch|fetch failed|load failed|networkerror|network request failed/i;
@@ -32,14 +46,21 @@ export function readAuthFailure(error: unknown): AuthFailure {
   const message = error instanceof Error ? error.message : String(field(error, "message") ?? "");
   const offline =
     status === null && (NETWORK_FAILURE.test(message) || (typeof navigator !== "undefined" && navigator.onLine === false));
-  return { status, code: (code ?? "").toUpperCase(), offline };
+  const retryAfterSeconds = [
+    field(error, "retryAfterSeconds"),
+    field(body, "retryAfterSeconds"),
+    field(field(error, "details"), "retryAfterSeconds"),
+    field(field(body, "details"), "retryAfterSeconds"),
+  ].map(Number).find((value) => Number.isFinite(value) && value > 0) ?? null;
+  return { status, code: (code ?? "").toUpperCase(), offline, retryAfterSeconds };
 }
 
 /**
  * The message for a failed auth request. Connection problems, rate limits,
  * the 2FA lockout and server faults read the same on every screen; `pick`
  * names the screen's own messages (wrong password, wrong code). A rate limit
- * says how long to wait when the server told us (`X-Retry-After`).
+ * says how long to wait when the server told us (`X-Retry-After`, or the wait
+ * in the refusal's body).
  */
 export function authFailureMessage(
   error: unknown,
@@ -50,13 +71,7 @@ export function authFailureMessage(
   if (failure.offline) return { key: "offline" };
   // Better Auth answers the 2FA lockout with 429 too; it lasts 15 minutes.
   if (failure.code === "ACCOUNT_TEMPORARILY_LOCKED") return { key: "locked" };
-  if (failure.status === 429) {
-    const seconds = Math.ceil(Number(retryAfter));
-    if (!Number.isFinite(seconds) || seconds <= 0) return { key: "rateLimited" };
-    return seconds < 60
-      ? { key: "rateLimitedSeconds", vars: { count: seconds } }
-      : { key: "rateLimitedMinutes", vars: { count: Math.ceil(seconds / 60) } };
-  }
+  if (failure.status === 429) return rateLimitWait(retryAfter || failure.retryAfterSeconds);
   if (failure.status !== null && failure.status >= 500) return { key: "unavailable" };
   return { key: pick(failure) ?? "unavailable" };
 }

@@ -18,7 +18,7 @@ import {
 import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
 import { accountMessages } from "~/i18n/account";
-import { accountFailureKey } from "./account-error";
+import { accountFailureMessage, type AccountMessage } from "./account-error";
 
 const DEVICE_ICONS = { mobile: Smartphone, tablet: Tablet, desktop: Laptop, unknown: MonitorSmartphone } as const;
 
@@ -30,6 +30,7 @@ function when(value: string): string {
 /** Signed-in devices: where this account is signed in, with sign out per device or for all others. */
 export function AccountSessions() {
   const t = useMessages(accountMessages);
+  const say = (message: AccountMessage) => t(message.key, message.vars);
   const queryClient = useQueryClient();
   const sessionsQuery = useQuery(accountSessionsQueryOptions());
   const [confirm, setConfirm] = useState<AccountSession | "others" | null>(null);
@@ -48,7 +49,7 @@ export function AccountSessions() {
       keep((session) => session.commandId !== commandId);
       toast.success(t("deviceSignedOut"));
     },
-    onError: (error) => toast.error(t(accountFailureKey(error, () => "signOutFailed"))),
+    onError: (error) => toast.error(say(accountFailureMessage(error, () => "signOutFailed"))),
     onSettled: settle,
   });
 
@@ -59,7 +60,7 @@ export function AccountSessions() {
       const count = result.revokedCount;
       toast.success(count === 0 ? t("noOtherDevices") : count === 1 ? t("devicesSignedOutOne") : t("devicesSignedOutMany", { count }));
     },
-    onError: (error) => toast.error(t(accountFailureKey(error, () => "signOutFailed"))),
+    onError: (error) => toast.error(say(accountFailureMessage(error, () => "signOutFailed"))),
     onSettled: settle,
   });
 

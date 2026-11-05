@@ -8,7 +8,8 @@
 // pickers and page-numbered lists stay its beta operations
 // (`dashboard.categories.*`, `dashboard.collections.*`, `dashboard.brands.list`,
 // `dashboard.content.list`).
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { MiddlewareHandler } from "hono";
 import { gte, inArray, isNotNull, isNull, eq, sql, type SQL } from "drizzle-orm";
 import { brands, categories, collections, CONTENT_ENTRY_TYPES, pages } from "@scalius/database/schema";
@@ -26,7 +27,7 @@ import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/ti
 import { nextCursorSchema } from "../../utils/bounded-page";
 import { epochSeconds, resourcePage, resourcePageQuery, updatedOrder } from "../../utils/resource-page";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const noStore: MiddlewareHandler = async (c, next) => {
   await next();

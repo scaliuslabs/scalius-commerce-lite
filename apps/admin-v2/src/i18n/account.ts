@@ -11,7 +11,9 @@ export const accountMessages = defineMessages({
     copyFailed: "Couldn't copy. Select the codes and copy them yourself.",
     offline: "Couldn't reach the server. Check your connection and try again.",
     unavailable: "Something went wrong on our side. Try again in a moment.",
-    rateLimited: "Too many attempts. Wait a minute and try again.",
+    rateLimited: "Too many attempts. Wait a moment and try again.",
+    rateLimitedSeconds: "Too many attempts. Try again in {count} seconds.",
+    rateLimitedMinutes: "Too many attempts. Try again in {count} minutes.",
     sessionEnded: "Your session ended. Sign in again.",
 
     profile: "Profile",
@@ -121,7 +123,9 @@ export const accountMessages = defineMessages({
     copyFailed: "কপি করা যায়নি। কোডগুলো সিলেক্ট করে নিজে কপি করুন।",
     offline: "সার্ভারের সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
     unavailable: "আমাদের দিকে একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।",
-    rateLimited: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
+    rateLimited: "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+    rateLimitedSeconds: "অনেকবার চেষ্টা করা হয়েছে। {count} সেকেন্ড পরে আবার চেষ্টা করুন।",
+    rateLimitedMinutes: "অনেকবার চেষ্টা করা হয়েছে। {count} মিনিট পরে আবার চেষ্টা করুন।",
     sessionEnded: "আপনার সেশন শেষ হয়ে গেছে। আবার সাইন ইন করুন।",
 
     profile: "প্রোফাইল",

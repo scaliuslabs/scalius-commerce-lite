@@ -1,6 +1,7 @@
 // apps/api/src/routes/admin/settings/platform.ts
 // Settings > Store details > Web addresses: the deployment's public origins.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Context } from "hono";
 import { getPlatformSettingsDocument, savePlatformSettings } from "@scalius/core/modules/platform";
 import { settingsMirror } from "@scalius/core/settings-store";
@@ -18,7 +19,7 @@ import { ok } from "../../../utils/api-response";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const identityHandoffSchema = z.object({
   enabled: z.boolean(),

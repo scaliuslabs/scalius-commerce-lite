@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin/admin-router";
 
 import {
   buildBatchGuard,
@@ -31,7 +32,7 @@ import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../sch
 const CHECKOUT_LANGUAGE_REVISION_GUARD = "CHECKOUT_LANGUAGE_REVISION_GUARD";
 
 const publicApp = new OpenAPIHono<{ Bindings: Env }>();
-const adminApp = new OpenAPIHono<{ Bindings: Env }>();
+const adminApp = adminRouter();
 
 const checkoutLanguageCreateErrorResponses = {
   400: errorResponses[400],

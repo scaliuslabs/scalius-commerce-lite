@@ -16,7 +16,8 @@
 //     refused publish leaves the saved links unpublished and says why
 //     (`published: false`, `publishError`). Where a published menu shows
 //     (header, footer columns) stays the merchant's choice.
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   NAVIGATION_MENU_WRITE_ITEM_LIMIT,
@@ -37,7 +38,7 @@ import { conflictResponse, errorResponses, successEnvelope } from "../../schemas
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

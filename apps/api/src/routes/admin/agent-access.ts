@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { nanoid } from "nanoid";
 import { deleteAgentArtifactObjects } from "../../agent-access/artifact-delivery";
 import { claimAgentBrowserHandoff } from "../../agent-access/browser-handoffs";
@@ -37,7 +38,7 @@ import {
   getAgentConnectionListScope,
 } from "../../agent-access/management-authority";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 app.use("*", async (c, next) => {
   try {
     await next();

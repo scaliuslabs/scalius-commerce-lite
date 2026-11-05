@@ -19,7 +19,8 @@
 // key and records the outcome, so a repeat answers the first outcome and
 // never charges twice. A decline is 422 `payment_declined`; a lost provider
 // answer is 503 `payment_outcome_unknown` (repeat the same request).
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
 import { customers } from "@scalius/database/schema";
@@ -49,7 +50,7 @@ import { claimAndApplyPaymentEventNow } from "../payment/payment-events";
 import { executionContextOf } from "../../background/after-response";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

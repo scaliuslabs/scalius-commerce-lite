@@ -47,6 +47,7 @@ const returnTo = (() => {
       returnTo={returnTo}
       open={notice?.warrantyId === record.warrantyId}
       flag={notice?.warrantyId === record.warrantyId ? notice.flag : null}
+      retryAfterSeconds={notice?.warrantyId === record.warrantyId ? notice.retryAfterSeconds : undefined}
     />
   </div>
 ))}

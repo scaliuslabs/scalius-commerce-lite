@@ -6,6 +6,7 @@ import { checkoutText } from "@/lib/checkout-text";
 import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { isCodeStillValidRefusal } from "@scalius/shared/customer-auth-policy";
 import { toLatinDigits } from "@scalius/shared/phone-input";
+import { checkoutRateLimitedText, pageWait, positiveSeconds } from "@/lib/rate-limit-wait";
 
 /** The API's resend wait when a response doesn't say (core OTP cooldown). */
 export const DEFAULT_RESEND_AFTER_SECONDS = 60;
@@ -69,17 +70,11 @@ export function getOrderLookupFieldErrors(
   return normalizeOrderReference(reference) ? {} : { reference: copy.trackOrderNumberInvalidText };
 }
 
-/** 45 → "0:45", 120 → "2:00". */
-export function formatCountdown(totalSeconds: number): string {
-  const seconds = Math.max(0, Math.ceil(totalSeconds));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+/** 45 → "0:45", 120 → "2:00", in the page's digits ("২:০০" on a Bangla page): the one wait clock. */
+function formatCountdown(seconds: number): string {
+  return pageWait(seconds);
 }
-
-/** A positive whole number of seconds, else undefined. */
-export function positiveSeconds(value: unknown): number | undefined {
-  const seconds = Number(value);
-  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined;
-}
+export { formatCountdown, positiveSeconds };
 
 /**
  * Buyer copy for a failed send or verify. Waits and remaining attempts come
@@ -91,11 +86,7 @@ export function getOrderCodeFailureText(
   operation: "send" | "verify",
   unavailableText: string,
 ): string {
-  if (failure.status === 429) {
-    if (!failure.retryAfterSeconds) return copy.paymentRecoveryRateLimitedText;
-    const wait = checkoutText(copy.orderCodeTryAgainInText, { time: formatCountdown(failure.retryAfterSeconds) });
-    return wait;
-  }
+  if (failure.status === 429) return checkoutRateLimitedText(copy, copy.paymentRecoveryRateLimitedText, failure.retryAfterSeconds);
   if (operation === "send" && failure.status === 404) return copy.trackOrderNotFoundText;
   if (operation === "send" && failure.status === 409) return unavailableText;
   if (operation === "verify" && typeof failure.attemptsLeft === "number") {

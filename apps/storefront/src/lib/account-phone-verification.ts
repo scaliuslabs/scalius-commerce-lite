@@ -10,10 +10,9 @@ import {
   verifyPhone,
   type PhoneVerificationPrompt,
 } from "@/lib/api/customer-auth";
-import { formatWait } from "@/lib/customer-auth-ui";
+import { pageWait } from "@/lib/rate-limit-wait";
 
 import { accountCopy } from "@/lib/account-copy";
-import { formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
 
 const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 aria-[invalid=true]:border-destructive disabled:opacity-50";
 const linkButton = "inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline";
@@ -22,12 +21,6 @@ export function phoneVerificationNotice(phone: string): string {
   return accountCopy().phone.notice(pagePhone(phone));
 }
 
-/** A wait as a clock in the page's digits: "1:05", "১:০৫". */
-function waitText(seconds: number): string {
-  const [minutes, rest] = formatWait(seconds).split(":");
-  const language = pageLanguage();
-  return `${formatPageNumber(Number(minutes), language)}:${formatPageNumber(Number(rest), language).padStart(2, formatPageNumber(0, language))}`;
-}
 
 /** Countdowns of the notice on screen; a re-render stops the old ones. */
 const timers = new Set<number>();
@@ -140,7 +133,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
     resend.disabled = true;
     countdown(
       seconds,
-      (left) => { resend.textContent = words.resendIn(waitText(left)); },
+      (left) => { resend.textContent = words.resendIn(pageWait(left)); },
       () => { resend.disabled = false; resend.textContent = RESEND_LABEL; },
     );
   };
@@ -166,7 +159,7 @@ function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificatio
       // Too many codes: say so with the honest wait, and hold the button until it passes.
       stopWait = countdown(
         result.retryAfterSeconds,
-        (left) => say(words.tryAgainIn(result.error, waitText(left)), "error"),
+        (left) => say(words.tryAgainIn(result.error, pageWait(left)), "error"),
         () => { trigger.disabled = false; say(""); },
       );
       return;

@@ -63,7 +63,7 @@ async function callAccountApi(
       data?: unknown;
       error?: { code?: unknown; message?: unknown } | string | null;
     } | null;
-    const error = payload?.success === true ? null : buyerApiErrorText(payload, { status: response.status });
+    const error = payload?.success === true ? null : buyerApiErrorText(payload, { status: response.status, headers: response.headers });
     return { status: response.status, data: payload?.success === true ? payload.data : null, error };
   } catch (error) {
     console.warn("[account] API call failed:", error instanceof Error ? error.name : "unknown");

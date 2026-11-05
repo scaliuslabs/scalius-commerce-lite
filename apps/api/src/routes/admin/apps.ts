@@ -10,7 +10,8 @@
 // never call these (the `apps` resource is reserved, and they are
 // security-class operations).
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { user as userTable, PLUGIN_EVENT_DELIVERY_STATUSES } from "@scalius/database/schema";
@@ -115,7 +116,7 @@ function sandboxAvailable(c: Context<{ Bindings: Env }>): boolean {
   }
 }
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /** Log lines per page (the ring keeps a plugin's newest 500). */
 const APP_LOG_PAGE_MAX = 100;

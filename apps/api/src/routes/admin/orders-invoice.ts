@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
   recordOrderEvent,
   getInvoiceDocument,
@@ -17,7 +18,7 @@ import {
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const nullableMoneySchema = z.number().nullable();
 const orderItemSchema = z.object({

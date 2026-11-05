@@ -9,6 +9,7 @@
 // text, a proof or a cookie: failures log an error name at most.
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import {
   defaultReviewReturnPath,
@@ -192,6 +193,8 @@ export type ReviewPostOutcome = {
   reviewRef: string | null;
   returnTo: string;
   access: ReviewAccess;
+  /** With `rate_limited`: the wait the API named. */
+  retryAfterSeconds?: number;
 };
 
 /**
@@ -257,7 +260,8 @@ export async function submitReviewForm(request: Request, form: FormData | null):
   const envelope = await readEnvelope(response);
   if (!response.ok) {
     const flag = reviewFlagForApi(response.status, envelope.code, envelope.field, access);
-    return outcome(flag, flag === "exists" ? existingReviewId(envelope) : null);
+    const retryAfterSeconds = flag === "rate_limited" ? refusalWaitSeconds({ details: envelope.details }, response.headers) : undefined;
+    return { ...outcome(flag, flag === "exists" ? existingReviewId(envelope) : null), ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
   }
   if (intent === "withdraw") return outcome("withdrawn");
   const published = (envelope.data as { published?: unknown } | null)?.published === true;
@@ -292,7 +296,7 @@ export async function handleReviewFormPost(
 ): Promise<Response> {
   const form = await readReviewForm(request);
   const outcome = await submitReviewForm(request, form);
-  const location = withReviewStatus(outcome.returnTo, outcome.flag, outcome.lineId, outcome.reviewRef);
+  const location = withReviewStatus(outcome.returnTo, outcome.flag, outcome.lineId, outcome.reviewRef, outcome.retryAfterSeconds);
   const wantsJson = (request.headers.get("accept") ?? "").includes("application/json");
   if (!wantsJson) return privateRedirect(location);
   const success = ["published", "pending", "updated", "withdrawn"].includes(outcome.flag);
@@ -301,7 +305,7 @@ export async function handleReviewFormPost(
     ok: success,
     flag: outcome.flag,
     location,
-    message: reviewNoticeText(outcome.flag, copy),
+    message: reviewNoticeText(outcome.flag, copy, outcome.retryAfterSeconds),
     ...(outcome.flag === "exists" && outcome.reviewRef
       ? { editHref: existingReviewHref(outcome.access, outcome.reviewRef), editText: copy.reviewEditExistingText }
       : {}),
