@@ -788,7 +788,7 @@ function renderPayment(detail: AccountOrderDetail): void {
                 : copy.codDepositCancelledText
           )}</p>
           ${detail.paymentPlan.instructions ? `<p class="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words" data-manual-cod-deposit-instructions>${escapeHtml(detail.paymentPlan.instructions)}</p>` : ""}
-          ${detail.paymentPlan.contactSnapshot ? renderManualCodDepositContact(detail.paymentPlan.contactSnapshot, copy) : ""}
+          ${detail.paymentPlan.contactSnapshot ? renderManualCodDepositContact(detail.paymentPlan.contactSnapshot, accountCopy()) : ""}
         </div>
       ` : "",
       refunds,
