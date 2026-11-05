@@ -215172,6 +215172,11 @@
                               "refundable"
                             ]
                           }
+                        },
+                        "refundLimit": {
+                          "type": "number",
+                          "nullable": true,
+                          "description": "The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it."
                         }
                       },
                       "required": [
@@ -215181,7 +215186,8 @@
                         "activeRefundOperation",
                         "paymentWebhookIssues",
                         "paymentSessionAttempts",
-                        "refundSources"
+                        "refundSources",
+                        "refundLimit"
                       ]
                     }
                   },
