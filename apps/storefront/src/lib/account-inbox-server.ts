@@ -11,6 +11,7 @@
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { seedRuntimeStoreLanguage } from "@/lib/api/runtime";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { ownCspHeaders } from "@/lib/middleware-helper/own-csp";
 import {
   normalizeConversationBody,
@@ -266,14 +267,15 @@ export async function proxyConversationAttachment(
 
 export type WriteResult =
   | { ok: true; flag: ConversationStatusFlag; thread: BuyerConversationThread }
-  | { ok: false; flag: ConversationStatusFlag; message?: string };
+  | { ok: false; flag: ConversationStatusFlag; message?: string; retryAfterSeconds?: number };
 
 async function refusal(response: Response | null, action: "post" | "start" | "upload"): Promise<WriteResult> {
   if (!response) return { ok: false, flag: "unavailable" };
-  return {
-    ok: false,
-    flag: statusFlagForApiStatus(response.status, action),
-  };
+  const flag = statusFlagForApiStatus(response.status, action);
+  if (flag !== "rate") return { ok: false, flag };
+  // A rate limit names its wait in the body and in Retry-After.
+  const retryAfterSeconds = refusalWaitSeconds(await response.json().catch(() => null), response.headers);
+  return { ok: false, flag, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
 async function threadFrom(response: Response): Promise<BuyerConversationThread | null> {
@@ -446,8 +448,14 @@ export function respondToConversationPost(
 ): Response {
   if (wantsJson(request)) {
     if (!result.ok) {
-      const message = conversationStatusMessage(result.flag).text;
-      return conversationJson({ success: false, error: { code: result.flag, message } }, JSON_STATUS[result.flag] ?? 400);
+      const wait = result.flag === "rate" ? result.retryAfterSeconds : undefined;
+      const message = conversationStatusMessage(result.flag, wait).text;
+      const response = conversationJson({
+        success: false,
+        error: { code: result.flag, message, ...(wait ? { details: { retryAfterSeconds: wait } } : {}) },
+      }, JSON_STATUS[result.flag] ?? 400);
+      if (wait) response.headers.set("Retry-After", String(wait));
+      return response;
     }
     const target = options.target ?? { kind: "thread", conversationId: result.thread.id };
     return conversationJson({
@@ -462,7 +470,7 @@ export function respondToConversationPost(
     }, 201);
   }
   const destination = result.ok && options.redirectOnSuccess ? options.redirectOnSuccess : options.returnTo;
-  return conversationRedirect(withConversationStatus(destination, result.flag));
+  return conversationRedirect(withConversationStatus(destination, result.flag, undefined, result.ok ? undefined : result.retryAfterSeconds));
 }
 
 /** The page a form came from, or the fallback. */

@@ -11,6 +11,7 @@
 
 import { resolveBackendTarget } from "@/lib/api/transport";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
+import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import {
   defaultDownloadReturnPath,
@@ -105,11 +106,14 @@ async function envelopeData(response: Response): Promise<Record<string, unknown>
     : null;
 }
 
-async function errorCode(response: Response): Promise<string | null> {
+/** A refused write: its flag, and the wait a rate limit names (body or Retry-After). */
+async function refusal(response: Response, access: DigitalAccess): Promise<{ ok: false; flag: DownloadStatusFlag; retryAfterSeconds?: number }> {
   const payload = await response.json().catch(() => null) as { error?: unknown; code?: unknown } | null;
   const error = payload?.error;
   const code = error && typeof error === "object" ? (error as { code?: unknown }).code : payload?.code;
-  return typeof code === "string" ? code : null;
+  const flag = downloadFlagForApi(response.status, typeof code === "string" ? code : null, access);
+  const retryAfterSeconds = flag === "rate" ? refusalWaitSeconds(payload, response.headers) : undefined;
+  return { ok: false, flag, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +138,7 @@ export async function readAccountDownloads(request: Request): Promise<ReadResult
 // Writes: a ticket and a key reveal
 // ---------------------------------------------------------------------------
 
-export type TicketResult = { ok: true; href: string } | { ok: false; flag: DownloadStatusFlag };
+export type TicketResult = { ok: true; href: string } | { ok: false; flag: DownloadStatusFlag; retryAfterSeconds?: number };
 
 /** Counts one download and returns the storefront stream path to redirect to. */
 export async function mintDownloadTicket(request: Request, access: DigitalAccess, entitlementId: string): Promise<TicketResult> {
@@ -143,12 +147,12 @@ export async function mintDownloadTicket(request: Request, access: DigitalAccess
   if (!headers) return { ok: false, flag: access.kind === "account" ? "signin" : "missing" };
   const response = await callApi(digitalApiPaths(access).ticket(entitlementId), { method: "POST", headers }, WRITE_TIMEOUT_MS);
   if (!response) return { ok: false, flag: "unavailable" };
-  if (!response.ok) return { ok: false, flag: downloadFlagForApi(response.status, await errorCode(response), access) };
+  if (!response.ok) return refusal(response, access);
   const href = (await envelopeData(response))?.href;
   return isDownloadTicketHref(href, access, entitlementId) ? { ok: true, href } : { ok: false, flag: "unavailable" };
 }
 
-export type RevealResult = { ok: true; key: string; last4: string } | { ok: false; flag: DownloadStatusFlag };
+export type RevealResult = { ok: true; key: string; last4: string } | { ok: false; flag: DownloadStatusFlag; retryAfterSeconds?: number };
 
 /** One licence key's plaintext, for a no-store page only. */
 export async function revealLicenceKey(request: Request, access: DigitalAccess, keyId: string): Promise<RevealResult> {
@@ -157,7 +161,7 @@ export async function revealLicenceKey(request: Request, access: DigitalAccess, 
   if (!headers) return { ok: false, flag: access.kind === "account" ? "signin" : "missing" };
   const response = await callApi(digitalApiPaths(access).reveal(keyId), { method: "POST", headers }, WRITE_TIMEOUT_MS);
   if (!response) return { ok: false, flag: "unavailable" };
-  if (!response.ok) return { ok: false, flag: downloadFlagForApi(response.status, await errorCode(response), access) };
+  if (!response.ok) return refusal(response, access);
   const data = await envelopeData(response);
   const key = data?.key;
   if (typeof key !== "string" || !key || data?.keyId !== keyId) return { ok: false, flag: "unavailable" };
@@ -212,7 +216,7 @@ export async function handleDownloadTicketPost(request: Request): Promise<Respon
   const result = await mintDownloadTicket(request, access, entitlementId);
   return result.ok
     ? privateRedirect(result.href)
-    : privateRedirect(withDownloadStatus(returnTo, result.flag, entitlementId));
+    : privateRedirect(withDownloadStatus(returnTo, result.flag, entitlementId, result.retryAfterSeconds));
 }
 
 // ---------------------------------------------------------------------------

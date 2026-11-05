@@ -12,6 +12,7 @@ import {
   isConversationId,
 } from "@/lib/account-inbox";
 import { buyerProofHeaders, callApi, envelopeData, type ReadResult } from "@/lib/account-inbox-server";
+import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import {
   isWarrantyClaimId,
   readBuyerWarranties,
@@ -42,7 +43,7 @@ export async function readAccountWarranties(request: Request): Promise<ReadResul
 
 export type ClaimResult =
   | { ok: true; claimId: string; conversationId: string }
-  | { ok: false; flag: WarrantyClaimFlag };
+  | { ok: false; flag: WarrantyClaimFlag; retryAfterSeconds?: number };
 
 function claimPaths(warrantyId: string, access: WarrantyAccess) {
   const base = access.kind === "account"
@@ -67,6 +68,13 @@ async function claimFlagFor(response: Response | null, access: WarrantyAccess, s
   if (status === 429) return "rate";
   if (status === 503 && step === "upload") return "photo";
   return "unavailable";
+}
+
+/** A refused step: its flag, and for a rate limit the wait the API named (body or Retry-After). */
+async function claimRefusal(response: Response | null, access: WarrantyAccess, step: "upload" | "open"): Promise<ClaimResult> {
+  if (response?.status !== 429) return { ok: false, flag: await claimFlagFor(response, access, step) };
+  const retryAfterSeconds = refusalWaitSeconds(await response.json().catch(() => null), response.headers);
+  return { ok: false, flag: "rate", ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
 /**
@@ -97,7 +105,7 @@ export async function openWarrantyClaimFromForm(
     upload.append("file", file, file.name || "image");
     upload.append("clientKey", clientKey);
     const response = await callApi(paths.upload, { method: "POST", headers, body: upload }, UPLOAD_TIMEOUT_MS);
-    if (!response || response.status !== 201) return { ok: false, flag: await claimFlagFor(response, access, "upload") };
+    if (!response || response.status !== 201) return claimRefusal(response, access, "upload");
     const data = await envelopeData<{ attachmentId?: unknown }>(response);
     if (!isConversationAttachmentId(data?.attachmentId)) return { ok: false, flag: "photo" };
     attachmentIds.push(data.attachmentId);
@@ -115,7 +123,7 @@ export async function openWarrantyClaimFromForm(
       ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     }),
   }, WRITE_TIMEOUT_MS);
-  if (!response || response.status !== 201) return { ok: false, flag: await claimFlagFor(response, access, "open") };
+  if (!response || response.status !== 201) return claimRefusal(response, access, "open");
   const data = await envelopeData<{ claimId?: unknown; conversationId?: unknown }>(response);
   return isWarrantyClaimId(data?.claimId) && isConversationId(data?.conversationId)
     ? { ok: true, claimId: data.claimId, conversationId: data.conversationId }

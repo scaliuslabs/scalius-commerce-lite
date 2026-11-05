@@ -7,6 +7,8 @@
 // store. A merchant's own heading, text or button label replaces the default.
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { ACCOUNT_MARKETING_COPY, type MarketingChannel } from "@scalius/shared/customer-marketing";
+import { checkoutText } from "@/lib/checkout-text";
+import { pageWait } from "@/lib/rate-limit-wait";
 
 export type NewsletterLanguage = "en" | "bn";
 
@@ -25,6 +27,21 @@ export const NEWSLETTER_STATUSES = [
   "link_invalid",
 ] as const;
 export type NewsletterStatus = (typeof NEWSLETTER_STATUSES)[number];
+
+/**
+ * An outcome's words; a rate limit says the wait the store named
+ * (`retryAfterSeconds`, in the page's digits), else a sentence with no time.
+ */
+export function newsletterStatusWords(
+  copy: Pick<NewsletterCopy, "status" | "rateLimitedWait">,
+  status: NewsletterStatus,
+  retryAfterSeconds?: number,
+): NewsletterStatusCopy {
+  const words = copy.status[status];
+  return status === "rate_limited" && retryAfterSeconds
+    ? { ...words, text: checkoutText(copy.rateLimitedWait, { time: pageWait(retryAfterSeconds) }) }
+    : words;
+}
 
 export function isNewsletterStatus(value: unknown): value is NewsletterStatus {
   return typeof value === "string" && (NEWSLETTER_STATUSES as readonly string[]).includes(value);
@@ -55,6 +72,8 @@ export interface NewsletterCopy {
   /** The consent line under the form: the channels the form subscribes. */
   consent: (channels: { email: boolean }) => string;
   status: Record<NewsletterStatus, NewsletterStatusCopy>;
+  /** `rate_limited`'s text when the store named its wait (`{time}`, "11:10"). */
+  rateLimitedWait: string;
   /** The result page's heading when it shows the form alone. */
   pageTitle: string;
   continueShopping: string;
@@ -111,7 +130,7 @@ const ENGLISH: NewsletterCopy = {
     },
     rate_limited: {
       title: "Too many tries",
-      text: "Please wait a minute, then try again.",
+      text: "Please wait before trying again.",
     },
     error: {
       title: "Something went wrong",
@@ -130,6 +149,7 @@ const ENGLISH: NewsletterCopy = {
       text: "It may have expired or been used already.",
     },
   },
+  rateLimitedWait: "Please try again in {time}.",
   pageTitle: "Newsletter",
   continueShopping: "Continue shopping",
   channelName: { email: "email", sms: "SMS", whatsapp: "WhatsApp", push: "browser notifications" },
@@ -182,7 +202,7 @@ const BANGLA: NewsletterCopy = {
     },
     rate_limited: {
       title: "অনেকবার চেষ্টা করা হয়েছে",
-      text: "এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।",
+      text: "কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
     },
     error: {
       title: "কিছু একটা সমস্যা হয়েছে",
@@ -201,6 +221,7 @@ const BANGLA: NewsletterCopy = {
       text: "লিংকটির মেয়াদ শেষ হয়ে গেছে বা আগেই ব্যবহার করা হয়েছে।",
     },
   },
+  rateLimitedWait: "{time} পরে আবার চেষ্টা করুন।",
   pageTitle: "নিউজলেটার",
   continueShopping: "কেনাকাটা চালিয়ে যান",
   channelName: { email: "ইমেইল", sms: "এসএমএস", whatsapp: "হোয়াটসঅ্যাপ", push: "ব্রাউজার বিজ্ঞপ্তি" },

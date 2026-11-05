@@ -145,13 +145,3 @@ export function checkNewAccount(
   }
   return errors.length > 0 ? { ok: false, errors } : { ok: true, account };
 }
-
-/**
- * "2:00", "0:45": the honest wait shown next to a disabled button, its
- * digits written by `digits` (the page's: "২:০০" on a Bangla page).
- */
-export function formatWait(seconds: number, digits: (value: number) => string = String): string {
-  const total = Math.max(0, Math.ceil(seconds));
-  const rest = total % 60;
-  return `${digits(Math.floor(total / 60))}:${rest < 10 ? digits(0) : ""}${digits(rest)}`;
-}

@@ -20,6 +20,7 @@ import {
 import { newsletterResultPath } from "@/lib/newsletter-form";
 import { isOneClickJson, readBoundedText } from "@/lib/newsletter-one-click";
 import { buyerIpHeaders } from "@/lib/order-lookup-api";
+import { positiveSeconds } from "@/lib/rate-limit-wait";
 
 const API_TIMEOUT_MS = 8_000;
 /** A signup or link form is a few hundred bytes; anything larger is not one. */
@@ -141,8 +142,7 @@ async function postMarketingApi(request: Request, path: string, body: Record<str
 }
 
 function retrySeconds(answer: ApiAnswer): number | undefined {
-  const value = Number(answer.details.retryAfterSeconds ?? answer.retryAfter);
-  return Number.isFinite(value) && value > 0 ? Math.ceil(value) : undefined;
+  return positiveSeconds(answer.details.retryAfterSeconds) ?? positiveSeconds(answer.retryAfter);
 }
 
 /** A failed answer as a status: too many tries, refused input, or anything else. */
@@ -198,14 +198,23 @@ export interface UnsubscribePreview {
   alreadyOff: boolean;
 }
 
+/** A rate-limited preview, with the wait the API named. */
+export interface NewsletterRateLimited {
+  status: "rate_limited";
+  retryAfterSeconds?: number;
+}
+
 /** What a signed link would unsubscribe (changes nothing); `invalid` for a dead link, null when the API is unreachable. */
 export async function previewNewsletterUnsubscribe(
   request: Request,
   token: unknown,
-): Promise<UnsubscribePreview | "invalid" | "rate_limited" | null> {
+): Promise<UnsubscribePreview | "invalid" | NewsletterRateLimited | null> {
   if (!isNewsletterUnsubscribeToken(token)) return "invalid";
   const answer = await postMarketingApi(request, "/marketing/unsubscribe/preview", { token });
-  if (answer?.status === 429) return "rate_limited";
+  if (answer?.status === 429) {
+    const retryAfterSeconds = retrySeconds(answer);
+    return { status: "rate_limited", ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
+  }
   if (answer?.status === 400 || answer?.status === 422) return "invalid";
   if (answer?.status !== 200 || !answer.data) return null;
   const { valid, channel, contactMasked, status } = answer.data;
@@ -245,16 +254,16 @@ export function newsletterJson(body: Record<string, unknown>, status: number): R
 }
 
 /** 303 to the result page: the outcome flag is the only thing in the URL. */
-export function newsletterRedirect(status: NewsletterStatus, extra: Record<string, string> = {}): Response {
+export function newsletterRedirect(status: NewsletterStatus, extra: Record<string, string> = {}, retryAfterSeconds?: number): Response {
   return new Response(null, {
     status: 303,
-    headers: { Location: newsletterResultPath(status), "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL, ...extra },
+    headers: { Location: newsletterResultPath(status, retryAfterSeconds), "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL, ...extra },
   });
 }
 
 /** The answer to a signup post: JSON with the outcome for the script, else a 303. */
 export function respondToNewsletterPost(request: Request, outcome: NewsletterOutcome): Response {
-  if (!wantsNewsletterJson(request)) return newsletterRedirect(outcome.status);
+  if (!wantsNewsletterJson(request)) return newsletterRedirect(outcome.status, {}, outcome.retryAfterSeconds);
   const ok = !(outcome.status in JSON_STATUS);
   return newsletterJson({
     success: ok,

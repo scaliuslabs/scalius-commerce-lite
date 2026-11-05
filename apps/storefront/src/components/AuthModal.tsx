@@ -25,9 +25,9 @@ import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
   checkContact,
   checkNewAccount,
-  formatWait,
   resolveCustomerAuthUi,
 } from "@/lib/customer-auth-ui";
+import { pageWait } from "@/lib/rate-limit-wait";
 import { pagePath } from "@/lib/presence-url";
 import { pageLocale, signInApps } from "@/lib/app-services";
 import { continueWithLabel, signInAppHref, signInLanguage } from "@/lib/sign-in-apps";
@@ -138,7 +138,7 @@ export default function AuthModal() {
   const digits = (value: number) => formatPageNumber(value, language);
   /** A valid example number for the phone check's message, in the page's digits. */
   const phoneExample = "01712345678".replace(/\d/g, (digit) => digits(Number(digit)));
-  const wait = (seconds: number) => formatWait(seconds, digits);
+  const wait = (seconds: number) => pageWait(seconds, language);
   const isEmail = ui.requestMethod === "email";
   const locked = attemptsLeft === 0;
 

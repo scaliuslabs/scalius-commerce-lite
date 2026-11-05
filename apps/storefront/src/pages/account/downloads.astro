@@ -50,7 +50,7 @@ const listMarkup = downloads.ok ? renderDownloadLines(lines, { returnTo: "/accou
       <div class="space-y-6">
 
         {notice && (
-          <p role="status" class={ui.errorNotice}>{downloadStatusText(notice.flag)}</p>
+          <p role="status" class={ui.errorNotice}>{downloadStatusText(notice.flag, notice.retryAfterSeconds)}</p>
         )}
 
         {lines.length > 0 ? (

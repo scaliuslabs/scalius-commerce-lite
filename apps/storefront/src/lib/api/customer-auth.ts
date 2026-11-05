@@ -1,5 +1,6 @@
 import { buyerApiErrorText } from "../buyer-api-errors";
 import { buyerApiErrorCopy } from "../buyer-api-error-copy";
+import { refusalWaitSeconds } from "../rate-limit-wait";
 import { pageLanguage } from "../store-time-zone";
 import { clearBuyerAttributes } from "../buyer-ui/state";
 // src/lib/api/customer-auth.ts
@@ -213,9 +214,12 @@ function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attem
   return typeof raw.error === "object" && raw.error.details ? raw.error.details : {};
 }
 
-/** Refusals use stable codes and the page language; backend prose stays internal. */
-function failureMessage(res: Response, raw: AuthApiEnvelope): string {
-  return buyerApiErrorText(raw, { status: res.status });
+/**
+ * Refusals use stable codes and the page language; backend prose stays
+ * internal. A rate limit says its wait, unless the caller counts it down.
+ */
+function failureMessage(res: Response, raw: AuthApiEnvelope, options: { showWait?: boolean } = {}): string {
+  return buyerApiErrorText(raw, { status: res.status, headers: res.headers, showWait: options.showWait });
 }
 
 function isTemporaryReadFailure(status: number): boolean {
@@ -303,8 +307,9 @@ export async function sendCustomerOtp(input: SendCustomerOtpInput): Promise<Send
     if (!res.ok || isFailedEnvelope(raw)) {
       return {
         success: false,
-        error: failureMessage(res, raw),
-        retryAfterSeconds: errorDetails(raw).retryAfterSeconds,
+        // The dialog counts this wait down beside the message.
+        error: failureMessage(res, raw, { showWait: false }),
+        retryAfterSeconds: refusalWaitSeconds(raw, res.headers),
         // The cooldown or the contact's ceiling: the code already sent still works.
         codeStillValid: isCodeStillValidRefusal(errorDetails(raw).reason),
       };
@@ -850,8 +855,8 @@ export type VerifyPhoneResult =
   | { success: false; error: string; status: number; attemptsLeft?: number };
 
 /** Phone verification uses the same localized refusal boundary as sign-in. */
-function phoneVerificationFailure(res: Response, raw: AuthApiEnvelope): string {
-  return failureMessage(res, raw);
+function phoneVerificationFailure(res: Response, raw: AuthApiEnvelope, options: { showWait?: boolean } = {}): string {
+  return failureMessage(res, raw, options);
 }
 
 /** Text a code to this account's own phone. No body: the server reads the phone from the session. */
@@ -864,7 +869,8 @@ export async function sendPhoneVerificationCode(): Promise<SendPhoneVerification
     const raw = await readEnvelope<{ message?: string; resendAfterSeconds?: number }>(res);
     const data = raw.data;
     if (!res.ok || isFailedEnvelope(raw) || !data) {
-      return { success: false, error: phoneVerificationFailure(res, raw), status: res.status, retryAfterSeconds: errorDetails(raw).retryAfterSeconds };
+      // The account page counts this wait down beside the message.
+      return { success: false, error: phoneVerificationFailure(res, raw, { showWait: false }), status: res.status, retryAfterSeconds: refusalWaitSeconds(raw, res.headers) };
     }
     return {
       success: true,

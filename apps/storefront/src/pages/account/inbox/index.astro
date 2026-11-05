@@ -9,9 +9,8 @@ import { getLayoutData } from "@/lib/api";
 import {
   conversationCopy,
   CONVERSATION_LIMITS,
-  conversationStatusMessage,
   newClientMessageKey,
-  readConversationStatusFlag,
+  readConversationStatusMessage,
   readInboxCursor,
   renderInboxItems,
 } from "@/lib/account-inbox";
@@ -29,9 +28,8 @@ const [layoutData, inbox, summary] = await Promise.all([
 ]);
 // The store's language (the layout read set it).
 const copy = conversationCopy();
-const flag = readConversationStatusFlag(Astro.url);
-const status = flag ? conversationStatusMessage(flag) : null;
-const startFailed = Boolean(flag && status?.tone === "error");
+const status = readConversationStatusMessage(Astro.url);
+const startFailed = status?.tone === "error";
 const clientMessageKey = newClientMessageKey();
 Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 if (!inbox.ok && inbox.reason === "unavailable") Astro.response.status = 503;
