@@ -33,8 +33,8 @@ type Logo = NonNullable<FooterStore["logo"]>;
  * knockout applies.
  */
 export function footerLogos(store: Pick<FooterStore, "logo" | "darkLogo" | "footerLogo">, tone: "ink" | "soft" | "plain"): { light: Logo | null; dark: Logo | null; knockout: "always" | "dark-pages" | null } {
-  // The store hands the header's logo as the footer logo when the theme names none.
-  const own = store.footerLogo && store.footerLogo.url !== store.logo?.url ? store.footerLogo : null;
+  // The merchant's own footer logo, or null: then the header's logo stands in.
+  const own = store.footerLogo;
   if (tone === "ink") {
     const light = store.darkLogo ?? own ?? store.logo;
     return { light, dark: null, knockout: light !== null && light !== store.darkLogo ? "always" : null };

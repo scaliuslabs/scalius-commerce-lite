@@ -10,6 +10,10 @@ import { resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
 import { answerFixtureApi, entryTheme, galleryApiBase, galleryStoreShape, GALLERY_API_PREFIX, unansweredReads } from "./api";
 import { galleryEntries, galleryEntry, type GalleryEntry, type GalleryPage } from "./entries";
 import { galleryCartSeed } from "./cart-seed";
+import { installGalleryListingApp } from "./listing-app-extension";
+
+// The gallery's own listing app answers as a bundled app (listing-app.tsx).
+installGalleryListingApp();
 import { PRODUCT_SCENARIO_SLUGS, mediaShape, setFixtureOrigin } from "./fixtures";
 
 if (import.meta.env.PROD) {

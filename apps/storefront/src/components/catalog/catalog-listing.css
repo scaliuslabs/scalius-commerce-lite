@@ -1198,3 +1198,89 @@
 .catalog-showcase-tabs a svg {
   display: none;
 }
+
+/* ─── A skin's bar of dropdowns on phones ─────────────────────────────
+   The store's own listing puts the filters behind its phone sheet; a skin's
+   `<Filters />` stays in the page, where a column of open groups pushed
+   every product below the first screen (about 450px at 320px). The bar is
+   one row of closed dropdowns that scrolls sideways; a dropdown opens as a
+   sheet over the page with the apply button under it. */
+@media (max-width: 63.99rem) {
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-filter-groups {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    padding: 0.5rem 0;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-facet {
+    flex: none;
+    border: 0;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-facet-summary {
+    padding-inline: 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--background);
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-facet[open] > .catalog-facet-summary {
+    border-color: var(--foreground);
+  }
+
+  /* Every group is in the row (it scrolls); nothing waits behind "More filters". */
+  .catalog-filter-form[data-placement="bar"][data-inline] [data-bar-overflow] {
+    display: block;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-bar-more {
+    display: none;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-filter-clear {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* The open dropdown: a sheet over the page, the apply bar under it. */
+  .catalog-filter-form[data-placement="bar"][data-inline] .catalog-facet[open] > .catalog-facet-body {
+    position: fixed;
+    inset-inline: 0;
+    bottom: var(--catalog-apply-bar, 5.25rem);
+    z-index: 60;
+    max-height: min(60vh, 28rem);
+    overflow-y: auto;
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--background);
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline] > [data-catalog-apply-bar] {
+    display: none;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline]:has(.catalog-facet[open]) > [data-catalog-apply-bar] {
+    display: block;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 60;
+  }
+
+  .catalog-filter-form[data-placement="bar"][data-inline]:has(.catalog-facet[open])::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: color-mix(in oklab, var(--foreground) 40%, transparent);
+  }
+}

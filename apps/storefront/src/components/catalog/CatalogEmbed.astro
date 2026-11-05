@@ -5,8 +5,10 @@
 // the page links. Same data, rules, words and scripts as the core listing
 // (CatalogListing.astro); paging is always numbered links, so crawlers reach
 // every product. The filters follow the merchant's placement, a sidebar or a
-// bar of dropdowns (catalogEmbeddedFilters); a drawer sits as a sidebar, and
-// below 64rem the form stays inline (no sheet).
+// bar of dropdowns (catalogEmbeddedFilters); a drawer sits as a sidebar.
+// Below 64rem the form stays in the page (no sheet): a sidebar stays a
+// column, and a bar is one sideways-scrolling row of closed dropdowns, each
+// opening as a sheet with its apply button (catalog-listing.css).
 import type { ComponentProps } from "astro/types";
 import CatalogBandTools from "./CatalogBandTools.astro";
 import CatalogFilters from "./CatalogFilters.astro";

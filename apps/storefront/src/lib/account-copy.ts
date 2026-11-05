@@ -127,6 +127,8 @@ export interface AccountCopy {
    */
   tracking: {
     milestones: Record<"placed" | "confirmed" | "shipped" | "delivered" | "cancelled" | "returned" | "refunded" | "partially_refunded", string>;
+    /** A dated update's title: what happened ("Shipped"), never the tracker step's state ("On its way") it moves the order to. */
+    events: Record<"placed" | "confirmed" | "shipped" | "delivered" | "cancelled" | "returned" | "refunded" | "partially_refunded", string>;
     awaitingPayment: string;
     placedDetails: string;
     confirmedDetails: string;
@@ -339,9 +341,13 @@ const EN: AccountCopy = {
       placed: "Order placed", confirmed: "Confirmed", shipped: "On its way", delivered: "Delivered",
       cancelled: "Cancelled", returned: "Returned", refunded: "Refunded", partially_refunded: "Partly refunded",
     },
+    events: {
+      placed: "Order received", confirmed: "Order confirmed", shipped: "Shipped", delivered: "Order delivered",
+      cancelled: "Order cancelled", returned: "Order returned", refunded: "Refund issued", partially_refunded: "Part refund issued",
+    },
     awaitingPayment: "Awaiting payment",
-    placedDetails: "We received your order.",
-    confirmedDetails: "The store confirmed your order.",
+    placedDetails: "Thank you for your order.",
+    confirmedDetails: "The store is getting it ready.",
     shippedDetails: "Your order is with the courier.",
     withCourier: (courier) => `With ${courier}.`,
     shipments: {
@@ -563,9 +569,13 @@ const BN: AccountCopy = {
       placed: "অর্ডার দেওয়া হয়েছে", confirmed: "নিশ্চিত হয়েছে", shipped: "পথে আছে", delivered: "ডেলিভারি হয়েছে",
       cancelled: "বাতিল হয়েছে", returned: "ফেরত এসেছে", refunded: "রিফান্ড হয়েছে", partially_refunded: "আংশিক রিফান্ড হয়েছে",
     },
+    events: {
+      placed: "অর্ডার গ্রহণ করা হয়েছে", confirmed: "অর্ডার নিশ্চিত করা হয়েছে", shipped: "পাঠানো হয়েছে", delivered: "অর্ডার পৌঁছে দেওয়া হয়েছে",
+      cancelled: "অর্ডার বাতিল করা হয়েছে", returned: "অর্ডার ফেরত এসেছে", refunded: "রিফান্ড দেওয়া হয়েছে", partially_refunded: "আংশিক রিফান্ড দেওয়া হয়েছে",
+    },
     awaitingPayment: "পেমেন্টের অপেক্ষায়",
-    placedDetails: "আমরা আপনার অর্ডার পেয়েছি।",
-    confirmedDetails: "স্টোর আপনার অর্ডার নিশ্চিত করেছে।",
+    placedDetails: "আপনার অর্ডারের জন্য ধন্যবাদ।",
+    confirmedDetails: "স্টোর অর্ডারটি প্রস্তুত করছে।",
     shippedDetails: "আপনার অর্ডার কুরিয়ারের কাছে আছে।",
     withCourier: (courier) => `${courier}-এর কাছে আছে।`,
     shipments: {

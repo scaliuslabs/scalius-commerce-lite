@@ -158,8 +158,9 @@ export function storefrontImageOf(asset: { url: string; alt?: string | null; wid
 
 /** A store logo as apps get it (header, footer and the render context): no alt text of its own is the store's name. */
 export function storeLogo(theme: Pick<RequestTheme, "brand">, storeName: string | null, which: "logo" | "darkLogo" | "footerLogo" = "logo"): StorefrontImage | null {
-  // The footer shows the main logo when the theme names no footer logo.
-  const logo = which === "footerLogo" ? theme.brand.footerLogo ?? theme.brand.logo : theme.brand[which];
+  // `footerLogo` is the merchant's own footer logo or null: a footer skin falls back to `logo`
+  // itself, so it can tell a dedicated footer logo from the header's.
+  const logo = theme.brand[which];
   return storefrontImageOf(logo ? { ...logo, alt: logo.alt || storeName } : null);
 }
 

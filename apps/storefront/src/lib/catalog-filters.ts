@@ -541,12 +541,15 @@ function setupPriceSlider(form: HTMLFormElement): void {
 
 /**
  * The bar's dropdowns (Dawn): one open at a time, closed by a click outside
- * or Escape; "More filters" shows the groups past the bar's count.
+ * or Escape; "More filters" shows the groups past the bar's count. A skin's
+ * bar (`data-inline`) does the same on phones, where each dropdown is a sheet
+ * over the page (a tap on the shade closes it; its apply button applies).
  */
 function setupFilterBar(form: HTMLFormElement): void {
   if (form.dataset.placement !== "bar") return;
   const dropdowns = [...form.querySelectorAll<HTMLDetailsElement>("details[data-catalog-dropdown]")];
-  const wide = window.matchMedia("(min-width: 1024px)");
+  const desktop = window.matchMedia("(min-width: 1024px)");
+  const wide = { get matches() { return desktop.matches || form.hasAttribute("data-inline"); } };
   dropdowns.forEach((dropdown) => {
     dropdown.addEventListener("toggle", () => {
       if (!dropdown.open || !wide.matches) return;
@@ -554,7 +557,9 @@ function setupFilterBar(form: HTMLFormElement): void {
     });
   });
   document.addEventListener("click", (event) => {
-    if (!wide.matches || !(event.target instanceof Node)) return;
+    if (!wide.matches || !(event.target instanceof Element)) return;
+    // The phone sheet's apply bar applies what the open dropdown holds.
+    if (event.target.closest("[data-catalog-apply-bar]")) return;
     for (const dropdown of dropdowns) if (dropdown.open && !dropdown.contains(event.target)) dropdown.open = false;
   });
   form.addEventListener("keydown", (event) => {

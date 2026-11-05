@@ -580,6 +580,11 @@ export interface StorefrontHeaderData {
 
 export interface StorefrontFooterData {
   store: StorefrontStoreInfo & {
+    /**
+     * The footer logo the merchant set (Theme settings, Logo), or `null`
+     * without one: it is never the header's `logo` standing in, so draw
+     * `footerLogo ?? logo` and compare nothing.
+     */
     footerLogo: StorefrontImage | null;
     phone: string | null;
     email: string | null;

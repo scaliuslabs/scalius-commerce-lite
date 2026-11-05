@@ -176,7 +176,8 @@ export function wordOrderTracking<P extends { steps: TrackingStep[]; outcome: Tr
     progress: progress ? { ...progress, steps: progress.steps.map(label), outcome: progress.outcome ? label(progress.outcome) : null } : null,
     timeline: timeline.map((event) => {
       if (event.type === "order" && isMilestone(event.status)) {
-        return { ...event, label: words.milestones[event.status], details: details[event.status] ?? null };
+        // The update says what happened ("Shipped"); the tracker step above it says where the order is ("On its way").
+        return { ...event, label: words.events[event.status], details: details[event.status] ?? null };
       }
       if (event.type === "payment" && (event.status === "confirmed" || event.status === "failed")) {
         return { ...event, label: event.status === "confirmed" ? words.paymentReceived : words.paymentFailed };

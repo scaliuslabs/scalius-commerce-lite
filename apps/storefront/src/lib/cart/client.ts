@@ -1403,6 +1403,8 @@ async function refreshTotals() {
       setPreviewLineDiscounts(items, preview.lineDiscountsMinor ?? []);
     }
     totalEl.textContent = formatMoney(Math.max(0, totalAmount + shippingFee - discount));
+    // No quote, so no buyer's methods: the cart page keeps its payment step.
+    window.dispatchEvent(new CustomEvent("cart-quote-payment-methods", { detail: null }));
     if (elements.totalLabel) elements.totalLabel.textContent = activeCheckoutCopy().estimatedTotalText;
     setTaxStatus(elements, failure || (preview.ok ? "" : activeCheckoutCopy().taxVerificationFailedText));
     renderDiscountFacts(preview.ok ? preview : latestDiscountFacts);

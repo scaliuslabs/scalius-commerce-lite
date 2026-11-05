@@ -87,6 +87,8 @@ export interface GalleryScenario {
   addressApp?: boolean;
   /** A second market and a second language: the footer draws its country and language forms. */
   localization?: boolean;
+  /** The gallery's listing app is installed (listing-app.tsx): a third-party listing skin over the store's embeds. */
+  listingApp?: boolean;
   /** The header has the merchant's logo. */
   logo?: boolean;
   /** The cart page opens with these lines in the browser's cart (none: an empty cart). */
@@ -110,6 +112,8 @@ export type GalleryInteraction = {
   | { expectInside: string; container: string }
   /** Layout: the two first visible matches share one row (neither wrapped below the other). */
   | { expectSameRow: [string, string] }
+  /** Layout: the first visible match starts within the first screen (the page at its top), or within `fold` px (a short phone's screen). */
+  | { expectAboveFold: string; fold?: number }
 );
 
 export interface GalleryEntry {
@@ -385,6 +389,27 @@ function listingEntries(): GalleryEntry[] {
     theme.blocks.listing = { ...theme.blocks.listing, toolbar: toolbar as typeof theme.blocks.listing.toolbar };
     entries.push({ id: entryId("listing", `toolbar=${label}`), family: "listing", title: `Listing toolbar: ${label}`, page: "category", theme, focus: MAIN, scenario: {} });
   }
+  // A bar of filter dropdowns on phones, in the store's own listing and in a
+  // third-party listing skin's `<Filters />`: products start on the first
+  // screen (a skin's inline form once took about 450px at 320px).
+  const barTheme = clone(base);
+  barTheme.blocks.listing = { ...barTheme.blocks.listing, filters: { ...barTheme.blocks.listing.filters, style: "bar-dropdowns", openByDefault: false } };
+  entries.push({
+    id: "listing-filters-bar-phone", family: "listing", title: "Listing filters: a bar of dropdowns on phones", page: "category",
+    theme: barTheme, focus: MAIN, scenario: {}, widths: [320, 390],
+    interact: [{ expectAboveFold: ".product-grid-frame .product-card", fold: 568 }],
+  });
+  const skinTheme = clone(barTheme);
+  skinTheme.apps = { ...skinTheme.apps, skins: { ...skinTheme.apps?.skins, listing_main: { app: "gallery.listing/gallery_listing", values: {} } } };
+  entries.push({
+    id: "listing-skin-filters-bar-phone", family: "listing", title: "A listing skin's filters: a bar of dropdowns on phones", page: "category",
+    theme: skinTheme, focus: MAIN, scenario: { listingApp: true }, widths: [320, 390],
+    interact: [
+      { expectSameRow: ['[data-sx-embed="filters"] .catalog-facet:first-of-type > summary', '[data-sx-embed="filters"] .catalog-facet:nth-of-type(2) > summary'] },
+      // A short phone's first screen (iPhone SE, 568px).
+      { expectAboveFold: ".gallery-listing-results > li", fold: 568 },
+    ],
+  });
   for (const listing of ["empty", "small"] as const) {
     entries.push({ id: entryId("listing", `results=${listing}`), family: "listing", title: `Listing with ${listing} results`, page: listing === "empty" ? "search" : "category", theme: clone(base), focus: MAIN, scenario: { listing } });
   }
