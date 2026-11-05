@@ -454,6 +454,11 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
     });
     return new Response(envelope({ parts }), { headers: json });
   }
+  // The theme editor's sample pages: a live preview whose draft is the entry's theme.
+  if (url.pathname === "/api/v1/storefront/theme-preview/resolve" && request.method === "POST") {
+    const preview = { theme: entryTheme(entry), draftRevision: 1, basePublishedRevision: 1, expiresAt: "2099-01-01T00:00:00.000Z", brand: layout(entry).brand };
+    return new Response(envelope(preview), { headers: json });
+  }
   const posted = await browserPostAnswer(entry, url.pathname, request);
   if (posted !== null) return new Response(envelope(posted), { headers: json });
   const data = answer(entry, url.pathname, url.searchParams);

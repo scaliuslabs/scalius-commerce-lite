@@ -1,6 +1,7 @@
-// The storefront theme document (version 13): the template it is based on
+// The storefront theme document (version 14): the template it is based on
 // (a label: no renderer reads it), the tokens, one variant per block (plus
-// the shared navigation source, the listing's filter style and page chrome),
+// the shared navigation source, the listing's filter style and page chrome,
+// and the presentation of the buyer's private pages),
 // the page sections and the page templates' sections. The dashboard
 // and a future builder write it; the storefront renders it. Contract:
 // ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in.
@@ -32,14 +33,15 @@ import {
   buildStorefrontTokenCss,
   storefrontDarkColorsMissing,
   storefrontDarkPalette,
+  storefrontThemeColorsSchema,
   storefrontThemeShowsDarkColors,
-  storefrontThemeTokensSchema,
+  storefrontThemeTokensSchemaOf,
   type StorefrontThemeColorSet,
   type StorefrontThemeTokens,
 } from "./tokens";
 import { storefrontThemeTranslationsSchema } from "./text";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 13 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 14 as const;
 
 /**
  * The five presets of one design system ("Scalius Base"), named by
@@ -148,6 +150,7 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
   const sections = name("StorefrontSectionList", storefrontSectionListSchemaOf(skin, bindings, productSource));
   const landingPage = name("StorefrontLandingPage", storefrontLandingPageSchemaOf(sections));
   const pageTemplate = name("StorefrontPageTemplate", storefrontPageTemplateSchemaOf(sections));
+  const tokens = storefrontThemeTokensSchemaOf(name("StorefrontThemeColors", storefrontThemeColorsSchema));
   const document = z.object({
     version: z.literal(STOREFRONT_THEME_DOCUMENT_VERSION),
     /**
@@ -156,7 +159,7 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
      * blocks from any template (or a builder) mix freely.
      */
     template: z.enum(STOREFRONT_TEMPLATE_IDS),
-    tokens: storefrontThemeTokensSchema,
+    tokens,
     /** The logo, its width, the footer logo and the tab icon (media ids). */
     brand: storefrontThemeBrandSchema,
     blocks: storefrontThemeBlocksSchemaOf(bindings),

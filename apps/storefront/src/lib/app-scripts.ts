@@ -14,6 +14,7 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
  * pages and a manifest cannot name them.
  */
 
+import { isThemePreviewSamplePath } from "@scalius/shared/theme-preview-path";
 import { isPrivateStorefrontPathname } from "./cache-policy";
 
 /** The page kinds an app script can name (besides "all"). */
@@ -28,12 +29,24 @@ export interface StorefrontAppScript {
   pages: Array<StorefrontAppPage | "all">;
 }
 
+/** The path as the router reads it (percent-escapes decoded); a path that cannot be decoded as it is. */
+function decodedPath(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
 /** Which kind of page a storefront path renders ("private": a buyer's page, no app code; null: a page only "all" scripts load on). */
 export function storefrontAppPage(pathname: string): StorefrontAppPage | "private" | null {
   const path = trimTrailingCharacter(pathname, "/") || "/";
   // The buyer's own pages (`PRIVATE_STOREFRONT_ROOTS`) are decided first, so no other pattern can claim one;
-  // the theme editor's canvas is the merchant's.
-  if (isPrivateStorefrontPathname(path)) return /^\/theme-preview(?:\/|$)/.test(path) ? null : "private";
+  // the theme editor's canvas is the merchant's, but its sample checkout, receipt and account stand
+  // for buyer pages and load no app code either.
+  if (isPrivateStorefrontPathname(path)) {
+    return /^\/theme-preview(?:\/|$)/.test(path) && !isThemePreviewSamplePath(decodedPath(path)) ? null : "private";
+  }
   if (path === "/") return "home";
   if (/^\/products\/[^/]+$/.test(path)) return "product";
   if (/^\/(?:categories|brands|collections)\/[^/]+$/.test(path) || /^\/(?:categories|collections|search)$/.test(path)) {

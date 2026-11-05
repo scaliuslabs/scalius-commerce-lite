@@ -3,7 +3,9 @@
  * and landing pages are sections; product, collection (and category),
  * cart and CMS pages are templates whose ordinary sections sit before and
  * after one fixed part; search results are the listing alone. Every page
- * shares the announcement bar, header and footer.
+ * shares the announcement bar, header and footer. The buyer's checkout,
+ * receipt and account are each one fixed part, previewed on the editor's
+ * sample pages (fixed sample orders: a buyer's own page never draws a draft).
  */
 import {
   STOREFRONT_PRODUCT_MODULES,
@@ -14,6 +16,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
+import { themePreviewSamplePath } from "@scalius/shared/theme-preview-path";
 
 type Theme = StorefrontThemeDocument;
 
@@ -25,7 +28,10 @@ export type EditorPage =
   | { kind: "category" }
   | { kind: "search" }
   | { kind: "cart" }
-  | { kind: "page" };
+  | { kind: "page" }
+  | { kind: "checkout" }
+  | { kind: "receipt" }
+  | { kind: "account" };
 
 export type EditorPageKind = EditorPage["kind"];
 
@@ -34,7 +40,15 @@ export type ResourcePageKind = "product" | "collection" | "category" | "page";
 export const RESOURCE_PAGE_KINDS: readonly ResourcePageKind[] = ["product", "collection", "category", "page"];
 
 /** The store's pages in the page switcher, in Shopify's order. */
-export const STORE_PAGE_KINDS = ["home", "product", "collection", "category", "search", "cart", "page"] as const;
+export const STORE_PAGE_KINDS = ["home", "product", "collection", "category", "search", "cart", "page", "checkout", "receipt", "account"] as const;
+
+/** The buyer's pages the editor previews with a sample order. */
+export const SAMPLE_PAGE_KINDS = ["checkout", "receipt", "account"] as const;
+export type SamplePageKind = (typeof SAMPLE_PAGE_KINDS)[number];
+
+export function isSamplePage(page: EditorPage): page is { kind: SamplePageKind } {
+  return (SAMPLE_PAGE_KINDS as readonly string[]).includes(page.kind);
+}
 
 export function isResourcePage(page: EditorPage): page is { kind: ResourcePageKind } {
   return (RESOURCE_PAGE_KINDS as readonly string[]).includes(page.kind);
@@ -119,6 +133,9 @@ export const EDITOR_PARTS = {
   listingToolbar: "listing-toolbar",
   pageContent: THEME_EDITOR_MARKS.pageContent,
   cart: THEME_EDITOR_MARKS.cart,
+  checkout: THEME_EDITOR_MARKS.checkout,
+  receipt: THEME_EDITOR_MARKS.receipt,
+  account: THEME_EDITOR_MARKS.account,
 } as const;
 
 export const PRODUCT_MODULES = Object.keys(STOREFRONT_PRODUCT_MODULES) as StorefrontProductModule[];
@@ -140,19 +157,23 @@ export function pageFixedPart(page: EditorPage): string | null {
     case "search": return EDITOR_PARTS.listing;
     case "cart": return EDITOR_PARTS.cart;
     case "page": return EDITOR_PARTS.pageContent;
+    case "checkout": return EDITOR_PARTS.checkout;
+    case "receipt": return EDITOR_PARTS.receipt;
+    case "account": return EDITOR_PARTS.account;
     default: return null;
   }
 }
 
-/** Whether the page shows the shared announcement bar, header and footer (the cart hides them). */
+/** Whether the page shows the shared announcement bar, header and footer (the cart and checkout hide them). */
 export function pageShowsSharedParts(page: EditorPage): boolean {
-  return page.kind !== "cart";
+  return page.kind !== "cart" && page.kind !== "checkout";
 }
 
 /**
  * Where the preview opens a page: home `/`, a landing page `/pages/<slug>`,
- * search `/search`, the cart `/cart`, and a product, collection, category or
- * CMS page at the chosen resource's own address (null until there is one).
+ * search `/search`, the cart `/cart`, the checkout, receipt and account on
+ * their sample pages, and a product, collection, category or CMS page at the
+ * chosen resource's own address (null until there is one).
  */
 export function previewPath(page: EditorPage, resourceUrl: string | null): string | null {
   switch (page.kind) {
@@ -164,6 +185,10 @@ export function previewPath(page: EditorPage, resourceUrl: string | null): strin
       return "/search";
     case "cart":
       return "/cart";
+    case "checkout":
+    case "receipt":
+    case "account":
+      return themePreviewSamplePath(page.kind);
     default:
       return resourceUrl;
   }

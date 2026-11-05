@@ -53,6 +53,15 @@ import {
   type GatewayPresentation,
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
+import {
+  applySelectedPaymentChoice,
+  buildPaymentChoice,
+  clearPaymentChoices,
+  handlePaymentChoiceKeyDown,
+  paymentChoiceDetails,
+  paymentChoiceStyle,
+  placePaymentChoice,
+} from "./payment-choices";
 import { readLastPlacedOrderId, rememberSubmittedCart } from "./receipt-finalization";
 import { cashOnDeliveryDescription, cashOnDeliveryLabel, type CheckoutDeliveryMode } from "./delivery-mode";
 import { cartLinePropertyText } from "../cart/line-properties-view";
@@ -229,7 +238,7 @@ function parkPaymentControls(): void {
 function clearCheckoutPresentation(): void {
   parkPaymentControls();
   const paymentMethods = document.getElementById("paymentMethods");
-  paymentMethods?.replaceChildren();
+  clearPaymentChoices(paymentMethods);
   paymentMethods?.setAttribute("aria-busy", "false");
   document.getElementById("summaryDetails")?.replaceChildren();
   document.getElementById("orderSummary")?.classList.add("hidden");
@@ -295,124 +304,6 @@ async function recoverExistingCheckout(recovery: HostedPaymentRecoverySession): 
     showExistingCheckout(recovery.href);
   }
   return true;
-}
-
-function applySelectedMethodStyles(methodId: string | null): void {
-  document.querySelectorAll(".payment-method-card").forEach((card) => {
-    const el = card as HTMLElement;
-    const isSelected = el.dataset.method === methodId;
-    const control = el.querySelector<HTMLButtonElement>(".payment-method-control");
-    const details = el.querySelector<HTMLElement>(".payment-method-details");
-    if (control) {
-      control.setAttribute("aria-checked", String(isSelected));
-      if (methodId !== null) control.tabIndex = isSelected ? 0 : -1;
-    }
-    el.classList.toggle("border-primary", isSelected);
-    el.classList.toggle("border-border", !isSelected);
-    el.classList.toggle("shadow-sm", isSelected);
-    el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
-    details?.classList.toggle("hidden", !isSelected);
-  });
-}
-
-function handlePaymentMethodKeyDown(event: KeyboardEvent): void {
-  const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
-  if (!keys.includes(event.key)) return;
-
-  const cards = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(".payment-method-control"),
-  );
-  const current = event.currentTarget as HTMLButtonElement;
-  const currentIndex = cards.indexOf(current);
-  if (currentIndex === -1 || cards.length === 0) return;
-
-  event.preventDefault();
-  let nextIndex: number;
-  if (event.key === "Home") nextIndex = 0;
-  else if (event.key === "End") nextIndex = cards.length - 1;
-  else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-    nextIndex = (currentIndex + 1) % cards.length;
-  } else {
-    nextIndex = (currentIndex - 1 + cards.length) % cards.length;
-  }
-
-  const next = cards[nextIndex];
-  next?.focus();
-  next?.click();
-}
-
-function appendProviderIdentity(
-  parent: HTMLElement,
-  presentation: GatewayPresentation,
-): void {
-  // One badge size for every method (Shopify's payment rows): a brand's
-  // wordmark fills it, a plain icon sits in its middle. Marks are drawn for
-  // white, so the badge stays white in the dark colours unless the mark has
-  // a dark version.
-  if (!presentation.markSrc) return;
-  const identity = document.createElement("span");
-  identity.className =
-    `flex h-8 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-white px-1.5${presentation.darkMarkSrc ? " dark:bg-card" : ""}`;
-  identity.setAttribute("aria-hidden", "true");
-  const wordmark = presentation.markKind === "wordmark";
-  const light = document.createElement("img");
-  light.src = presentation.markSrc;
-  light.alt = "";
-  light.width = wordmark ? 52 : 20;
-  light.height = 20;
-  light.className = wordmark ? "h-5 w-full object-contain" : "h-5 w-5 object-contain";
-  if (presentation.darkMarkSrc) light.classList.add("dark:hidden");
-  identity.appendChild(light);
-  if (presentation.darkMarkSrc) {
-    const dark = document.createElement("img");
-    dark.src = presentation.darkMarkSrc;
-    dark.alt = "";
-    dark.width = 20;
-    dark.height = 20;
-    dark.className = "hidden h-5 w-5 object-contain dark:block";
-    identity.appendChild(dark);
-  }
-  parent.appendChild(identity);
-}
-
-function appendPaymentMethodContent(
-  control: HTMLElement,
-  presentation: GatewayPresentation,
-  label: string,
-  showRadio: boolean,
-): void {
-  const copy = document.createElement("div");
-  copy.className = "min-w-0 flex-1";
-  appendTextElement(copy, "p", "text-sm font-semibold text-foreground", label);
-  if (presentation.description) {
-    appendTextElement(
-      copy,
-      "p",
-      "mt-0.5 text-xs leading-4 text-muted-foreground",
-      presentation.description,
-    );
-  }
-  control.appendChild(copy);
-
-  appendProviderIdentity(control, presentation);
-
-  if (showRadio) {
-    const check = document.createElement("span");
-    check.className =
-      "method-check flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-input";
-    check.setAttribute("aria-hidden", "true");
-    const dot = document.createElement("span");
-    dot.className = "check-dot hidden h-2.5 w-2.5 rounded-full bg-primary";
-    check.appendChild(dot);
-    control.appendChild(check);
-  }
-
-  control.setAttribute(
-    "aria-label",
-    [label, presentation.description, presentation.providerLabel]
-      .filter(Boolean)
-      .join(". "),
-  );
 }
 
 function localizedGatewayPresentation(
@@ -1059,13 +950,50 @@ function hostedRedirectMessage(methodId: string): string | null {
     : null;
 }
 
+/**
+ * The methods drawn into the page, in the theme's style (payment-choices.ts):
+ * each as the buyer reads it (localized, with an app's quoted name), and what
+ * choosing one does.
+ */
+function drawPaymentChoices(
+  container: HTMLElement,
+  shown: CheckoutConfig["gateways"],
+  choose: (gateway: CheckoutConfig["gateways"][number]) => void,
+): void {
+  const stripeSection = document.getElementById("stripeSection");
+  const singleMethod = shown.length === 1;
+  const style = paymentChoiceStyle(container, shown.length);
+  shown.forEach((gw, index) => {
+    const fallbackLabel = (gw as { name?: string }).name || gw.id;
+    const known = getGatewayPresentation(gw.id, fallbackLabel, checkoutCopy);
+    const localized = gw.flow === "deferred"
+      ? deferredPresentation(gw, known)
+      : localizedGatewayPresentation(gw.id, known);
+    const quotedName = quotedPaymentMethodName(gw);
+    const presentation = quotedName ? { ...localized, buyerLabel: quotedName } : localized;
+    const parts = buildPaymentChoice({
+      id: gw.id,
+      presentation,
+      label: presentation.buyerLabel,
+      single: singleMethod,
+      first: index === 0,
+      style,
+    });
+    if (parts.control instanceof HTMLButtonElement) {
+      parts.control.addEventListener("click", () => choose(gw));
+      parts.control.addEventListener("keydown", handlePaymentChoiceKeyDown);
+    }
+    if (gw.id === "stripe" && stripeSection) parts.details.appendChild(stripeSection);
+    placePaymentChoice(container, parts, style);
+  });
+}
+
 async function renderGateways(): Promise<void> {
   if (!checkoutConfig || !checkoutData || !authoritativeTaxQuote) return;
   const container = document.getElementById("paymentMethods");
   if (!container) return;
   parkPaymentControls();
-  const stripeSection = document.getElementById("stripeSection");
-  container.innerHTML = "";
+  clearPaymentChoices(container);
   const eligibleGateways = eligibleCheckoutGateways();
   const singleMethod = eligibleGateways.length === 1;
   container.setAttribute("role", singleMethod ? "group" : "radiogroup");
@@ -1084,55 +1012,7 @@ async function renderGateways(): Promise<void> {
     return;
   }
 
-  eligibleGateways.forEach((gw, index) => {
-    const fallbackLabel = (gw as { name?: string }).name || gw.id;
-    const known = getGatewayPresentation(gw.id, fallbackLabel, checkoutCopy);
-    const localized = gw.flow === "deferred"
-      ? deferredPresentation(gw, known)
-      : localizedGatewayPresentation(gw.id, known);
-    const quotedName = quotedPaymentMethodName(gw);
-    const presentation = quotedName ? { ...localized, buyerLabel: quotedName } : localized;
-    const card = document.createElement("div");
-    card.className =
-      "payment-method-card overflow-hidden rounded-xl border border-border bg-card transition-colors";
-    card.dataset.method = gw.id;
-
-    const control = singleMethod
-      ? document.createElement("div")
-      : document.createElement("button");
-    control.className = singleMethod
-      ? "flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
-      : "payment-method-control flex min-h-16 w-full appearance-none items-center gap-3 px-4 py-3 text-start transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-wait";
-    if (control instanceof HTMLButtonElement) {
-      control.type = "button";
-      control.id = `payment-method-${gw.id}`;
-      control.setAttribute("role", "radio");
-      control.setAttribute("aria-checked", "false");
-      // A radio may not carry aria-expanded; aria-controls names the revealed details.
-      control.setAttribute("aria-controls", `payment-details-${gw.id}`);
-      control.tabIndex = index === 0 ? 0 : -1;
-      control.addEventListener("click", () => void selectMethod(gw.id, gw));
-      control.addEventListener("keydown", handlePaymentMethodKeyDown);
-    }
-    appendPaymentMethodContent(
-      control,
-      presentation,
-      presentation.buyerLabel,
-      !singleMethod,
-    );
-    card.appendChild(control);
-
-    const details = document.createElement("div");
-    details.id = `payment-details-${gw.id}`;
-    details.className =
-      "payment-method-details hidden space-y-3 border-t border-border px-4 py-4";
-    if (!singleMethod) {
-      details.setAttribute("aria-labelledby", `payment-method-${gw.id}`);
-    }
-    if (gw.id === "stripe" && stripeSection) details.appendChild(stripeSection);
-    card.appendChild(details);
-    container.appendChild(card);
-  });
+  drawPaymentChoices(container, eligibleGateways, (gw) => void selectMethod(gw.id, gw));
 
   container.setAttribute("aria-busy", "false");
   const restoredMethod = readCheckoutPaymentSelection();
@@ -1155,15 +1035,13 @@ async function selectMethod(
   const selectionId = ++selectionVersion;
   retrySelection = null;
   selectedMethod = null;
-  applySelectedMethodStyles(methodId);
+  applySelectedPaymentChoice(methodId);
   setPayButton(checkoutCopy.preparingPaymentText, true);
   hideError();
   const handler = handlerFor(methodId);
   const stripeSection = document.getElementById("stripeSection");
   const actionHost = document.getElementById("paymentActionHost");
-  const details = document.querySelector<HTMLElement>(
-    `.payment-method-card[data-method="${CSS.escape(methodId)}"] .payment-method-details`,
-  );
+  const details = paymentChoiceDetails(methodId);
   const testNotice = document.getElementById("testModeNotice");
   const redirectNote = document.getElementById("hostedRedirectNote");
   if (!handler || !details) {
@@ -1241,7 +1119,7 @@ async function selectMethod(
   if (selectionId !== selectionVersion) return;
   selectedMethod = methodId;
   writeCheckoutPaymentSelection(methodId);
-  applySelectedMethodStyles(methodId);
+  applySelectedPaymentChoice(methodId);
 
   setPayButton(
     paymentActionLabel(methodId),
@@ -1786,14 +1664,7 @@ export async function initCheckoutPage(): Promise<void> {
   samePageStripeRetry = null;
   selectionVersion += 1;
   checkoutConfig = (window as unknown as Record<string, CheckoutConfig>).__CHECKOUT_CONFIG__;
-  const activeLanguage = window.__CHECKOUT_LANGUAGE__ as
-    | { languageData?: Partial<CheckoutLanguageData> }
-    | undefined;
-  checkoutCopy = {
-    ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
-    ...(activeLanguage?.languageData ?? {}),
-  };
-  giftCopy = giftCardCheckoutCopy(activeLanguage?.languageData);
+  readCheckoutLanguage();
   appliedGiftCards = readStoredGiftCards();
   giftCardBusy = false;
   if (!checkoutConfig) return;
@@ -1848,6 +1719,64 @@ export async function initCheckoutPage(): Promise<void> {
       void processPayment();
     });
   }
+}
+
+/** The page's checkout words from the language the page carries (English where it has none). */
+function readCheckoutLanguage(): void {
+  const activeLanguage = window.__CHECKOUT_LANGUAGE__ as
+    | { languageData?: Partial<CheckoutLanguageData> }
+    | undefined;
+  checkoutCopy = {
+    ...ENGLISH_CHECKOUT_LANGUAGE_DATA,
+    ...(activeLanguage?.languageData ?? {}),
+  };
+  giftCopy = giftCardCheckoutCopy(activeLanguage?.languageData);
+}
+
+/**
+ * The theme editor's sample checkout (`/theme-preview/sample/checkout`): a
+ * fixed sample order's summary and the payment methods, drawn by this page's
+ * own code in the theme's layout. It reads no buyer's session, quote, cart or
+ * storage and writes none; it opens no payment: choosing a method marks it
+ * and shows its (disabled) Pay button where the buyer would find it.
+ */
+export function renderCheckoutSample(sample: {
+  config: CheckoutConfig;
+  data: Record<string, unknown>;
+  quote: CheckoutTaxQuote;
+}): void {
+  readCheckoutLanguage();
+  checkoutConfig = sample.config;
+  checkoutData = sample.data;
+  authoritativeTaxQuote = sample.quote;
+  installOrderSummaryToggle();
+  renderSummary(sample.quote);
+  const container = document.getElementById("paymentMethods");
+  if (!container) return;
+  clearPaymentChoices(container);
+  const shown = sample.config.gateways;
+  container.setAttribute("role", shown.length === 1 ? "group" : "radiogroup");
+  container.setAttribute("aria-label", shown.length === 1 ? checkoutCopy.paymentMethodText : checkoutCopy.paymentMethodsText);
+  const choose = (gw: CheckoutConfig["gateways"][number]) => {
+    applySelectedPaymentChoice(gw.id);
+    const details = paymentChoiceDetails(gw.id);
+    const actionHost = document.getElementById("paymentActionHost");
+    if (details && actionHost) {
+      details.appendChild(actionHost);
+      actionHost.classList.remove("hidden");
+    }
+    const redirectNote = document.getElementById("hostedRedirectNote");
+    const redirectMessage = hostedRedirectMessage(gw.id);
+    if (redirectNote) {
+      redirectNote.textContent = redirectMessage ?? "";
+      redirectNote.classList.toggle("hidden", !redirectMessage);
+    }
+    setPayButton(paymentActionLabel(gw.id), true);
+  };
+  drawPaymentChoices(container, shown, choose);
+  container.setAttribute("aria-busy", "false");
+  const first = shown[0];
+  if (first) choose(first);
 }
 
 export async function resumeCheckoutPageFromHistory(): Promise<void> {

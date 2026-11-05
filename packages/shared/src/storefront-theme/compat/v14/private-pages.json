@@ -1,0 +1,927 @@
+[
+ {
+  "version": 14,
+  "template": "department-mall",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#1d1c1a",
+    "card": "#ffffff",
+    "card-foreground": "#1d1c1a",
+    "popover": "#ffffff",
+    "popover-foreground": "#1d1c1a",
+    "primary": "#1d1c1a",
+    "primary-foreground": "#fbfaf7",
+    "secondary": "#f1eee8",
+    "secondary-foreground": "#1d1c1a",
+    "muted": "#f1eee8",
+    "muted-foreground": "#5d5850",
+    "accent": "#e9e3d8",
+    "accent-foreground": "#1d1c1a",
+    "destructive": "#b42318",
+    "destructive-foreground": "#ffffff",
+    "border": "#e5e0d6",
+    "input": "#d3ccbf",
+    "ring": "#1d1c1a"
+   },
+   "typography": "retail",
+   "typeScale": "retail",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "hairline",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200",
+   "colorScheme": "light",
+   "darkColors": null,
+   "colorSchemeToggle": false
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null,
+   "darkLogo": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "page",
+     "cartTotal": true
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 8,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "mega-panel",
+    "settings": {
+     "promoImages": false
+    }
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "none",
+     "action": "full",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "classic",
+     "settings": {}
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "row",
+      "features": true,
+      "details": "below",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   },
+   "cart": {
+    "summary": "top"
+   },
+   "cartDrawer": {
+    "width": "wide",
+    "recommendations": "hidden"
+   },
+   "checkout": {
+    "summary": "top",
+    "paymentChoices": "tiles"
+   },
+   "receipt": {
+    "layout": "split",
+    "sections": [
+     "items",
+     "order",
+     "delivery"
+    ]
+   },
+   "account": {
+    "navigation": "sidebar"
+   }
+  },
+  "pages": {
+   "home": [
+    {
+     "id": "hero",
+     "type": "hero",
+     "version": 1,
+     "settings": {
+      "layout": "contained-banners",
+      "slides": [
+       {
+        "image": "banner-eid",
+        "phoneImage": "phone-eid",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: eid",
+        "heading": "Eid collection 2026",
+        "text": "Handwoven jamdani, delivered in 2 days across Dhaka",
+        "buttonLabel": "Shop the edit",
+        "link": "/collections/col-eid"
+       },
+       {
+        "image": "banner-tech",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: tech",
+        "heading": "Galaxy A56 5G",
+        "text": "From ৳48,999 or ৳4,083/month EMI",
+        "buttonLabel": "Buy now",
+        "link": "/products/galaxy-a56"
+       },
+       {
+        "image": "banner-boishakh",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: boishakh",
+        "heading": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ",
+        "buttonLabel": "কিনুন",
+        "link": "/collections/col-eid"
+       }
+      ],
+      "sideBanners": [
+       {
+        "mediaId": "banner-side-1",
+        "alt": "Free delivery over ৳3,000",
+        "href": "/pages/delivery"
+       },
+       {
+        "mediaId": "banner-side-2",
+        "alt": "Laptops for students",
+        "href": "/categories/laptops"
+       }
+      ]
+     }
+    },
+    {
+     "id": "collections",
+     "type": "collections",
+     "version": 1,
+     "settings": {
+      "carousel": "large",
+      "collectionIds": [
+       "col-eid",
+       "col-new",
+       "col-tech",
+       "col-bangla"
+      ]
+     }
+    },
+    {
+     "id": "categories",
+     "type": "category_tiles",
+     "version": 1,
+     "settings": {
+      "style": "photo",
+      "title": "Shop by category",
+      "categoryIds": [
+       "cat-0",
+       "cat-1",
+       "cat-2",
+       "cat-3",
+       "cat-4",
+       "cat-5",
+       "cat-6",
+       "cat-7",
+       "cat-8",
+       "cat-9",
+       "cat-10",
+       "cat-11"
+      ]
+     }
+    },
+    {
+     "id": "delivery",
+     "type": "usp_strip",
+     "version": 1,
+     "settings": {
+      "style": "icons",
+      "source": {
+       "kind": "delivery-facts"
+      }
+     }
+    }
+   ],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 14,
+  "template": "boutique",
+  "tokens": {
+   "colors": {
+    "background": "#f6f4ef",
+    "foreground": "#242220",
+    "card": "#f6f4ef",
+    "card-foreground": "#242220",
+    "popover": "#f6f4ef",
+    "popover-foreground": "#242220",
+    "primary": "#242220",
+    "primary-foreground": "#f6f4ef",
+    "secondary": "#ebe7df",
+    "secondary-foreground": "#242220",
+    "muted": "#ebe7df",
+    "muted-foreground": "#5a554d",
+    "accent": "#e3ddd2",
+    "accent-foreground": "#242220",
+    "destructive": "#9b1c1c",
+    "destructive-foreground": "#ffffff",
+    "border": "#d9d3c7",
+    "input": "#c9c1b3",
+    "ring": "#242220"
+   },
+   "typography": "editorial",
+   "typeScale": "display",
+   "headingCase": "sentence",
+   "density": "airy",
+   "radius": "square",
+   "buttonShape": "radius",
+   "surface": "flat",
+   "imageRatio": "square",
+   "imageFit": "cover",
+   "headerTone": "light",
+   "container": "1200",
+   "colorScheme": "light",
+   "darkColors": null,
+   "colorSchemeToggle": false
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null,
+   "darkLogo": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "announcement",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "inline-nav",
+    "settings": {
+     "search": "icon",
+     "rowTone": "page",
+     "cartTotal": false
+    }
+   },
+   "navigation": {
+    "source": "menu",
+    "maxTopItems": 6,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "dropdown",
+    "settings": {}
+   },
+   "mobileNav": {
+    "variant": "accordion-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "swatches",
+     "action": "none",
+     "hoverImage": true
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "same",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "bar-dropdowns",
+     "openByDefault": false,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "breadcrumb",
+     "result-count",
+     "sort",
+     "applied-chips"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "page",
+    "band": "inline",
+    "phoneBar": "standard",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "thumbs-left",
+     "settings": {
+      "phoneSideThumbnails": false
+     }
+    },
+    "buyBox": {
+     "variant": "classic",
+     "settings": {
+      "cta": "stack",
+      "features": false,
+      "details": "buy-box",
+      "emi": false,
+      "whatsapp": false
+     }
+    },
+    "below": [
+     "description",
+     "content_blocks",
+     "policies",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "none",
+     "phoneBottom": "none",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "columns",
+    "settings": {
+     "tone": "page",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   },
+   "cart": {
+    "summary": "side"
+   },
+   "cartDrawer": {
+    "width": "standard",
+    "recommendations": "shown"
+   },
+   "checkout": {
+    "summary": "side",
+    "paymentChoices": "list"
+   },
+   "receipt": {
+    "layout": "stacked",
+    "sections": [
+     "order",
+     "delivery",
+     "items"
+    ]
+   },
+   "account": {
+    "navigation": "tabs"
+   }
+  },
+  "pages": {
+   "home": [
+    {
+     "id": "hero",
+     "type": "hero",
+     "version": 1,
+     "settings": {
+      "layout": "split",
+      "slides": [
+       {
+        "image": "banner-eid",
+        "phoneImage": "phone-eid",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: eid",
+        "heading": "Eid collection 2026",
+        "text": "Handwoven jamdani, delivered in 2 days across Dhaka",
+        "buttonLabel": "Shop the edit",
+        "link": "/collections/col-eid"
+       },
+       {
+        "image": "banner-tech",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: tech",
+        "heading": "Galaxy A56 5G",
+        "text": "From ৳48,999 or ৳4,083/month EMI",
+        "buttonLabel": "Buy now",
+        "link": "/products/galaxy-a56"
+       },
+       {
+        "image": "banner-boishakh",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: boishakh",
+        "heading": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ",
+        "buttonLabel": "কিনুন",
+        "link": "/collections/col-eid"
+       }
+      ],
+      "sideBanners": [
+       {
+        "mediaId": "banner-side-1",
+        "alt": "Free delivery over ৳3,000",
+        "href": "/pages/delivery"
+       },
+       {
+        "mediaId": "banner-side-2",
+        "alt": "Laptops for students",
+        "href": "/categories/laptops"
+       }
+      ]
+     }
+    },
+    {
+     "id": "intro",
+     "type": "editorial",
+     "version": 1,
+     "settings": {
+      "layout": "rich-text",
+      "heading": "Made by hand in Bangladesh",
+      "body": "Every saree is woven by a master weaver in Narayanganj.\n\nWe pay fair wages and ship from our own warehouse in Dhaka."
+     }
+    },
+    {
+     "id": "featured",
+     "type": "product_grid",
+     "version": 1,
+     "settings": {
+      "title": "Best sellers this week",
+      "source": {
+       "kind": "newest"
+      },
+      "columns": 4,
+      "rows": 2
+     }
+    },
+    {
+     "id": "values",
+     "type": "editorial",
+     "version": 1,
+     "settings": {
+      "layout": "multicolumn",
+      "heading": "Made by hand in Bangladesh",
+      "columns": []
+     }
+    },
+    {
+     "id": "testimonials",
+     "type": "editorial",
+     "version": 1,
+     "settings": {
+      "layout": "testimonial",
+      "quotes": []
+     }
+    },
+    {
+     "id": "newsletter",
+     "type": "newsletter",
+     "version": 1,
+     "settings": {
+      "heading": "Get Eid offers first",
+      "text": "SMS and email, twice a month. Unsubscribe any time.",
+      "mediaId": "banner-eid",
+      "email": "optional",
+      "whatsapp": false,
+      "buttonLabel": "Subscribe"
+     }
+    }
+   ],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ },
+ {
+  "version": 14,
+  "template": "marketplace",
+  "tokens": {
+   "colors": {
+    "background": "#ffffff",
+    "foreground": "#0f1111",
+    "card": "#ffffff",
+    "card-foreground": "#0f1111",
+    "popover": "#ffffff",
+    "popover-foreground": "#0f1111",
+    "primary": "#c2410c",
+    "primary-foreground": "#ffffff",
+    "secondary": "#f2f4f5",
+    "secondary-foreground": "#0f1111",
+    "muted": "#f2f4f5",
+    "muted-foreground": "#565959",
+    "accent": "#fff1e6",
+    "accent-foreground": "#7a2e0e",
+    "destructive": "#b12704",
+    "destructive-foreground": "#ffffff",
+    "border": "#e3e6e6",
+    "input": "#c7cccc",
+    "ring": "#c2410c"
+   },
+   "typography": "market",
+   "typeScale": "flat",
+   "headingCase": "sentence",
+   "density": "compact",
+   "radius": "subtle",
+   "buttonShape": "radius",
+   "surface": "flat",
+   "imageRatio": "square",
+   "imageFit": "contain",
+   "headerTone": "dark",
+   "container": "full",
+   "colorScheme": "light",
+   "darkColors": null,
+   "colorSchemeToggle": false
+  },
+  "brand": {
+   "logo": null,
+   "logoWidth": 180,
+   "footerLogo": null,
+   "favicon": null,
+   "darkLogo": null
+  },
+  "blocks": {
+   "topBar": {
+    "variant": "utility",
+    "settings": {
+     "text": "Free delivery inside Dhaka on orders over ৳3,000",
+     "link": "/delivery"
+    }
+   },
+   "header": {
+    "variant": "search-first",
+    "settings": {
+     "search": "scoped",
+     "rowTone": "header",
+     "cartTotal": false
+    }
+   },
+   "navigation": {
+    "source": "tree+menu",
+    "maxTopItems": 18,
+    "linkBudget": 150
+   },
+   "desktopNav": {
+    "variant": "drill-in-drawer",
+    "settings": {}
+   },
+   "mobileNav": {
+    "variant": "drill-in-drawer",
+    "settings": {}
+   },
+   "card": {
+    "variant": "standard",
+    "settings": {
+     "facts": "delivery",
+     "action": "none",
+     "hoverImage": false
+    }
+   },
+   "listing": {
+    "layout": {
+     "variant": "grid",
+     "settings": {}
+    },
+    "searchLayout": "list",
+    "descriptionPlacement": "below",
+    "filters": {
+     "style": "sidebar-dense",
+     "openByDefault": true,
+     "column": 262,
+     "rowPitch": 24,
+     "label": 14,
+     "searchPlacement": "same",
+     "ruled": false
+    },
+    "toolbar": [
+     "aspect-chips",
+     "result-count",
+     "sort",
+     "applied-chips",
+     "grid-list-toggle"
+    ],
+    "phoneLayout": "grid",
+    "paging": "numbered",
+    "surface": "muted",
+    "band": "standard",
+    "phoneBar": "split-sheet",
+    "links": "chips",
+    "phoneBanner": true,
+    "maxColumns": null
+   },
+   "product": {
+    "gallery": {
+     "variant": "thumbs-left",
+     "settings": {
+      "phoneSideThumbnails": false
+     }
+    },
+    "buyBox": {
+     "variant": "marketplace-3col",
+     "settings": {}
+    },
+    "below": [
+     "about_bullets",
+     "key_attributes",
+     "spec_table",
+     "description",
+     "reviews",
+     "related"
+    ],
+    "sticky": {
+     "phoneTop": "anchor-bar",
+     "phoneBottom": "buy-bar",
+     "desktop": "none"
+    }
+   },
+   "footer": {
+    "variant": "directory",
+    "settings": {
+     "style": "columns",
+     "tagline": "Handwoven sarees and genuine electronics, delivered across Bangladesh.",
+     "about": "Nakshi Bazar started as one stall in New Market in 2009.\n\nToday we ship to all 64 districts from our warehouse in Tejgaon, with cash on delivery and official warranty.",
+     "copyright": "Nakshi Bazar Limited"
+    }
+   },
+   "cart": {
+    "summary": "side"
+   },
+   "cartDrawer": {
+    "width": "standard",
+    "recommendations": "hidden"
+   },
+   "checkout": {
+    "summary": "side",
+    "paymentChoices": "tiles"
+   },
+   "receipt": {
+    "layout": "stacked",
+    "sections": [
+     "delivery",
+     "items",
+     "order"
+    ]
+   },
+   "account": {
+    "navigation": "tabs"
+   }
+  },
+  "pages": {
+   "home": [
+    {
+     "id": "hero",
+     "type": "hero",
+     "version": 1,
+     "settings": {
+      "layout": "full-bleed",
+      "slides": [
+       {
+        "image": "banner-eid",
+        "phoneImage": "phone-eid",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: eid",
+        "heading": "Eid collection 2026",
+        "text": "Handwoven jamdani, delivered in 2 days across Dhaka",
+        "buttonLabel": "Shop the edit",
+        "link": "/collections/col-eid"
+       },
+       {
+        "image": "banner-tech",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: tech",
+        "heading": "Galaxy A56 5G",
+        "text": "From ৳48,999 or ৳4,083/month EMI",
+        "buttonLabel": "Buy now",
+        "link": "/products/galaxy-a56"
+       },
+       {
+        "image": "banner-boishakh",
+        "focalPoint": {
+         "x": 50,
+         "y": 40
+        },
+        "alt": "Campaign photo: boishakh",
+        "heading": "হাতে বোনা ঢাকাই জামদানি শাড়ি, সুতি ও রেশমের মিশ্রণে তৈরি, নকশিকাঁথা ফোঁড়ের পাড় সহ উৎসবের বিশেষ সংস্করণ",
+        "buttonLabel": "কিনুন",
+        "link": "/collections/col-eid"
+       }
+      ],
+      "sideBanners": [
+       {
+        "mediaId": "banner-side-1",
+        "alt": "Free delivery over ৳3,000",
+        "href": "/pages/delivery"
+       },
+       {
+        "mediaId": "banner-side-2",
+        "alt": "Laptops for students",
+        "href": "/categories/laptops"
+       }
+      ]
+     }
+    },
+    {
+     "id": "categories",
+     "type": "category_tiles",
+     "version": 1,
+     "settings": {
+      "style": "quad",
+      "title": "Shop by category",
+      "categoryIds": [
+       "cat-0",
+       "cat-1",
+       "cat-2",
+       "cat-3",
+       "cat-4",
+       "cat-5",
+       "cat-6",
+       "cat-7",
+       "cat-8",
+       "cat-9",
+       "cat-10",
+       "cat-11"
+      ]
+     }
+    },
+    {
+     "id": "flash-sale",
+     "type": "deal_block",
+     "version": 1,
+     "settings": {
+      "title": "Flash sale",
+      "source": {
+       "kind": "on-sale"
+      },
+      "promotionId": "promo-flash",
+      "mediaId": "banner-eid"
+     }
+    },
+    {
+     "id": "for-you",
+     "type": "endless_grid",
+     "version": 1,
+     "settings": {
+      "title": "Just for you",
+      "pageSize": 24
+     }
+    }
+   ],
+   "homeMode": {
+    "kind": "sections"
+   },
+   "landing": {},
+   "templates": {
+    "product": {
+     "sections": [],
+     "main": 0
+    },
+    "collection": {
+     "sections": [],
+     "main": 0
+    },
+    "cart": {
+     "sections": [],
+     "main": 0
+    },
+    "page": {
+     "sections": [],
+     "main": 0
+    }
+   }
+  }
+ }
+]

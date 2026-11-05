@@ -151,6 +151,12 @@ export interface ResolvedStorefrontTheme {
       sticky: StorefrontThemeBlocks["product"]["sticky"];
     };
     footer: ResolvedStorefrontBlock;
+    /** The private pages' presentation, as the document states it (no fit rule applies). */
+    cart: StorefrontThemeBlocks["cart"];
+    cartDrawer: StorefrontThemeBlocks["cartDrawer"];
+    checkout: StorefrontThemeBlocks["checkout"];
+    receipt: StorefrontThemeBlocks["receipt"];
+    account: StorefrontThemeBlocks["account"];
   };
   /** The logo, footer logo and tab icon (media ids) and the logo width, as the document states them. */
   brand: StorefrontThemeBrand;
@@ -333,6 +339,11 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       },
       product: { gallery: resolved.gallery, buyBox: resolved.buyBox, below, sticky: product.sticky },
       footer: resolved.footer,
+      cart: document.blocks.cart,
+      cartDrawer: document.blocks.cartDrawer,
+      checkout: document.blocks.checkout,
+      receipt: document.blocks.receipt,
+      account: document.blocks.account,
     },
     brand: document.brand,
     pages: {

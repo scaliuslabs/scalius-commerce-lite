@@ -9,7 +9,7 @@ import { STOREFRONT_PAGE_TEMPLATES } from "./pages";
 /** Theme-wide settings, grouped the way the editor shows them. */
 export const THEME_CHANGE_AREAS = [
   "template", "colors", "typography", "style", "brand", "header", "announcement", "navigation", "footer",
-  "productCard", "listing", "productPage", "homeMode", "translations",
+  "productCard", "listing", "productPage", "homeMode", "translations", "buyerPages",
 ] as const;
 export type ThemeChangeArea = (typeof THEME_CHANGE_AREAS)[number];
 
@@ -40,6 +40,7 @@ const TOKEN_AREA: Record<string, ThemeChangeArea> = {
 const BLOCK_AREA: Record<string, ThemeChangeArea> = {
   topBar: "announcement", header: "header", navigation: "navigation", desktopNav: "navigation", mobileNav: "navigation",
   card: "productCard", listing: "listing", product: "productPage", footer: "footer",
+  cart: "buyerPages", cartDrawer: "buyerPages", checkout: "buyerPages", receipt: "buyerPages", account: "buyerPages",
 };
 
 const SKIN_AREA: Record<string, ThemeChangeArea> = { header: "header", footer: "footer", "product_card": "productCard", "product_main": "productPage", "listing_main": "listing" };

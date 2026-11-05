@@ -11,6 +11,7 @@
 
 import { STOREFRONT_THEME_DOCUMENT_VERSION, storefrontThemeDocumentSchema, type StorefrontThemeDocument } from "./document";
 import { STOREFRONT_SECTION_REGISTRY, type StorefrontSectionSettingsUpgrade } from "./sections";
+import { STOREFRONT_PRIVATE_PAGE_BLOCKS, storefrontPrivatePageDefaults } from "./private-pages";
 
 /**
  * The oldest stored version that still reads. Migration 0155 reset every
@@ -131,6 +132,23 @@ function lightColorScheme(document: Json): Json {
 }
 
 /**
+ * Version 13 → 14: the blocks gain the buyer's private pages (`cart`,
+ * `cartDrawer`, `checkout`, `receipt`, `account`), each with the choice that
+ * draws its page as before. Only a whole stored document takes them: an app
+ * template's blocks are the ones it sets, and one written before this step
+ * sets none of them, so applying it keeps the merchant's.
+ */
+function privatePageBlocks(document: Json): Json {
+  const { blocks } = document;
+  if (typeof document.template !== "string" || !isRecord(blocks)) return document;
+  const defaults = storefrontPrivatePageDefaults();
+  const added = Object.fromEntries(STOREFRONT_PRIVATE_PAGE_BLOCKS
+    .filter((key) => !(key in blocks))
+    .map((key) => [key, defaults[key]]));
+  return { ...document, blocks: { ...blocks, ...added } };
+}
+
+/**
  * The document steps by the version they upgrade from: entry `n` turns a
  * version `n` document into version `n + 1`. compat.test.ts requires one for
  * every version from the oldest readable one to the one before the current.
@@ -150,11 +168,15 @@ function lightColorScheme(document: Json): Json {
  *   its pages paint exactly as before; `blocks.product.below` names its
  *   modules in snake_case (`spec-table` → `spec_table`) and drops `warranty`,
  *   which drew nothing.
+ * - 13 → 14: a stored document's blocks gain the private pages' blocks with
+ *   the choices that draw each page as before (`privatePageBlocks`); app
+ *   templates and page presets are left as they are.
  */
 export const STOREFRONT_THEME_DOCUMENT_UPGRADES: Readonly<Record<number, StorefrontThemeDocumentUpgrade>> = {
   10: (document) => snakeAppKeys(document) as Json,
   11: snakeCoreNames,
   12: lightColorScheme,
+  13: privatePageBlocks,
 };
 
 /** A chain: the versions it reads, its document steps and each section type's own. */

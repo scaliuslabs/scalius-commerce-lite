@@ -24,6 +24,13 @@ import { storefrontProductAppBlocksSchema } from "./apps";
 import { storefrontLinkSchema } from "./links";
 import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
+import {
+  storefrontAccountBlockSchema,
+  storefrontCartDrawerBlockSchema,
+  storefrontCartPageBlockSchema,
+  storefrontCheckoutBlockSchema,
+  storefrontReceiptBlockSchema,
+} from "./private-pages";
 
 // ─── Primitives ───────────────────────────────────────────────────────────
 
@@ -807,6 +814,15 @@ export const storefrontThemeBlocksSchemaOf = (bindings: typeof storefrontSetting
     }).strict(),
   }).strict(),
   footer: blockSchema(STOREFRONT_FOOTER_VARIANTS, bindings),
+  /**
+   * The buyer's private pages (private-pages.ts): closed choices core draws
+   * with, never a part an app draws. What a buyer must see and do there stays.
+   */
+  cart: storefrontCartPageBlockSchema,
+  cartDrawer: storefrontCartDrawerBlockSchema,
+  checkout: storefrontCheckoutBlockSchema,
+  receipt: storefrontReceiptBlockSchema,
+  account: storefrontAccountBlockSchema,
 }).strict();
 
 export const storefrontThemeBlocksSchema = storefrontThemeBlocksSchemaOf();

@@ -234,7 +234,8 @@ function readThemeEditorCommand(message: Record<string, unknown>): ThemeEditorCo
  * them from the preview like sections: every page's header, announcement bar
  * and footer; a product page's main area (gallery and buy box), each module
  * below it and its app blocks; a listing's results and its filters; a CMS
- * page's content and the cart. They follow the section id rule and no
+ * page's content and the cart; and the main part of the editor's sample
+ * checkout, receipt and account. They follow the section id rule and no
  * section type is named like them.
  */
 export const THEME_EDITOR_MARKS = {
@@ -247,6 +248,9 @@ export const THEME_EDITOR_MARKS = {
   listingFilters: "listing-filters",
   pageContent: "page-content",
   cart: "cart-main",
+  checkout: "checkout-main",
+  receipt: "receipt-main",
+  account: "account-main",
 } as const;
 
 /**

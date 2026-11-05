@@ -10,7 +10,11 @@
  * Nothing here renders: the real pages do, with the fixture API (`api.ts`).
  */
 import {
+  STOREFRONT_ACCOUNT_NAVIGATION_STYLES,
   STOREFRONT_BLOCK_REGISTRY,
+  STOREFRONT_PAYMENT_CHOICE_STYLES,
+  STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS,
+  STOREFRONT_RECEIPT_LAYOUTS,
   STOREFRONT_CARD_ACTIONS,
   STOREFRONT_CARD_FACTS,
   STOREFRONT_PRODUCT_MODULES,
@@ -44,7 +48,10 @@ import { settingVariants, settingChoices, settingWith, type SettingsSchema } fro
 import { noorLandingSections, noorTheme } from "./noor";
 import { NOOR_SECTION_FIXTURES, NOOR_REPEATED_FIXTURES, repeatedNoorValues } from "./noor-content";
 
-export type GalleryPage = "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page";
+export type GalleryPage =
+  | "home" | "landing" | "product" | "category" | "collection" | "brand" | "search" | "cart" | "page"
+  /** The theme editor's sample pages (the entry's theme as a live preview's draft). */
+  | "sample-checkout" | "sample-receipt" | "sample-account";
 
 /** The part of the page an entry is about: axe and the harness checks look only here. */
 export interface GalleryFocus {
@@ -578,6 +585,76 @@ function pageEntries(): GalleryEntry[] {
   ];
 }
 
+/**
+ * The buyer's private pages in every choice of their blocks: the cart page
+ * itself (with lines), and the checkout, receipt and account as the theme
+ * editor previews them, on its sample pages (fixed sample orders).
+ */
+function privatePageEntries(): GalleryEntry[] {
+  const base = baseTheme();
+  const withBlocks = (blocks: Partial<StorefrontThemeDocument["blocks"]>) => {
+    const theme = clone(base);
+    theme.blocks = { ...theme.blocks, ...blocks } as StorefrontThemeDocument["blocks"];
+    return theme;
+  };
+  const entries: GalleryEntry[] = STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS.map((summary) => ({
+    id: entryId("private", "cart", `summary=${summary}`),
+    family: "private:cart",
+    title: `Cart page, the cart ${summary === "side" ? "beside" : "above"} the form`,
+    page: "cart" as const,
+    theme: withBlocks({ cart: { summary } }),
+    focus: MAIN,
+    scenario: { cart: "three" as const },
+  }));
+  for (const summary of STOREFRONT_PRIVATE_SUMMARY_PLACEMENTS) {
+    for (const paymentChoices of STOREFRONT_PAYMENT_CHOICE_STYLES) {
+      entries.push({
+        id: entryId("private", "checkout", `summary=${summary}`, `payment=${paymentChoices}`),
+        family: "private:checkout",
+        title: `Payment step (sample), summary ${summary}, payment ${paymentChoices}`,
+        page: "sample-checkout",
+        theme: withBlocks({ checkout: { summary, paymentChoices } }),
+        focus: { include: ["#checkoutPageRoot"] },
+        scenario: {},
+      });
+    }
+  }
+  entries.push({
+    id: entryId("private", "checkout", "bangla"),
+    family: "private:checkout",
+    title: "Payment step (sample), Bangla store, tiles",
+    page: "sample-checkout",
+    theme: withBlocks({ checkout: { summary: "side", paymentChoices: "tiles" } }),
+    focus: { include: ["#checkoutPageRoot"] },
+    scenario: { locale: "bn" },
+  });
+  for (const layout of STOREFRONT_RECEIPT_LAYOUTS) {
+    for (const sections of [["order", "delivery", "items"], ["items", "order", "delivery"]] as const) {
+      entries.push({
+        id: entryId("private", "receipt", `layout=${layout}`, sections[0]),
+        family: "private:receipt",
+        title: `Order confirmation (sample), ${layout}, ${sections.join(", ")}`,
+        page: "sample-receipt",
+        theme: withBlocks({ receipt: { layout, sections: [...sections] } }),
+        focus: MAIN,
+        scenario: {},
+      });
+    }
+  }
+  for (const navigation of STOREFRONT_ACCOUNT_NAVIGATION_STYLES) {
+    entries.push({
+      id: entryId("private", "account", `navigation=${navigation}`),
+      family: "private:account",
+      title: `Customer account (sample), ${navigation}`,
+      page: "sample-account",
+      theme: withBlocks({ account: { navigation } }),
+      focus: MAIN,
+      scenario: {},
+    });
+  }
+  return entries;
+}
+
 function localeEntries(): GalleryEntry[] {
   const base = baseTheme();
   const rtl = clone(base);
@@ -740,6 +817,7 @@ export function galleryEntries(): GalleryEntry[] {
     ...noorEntries(),
     ...noorSectionEntries(),
     ...pageEntries(),
+    ...privatePageEntries(),
     ...localeEntries(),
   ];
   const seen = new Set<string>();

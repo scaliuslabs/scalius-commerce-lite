@@ -7,6 +7,7 @@
  * to fix, an AI draft) and their actions.
  */
 import {
+  CreditCard,
   FileText,
   Image,
   LayoutGrid,
@@ -15,11 +16,13 @@ import {
   PanelBottom,
   PanelTop,
   Puzzle,
+  ReceiptText,
   Settings2,
   ShoppingBag,
   ShoppingCart,
   SlidersHorizontal,
   Type,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -40,7 +43,7 @@ import { themeSettingMessages } from "~/i18n/theme-settings";
 import { settingLabelKey, sectionLabelScope } from "../schema-form/labels";
 import { appValuesInvalid } from "../schema-form/app-settings";
 import { useFitReason } from "../use-fit-reason";
-import { EDITOR_PARTS, PRODUCT_MODULES, moduleId, pageMain, pageSections, pageShowsSharedParts, pageTemplate, type EditorPage } from "./editor-pages";
+import { EDITOR_PARTS, PRODUCT_MODULES, isSamplePage, moduleId, pageMain, pageSections, pageShowsSharedParts, pageTemplate, type EditorPage } from "./editor-pages";
 import { blockId } from "./editor-selection";
 import { blockList, canRemoveBlock, newBlock, pageItems, type AppSectionEntry } from "./editor-state";
 import type { TreeGroupModel, TreeItemModel } from "./LayerTree";
@@ -232,6 +235,12 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
         });
       case "cart":
         return part(EDITOR_PARTS.cart, ShoppingCart, t("cartMain"), { move });
+      case "checkout":
+        return part(EDITOR_PARTS.checkout, CreditCard, t("checkoutMain"));
+      case "receipt":
+        return part(EDITOR_PARTS.receipt, ReceiptText, t("receiptMain"));
+      case "account":
+        return part(EDITOR_PARTS.account, UserRound, t("accountMain"));
       default:
         return part(EDITOR_PARTS.pageContent, FileText, t("pageContent"), { move });
     }
@@ -247,7 +256,7 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
   items.forEach((item, index) => {
     pageRows.push(item.kind === "fixed" ? fixedRow(index, items.length) : sectionRow(item.section, index, items.length));
   });
-  if (page.kind === "search") pageRows.push(fixedRow(0, 1));
+  if (page.kind === "search" || isSamplePage(page)) pageRows.push(fixedRow(0, 1));
   if (sections && editable) {
     pageRows.push({ id: "add-section", name: t("addSection"), add: () => handlers.addSectionAt(items.length) });
   }
@@ -259,7 +268,7 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
       id: "header",
       label: t("groupShared"),
       shared: true,
-      note: shared ? undefined : t("sharedHiddenOnCart"),
+      note: shared ? undefined : t(page.kind === "checkout" ? "sharedHiddenOnCheckout" : "sharedHiddenOnCart"),
       items: shared ? [
         part(EDITOR_PARTS.announcement, Megaphone, t("announcement"), theme.blocks.topBar.variant === "none" ? { note: t("off") } : {}),
         part(EDITOR_PARTS.header, PanelTop, t("headerRow")),
@@ -269,7 +278,7 @@ export function useEditorTree({ theme, page, pageName, resolved, appSections, he
       id: "page",
       label: pageName,
       treeLabel: t("treeSections", { page: pageName }),
-      note: homeIsProduct ? t("homeIsProduct") : page.kind === "search" ? t("searchNoSections") : pageTemplate(page) ? t("templateNote", { pages: t(`templateName_${pageTemplate(page)!}`) }) : undefined,
+      note: homeIsProduct ? t("homeIsProduct") : page.kind === "search" ? t("searchNoSections") : isSamplePage(page) ? t("sampleNote") : pageTemplate(page) ? t("templateNote", { pages: t(`templateName_${pageTemplate(page)!}`) }) : undefined,
       items: pageRows,
     },
     ...(shared ? [{

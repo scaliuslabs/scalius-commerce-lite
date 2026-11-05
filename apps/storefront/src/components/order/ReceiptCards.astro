@@ -1,0 +1,69 @@
+---
+// The receipt's three cards (the order and its totals, where it goes, what
+// was bought) in the order and layout of the theme's `receipt` block:
+// `stacked`, one column; `split`, the first card on the start side and the
+// others stacked beside it on a wide screen, in reading order. Every card is
+// mandatory: a layout orders them and never leaves one out. The receipt page
+// draws them for the buyer; the theme editor's sample receipt draws them
+// from fixed sample data, both through lib/order-receipt-view.ts.
+import ReceiptCard from "@/components/order/ReceiptCard.astro";
+import type { CheckoutConfig } from "@/lib/api/checkout";
+import type { CheckoutLanguageData } from "@/lib/api";
+import type { OrderReceiptView, ReceiptOrder, ReceiptSuccessView } from "@/lib/order-receipt-view";
+import type { StorefrontReceiptBlock } from "@scalius/shared/storefront-theme";
+
+interface Props {
+  order: ReceiptOrder;
+  orderId: string;
+  copy: CheckoutLanguageData["languageData"];
+  orderSuccessView: ReceiptSuccessView;
+  gateways: CheckoutConfig["gateways"];
+  view: OrderReceiptView;
+  block: StorefrontReceiptBlock;
+}
+
+const { block, ...card } = Astro.props;
+const split = block.layout === "split";
+const [first, ...rest] = block.sections;
+---
+
+{split ? (
+  <div class="order-success-print-grid grid gap-6 animate-slide-up lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start" data-receipt-layout="split">
+    <div class="min-w-0">
+      {first && <ReceiptCard section={first} {...card} />}
+    </div>
+    <div class="min-w-0 space-y-6">
+      {rest.map((section) => <ReceiptCard section={section} {...card} />)}
+    </div>
+  </div>
+) : (
+  <div class="order-success-print-grid space-y-6 animate-slide-up">
+    {block.sections.map((section) => <ReceiptCard section={section} {...card} />)}
+  </div>
+)}
+
+<style>
+  /* Slide up animation */
+  .animate-slide-up {
+    animation: slideUp 0.8s ease-out forwards;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-slide-up {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+  }
+</style>

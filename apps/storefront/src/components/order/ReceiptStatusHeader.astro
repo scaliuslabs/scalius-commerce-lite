@@ -1,0 +1,109 @@
+---
+// The receipt's heading: the order's state (a success mark, or what still
+// needs the buyer), its title and message and the next steps. The page puts
+// its payment actions (retry, card form) in the slot. The receipt page and
+// the theme editor's sample receipt both draw it.
+import type { CheckoutLanguageData } from "@/lib/api";
+import type { ReceiptSuccessView } from "@/lib/order-receipt-view";
+
+interface Props {
+  merchantReceiptName: string | null;
+  statusView: boolean;
+  paymentNeedsBuyer: boolean;
+  showsSuccessHero: boolean;
+  orderSuccessView: ReceiptSuccessView;
+  statusTitle: string;
+  nextSteps: string[];
+  copy: CheckoutLanguageData["languageData"];
+}
+
+const { merchantReceiptName, statusView, paymentNeedsBuyer, showsSuccessHero, orderSuccessView, statusTitle, nextSteps, copy } = Astro.props;
+---
+
+<div class="order-success-print-header text-center mb-8 animate-fade-in">
+  {merchantReceiptName && <p class="order-success-print-merchant hidden font-semibold">{merchantReceiptName}</p>}
+  {statusView && !paymentNeedsBuyer ? null : showsSuccessHero ? (
+    <div class="success-checkmark" aria-hidden="true">
+      <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+      </svg>
+    </div>
+  ) : (
+    <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-warning/15 text-foreground" : "bg-muted text-foreground"}`}>
+      <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : orderSuccessView.kind === "payment_pending" ? "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" : "M12 16h.01M12 8v4m9 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"}></path>
+      </svg>
+    </div>
+  )}
+  {statusView ? (
+    <>
+      <h1 class="mb-1 text-2xl font-bold">{statusTitle}</h1>
+      <p class="mb-2 text-lg font-semibold text-foreground">{orderSuccessView.title}</p>
+    </>
+  ) : (
+    <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
+  )}
+  <p class="text-muted-foreground">{orderSuccessView.message}</p>
+  {nextSteps.length > 0 && (
+    <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-start">
+      <h2 class="text-sm font-semibold text-foreground">{copy.orderReceiptNextStepsTitleText}</h2>
+      {nextSteps.map((step) => <p class="mt-1 text-sm text-muted-foreground">{step}</p>)}
+    </div>
+  )}
+  {orderSuccessView.kind === "payment_pending" && (
+    <div class="mt-3 text-sm text-muted-foreground">
+      <p data-payment-status-message aria-live="polite">
+        {copy.orderReceiptCheckingPaymentText}
+      </p>
+      <button type="button" class="mt-2 hidden min-h-11 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted" data-payment-check-now>
+        {copy.orderReceiptCheckPaymentText}
+      </button>
+    </div>
+  )}
+  <slot />
+</div>
+
+<style>
+  /* A short, unambiguous success cue that remains visible after motion ends. */
+  .success-checkmark {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--color-primary) 38%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    animation: success-pop 320ms ease-out both;
+  }
+
+  @keyframes success-pop {
+    from { opacity: 0; transform: scale(0.86); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .success-checkmark,
+    .animate-fade-in {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Fade in animation */
+  .animate-fade-in {
+    animation: fadeIn 1s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+</style>
