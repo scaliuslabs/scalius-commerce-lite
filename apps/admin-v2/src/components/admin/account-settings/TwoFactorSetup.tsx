@@ -19,7 +19,7 @@ import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { useMessages } from "~/i18n";
 import { accountMessages, type AccountMessageKey } from "~/i18n/account";
-import { accountFailureKey } from "./account-error";
+import { accountFailureMessage, type AccountMessage } from "./account-error";
 import type { User } from "./ProfileHeader";
 import { Field } from "~/components/ui/field";
 
@@ -76,7 +76,7 @@ export function TwoFactorSetup({ user, required = false }: {
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<AccountMessageKey | null>(null);
+  const [error, setError] = useState<AccountMessage | null>(null);
   const isChange = mode === "change" || mode === "codes";
 
   // The QR code is drawn locally; the key never leaves this page.
@@ -110,7 +110,7 @@ export function TwoFactorSetup({ user, required = false }: {
     try {
       await task();
     } catch (err) {
-      setError(accountFailureKey(err, pick));
+      setError(accountFailureMessage(err, pick));
     } finally {
       setBusy(false);
     }
@@ -170,7 +170,7 @@ export function TwoFactorSetup({ user, required = false }: {
   // The code proves the method works before anything changes.
   const verify = () =>
     run(async () => {
-      if (isChange && !challengeId) return setError("setupExpired");
+      if (isChange && !challengeId) return setError({ key: "setupExpired" });
       const result = await apiData(postApiV1AdminAuth2FaMethod({
         body: isChange ? { method, challengeId: challengeId!, code } : { method, code },
       }));
@@ -444,7 +444,7 @@ export function TwoFactorSetup({ user, required = false }: {
           {error ? (
             <Alert variant="destructive">
               <AlertCircle aria-hidden="true" />
-              <AlertDescription>{t(error)}</AlertDescription>
+              <AlertDescription>{t(error.key, error.vars)}</AlertDescription>
             </Alert>
           ) : null}
           {content}
