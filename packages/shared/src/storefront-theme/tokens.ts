@@ -471,14 +471,19 @@ export function storefrontDarkPalette(colors: StorefrontThemeColors): Storefront
 
 const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, "Use a #rrggbb colour.");
 
-const colorsSchema = z.object(
+/** One colour set: the 19 colour tokens. `colors` and `darkColors` are each one. */
+export const storefrontThemeColorsSchema = z.object(
   Object.fromEntries(STOREFRONT_THEME_COLOR_KEYS.map((key) => [key, hexColorSchema])) as Record<
     StorefrontThemeColorKey,
     typeof hexColorSchema
   >,
 ).strict();
 
-export const storefrontThemeTokensSchema = z.object({
+/**
+ * The tokens with this colour set schema (the API passes it named, so its
+ * contract states the 19 colours once for `colors` and `darkColors`).
+ */
+export const storefrontThemeTokensSchemaOf = (colorsSchema: typeof storefrontThemeColorsSchema = storefrontThemeColorsSchema) => z.object({
   colors: colorsSchema,
   /** Which colours buyers see (STOREFRONT_COLOR_SCHEMES). */
   colorScheme: z.enum(STOREFRONT_COLOR_SCHEMES),
@@ -487,7 +492,7 @@ export const storefrontThemeTokensSchema = z.object({
    * and held to the same readable-text rules, while buyers can see them
    * (`storefrontThemeShowsDarkColors`); kept as they are otherwise.
    */
-  darkColors: colorsSchema.nullable(),
+  darkColors: z.union([colorsSchema, z.null()]),
   /** A switch in the header lets each buyer pick light or dark (remembered on their device). */
   colorSchemeToggle: z.boolean(),
   typography: z.enum(STOREFRONT_TYPE_PAIRINGS),
@@ -502,6 +507,8 @@ export const storefrontThemeTokensSchema = z.object({
   headerTone: z.enum(STOREFRONT_HEADER_TONES),
   container: z.enum(STOREFRONT_CONTAINERS),
 }).strict();
+
+export const storefrontThemeTokensSchema = storefrontThemeTokensSchemaOf();
 
 export type StorefrontThemeTokens = z.infer<typeof storefrontThemeTokensSchema>;
 

@@ -314,7 +314,7 @@ export const policies = [
       `${storefront}/pages/account/inbox/index.astro`,
       `${storefront}/lib/account-downloads.ts`,
       // Gift-card codes (Wave B §11.1): checkout apply, balance check, save and reveal.
-      `${storefront}/pages/checkout.astro`,
+      `${storefront}/components/checkout/CheckoutPaymentStep.astro`,
       `${storefront}/pages/gift-card-balance.astro`,
       `${storefront}/pages/account/gift-cards.astro`,
     ],

@@ -71,6 +71,7 @@ import { EditorCanvas, type SelectionActions, type PreviewNotice } from "./Edito
 import {
   EDITOR_PARTS,
   isResourcePage,
+  isSamplePage,
   moduleId,
   pageFixedPart,
   pageMain,
@@ -581,7 +582,8 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
     setLibraryAt(null);
     select(section.id, "other");
   };
-  const aiPage: AiPage = page.kind === "category" || page.kind === "search" ? "collection" : page.kind;
+  // The sample checkout, receipt and account hold no sections, so Draft with AI never opens on them.
+  const aiPage: AiPage = page.kind === "category" || page.kind === "search" ? "collection" : isSamplePage(page) ? "cart" : page.kind;
   const onDrafted = (drafted: Section[], note: string | null, rejected: number) => {
     const added = draftedSections(drafted, sections ?? []);
     const at = libraryAt ?? items.length;

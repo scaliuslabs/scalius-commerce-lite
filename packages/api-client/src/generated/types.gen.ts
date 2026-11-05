@@ -449,52 +449,12 @@ export type MarketPresence = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 13;
+    version: 14;
     template: 'department-mall' | 'boutique' | 'marketplace' | 'daily-essentials' | 'showcase-landing';
     tokens: {
-        colors: {
-            background: string;
-            foreground: string;
-            card: string;
-            'card-foreground': string;
-            popover: string;
-            'popover-foreground': string;
-            primary: string;
-            'primary-foreground': string;
-            secondary: string;
-            'secondary-foreground': string;
-            muted: string;
-            'muted-foreground': string;
-            accent: string;
-            'accent-foreground': string;
-            destructive: string;
-            'destructive-foreground': string;
-            border: string;
-            input: string;
-            ring: string;
-        };
+        colors: StorefrontThemeColors;
         colorScheme: 'light' | 'dark' | 'system';
-        darkColors: {
-            background: string;
-            foreground: string;
-            card: string;
-            'card-foreground': string;
-            popover: string;
-            'popover-foreground': string;
-            primary: string;
-            'primary-foreground': string;
-            secondary: string;
-            'secondary-foreground': string;
-            muted: string;
-            'muted-foreground': string;
-            accent: string;
-            'accent-foreground': string;
-            destructive: string;
-            'destructive-foreground': string;
-            border: string;
-            input: string;
-            ring: string;
-        } | null;
+        darkColors: StorefrontThemeColors | null;
         colorSchemeToggle: boolean;
         typography: 'retail' | 'market' | 'editorial' | 'fresh' | 'beauty' | 'heritage' | 'tech';
         typeScale: 'flat' | 'retail' | 'display';
@@ -787,6 +747,24 @@ export type StorefrontThemeDocument = {
             };
             bindings?: StorefrontSettingBindings;
         };
+        cart: {
+            summary: 'side' | 'top';
+        };
+        cartDrawer: {
+            width: 'standard' | 'wide';
+            recommendations: 'shown' | 'hidden';
+        };
+        checkout: {
+            summary: 'side' | 'top';
+            paymentChoices: 'list' | 'tiles';
+        };
+        receipt: {
+            layout: 'stacked' | 'split';
+            sections: Array<'order' | 'delivery' | 'items'>;
+        };
+        account: {
+            navigation: 'tabs' | 'sidebar';
+        };
     };
     apps?: {
         skins?: {
@@ -823,6 +801,28 @@ export type StorefrontThemeDocument = {
             [key: string]: string;
         };
     }>;
+};
+
+export type StorefrontThemeColors = {
+    background: string;
+    foreground: string;
+    card: string;
+    'card-foreground': string;
+    popover: string;
+    'popover-foreground': string;
+    primary: string;
+    'primary-foreground': string;
+    secondary: string;
+    'secondary-foreground': string;
+    muted: string;
+    'muted-foreground': string;
+    accent: string;
+    'accent-foreground': string;
+    destructive: string;
+    'destructive-foreground': string;
+    border: string;
+    input: string;
+    ring: string;
 };
 
 export type StorefrontSettingBindings = {
@@ -4665,7 +4665,7 @@ export type ThemeVersionSummary = {
         page: string;
     } | {
         kind: 'settings-changed';
-        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'announcement' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations';
+        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'announcement' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode' | 'translations' | 'buyerPages';
     }>;
     moreChanges: number;
     note: string | null;

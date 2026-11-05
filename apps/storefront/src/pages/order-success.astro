@@ -1,8 +1,10 @@
 ---
-import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
+import { checkoutText } from "@/lib/checkout-text";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
-import { formatOrderPlaces } from "@/lib/account-format";
-import LineExtras from "@/components/order/LineExtras.astro";
+import ReceiptCards from "@/components/order/ReceiptCards.astro";
+import ReceiptStatusHeader from "@/components/order/ReceiptStatusHeader.astro";
+import { orderReceiptView } from "@/lib/order-receipt-view";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -25,14 +27,9 @@ import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/che
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import {
   createPurchaseTrackingPayload,
-  formatOrderSuccessPaymentMethod,
-  getOrderPaymentPresentation,
-  receiptGiftCardTenderLabel,
   getOrderSuccessNextSteps,
-  isDigitalLinePreparing,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
-  getOrderSuccessVisibleBalanceDue,
   isOrderStatusView,
   shouldClearCheckoutCartForOrder,
 } from "@/lib/order-success-state";
@@ -51,29 +48,14 @@ import {
 } from "@/lib/order-receipt-cookie";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
-import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import {
-  isFreeOrderLine,
-  resolveSavedOrderLineMoney,
-  resolveSavedOrderMoneySummary,
-} from "@scalius/shared/order-money-presentation";
 import { getGatewayPresentation, isAppGatewayId } from "@/lib/checkout/gateway-presentation";
-import {
-  formatOrderReceiptDate,
-  formatOrderReceiptDay,
-} from "@/lib/order-success-localization";
-import { formatCount, formatPageNumber } from "@/lib/store-time-zone";
+import { formatOrderReceiptDate } from "@/lib/order-success-localization";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
-import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
-import { fromMinor } from "@scalius/shared/money";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 
-import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
-import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
-import { orderDeliveryRow } from "@/lib/order-delivery-row";
-import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -82,13 +64,8 @@ import {
   type OrderTrackingText,
 } from "@/lib/order-tracking-markup";
 import {
-  groupOrderLines,
-  orderLineGroupStatusText,
-  orderLinePropertyRows,
   relabelOrderProgress,
   relabelOrderTimeline,
-  resolveOrderDeliveryBlock,
-  showsOrderLineGroupHeadings,
   withOrderCompletionWording,
 } from "@/lib/order-line-groups";
 
@@ -224,18 +201,17 @@ const orderItemsFromApi: OrderItem[] = order?.items || [];
 const orderSuccessView = order
   ? withOrderCompletionWording(getOrderSuccessViewState(order, copy, paymentResult), order, copy)
   : null;
-const orderLineGroups = order ? groupOrderLines(orderItemsFromApi, order, copy) : [];
-const showOrderLineGroupHeadings = showsOrderLineGroupHeadings(orderLineGroups);
-const deliveryBlock = order ? resolveOrderDeliveryBlock(order, copy) : null;
-const visibleBalanceDue = order ? getOrderSuccessVisibleBalanceDue(order) : 0;
-// Gift cards that paid part of the order, and the words for what is left.
-const receiptPayment = order ? getOrderPaymentPresentation(order, copy) : null;
-const receiptGiftCardTenders = receiptPayment?.giftCardTenders ?? [];
-const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
 const configuredCurrencyCode = checkoutConfig.currency?.code
   ?? layoutData?.currency?.code
   ?? DEFAULT_CURRENCY.code;
-const receiptCurrencyCode = savedMoneySummary?.currencyCode ?? configuredCurrencyCode;
+// What the receipt's cards show (lib/order-receipt-view.ts, shared with the theme editor's sample receipt).
+const receiptView = order
+  ? orderReceiptView({ order, copy, languageCode: checkoutLanguage.code, configuredCurrencyCode })
+  : null;
+const visibleBalanceDue = receiptView?.visibleBalanceDue ?? 0;
+const receiptCurrencyCode = receiptView?.receiptCurrencyCode ?? configuredCurrencyCode;
+// The theme's receipt block (the request's one theme resolution: no read of its own).
+const receiptBlock = (await resolveRequestTheme(Astro, layoutData)).resolved.blocks.receipt;
 const shouldClearCheckoutCart = order ? shouldClearCheckoutCartForOrder(order) : false;
 const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
   || orderSuccessView?.kind === "order_updated";
@@ -303,84 +279,10 @@ const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
     : null;
-const formatReceiptAmount = (amount: number) => formatMoney(amount, { code: receiptCurrencyCode });
-// Major units from the saved minor-unit snapshot when complete; legacy decimals otherwise.
-const toMajor = (amountMinor: number) => fromMinor(amountMinor, savedMoneySummary?.decimalPlaces ?? 0);
-const formatReceiptMinor = (amountMinor: number) => formatReceiptAmount(toMajor(amountMinor));
-const receiptMoney = savedMoneySummary
-  ? {
-      subtotal: toMajor(savedMoneySummary.subtotalMinor),
-      shipping: toMajor(savedMoneySummary.shippingMinor),
-      discount: toMajor(savedMoneySummary.discountMinor),
-      tax: toMajor(savedMoneySummary.taxMinor),
-      total: toMajor(savedMoneySummary.totalMinor),
-    }
-  : order
-    ? {
-        subtotal: order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0),
-        shipping: order.shippingCharge,
-        discount: order.discountAmount ?? 0,
-        tax: 0,
-        total: order.totalAmount,
-      }
-    : null;
-const receiptDiscounts = receiptMoney
-  ? summarizeOrderDiscounts({
-      discounts: order?.discounts,
-      shipping: receiptMoney.shipping,
-      deliveryFee: savedMoneySummary && order?.shippingMethodBaseAmountMinor != null
-        ? toMajor(order.shippingMethodBaseAmountMinor)
-        : null,
-      discount: receiptMoney.discount,
-      decimalPlaces: savedMoneySummary?.decimalPlaces,
-      discountText: copy.discountText,
-    })
-  : null;
-const receiptDeliveryRow = receiptDiscounts && deliveryBlock
-  ? orderDeliveryRow({
-      mode: deliveryBlock.mode,
-      methodName: order?.shippingMethodName,
-      ...receiptDiscounts.delivery,
-    }, copy, formatReceiptAmount)
-  : null;
-// An order-level promotion is one line in the totals, never an "Item discount" on each line.
-const showsLineDiscounts = orderShowsLineDiscounts(order?.discounts);
-// Nothing to deliver and nothing charged: no delivery row and no "method not recorded" note.
-const showsReceiptDeliveryRow = !(deliveryBlock?.mode === "none"
-  && !order?.shippingMethodName
-  && (receiptMoney?.shipping ?? 0) === 0);
-const receiptDeliveryDetails = !showsReceiptDeliveryRow
-  ? ""
-  : order?.shippingMethodName
-  ? [
-      order.shippingMethodDescription,
-      order.shippingFeeWaived && savedMoneySummary && order.shippingMethodBaseAmountMinor != null
-        ? checkoutText(copy.orderReceiptFeeWaivedText, {
-            fee: formatReceiptMinor(order.shippingMethodBaseAmountMinor),
-          })
-        : null,
-    ].filter(Boolean).join(" · ")
-  : copy.orderReceiptDeliveryNotRecordedText;
-const deliveryLocality = order && deliveryBlock?.mode === "ship"
-  ? order.shippingCountryCode && order.shippingCountryCode !== "BD"
-    // Another country's places, then the country (MARKETS-DESIGN D7).
-    ? formatOrderPlaces(order, checkoutLanguageBaseCode(checkoutLanguage.code))
-    : [order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city]
-      .filter((value): value is string => Boolean(value))
-      .join(", ")
-  : "";
 const merchantReceiptName = layoutData?.business?.companyName?.trim()
   || layoutData?.business?.legalName?.trim()
   || null;
-const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.code);
-// An invoice still owed: "Payment due by 19 November 2026 (net 30)", or that it was due.
-const receiptPaymentTerms = order?.paymentTerms && order.balanceDue > 0
-  ? checkoutText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
-      date: formatOrderReceiptDay(order.paymentTerms.dueAt, checkoutLanguage.code) ?? "",
-      days: formatPageNumber(order.paymentTerms.days, checkoutLanguageBaseCode(checkoutLanguage.code)),
-    })
-  : null;
-const orderNumber = order ? pageOrderNumber(order.orderNumber, order.id) : "";
+const orderNumber = receiptView?.orderNumber ?? "";
 const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, orderSuccessView.kind, copy) : [];
 // Opened by tracking or later: a status page ("Order #1057", where it is) instead of the checkout confirmation.
 const statusView = orderSuccessView
@@ -427,7 +329,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
 >
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section
-    class="container mx-auto max-w-3xl px-4 py-6 sm:py-8"
+    class={receiptBlock.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"}
     data-order-success-print={order ? "receipt" : undefined}
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
@@ -450,46 +352,16 @@ const orderRecommendations = order && showsSuccessHero && !statusView
         copy={copy}
       />
     )}
-    <div class="order-success-print-header text-center mb-8 animate-fade-in">
-      {merchantReceiptName && <p class="order-success-print-merchant hidden font-semibold">{merchantReceiptName}</p>}
-      {statusView && !paymentNeedsBuyer ? null : showsSuccessHero ? (
-        <div class="success-checkmark" aria-hidden="true">
-          <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
-          </svg>
-        </div>
-      ) : (
-        <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive text-destructive-foreground" : orderSuccessView.kind === "payment_pending" ? "bg-warning/15 text-foreground" : "bg-muted text-foreground"}`}>
-          <svg class="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={orderSuccessView.kind === "payment_issue" ? "M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" : orderSuccessView.kind === "payment_pending" ? "M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" : "M12 16h.01M12 8v4m9 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"}></path>
-          </svg>
-        </div>
-      )}
-      {statusView ? (
-        <>
-          <h1 class="mb-1 text-2xl font-bold">{statusTitle}</h1>
-          <p class="mb-2 text-lg font-semibold text-foreground">{orderSuccessView.title}</p>
-        </>
-      ) : (
-        <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
-      )}
-      <p class="text-muted-foreground">{orderSuccessView.message}</p>
-      {nextSteps.length > 0 && (
-        <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-start">
-          <h2 class="text-sm font-semibold text-foreground">{copy.orderReceiptNextStepsTitleText}</h2>
-          {nextSteps.map((step) => <p class="mt-1 text-sm text-muted-foreground">{step}</p>)}
-        </div>
-      )}
-      {orderSuccessView.kind === "payment_pending" && (
-        <div class="mt-3 text-sm text-muted-foreground">
-          <p data-payment-status-message aria-live="polite">
-            {copy.orderReceiptCheckingPaymentText}
-          </p>
-          <button type="button" class="mt-2 hidden min-h-11 rounded-lg border border-border px-4 py-2 font-medium text-foreground hover:bg-muted" data-payment-check-now>
-            {copy.orderReceiptCheckPaymentText}
-          </button>
-        </div>
-      )}
+    <ReceiptStatusHeader
+      merchantReceiptName={merchantReceiptName}
+      statusView={statusView}
+      paymentNeedsBuyer={paymentNeedsBuyer}
+      showsSuccessHero={showsSuccessHero}
+      orderSuccessView={orderSuccessView}
+      statusTitle={statusTitle}
+      nextSteps={nextSteps}
+      copy={copy}
+    >
       {retryPaymentOptions.length > 0 && retryPaymentType && (
         <div class="no-print mt-5 flex flex-col items-center gap-2">
           <div class="flex flex-col justify-center gap-2 sm:flex-row sm:flex-wrap">
@@ -569,7 +441,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           <p id="retryPaymentMessage" class="min-h-5 text-sm text-muted-foreground" aria-live="polite"></p>
         </div>
       )}
-    </div>
+    </ReceiptStatusHeader>
 
     {tracking && (
       <section class="no-print mb-6 rounded-xl border border-border bg-background p-4 sm:p-6" aria-label={copy.orderReceiptStatusText}>
@@ -584,287 +456,17 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       </section>
     )}
 
-    <div class="order-success-print-grid space-y-6 animate-slide-up">
-      {/* Order details sections */}
-      <div
-        class="order-success-print-card order-success-print-order rounded-xl border border-border bg-background p-4 sm:p-6"
-      >
-        <h2 class="text-lg font-medium mb-4 flex items-center">
-          <svg
-            class="w-5 h-5 me-2 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            ></path>
-          </svg>
-          {copy.orderReceiptOrderDetailsText}
-        </h2>
-        <div class="space-y-4">
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
-            <span class="break-all text-end font-medium">{orderNumber}</span>
-          </div>
-          {orderPlacedAt && <div class="flex justify-between gap-4">
-            <span class="text-muted-foreground">{copy.orderReceiptPlacedText}</span>
-            <span class="text-end font-medium">{orderPlacedAt}</span>
-          </div>}
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{copy.orderReceiptStatusText}</span>
-            <span
-              class={`rounded-full px-2 py-0.5 text-sm font-medium ${orderSuccessView.orderBadgeClass}`}
-              >{orderSuccessView.orderStatusLabel}</span
-            >
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{copy.orderReceiptPaymentText}</span>
-            <span class="text-end font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order, checkoutConfig.gateways)}</span>
-          </div>
-          <div class="flex justify-between">
-            <span class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</span>
-            <span
-              class={`rounded-full px-2 py-0.5 text-sm font-medium ${orderSuccessView.paymentBadgeClass}`}
-              >{orderSuccessView.paymentStatusLabel}</span
-            >
-          </div>
-          {receiptPaymentTerms && <p class="text-end text-sm font-medium" data-payment-terms>{receiptPaymentTerms}</p>}
-          {receiptMoney && receiptDiscounts && (
-            <div class="space-y-3 border-t border-border pt-4">
-              <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{copy.subtotalText}</span>
-                <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
-              </div>
-              {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
-                <span class="text-end font-medium">
-                  {receiptDeliveryRow.struck && <s class="me-1.5 font-normal text-muted-foreground">{receiptDeliveryRow.struck}</s>}
-                  {receiptDeliveryRow.value}
-                  {receiptDeliveryRow.codes && (
-                    <span class="ms-1 font-normal text-muted-foreground">({receiptDeliveryRow.codes})</span>
-                  )}
-                </span>
-              </div>}
-              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
-              {receiptDiscounts.lines.map((line) => (
-                <div class="flex justify-between gap-4">
-                  <span class="text-muted-foreground">{line.label}</span>
-                  <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(line.amount)}</span>
-                </div>
-              ))}
-              {savedMoneySummary && receiptMoney.tax > 0 && <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
-                <span class="font-medium">{formatReceiptAmount(receiptMoney.tax)}</span>
-              </div>}
-              <div class="flex justify-between gap-4 border-t border-border pt-3">
-                <span class="font-semibold text-foreground">{copy.totalText}</span>
-                <span class="font-semibold text-foreground">{formatReceiptAmount(receiptMoney.total)}</span>
-              </div>
-            </div>
-          )}
-          {receiptGiftCardTenders.map((tender) => (
-            <div class="flex justify-between gap-4" data-receipt-gift-card>
-              <span class="text-muted-foreground">{receiptGiftCardTenderLabel(tender, copy)}</span>
-              <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(tender.amount)}</span>
-            </div>
-          ))}
-          {
-            order.paidAmount > 0 && visibleBalanceDue > 0 && receiptGiftCardTenders.length === 0 && (
-              <div class="flex justify-between">
-                <span class="text-muted-foreground">{copy.orderReceiptPaidText}</span>
-                <span class="font-medium text-foreground">
-                  {formatReceiptAmount(order.paidAmount)}
-                </span>
-              </div>
-            )
-          }
-          {
-            visibleBalanceDue > 0 && (
-              <div class="flex justify-between">
-                <span class="text-muted-foreground">{receiptPayment?.balanceLabel ?? copy.orderReceiptBalanceDueText}</span>
-                <span class="font-medium">
-                  {formatReceiptAmount(visibleBalanceDue)}
-                </span>
-              </div>
-            )
-          }
-        </div>
-      </div>
-
-      <div
-        class="order-success-print-card order-success-print-shipping rounded-xl border border-border bg-background p-4 sm:p-6"
-      >
-        <h2 class="text-lg font-medium mb-4 flex items-center">
-          <svg
-            class="w-5 h-5 me-2 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-            ></path>
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
-          </svg>
-          {deliveryBlock?.mode === "pickup" ? deliveryBlock.heading : copy.orderReceiptDeliveryDetailsText}
-        </h2>
-        <div class="space-y-1 text-sm">
-          <p class="font-medium text-foreground">{order.customerName}</p>
-          {deliveryBlock?.mode === "ship" && deliveryBlock.address && <p class="text-muted-foreground">{deliveryBlock.address}</p>}
-          {deliveryLocality && <p class="text-muted-foreground">{deliveryLocality}</p>}
-          {deliveryBlock?.mode === "pickup" && (
-            <>
-              {deliveryBlock.location && <p class="text-foreground">{deliveryBlock.location}</p>}
-              {deliveryBlock.hours && <p class="text-muted-foreground">{deliveryBlock.hoursLabel}: {deliveryBlock.hours}</p>}
-              {deliveryBlock.notReady && <p class="text-muted-foreground">{deliveryBlock.notReady}</p>}
-            </>
-          )}
-          {deliveryBlock?.mode === "none" && <p class="text-muted-foreground">{deliveryBlock.text}</p>}
-          {order.customerPhone && <p class="text-muted-foreground">{formatBdMobile(order.customerPhone)}</p>}
-          {order.customerEmail && <p class="break-all text-muted-foreground">{order.customerEmail}</p>}
-        </div>
-        {order.notes && (
-          <div class="mt-3 border-t border-border pt-3 text-sm">
-            <p class="font-medium text-foreground">{copy.orderReceiptNoteText}</p>
-            <p class="whitespace-pre-line break-words text-muted-foreground">{order.notes}</p>
-          </div>
-        )}
-      </div>
-
-      <div
-        class="order-success-print-card order-success-print-items rounded-xl border border-border bg-background p-4 sm:p-6"
-      >
-        <h2 class="text-lg font-medium mb-4 flex items-center">
-          <svg
-            class="w-5 h-5 me-2 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
-          </svg>
-          {copy.orderReceiptItemsText}
-        </h2>
-        <div class={showOrderLineGroupHeadings ? "space-y-6" : undefined} data-receipt-lines>
-        {orderLineGroups.map((group) => (
-        <div data-order-line-group={group.type}>
-          {showOrderLineGroupHeadings && (
-            <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-border pb-2">
-              <h3 class="text-sm font-semibold text-foreground">{group.heading}</h3>
-              {orderLineGroupStatusText(group) && <p class="text-sm text-muted-foreground">{orderLineGroupStatusText(group)}</p>}
-            </div>
-          )}
-        <div class="space-y-4">
-          {
-            group.items.map((item) => {
-              const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
-              const propertyRows = orderLinePropertyRows(
-                item.properties,
-                (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
-                copy,
-              );
-              const preparing = Boolean(order && isDigitalLinePreparing(item, order));
-              return (
-                <div class="order-success-print-item border-b border-border pb-3 last:border-0 last:pb-0">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex min-w-0 items-center gap-3">
-                    {item.productImage ? (
-                      <img
-                        src={getProductImageUrl(item.productImage, 96)}
-                        alt=""
-                        width="48"
-                        height="48"
-                        loading="lazy"
-                        class="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
-                      />
-                    ) : (
-                      // Same box without a photo, so every line's name starts at one edge.
-                      <span aria-hidden="true" class="h-12 w-12 shrink-0 rounded-lg border border-border bg-muted" />
-                    )}
-                    <div class="min-w-0">
-                    <p class="font-medium">
-                      {item.productName || copy.orderReceiptProductUnavailableText}
-                    </p>
-                    {item.variantLabel && (
-                      <p class="text-xs text-muted-foreground mt-1">
-                        {item.variantLabel}
-                      </p>
-                    )}
-                    {propertyRows.length > 0 && (
-                      <ul class="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                        {propertyRows.map((row) => (
-                          <li class="break-words">
-                            <span class="text-foreground">{row.label}:</span> {row.value}{row.surcharge && ` (${row.surcharge})`}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <p class="text-sm text-muted-foreground mt-1">
-                      {checkoutText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })} × {savedLine
-                        ? formatReceiptMinor(savedLine.unitPriceMinor)
-                        : formatReceiptAmount(item.price)}
-                    </p>
-                    {savedLine && savedMoneySummary && showsLineDiscounts && savedLine.discountMinor > 0 && (
-                      <p class="mt-1 text-xs text-muted-foreground">
-                        {checkoutText(copy.orderReceiptItemDiscountText, {
-                          amount: formatReceiptMinor(savedLine.discountMinor),
-                        })}
-                      </p>
-                    )}
-                    </div>
-                  </div>
-                  <div class="shrink-0 text-end">
-                    {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
-                    <p class="font-medium">
-                      {savedLine && savedMoneySummary && isFreeOrderLine(savedLine) && (
-                        <s class="me-1.5 text-muted-foreground">{formatReceiptMinor(savedLine.grossSubtotalMinor)}</s>
-                      )}
-                      {savedLine && savedMoneySummary
-                        ? formatReceiptMinor(presentedLineTotalMinor(savedLine, showsLineDiscounts))
-                        : formatReceiptAmount(item.quantity * item.price)}
-                    </p>
-                  </div>
-                </div>
-                {/* Downloads, gift cards and the review form get the line's full
-                    width (under its text from sm up), not the column beside the total. */}
-                {(item.extras || preparing) && (
-                  <div class="sm:ps-[3.75rem]">
-                    <LineExtras line={item} context={{ orderId, access: "receipt" }} />
-                    {preparing && (
-                      <p class="mt-3 flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-3 text-sm text-foreground" data-download-preparing data-later-text={copy.orderReceiptDownloadLaterText}>
-                        <span class="size-4 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground motion-reduce:animate-none" aria-hidden="true" data-download-preparing-spinner></span>
-                        <span class="min-w-0 flex-1" role="status" data-download-preparing-text>{copy.orderReceiptDownloadPreparingText}</span>
-                        {/* Without JavaScript the buyer checks again; with it the page does. */}
-                        <a href={`${Astro.url.pathname}${Astro.url.search}`} class="shrink-0 font-medium underline underline-offset-2">{copy.orderReceiptRefreshText}</a>
-                      </p>
-                    )}
-                  </div>
-                )}
-                </div>
-              );
-            })
-          }
-        </div>
-        </div>
-        ))}
-        </div>
-      </div>
-    </div>
+    {receiptView && (
+      <ReceiptCards
+        order={order}
+        orderId={orderId}
+        copy={copy}
+        orderSuccessView={orderSuccessView}
+        gateways={checkoutConfig.gateways}
+        view={receiptView}
+        block={receiptBlock}
+      />
+    )}
 
     <div
       data-buyer-ui-target={statusView ? "account.order" : "order.confirmation"}
@@ -1382,65 +984,3 @@ const orderRecommendations = order && showsSuccessHero && !statusView
   });
 </script>
 
-<style>
-  /* A short, unambiguous success cue that remains visible after motion ends. */
-  .success-checkmark {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    border: 2px solid color-mix(in srgb, var(--color-primary) 38%, transparent);
-    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-    color: var(--color-primary);
-    animation: success-pop 320ms ease-out both;
-  }
-
-  @keyframes success-pop {
-    from { opacity: 0; transform: scale(0.86); }
-    to { opacity: 1; transform: scale(1); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .success-checkmark,
-    .animate-fade-in,
-    .animate-slide-up {
-      animation: none;
-      opacity: 1;
-      transform: none;
-    }
-  }
-
-  /* Fade in animation */
-  .animate-fade-in {
-    animation: fadeIn 1s ease-out forwards;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  /* Slide up animation */
-  .animate-slide-up {
-    animation: slideUp 0.8s ease-out forwards;
-  }
-
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-</style>

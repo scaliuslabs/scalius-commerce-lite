@@ -37,6 +37,7 @@ Each check looks only at the entry's region (`focus`: a section, the header, the
 |---|---|---|
 | axe rules | axe-core with the `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa` tags (contrast, names, `target-size` for WCAG 2.5.8, and more) | yes, for `serious` and `critical` |
 | `overflow` | The page scrolls sideways because of an element in the region | yes |
+| `print-layout` | A receipt printed (print media, at 1280 px): the items card spans the print grid and the order and delivery cards share a row, in every layout and card order | yes |
 | `render` | The page answers 4xx or 5xx | yes |
 | `overflow-outside-focus` | Sideways scroll caused outside the region (reported on the entry of that region) | no |
 | `interaction` | A required action failed or did not reach its declared result | yes, cannot be allowlisted |

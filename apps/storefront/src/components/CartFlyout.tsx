@@ -60,6 +60,7 @@ import { currentPresence, pagePath } from "@/lib/presence-url";
 import { readBuyerAttributes } from "@/lib/buyer-ui/state";
 import { browserBuyerUiLocaleHeaders } from "@/lib/buyer-ui/browser-locale";
 import { loadLazyScript } from "@/scripts/lazy-script";
+import { readCartDrawerLook } from "@/lib/cart/drawer-look";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -305,7 +306,9 @@ export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, issues, ruleErrors, buyerUi, recheck } = useDrawerCartFacts(cart, isOpen);
-  const recommendations = useCartRecommendations(cart, isOpen);
+  // The theme's drawer: its width, and whether it suggests products (none fetched when it does not).
+  const look = readCartDrawerLook();
+  const recommendations = useCartRecommendations(cart, isOpen && look.recommendations === "shown");
   // A line that can't be bought as is blocks Checkout here, like on the cart page,
   // and so does a store app's rule (on its line, or about the whole cart).
   const lineIssues = Object.entries(issues).filter(([key]) => cart.items[key]);
@@ -498,7 +501,8 @@ export default function CartFlyout({ onReady }: Props) {
           // Mobile: a bottom sheet of most of the screen (Shopify: room for the lines)
           "fixed inset-x-0 bottom-0 h-[85dvh] max-h-[85dvh] top-auto rounded-t-[20px] border-t-0",
           // Desktop: Side Sheet
-          "sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:max-w-[380px] sm:rounded-none sm:border-s",
+          "sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:rounded-none sm:border-s",
+          look.width === "wide" ? "sm:max-w-[440px]" : "sm:max-w-[380px]",
         )}
       >
         <SheetDescription className="sr-only">

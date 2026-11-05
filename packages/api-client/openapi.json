@@ -1519,7 +1519,7 @@
           "version": {
             "type": "number",
             "enum": [
-              13
+              14
             ]
           },
           "template": {
@@ -1536,107 +1536,7 @@
             "type": "object",
             "properties": {
               "colors": {
-                "type": "object",
-                "properties": {
-                  "background": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "card": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "card-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "popover": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "popover-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "primary": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "primary-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "secondary": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "secondary-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "muted": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "muted-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "accent": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "accent-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "destructive": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "destructive-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "border": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "input": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "ring": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  }
-                },
-                "required": [
-                  "background",
-                  "foreground",
-                  "card",
-                  "card-foreground",
-                  "popover",
-                  "popover-foreground",
-                  "primary",
-                  "primary-foreground",
-                  "secondary",
-                  "secondary-foreground",
-                  "muted",
-                  "muted-foreground",
-                  "accent",
-                  "accent-foreground",
-                  "destructive",
-                  "destructive-foreground",
-                  "border",
-                  "input",
-                  "ring"
-                ],
-                "additionalProperties": false
+                "$ref": "#/components/schemas/StorefrontThemeColors"
               },
               "colorScheme": {
                 "type": "string",
@@ -1647,108 +1547,12 @@
                 ]
               },
               "darkColors": {
-                "type": "object",
-                "nullable": true,
-                "properties": {
-                  "background": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "card": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "card-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "popover": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "popover-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "primary": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "primary-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "secondary": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "secondary-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "muted": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "muted-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "accent": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "accent-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "destructive": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "destructive-foreground": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "border": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "input": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
-                  },
-                  "ring": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-f]{6}$"
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/StorefrontThemeColors"
                   }
-                },
-                "required": [
-                  "background",
-                  "foreground",
-                  "card",
-                  "card-foreground",
-                  "popover",
-                  "popover-foreground",
-                  "primary",
-                  "primary-foreground",
-                  "secondary",
-                  "secondary-foreground",
-                  "muted",
-                  "muted-foreground",
-                  "accent",
-                  "accent-foreground",
-                  "destructive",
-                  "destructive-foreground",
-                  "border",
-                  "input",
-                  "ring"
                 ],
-                "additionalProperties": false
+                "nullable": true
               },
               "colorSchemeToggle": {
                 "type": "boolean"
@@ -3363,6 +3167,114 @@
                     "additionalProperties": false
                   }
                 ]
+              },
+              "cart": {
+                "type": "object",
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "enum": [
+                      "side",
+                      "top"
+                    ]
+                  }
+                },
+                "required": [
+                  "summary"
+                ],
+                "additionalProperties": false
+              },
+              "cartDrawer": {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "wide"
+                    ]
+                  },
+                  "recommendations": {
+                    "type": "string",
+                    "enum": [
+                      "shown",
+                      "hidden"
+                    ]
+                  }
+                },
+                "required": [
+                  "width",
+                  "recommendations"
+                ],
+                "additionalProperties": false
+              },
+              "checkout": {
+                "type": "object",
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "enum": [
+                      "side",
+                      "top"
+                    ]
+                  },
+                  "paymentChoices": {
+                    "type": "string",
+                    "enum": [
+                      "list",
+                      "tiles"
+                    ]
+                  }
+                },
+                "required": [
+                  "summary",
+                  "paymentChoices"
+                ],
+                "additionalProperties": false
+              },
+              "receipt": {
+                "type": "object",
+                "properties": {
+                  "layout": {
+                    "type": "string",
+                    "enum": [
+                      "stacked",
+                      "split"
+                    ]
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "order",
+                        "delivery",
+                        "items"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "layout",
+                  "sections"
+                ],
+                "additionalProperties": false
+              },
+              "account": {
+                "type": "object",
+                "properties": {
+                  "navigation": {
+                    "type": "string",
+                    "enum": [
+                      "tabs",
+                      "sidebar"
+                    ]
+                  }
+                },
+                "required": [
+                  "navigation"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -3374,7 +3286,12 @@
               "card",
               "listing",
               "product",
-              "footer"
+              "footer",
+              "cart",
+              "cartDrawer",
+              "checkout",
+              "receipt",
+              "account"
             ],
             "additionalProperties": false
           },
@@ -3533,6 +3450,109 @@
           "brand",
           "blocks",
           "pages"
+        ],
+        "additionalProperties": false
+      },
+      "StorefrontThemeColors": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "card": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "card-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "popover": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "popover-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "primary": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "primary-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "secondary": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "secondary-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "muted": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "muted-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "accent": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "accent-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "destructive": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "destructive-foreground": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "border": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "input": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "ring": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          }
+        },
+        "required": [
+          "background",
+          "foreground",
+          "card",
+          "card-foreground",
+          "popover",
+          "popover-foreground",
+          "primary",
+          "primary-foreground",
+          "secondary",
+          "secondary-foreground",
+          "muted",
+          "muted-foreground",
+          "accent",
+          "accent-foreground",
+          "destructive",
+          "destructive-foreground",
+          "border",
+          "input",
+          "ring"
         ],
         "additionalProperties": false
       },
@@ -22199,7 +22219,8 @@
                         "listing",
                         "productPage",
                         "homeMode",
-                        "translations"
+                        "translations",
+                        "buyerPages"
                       ]
                     }
                   },

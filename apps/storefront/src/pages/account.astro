@@ -3,25 +3,17 @@
 // (status, date, total, thumbnails, Buy again), dense rows on a phone like
 // Daraz and Amazon. Server-rendered from the session cookie, so it works
 // without JavaScript; "Older orders" pages with the API's opaque cursor.
-import { pageOrderNumber } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import { getLayoutData } from "@/lib/api";
 import { readAccountOrders, readAccountSummaryForRequest } from "@/lib/account-server";
-import {
-  accountMoney,
-  accountOrderStatusText,
-  accountShipmentStatusText,
-  formatAccountDate,
-  openRequestLabel,
-  orderPaymentLine,
-} from "@/lib/account-format";
+import AccountOrderCards from "@/components/account/AccountOrderCards.astro";
+import { accountOrderCards } from "@/lib/account-order-cards";
 import { accountCopy } from "@/lib/account-copy";
 import { formatCount } from "@/lib/store-time-zone";
 import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
-import { accountPill, accountUi as ui, orderStatusTone } from "@/lib/account-ui";
-import { getProductImageUrl } from "@/lib/product-media";
+import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 
 export const prerender = false;
@@ -47,42 +39,7 @@ const words = copy.orders;
 const checkoutCopy = getCheckoutLanguagePreset(layoutData?.storefrontCopy?.languageCode);
 const countText = page ? words.count(formatCount(page.totalOrders), page.totalOrders === 1) : null;
 
-const cards = orders.map((order) => {
-  const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
-  const payment = orderPaymentLine(order, checkoutCopy);
-  const shipment = order.latestShipment;
-  const courier = shipment ? shipment.providerName || shipment.courierName : null;
-  const request = openRequestLabel(order.openSupportRequestType);
-  const needsPayment = payment.state === copy.format.paymentNeedsAttention;
-  return {
-    id: order.id,
-    href: `/account/orders/${encodeURIComponent(order.id)}`,
-    number: pageOrderNumber(order.orderNumber, order.id),
-    status: accountOrderStatusText(order.status),
-    tone: orderStatusTone(order.status),
-    request,
-    date: formatAccountDate(order.createdAt, { time: false }),
-    items: words.items(formatCount(itemCount), itemCount === 1),
-    total: accountMoney(order.totalAmount, order.currencyCode),
-    detail: needsPayment
-      ? { text: payment.state, warn: true }
-      : shipment
-        ? { text: [courier, accountShipmentStatusText(shipment.status)].filter(Boolean).join(" · "), warn: false }
-        : { text: `${payment.method} · ${payment.state}`, warn: false },
-    thumbs: order.items.slice(0, 4).map((item) => ({ src: getProductImageUrl(item.productImage, 160), alt: item.productName ?? "" })),
-    more: Math.max(0, order.items.length - 4),
-    buyAgain: JSON.stringify(order.items.map((item) => ({
-      productId: item.productId,
-      variantId: item.variantId,
-      quantity: item.quantity,
-      price: item.price,
-      productName: item.productName,
-      productSlug: item.productSlug,
-      productImage: item.productImage,
-      variantLabel: item.variantLabel,
-    }))),
-  };
-});
+const cards = accountOrderCards(orders, copy, checkoutCopy);
 ---
 
 <Layout title={words.title} layoutData={layoutData}>
@@ -115,48 +72,7 @@ const cards = orders.map((order) => {
         </div>
       </div>
     ) : (
-      <ul class="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3" aria-label={words.title}>
-        {cards.map((card) => (
-          <li>
-            <article class={`${ui.card} group relative flex h-full gap-3 p-3 transition-colors hover:border-foreground/25 sm:flex-col sm:p-4`}>
-              <div class="flex shrink-0 gap-2 sm:order-2" aria-hidden="true">
-                {card.thumbs.map((thumb, index) => (
-                  <span class:list={["relative block h-16 w-16 overflow-hidden rounded-lg border border-border bg-muted sm:h-14 sm:w-14", index > 0 && "hidden sm:block"]}>
-                    <img src={thumb.src} alt="" width="64" height="64" loading="lazy" decoding="async" class="h-full w-full object-contain" />
-                    {index === 0 && card.thumbs.length + card.more > 1 && (
-                      <span class="absolute bottom-0.5 inset-e-0.5 rounded-md bg-background/90 px-1 text-[0.6875rem] font-semibold tabular-nums text-foreground sm:hidden">+{formatCount(card.thumbs.length + card.more - 1)}</span>
-                    )}
-                  </span>
-                ))}
-                {card.more > 0 && <span class="hidden h-14 w-14 items-center justify-center rounded-lg border border-border bg-muted text-xs font-semibold text-muted-foreground sm:flex">+{formatCount(card.more)}</span>}
-              </div>
-
-              <div class="flex min-w-0 flex-1 flex-col sm:order-1 sm:flex-none">
-                <div class="flex flex-wrap items-center gap-1.5">
-                  <span class={accountPill(card.tone)}>{card.status}</span>
-                  {card.request && <span class={accountPill("warning")}>{card.request}</span>}
-                </div>
-                <h2 class="mt-1.5 text-sm font-semibold text-foreground sm:text-base">
-                  <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">{words.order(card.number)}</a>
-                </h2>
-                <p class="text-xs text-muted-foreground sm:text-sm">{card.date} · {card.items}</p>
-                <p class:list={["mt-1 truncate text-xs sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
-              </div>
-
-              <div class="flex shrink-0 flex-col items-end justify-between gap-2 sm:order-3 sm:mt-auto sm:flex-row sm:items-center sm:border-t sm:border-border sm:pt-3">
-                <p class="text-sm font-semibold tabular-nums text-foreground sm:text-base">{card.total}</p>
-                <a
-                  href={`${card.href}#buy-again`}
-                  data-astro-prefetch="false"
-                  data-buy-again={card.buyAgain}
-                  class="relative z-10 inline-flex min-h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:min-h-10 sm:text-sm"
-                >{words.buyAgain}</a>
-              </div>
-              <p class="relative z-10 hidden w-full text-xs text-muted-foreground empty:hidden sm:order-4" role="status" data-buy-again-status></p>
-            </article>
-          </li>
-        ))}
-      </ul>
+      <AccountOrderCards cards={cards} words={words} />
     )}
 
     {(olderHref || cursor) && (

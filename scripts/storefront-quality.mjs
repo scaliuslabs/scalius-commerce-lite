@@ -417,6 +417,26 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
           const light = new Set(findings.filter((finding) => finding.rule === "color-contrast").flatMap((finding) => finding.nodes));
           const extra = dark.filter((node) => !light.has(node));
           if (extra.length) findings.push({ rule: "contrast-dark-preference", source: "harness", impact: "serious", message: "Text fails contrast only when the browser prefers a dark colour scheme.", count: extra.length, nodes: extra.slice(0, 10) });
+
+          // A receipt on paper: the items card spans the print grid, the order and delivery cards share a row,
+          // whatever the theme's layout or card order.
+          await page.emulateMedia({ media: "print" });
+          const printProblems = await page.evaluate(() => {
+            const grid = document.querySelector('[data-order-success-print="receipt"] .order-success-print-grid');
+            if (!grid) return [];
+            const box = (selector) => grid.querySelector(selector)?.getBoundingClientRect() ?? null;
+            const [whole, items, order, delivery] = [grid.getBoundingClientRect(), box(".order-success-print-items"), box(".order-success-print-order"), box(".order-success-print-shipping")];
+            const problems = [];
+            if (!items || !order || !delivery) return ["a receipt card is missing from the print grid"];
+            if (items.width < whole.width * 0.95) problems.push(`the items card prints ${Math.round(items.width)}px of a ${Math.round(whole.width)}px grid`);
+            if (Math.abs(order.top - delivery.top) > 1) problems.push("the order and delivery cards print on different rows");
+            for (const [name, card] of [["order", order], ["delivery", delivery]]) {
+              if (card.width < whole.width * 0.3) problems.push(`the ${name} card prints ${Math.round(card.width)}px wide`);
+            }
+            return problems;
+          });
+          await page.emulateMedia({ media: "screen" });
+          if (printProblems.length) findings.push({ rule: "print-layout", source: "harness", impact: "serious", message: `The receipt prints out of its print grid: ${printProblems.join("; ")}.`, count: printProblems.length, nodes: [".order-success-print-grid"] });
         }
       }
       if (consoleErrors.length) findings.push({ rule: "console-error", source: "harness", impact: "minor", message: "The page logged errors.", count: consoleErrors.length, nodes: consoleErrors.slice(0, 10) });
@@ -448,7 +468,7 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
       for (const finding of findings) {
         finding.help ??= null;
         const requiredState = REQUIRED_STATE_RULES.has(finding.rule);
-        const gating = requiredState || finding.rule === "render" || finding.rule === "overflow" || (finding.source === "axe" && GATING_IMPACTS.has(finding.impact));
+        const gating = requiredState || finding.rule === "render" || finding.rule === "overflow" || finding.rule === "print-layout" || (finding.source === "axe" && GATING_IMPACTS.has(finding.impact));
         const allow = gating && !requiredState ? allowed(allowlist, entry.id, finding.rule, width) : null;
         finding.gating = gating && !allow;
         if (allow) {

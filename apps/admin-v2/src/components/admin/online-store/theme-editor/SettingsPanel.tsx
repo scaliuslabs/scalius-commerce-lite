@@ -119,6 +119,9 @@ export function usePartTitle() {
       case EDITOR_PARTS.listingToolbar: return t("listingToolbar");
       case EDITOR_PARTS.listingFilters: return t("listingFilters");
       case EDITOR_PARTS.cart: return t("cartMain");
+      case EDITOR_PARTS.checkout: return t("checkoutMain");
+      case EDITOR_PARTS.receipt: return t("receiptMain");
+      case EDITOR_PARTS.account: return t("accountMain");
       case EDITOR_PARTS.pageContent: return t("pageContent");
       default: return null;
     }

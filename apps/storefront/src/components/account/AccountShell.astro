@@ -14,6 +14,7 @@ import { getLayoutData } from "@/lib/api";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { continueWithLabel, readSignInApps, signInAppHref, signInErrorMessage, signInLanguage } from "@/lib/sign-in-apps";
 import { accountCopy } from "@/lib/account-copy";
+import ConditionalWrap from "@/components/ConditionalWrap.astro";
 
 export interface Props {
   current: AccountSection;
@@ -42,8 +43,10 @@ const {
   signedOut = { title: words.signInTitle, body: words.signInBody },
   unavailable = { text: words.unavailable, retryHref: "/account" },
 } = Astro.props;
-// What the store offers keeps Reviews and Downloads in the strip on every account page.
-const storeFacts = await currentRequestTheme(Astro.locals).then(({ resolved }) => resolved.facts).catch(() => null);
+// What the store offers keeps Reviews and Downloads in the strip on every account page;
+// the theme's account block says where the navigation sits.
+const requestTheme = await currentRequestTheme(Astro.locals).catch(() => null);
+const storeFacts = requestTheme?.resolved.facts ?? null;
 const tabs = accountNavTabs(current, summary, {
   hasReviews: storeFacts?.hasReviews === true,
   hasDigitalLines: storeFacts?.hasDigitalLines === true,
@@ -55,19 +58,27 @@ const signedOutLayout = state === "signed_out" ? await getLayoutData().catch(() 
 const signInWords = signInLanguage(signedOutLayout?.storefrontCopy?.languageCode);
 const signInAppList = readSignInApps(signedOutLayout?.appServices?.signIn);
 const signInError = state === "signed_out" ? signInErrorMessage(Astro.url.searchParams.get("sign_in_error"), signInWords) : null;
+// Beside the page (wide screens): a list of the same links, the current one marked at its start edge.
+const sidebar = requestTheme?.resolved.blocks.account.navigation === "sidebar" && state !== "signed_out";
+const sideTab = "lg:min-h-11 lg:rounded-lg lg:after:inset-x-auto lg:after:inset-y-2 lg:after:start-0 lg:after:h-auto lg:after:w-0.5 lg:hover:bg-muted";
 const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full";
 ---
 
-<div class={workspace ? "mx-auto flex w-full max-w-5xl flex-col px-4 pb-4 pt-3 sm:px-6" : ACCOUNT_CONTAINER} data-account-shell data-account-state={state} data-account-workspace={workspace ? "true" : undefined}>
+<div class={workspace ? "mx-auto flex w-full max-w-5xl flex-col px-4 pb-4 pt-3 sm:px-6" : ACCOUNT_CONTAINER} data-account-shell data-account-state={state} data-account-workspace={workspace ? "true" : undefined} data-account-navigation={sidebar ? "sidebar" : undefined}>
+  <ConditionalWrap when={sidebar} class={workspace ? "flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-x-8" : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-x-8"}>
   {state !== "signed_out" && (
-    <nav aria-label={words.nav} class={workspace ? "mb-3 shrink-0 border-b border-border" : "mb-6 border-b border-border sm:mb-8"}>
-      <div class="-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" data-account-nav>
+    <nav aria-label={words.nav} class={sidebar
+      ? (workspace ? "mb-3 shrink-0 border-b border-border lg:mb-0 lg:border-b-0" : "mb-6 border-b border-border sm:mb-8 lg:sticky lg:top-[calc(var(--header-height,64px)+1rem)] lg:mb-0 lg:border-b-0")
+      : (workspace ? "mb-3 shrink-0 border-b border-border" : "mb-6 border-b border-border sm:mb-8")}>
+      <div class={sidebar
+        ? "-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 lg:flex-col lg:items-stretch lg:overflow-visible [&::-webkit-scrollbar]:hidden"
+        : "-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"} data-account-nav>
         {tabs.map((item) => (
           <a
             href={item.href}
             aria-current={item.key === current ? "page" : undefined}
             data-astro-prefetch="false"
-            class:list={[tab, item.key === current ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"]}
+            class:list={[tab, sidebar && sideTab, item.key === current ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"]}
           >
             {item.label}
             {item.badge && (
@@ -75,7 +86,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
             )}
           </a>
         ))}
-        <form method="post" action="/api/auth/logout" class="ms-auto shrink-0 ps-2" data-account-sign-out>
+        <form method="post" action="/api/auth/logout" class={sidebar ? "ms-auto shrink-0 ps-2 lg:ms-0 lg:mt-2 lg:border-t lg:border-border lg:ps-0 lg:pt-2" : "ms-auto shrink-0 ps-2"} data-account-sign-out>
           <button type="submit" class="inline-flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
             {words.signOut}
@@ -85,6 +96,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
     </nav>
   )}
 
+  <ConditionalWrap when={sidebar} class={workspace ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-w-0"}>
   {state === "signed_out" && (
     <div class="mx-auto max-w-md py-16 text-center">
       <h1 class="text-2xl font-semibold text-foreground">{signedOut.title}</h1>
@@ -134,6 +146,8 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
       {workspace ? <div class="flex min-h-0 flex-1 flex-col"><slot /></div> : <slot />}
     </>
   )}
+  </ConditionalWrap>
+  </ConditionalWrap>
 </div>
 
 <style>

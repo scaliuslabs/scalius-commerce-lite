@@ -1,4 +1,4 @@
-# Storefront theme document (version 13)
+# Storefront theme document (version 14)
 
 One JSON document describes how the storefront looks: the template label, tokens, brand, one variant per block with its settings, the homepage sections, up to 20 landing pages, the sections of the product, listing, cart and CMS page templates and what `/` shows. The dashboard drafts, previews, publishes (atomically) and restores it. An agent can write it through the API, and installed apps add sections and product blocks. The storefront and the dashboard resolve it against the store with the same function. This file is the contract for contributors and coding agents.
 
@@ -10,7 +10,7 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
 
 ```jsonc
 {
-  "version": 13,                       // literal (STOREFRONT_THEME_DOCUMENT_VERSION); a new shape means a new version. Older stored versions (10 and up) read through upgrade steps.
+  "version": 14,                       // literal (STOREFRONT_THEME_DOCUMENT_VERSION); a new shape means a new version. Older stored versions (10 and up) read through upgrade steps.
   "template": "department-mall",       // the template it is based on: a label, never read for behaviour
   "tokens": {
     "colors": { "<19 keys>": "#rrggbb" },
@@ -34,7 +34,13 @@ Source of truth: `packages/shared/src/storefront-theme/*.ts`, re-exported as `@s
       "surface", "band", "phoneBar", "links", "phoneBanner", "maxColumns"
     },
     "product": { "gallery", "buyBox", "below": [], "apps"?: [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
-    "footer"                           // every variant: { tagline, about, copyright } (+ directory's style)
+    "footer",                          // every variant: { tagline, about, copyright } (+ directory's style)
+    // The buyer's private pages (private-pages.ts): closed choices only, core draws them.
+    "cart": { "summary" },             // side | top
+    "cartDrawer": { "width", "recommendations" },  // standard | wide; shown | hidden
+    "checkout": { "summary", "paymentChoices" },   // side | top; list | tiles
+    "receipt": { "layout", "sections": [] },        // stacked | split; order, delivery, items: each once
+    "account": { "navigation" }        // tabs | sidebar
   },
   "apps"?: {                           // app storefront components (packages/plugin-sdk/docs/storefront.md); optional
     "skins"?: {                        // the units an app skin draws: header, footer, product_card, product_main, listing_main
@@ -133,6 +139,10 @@ One listing block serves category, collection, brand and search pages. The edito
 - **Modules.** `below` lists the modules in page order. Each renders only when this product has its data, from reads the page already makes. Module ids are snake_case, the names a skin places them by (`STOREFRONT_PRODUCT_MODULE_EMBEDS`): `key_attributes`, `about_bullets`, `spec_table`, `description`, `content_blocks`, `compare_similar`, `reviews`, `policies`, `related`, `recently_viewed`; version 12's kebab-case ids read through the 12 → 13 step, which also drops `warranty` (the buy box shows the warranty). Rules: `key_attributes` shows at most 8 key-spec rows and needs key specs in the store, as does `compare_similar`. `key_attributes` shows above a spec table that lists more rows, and not beside the marketplace facts column. `about_bullets` is left out when the buy box already lists the features. `spec_table` never shows a brand as a row. `reviews` carries "Write a review" in its zero state. `recently_viewed` is this browser's own list, filled before paint, and shows nothing without JavaScript.
 - **Sticky bars.** At most one at the top and one at the bottom on phones. `phoneBottom: buy-bar` and `desktop: product-bar` show the price and Add to cart once the buy buttons scroll away.
 - **App blocks.** `blocks.product.apps` lists blocks that installed apps draw (`{ id, app, values }`, at most 10, in the merchant's order). Each renders in the buy box or after the modules, as its app declares.
+
+### Private pages
+
+`blocks.cart`, `cartDrawer`, `checkout`, `receipt` and `account` lay out the buyer's own pages (`private-pages.ts`). Each is a strict object of closed choices: where the totals sit beside or above the form (`summary`), the drawer's width and whether it suggests products, the payment methods as rows or tiles, the receipt's cards in one or two columns and in which order (all three always, each once), and the account menu as tabs or a sidebar. Nothing in them names markup, a style or a part to hide: core draws the pages with the tokens, no app code runs there, and the contact, delivery and terms of the details form, the totals, the payment methods and Pay button, every error and the typed extension targets stay in every choice. The defaults (`STOREFRONT_PRIVATE_PAGE_DEFAULTS`: `side`, `standard`/`shown`, `side`/`list`, `stacked` in `order, delivery, items`, `tabs`) draw each page as before the blocks and add nothing to the HTML; every built-in template carries them. A default choice is the HTML as it was; `split`, `top`, `tiles` and `sidebar` change classes and add wrappers only. The drawer mounts in the browser, so a non-default drawer choice reaches it as a body attribute (`data-cart-drawer-*`, from `themePaint`). The editor previews the cart itself and the checkout, receipt and account on its sample pages (`/theme-preview/sample/<page>`): fixed sample orders, never a buyer's, answering only under a live preview.
 
 ### Sections, landing pages and apps
 
@@ -248,6 +258,8 @@ Version 11 names app surfaces by snake_case keys (the plugin manifest's identifi
 Version 12 names core identifiers the same way, as the storefront protocol does: the 11 → 12 step rewrites every core section type (`usp-strip` → `usp_strip`, `category-tiles` → `category_tiles`, ...) and every `apps.skins` unit (`product-card` → `product_card`, `product-main`, `listing-main`). Skin targets (`section:usp_strip`) and embed kinds (`buy_form`, `order_form`) follow. Settings values (layouts, styles, source kinds) and product page modules keep their spelling.
 
 Version 13 adds the colour scheme: the 12 → 13 step gives any `tokens` it finds (a stored theme's, or an app template's) `colorScheme: "light"`, `darkColors: null` and `colorSchemeToggle: false`, so every token it paints stays byte for byte the same.
+
+Version 14 adds the private pages' blocks: the 13 → 14 step gives a stored document (one with a `template`) `cart`, `cartDrawer`, `checkout`, `receipt` and `account` with the defaults, which draw each page as before (frozen render goldens in `apps/storefront/src/lib/route-tests/__snapshots__/private-page-presentation/`). App templates and page presets are left as they are: a template sets only the blocks it states, so one written before version 14 keeps the merchant's private pages.
 
 - **Upgrade chain.** `upgrade.ts` holds one pure step per document version (`STOREFRONT_THEME_DOCUMENT_UPGRADES[n]`: a version `n` document in, version `n + 1` out) and each section registry entry holds its own steps (`upgrades[n]`: its settings at version `n` in, `n + 1` out). A step reads and writes JSON only (no I/O, no clock) and changes only the parts it finds, because app templates and page presets carry parts of a document. A stored read (`parseStoredStorefrontThemeDocument`) runs the document steps from the stored version to the current one, then the section steps on every section list, then the strict schema. Nothing is written on read: the next save (draft, publish, restore) stores the current version. A document older than `STOREFRONT_THEME_OLDEST_READABLE_VERSION` (10, after the 0155 reset) or newer than the current one, a step that throws, or a result the strict schema rejects reads as unreadable: the dashboard fails closed and the storefront renders the default theme. Writes accept only the current version. SQL that reads a stored row by JSON path (the brand media in `homepage-sections.ts`, the logo in `store-messages.ts`) sees the stored shape, so a step that moves such a path also teaches those reads both shapes.
 - **Compatibility gate.** `compat.test.ts` fails the build on an unreviewed change:

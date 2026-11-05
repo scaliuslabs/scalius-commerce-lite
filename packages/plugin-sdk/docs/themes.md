@@ -205,7 +205,9 @@ Right:
 
 ## Templates
 
-A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 13 today); stores upgrade it from there.
+A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 14 today); stores upgrade it from there.
+
+A template may also lay out the buyer's own pages, from closed choices only: `blocks.cart` (`summary`: `side` or `top`), `blocks.cartDrawer` (`width`: `standard` or `wide`; `recommendations`: `shown` or `hidden`), `blocks.checkout` (`summary`; `paymentChoices`: `list` or `tiles`), `blocks.receipt` (`layout`: `stacked` or `split`; `sections`: `order`, `delivery` and `items`, each once, in your order) and `blocks.account` (`navigation`: `tabs` or `sidebar`). The store draws those pages itself with your tokens: no skin, island, stylesheet or script of yours runs there, and the details form, totals, payment methods, Pay button, errors and the Buyer UI targets always show. Set all of a block's choices; a block you leave out keeps the merchant's.
 
 Its `tokens` can set the colour scheme too, checked like any theme when the merchant saves:
 
@@ -221,7 +223,7 @@ A template that leaves dark off (`light`, no switch) keeps the merchant's own sc
 templates: [{
   id: "studio",
   name: "Studio",
-  themeVersion: 13,
+  themeVersion: 14,
   theme: {
     apps: { skins: { header: { app: "acme.studio/header", values: {} }, product_card: { app: "acme.studio/card", values: {} } } },
     sections: [

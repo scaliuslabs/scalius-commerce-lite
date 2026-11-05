@@ -1,0 +1,12 @@
+---
+// Its children inside one element when `when` holds, else the children alone
+// (no element, nothing added), so a layout choice can add a wrapper that the
+// default leaves out.
+interface Props {
+  when: boolean;
+  class?: string;
+}
+
+const { when, class: className } = Astro.props;
+---
+{when ? <div class={className}><slot /></div> : <slot />}

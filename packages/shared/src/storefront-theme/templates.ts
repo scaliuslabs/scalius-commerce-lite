@@ -15,6 +15,7 @@ import {
   type StorefrontThemeBlocks,
 } from "./blocks";
 import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
+import { storefrontPrivatePageDefaults } from "./private-pages";
 import { emptyStorefrontPageTemplates } from "./pages";
 import {
   STOREFRONT_THEME_DOCUMENT_VERSION,
@@ -115,6 +116,8 @@ function blocks(spec: {
       sticky: spec.product.sticky,
     },
     footer: pick("footer", ...spec.footer),
+    // Every template draws the buyer's private pages as they have always been drawn.
+    ...storefrontPrivatePageDefaults(),
   } as StorefrontThemeBlocks;
 }
 
