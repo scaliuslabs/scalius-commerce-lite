@@ -84,6 +84,44 @@ const optionValueInputSchema = z.object({
 
 export const OPTION_SWATCH_IMAGE_MESSAGE = "Choose a ready image from Files for the swatch.";
 
+/**
+ * Swatch images a write newly names (media id -> the input field naming it)
+ * must be ready images in Files. Every write that stores an option value's
+ * swatch (the matrix save, a product create, a copy) checks through this,
+ * and adds `swatchImagesGuard` to its batch.
+ */
+export async function assertReadySwatchImages(db: Database, named: ReadonlyMap<string, string>): Promise<void> {
+    if (named.size === 0) return;
+    const ready = await readySwatchImageIds(db, [...named.keys()]);
+    for (const [mediaId, field] of named) {
+        if (!ready.has(mediaId)) throw new ValidationError(OPTION_SWATCH_IMAGE_MESSAGE, { field });
+    }
+}
+
+/** Which of these files are ready images in Files (one bound list, any length). */
+export async function readySwatchImageIds(db: Database, mediaIds: readonly string[]): Promise<Set<string>> {
+    if (mediaIds.length === 0) return new Set();
+    return new Set((await db.select({ id: media.id }).from(media).where(and(
+        sql`${media.id} IN (SELECT value FROM json_each(${JSON.stringify(mediaIds)}))`,
+        eq(media.kind, "image"),
+        eq(media.status, "ready"),
+    ))).map((row) => row.id));
+}
+
+/** A newly named swatch image is not one Files is deleting by the time the batch writes it. */
+export function swatchImagesGuard(db: Database, mediaIds: readonly string[]) {
+    return buildBatchGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${media}
+        WHERE ${media.id} IN (SELECT value FROM json_each(${JSON.stringify(mediaIds)}))
+          AND ${media.status} IN ('deleting', 'deleted')
+    )`, "option_matrix_swatch_media_conflict");
+}
+
+/** An option value's stored swatch columns from its input swatch (none for a value without one). */
+export function swatchColumnsOf(swatch: { color: string | null; mediaId: string | null } | null | undefined) {
+    return { swatchColor: swatch?.color ?? null, swatchMediaId: swatch?.mediaId ?? null };
+}
+
 const optionDefinitionInputSchema = z.object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1).max(40),
@@ -660,16 +698,7 @@ export async function planProductOptionMatrix(
             newSwatchMedia.set(swatch.mediaId, `${fieldPrefix}options.${optionIndex}.values.${valueIndex}.swatch.mediaId`);
         }
     }));
-    if (newSwatchMedia.size > 0) {
-        const ready = new Set((await db.select({ id: media.id }).from(media).where(and(
-            sql`${media.id} IN (SELECT value FROM json_each(${JSON.stringify([...newSwatchMedia.keys()])}))`,
-            eq(media.kind, "image"),
-            eq(media.status, "ready"),
-        ))).map((row) => row.id));
-        for (const [mediaId, field] of newSwatchMedia) {
-            if (!ready.has(mediaId)) throw new ValidationError(OPTION_SWATCH_IMAGE_MESSAGE, { field });
-        }
-    }
+    await assertReadySwatchImages(db, newSwatchMedia);
 
     const persistedOptions = input.options.map((option) => ({
         id: definitionIdMap.get(option.id)!,
@@ -928,13 +957,7 @@ export async function planProductOptionMatrix(
     }
 
     // A swatch image newly named is not one Files is deleting by the time the batch writes it.
-    if (newSwatchMedia.size > 0) {
-        statements.push(buildBatchGuard(db, sql`NOT EXISTS (
-            SELECT 1 FROM ${media}
-            WHERE ${media.id} IN (SELECT value FROM json_each(${JSON.stringify([...newSwatchMedia.keys()])}))
-              AND ${media.status} IN ('deleting', 'deleted')
-        )`, "option_matrix_swatch_media_conflict"));
-    }
+    if (newSwatchMedia.size > 0) statements.push(swatchImagesGuard(db, [...newSwatchMedia.keys()]));
 
     input.options.forEach((option, optionPosition) => {
         const optionId = definitionIdMap.get(option.id)!;
@@ -994,10 +1017,13 @@ export async function planProductOptionMatrix(
                 .where(eq(productOptionDefinitions.id, definition.id)));
         }
     }
+    // A removed value drops its swatch: Files never counts a value no one can
+    // see as a use of a file, and a value brought back later starts without
+    // one, as a new value does.
     for (const value of existingValues) {
         if (value.deletedAt === null && !submittedValueIds.has(value.id)) {
             statements.push(db.update(productOptionValues)
-                .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()`, swatchColor: null, swatchMediaId: null })
                 .where(eq(productOptionValues.id, value.id)));
         }
     }

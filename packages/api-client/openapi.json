@@ -100828,6 +100828,31 @@
                           ],
                           "default": "none",
                           "description": "Which standard attribute it is for catalog feeds; each one at most once."
+                        },
+                        "swatches": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "color": {
+                                "type": "string",
+                                "nullable": true,
+                                "pattern": "^#[0-9a-fA-F]{6}$"
+                              },
+                              "mediaId": {
+                                "type": "string",
+                                "nullable": true,
+                                "minLength": 1,
+                                "maxLength": 180
+                              }
+                            },
+                            "required": [
+                              "color",
+                              "mediaId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "description": "Swatches by value: `{ \"Red\": { \"color\": \"#c0392b\", \"mediaId\": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch."
                         }
                       },
                       "required": [
@@ -106590,6 +106615,31 @@
                                 ],
                                 "default": "none",
                                 "description": "Which standard attribute it is for catalog feeds; each one at most once."
+                              },
+                              "swatches": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "object",
+                                  "properties": {
+                                    "color": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "pattern": "^#[0-9a-fA-F]{6}$"
+                                    },
+                                    "mediaId": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "minLength": 1,
+                                      "maxLength": 180
+                                    }
+                                  },
+                                  "required": [
+                                    "color",
+                                    "mediaId"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "description": "Swatches by value: `{ \"Red\": { \"color\": \"#c0392b\", \"mediaId\": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch."
                               }
                             },
                             "required": [

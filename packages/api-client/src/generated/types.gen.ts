@@ -26471,6 +26471,15 @@ export type PostApiV1AdminResourcesProductsData = {
              * Which standard attribute it is for catalog feeds; each one at most once.
              */
             standardMapping?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            /**
+             * Swatches by value: `{ "Red": { "color": "#c0392b", "mediaId": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch.
+             */
+            swatches?: {
+                [key: string]: {
+                    color: string | null;
+                    mediaId: string | null;
+                };
+            };
         }>;
         /**
          * With options, one SKU per combination, each using every option's value; without options, exactly one.
@@ -28461,6 +28470,15 @@ export type PostApiV1AdminResourcesProductsBatchData = {
                  * Which standard attribute it is for catalog feeds; each one at most once.
                  */
                 standardMapping?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                /**
+                 * Swatches by value: `{ "Red": { "color": "#c0392b", "mediaId": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch.
+                 */
+                swatches?: {
+                    [key: string]: {
+                        color: string | null;
+                        mediaId: string | null;
+                    };
+                };
             }>;
             /**
              * With options, one SKU per combination, each using every option's value; without options, exactly one.
