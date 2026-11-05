@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 195,
-  name: "0195_postgres_json_edits",
+  version: 196,
+  name: "0196_option_value_swatches",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -756,6 +756,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 195,
     name: "0195_postgres_json_edits",
     sourceSha256: "8ab5a63ebdd53b349e4b5f53f80083c045623f5b0573a5972bcd3947b771666e",
+  },
+  {
+    version: 196,
+    name: "0196_option_value_swatches",
+    sourceSha256: "7ddf84c1a0efdd145d1e5a389e1b0643be3debffaf5a1624aacb8631ed37cbe5",
   },
 ] as const;
 

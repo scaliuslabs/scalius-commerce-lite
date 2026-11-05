@@ -14223,6 +14223,31 @@
           "createdAt"
         ]
       },
+      "ProductOptionValueSwatch": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "string",
+            "nullable": true,
+            "description": "`#rrggbb`, lowercase; null without a colour."
+          },
+          "mediaId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The swatch image's file in Files; null without one."
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "The swatch image's published URL; null without one, or while its file is uploading or being deleted."
+          }
+        },
+        "required": [
+          "color",
+          "mediaId",
+          "imageUrl"
+        ]
+      },
       "ProductPageContentBlock": {
         "oneOf": [
           {
@@ -71672,12 +71697,22 @@
                                         },
                                         "position": {
                                           "type": "integer"
+                                        },
+                                        "swatch": {
+                                          "description": "The value's swatch (a colour, an image from Files) for a swatch picker; null without one.",
+                                          "allOf": [
+                                            {
+                                              "$ref": "#/components/schemas/ProductOptionValueSwatch"
+                                            }
+                                          ],
+                                          "nullable": true
                                         }
                                       },
                                       "required": [
                                         "id",
                                         "value",
-                                        "position"
+                                        "position",
+                                        "swatch"
                                       ]
                                     }
                                   }
@@ -225101,6 +225136,28 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 100
+                                  },
+                                  "swatch": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "color": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "pattern": "^#[0-9a-fA-F]{6}$"
+                                      },
+                                      "mediaId": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "minLength": 1,
+                                        "maxLength": 180
+                                      }
+                                    },
+                                    "required": [
+                                      "color",
+                                      "mediaId"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 },
                                 "required": [
@@ -228940,12 +228997,21 @@
                                         },
                                         "position": {
                                           "type": "integer"
+                                        },
+                                        "swatch": {
+                                          "allOf": [
+                                            {
+                                              "$ref": "#/components/schemas/ProductOptionValueSwatch"
+                                            }
+                                          ],
+                                          "nullable": true
                                         }
                                       },
                                       "required": [
                                         "id",
                                         "value",
-                                        "position"
+                                        "position",
+                                        "swatch"
                                       ]
                                     },
                                     "maxItems": 150
@@ -230215,12 +230281,22 @@
                                     },
                                     "position": {
                                       "type": "integer"
+                                    },
+                                    "swatch": {
+                                      "description": "The value's swatch for a swatch picker; null without one.",
+                                      "allOf": [
+                                        {
+                                          "$ref": "#/components/schemas/ProductOptionValueSwatch"
+                                        }
+                                      ],
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
                                     "id",
                                     "value",
-                                    "position"
+                                    "position",
+                                    "swatch"
                                   ]
                                 }
                               }
@@ -231223,6 +231299,28 @@
                                     "type": "string",
                                     "minLength": 1,
                                     "maxLength": 100
+                                  },
+                                  "swatch": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "color": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "pattern": "^#[0-9a-fA-F]{6}$"
+                                      },
+                                      "mediaId": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "minLength": 1,
+                                        "maxLength": 180
+                                      }
+                                    },
+                                    "required": [
+                                      "color",
+                                      "mediaId"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 },
                                 "required": [
@@ -233874,6 +233972,28 @@
                                 "type": "string",
                                 "minLength": 1,
                                 "maxLength": 100
+                              },
+                              "swatch": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "color": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "pattern": "^#[0-9a-fA-F]{6}$"
+                                  },
+                                  "mediaId": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "minLength": 1,
+                                    "maxLength": 180
+                                  }
+                                },
+                                "required": [
+                                  "color",
+                                  "mediaId"
+                                ],
+                                "additionalProperties": false
                               }
                             },
                             "required": [

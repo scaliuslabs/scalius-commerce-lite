@@ -17,7 +17,6 @@ import type { ProductCondition } from "@scalius/shared/product-condition";
 import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
 import { pageLanguage } from "@/lib/store-time-zone";
 import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
-import { cssNamedColour } from "./css-colours";
 
 export type ProductCardProduct = Product & { secondaryImageUrl?: string | null };
 
@@ -41,7 +40,7 @@ export interface ProductCardFactValues {
   packSize: string | null;
   /** "Free delivery", or the cheapest rate ("৳60"). */
   delivery: { free: true } | { free: false; fee: string } | null;
-  /** The colour axis's values with a known colour (swatch value or CSS named colour), and how many more it has. */
+  /** The colour axis's values with the merchant's swatch colour (the value's own, else its swatch facet's), and how many more it has; a value without one is never guessed from its name. */
   swatches: { items: Array<{ label: string; colour: string }>; more: number };
 }
 
@@ -106,7 +105,7 @@ function cardFactValues(product: ProductCardProduct, money: (amount: number) => 
       : null;
   const known = (colourAxis?.swatches ?? []).flatMap((swatch) => {
     const label = nonEmpty(swatch.label);
-    const colour = swatch.hex && /^#[0-9a-f]{6}$/i.test(swatch.hex) ? swatch.hex : cssNamedColour(label);
+    const colour = swatch.hex && /^#[0-9a-f]{6}$/i.test(swatch.hex) ? swatch.hex : null;
     return label && colour ? [{ label, colour }] : [];
   });
   const items = known.slice(0, SWATCHES_MAX);

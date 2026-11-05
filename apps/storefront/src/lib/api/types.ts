@@ -200,7 +200,14 @@ export interface ProductOptionDefinition {
   name: string;
   position: number;
   standardMapping: ProductOptionStandardMapping;
-  values: Array<{ id: string; value: string; position: number }>;
+  values: Array<{ id: string; value: string; position: number; swatch?: ProductOptionValueSwatch | null }>;
+}
+
+/** An option value's swatch (Products: a colour and/or an image from Files); `imageUrl` null while the file is not shown. */
+export interface ProductOptionValueSwatch {
+  color: string | null;
+  mediaId?: string | null;
+  imageUrl: string | null;
 }
 
 export interface SelectedProductOption {

@@ -1373,6 +1373,13 @@
       "when": 1793830000000,
       "tag": "0195_postgres_json_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "6",
+      "when": 1793903019077,
+      "tag": "0196_option_value_swatches",
+      "breakpoints": true
     }
   ]
 }

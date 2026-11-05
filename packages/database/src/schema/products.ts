@@ -235,7 +235,13 @@ export const productOptionValues = sqliteTable("product_option_values", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
+    /** The value's swatch colour (`#rrggbb`, lowercase), for a swatch picker; null without one (0196). */
+    swatchColor: text("swatch_color"),
+    /** The value's swatch image from Files (a fabric, a pattern); null without one (0196). */
+    swatchMediaId: text("swatch_media_id").references(() => media.id, { onDelete: "restrict" }),
 }, (table) => [
+    check("product_option_values_swatch_color_check", sql`${table.swatchColor} IS NULL OR (length(${table.swatchColor}) = 7 AND ${table.swatchColor} GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')`),
+    index("product_option_values_swatch_media_idx").on(table.swatchMediaId).where(sql`${table.swatchMediaId} IS NOT NULL`),
     check("product_option_values_value_check", sql`${table.value} = trim(${table.value}) AND ${table.value} <> ''`),
     check("product_option_values_normalized_value_check", sql`${table.normalizedValue} = lower(trim(${table.value}))`),
     check("product_option_values_position_check", sql`${table.position} >= 0`),

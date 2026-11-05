@@ -593,6 +593,7 @@ const CACHE_DEP_TABLE_RULES = {
   product_option_values: {
     kinds: ["p"],
     noise: [...TIMESTAMPS],
+    note: "A value's swatch colour and image (0196) are visible columns: the product page's swatch layout and the cards' colour dots draw them. The swatch image's file is its own key (`m:<id>`, declared by the product page), so a file's renditions or deletion reach the page too.",
     rules: everyChange([
       {
         prefix: "p:",

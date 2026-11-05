@@ -64,10 +64,25 @@ import {
   unitCostAmountSchema,
 } from "../inventory";
 
+/**
+ * An option value's swatch (0196): a colour (`#rrggbb`, stored lowercase)
+ * and/or an image from Files by media id. Null clears it; left out, a value
+ * keeps its stored swatch (a new value has none), so a client that never
+ * edits swatches never clears one.
+ */
+export const optionValueSwatchInputSchema = z.object({
+    color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1f6feb.")
+        .transform((color) => color.toLowerCase()).nullable(),
+    mediaId: z.string().trim().min(1).max(180).nullable(),
+}).strict();
+
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
     value: z.string().trim().min(1).max(100),
+    swatch: optionValueSwatchInputSchema.nullable().optional(),
 });
+
+export const OPTION_SWATCH_IMAGE_MESSAGE = "Choose a ready image from Files for the swatch.";
 
 const optionDefinitionInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -574,6 +589,8 @@ export async function planProductOptionMatrix(
             value: productOptionValues.value,
             position: productOptionValues.position,
             deletedAt: productOptionValues.deletedAt,
+            swatchColor: productOptionValues.swatchColor,
+            swatchMediaId: productOptionValues.swatchMediaId,
         }).from(productOptionValues)
             .innerJoin(
                 productOptionDefinitions,
@@ -624,6 +641,33 @@ export async function planProductOptionMatrix(
                 && normalizeOptionIdentity(candidate.value) === normalizeOptionIdentity(value.value)
                 && ![...valueIdMap.values()].includes(candidate.id));
             valueIdMap.set(value.id, existing ? value.id : revived?.id ?? `pval_${nanoid()}`);
+        }
+    }
+
+    // Each value's swatch after this save: the input's, else the stored one.
+    // A swatch image newly named must be a ready image in Files; a stored one
+    // stays as it is (even trashed), so an unrelated edit never fails on it.
+    const swatchByValueId = new Map<string, { color: string | null; mediaId: string | null }>();
+    const newSwatchMedia = new Map<string, string>();
+    input.options.forEach((option, optionIndex) => option.values.forEach((value, valueIndex) => {
+        const valueId = valueIdMap.get(value.id)!;
+        const stored = valueById.get(valueId) ?? existingValues.find((candidate) => candidate.id === valueId);
+        const swatch = value.swatch === undefined
+            ? (stored ? { color: stored.swatchColor, mediaId: stored.swatchMediaId } : { color: null, mediaId: null })
+            : { color: value.swatch?.color ?? null, mediaId: value.swatch?.mediaId ?? null };
+        swatchByValueId.set(valueId, swatch);
+        if (swatch.mediaId && swatch.mediaId !== stored?.swatchMediaId && !newSwatchMedia.has(swatch.mediaId)) {
+            newSwatchMedia.set(swatch.mediaId, `${fieldPrefix}options.${optionIndex}.values.${valueIndex}.swatch.mediaId`);
+        }
+    }));
+    if (newSwatchMedia.size > 0) {
+        const ready = new Set((await db.select({ id: media.id }).from(media).where(and(
+            sql`${media.id} IN (SELECT value FROM json_each(${JSON.stringify([...newSwatchMedia.keys()])}))`,
+            eq(media.kind, "image"),
+            eq(media.status, "ready"),
+        ))).map((row) => row.id));
+        for (const [mediaId, field] of newSwatchMedia) {
+            if (!ready.has(mediaId)) throw new ValidationError(OPTION_SWATCH_IMAGE_MESSAGE, { field });
         }
     }
 
@@ -883,6 +927,15 @@ export async function planProductOptionMatrix(
             .where(eq(productOptionValues.id, value.id)));
     }
 
+    // A swatch image newly named is not one Files is deleting by the time the batch writes it.
+    if (newSwatchMedia.size > 0) {
+        statements.push(buildBatchGuard(db, sql`NOT EXISTS (
+            SELECT 1 FROM ${media}
+            WHERE ${media.id} IN (SELECT value FROM json_each(${JSON.stringify([...newSwatchMedia.keys()])}))
+              AND ${media.status} IN ('deleting', 'deleted')
+        )`, "option_matrix_swatch_media_conflict"));
+    }
+
     input.options.forEach((option, optionPosition) => {
         const optionId = definitionIdMap.get(option.id)!;
         submittedDefinitionIds.add(optionId);
@@ -909,11 +962,14 @@ export async function planProductOptionMatrix(
         option.values.forEach((value, valuePosition) => {
             const valueId = valueIdMap.get(value.id)!;
             submittedValueIds.add(valueId);
+            const swatch = swatchByValueId.get(valueId) ?? { color: null, mediaId: null };
             const valueFields = {
                 optionDefinitionId: optionId,
                 value: value.value,
                 normalizedValue: normalizeOptionIdentity(value.value),
                 position: valuePosition,
+                swatchColor: swatch.color,
+                swatchMediaId: swatch.mediaId,
                 updatedAt: sql`unixepoch()`,
                 deletedAt: null,
             };
@@ -1164,6 +1220,9 @@ const OPTION_MATRIX_CHANGED_MESSAGE = "This product changed while you were editi
 export function optionMatrixBatchConflict(error: unknown): ConflictError | null {
     if (isBatchGuardError(error, "option_matrix_stock_conflict")) {
         return new ConflictError(STOCK_CHANGED_MESSAGE);
+    }
+    if (isBatchGuardError(error, "option_matrix_swatch_media_conflict")) {
+        return new ConflictError(OPTION_SWATCH_IMAGE_MESSAGE);
     }
     if (
         isBatchGuardError(error, "option_matrix_restore_conflict")

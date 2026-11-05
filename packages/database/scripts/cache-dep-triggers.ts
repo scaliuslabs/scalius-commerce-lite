@@ -148,6 +148,8 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_product_variants_upd: "0189_variant_warranty",
   cdep_warranty_policies_sku_upd: "0189_variant_warranty",
   cdep_warranty_policies_sku_upd_old: "0189_variant_warranty",
+  // An option value's swatch (0196) is a visible column of its row.
+  cdep_product_option_values_upd: "0196_option_value_swatches",
 };
 
 /**
@@ -208,6 +210,10 @@ export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string
     "low_stock_threshold", "allow_preorder", "preorder_date", "preorder_message", "allow_backorder",
     "backorder_limit", "tax_class_id", "tax_classification_version", "discount_bps", "discount_type",
     "discount_amount_minor", "barcode", "barcode_type", "fulfillment_kind", "created_at", "updated_at", "deleted_at",
+  ],
+  // 0196 adds the value's swatch (colour and image from Files).
+  product_option_values: [
+    "id", "option_definition_id", "value", "normalized_value", "position", "created_at", "updated_at", "deleted_at",
   ],
   products: [
     "id", "name", "description", "price_minor", "category_id", "slug", "meta_title", "meta_description",
