@@ -2799,6 +2799,21 @@ export type CustomerSavedPaymentMethod = {
     createdAt: string;
 };
 
+export type ProductOptionValueSwatch = {
+    /**
+     * `#rrggbb`, lowercase; null without a colour.
+     */
+    color: string | null;
+    /**
+     * The swatch image's file in Files; null without one.
+     */
+    mediaId: string | null;
+    /**
+     * The swatch image's published URL; null without one, or while its file is uploading or being deleted.
+     */
+    imageUrl: string | null;
+};
+
 export type ProductPageContentBlock = {
     type: 'rich-text';
     version: 1;
@@ -19040,6 +19055,10 @@ export type GetApiV1ProductsBySlugResponses = {
                         id: string;
                         value: string;
                         position: number;
+                        /**
+                         * The value's swatch (a colour, an image from Files) for a swatch picker; null without one.
+                         */
+                        swatch: ProductOptionValueSwatch | null;
                     }>;
                 }>;
                 features: Array<string>;
@@ -26460,6 +26479,15 @@ export type PostApiV1AdminResourcesProductsData = {
              * Which standard attribute it is for catalog feeds; each one at most once.
              */
             standardMapping?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            /**
+             * Swatches by value: `{ "Red": { "color": "#c0392b", "mediaId": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch.
+             */
+            swatches?: {
+                [key: string]: {
+                    color: string | null;
+                    mediaId: string | null;
+                };
+            };
         }>;
         /**
          * With options, one SKU per combination, each using every option's value; without options, exactly one.
@@ -28450,6 +28478,15 @@ export type PostApiV1AdminResourcesProductsBatchData = {
                  * Which standard attribute it is for catalog feeds; each one at most once.
                  */
                 standardMapping?: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                /**
+                 * Swatches by value: `{ "Red": { "color": "#c0392b", "mediaId": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch.
+                 */
+                swatches?: {
+                    [key: string]: {
+                        color: string | null;
+                        mediaId: string | null;
+                    };
+                };
             }>;
             /**
              * With options, one SKU per combination, each using every option's value; without options, exactly one.
@@ -63451,6 +63488,10 @@ export type PostApiV1AdminProductsData = {
                 values: Array<{
                     id: string;
                     value: string;
+                    swatch?: {
+                        color: string | null;
+                        mediaId: string | null;
+                    } | null;
                 }>;
             }>;
             variants: Array<{
@@ -64625,6 +64666,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                     id: string;
                     value: string;
                     position: number;
+                    swatch: ProductOptionValueSwatch | null;
                 }>;
             }>;
             total: number;
@@ -64951,6 +64993,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                     id: string;
                     value: string;
                     position: number;
+                    /**
+                     * The value's swatch for a swatch picker; null without one.
+                     */
+                    swatch: ProductOptionValueSwatch | null;
                 }>;
             }>;
             aggregateRevision: number;
@@ -65176,6 +65222,10 @@ export type PutApiV1AdminProductsByIdData = {
                 values: Array<{
                     id: string;
                     value: string;
+                    swatch?: {
+                        color: string | null;
+                        mediaId: string | null;
+                    } | null;
                 }>;
             }>;
             variants: Array<{
@@ -65907,6 +65957,10 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             values: Array<{
                 id: string;
                 value: string;
+                swatch?: {
+                    color: string | null;
+                    mediaId: string | null;
+                } | null;
             }>;
         }>;
         variants: Array<{
