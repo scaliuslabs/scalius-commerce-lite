@@ -62,7 +62,6 @@ import {
     readPendingTwoFactorMethodChallenge,
     sendStaffPasswordChangedEmail,
     sendStaffTwoStepOffEmail,
-    verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
 import { RESET_TOKEN_MARKER_TTL_MS, liveResetToken, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
@@ -1695,7 +1694,9 @@ app.openapi(update2faMethodRoute, async (c) => {
             return ok(c, {});
         }
 
-        if (!(await verifyPendingTotpCode(pending.secret, methodInput.code))) {
+        // The new key's code is a proof like any other: it spends the person's budget.
+        const proofs = await staffProofs(c.env, db, createAuth(c.env, { appProviders: requestAppProviders(c) }), sessionUser.id);
+        if (!(await proofs.verifyPendingTotpCode(pending.secret, methodInput.code))) {
             throw twoFactorCodeRejected();
         }
 

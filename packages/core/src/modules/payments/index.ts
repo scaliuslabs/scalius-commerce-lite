@@ -101,7 +101,7 @@ export type {
 export { paymentReviewFromMetadata, paymentReviewHoldReason } from "./payment-review";
 
 // --- Refund service ---
-export { finalizeAcceptedRefundAttemptIds, listRefundSources, processRefund, STORE_CREDIT_NEEDS_STAFF_REASON } from "./refund-service";
+export { finalizeAcceptedRefundAttemptIds, listRefundSources, previewGiftCardRefundLimitMinor, processRefund, STORE_CREDIT_NEEDS_STAFF_REASON } from "./refund-service";
 export type {
   FinalizeAcceptedRefundAttemptsResult,
   RefundCaller,

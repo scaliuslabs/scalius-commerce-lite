@@ -1,4 +1,5 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useNavigate } from "@tanstack/react-router";
 
 /**
  * A list's search term lives in this tab's session, never in the URL: search
@@ -57,6 +58,23 @@ export function adoptListSearch(list: string, q: unknown): string {
   if (typeof q !== "string") return readListSearch(list);
   writeListSearch(list, q);
   return readListSearch(list);
+}
+
+/** A list validator's share of a `?q=` deep link: kept until the loader adopts it. */
+export function urlSearchTerm(search: Record<string, unknown>): { q?: string } {
+  return typeof search.q === "string" ? { q: search.q } : {};
+}
+
+/**
+ * Drops an adopted `?q=` from the address (the term now lives in the session,
+ * and the search box shows it): a reload or a shared link never carries it.
+ */
+export function useDropUrlSearchTerm(q: unknown): void {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (typeof q !== "string") return;
+    void navigate({ to: ".", search: ((previous: Record<string, unknown>) => ({ ...previous, q: undefined })) as never, replace: true });
+  }, [q, navigate]);
 }
 
 function subscribe(listener: () => void) {

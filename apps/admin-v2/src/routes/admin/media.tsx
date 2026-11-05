@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useDropUrlSearchTerm, useListSearch } from "~/lib/list-search";
 import { PageSkeleton } from "~/components/admin/states/PageSkeleton";
 import {
   mediaRouteSearchToWorkspaceState,
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/admin/media")({
       .then(({ mediaWorkspaceFilters, prefetchMediaFirstPage }) =>
         prefetchMediaFirstPage(
           queryClient,
-          mediaWorkspaceFilters(mediaRouteSearchToWorkspaceState(search, readListSearch("media"))),
+          mediaWorkspaceFilters(mediaRouteSearchToWorkspaceState(search, adoptListSearch("media", search.q))),
         ))
       .catch(() => undefined);
   },
@@ -48,6 +48,7 @@ function MediaPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const [term, setTerm] = useListSearch("media");
+  useDropUrlSearchTerm(search.q);
   const workspaceState = useMemo(
     () => mediaRouteSearchToWorkspaceState(search, term),
     [search, term],
