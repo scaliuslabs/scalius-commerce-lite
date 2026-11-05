@@ -424,4 +424,49 @@ describe("reconcileRefundedOrderInventory — refund inventory recovery drain", 
     // Verify the query filters for CANCELLED status, REFUNDED payment, and pending inventoryAction
     expect(whereMock).toHaveBeenCalled();
   });
+
+  it("reconciles orders regardless of age — no 7-day cutoff blocks old orders", async () => {
+    const { applyInventoryForStatusChangeWithImpact } = await import("../../inventory");
+    const mockedApplyInventory = applyInventoryForStatusChangeWithImpact as ReturnType<typeof vi.fn>;
+    mockedApplyInventory.mockResolvedValue({
+      inventoryAction: "restored",
+      availabilityTransitionVariantIds: [],
+    });
+
+    // An order far older than 7 days (updatedAt well in the past) must still be
+    // reconciled now that the updatedAt cutoff was removed.
+    const selectMock = vi.fn().mockImplementation(() => ({
+      from: vi.fn().mockImplementation(() => ({
+        where: vi.fn().mockImplementation(() => ({
+          limit: vi.fn().mockImplementation(() => ({
+            all: vi.fn().mockResolvedValue([
+              { id: "order_old", inventoryAction: "deducted", updatedAt: 1_000_000 },
+            ]),
+          })),
+        })),
+      })),
+    }));
+
+    const db = {
+      select: selectMock,
+      update: vi.fn().mockImplementation(() => ({
+        set: vi.fn().mockImplementation(() => ({
+          where: vi.fn().mockImplementation(() => ({
+            returning: vi.fn().mockResolvedValue([{ id: "order_old" }]),
+          })),
+        })),
+      })),
+      batch: vi.fn().mockResolvedValue([]),
+      exec: vi.fn(),
+      prepare: vi.fn(),
+      transaction: vi.fn(),
+    } as unknown as Database;
+
+    const result = await reconcileRefundedOrderInventory(db, { limit: 25 });
+
+    expect(result.scanned).toBe(1);
+    expect(result.reconciled).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(mockedApplyInventory).toHaveBeenCalledWith(db, "order_old", OrderStatus.CANCELLED);
+  });
 });
