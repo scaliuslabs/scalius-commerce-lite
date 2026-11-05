@@ -6,7 +6,7 @@
 import type { ComponentProps } from "astro/types";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatPageNumber } from "@/lib/store-time-zone";
 import Icon from "@/components/icons/Icon.astro";
 import CatalogChipLinks from "./CatalogChipLinks.astro";
 import CatalogViewSelect from "./CatalogViewSelect.astro";
@@ -31,7 +31,8 @@ interface Props {
 }
 
 const { drawerButton, refinementCount, quickFilters, showPageSize, showSort, showViewToggle, limit, sortBy, sortOptions, viewSelect, results, countLabel = null, class: className } = Astro.props;
-const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).listing;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = catalogCopy(language).listing;
 ---
 
 <div class:list={["catalog-band-tools", className]}>
@@ -48,7 +49,7 @@ const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).lis
         <span>{copy.filter}</span>
         {refinementCount > 0 && (
           <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-            {formatCount(refinementCount)}<span class="sr-only"> {copy.applied}</span>
+            {formatPageNumber(refinementCount, language)}<span class="sr-only"> {copy.applied}</span>
           </span>
         )}
       </button>

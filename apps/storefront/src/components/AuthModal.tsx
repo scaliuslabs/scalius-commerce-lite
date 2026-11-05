@@ -3,7 +3,7 @@
 // code, and you're in. A new buyer adds their name (and phone) after the code
 // proves their contact; nobody is asked whether they "have an account".
 
-import { pageOrderNumber } from "@/lib/checkout-text";
+import { pageOrderNumber, fieldPhone, pagePhone } from "@/lib/checkout-text";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import {
@@ -20,7 +20,6 @@ import { focusMainHeading } from "@/lib/focus-main-heading";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import type { CustomerAuthOtpChannel, CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
-import { formatBdMobile } from "@scalius/shared/phone-input";
 
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
@@ -171,7 +170,7 @@ export default function AuthModal() {
     setLimit("");
     setFieldErrors({});
     setOrderAddress(null);
-    const phone = prefill.phone ? formatBdMobile(prefill.phone) : "";
+    const phone = prefill.phone ? fieldPhone(prefill.phone) : "";
     setContact(methodRef.current === "email" ? prefill.email ?? "" : phone);
     setDetails({ name: prefill.name ?? "", phone, email: prefill.email ?? "" });
   }, []);
@@ -352,7 +351,7 @@ export default function AuthModal() {
       if (suggestion) {
         setDetails((value) => ({
           name: value.name.trim() ? value.name : suggestion.name ?? "",
-          phone: value.phone.trim() ? value.phone : suggestion.phone ? formatBdMobile(suggestion.phone) : "",
+          phone: value.phone.trim() ? value.phone : suggestion.phone ? fieldPhone(suggestion.phone) : "",
           email: value.email.trim() ? value.email : suggestion.email ?? "",
         }));
       }
@@ -446,7 +445,7 @@ export default function AuthModal() {
               <div className="space-y-1">
                 <p className="font-medium">{customer.name}</p>
                 <p className="break-words text-sm text-muted-foreground">
-                  {customer.email || (customer.phone ? formatBdMobile(customer.phone) : "")}
+                  {customer.email || (customer.phone ? pagePhone(customer.phone) : "")}
                 </p>
               </div>
             )}
@@ -469,7 +468,7 @@ export default function AuthModal() {
                           setFieldErrors({});
                           setError("");
                           const prefill = prefillRef.current;
-                          setContact(option.method === "email" ? prefill.email ?? "" : prefill.phone ? formatBdMobile(prefill.phone) : "");
+                          setContact(option.method === "email" ? prefill.email ?? "" : prefill.phone ? fieldPhone(prefill.phone) : "");
                         }}
                         className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${channel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                       >
@@ -503,7 +502,7 @@ export default function AuthModal() {
                       if (!contact.trim()) return;
                       const checked = checkContact(ui.requestMethod, contact, settings.phonePolicy, copy.check, phoneExample);
                       if (!checked.ok) setFieldErrors({ contact: checked.message });
-                      else if (!isEmail) setContact(formatBdMobile(checked.value));
+                      else if (!isEmail) setContact(fieldPhone(checked.value));
                     }}
                     className={inputClass}
                   />
@@ -540,7 +539,7 @@ export default function AuthModal() {
             {step === "code" && (
               <>
                 <p className="break-words text-sm text-muted-foreground">
-                  {copy.codeSentTo(isEmail ? sentTo : formatBdMobile(sentTo))}
+                  {copy.codeSentTo(isEmail ? sentTo : pagePhone(sentTo))}
                 </p>
                 <div className="space-y-1.5">
                   <label htmlFor="customer-otp" className="text-sm font-medium">{copy.code}</label>

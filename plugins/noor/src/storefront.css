@@ -486,7 +486,7 @@
   font-weight: 500;
   letter-spacing: 0.02em;
 }
-.noor-announce-list { position: relative; display: grid; block-size: 2.25rem; max-inline-size: var(--n-max); margin: 0 auto; padding: 0 var(--n-gutter); list-style: none; }
+.noor-announce-list { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); block-size: 2.25rem; max-inline-size: var(--n-max); margin: 0 auto; padding: 0 var(--n-gutter); list-style: none; }
 .noor-announce-list > li { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; min-inline-size: 0; opacity: 0; transform: translateY(0.375rem); transition: opacity var(--n-base) var(--n-ease), transform var(--n-base) var(--n-ease); }
 .noor-announce-list > li:not([data-active]) { visibility: hidden; pointer-events: none; }
 .noor-announce-list > li[data-active] { opacity: 1; transform: none; }
@@ -749,8 +749,11 @@
 }
 
 /* The campaign header on landing pages */
-.noor-header.is-campaign .noor-header-bar { grid-template-columns: auto auto; justify-content: space-between; }
+.noor-header.is-campaign .noor-header-bar { grid-template-columns: minmax(0, auto) auto; justify-content: space-between; }
 .noor-header.is-campaign .noor-logo { justify-self: start; }
+/* Phones down to 320px: the logo gives way so the switch and the order button stay on the bar's one row. */
+.noor-header.is-campaign .noor-header-end { flex-wrap: nowrap; }
+.noor-header.is-campaign .noor-logo-img { max-inline-size: min(var(--noor-logo-width, 140px), 36vw); }
 
 /* Complete menu: phones and the desktop More button. */
 .noor-drawer {
@@ -1220,8 +1223,12 @@ a.noor-split-media:hover .noor-cover:only-of-type { transform: scale(1.03); }
 /* ── Product page ───────────────────────────────────────────────────────── */
 
 .noor-crumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; margin: 0 0 1rem; font-size: 0.8125rem; color: var(--n-muted); }
-.noor-crumbs li { display: inline-flex; align-items: center; gap: 0.25rem; }
-.noor-crumbs [aria-current] { color: var(--n-ink); max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A crumb never reaches past the column: at 320 px a long title ellipsizes
+   inside the row instead of pushing the page sideways. */
+.noor-crumbs li { display: inline-flex; align-items: center; gap: 0.25rem; min-inline-size: 0; max-inline-size: 100%; }
+.noor-crumbs li > :is(a, [aria-current]) { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.noor-crumbs li > svg { flex: none; }
+.noor-crumbs [aria-current] { color: var(--n-ink); max-width: min(40ch, 100%); }
 .noor-crumbs a:hover { color: var(--n-ink); text-decoration: underline; }
 .noor-pdp { display: grid; gap: clamp(1.25rem, 1rem + 2vw, 3rem); align-items: start; }
 .noor-pdp-media { min-inline-size: 0; }

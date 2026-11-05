@@ -103,8 +103,21 @@ function postDiscountPreview(body: DiscountPreviewBody): Promise<Response> {
 }
 
 export type DiscountPreview =
-  | ({ ok: true; totalDiscount: number } & CheckoutDiscountFacts)
+  | ({ ok: true; totalDiscount: number; lineDiscountsMinor: number[] } & CheckoutDiscountFacts)
   | { ok: false; message: string | null };
+
+/** Each previewed line's share of the store's discounts, by its position (0 where the answer names none). */
+function parseLineDiscounts(value: unknown, count: number): number[] {
+  const shares = new Array<number>(count).fill(0);
+  if (!Array.isArray(value)) return shares;
+  for (const entry of value) {
+    const index = (entry as { index?: unknown })?.index;
+    const minor = (entry as { discountMinor?: unknown })?.discountMinor;
+    if (typeof index === "number" && Number.isInteger(index) && index >= 0 && index < count
+      && typeof minor === "number" && Number.isSafeInteger(minor) && minor >= 0) shares[index] = minor;
+  }
+  return shares;
+}
 
 /**
  * The cart's discounts before a delivery destination is chosen: every applied
@@ -151,6 +164,7 @@ async function requestDiscountPreview(body: DiscountPreviewBody): Promise<Discou
     return {
       ok: true,
       totalDiscount: Number.isFinite(totalDiscount) && totalDiscount > 0 ? totalDiscount : 0,
+      lineDiscountsMinor: parseLineDiscounts(json.data.lineDiscounts, body.items.length),
       ...facts,
     };
   } catch {

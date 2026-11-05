@@ -107,7 +107,7 @@ export const policies = [
     paths: [storefront],
     allow: { "apps/storefront/src/lib/checkout-text.ts": "the wrapper itself" },
     forbid: [
-      /import\s*\{[^}]*\b(?:formatCheckoutLanguageText|formatOrderNumber)\b[^}]*\}\s*from\s*["']@scalius\/shared\/(?:checkout-language(?:-format)?|order-utils)["']/,
+      /import\s*\{[^}]*\b(?:formatCheckoutLanguageText|formatOrderNumber|formatBdMobile)\b[^}]*\}\s*from\s*["']@scalius\/shared\/(?:checkout-language(?:-format)?|order-utils|phone-input)["']/,
       /\.textContent\s*=[^;\n]*\bString\(\s*[A-Za-z_$][\w$.]*\s*\)/,
       // A number made text before it fills a template: String(n), `${n}` or `${n}%`, n.toFixed().
       /checkoutText\([^;\n]*:\s*(?:String\(|`\$\{[^}`]+\}%?`)/,
@@ -115,6 +115,14 @@ export const policies = [
       /=>\s*String\(Math\./,
     ],
     sample: 'badge.textContent = String(count);',
+  },
+  {
+    rule: "a storefront component that reads its request's language writes its counts in that language",
+    why: "formatCount reads the page language the layout seeded, so a card rendered on its own (a fragment, a test render) read '১২৮টি' as '128টি' beside a Bangla rating; a component holding the request's language passes it (formatPageNumber(n, language)); browser scripts after <script keep formatCount",
+    paths: [storefront],
+    extensions: [".astro"],
+    forbid: [/^(?=[\s\S]*\bcurrentRequestTheme\()(?:(?!<script)[\s\S])*?\bformatCount\(/],
+    sample: 'const { language } = await currentRequestTheme(Astro.locals);\nconst shown = formatCount(count);\n',
   },
   {
     rule: "storefront pages keep no unload or beforeunload listener, so Back restores them from the back/forward cache",

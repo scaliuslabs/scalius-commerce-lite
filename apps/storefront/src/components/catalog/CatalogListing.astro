@@ -55,7 +55,7 @@ import {
 import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { catalogCopy } from "@/lib/catalog-copy";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatPageNumber } from "@/lib/store-time-zone";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Icon from "@/components/icons/Icon.astro";
 
@@ -306,7 +306,7 @@ const bandTools = {
             <span class="sr-only">{copy.listing.filters}</span>
             {refinementCount > 0 && (
               <span class="absolute -inset-e-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                {formatCount(refinementCount)}
+                {formatPageNumber(refinementCount, language)}
               </span>
             )}
           </button>
@@ -336,7 +336,7 @@ const bandTools = {
             <span>{copy.listing.filter}</span>
             {refinementCount > 0 && (
               <span class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                {formatCount(refinementCount)}<span class="sr-only"> {copy.listing.applied}</span>
+                {formatPageNumber(refinementCount, language)}<span class="sr-only"> {copy.listing.applied}</span>
               </span>
             )}
           </button>
@@ -363,7 +363,7 @@ const bandTools = {
             <span>{copy.listing.filters}</span>
             {refinementCount > 0 && (
               <span class="absolute -inset-e-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
-                {formatCount(refinementCount)}
+                {formatPageNumber(refinementCount, language)}
               </span>
             )}
           </button>

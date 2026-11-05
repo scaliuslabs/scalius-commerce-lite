@@ -63,7 +63,8 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
       ) : null}
     </div>
   );
-  if (campaign) return <footer class={cx("noor-footer is-campaign", `tone-${tone}`)}><div class="noor-wrap">{legal}</div></footer>;
+  // The store's country and language choices sit inside the campaign footer too, above its legal line.
+  if (campaign) return <footer class={cx("noor-footer is-campaign", `tone-${tone}`)}><div class="noor-wrap"><Slot name="footer.columns" />{legal}</div></footer>;
   return (
     <footer class={cx("noor-footer", `tone-${tone}`)}>
       <div class="noor-wrap">

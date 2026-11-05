@@ -190,7 +190,7 @@ export function enhanceOrderCodeForm(
         setMessage(sentMessage);
         const orderNumber = orderLine?.querySelector("[data-order-number]");
         if (orderLine && orderNumber && typeof data.orderNumber === "number") {
-          orderNumber.textContent = pageOrderNumber(data.orderNumber, "");
+          orderNumber.textContent = pageOrderNumber(data.orderNumber, "", pageLanguage());
           orderLine.hidden = false;
         }
         waitToResend(positiveSeconds(data.resendAfterSeconds) ?? DEFAULT_RESEND_AFTER_SECONDS);

@@ -17,7 +17,7 @@ import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { cardCondition } from "./card-model";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatPageNumber } from "@/lib/store-time-zone";
 import {
   listingFilterColumnPx,
   productCardImageMaxCssWidth,
@@ -112,6 +112,7 @@ const model = productCardModel(product, {
   imageMaxWidth,
   // Ratings show only while the store takes reviews and has a published one.
   ratings: resolved.facts.hasReviews,
+  language,
 });
 const { facts } = model;
 const TitleTag = headingLevel;
@@ -122,7 +123,7 @@ const details = [facts.packSize, condition].filter(Boolean).join(" · ");
 const keySpecs = card.facts === "key-specs" ? facts.keySpecs : [];
 const swatches = card.facts === "swatches" ? facts.swatches : { items: [], more: 0 };
 const delivery = card.facts === "delivery" ? facts.delivery : null;
-const moreSwatches = formatCount(swatches.more);
+const moreSwatches = formatPageNumber(swatches.more, language);
 const swatchWords = swatches.items.length > 0
   ? copy.colours([...swatches.items.map((swatch) => swatch.label), ...(swatches.more > 0 ? [copy.moreColours(moreSwatches, swatches.more)] : [])].join(", "))
   : "";

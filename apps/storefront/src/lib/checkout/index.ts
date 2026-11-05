@@ -1,4 +1,4 @@
-import { checkoutText } from "@/lib/checkout-text";
+import { checkoutText, pagePhone } from "@/lib/checkout-text";
 import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
 import { cartStore, hydrateCartFromStorage, removeOrderedLines } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
@@ -9,7 +9,7 @@ import { createHostedGatewayHandler } from "./handlers/hosted";
 import { createDeferredGatewayHandler } from "./handlers/deferred";
 import { formatPageNumber, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
 import { formatMoney, DEFAULT_CURRENCY } from "@/lib/currency";
-import { formatBdMobile } from "@scalius/shared/phone-input";
+
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import type { PaymentResult } from "./types";
@@ -650,7 +650,7 @@ function appendCheckoutReview(
   const phone = displayString(data.customerPhone);
   appendReviewRow(review, checkoutCopy.contactReviewText, [
     displayString(data.customerName) ?? "",
-    phone ? formatBdMobile(phone) : "",
+    phone ? pagePhone(phone) : "",
     displayString(data.customerEmail) ?? "",
   ]);
   const mode = quoteDeliveryMode(quote);

@@ -1,7 +1,7 @@
 ---
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatPageNumber } from "@/lib/store-time-zone";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -11,7 +11,8 @@ interface Props {
 }
 
 const { page, totalPages, getPageUrl } = Astro.props;
-const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).paging;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = catalogCopy(language).paging;
 
 function paginationItems(currentPage: number, pageCount: number): (number | "…")[] {
   if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
@@ -49,7 +50,7 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
         typeof item === "number" ? (
           <a
             href={getPageUrl(item)}
-            aria-label={copy.page(formatCount(item))}
+            aria-label={copy.page(formatPageNumber(item, language))}
             aria-current={page === item ? "page" : undefined}
             class:list={[
               "inline-flex h-10 min-w-10 items-center justify-center rounded-md border text-sm font-medium transition-colors",
@@ -58,14 +59,14 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
                 : "border-border text-foreground hover:bg-muted max-[389px]:hidden",
             ]}
           >
-            {formatCount(item)}
+            {formatPageNumber(item, language)}
           </a>
         ) : (
           <span aria-hidden="true" class="inline-flex h-10 w-10 items-center justify-center text-sm text-muted-foreground max-[389px]:hidden">{item}</span>
         ),
       )}
       {/* Narrow phones (320-389px) cannot fit seven page links: they show "3 of 33" between the arrows. */}
-      <span class="hidden items-center px-1 text-sm text-muted-foreground max-[389px]:inline-flex">{copy.of(formatCount(totalPages))}</span>
+      <span class="hidden items-center px-1 text-sm text-muted-foreground max-[389px]:inline-flex">{copy.of(formatPageNumber(totalPages, language))}</span>
 
       {page < totalPages ? (
         <a

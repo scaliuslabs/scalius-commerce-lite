@@ -1,7 +1,7 @@
 // /account/orders/[id]: where the order is, what was bought, delivery,
 // payment (with online payment recovery) and order help.
 
-import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
+import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,
@@ -44,7 +44,6 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { fromMinor } from "@scalius/shared/money";
 
-import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
@@ -713,7 +712,7 @@ function renderDelivery(detail: AccountOrderDetail): void {
           ];
     address.innerHTML = [
       order.customerName,
-      order.customerPhone ? formatBdMobile(order.customerPhone) : null,
+      order.customerPhone ? pagePhone(order.customerPhone) : null,
       ...lines,
     ].filter(Boolean).map((line) => `<p>${escapeHtml(String(line))}</p>`).join("");
   }

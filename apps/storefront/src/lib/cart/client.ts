@@ -1396,7 +1396,10 @@ async function refreshTotals() {
     );
     if (quoteSequence !== cartTaxQuoteSequence) return;
     const discount = preview.ok ? preview.totalDiscount : 0;
-    if (preview.ok) estimateShipping(preview.discounts);
+    if (preview.ok) {
+      estimateShipping(preview.discounts);
+      setPreviewLineDiscounts(items, preview.lineDiscountsMinor ?? []);
+    }
     totalEl.textContent = formatMoney(Math.max(0, totalAmount + shippingFee - discount));
     if (elements.totalLabel) elements.totalLabel.textContent = activeCheckoutCopy().estimatedTotalText;
     setTaxStatus(elements, failure || (preview.ok ? "" : activeCheckoutCopy().taxVerificationFailedText));
@@ -1462,9 +1465,24 @@ let quotedLineDiscounts = new Map<string, { discountMinor: number; quantity: num
 
 /** Keeps the latest quote's line shares; the lines repaint when one changes (a gift turning free). */
 function setQuotedLineDiscounts(quote: CheckoutTaxQuote): void {
-  const next = new Map(quote.items.flatMap((line) => (typeof line.discountMinor === "number"
+  setLineDiscounts(new Map(quote.items.flatMap((line) => (typeof line.discountMinor === "number"
     ? [[line.cartKey, { discountMinor: line.discountMinor, quantity: line.quantity, decimalPlaces: quote.decimalPlaces }] as const]
-    : [])));
+    : []))));
+}
+
+/**
+ * Before an address the discount preview names the same shares by line
+ * position, so a free gift reads free from the first paint, as it does once
+ * the quote answers.
+ */
+function setPreviewLineDiscounts(items: Record<string, CartItem>, sharesMinor: readonly number[]): void {
+  const decimalPlaces = getDecimalPlaces(getCurrencyCode());
+  setLineDiscounts(new Map(Object.entries(items).map(([cartKey, item], index) => [
+    cartKey, { discountMinor: sharesMinor[index] ?? 0, quantity: item.quantity, decimalPlaces },
+  ] as const)));
+}
+
+function setLineDiscounts(next: Map<string, { discountMinor: number; quantity: number; decimalPlaces: number }>): void {
   const changed = JSON.stringify([...next]) !== JSON.stringify([...quotedLineDiscounts]);
   quotedLineDiscounts = next;
   if (changed) paintCartLines();

@@ -247,12 +247,16 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
           <header class="noor-header is-campaign">
             <div class="noor-header-bar">
               {logo}
-              <Island name="landing-link" hydrate="idle">
-                <a class="noor-btn is-solid is-small" href={data.routes.search} data-noor-order-link
-                  data-order-label={text(settings.landing_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" })}>
-                  {t(context, { en: "Shop", bn: "কেনাকাটা করুন" })}
-                </a>
-              </Island>
+              {/* The store's actions (its light or dark switch) sit in the bar beside the order button, never on a row of their own. */}
+              <div class="noor-header-end">
+                <Slot name="header.actions" />
+                <Island name="landing-link" hydrate="idle">
+                  <a class="noor-btn is-solid is-small" href={data.routes.search} data-noor-order-link
+                    data-order-label={text(settings.landing_label) ?? t(context, { en: "Order now", bn: "অর্ডার করুন" })}>
+                    {t(context, { en: "Shop", bn: "কেনাকাটা করুন" })}
+                  </a>
+                </Island>
+              </div>
             </div>
           </header>
         </Island>

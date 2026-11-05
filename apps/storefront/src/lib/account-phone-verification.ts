@@ -4,13 +4,14 @@
 // people until the phone is proven. The server reads the phone from the
 // session: only the code is sent, in a request body, never in a URL.
 
+import { pagePhone } from "@/lib/checkout-text";
 import {
   sendPhoneVerificationCode,
   verifyPhone,
   type PhoneVerificationPrompt,
 } from "@/lib/api/customer-auth";
 import { formatWait } from "@/lib/customer-auth-ui";
-import { formatBdMobile } from "@scalius/shared/phone-input";
+
 import { accountCopy } from "@/lib/account-copy";
 import { formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
 
@@ -18,7 +19,7 @@ const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 t
 const linkButton = "inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline";
 /** "Verify your phone number 01712-345678 to add orders you placed with it." (the phone keeps its Latin digits). */
 export function phoneVerificationNotice(phone: string): string {
-  return accountCopy().phone.notice(formatBdMobile(phone));
+  return accountCopy().phone.notice(pagePhone(phone));
 }
 
 /** A wait as a clock in the page's digits: "1:05", "১:০৫". */

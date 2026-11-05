@@ -49,7 +49,7 @@ import { formatMoney } from "@/lib/currency";
 import { PRODUCT_LIST_MIN_RATING_PARAM } from "@/lib/product-list-query";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { catalogCopy } from "@/lib/catalog-copy";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatPageNumber } from "@/lib/store-time-zone";
 import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
@@ -256,8 +256,8 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
             <span class="min-w-0 truncate">{section.name}</span>
             {section.selectedCount > 0 && (
               <span class="catalog-facet-selected tabular-nums">
-                <span aria-hidden="true">({formatCount(section.selectedCount)})</span>
-                <span class="sr-only">{copy.selected(formatCount(section.selectedCount))}</span>
+                <span aria-hidden="true">({formatPageNumber(section.selectedCount, language)})</span>
+                <span class="sr-only">{copy.selected(formatPageNumber(section.selectedCount, language))}</span>
               </span>
             )}
             <svg class="catalog-facet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -291,9 +291,9 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   <span class="catalog-facet-label catalog-rating-label">
                     <span class="sc-stars catalog-rating-stars" style={`--sc-fill:${min * 20}%`} aria-hidden="true"></span>
                     <span aria-hidden="true">{copy.andUp}</span>
-                    <span class="sr-only">{copy.starsAndUp(formatCount(min))}</span>
+                    <span class="sr-only">{copy.starsAndUp(formatPageNumber(min, language))}</span>
                   </span>
-                  <span class="catalog-facet-count">{formatCount(count)}</span>
+                  <span class="catalog-facet-count">{formatPageNumber(count, language)}</span>
                 </label>
               ))}
               {ratingSelected && (
@@ -379,12 +379,12 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                     {link.href ? (
                       <a href={link.href} class="catalog-facet-row catalog-facet-link">
                         <span class="catalog-facet-label">{link.label}</span>
-                        <span class="catalog-facet-count">{formatCount(link.count)}</span>
+                        <span class="catalog-facet-count">{formatPageNumber(link.count, language)}</span>
                       </a>
                     ) : (
                       <span class="catalog-facet-row catalog-facet-link opacity-50">
                         <span class="catalog-facet-label">{link.label}</span>
-                        <span class="catalog-facet-count">{formatCount(0)}</span>
+                        <span class="catalog-facet-count">{formatPageNumber(0, language)}</span>
                       </span>
                     )}
                   </li>
@@ -395,11 +395,11 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   href={showAllHref(group.expanded ? null : group.key)}
                   class="catalog-facet-more"
                   data-catalog-facet-more
-                  data-more-label={copy.seeMore(formatCount(group.more))}
+                  data-more-label={copy.seeMore(formatPageNumber(group.more, language))}
                   data-less-label={copy.seeLess}
                   aria-expanded={group.expanded ? "true" : "false"}
                 >
-                  {group.expanded ? copy.seeLess : copy.seeMore(formatCount(group.more))}
+                  {group.expanded ? copy.seeLess : copy.seeMore(formatPageNumber(group.more, language))}
                 </a>
               )}
             </fieldset>
@@ -450,7 +450,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                       ></span>
                     )}
                     <span class="catalog-facet-label">{label}</span>
-                    <span class="catalog-facet-count">{formatCount(count)}</span>
+                    <span class="catalog-facet-count">{formatPageNumber(count, language)}</span>
                   </label>
                 ))}
               </div>
@@ -459,11 +459,11 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
                   href={showAllHref(group.expanded ? null : group.key)}
                   class="catalog-facet-more"
                   data-catalog-facet-more
-                  data-more-label={copy.seeMore(formatCount(group.more))}
+                  data-more-label={copy.seeMore(formatPageNumber(group.more, language))}
                   data-less-label={copy.seeLess}
                   aria-expanded={group.expanded ? "true" : "false"}
                 >
-                  {group.expanded ? copy.seeLess : copy.seeMore(formatCount(group.more))}
+                  {group.expanded ? copy.seeLess : copy.seeMore(formatPageNumber(group.more, language))}
                 </a>
               )}
             </fieldset>
@@ -474,7 +474,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
 
     {bar && barMore > 0 && (
       <button type="button" class="catalog-bar-more" data-catalog-bar-more aria-expanded={barOpen ? "true" : "false"}>
-        {copy.moreFilters}{barMoreApplied > 0 && <span class="tabular-nums"> ({formatCount(barMoreApplied)})</span>}
+        {copy.moreFilters}{barMoreApplied > 0 && <span class="tabular-nums"> ({formatPageNumber(barMoreApplied, language)})</span>}
       </button>
     )}
 

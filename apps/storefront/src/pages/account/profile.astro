@@ -8,6 +8,7 @@
 // another country's fields follow its rules. Saved payment methods (cards a
 // provider kept for a subscription's renewals) show while there are any, each
 // removable behind a confirm popover. Only an outcome flag enters a URL.
+import { pagePhone } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
@@ -70,7 +71,7 @@ import { pageLanguage } from "@/lib/store-time-zone";
 import { defaultShippingCountry, isLocationCountry, storeShippingCountries } from "@/lib/checkout/shipping-country";
 import { accountPill, accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
-import { formatBdMobile } from "@scalius/shared/phone-input";
+
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
 export const prerender = false;
@@ -285,7 +286,7 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
             <div class={row}>
               <div class="min-w-0">
                 <p class={ui.muted}>{words.phone}</p>
-                <p class="mt-0.5 text-foreground tabular-nums">{customer.phone ? formatBdMobile(customer.phone) : words.notAdded}</p>
+                <p class="mt-0.5 text-foreground tabular-nums">{customer.phone ? pagePhone(customer.phone) : words.notAdded}</p>
               </div>
             </div>
           </div>
@@ -322,7 +323,7 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                       <p class="font-medium">{address.name ?? customer.name}</p>
                       {address.company && <p>{address.company}</p>}
                       {formatAddressLines(address, pageLanguage()).map((line) => <p>{line}</p>)}
-                      {(address.phone ?? customer.phone) && <p class="tabular-nums text-muted-foreground">{formatBdMobile((address.phone ?? customer.phone)!)}</p>}
+                      {(address.phone ?? customer.phone) && <p class="tabular-nums text-muted-foreground">{pagePhone((address.phone ?? customer.phone)!)}</p>}
                     </div>
                     {failedAddressId !== address.id && (
                       <div class="mt-3 flex flex-wrap gap-x-4">

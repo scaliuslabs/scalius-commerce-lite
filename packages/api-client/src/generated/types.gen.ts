@@ -8317,6 +8317,16 @@ export type PostApiV1DiscountsValidateResponses = {
                  */
                 bundleSavesMore?: true;
             }>;
+            /**
+             * Each cart line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here.
+             */
+            lineDiscounts: Array<{
+                /**
+                 * The line's position in `items`.
+                 */
+                index: number;
+                discountMinor: number;
+            }>;
         };
     };
 };

@@ -6,7 +6,7 @@
 import type { CatalogAspectChip } from "@/lib/catalog-listing";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatPageNumber } from "@/lib/store-time-zone";
 
 interface Props {
   chips: CatalogAspectChip[];
@@ -15,7 +15,8 @@ interface Props {
 }
 
 const { chips, inline = false } = Astro.props;
-const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).filters;
+const { language } = await currentRequestTheme(Astro.locals);
+const copy = catalogCopy(language).filters;
 ---
 
 {chips.length > 0 && (
@@ -35,8 +36,8 @@ const copy = catalogCopy((await currentRequestTheme(Astro.locals)).language).fil
         <span class="max-w-[12rem] truncate">{chip.label}</span>
         {chip.selectedCount > 0 && (
           <span class="tabular-nums">
-            <span aria-hidden="true">({formatCount(chip.selectedCount)})</span>
-            <span class="sr-only">{copy.selected(formatCount(chip.selectedCount))}</span>
+            <span aria-hidden="true">({formatPageNumber(chip.selectedCount, language)})</span>
+            <span class="sr-only">{copy.selected(formatPageNumber(chip.selectedCount, language))}</span>
           </span>
         )}
         <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>

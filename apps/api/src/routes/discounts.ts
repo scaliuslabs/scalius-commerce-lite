@@ -93,6 +93,12 @@ const validateDiscountRoute = createRoute({
         discounts: z.array(quotedDiscountLineSchema),
         offers: z.array(discountOfferSchema),
         rejectedCodes: z.array(rejectedDiscountCodeSchema),
+        lineDiscounts: z.array(z.object({
+          index: z.number().int().min(0).openapi({ description: "The line's position in `items`." }),
+          discountMinor: z.number().int().min(0),
+        })).openapi({
+          description: "Each cart line's share of the store's own discounts (promotions or quantity bundles), as checkout allocates it: a line it pays in full (a free gift) reads free. Store apps' discounts are not split by line here.",
+        }),
       })) } },
     },
     400: errorResponses[400],
@@ -211,6 +217,14 @@ app.openapi(validateDiscountRoute, async (c) => {
       label: bundle.label,
     })),
     ...presentStorefrontDiscountQuote(quote, currency.decimalPlaces, appResolution?.applied ?? []),
+    // Each line's share, as the quote and the order keep it (by the same allocation ids).
+    lineDiscounts: lines.map(({ index, variantId }) => {
+      const id = `cart:${index}:${variantId}`;
+      const discountMinor = (interplay.allocation?.lines ?? [])
+        .filter((line) => line.lineId === id)
+        .reduce((total, line) => total + line.amountMinor, 0);
+      return { index, discountMinor };
+    }),
   });
 });
 

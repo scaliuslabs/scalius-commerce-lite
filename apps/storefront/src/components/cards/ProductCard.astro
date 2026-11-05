@@ -23,13 +23,14 @@ const props = Astro.props;
 let projection: Promise<StorefrontProductCardData> | undefined;
 // Built once, and only when a skin or a slot component draws.
 const data = () => projection ??= (async () => {
-  const { resolved } = await currentRequestTheme(Astro.locals);
+  const { resolved, language } = await currentRequestTheme(Astro.locals);
   const page = { currencySymbol: props.currencySymbol ?? DEFAULT_CURRENCY.symbol, currencyCode: props.currencyCode ?? DEFAULT_CURRENCY.code };
   const model = productCardModel(props.product, {
     ...page,
     // The skin decides whether to show the second photo (its own card settings).
     hoverImage: true,
     ratings: resolved.facts.hasReviews,
+    language,
   });
   return {
     product: productCardData(props.product, model, page),

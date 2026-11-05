@@ -4,7 +4,7 @@
 // other country asks for the country code and shows a libphonenumber example.
 // Browser safe: no libphonenumber here; the example comes in as data.
 
-import { checkoutText } from "@/lib/checkout-text";
+import { checkoutText, pageDigits } from "@/lib/checkout-text";
 import type { PhoneCountryMeta } from "@scalius/shared/phone-example";
 
 export type PhoneHintMode = "delivery" | "pickup" | "none";
@@ -70,11 +70,11 @@ export function phoneHints(
   if (country === "BD") {
     return {
       hints: { delivery: copy.help, pickup: copy.pickupHelp, none: copy.serviceHelp },
-      placeholder: copy.placeholder,
+      placeholder: pageDigits(copy.placeholder),
     };
   }
   const example = meta?.example
-    ? ` ${checkoutText(copy.exampleText, { example: meta.example })}`
+    ? ` ${checkoutText(copy.exampleText, { example: pageDigits(meta.example) })}`
     : "";
   return {
     hints: {
@@ -82,6 +82,6 @@ export function phoneHints(
       pickup: `${copy.intlPickupHelp}${example}`,
       none: `${copy.intlServiceHelp}${example}`,
     },
-    placeholder: meta?.national ?? copy.label,
+    placeholder: meta?.national ? pageDigits(meta.national) : copy.label,
   };
 }

@@ -15,7 +15,7 @@ import {
   getPriceIncrementMinor,
 } from "@/lib/currency";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
-import { formatCount } from "@/lib/store-time-zone";
+import { formatCount, formatPageNumber } from "@/lib/store-time-zone";
 import {
   discountedPriceMinor,
   fromMinor,
@@ -179,10 +179,11 @@ export function formatPrice(price: number, currencySymbol?: string): string {
  * fixed amount off alike. Rounded down so it never promises more than the
  * struck-through price shows; the amount itself is on the price line.
  */
-export function formatDiscountBadge(originalPrice: number, finalPrice: number): string | null {
+export function formatDiscountBadge(originalPrice: number, finalPrice: number, language?: string): string | null {
   if (!(originalPrice > 0) || !(finalPrice < originalPrice)) return null;
   const percent = discountPercentOff(originalPrice, finalPrice);
-  return percent === null ? null : `-${formatCount(percent)}%`;
+  if (percent === null) return null;
+  return `-${language ? formatPageNumber(percent, language) : formatCount(percent)}%`;
 }
 
 /** Final price of one SKU; see `calculateVariantPrice`. */

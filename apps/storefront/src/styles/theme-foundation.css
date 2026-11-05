@@ -227,6 +227,13 @@ body {
   gap: 0.75rem 2rem;
   margin-block-start: 1.5rem;
 }
+/* After a footer skin that places no slot, the choices stand on their own:
+   inside the page's gutters, clear of the footer above. */
+.site-root [data-storefront-footer] > .footer-locale-row {
+  margin: 0;
+  padding: 1rem var(--theme-gutter-phone, 1rem);
+}
+
 /* In a skin's slot the skin's next row follows directly: keep the same gap below. */
 .site-root [data-sx-embed] .footer-locale-row {
   margin-block-end: 1.5rem;

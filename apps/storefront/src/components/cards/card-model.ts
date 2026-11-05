@@ -146,9 +146,11 @@ export function productCardModel(
     imageMaxWidth?: number;
     /** False while the store has no published review or reviews are off (`hasReviews`): no card shows a rating. */
     ratings?: boolean;
+    /** The request's language, so prices and the sale badge read in its digits wherever the card renders. */
+    language?: string;
   },
 ): ProductCardModel {
-  const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode });
+  const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode, language: options.language });
   const hasDiscount = product.discountedPrice < product.price;
   const soldOut = product.availableForSale === false;
   const photo = cardPhoto(product.imageUrl);
@@ -180,7 +182,7 @@ export function productCardModel(
       regular: hasDiscount ? money(product.price) : null,
       from: product.priceVaries === true,
     },
-    percentOff: formatDiscountBadge(product.price, product.discountedPrice),
+    percentOff: formatDiscountBadge(product.price, product.discountedPrice, options.language),
     quickAddEligible,
     needsOptions: !soldOut && product.hasVariants,
     facts: cardFactValues(product, money, options.ratings !== false),

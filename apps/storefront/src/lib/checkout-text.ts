@@ -1,5 +1,6 @@
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatBdMobile } from "@scalius/shared/phone-input";
 import { formatCount, formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
 
 /**
@@ -26,6 +27,20 @@ export function pageDigits(value: string | null | undefined, language: string = 
   if (zero === "0" || zero.length !== 1) return text;
   const base = zero.codePointAt(0)!;
   return text.replace(/[0-9]/g, (digit) => String.fromCodePoint(base + Number(digit)));
+}
+
+/**
+ * A phone number as the buyer reads it: Bangladesh mobiles grouped
+ * ("০১৭১২-৩৪৫৬৭৮" on a Bangla page), in the page's digits. A `tel:` link and
+ * a field's value take `fieldPhone`, in Latin digits.
+ */
+export function pagePhone(phone: string, language?: string): string {
+  return pageDigits(formatBdMobile(phone), language);
+}
+
+/** A phone number as a field holds it (Latin digits, grouped as typed): what a buyer edits and sends. */
+export function fieldPhone(phone: string): string {
+  return formatBdMobile(phone);
 }
 
 /**

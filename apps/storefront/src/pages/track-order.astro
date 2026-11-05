@@ -8,7 +8,8 @@
 // the receipt proof as an httpOnly cookie and opens the receipt. Plain form
 // posts: it works the same without JavaScript, and the order number, contact
 // and code only ever travel in POST bodies.
-import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
+import { checkoutText, pageDigits, pageOrderNumber } from "@/lib/checkout-text";
+import { wordOrderTracking } from "@/lib/account-format";
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import {
@@ -123,7 +124,8 @@ if (isPost) {
   }
 }
 
-const orderNumberText = status ? pageOrderNumber(status.orderNumber, reference) : `#${reference}`;
+// A typed order number reads in the page's digits too ("অর্ডার #১১১২").
+const orderNumberText = status ? pageOrderNumber(status.orderNumber, reference) : /^\d+$/.test(reference) ? pageDigits(`#${reference}`) : `#${reference}`;
 const money = (amount: number) => formatMoney(amount, { code: status?.currencyCode ?? "BDT" });
 const trackingText: OrderTrackingText = {
   done: copy.orderTrackingStepDoneText,
@@ -134,8 +136,12 @@ const trackingText: OrderTrackingText = {
 const deliveryView = status
   ? { status: status.status, requiresShipping: status.requiresShipping, shippingMethodKind: status.shippingMethodKind }
   : null;
-const progress = status && deliveryView ? relabelOrderProgress(status.tracking.progress, deliveryView, copy) : null;
-const timeline = status && deliveryView ? relabelOrderTimeline(status.tracking.timeline, deliveryView, copy) : [];
+// The API's steps and updates in the page's words, by their keys (as the account order page words them).
+const worded = status
+  ? wordOrderTracking(status.tracking.progress, status.tracking.timeline, status.tracking.shipments[0]?.courierName ?? null)
+  : null;
+const progress = worded?.progress && deliveryView ? relabelOrderProgress(worded.progress, deliveryView, copy) : null;
+const timeline = worded && deliveryView ? relabelOrderTimeline(worded.timeline, deliveryView, copy) : [];
 const shipments = (status?.tracking.shipments ?? []).map((shipment) => orderShipmentMarkup({
   statusLabel: shipment.statusLabel,
   courier: shipment.courierName,

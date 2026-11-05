@@ -1,5 +1,5 @@
 ---
-import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
+import { checkoutText, pageOrderNumber, pagePhone } from "@/lib/checkout-text";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import { formatOrderPlaces } from "@/lib/account-format";
 import LineExtras from "@/components/order/LineExtras.astro";
@@ -68,7 +68,6 @@ import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
 
-import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
@@ -731,7 +730,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
             </>
           )}
           {deliveryBlock?.mode === "none" && <p class="text-muted-foreground">{deliveryBlock.text}</p>}
-          {order.customerPhone && <p class="text-muted-foreground">{formatBdMobile(order.customerPhone)}</p>}
+          {order.customerPhone && <p class="text-muted-foreground">{pagePhone(order.customerPhone)}</p>}
           {order.customerEmail && <p class="break-all text-muted-foreground">{order.customerEmail}</p>}
         </div>
         {order.notes && (

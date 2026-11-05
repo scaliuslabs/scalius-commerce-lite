@@ -40,7 +40,7 @@ const { byId, host } = await requestExtensions(Astro.locals, Astro.url);
 const extension = byId.get(component.pluginId);
 const schema = extension?.sectionSettings[component.type];
 if (extension && schema && extension.sections.includes(component.type)) {
-  const [{ resolved, preview: themePreview, bindingContext }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
+  const [{ resolved, preview: themePreview, bindingContext, language }, layoutData] = await Promise.all([currentRequestTheme(Astro.locals), getLayoutData()]);
   preview = themePreview !== null;
   const currency = { symbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol, code: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code };
   const media = new Map([...component.media, ...sourceMedia, ...bindingResourceMedia(bindingContext.resource)].flatMap((asset) => {
@@ -56,6 +56,7 @@ if (extension && schema && extension.sections.includes(component.type)) {
       // The app decides whether to show the second photo.
       hoverImage: true,
       ratings: resolved.facts.hasReviews,
+      language,
     });
     return productCardData(card, model, { currencyCode: currency.code, currencySymbol: currency.symbol });
   })]));
