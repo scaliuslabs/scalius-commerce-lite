@@ -80,7 +80,7 @@ export function manualRefundShareMinor(sources: readonly RefundSource[], amountM
  * refund starts from what is owed and carries its own request key: a repeated
  * submit replays the first refund.
  */
-export default function RefundDialog({ order, open, onOpenChange, paid, money, locked, refundSources }: {
+export default function RefundDialog({ order, open, onOpenChange, paid, money, locked, refundSources, refundLimit = null }: {
   order: Order;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -91,6 +91,8 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   locked: boolean;
   /** Where an original-method refund draws from, in refund order (the order's payments read). */
   refundSources: readonly RefundSource[];
+  /** The most the gift cards this order sold leave refundable (some were spent), from the payments read; null when only `paid` bounds it. */
+  refundLimit?: number | null;
 }) {
   const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
@@ -118,7 +120,12 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   // The most the server said this refund can be (gift cards the order sold were spent).
   const decimalPlaces = order.currencyDecimalPlaces ?? 2;
   const refusal = giftCardRefundLimit(mutation.error, decimalPlaces);
-  const limit = refusal ? Math.min(paid, refusal.max) : paid;
+  // The true maximum from the start (the payments read, for a refund naming no lines), then what
+  // the server said for the lines named: naming gift-card units not issued yet can raise it.
+  const namesLines = Object.values(lineQuantities).some((quantity) => quantity > 0);
+  const preview = namesLines ? null : refundLimit;
+  const limit = refusal ? Math.min(paid, refusal.max) : Math.min(paid, preview ?? paid);
+  const boundByGiftCards = !refusal && preview !== null && preview < paid;
 
   const value = amount ?? Number.NaN;
   const valid = Number.isFinite(value) && value > 0 && value <= limit;
@@ -200,7 +207,9 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
               ? (order.returnDeliveryShare ?? 0) > 0
                 ? t("refund.maxOwedDelivery", { owed: money(order.refundDue), delivery: money(order.returnDeliveryShare!), amount: money(limit) })
                 : t("refund.maxOwed", { owed: money(order.refundDue), amount: money(limit) })
-              : t("refund.max", { amount: money(limit) })}
+              : boundByGiftCards
+                ? why("giftCardLimit", { max: money(limit) })
+                : t("refund.max", { amount: money(limit) })}
           >
             <MoneyInput
               currencyCode={order.currencyCode ?? ""}

@@ -60692,6 +60692,10 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 settlement: 'provider' | 'manual' | 'gift_card';
                 refundable: number;
             }>;
+            /**
+             * The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it.
+             */
+            refundLimit: number | null;
         };
     };
 };
