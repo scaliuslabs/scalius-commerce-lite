@@ -989,13 +989,16 @@ export { STOREFRONT_BUY_FORM_OPTION_LAYOUTS } from "@scalius/shared/plugins/stor
 export { STOREFRONT_WARRANTY_DURATION_UNITS, STOREFRONT_WARRANTY_PROVIDERS } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_CARD_FACT_KINDS } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-protocol";
+export { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
 export type { BuyFormPartProps, BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
-export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeferredHydration, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductModuleEmbed, StorefrontBuyFormPart, StorefrontBuyFormOptionLayout, StorefrontWarrantyDurationUnit, StorefrontWarrantyProvider, StorefrontCardFactKind, StorefrontWarranty, StorefrontProductError, StorefrontProductPage, StorefrontProductSlot, StorefrontProductState, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecification, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
+export type { StorefrontBannerMosaicSkinSettings, StorefrontBannerSkinSettings, StorefrontComponentSlot, StorefrontComponentTarget, StorefrontBrandWallSkinSettings, StorefrontCategoryTilesSkinSettings, StorefrontCollectionsSkinSettings, StorefrontDealBlockSkinSettings, StorefrontDeferredHydration, StorefrontDeliveryFacts, StorefrontEditorialSkinSettings, StorefrontFaqSkinSettings, StorefrontFocalPoint, StorefrontFooterData, StorefrontHeaderData, StorefrontHeroSkinSettings, StorefrontImage, StorefrontLink, StorefrontListingPage, StorefrontLookbookSkinSettings, StorefrontMenuItem, StorefrontMoney, StorefrontNewsletterSkinSettings, StorefrontObjectFieldView, StorefrontProductCard, StorefrontProductCardData, StorefrontSearchSuggestion, StorefrontProductGridSkinSettings, StorefrontProductList, StorefrontProductModuleEmbed, StorefrontBuyFormPart, StorefrontBuyFormOptionLayout, StorefrontWarrantyDurationUnit, StorefrontWarrantyProvider, StorefrontCardFactKind, StorefrontWarranty, StorefrontProductError, StorefrontProductPage, StorefrontProductSlot, StorefrontProductState, StorefrontProductRailSkinSettings, StorefrontProductTabsSkinSettings, StorefrontPromotionEnd, StorefrontRenderContext, StorefrontResolvedSettings, StorefrontSectionSkinData, StorefrontSectionSkinSettings, StorefrontSeoTextSkinSettings, StorefrontShopBySkinSettings, StorefrontSkinnableSection, StorefrontSkinTarget, StorefrontSpecification, StorefrontSpecificationsSkinSettings, StorefrontStoreInfo, StorefrontTile, StorefrontUspStripSkinSettings, StorefrontUtilityCardsSkinSettings, } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_PRODUCT_ERRORS } from "@scalius/shared/plugins/storefront-protocol";
 
 // packages/plugin-sdk/src/storefront/island.d.ts
 import { type StorefrontIslandContext, type StorefrontIslandModule } from "@scalius/shared/plugins/storefront-protocol";
 export type { StorefrontIslandContext as IslandContext };
+export type { StorefrontSearchSuggestion as SearchSuggestion } from "@scalius/shared/plugins/storefront-protocol";
+export { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
 export declare function defineIsland<Props = unknown>(mount: (element: HTMLElement, props: Props, context: StorefrontIslandContext) => void | (() => void)): StorefrontIslandModule<Props>;
 
 // packages/plugin-sdk/src/storefront/jsx-dev-runtime.d.ts
@@ -1062,7 +1065,7 @@ export declare function storeTime(context: {
 export {};
 
 // packages/plugin-sdk/src/storefront/testing.d.ts
-import { type StorefrontComponentTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontImage, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinJob, type StorefrontSkinnableSection, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
+import { type StorefrontComponentTarget, type StorefrontFooterData, type StorefrontHeaderData, type StorefrontImage, type StorefrontListingPage, type StorefrontModule, type StorefrontProductCard, type StorefrontProductCardData, type StorefrontProductPage, type StorefrontSearchSuggestion, type StorefrontRenderContext, type StorefrontResolvedSettings, type StorefrontSectionSkinData, type StorefrontSectionSkinSettings, type StorefrontSkinJob, type StorefrontSkinnableSection, type StorefrontSkinTarget, type StorefrontSkinUnit } from "@scalius/shared/plugins/storefront-protocol";
 import { type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
 export { checkStorefrontHeaderHtml } from "@scalius/shared/plugins/storefront-html-check";
 export declare function storefrontShown(html: string, pluginId: string): {
@@ -1094,6 +1097,9 @@ export interface FixtureStore {
     productPage(overrides?: Partial<StorefrontProductPage["product"]>): StorefrontProductPage;
     skinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"];
 }
+export declare function fixtureSearchSuggestions(store: FixtureStoreName, query: string, options?: {
+    limit?: number;
+}): StorefrontSearchSuggestion[];
 export declare function fixtureStore(name: FixtureStoreName): FixtureStore;
 export declare function checkSkinHtml(target: StorefrontSkinTarget, html: string): string[];
 export interface RenderOptions extends StorefrontHeaderCheckOptions {
@@ -4770,6 +4776,17 @@ export interface StorefrontModule {
     abi: typeof STOREFRONT_COMPONENT_ABI;
     render(batch: StorefrontRenderBatch): StorefrontRenderReply;
 }
+export declare const STOREFRONT_SEARCH_SUGGESTIONS_MAX = 7;
+export interface StorefrontSearchSuggestion {
+    productId: string;
+    title: string;
+    url: string;
+    image: StorefrontImage | null;
+    price: StorefrontMoney;
+    compareAt: StorefrontMoney | null;
+    priceVaries: boolean;
+    available: boolean;
+}
 export interface StorefrontIslandContext {
     pluginId: string;
     assets: string;
@@ -4792,6 +4809,10 @@ export interface StorefrontIslandContext {
     }) => void): () => void;
     fetchApp(path: string, init?: RequestInit): Promise<Response>;
     signedIn(): boolean;
+    searchSuggestions?(query: string, options?: {
+        limit?: number;
+        signal?: AbortSignal;
+    }): Promise<StorefrontSearchSuggestion[]>;
     product?: {
         state(): StorefrontProductState;
         onChange(listener: (state: StorefrontProductState) => void): () => void;

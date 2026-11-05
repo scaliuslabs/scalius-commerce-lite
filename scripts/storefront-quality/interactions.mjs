@@ -1,7 +1,7 @@
 /** Invalid audit states cannot be accepted as measurements of the intended UI. */
 export const REQUIRED_STATE_RULES = new Set(["interaction", "focus-missing"]);
 const TIMEOUT = 5_000;
-const selectorOf = (action) => action.click ?? action.select ?? action.type ?? action.expectInside ?? action.expectSameRow?.join(" + ");
+const selectorOf = (action) => action.click ?? action.select ?? action.type ?? action.expectInside ?? action.expectAboveFold ?? action.expectSameRow?.join(" + ");
 
 /** The first visible match and its box. */
 async function box(page, selector) {
@@ -12,8 +12,14 @@ async function box(page, selector) {
   return { target, rect };
 }
 
-/** A layout expectation: an element inside its container, or two on one row. Throws what is wrong. */
+/** A layout expectation: an element inside its container, on the first screen, or two on one row. Throws what is wrong. */
 async function checkLayout(page, action) {
+  if (action.expectAboveFold !== undefined) {
+    const { rect } = await box(page, action.expectAboveFold);
+    const fold = Math.min(page.viewportSize()?.height ?? 0, action.fold ?? Infinity);
+    if (rect.y >= fold) throw new Error(`${action.expectAboveFold} starts at ${Math.round(rect.y)}px, below the first screen (${fold}px).`);
+    return;
+  }
   if (action.expectInside !== undefined) {
     const inner = await box(page, action.expectInside);
     const outer = await box(page, action.container);
@@ -49,7 +55,7 @@ export async function runInteractions(page, actions, width) {
       continue;
     }
     try {
-      if (action.expectInside !== undefined || action.expectSameRow !== undefined) {
+      if (action.expectInside !== undefined || action.expectSameRow !== undefined || action.expectAboveFold !== undefined) {
         await checkLayout(page, action);
         steps.push({ index, selector, status: "passed" });
         continue;

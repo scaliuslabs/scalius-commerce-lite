@@ -15,7 +15,9 @@
 // - `bar` (bar-dropdowns): on computers a one-line bar of facet dropdowns
 //   over the grid (Dawn), the rest behind "More filters";
 // - `drawer`: a panel behind a Filter button at every width (Target).
-// On phones every placement is a bottom sheet. The measured column width,
+// On phones every placement is a bottom sheet; a skin's embed (`inline`)
+// keeps the form in the page, and its bar is one sideways-scrolling row of
+// closed dropdowns, each opening as a sheet. The measured column width,
 // row pitch and label size arrive as CSS custom properties
 // (`presentation.styleVars`, catalog-listing.css).
 //
@@ -210,6 +212,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
   data-placement={placement}
   data-filter-style={presentation.style}
   data-bar-open={barOpen ? "" : undefined}
+  data-inline={inline ? "" : undefined}
   class="catalog-filter-form grow overflow-y-auto"
 >
   {sortBy !== defaultSort && <input type="hidden" name="sortBy" value={sortBy} />}
@@ -499,6 +502,7 @@ const priceSlider = priceRange && priceRange.max > priceRange.min
   </div>
 
   <div
+    data-catalog-apply-bar
     class:list={[
       "z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
       drawer ? "sticky bottom-0" : inline ? "lg:hidden" : "fixed inset-x-0 bottom-0 lg:hidden",

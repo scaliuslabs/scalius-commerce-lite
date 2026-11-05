@@ -23,6 +23,8 @@ import {
   type StorefrontProductCard,
   type StorefrontProductCardData,
   type StorefrontProductPage,
+  type StorefrontSearchSuggestion,
+  STOREFRONT_SEARCH_SUGGESTIONS_MAX,
   type StorefrontWarranty,
   type StorefrontRenderContext,
   type StorefrontRenderJob,
@@ -37,6 +39,7 @@ import {
   type StorefrontTile,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { splitStorefrontEmbeds } from "@scalius/shared/plugins/storefront-embeds";
+import { isSearchableQuery } from "@scalius/shared/search-query";
 import { storefrontSectionDefault, storefrontVisibleSection } from "@scalius/shared/storefront-theme/sections";
 import { coreSectionSkinSettings, type CoreSectionResolver } from "@scalius/shared/storefront-theme/skins";
 import { checkStorefrontHeaderHtml, type StorefrontHeaderCheckOptions } from "@scalius/shared/plugins/storefront-html-check";
@@ -306,6 +309,34 @@ export interface FixtureStore {
   productPage(overrides?: Partial<StorefrontProductPage["product"]>): StorefrontProductPage;
   /** The projection a skin target gets in this store. */
   skinData(target: StorefrontSkinTarget): StorefrontSkinJob["data"];
+}
+
+/**
+ * What `context.searchSuggestions(query, options)` answers in a fixture
+ * store: its product cards whose title holds the query, typed as
+ * `StorefrontSearchSuggestion`, at most `limit` (1 to
+ * STOREFRONT_SEARCH_SUGGESTIONS_MAX, default 5); `[]` for a query too short
+ * to search. Use it as the stub an island test gives its context.
+ */
+export function fixtureSearchSuggestions(store: FixtureStoreName, query: string, options: { limit?: number } = {}): StorefrontSearchSuggestion[] {
+  const cards = fixtureStore(store).productCards();
+  const typed = query.trim().toLocaleLowerCase();
+  if (!isSearchableQuery(typed)) return [];
+  const asked = Number.isFinite(options.limit) ? Math.trunc(options.limit!) : 5;
+  const limit = Math.min(STOREFRONT_SEARCH_SUGGESTIONS_MAX, Math.max(1, asked));
+  return cards
+    .filter((card) => card.title.toLocaleLowerCase().includes(typed))
+    .slice(0, limit)
+    .map((card) => ({
+      productId: card.id,
+      title: card.title,
+      url: card.url,
+      image: card.image,
+      price: card.price,
+      compareAt: card.compareAt,
+      priceVaries: card.priceVaries,
+      available: !card.soldOut,
+    }));
 }
 
 /** The sample shop's linen shirt as a card: the bare fixture card with the key specs the store sends. */

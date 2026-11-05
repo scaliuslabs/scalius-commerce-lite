@@ -37,6 +37,7 @@ import {
 } from "./fixtures";
 import { fixtureObject, objectMediaIds } from "./objects";
 import { NOOR_EXTENSION, noorSectionSurfaces } from "./noor";
+import { GALLERY_LISTING_EXTENSION } from "./listing-app-extension";
 
 /**
  * The fixture API lives on the gallery server under the entry's id, so the
@@ -128,7 +129,9 @@ function layout(entry: GalleryEntry) {
     currency: { code: "BDT", symbol: "৳", decimalPlaces: 2, priceIncrementMinor: 100 },
     ...(markets(entry) ? { markets: markets(entry) } : {}),
     theme,
-    ...(entry.scenario.noor ? { appExtensions: entry.scenario.noor === "active" ? [NOOR_EXTENSION] : [] } : {}),
+    ...(entry.scenario.noor || entry.scenario.listingApp
+      ? { appExtensions: [...(entry.scenario.noor === "active" ? [NOOR_EXTENSION] : []), ...(entry.scenario.listingApp ? [GALLERY_LISTING_EXTENSION] : [])] }
+      : {}),
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, darkLogo: null, footerLogo: null, favicon: null },
     storeShape: galleryStoreShape(entry),
     business: entry.scenario.locale === "bn" ? { ...business, companyName: BANGLA_STORE_NAME } : business,

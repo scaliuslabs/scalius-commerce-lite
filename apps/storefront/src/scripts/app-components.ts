@@ -126,6 +126,8 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     onCart,
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
     signedIn: signedInHint,
+    // The store's search, as its palette asks it (lib/predictive-search.ts), loaded on the first call.
+    searchSuggestions: async (query, options) => (await loadLazyScript(() => import("@/lib/predictive-search"))).searchSuggestions(query, options),
     ...(product ? { product } : {}),
   };
 }

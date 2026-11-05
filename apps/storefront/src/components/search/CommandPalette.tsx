@@ -14,60 +14,23 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
-import { browserApiUrl } from "@/lib/api/browser-url";
+import {
+  PREDICTIVE_SEARCH_DEBOUNCE_MS,
+  cachedPredictiveSearch,
+  fetchPredictiveSearch,
+  type PredictiveSearchItem,
+  type PredictiveSearchResponse,
+} from "@/lib/predictive-search";
 import { normalizeSearchQuery } from "@/lib/search-query";
 import { isSearchableQuery } from "@scalius/shared/search-query";
-import { currentPresence, pagePath } from "@/lib/presence-url";
-import { pageLocale, searchProvider } from "@/lib/app-services";
+import { pagePath } from "@/lib/presence-url";
 import { formatCount, pageLanguage } from "@/lib/store-time-zone";
 import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
 
-interface SearchResultItem {
-  id: string;
-  name?: string;
-  title?: string;
-  slug: string;
-  price?: number;
-  imageUrl?: string | null;
-  imageAlt?: string | null;
-  discountedPrice?: number;
-  priceVaries?: boolean;
-  availableForSale?: boolean;
-}
-
-interface SearchResponse {
-  products: SearchResultItem[];
-  categories: SearchResultItem[];
-  pages: SearchResultItem[];
-  /** Set when the typed query matched nothing and these results are for this corrected query. */
-  correctedQuery?: string | null;
-}
-
-interface ApiResponse {
-  success: boolean;
-  data: SearchResponse;
-}
-
-// Match Shopify's predictive-search pattern: keep successful results for the
-// lifetime of the page so revisiting or refining the same query is immediate.
-// Full navigations naturally clear this small, bounded cache.
-const SEARCH_RESULT_CACHE_LIMIT = 40;
-const PREDICTIVE_SEARCH_DEBOUNCE_MS = 150;
-const PREDICTIVE_SEARCH_RESULT_LIMIT = "7";
-const searchResultCache = new Map<string, SearchResponse>();
-
-function getSearchCacheKey(query: string): string {
-  return query.toLocaleLowerCase();
-}
-
-function cacheSearchResults(query: string, results: SearchResponse): void {
-  const key = getSearchCacheKey(query);
-  if (!searchResultCache.has(key) && searchResultCache.size >= SEARCH_RESULT_CACHE_LIMIT) {
-    const oldestKey = searchResultCache.keys().next().value;
-    if (oldestKey) searchResultCache.delete(oldestKey);
-  }
-  searchResultCache.set(key, results);
-}
+// The store's predictive search (lib/predictive-search.ts): the same request
+// and page memo an app island's `searchSuggestions` uses.
+type SearchResultItem = PredictiveSearchItem;
+type SearchResponse = PredictiveSearchResponse;
 
 export default function CommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
@@ -195,7 +158,7 @@ export default function CommandPalette() {
       return;
     }
 
-    const cachedResults = searchResultCache.get(getSearchCacheKey(normalizedQuery));
+    const cachedResults = cachedPredictiveSearch(normalizedQuery);
     if (cachedResults) {
       searchAbortRef.current?.abort();
       setResults(cachedResults);
@@ -221,39 +184,11 @@ export default function CommandPalette() {
 
     const timer = setTimeout(async () => {
       try {
-        const params = new URLSearchParams({
-          q: normalizedQuery,
-          limit: PREDICTIVE_SEARCH_RESULT_LIMIT,
-          searchCategories: "true",
-          searchPages: "true",
-        });
-        // A presence page's market prices the hits (MARKETS-DESIGN D5).
-        const presence = currentPresence();
-        if (presence) params.set("presence", presence);
-        // The store's search app ranks the hits; the API falls back to built-in
-        // search by itself, so nothing changes without one.
-        const provider = searchProvider();
-        if (provider) {
-          params.set("provider", provider);
-          params.set("locale", pageLocale());
-        }
-
-        const res = await fetch(browserApiUrl(`/search?${params}`), {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error("Search failed");
-
-        const json = (await res.json()) as ApiResponse;
+        const data = await fetchPredictiveSearch(normalizedQuery, controller.signal);
         if (controller.signal.aborted || searchRunRef.current !== runId) return;
-
-        if (json.success && json.data) {
-          cacheSearchResults(normalizedQuery, json.data);
-          setResults(json.data);
-          setSelectedIndex(-1);
-          setHasSearched(true);
-        } else {
-          throw new Error("Search response was invalid");
-        }
+        setResults(data);
+        setSelectedIndex(-1);
+        setHasSearched(true);
       } catch (error: unknown) {
         if (isAbortError(error)) return;
         console.error("Search error:", error);
