@@ -3,6 +3,8 @@ import { createSqliteD1Database, type SqliteTestDatabase } from "@scalius/databa
 import { recordOrderPayment } from "./recorded-payment";
 import { assertManualCodDepositVerified } from "./manual-cod-deposit";
 import { applyOrderStatusChange } from "../orders/status/lifecycle";
+import { paymentPlans } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
 
 describe("manual COD deposit production ledger", () => {
   let fixture: SqliteTestDatabase;

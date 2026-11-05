@@ -95,10 +95,6 @@ function trimmed(value: string | null | undefined, max: number): string | null {
   return text ? text.slice(0, max) : null;
 }
 
-async function recordedPaymentId(orderId: string, requestKey: string): Promise<string> {
-  return `recorded:${orderId}:${(await sha256Hex(`${orderId}\n${requestKey}`)).slice(0, 32)}`;
-}
-
 function readMetadata(value: string | null): Partial<RecordedPaymentMetadata> {
   if (!value) return {};
   try {
@@ -111,6 +107,13 @@ function readMetadata(value: string | null): Partial<RecordedPaymentMetadata> {
 
 /** Orders a recorded payment can never land on. */
 const CLOSED_STATUSES = new Set<string>([OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.RETURNED]);
+
+/** Generate payment ID for idempotency. Uses only orderId + requestKey for consistent replay.
+ * The planId is NOT included to ensure the same requestKey always maps to the same paymentId. */
+async function recordedPaymentId(orderId: string, requestKey: string): Promise<string> {
+  const hashInput = `recorded\n${orderId}\n${requestKey}`;
+  return `recorded:${orderId}:${(await sha256Hex(hashInput)).slice(0, 32)}`;
+}
 
 export async function recordOrderPayment(
   db: Database,
@@ -132,9 +135,34 @@ export async function recordOrderPayment(
     note: trimmed(input.note, 500),
     recordedBy: input.recordedBy.slice(0, 160),
   };
+
+  // Generate paymentId first (without planId) for consistent idempotency key
   const paymentId = await recordedPaymentId(input.orderId, requestKey);
 
-  const [order, existing, plan] = await Promise.all([
+  // Check for existing payment with this idempotency key BEFORE reading plan
+  // This ensures replay works even if plan status changes between calls
+  const existing = await db.select({
+    amountMinor: orderPayments.amountMinor,
+    status: orderPayments.status,
+    metadata: orderPayments.metadata,
+  }).from(orderPayments).where(eq(orderPayments.id, paymentId)).get();
+  if (existing) {
+    // Replay: fetch current order state and return full result
+    const currentOrder = await db.select({
+      paidAmountMinor: orders.paidAmountMinor,
+      balanceDueMinor: orders.balanceDueMinor,
+    }).from(orders).where(eq(orders.id, input.orderId)).get();
+    return {
+      paymentId,
+      paymentStatus: existing.status,
+      paidAmountMinor: currentOrder?.paidAmountMinor ?? 0,
+      balanceDueMinor: currentOrder?.balanceDueMinor ?? 0,
+      replayed: true,
+    };
+  }
+
+  // Read order and payment plan for validation (only for new payments)
+  const [order, plan] = await Promise.all([
     db.select({
       id: orders.id,
       status: orders.status,
@@ -149,11 +177,6 @@ export async function recordOrderPayment(
       currencyDecimalPlaces: orders.currencyDecimalPlaces,
     }).from(orders).where(eq(orders.id, input.orderId)).get(),
     db.select({
-      amountMinor: orderPayments.amountMinor,
-      status: orderPayments.status,
-      metadata: orderPayments.metadata,
-    }).from(orderPayments).where(eq(orderPayments.id, paymentId)).get(),
-    db.select({
       id: paymentPlans.id,
       status: paymentPlans.status,
       kind: paymentPlans.kind,
@@ -163,28 +186,7 @@ export async function recordOrderPayment(
   ]);
   if (!order || order.deletedAt) throw new NotFoundError("Order not found");
 
-  if (existing) {
-    const recorded = readMetadata(existing.metadata);
-    if (existing.amountMinor !== input.amountMinor || recorded.via !== input.via) {
-      throw new ConflictError("This retry key already recorded a different payment.");
-    }
-    return {
-      paymentId,
-      paymentStatus: order.paymentStatus,
-      paidAmountMinor: order.paidAmountMinor,
-      balanceDueMinor: order.balanceDueMinor,
-      replayed: true,
-    };
-  }
-
-  if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
-    throw new ConflictError("This order changed. Reload it and record the payment again.");
-  }
-
-  // Manual COD deposit branch: staff record the exact deposit against a
-  // pending manual-kind plan. This path is independent of net terms — the
-  // order has no invoice, and the deposit is paid offline (bank transfer,
-  // mobile wallet, cash at counter).
+  // Determine if this is a manual COD deposit
   let isDeposit = false;
   const depositRequested = input.paymentType === "deposit";
   if (depositRequested
@@ -204,8 +206,6 @@ export async function recordOrderPayment(
   } else if (depositRequested) {
     // Explicit deposit request without a matching pending manual plan.
     throw new ValidationError("No pending manual deposit plan found for this order.");
-  } else if (order.paymentTermsDays === null) {
-    throw new ValidationError("Payments are recorded here only for invoice (net terms) orders. Record cash on delivery with Collect cash.");
   }
   if (CLOSED_STATUSES.has(order.status)) {
     throw new ValidationError("This order is closed, so no payment can be recorded on it.");
