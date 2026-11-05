@@ -90,7 +90,7 @@ export function renderCatalogProjectionFillMigration(): { sqlite: string; postgr
     ].join(`\n${BREAKPOINT}\n`) + "\n";
     const postgres = [
         ...fill.map((statement, index) =>
-            `${index === 0 ? `${HEADER}\n` : ""}${compileSqliteStatementForPostgres(statement, 0).sql};`),
+            `${index === 0 ? `${HEADER}\n` : ""}${compileSqliteStatementForPostgres(statement, []).sql};`),
         `INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (${version}, '${name}', '${sha}');`,
     ].join(`\n${BREAKPOINT}\n`) + "\n";
     return { sqlite, postgres };

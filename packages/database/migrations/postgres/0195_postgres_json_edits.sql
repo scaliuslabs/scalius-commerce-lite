@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION scalius_compat.json_path_steps(json_path text)
 RETURNS text[]
 LANGUAGE plpgsql
 IMMUTABLE
+PARALLEL SAFE
 STRICT
 AS $function$
 DECLARE
@@ -32,6 +33,7 @@ CREATE OR REPLACE FUNCTION scalius_compat.json_edit(target jsonb, steps text[], 
 RETURNS jsonb
 LANGUAGE plpgsql
 IMMUTABLE
+PARALLEL SAFE
 AS $function$
 DECLARE
   step text := steps[1];
@@ -81,6 +83,7 @@ CREATE OR REPLACE FUNCTION scalius_compat.json_edit_text(input_text text, json_p
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
+PARALLEL SAFE
 AS $function$
   SELECT CASE
     WHEN input_text IS NULL THEN NULL
@@ -94,10 +97,11 @@ AS $function$
   END
 $function$;
 
-CREATE OR REPLACE FUNCTION scalius_compat.json_value(value anyelement)
+CREATE OR REPLACE FUNCTION scalius_compat.json_edit_value(value anyelement)
 RETURNS jsonb
 LANGUAGE sql
-IMMUTABLE
+STABLE
+PARALLEL SAFE
 AS $function$
   SELECT CASE
     WHEN value IS NULL THEN 'null'::jsonb
@@ -110,6 +114,7 @@ CREATE OR REPLACE FUNCTION public.json_set(input_text text, json_path text, valu
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
+PARALLEL SAFE
 AS $function$
   SELECT scalius_compat.json_edit_text(input_text, json_path, to_jsonb(value), 'set')
 $function$;
@@ -117,15 +122,17 @@ $function$;
 CREATE OR REPLACE FUNCTION public.json_set(input_text text, json_path text, value anyelement)
 RETURNS text
 LANGUAGE sql
-IMMUTABLE
+STABLE
+PARALLEL SAFE
 AS $function$
-  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_value(value), 'set')
+  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_edit_value(value), 'set')
 $function$;
 
 CREATE OR REPLACE FUNCTION public.json_insert(input_text text, json_path text, value text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
+PARALLEL SAFE
 AS $function$
   SELECT scalius_compat.json_edit_text(input_text, json_path, to_jsonb(value), 'insert')
 $function$;
@@ -133,15 +140,17 @@ $function$;
 CREATE OR REPLACE FUNCTION public.json_insert(input_text text, json_path text, value anyelement)
 RETURNS text
 LANGUAGE sql
-IMMUTABLE
+STABLE
+PARALLEL SAFE
 AS $function$
-  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_value(value), 'insert')
+  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_edit_value(value), 'insert')
 $function$;
 
 CREATE OR REPLACE FUNCTION public.json_replace(input_text text, json_path text, value text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
+PARALLEL SAFE
 AS $function$
   SELECT scalius_compat.json_edit_text(input_text, json_path, to_jsonb(value), 'replace')
 $function$;
@@ -149,15 +158,17 @@ $function$;
 CREATE OR REPLACE FUNCTION public.json_replace(input_text text, json_path text, value anyelement)
 RETURNS text
 LANGUAGE sql
-IMMUTABLE
+STABLE
+PARALLEL SAFE
 AS $function$
-  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_value(value), 'replace')
+  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_edit_value(value), 'replace')
 $function$;
 
 CREATE OR REPLACE FUNCTION public.json_remove(input_text text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
+PARALLEL SAFE
 STRICT
 AS $function$
   SELECT input_text::jsonb::text
@@ -167,6 +178,7 @@ CREATE OR REPLACE FUNCTION public.json_remove(input_text text, VARIADIC json_pat
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
+PARALLEL SAFE
 AS $function$
 DECLARE
   result jsonb;

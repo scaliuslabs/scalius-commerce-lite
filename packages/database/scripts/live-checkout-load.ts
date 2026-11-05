@@ -419,7 +419,7 @@ function createLoadOracle(options: LoadOptions): SqlitePortabilityExecutor {
     const connection = connectPostgres(options.databaseUrl);
     return {
       async query(sql, params = []) {
-        const compiled = compileSqliteStatementForPostgres(sql, params.length);
+        const compiled = compileSqliteStatementForPostgres(sql, params);
         if (!compiled.readOnly) {
           throw new Error("PostgreSQL load oracle accepts read-only SQL only.");
         }

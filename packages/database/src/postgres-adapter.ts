@@ -8,7 +8,6 @@ import { observeStatement } from "./read-observer";
 import { withNamedRawRows } from "./remote-raw-rows";
 import {
   compilePostgresJsonEachRowCounts,
-  compilePostgresJsonValueParameters,
   compileSqliteStatementForPostgres,
   normalizePostgresParameters,
   normalizePostgresResultRows,
@@ -326,10 +325,10 @@ function wrapMutationToCaptureChanges(sql: string): string {
     + "value AS __scalius_changes FROM scalius_change_count";
 }
 
-/** One SQLite-profile statement in PostgreSQL syntax, its JSON lookup sets sized and its JSON edit values typed by their bound values. */
+/** One SQLite-profile statement in PostgreSQL syntax, its JSON lookup sets sized by their bound values. */
 function compileStatement(sql: string, params: readonly unknown[]) {
-  const statement = compileSqliteStatementForPostgres(sql, params.length);
-  return { ...statement, sql: compilePostgresJsonValueParameters(compilePostgresJsonEachRowCounts(statement.sql, params), params) };
+  const statement = compileSqliteStatementForPostgres(sql, params);
+  return { ...statement, sql: compilePostgresJsonEachRowCounts(statement.sql, params) };
 }
 
 function compileBatchStatements(
