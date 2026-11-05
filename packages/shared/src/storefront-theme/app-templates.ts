@@ -123,13 +123,28 @@ function valueAt(root: unknown, path: readonly PropertyKey[]): unknown {
 }
 
 /**
+ * A required field whose right default depends on a sibling the template
+ * named, not on the default theme: listing filters in the bar-dropdowns style
+ * open on demand only, so their `openByDefault` is false (the default theme's
+ * sidebar opens its groups). Undefined: the default theme's value.
+ */
+function styleFallback(path: readonly PropertyKey[], parent: Record<string, unknown>): unknown {
+  const [block, field, key] = path;
+  if (block === "listing" && field === "filters" && key === "openByDefault" && path.length === 3) {
+    return parent.style === "bar-dropdowns" ? false : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Fills, in the template's blocks, each field the schema requires and the
  * template leaves out, from the default theme's block at the same place
  * (`issues` name them: a required field missing is an issue at its path).
  * Optional fields are never filled: absent means the style's own value. A
- * block naming another `variant` than the default's takes nothing from it
- * below that variant (each variant has its own settings). Returns whether it
- * filled any.
+ * list is never filled or merged (a receipt's mandatory cards stay exactly
+ * the template's, so dropping or repeating one is refused). A block naming
+ * another `variant` than the default's takes nothing from it below that
+ * variant (each variant has its own settings). Returns whether it filled any.
  */
 function fillRequiredBlockFields(candidate: Record<string, unknown>, issues: z.ZodError["issues"]): boolean {
   const defaults = DEFAULT_STOREFRONT_THEME.blocks as unknown as Record<string, unknown>;
@@ -141,7 +156,11 @@ function fillRequiredBlockFields(candidate: Record<string, unknown>, issues: z.Z
     const key = path.at(-1)!;
     if (!isRecord(parent) || parent[key as string] !== undefined) continue;
     const fallback = valueAt(defaults, path);
-    if (fallback === undefined) continue;
+    // A list is the template's whole say or nothing: never filled, never
+    // merged into element by element (a receipt's mandatory cards, a
+    // product's modules, an order of filters), so a list that drops or
+    // repeats a member is refused as written.
+    if (fallback === undefined || Array.isArray(fallback) || path.some((segment) => typeof segment === "number")) continue;
     // Never across a variant the template changed.
     const crossesVariant = path.slice(0, -1).some((_, depth) => {
       const declared = valueAt(candidate.blocks, path.slice(0, depth + 1));
@@ -149,7 +168,7 @@ function fillRequiredBlockFields(candidate: Record<string, unknown>, issues: z.Z
       return isRecord(declared) && isRecord(standard) && "variant" in declared && declared.variant !== standard.variant;
     });
     if (crossesVariant) continue;
-    parent[key as string] = structuredClone(fallback);
+    parent[key as string] = structuredClone(styleFallback(path, parent) ?? fallback);
     filled = true;
   }
   return filled;
