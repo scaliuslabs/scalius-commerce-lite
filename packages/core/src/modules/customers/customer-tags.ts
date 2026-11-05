@@ -14,7 +14,8 @@ import {
 } from "@scalius/shared/customer-marketing";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { containsText } from "../../utils/text-match";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
+import { assertCustomerWritable } from "./erased-guard";
 
 /** Customers in one bulk tag request (the dashboard's "select all" cap). */
 export const CUSTOMER_TAG_BULK_MAX_CUSTOMERS = 500;
@@ -68,9 +69,8 @@ export async function setCustomerTags(db: Database, customerId: string, inputs: 
     if (tags.length > CUSTOMER_TAGS_PER_CUSTOMER_MAX) {
         throw new ValidationError(`A customer has at most ${CUSTOMER_TAGS_PER_CUSTOMER_MAX} tags.`);
     }
-    const customer = await db.select({ id: customers.id }).from(customers)
-        .where(and(eq(customers.id, customerId), isNull(customers.deletedAt))).get();
-    if (!customer) throw new NotFoundError("Customer not found");
+    assertCustomerWritable(await db.select({ erasedAt: customers.erasedAt, deletedAt: customers.deletedAt }).from(customers)
+        .where(eq(customers.id, customerId)).get());
     const tagsJson = JSON.stringify(tags);
     await safeBatch(db, [
         db.delete(customerTagLinks).where(and(

@@ -41,13 +41,15 @@ export function SortPanel({ fields, value, defaultLabel, onChange }: SortMenuPro
           </div>
         ))}
       </RadioGroup>
+      {/* One direction per row: named directions ("Newest activity", Bangla) are wider than half the menu. */}
       {directionless ? null : (
-        <div className="grid grid-cols-2 gap-2 border-t pt-2">
+        <div data-slot="sort-directions" className="grid gap-1 border-t pt-2">
           {([false, true] as const).map((desc) => (
             <Button
               key={String(desc)}
               type="button"
               size="sm"
+              className="justify-start"
               variant={field && Boolean(value?.desc) === desc ? "secondary" : "ghost"}
               aria-pressed={Boolean(field) && Boolean(value?.desc) === desc}
               disabled={!field}

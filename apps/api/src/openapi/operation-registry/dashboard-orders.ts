@@ -6,6 +6,11 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     risk: "destructive",
     batch: "forbidden",
   },
+  "dashboard.abandoned_checkouts.get": {
+    exposure: "excluded",
+    reason:
+      "Browser detail projection contains buyer PII and serialized checkout state; use dashboard.abandoned_checkouts.summaries_list for bounded routine agent listing.",
+  },
   "dashboard.abandoned_checkouts.list": {
     exposure: "excluded",
     reason:

@@ -1931,7 +1931,14 @@ export async function processRefund(
         ].filter(Boolean).join(", and ");
         throw new ValidationError(
             `This refund gives back more than the order kept: ${why}. Refund at most ${display(maxMinor)}.`,
-            { reason: GIFT_CARD_VALUE_SPENT_REASON, maxRefundAmount: display(maxMinor) },
+            {
+                reason: GIFT_CARD_VALUE_SPENT_REASON,
+                maxRefundAmount: display(maxMinor),
+                // Integer minor units: clients word the refusal in their own language.
+                maxRefundMinor: maxMinor,
+                spentMinor: giftCardClawback.spentMinor,
+                unissuedMinor: giftCardClawback.unissuedMinor,
+            },
         );
     }
 

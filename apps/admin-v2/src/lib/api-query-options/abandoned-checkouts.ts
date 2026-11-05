@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
+import { getApiV1AdminAbandonedCheckouts, getApiV1AdminAbandonedCheckoutsById } from "@scalius/api-client/sdk";
 import { apiData, type ApiQuery, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 
@@ -14,4 +14,14 @@ export const abandonedCheckoutsQueryOptions = (
     queryKey: queryKeys.abandonedCheckouts.list(query),
     queryFn: () => apiData(getApiV1AdminAbandonedCheckouts({ query })),
     staleTime: MODERATE_STALE_TIME_MS,
+  });
+
+/** One checkout, for a link to a checkout the list's loaded page doesn't hold. A missing one is not retried. */
+export const abandonedCheckoutQueryOptions = (id: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.abandonedCheckouts.all, "detail", id] as const,
+    queryFn: async (): Promise<AbandonedCheckout> =>
+      (await apiData(getApiV1AdminAbandonedCheckoutsById({ path: { id } }))).checkout,
+    staleTime: MODERATE_STALE_TIME_MS,
+    retry: false,
   });

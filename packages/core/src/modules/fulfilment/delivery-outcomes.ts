@@ -24,7 +24,7 @@ import {
   shipmentClaimShipmentStatusSql,
 } from "../order-kernel";
 import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
-import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { fromMinor } from "@scalius/shared/money";
 import {
   applyOrderStatusChange,
@@ -92,8 +92,11 @@ export async function processCodAction(
 
             if (existingCodCollection && (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED)) {
                 // Another tab (or person) already did this: say so, record nothing (R3-ORD-10).
-                throw new ConflictError(
+                throw new AppError(
+                    409,
+                    "conflict",
                     `Cash for this order was already recorded as collected by ${existingCodCollection.collectedBy}.`,
+                    { reason: "cod_already_collected", collectedBy: existingCodCollection.collectedBy },
                 );
             }
             if (existingCodCollection) {

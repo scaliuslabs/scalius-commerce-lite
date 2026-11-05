@@ -31,4 +31,8 @@ export interface LineGiftCardExtra {
   currencyCode: string;
   /** The masked recipient contact ("R••••@gmail.com"), or null when sent to the buyer. */
   sentTo: string | null;
+  /** Staff only: what the card holds now (a refund takes value back, spending lowers it). */
+  balanceMinor?: number;
+  /** Staff only: the card was disabled (a refund that took its whole balance disables it). */
+  disabled?: boolean;
 }

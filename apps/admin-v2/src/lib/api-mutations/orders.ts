@@ -39,7 +39,7 @@ import {
   putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus,
 } from "@scalius/api-client/sdk";
 import { translate } from "~/i18n";
-import { classifyAdminError } from "../admin-api-error";
+import { classifyAdminError, readAdminApiError } from "../admin-api-error";
 import { orderToastMessages, type OrderToastMessageKey } from "~/i18n/order-toasts";
 import { apiData, type ApiBody } from "../api";
 import { showOrderNotice } from "../order-notice";
@@ -155,14 +155,24 @@ export function isOrderConflict(error: unknown): boolean {
   return errorStatus(error) === 409;
 }
 
+/** A refusal the API names by its reason, worded from the dashboard's own catalog. */
+function reasonMessage(error: unknown): string | null {
+  const details = readAdminApiError(error)?.details as { reason?: unknown; collectedBy?: unknown } | undefined;
+  if (details?.reason === "order_already_returned") return msg("error.alreadyReturned");
+  if (details?.reason === "cod_already_collected" && typeof details.collectedBy === "string") {
+    return msg("error.codAlreadyCollectedBy", { name: details.collectedBy });
+  }
+  return null;
+}
+
 /**
  * Plain words for a failed order action: the connection only when no answer
- * arrived, our side when the server faulted, else what the server said.
+ * arrived, a reason the dashboard words itself, else what the server said.
  */
 export function orderErrorMessage(error: unknown): string {
   switch (classifyAdminError(error)) {
     case "network": return msg("error.network");
-    default: return getServerFnError(error);
+    default: return reasonMessage(error) ?? getServerFnError(error);
   }
 }
 

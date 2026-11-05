@@ -3,7 +3,7 @@
 // (Wave B design §3).
 export * from "./browser";
 export type { LineExtrasInput } from "../../utils/line-extras";
-export { digitalDeliverableSql, digitalUnusedKeysSql } from "./deliverable";
+export { digitalDeliverableSql } from "./deliverable";
 export { countBuyerDownloads, listLineDeliveries } from "./extras";
 export { sweepDigitalUploads } from "./uploads";
 export {

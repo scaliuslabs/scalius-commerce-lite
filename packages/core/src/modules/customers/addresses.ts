@@ -33,7 +33,7 @@ import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/sha
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { customerNotErasedGuard, erasedCustomerConflict, isCustomerErasedError } from "./erased-guard";
+import { assertCustomerWritable, customerNotErasedGuard, erasedCustomerConflict, isCustomerErasedError } from "./erased-guard";
 
 /** `details.reason` of every refused address. */
 export const ADDRESS_INVALID_REASON = "address_invalid";
@@ -407,17 +407,19 @@ export async function listCustomerAddresses(db: Database, customerId: string): P
     return rows.map(customerAddressFromRow);
 }
 
-/** The live customer and how many addresses it has (one statement). */
+/** The live customer and how many addresses it has (one statement); an erased one is a 409. */
 async function requireCustomer(db: Database, customerId: string): Promise<{ addressCount: number }> {
     const customer = await db.select({
         id: customers.id,
+        erasedAt: customers.erasedAt,
+        deletedAt: customers.deletedAt,
         // Qualified: drizzle leaves a one-table select's columns bare, and a bare name binds inside the subquery first.
         addressCount: sql<number>`(SELECT count(*) FROM customer_addresses AS counted WHERE counted.customer_id = "customers"."id")`,
     }).from(customers)
-        .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
+        .where(eq(customers.id, customerId))
         .get();
-    if (!customer) throw new NotFoundError("Customer not found");
-    return { addressCount: Number(customer.addressCount ?? 0) };
+    assertCustomerWritable(customer);
+    return { addressCount: Number(customer!.addressCount ?? 0) };
 }
 
 /** Clears the customer's other default, then makes `addressId` the default (one batch). */

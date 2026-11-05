@@ -117,7 +117,8 @@ export function CodDialogs({
               <p className="text-muted-foreground">{t("cod.amountToCollect")}</p>
               <p className="text-heading-md font-semibold tabular-nums">{money(cashAmount)}</p>
             </div>
-            <Field id="collectedBy" label={t("cod.collectedBy")} error={collectorError ? collectorError : undefined}>
+            {/* The dialog's only field, and required: its help says so (F7 puts no star on a label). */}
+            <Field id="collectedBy" label={t("cod.collectedBy")} help={t("cod.collectorHelp")} error={collectorError ? collectorError : undefined}>
               <Input
                 id="collectedBy"
                 placeholder={t("cod.collectorPlaceholder")}

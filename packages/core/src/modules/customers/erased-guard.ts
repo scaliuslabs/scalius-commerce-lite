@@ -6,7 +6,7 @@
 import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { customers } from "@scalius/database/schema";
 import { sql, type SQL } from "drizzle-orm";
-import { ConflictError } from "@scalius/core/errors";
+import { ConflictError, NotFoundError } from "@scalius/core/errors";
 
 /** The guard's marker, and the message migration 0191's triggers raise. */
 export const CUSTOMER_ERASED = "CUSTOMER_ERASED";
@@ -28,4 +28,14 @@ export function isCustomerErasedError(error: unknown): boolean {
 /** The answer to a write on an erased customer (409). */
 export function erasedCustomerConflict(message = "This customer's data was erased, so the record can't be changed."): ConflictError {
     return new ConflictError(message);
+}
+
+/**
+ * Before a staff write on one customer: 409 when its data was erased (erasure
+ * also trashes the record, so this is checked first), 404 when it is gone or
+ * trashed.
+ */
+export function assertCustomerWritable(row: { erasedAt: unknown; deletedAt: unknown } | undefined): void {
+  if (row?.erasedAt) throw erasedCustomerConflict();
+  if (!row || row.deletedAt) throw new NotFoundError("Customer not found");
 }

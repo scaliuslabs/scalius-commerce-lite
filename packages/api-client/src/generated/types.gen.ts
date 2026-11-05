@@ -1969,6 +1969,9 @@ export type OrderLineGiftCardExtra = {
     initialAmountMinor: number;
     currencyCode: string;
     sentTo: string | null;
+    balance?: number;
+    balanceMinor?: number;
+    disabled?: boolean;
 };
 
 export type OrderLineWarrantyExtra = {
@@ -66290,10 +66293,6 @@ export type PostApiV1AdminAuthUsersByIdResendSetupErrors = {
      */
     404: ErrorResponse;
     /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
      * Rate limit exceeded
      */
     429: ErrorResponse;
@@ -78580,6 +78579,65 @@ export type GetApiV1AdminAbandonedCheckoutsSummariesResponses = {
 };
 
 export type GetApiV1AdminAbandonedCheckoutsSummariesResponse = GetApiV1AdminAbandonedCheckoutsSummariesResponses[keyof GetApiV1AdminAbandonedCheckoutsSummariesResponses];
+
+export type GetApiV1AdminAbandonedCheckoutsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/abandoned-checkouts/{id}';
+};
+
+export type GetApiV1AdminAbandonedCheckoutsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminAbandonedCheckoutsByIdError = GetApiV1AdminAbandonedCheckoutsByIdErrors[keyof GetApiV1AdminAbandonedCheckoutsByIdErrors];
+
+export type GetApiV1AdminAbandonedCheckoutsByIdResponses = {
+    /**
+     * Abandoned checkout
+     */
+    200: {
+        success: true;
+        data: {
+            checkout: {
+                id: string;
+                checkoutId: string | null;
+                customerPhone: string | null;
+                checkoutData: string;
+                createdAt: string | number;
+                updatedAt: string | number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminAbandonedCheckoutsByIdResponse = GetApiV1AdminAbandonedCheckoutsByIdResponses[keyof GetApiV1AdminAbandonedCheckoutsByIdResponses];
 
 export type PostApiV1AdminFcmTokenData = {
     body: {

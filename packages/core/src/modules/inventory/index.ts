@@ -6,6 +6,7 @@ export {
   prepareStockReservationBatch,
   selectReservationVariantStates,
   isInventoryReservationConflictError,
+  licenceKeyStockSql,
 } from "./reserve";
 export type {
   PreparedStockReservationBatch,

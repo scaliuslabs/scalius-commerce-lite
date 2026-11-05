@@ -20,10 +20,12 @@ import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
 import { useMessages } from "~/i18n";
 import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
+import { refundRefusalMessages } from "~/i18n/refund-refusals";
 import { orderDetailLabel } from "~/i18n/order-detail";
 import { orderPaymentDialogMessages } from "~/i18n/order-payment-dialogs";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useRefundOrder } from "~/lib/api-mutations/orders";
+import { readAdminApiError } from "~/lib/admin-api-error";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import { clampQuantity, getOrderItemName } from "./order-returns/shared";
@@ -33,6 +35,18 @@ import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
 import { refundSettlementTotals } from "@scalius/shared/refund-sources";
 
 const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
+
+/**
+ * The API's refusal of a refund larger than the order kept (gift cards it sold
+ * were spent, or are still to be issued), from its minor units into the
+ * order's major units; null for any other failure.
+ */
+export function giftCardRefundLimit(error: unknown, decimalPlaces: number): { max: number; spent: number; unissued: number } | null {
+  const details = readAdminApiError(error)?.details as Record<string, unknown> | undefined;
+  if (details?.reason !== "gift_card_value_spent") return null;
+  const major = (minor: unknown) => (Number.isSafeInteger(minor) && (minor as number) > 0 ? (minor as number) / 10 ** decimalPlaces : 0);
+  return { max: major(details.maxRefundMinor), spent: major(details.spentMinor), unissued: major(details.unissuedMinor) };
+}
 
 /**
  * Only what came back is owed, with the delivery its items were charged
@@ -81,6 +95,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const t = useMessages(orderPaymentDialogMessages);
   const r = useMessages(resourceMessages);
   const g = useMessages(giftCardOrderMessages);
+  const why = useMessages(refundRefusalMessages);
   const owed = initialRefundAmount(order);
   const [amount, setAmount] = useState<number | null>(owed);
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -100,13 +115,16 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const lineChoices = refundableLines(order.items);
   const requestKey = useRef(crypto.randomUUID());
   const mutation = useRefundOrder();
+  // The most the server said this refund can be (gift cards the order sold were spent).
+  const decimalPlaces = order.currencyDecimalPlaces ?? 2;
+  const refusal = giftCardRefundLimit(mutation.error, decimalPlaces);
+  const limit = refusal ? Math.min(paid, refusal.max) : paid;
 
   const value = amount ?? Number.NaN;
-  const valid = Number.isFinite(value) && value > 0 && value <= paid;
-  const decimalPlaces = order.currencyDecimalPlaces ?? 2;
+  const valid = Number.isFinite(value) && value > 0 && value <= limit;
   const toMinor = (major: number) => Math.round(major * 10 ** decimalPlaces);
   // What the split is previewed for: the typed amount, else everything refundable.
-  const previewMinor = toMinor(valid ? value : paid);
+  const previewMinor = toMinor(valid ? value : limit);
   // Store credit hands over a gift card, not money: nothing to confirm. An
   // original-method refund's cash or transfer share is paid back by hand.
   const manualMinor = settlement === "original" ? manualRefundShareMinor(refundSources, previewMinor, decimalPlaces) : 0;
@@ -115,7 +133,7 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const recordOnly = manual && manualMinor >= previewMinor;
   const manualConfirmed = manual && confirmedManualMinor === manualMinor;
   const manualAmount = money(manualMinor / 10 ** decimalPlaces);
-  const problem = (): string | null => (valid ? null : t("refund.amountInvalid", { amount: money(paid) }));
+  const problem = (): string | null => (valid ? null : t("refund.amountInvalid", { amount: money(limit) }));
   // The confirm button echoes the live amount, e.g. "Record ৳500 cash refund", only while it is valid.
   const confirmLabel = settlement === "store_credit"
     ? valid ? g("refundTo.issueAmount", { amount: money(value) }) : g("refundTo.issue")
@@ -162,16 +180,27 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>
-          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
+          {mutation.isError ? (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {refusal
+                  ? [
+                    refusal.spent > 0 ? why("giftCardSpent", { spent: money(refusal.spent), max: money(refusal.max) }) : null,
+                    refusal.unissued > 0 ? why("giftCardUnissued", { unissued: money(refusal.unissued), max: money(refusal.max) }) : null,
+                  ].filter(Boolean).join(" ") || t("refund.max", { amount: money(refusal.max) })
+                  : orderErrorMessage(mutation.error)}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <Field
             id="refundAmount"
             label={t("refund.amount")}
             error={amountError ?? undefined}
             help={order.refundDue > 0
               ? (order.returnDeliveryShare ?? 0) > 0
-                ? t("refund.maxOwedDelivery", { owed: money(order.refundDue), delivery: money(order.returnDeliveryShare!), amount: money(paid) })
-                : t("refund.maxOwed", { owed: money(order.refundDue), amount: money(paid) })
-              : t("refund.max", { amount: money(paid) })}
+                ? t("refund.maxOwedDelivery", { owed: money(order.refundDue), delivery: money(order.returnDeliveryShare!), amount: money(limit) })
+                : t("refund.maxOwed", { owed: money(order.refundDue), amount: money(limit) })
+              : t("refund.max", { amount: money(limit) })}
           >
             <MoneyInput
               currencyCode={order.currencyCode ?? ""}
@@ -214,7 +243,11 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
                         aria-label={t("refund.linesQty", { name })}
                         disabled={locked}
                         value={lineQuantities[item.id] ?? 0}
-                        onValueChange={(value) => setLineQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, item.quantity) }))}
+                        onValueChange={(value) => {
+                          setLineQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, item.quantity) }));
+                          // Naming unissued gift-card units changes the most the server allows: ask it again.
+                          if (refusal) mutation.reset();
+                        }}
                       />
                     </li>
                   );
