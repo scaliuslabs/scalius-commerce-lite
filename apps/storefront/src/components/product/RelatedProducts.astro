@@ -1,6 +1,8 @@
 ---
 // The same card as every listing, so prices ("From ৳2,200"), badges and
-// labels read identically everywhere.
+// labels read identically everywhere. `data-recs-part` (`root`, `title`,
+// `list`) and `data-recs-reason` are permanent styling hooks a product_main
+// skin's `<Recommendations />` styles by (packages/plugin-sdk docs).
 import ProductCard from "@/components/cards/ProductCard.astro";
 import ProductGrid from "@/components/cards/ProductGrid.astro";
 import Container from "@/components/ui/Container.astro";
@@ -27,20 +29,24 @@ const {
       class="bg-muted/50 py-6 mt-4"
       id="related-products"
       aria-labelledby="related-products-title"
+      data-recs-part="root"
+      data-recs-reason={recommendations.reason}
     >
       <Container>
-        <h2 id="related-products-title" class="section-heading text-foreground mb-4">
+        <h2 id="related-products-title" class="section-heading text-foreground mb-4" data-recs-part="title">
           {recommendationTitle(recommendations.reason)}
         </h2>
-        <ProductGrid>
-          {recommendations.products.map((relatedProduct) => (
-            <ProductCard
-              product={relatedProduct}
-              currencySymbol={currencySymbol}
-              currencyCode={currencyCode}
-            />
-          ))}
-        </ProductGrid>
+        <div data-recs-part="list">
+          <ProductGrid>
+            {recommendations.products.map((relatedProduct) => (
+              <ProductCard
+                product={relatedProduct}
+                currencySymbol={currencySymbol}
+                currencyCode={currencyCode}
+              />
+            ))}
+          </ProductGrid>
+        </div>
       </Container>
     </section>
   )

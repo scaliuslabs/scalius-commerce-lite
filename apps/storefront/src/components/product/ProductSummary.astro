@@ -2,8 +2,16 @@
 import { checkoutText } from "@/lib/checkout-text";
 import Icon from "@/components/icons/Icon.astro";
 import ProductDetails from "./ProductDetails.astro";
-import ProductBuyerInputs from "./ProductBuyerInputs.astro";
 import ProductPurchaseOptions from "./ProductPurchaseOptions.astro";
+import BuyFormActions from "./buy-form/BuyFormActions.astro";
+import BuyFormOptions, { type BuyFormOptionGroup } from "./buy-form/BuyFormOptions.astro";
+import BuyFormPrice from "./buy-form/BuyFormPrice.astro";
+import BuyFormQuantity from "./buy-form/BuyFormQuantity.astro";
+import BuyFormInputs from "./buy-form/BuyFormInputs.astro";
+import BuyFormStatus from "./buy-form/BuyFormStatus.astro";
+import BuyFormStock from "./buy-form/BuyFormStock.astro";
+import { cssNamedColour } from "@/components/cards/css-colours";
+import { BUY_FORM_PLACED_PART } from "./lib/buy-scope";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
   getBuyerVariantPricePresentation,
@@ -38,7 +46,7 @@ import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getRuntime } from "@/lib/api/runtime";
 import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
-import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontBuyFormOptionLayout, StorefrontBuyFormPart, StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import { specificationText } from "@/lib/specification-text";
 
 const CLASSIC_LOOK: StorefrontBuyBoxLook = { cta: { layout: "row" }, facts: "list", features: "none", details: "buy-box" };
@@ -83,6 +91,18 @@ interface Props {
    * lib/extensions/purchase-controls.ts). The no-JavaScript picker stays.
    */
   nativeOptions?: boolean;
+  /** How the option controls draw (`buttons`, `select`, `swatches`): a skin's `optionsLayout`, or its options part's `layout`. */
+  optionsLayout?: StorefrontBuyFormOptionLayout;
+  /**
+   * False leaves out Add to cart and Buy now: a product_main skin's own buy
+   * buttons buy every buyable SKU (the host checked that,
+   * lib/extensions/purchase-controls.ts).
+   */
+  nativeActions?: boolean;
+  /** The parts a product_main skin draws apart from the form (`<BuyFormPart />`): left out here. */
+  placed?: readonly StorefrontBuyFormPart[];
+  /** Draw only this part, where the skin placed it, in a host-only wrapper (lib/buy-scope.ts). */
+  only?: StorefrontBuyFormPart;
 }
 
 const {
@@ -106,6 +126,10 @@ const {
   detailsFeatures = true,
   title = true,
   nativeOptions = true,
+  optionsLayout = "buttons",
+  nativeActions = true,
+  placed = [],
+  only,
 } = Astro.props;
 
 const { language } = await currentRequestTheme(Astro.locals);
@@ -255,6 +279,68 @@ const optionsJson = serializeJsonForInlineScript(options.map((option) => ({
   name: option.name,
   values: option.values.map((value) => ({ id: value.id })),
 })));
+// The option buttons, one group per axis (the facts column prices each value
+// when the values are priced differently).
+const optionGroups: BuyFormOptionGroup[] = options.map((option) => {
+  const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
+  const pricedOptions = new Map(option.values.flatMap((value) => {
+    const variant = factsColumn
+      ? pricedVariantForOption(variants, initialSelection, option.id, value.id, options.length)
+      : null;
+    return variant ? [[value.id, getVariantDiscountedPrice(
+      variant.price,
+      product.price,
+      variant.discountType,
+      variant.discountPercentage,
+      variant.discountAmount,
+      product.discountType,
+      product.discountPercentage,
+      product.discountAmount,
+      currencyDecimalPlaces,
+      currencyCode,
+      priceIncrementMinor,
+    )] as const] : [];
+  }));
+  // A price on each value only when the values are priced differently.
+  const optionPrices = onlyWhenDifferent(pricedOptions);
+  return {
+    id: option.id,
+    name: option.name,
+    overflow: option.values.length > 8,
+    values: option.values.map((value) => {
+      const status = availability.get(value.id) ?? "sold_out";
+      const price = optionPrices.has(value.id) ? formatPrice(optionPrices.get(value.id)!) : null;
+      return {
+        id: value.id,
+        value: value.value,
+        selected: initialSelection[option.id] === value.id,
+        status,
+        price,
+        ariaLabel: `${optionAriaLabel(option, value.value, status)}${price ? ` ${price}.` : ""}`,
+        colour: optionsLayout === "swatches" ? cssNamedColour(value.value) : null,
+      };
+    }),
+  };
+});
+// Which parts this render draws: the whole form less the parts a skin placed
+// apart, or (`only`) one placed part. Options and actions only while shown.
+const placedParts = new Set(placed);
+const partHasContent = (part: StorefrontBuyFormPart) =>
+  part === "options" ? options.length > 0 && nativeOptions
+    : part === "purchase_options" ? purchaseOptions.length > 0
+    : part !== "warranty";
+// The form and its buyer inputs, wherever they are drawn.
+const formInputs = {
+  formId: buyFormId,
+  slug: product.slug,
+  variantId: initialSelectedVariant?.id ?? "",
+  inputs: hasBuyerInputs
+    ? { fields: buyerInputFields, copy: buyerInputCopy, currencyPlaces: moneyPlaces(currencyDecimalPlaces, currencyCode), formatMoney: formatPrice }
+    : null,
+};
+const stockProps = { available: stockAvailable, tone: buyerStockSummary.tone, text: stockLabel(buyerStockSummary.text), fulfilmentBadge };
+const purchaseOptionsCopy = { legend: catalogWords.purchaseOptions, oneTime: catalogWords.oneTimePurchase, price: catalogWords.purchaseOptionPrice };
+const showPart = (part: StorefrontBuyFormPart) => (only ? only === part : !placedParts.has(part)) && partHasContent(part);
 const offers = (product.offers ?? []).map((offer) => ({
   ...offer,
   text: describeBuyGetOffer(offer, actionCopy, formatPrice),
@@ -272,6 +358,30 @@ function optionAriaLabel(
 }
 ---
 
+{only ? (
+  showPart(only) && (
+    <div {...{ [BUY_FORM_PLACED_PART]: only }}>
+      {only === "price" && (
+        <BuyFormPrice
+          price={showsStartingPrice ? checkoutText(actionCopy.fromPriceText, { price: openingPrice }) : openingPrice}
+          regularPrice={openingRegularPrice}
+          hasDiscount={pricing.hasDiscount}
+          discountBadge={discountBadge}
+          fromTemplate={actionCopy.fromPriceText}
+        />
+      )}
+      {only === "options" && <BuyFormOptions groups={optionGroups} pricedValues={factsColumn} layout={optionsLayout} />}
+      {only === "quantity" && (
+        <BuyFormQuantity formId={buyFormId} hidden={allSoldOut} label={actionCopy.quantityLabelText} decrease={catalogWords.decreaseQuantity} increase={catalogWords.increaseQuantity} />
+      )}
+      {only === "actions" && <BuyFormActions formId={buyFormId} actions={actionPresentation} off={!nativeActions} />}
+      {only === "inputs" && <BuyFormInputs {...formInputs} />}
+      {only === "purchase_options" && <ProductPurchaseOptions formId={buyFormId} options={purchaseOptions} copy={purchaseOptionsCopy} />}
+      {only === "stock" && <BuyFormStock {...stockProps} />}
+      {only === "status" && <BuyFormStatus />}
+    </div>
+  )
+) : (
 <div
   data-product-summary
   data-sx-product-summary
@@ -308,21 +418,15 @@ function optionAriaLabel(
         <slot name="after-title" />
       </div>
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
-      <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1" data-buy-part="price">
-        <div class="buy-box-price-fact">
-          <p data-sx-buy="price" class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
-            {showsStartingPrice
-              ? checkoutText(actionCopy.fromPriceText, { price: openingPrice })
-              : openingPrice}
-          </p>
-        </div>
-        <div class="buy-box-regular-fact">
-          <s data-sx-buy="regular-price" class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !pricing.hasDiscount }]}>
-            {openingRegularPrice}
-          </s>
-        </div>
-        <span data-sx-buy="discount" class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
-      </div>
+      {showPart("price") && (
+        <BuyFormPrice
+          price={showsStartingPrice ? checkoutText(actionCopy.fromPriceText, { price: openingPrice }) : openingPrice}
+          regularPrice={openingRegularPrice}
+          hasDiscount={pricing.hasDiscount}
+          discountBadge={discountBadge}
+          fromTemplate={actionCopy.fromPriceText}
+        />
+      )}
       {bundleTiers.length > 0 ? (
         <ul class="mt-2 flex flex-wrap gap-1.5" data-product-bundles aria-label={bundleListLabel}>
           {bundleTiers.map((tier) => (
@@ -334,14 +438,7 @@ function optionAriaLabel(
         </ul>
       ) : null}
       <slot name="after-price" />
-      {!factsColumn && (
-        <div class="mt-2 flex flex-wrap items-center gap-2">
-          <div id="product-stock-badge" data-sx-buy="stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" data-sx-buy="stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
-          </div>
-          {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
-        </div>
-      )}
+      {!factsColumn && showPart("stock") && <BuyFormStock {...stockProps} class="mt-2" />}
       {offers.length > 0 && (
         <ul class="mt-2 space-y-1" data-product-offers>
           {offers.map((offer) => (
@@ -364,74 +461,7 @@ function optionAriaLabel(
     <div class="space-y-3 pt-1 lg:pt-2">
       <div id="variant-unavailable-query-notice" data-sx-buy="unavailable-notice" class="hidden rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert"></div>
 
-      {options.length > 0 && nativeOptions && <div class="variant-option-panels" data-buy-part="options">
-        {options.map((option) => {
-          const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
-          const pricedOptions = new Map(option.values.flatMap((value) => {
-            const variant = factsColumn
-              ? pricedVariantForOption(variants, initialSelection, option.id, value.id, options.length)
-              : null;
-            return variant ? [[value.id, getVariantDiscountedPrice(
-              variant.price,
-              product.price,
-              variant.discountType,
-              variant.discountPercentage,
-              variant.discountAmount,
-              product.discountType,
-              product.discountPercentage,
-              product.discountAmount,
-              currencyDecimalPlaces,
-              currencyCode,
-              priceIncrementMinor,
-            )] as const] : [];
-          }));
-          // A price on each value only when the values are priced differently.
-          const optionPrices = onlyWhenDifferent(pricedOptions);
-          return (
-            <div class="variant-option-panel">
-              <fieldset class="variant-option-selector" data-sx-buy="option-group" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
-                <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
-                <div class="variant-option-values flex flex-wrap gap-1.5" data-sx-buy="option-values" data-option-overflow={option.values.length > 8 ? "" : undefined}>
-                  {option.values.map((value) => {
-                    const selected = initialSelection[option.id] === value.id;
-                    const status = availability.get(value.id) ?? "sold_out";
-                    const optionPrice = optionPrices.has(value.id)
-                      ? formatPrice(optionPrices.get(value.id)!)
-                      : null;
-                    return (
-                      <button
-                        type="button"
-                        class:list={[
-                          "variant-option-btn cursor-pointer",
-                          {
-                            "border-primary bg-primary text-primary-foreground": selected,
-                            "border-input bg-background text-foreground": !selected && status === "available",
-                            "border-dashed border-muted-foreground bg-muted text-foreground": !selected && status === "incompatible",
-                            "border-input bg-background text-muted-foreground": !selected && status === "sold_out",
-                            // Dawn: a sold-out value stays choosable, crossed out, so its photo and "Sold out" show.
-                            "line-through": status === "sold_out",
-                          },
-                        ]}
-                        data-sx-buy="option"
-                        data-option-definition-id={option.id}
-                        data-option-value-id={value.id}
-                        data-option-value={value.value}
-                        data-option-availability={status}
-                        aria-pressed={selected ? "true" : "false"}
-                        aria-label={`${optionAriaLabel(option, value.value, status)}${optionPrice ? ` ${optionPrice}.` : ""}`}
-                      >
-                        <span>{value.value}</span>
-                        {factsColumn && <span data-option-price hidden={!optionPrice}>{optionPrice ?? ""}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
-              </fieldset>
-            </div>
-          );
-        })}
-      </div>}
+      {showPart("options") && <BuyFormOptions groups={optionGroups} pricedValues={factsColumn} layout={optionsLayout} />}
 
       {compactFacts.length > 0 && (
         <dl class="hidden space-y-1 pt-1 text-sm leading-5 lg:block" data-product-compact-facts>
@@ -450,27 +480,9 @@ function optionAriaLabel(
         <p id="product-online-payment-unavailable" data-purchase-blocked data-sx-buy="blocked" class="rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium text-foreground" role="status">{pageCopy.onlinePaymentRequiredText}</p>
       ) : null}
 
-      {hasBuyerInputs ? (
-        <ProductBuyerInputs
-          formId={buyFormId}
-          slug={product.slug}
-          fields={buyerInputFields}
-          copy={buyerInputCopy}
-          variantId={initialSelectedVariant?.id ?? null}
-          currencyPlaces={moneyPlaces(currencyDecimalPlaces, currencyCode)}
-          formatMoney={formatPrice}
-        />
-      ) : (
-        <form id={buyFormId} method="post" action={`/buy/${encodeURIComponent(product.slug)}`} data-product-buy-form data-sx-buy-form>
-          <input type="hidden" name="variant" value={initialSelectedVariant?.id ?? ""} />
-        </form>
-      )}
+      {showPart("inputs") && <BuyFormInputs {...formInputs} />}
 
-      <ProductPurchaseOptions
-        formId={buyFormId}
-        options={purchaseOptions}
-        copy={{ legend: catalogWords.purchaseOptions, oneTime: catalogWords.oneTimePurchase, price: catalogWords.purchaseOptionPrice }}
-      />
+      {showPart("purchase_options") && <ProductPurchaseOptions formId={buyFormId} options={purchaseOptions} copy={purchaseOptionsCopy} />}
 
       {noScriptVariants.length > 0 ? (
         <noscript>
@@ -494,36 +506,14 @@ function optionAriaLabel(
             : formatPrice(pricing.finalPrice)}
         </p>
       )}
-      {factsColumn && (
-        <div class="flex flex-wrap items-center gap-2">
-          <div id="product-stock-badge" data-sx-buy="stock-badge" class:list={["flex shrink-0 items-center whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm", stockAvailable ? "text-primary" : "text-destructive"]} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
-            <Icon name="circle" class="me-1 h-2 w-2 fill-current" aria-hidden="true" /><span id="product-stock-text" data-sx-buy="stock-text" class="font-medium">{stockLabel(buyerStockSummary.text)}</span>
-          </div>
-          {fulfilmentBadge ? <span class="flex shrink-0 items-center whitespace-nowrap rounded-full border border-border bg-muted px-2 py-0.5 text-sm font-medium text-foreground" data-fulfilment-badge>{fulfilmentBadge}</span> : null}
-        </div>
+      {factsColumn && showPart("stock") && <BuyFormStock {...stockProps} />}
+      {showPart("quantity") && (
+        <BuyFormQuantity formId={buyFormId} hidden={allSoldOut} label={actionCopy.quantityLabelText} decrease={catalogWords.decreaseQuantity} increase={catalogWords.increaseQuantity} />
       )}
-      <div hidden={allSoldOut} data-buy-part="quantity">
-        <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{actionCopy.quantityLabelText}</label>
-        <div class="flex items-center">
-          <button type="button" id="quantity-minus" data-sx-buy="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.decreaseQuantity}><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={buyFormId} data-sx-buy="quantity" aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
-          <button type="button" id="quantity-plus" data-sx-buy="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={catalogWords.increaseQuantity}><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
-        </div>
-        <p id="quantity-message" data-sx-buy="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
-      </div>
 
       {/* The purchase's messages: the choice for screen readers, and a refused add's problem (product-controller.ts). */}
-      <div class="space-y-2" data-buy-part="status" data-sx-buy="status" data-state="idle">
-        <p id="variant-availability-status" data-sx-buy="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></p>
-      </div>
-      <div class="buy-box-ctas flex gap-2 pt-1" data-buy-part="actions" data-sx-buy="ctas" data-state={actionPresentation.addToCart.disabled ? "unavailable" : "ready"}>
-        <button type="submit" form={buyFormId} data-action="add-to-cart" data-sx-buy="add" disabled={actionPresentation.addToCart.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
-          <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart" data-sx-buy="add-label">{actionPresentation.addToCart.label}</span>
-        </button>
-        <button type="submit" form={buyFormId} data-action="buy-now" data-sx-buy="buy" disabled={actionPresentation.buyNow.disabled} hidden={actionPresentation.buyNow.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.buyNow.ariaLabel}>
-          <span data-action-label="buy-now" data-sx-buy="buy-label">{actionPresentation.buyNow.label}</span>
-        </button>
-      </div>
+      {showPart("status") && <BuyFormStatus />}
+      {showPart("actions") && <BuyFormActions formId={buyFormId} actions={actionPresentation} off={!nativeActions} />}
       {allSoldOut && (
         <div class="space-y-2" data-product-sold-out>
           <p class="text-sm text-muted-foreground">{soldOutCopy.note}</p>
@@ -543,6 +533,7 @@ function optionAriaLabel(
     {details && <ProductDetails product={product} features={detailsFeatures} />}
   </div>
 </div>
+)}
 
 <style is:global>
   /* A `?variant=` link before product-controller.ts selects its SKU: the

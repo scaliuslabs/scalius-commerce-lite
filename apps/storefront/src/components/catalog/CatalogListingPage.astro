@@ -33,6 +33,8 @@ import AppComponent from "@/components/apps/AppComponent.astro";
 import CatalogEmbed from "./CatalogEmbed.astro";
 import { appSkin, renderAppSkin } from "@/lib/extensions";
 import { listingPageData, productCardsOf } from "@/lib/extensions/data";
+import { catalogListingPresentation } from "@/lib/catalog-listing";
+import { catalogEmbedControls, projectedFilterPlacement } from "@/lib/catalog-embed-controls";
 import type { EmbedRender, EmbedRenderers } from "@/lib/extensions/embeds";
 import type { StorefrontFieldValues, StorefrontListingPage } from "@scalius/shared/plugins/storefront-protocol";
 
@@ -100,6 +102,15 @@ const projection: StorefrontListingPage = listingPageData({
   breadcrumbs: breadcrumb ?? [],
   fields,
   children: childCategories,
+  // The placement the `filters` embed draws (a drawer sits as a sidebar there); none when it draws no filters.
+  filtersPlacement: projectedFilterPlacement(
+    catalogEmbedControls({
+      facets: listing.facets, ratingFacet: listing.ratingFacet ?? [], priceRange: listing.priceRange,
+      currentFilters: listing.queryState.currentFilters, query: listing.queryState.query, total: listing.pagination.total,
+      hasReviews: resolved.facts.hasReviews, storeShown: resolved.blocks.listing.filters.shown,
+    }).controls.filters,
+    catalogListingPresentation(resolved, listing.listingTemplate ?? null).filters.placement,
+  ),
 });
 const listingSkin = await appSkin(Astro.locals, Astro.url, "listing_main");
 const listingMarkup = listingSkin

@@ -1,0 +1,27 @@
+---
+// The buy form's actions part (`data-buy-part="actions"`): Add to cart and
+// Buy now, submit buttons of the form wherever they are drawn (`form=`),
+// which product-controller.ts runs. Drawn in the form (ProductSummary.astro)
+// or where a product_main skin placed it (`<BuyFormPart name="actions" />`).
+// `off` (`<BuyForm actions={false} />`, honoured): hidden, and shown only
+// while the buyer edits a cart line, as its one "Update cart".
+import Icon from "@/components/icons/Icon.astro";
+import type { ProductActionPresentation } from "../lib/product-actions";
+
+interface Props {
+  formId: string;
+  actions: { addToCart: ProductActionPresentation; buyNow: ProductActionPresentation };
+  off?: boolean;
+}
+
+const { formId, actions, off = false } = Astro.props;
+---
+
+<div class="buy-box-ctas flex gap-2 pt-1" data-buy-part="actions" data-sx-buy="ctas" data-state={actions.addToCart.disabled ? "unavailable" : "ready"} hidden={off} data-sx-buy-off={off ? "" : undefined}>
+  <button type="submit" form={formId} data-action="add-to-cart" data-sx-buy="add" disabled={actions.addToCart.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actions.addToCart.ariaLabel}>
+    <Icon name="shopping-cart" class="me-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart" data-sx-buy="add-label">{actions.addToCart.label}</span>
+  </button>
+  <button type="submit" form={formId} data-action="buy-now" data-sx-buy="buy" disabled={actions.buyNow.disabled} hidden={actions.buyNow.disabled} class="buy-box-cta flex min-h-12 flex-1 items-center justify-center rounded-[var(--theme-button-radius,var(--radius))] border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actions.buyNow.ariaLabel}>
+    <span data-action-label="buy-now" data-sx-buy="buy-label">{actions.buyNow.label}</span>
+  </button>
+</div>

@@ -5,7 +5,10 @@
 // templates and other content stay. A declaration is written for one document
 // version (`themeVersion`); the API runs it through the stored documents'
 // upgrade chain and lists only what then parses against the live schema,
-// reporting the rest on the app's page. The applied document is checked whole
+// reporting the rest on the app's page. A block a template names may leave
+// required nested fields out: they take the default theme's, and the block is
+// then validated as any other; an optional field it leaves out stays out (the
+// style's own value). The applied document is checked whole
 // (contrast included) when it is saved, so an app can never write a theme the
 // storefront cannot draw.
 
@@ -16,6 +19,7 @@ import { storefrontSectionListSchema, type StorefrontSection } from "./sections"
 import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
+import { DEFAULT_STOREFRONT_THEME } from "./templates";
 import {
   resolveStorefrontHandles,
   storefrontHandlePlaceholder,
@@ -108,6 +112,49 @@ function resolveTemplateParts(parts: Record<string, unknown>, lookup: Storefront
   return first ? { ok: false, problem: `No ${first.kind} has the handle ${first.handle}.` } : { ok: true, value: value as Record<string, unknown> };
 }
 
+/** The value at `path` inside `root`; undefined where the path leaves the objects. */
+function valueAt(root: unknown, path: readonly PropertyKey[]): unknown {
+  let value = root;
+  for (const key of path) {
+    if (!isRecord(value) && !Array.isArray(value)) return undefined;
+    value = (value as Record<PropertyKey, unknown>)[key];
+  }
+  return value;
+}
+
+/**
+ * Fills, in the template's blocks, each field the schema requires and the
+ * template leaves out, from the default theme's block at the same place
+ * (`issues` name them: a required field missing is an issue at its path).
+ * Optional fields are never filled: absent means the style's own value. A
+ * block naming another `variant` than the default's takes nothing from it
+ * below that variant (each variant has its own settings). Returns whether it
+ * filled any.
+ */
+function fillRequiredBlockFields(candidate: Record<string, unknown>, issues: z.ZodError["issues"]): boolean {
+  const defaults = DEFAULT_STOREFRONT_THEME.blocks as unknown as Record<string, unknown>;
+  let filled = false;
+  for (const issue of issues) {
+    const [root, ...path] = issue.path;
+    if (root !== "blocks" || path.length < 2) continue;
+    const parent = valueAt(candidate.blocks, path.slice(0, -1));
+    const key = path.at(-1)!;
+    if (!isRecord(parent) || parent[key as string] !== undefined) continue;
+    const fallback = valueAt(defaults, path);
+    if (fallback === undefined) continue;
+    // Never across a variant the template changed.
+    const crossesVariant = path.slice(0, -1).some((_, depth) => {
+      const declared = valueAt(candidate.blocks, path.slice(0, depth + 1));
+      const standard = valueAt(defaults, path.slice(0, depth + 1));
+      return isRecord(declared) && isRecord(standard) && "variant" in declared && declared.variant !== standard.variant;
+    });
+    if (crossesVariant) continue;
+    parent[key as string] = structuredClone(fallback);
+    filled = true;
+  }
+  return filled;
+}
+
 function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHandleLookup): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
   if (!isRecord(value)) return { ok: false, problem: "The template's theme is not an object." };
   const { sections: declared, ...declaredRest } = value;
@@ -118,7 +165,12 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
   if (!upgraded.ok) return upgraded;
   const { pages, ...parts } = upgraded.value;
   const home = isRecord(pages) ? pages.home : undefined;
-  const parsed = storefrontAppTemplateThemeSchema.safeParse(home === undefined ? parts : { ...parts, sections: home });
+  // A block may leave required fields out: each takes the default theme's, then the whole is checked again.
+  const candidate: Record<string, unknown> = structuredClone(home === undefined ? parts : { ...parts, sections: home });
+  let parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
+  for (let round = 0; !parsed.success && round < 16 && fillRequiredBlockFields(candidate, parsed.error.issues); round += 1) {
+    parsed = storefrontAppTemplateThemeSchema.safeParse(candidate);
+  }
   return parsed.success ? { ok: true, value: parsed.data, unresolved } : { ok: false, problem: issueText(parsed.error) };
 }
 

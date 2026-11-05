@@ -13,7 +13,17 @@ import AppComponent from "@/components/apps/AppComponent.astro";
 import AppSlot from "@/components/apps/AppSlot.astro";
 import { appSkin, appSlotComponents, renderAppSkin } from "@/lib/extensions";
 import { productPageData } from "@/lib/extensions/data";
-import { placedProductModules, productModuleOf, type EmbedRender, type EmbedRenderers } from "@/lib/extensions/embeds";
+import {
+  buyFormLabel,
+  buyFormOptionLayoutOf,
+  buyFormPartOf,
+  placedBuyFormParts,
+  placedDescriptionOmitted,
+  placedProductModules,
+  productModuleOf,
+  type EmbedRender,
+  type EmbedRenderers,
+} from "@/lib/extensions/embeds";
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme-editor-bridge";
@@ -511,6 +521,7 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   price: { current: buyerDisplayedPrice, regular: buyerPricePresentation.pricing.originalPrice, from: buyerPricePresentation.isStartingAt },
   variantPrice: getVariantSchemaPrice,
   page: { currencyCode, currencySymbol },
+  warrantyCopy: productPageCopy,
 });
 const productMainSkin = await appSkin(Astro.locals, Astro.url, "product_main");
 const productMainMarkup = productMainSkin
@@ -537,7 +548,8 @@ const placedModules = productMainMarkup ? placedProductModules(productMainMarkup
 // The details module draws the description, except below a skin (the skin
 // draws it itself) unless the skin places the module, which is then the
 // store's whole details module. With nothing to draw it goes.
-const detailsDescription = !productMainMarkup || placedModules.has("description");
+// A skin that places it with `description={false}` draws the description itself and keeps the other tabs here.
+const detailsDescription = !productMainMarkup || (placedModules.has("description") && !placedDescriptionOmitted(productMainMarkup.parts));
 const detailsContent = (detailsDescription && Boolean(product.description))
   || (product.additionalInfo?.length ?? 0) > 0 || (featuresAt === "description" && (product.features?.length ?? 0) > 0);
 // Every module the page draws, below or where the skin placed it.
@@ -615,11 +627,40 @@ const productGalleryProps = {
   stepLabels: { previous: shop.product.previousPhoto, next: shop.product.nextPhoto },
   positionLabel: shop.product.photoOf,
 };
+// The skin's one buy form, and the parts it places apart from it
+// (`<BuyFormPart />`): each part draws from the same summary, so its options,
+// buttons and words are the form's; the form leaves the placed parts out.
+const skinBuyForm = productMainMarkup?.parts.find((part) => part.kind === "embed" && part.embed === "buy_form");
+const skinBuyFormData: Readonly<Record<string, string>> = skinBuyForm?.kind === "embed" ? skinBuyForm.data : {};
+const skinBuyParts = productMainMarkup ? placedBuyFormParts(productMainMarkup.parts) : new Set<never>();
+const skinBuyLabels = { add: buyFormLabel(skinBuyFormData["add-label"]), buy: buyFormLabel(skinBuyFormData["buy-label"]) };
+const skinBuyBox = {
+  ...buyBox,
+  placed: [...skinBuyParts],
+  summary: {
+    ...buyBox.summary,
+    details: false,
+    title: skinBuyFormData.title !== "false",
+    nativeOptions: skinBuyFormData.options !== "false",
+    optionsLayout: buyFormOptionLayoutOf(skinBuyFormData["options-layout"]) ?? "buttons",
+    nativeActions: skinBuyFormData.actions !== "false",
+    actionCopy: {
+      ...buyBox.summary.actionCopy,
+      ...(skinBuyLabels.add ? { addToCartText: skinBuyLabels.add } : {}),
+      ...(skinBuyLabels.buy ? { buyNowText: skinBuyLabels.buy } : {}),
+    },
+  },
+};
 const productEmbeds: EmbedRenderers = {
-  "buy_form": ({ data }) => ({
-    component: ProductBuyBox as EmbedRender["component"],
-    props: { ...buyBox, summary: { ...buyBox.summary, details: false, title: data.title !== "false", nativeOptions: data.options !== "false" } },
-  }),
+  "buy_form": () => ({ component: ProductBuyBox as EmbedRender["component"], props: skinBuyBox }),
+  "buy_form_part": ({ data }) => {
+    const part = buyFormPartOf(data.name);
+    if (!part || !skinBuyForm) return null;
+    // An options part may draw its own layout; every other part draws as the form does.
+    const layout = part === "options" ? buyFormOptionLayoutOf(data.layout) : undefined;
+    const summary = layout ? { ...skinBuyBox.summary, optionsLayout: layout } : skinBuyBox.summary;
+    return { component: ProductBuyBox as EmbedRender["component"], props: { ...skinBuyBox, summary, only: part } };
+  },
   gallery: () => ({ component: ProductGallery as EmbedRender["component"], props: productGalleryProps }),
   reviews: () => ({
     component: ProductReviews as EmbedRender["component"],
@@ -855,7 +896,7 @@ const productCategoryAnalytics = productCategory
     <StickyBuyBar
       productName={product.name}
       action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true && !onlinePaymentUnavailable
-        ? { label: productPageCopy.addToCartText, disabled: false }
+        ? { label: skinBuyLabels.add ?? productPageCopy.addToCartText, disabled: false }
         : { label: productPageCopy.unavailableText, disabled: true }}
       price={formatMoney(buyerDisplayedPrice, { code: currencyCode, symbol: currencySymbol })}
       phone={sticky.phoneBottom === "buy-bar"}

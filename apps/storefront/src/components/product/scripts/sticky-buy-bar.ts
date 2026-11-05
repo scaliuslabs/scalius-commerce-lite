@@ -1,3 +1,5 @@
+import { BUY_FORM_PLACED_PART, buyFormPart, buyFormScopes } from "../lib/buy-scope";
+
 type BoundBar = HTMLElement & { __stickyBuyCleanup?: () => void };
 
 /**
@@ -14,13 +16,19 @@ type BoundBar = HTMLElement & { __stickyBuyCleanup?: () => void };
  */
 export function bindStickyBuyBar(bar: BoundBar, root: Document): void {
   bar.__stickyBuyCleanup?.();
-  // The buy form's own parts (host-only roles), never an app's look-alike markup.
-  const actions = root.querySelector<HTMLElement>('[data-sx-product-summary] [data-sx-buy="actions"]');
-  const main = actions?.querySelector<HTMLButtonElement>('[data-sx-buy="add"]');
+  // The buy form's own parts (host-only roles), never an app's look-alike
+  // markup: in its container, or placed apart by a skin (lib/buy-scope.ts).
+  const summary = root.querySelector<HTMLElement>("[data-sx-product-summary]");
+  const scopes = summary ? buyFormScopes(root, summary) : [];
+  const main = buyFormPart<HTMLButtonElement>(scopes, "add");
   const action = bar.querySelector<HTMLButtonElement>("[data-sticky-buy-action]");
   const price = bar.querySelector<HTMLElement>("[data-sticky-buy-price]");
-  const mainPrice = actions?.querySelector<HTMLElement>('[data-sx-buy="price"]');
-  if (!actions || !main || !action || !price) return;
+  const mainPrice = buyFormPart(scopes, "price");
+  // The bar shows once the buttons have scrolled away: the form's body, or the buttons' own row placed apart.
+  const formBody = summary?.querySelector<HTMLElement>('[data-sx-buy="actions"]') ?? null;
+  const actions = main && formBody?.contains(main) ? formBody : main?.closest<HTMLElement>(`[${BUY_FORM_PLACED_PART}]`) ?? null;
+  // A skin without the form's own buttons (`actions={false}`) gets no bar pressing them.
+  if (!actions || !main || !action || !price || main.closest("[data-sx-buy-off]")) return;
 
   const sync = () => {
     price.textContent = mainPrice?.textContent?.trim() ?? "";

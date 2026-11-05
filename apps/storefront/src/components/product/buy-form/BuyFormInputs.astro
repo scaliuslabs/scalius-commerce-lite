@@ -1,0 +1,29 @@
+---
+// The buy form itself (`data-buy-part="inputs"` with buyer inputs): its
+// fields, checks and messages (a protection choice, an engraving), or, for a
+// product without buyer inputs, the bare form holding the chosen SKU. Every
+// other part posts to it with `form=`. Drawn in the form's container
+// (ProductSummary.astro) or where a product_main skin placed it
+// (`<BuyFormPart name="inputs" />`).
+import type { ComponentProps } from "astro/types";
+import ProductBuyerInputs from "../ProductBuyerInputs.astro";
+
+interface Props {
+  formId: string;
+  slug: string;
+  /** The SKU the form opens on; "" without one. */
+  variantId: string;
+  /** The buyer inputs; none renders the bare form. */
+  inputs: Omit<ComponentProps<typeof ProductBuyerInputs>, "formId" | "slug" | "variantId"> | null;
+}
+
+const { formId, slug, variantId, inputs } = Astro.props;
+---
+
+{inputs ? (
+  <ProductBuyerInputs formId={formId} slug={slug} variantId={variantId || null} {...inputs} />
+) : (
+  <form id={formId} method="post" action={`/buy/${encodeURIComponent(slug)}`} data-product-buy-form data-sx-buy-form>
+    <input type="hidden" name="variant" value={variantId} />
+  </form>
+)}

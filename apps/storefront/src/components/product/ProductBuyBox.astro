@@ -4,9 +4,13 @@
 // EMI, contact links, the buy box's app slots, digital promise, delivery facts,
 // warranty). One component for both places it draws: the core product page,
 // and a product_main skin's buy form embed (`<scalius-embed kind="buy_form">`),
-// so a skin always gets the store's own form, rules, scripts and words.
+// so a skin always gets the store's own form, rules, scripts and words. A
+// skin's `<BuyFormPart />` draws one part of the same form where the skin
+// placed it (`only`), and the form leaves that part out (`placed`).
 import type { ComponentProps } from "astro/types";
-import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontBuyFormPart, StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
+import { BUY_FORM_PLACED_PART } from "./lib/buy-scope";
+import { skuWarranties } from "./sku-warranties";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import type { ProductFulfilment } from "@/lib/delivery-facts";
 import type { StoreContactLink } from "@/lib/store-contact";
@@ -40,13 +44,29 @@ interface Props {
   canPurchaseAny: boolean;
   /** The SKU the page opens with (the page's opening choice); null when it names none. Its warranty row shows. */
   openingVariantId: string | null;
+  /** The parts a product_main skin places apart from the form (`<BuyFormPart />`): the form leaves them out. */
+  placed?: readonly StorefrontBuyFormPart[];
+  /** Draw only this part, where a skin placed it (a `buy_form_part` embed). */
+  only?: StorefrontBuyFormPart;
 }
 
-const { summary, reviewCopy, features, emi, contactLinks, contactCopy, blockData, fulfilment, deliveryFacts, canPurchaseAny, openingVariantId } = Astro.props;
+const { summary, reviewCopy, features, emi, contactLinks, contactCopy, blockData, fulfilment, deliveryFacts, canPurchaseAny, openingVariantId, placed = [], only } = Astro.props;
 const { product } = summary;
+const warrantyPlaced = placed.includes("warranty");
+const hasWarranty = only === "warranty" && skuWarranties(product, summary.variants).byId.size > 0;
+const placedPart = { [BUY_FORM_PLACED_PART]: only };
 ---
 
-<ProductSummary {...summary} projection={blockData()}>
+{only === "warranty" ? (
+  hasWarranty && (
+    <div {...placedPart}>
+      <WarrantyRow product={product} variants={summary.variants} initialVariantId={openingVariantId} copy={summary.actionCopy} />
+    </div>
+  )
+) : only ? (
+  <ProductSummary {...summary} projection={blockData()} only={only} />
+) : (
+<ProductSummary {...summary} projection={blockData()} placed={placed}>
   <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
   <AppSlot slot="after-title" name="product.buy_box.before" data={blockData} />
   {features.shown && (
@@ -71,5 +91,6 @@ const { product } = summary;
   <AppSlot slot="after-actions" name="product.buy_box.after" data={blockData} />
   <DigitalPromise slot="after-actions" product={product} fulfilment={fulfilment} />
   {canPurchaseAny && <DeliveryFacts slot="after-actions" facts={deliveryFacts} variant="list" />}
-  <WarrantyRow slot="after-actions" product={product} variants={summary.variants} initialVariantId={openingVariantId} copy={summary.actionCopy} />
+  {!warrantyPlaced && <WarrantyRow slot="after-actions" product={product} variants={summary.variants} initialVariantId={openingVariantId} copy={summary.actionCopy} />}
 </ProductSummary>
+)}

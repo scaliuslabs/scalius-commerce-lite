@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { bundlePlugin, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sealBundle, smokeSettings } from "./plugin-build.mjs";
+import { bundlePlugin, componentJobs, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sealBundle, smokeSettings } from "./plugin-build.mjs";
 import { BUNDLE_MAX_BYTES, shownPath } from "./plugin-registry.mjs";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
@@ -169,7 +169,76 @@ const PORTABILITY_LABELS = {
   fixed_identity: "Store name and logo",
   artwork_size: "Artwork size",
   artwork_mark: "Artwork rights",
+  island_props_url: "Island props",
 };
+
+const ISLAND = /<scalius-island\b[^>]*?\sdata-island="([^"]*)"[^>]*?\sdata-props="([^"]*)"/g;
+/** An absolute, protocol-relative or store-path link (`/products/…`), as a prop value. */
+const LINK = /^(?:[a-z][a-z0-9+.-]*:\/\/|\/\/|\/(?!\/))\S*$/i;
+
+function decodeAttribute(value) {
+  return value.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+/** The links among a prop value's strings (nested arrays and objects included), the first few. */
+function propLinks(value, found = []) {
+  if (found.length >= 3) return found;
+  if (typeof value === "string") {
+    if (LINK.test(value.trim())) found.push(value.trim());
+  } else if (Array.isArray(value)) {
+    for (const item of value) propLinks(item, found);
+  } else if (value && typeof value === "object") {
+    for (const item of Object.values(value)) propLinks(item, found);
+  }
+  return found;
+}
+
+/**
+ * Islands whose props carry links: rendered with their defaults over the
+ * sample store's data. A link in markup is checked by the store and follows
+ * the page's market path (`/en-in/…`); one in an island's props is JSON the
+ * store passes as is, so it can point off the store or at the wrong market.
+ * Put links in the markup the island enhances, or pass handles.
+ */
+export function islandPropsLinkNotes(contract, manifest, module) {
+  const { sections, components, skins } = manifest.storefront;
+  if (!module || manifest.storefront.islands.length === 0) return [];
+  const jobs = [
+    ...sections.map((section) => ({ id: `section ${section.type}`, kind: "section", type: section.type, instanceId: "validate", settings: smokeSettings(contract, section.settings) })),
+    ...componentJobs(contract, components, "validate").map((job) => ({ ...job, id: `component ${job.type} (${job.target})` })),
+    ...skins.map((skin) => ({
+      id: `skin ${skin.id} (${skin.target})`, kind: "skin", target: skin.target, component: skin.id, settings: smokeSettings(contract, skin.settings),
+      data: contract.fixtureSkinData(skin.target), ...(skin.target.startsWith("section:") ? { instanceId: "validate" } : {}),
+    })),
+  ];
+  let results;
+  try {
+    results = module.render({ abi: contract.STOREFRONT_COMPONENT_ABI, context: contract.fixtureContext(), jobs }).results;
+  } catch {
+    return [];
+  }
+  const notes = [];
+  for (const result of results) {
+    if (!("html" in result)) continue;
+    for (const [, island, raw] of result.html.matchAll(ISLAND)) {
+      let props;
+      try {
+        props = JSON.parse(decodeAttribute(raw));
+      } catch {
+        continue;
+      }
+      const links = propLinks(props);
+      if (links.length === 0) continue;
+      notes.push({
+        level: "warn",
+        rule: "island_props_url",
+        where: `${result.id}, island ${island}`,
+        message: `its props carry links (${links.join(", ")}). The store checks links in markup and keeps them on the page's market path; props reach the island unchecked. Put links in the markup the island enhances (an <a> it reads), or pass handles.`,
+      });
+    }
+  }
+  return notes;
+}
 
 /** A store name and logo no fixture uses, so a skin that draws them shows them and a fixed wordmark does not. */
 const PROBE_STORE = "Probe Store Kestrel";
@@ -227,6 +296,7 @@ async function portabilityNotes(contract, manifest, files) {
   notes.push(...contract.storefrontModuleFieldNotes(text, manifest.id));
   const loaded = await import(`data:text/javascript;base64,${Buffer.from(moduleFile.bytes).toString("base64")}`);
   notes.push(...identityNotes(contract, manifest, loaded.default));
+  notes.push(...islandPropsLinkNotes(contract, manifest, loaded.default));
   return notes;
 }
 
