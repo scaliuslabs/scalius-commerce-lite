@@ -117,6 +117,17 @@ export const policies = [
     sample: 'badge.textContent = String(count);',
   },
   {
+    rule: "every order-status surface words its tracker, updates and shipments through presentOrderTracking",
+    why: "order success relabelled the API's English steps without wording them by key, so a Bangla receipt read 'Order placed / Confirmed / On its way' while /track-order read Bangla (apps/storefront/src/lib/account-format.ts)",
+    paths: [storefront],
+    allow: {
+      "apps/storefront/src/lib/account-format.ts": "presentOrderTracking itself",
+      "apps/storefront/src/lib/order-line-groups.ts": "the pickup and no-delivery relabelling it calls",
+    },
+    forbid: [/\b(?:wordOrderTracking|relabelOrderProgress|relabelOrderTimeline)\(/],
+    sample: "const progress = relabelOrderProgress(tracking.progress, order, copy);",
+  },
+  {
     rule: "a storefront component that reads its request's language writes its counts in that language",
     why: "formatCount reads the page language the layout seeded, so a card rendered on its own (a fragment, a test render) read '১২৮টি' as '128টি' beside a Bangla rating; a component holding the request's language passes it (formatPageNumber(n, language)); browser scripts after <script keep formatCount",
     paths: [storefront],

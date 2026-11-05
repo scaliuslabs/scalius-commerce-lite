@@ -4,13 +4,15 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-languag
 interface Props {
   current: "information" | "payment" | "confirmation";
   paymentRequired?: boolean;
+  /** The page may drop the payment step once the buyer's methods leave cash alone (the cart page's script). */
+  paymentStepMayHide?: boolean;
   copy?: import("@scalius/shared/checkout-language").CheckoutLanguageData;
 }
 
-const { current, paymentRequired = true, copy = ENGLISH_CHECKOUT_LANGUAGE_DATA } = Astro.props;
+const { current, paymentRequired = true, paymentStepMayHide = false, copy = ENGLISH_CHECKOUT_LANGUAGE_DATA } = Astro.props;
 const allSteps = [
   { id: "information", label: copy.informationStepText },
-  ...(paymentRequired ? [{ id: "payment", label: copy.paymentStepText }] : []),
+  ...(paymentRequired || paymentStepMayHide ? [{ id: "payment", label: copy.paymentStepText }] : []),
   { id: "confirmation", label: copy.confirmationStepText },
 ] as const;
 ---
@@ -24,7 +26,11 @@ const allSteps = [
         const canReturnToInformation =
           step.id === "information" && current === "payment";
         return (
-          <li class="contents">
+          <li
+            class="contents"
+            hidden={step.id === "payment" && !paymentRequired}
+            data-checkout-payment-step={step.id === "payment" && paymentStepMayHide ? "" : undefined}
+          >
             {canReturnToInformation ? (
               <a
                 href="/cart"

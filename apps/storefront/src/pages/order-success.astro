@@ -63,9 +63,8 @@ import {
   safeTrackingUrl,
   type OrderTrackingText,
 } from "@/lib/order-tracking-markup";
+import { presentOrderTracking } from "@/lib/account-format";
 import {
-  relabelOrderProgress,
-  relabelOrderTimeline,
   withOrderCompletionWording,
 } from "@/lib/order-line-groups";
 
@@ -295,12 +294,9 @@ const paymentNeedsBuyer = orderSuccessView?.kind === "payment_pending" || orderS
 const statusTitle = checkoutText(copy.orderStatusTitleText, { orderNumber });
 const receiptTracking = statusView ? order?.tracking ?? null : null;
 // Pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
+// In the page's words by their keys, as every order-status surface words them (presentOrderTracking).
 const tracking = order && receiptTracking
-  ? {
-      ...receiptTracking,
-      progress: relabelOrderProgress(receiptTracking.progress, order, copy),
-      timeline: relabelOrderTimeline(receiptTracking.timeline, order, copy),
-    }
+  ? presentOrderTracking(receiptTracking, receiptTracking.shipments[0]?.courierName ?? null, order, copy)
   : null;
 const trackingText: OrderTrackingText = {
   done: copy.orderTrackingStepDoneText,
@@ -445,7 +441,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
 
     {tracking && (
       <section class="no-print mb-6 rounded-xl border border-border bg-background p-4 sm:p-6" aria-label={copy.orderReceiptStatusText}>
-        <div set:html={orderProgressMarkup(tracking.progress, trackingText)} />
+        {tracking.progress && <div set:html={orderProgressMarkup(tracking.progress, trackingText)} />}
         {trackingShipments && <div class="mt-4 space-y-3" set:html={trackingShipments} />}
         {tracking.timeline.length > 0 && (
           <>

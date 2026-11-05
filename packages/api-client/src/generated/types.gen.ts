@@ -20589,6 +20589,10 @@ export type PostApiV1OrdersLookupStatusResponses = {
                         details?: string | null;
                     }>;
                     shipments: Array<{
+                        /**
+                         * The shipment's state key (booked, in_transit, delivered and so on); a storefront words it in its page's language
+                         */
+                        status: string;
                         statusLabel: string;
                         courierName: string | null;
                         trackingId: string | null;
@@ -21443,6 +21447,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         details?: string | null;
                     }>;
                     shipments: Array<{
+                        /**
+                         * The shipment's state key (booked, in_transit, delivered and so on); a storefront words it in its page's language
+                         */
+                        status: string;
                         statusLabel: string;
                         courierName: string | null;
                         trackingId: string | null;

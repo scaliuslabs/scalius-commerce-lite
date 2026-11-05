@@ -76914,6 +76914,10 @@
                                   "items": {
                                     "type": "object",
                                     "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "description": "The shipment's state key (booked, in_transit, delivered and so on); a storefront words it in its page's language"
+                                      },
                                       "statusLabel": {
                                         "type": "string"
                                       },
@@ -76932,6 +76936,7 @@
                                       }
                                     },
                                     "required": [
+                                      "status",
                                       "statusLabel",
                                       "courierName",
                                       "trackingId",
@@ -81297,6 +81302,10 @@
                                   "items": {
                                     "type": "object",
                                     "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "description": "The shipment's state key (booked, in_transit, delivered and so on); a storefront words it in its page's language"
+                                      },
                                       "statusLabel": {
                                         "type": "string"
                                       },
@@ -81315,6 +81324,7 @@
                                       }
                                     },
                                     "required": [
+                                      "status",
                                       "statusLabel",
                                       "courierName",
                                       "trackingId",

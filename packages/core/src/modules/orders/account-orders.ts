@@ -879,6 +879,7 @@ export async function getBuyerOrderTracking(
         progress,
         timeline,
         shipments: shipments.map((shipment) => ({
+            status: shipment.status,
             statusLabel: customerShipmentStatusLabel(shipment.status),
             courierName: shipment.courierName?.trim() || shipment.providerName?.trim() || null,
             trackingId: shipment.trackingId?.trim() || null,
