@@ -50,6 +50,11 @@ export function isSamplePage(page: EditorPage): page is { kind: SamplePageKind }
   return (SAMPLE_PAGE_KINDS as readonly string[]).includes(page.kind);
 }
 
+/** The buyer's pages whose layout choices (blocks.cart, checkout, receipt, account) show on wide screens only. */
+export function showsWideScreenChoices(page: EditorPage): boolean {
+  return page.kind === "cart" || isSamplePage(page);
+}
+
 export function isResourcePage(page: EditorPage): page is { kind: ResourcePageKind } {
   return (RESOURCE_PAGE_KINDS as readonly string[]).includes(page.kind);
 }
