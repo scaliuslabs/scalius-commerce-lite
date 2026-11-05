@@ -2,13 +2,14 @@
 // checkout consent checkbox (label per language, channels; always unchecked,
 // never required) and e-mail double opt-in. One settings document with its
 // revision; a stale save is a 409.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { marketingConsentDocument } from "@scalius/core/modules/settings";
 import { marketingConsentSettingsSchema } from "@scalius/shared/customer-marketing";
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const payloadSchema = z.object({
     settings: marketingConsentSettingsSchema,

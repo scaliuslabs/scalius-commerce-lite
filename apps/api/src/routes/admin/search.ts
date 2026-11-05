@@ -1,13 +1,14 @@
 // src/server/routes/admin/search.ts
 // Admin OpenAPI routes for search: the dashboard's global search (⌘K).
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { ok } from "../../utils/api-response";
 import { GLOBAL_SEARCH_KINDS, GLOBAL_SEARCH_LIMIT, globalSearch, type GlobalSearchKind } from "./global-search";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import { protectedField as pii } from "../../schemas/protected";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 // ── Global search (the dashboard's ⌘K) ──
 

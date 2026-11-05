@@ -1,6 +1,7 @@
 // URL redirects (Online store -> Navigation -> URL redirects): list, add and
 // delete. A product's URL handle change writes its own (products routes).
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
   createUrlRedirect,
   deleteUrlRedirect,
@@ -11,7 +12,7 @@ import {
 import { ok, created } from "../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAGS = ["Admin - URL redirects"];
 
 const UrlRedirectResource = z.object({

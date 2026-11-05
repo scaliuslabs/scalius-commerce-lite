@@ -5,7 +5,8 @@
 // keys and the checkout authority fence in the write transaction. A change of
 // the backup market's price increment queues a catalogue projection rebuild,
 // because card prices round to it.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Context } from "hono";
 import { createMarket, deleteMarket, getMarket, listMarkets, listOwnMarketCurrencies, readStoreCurrency, updateMarket } from "@scalius/core/modules/markets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
@@ -23,7 +24,7 @@ import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { createMarketSchema, marketPricingInput, marketRecordSchema, presentMarket, updateMarketSchema } from "../../../schemas/markets";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Markets";
 const marketParam = z.object({ id: z.string().min(1).max(64) });

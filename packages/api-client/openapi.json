@@ -128492,6 +128492,7 @@
           "Admin - Customers"
         ],
         "summary": "Update a customer",
+        "description": "Changes the contact and tax fields sent. Tags are replaced with `PUT /api/v1/admin/customers/{id}/tags` and addresses through `/addresses`; a field this body does not declare is refused (400 `validation_error`), nothing saved.",
         "parameters": [
           {
             "schema": {

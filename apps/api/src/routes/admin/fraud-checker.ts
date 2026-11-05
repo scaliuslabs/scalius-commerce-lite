@@ -4,7 +4,8 @@
 // order page's manual lookup through the first active one. Advice for the
 // merchant, never automatic blocking.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     getFraudProviders,
     saveFraudProvider,
@@ -19,7 +20,7 @@ import { NotFoundError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const FRAUD_PROVIDER_PAGE_LIMIT = 20;
 /** An installed app's fraud provider (`<plugin id>:<provider id>`). */
 const appProviderTypeSchema = z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>.");

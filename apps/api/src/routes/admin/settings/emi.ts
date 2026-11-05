@@ -1,6 +1,7 @@
 // EMI plans: the store's "EMI on card payment, from X/month" line on
 // eligible products. Informational only; checkout offers no EMI.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { getEmiSettings, saveEmiSettings } from "@scalius/core/modules/settings";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { EMI_MAX_FEE_BPS, EMI_MAX_MONTHS, EMI_MAX_PLANS, EMI_MIN_MONTHS } from "@scalius/shared/emi";
@@ -9,7 +10,7 @@ import { ok } from "../../../utils/api-response";
 
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const emiPlanSchema = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/).openapi({ description: "A stable id the editor assigns (lowercase letters, numbers, - and _)." }),

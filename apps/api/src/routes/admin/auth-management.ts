@@ -3,6 +3,7 @@ import { randomString } from "@scalius/shared/random";
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
 import { settingsMirror } from "@scalius/core/settings-store";
@@ -90,7 +91,7 @@ import { STORE_NAME_MAX_LENGTH, applyStoreSetup } from "@scalius/core/modules/on
 import { TIME_ZONE_MAX_LENGTH, isValidTimeZone } from "@scalius/shared/commerce-time";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
 import { rebuildCatalogProjectionsAfterWrite } from "../../background/catalog";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90;
 const ADMIN_USER_PAGE_LIMIT = 2;
 const ADMIN_USER_ROLE_LIMIT = 20;

@@ -6,7 +6,8 @@
 //
 // Staff never see a plaintext licence key after import: pools list keys by
 // their last 4 characters only.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     completeDigitalAssetUpload,
     createDigitalAsset,
@@ -43,9 +44,9 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 
-export const adminDigitalAssetRoutes = new OpenAPIHono<{ Bindings: Env }>();
-export const adminProductDigitalAssetRoutes = new OpenAPIHono<{ Bindings: Env }>();
-export const adminDigitalEntitlementRoutes = new OpenAPIHono<{ Bindings: Env }>();
+export const adminDigitalAssetRoutes = adminRouter();
+export const adminProductDigitalAssetRoutes = adminRouter();
+export const adminDigitalEntitlementRoutes = adminRouter();
 
 const TAG = "Admin - Digital goods";
 

@@ -4,7 +4,8 @@
 // unsubscribe. Every staff member manages only their own browsers. A staff
 // push (new order, a staff alert, an app's `notifyStaff`) goes to Firebase
 // devices and these browsers alike.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   deletePushSubscription,
@@ -21,7 +22,7 @@ import { isWithinRateLimit } from "../../utils/rate-limit";
 import { noContent, ok } from "../../utils/api-response";
 import { errorResponses, noContentResponse, successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAG = "Admin - Web Push";
 
 function staffId(c: Context): string {

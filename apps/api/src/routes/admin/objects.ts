@@ -1,6 +1,7 @@
 // Static object operations: agents discover the fields at runtime; apps own
 // their definitions in manifests and staff edit only types in custom.*.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import type { Context } from "hono";
 import {
@@ -13,7 +14,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAG = "Admin - Objects";
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 const statusSchema = z.enum(OBJECT_STATUSES);

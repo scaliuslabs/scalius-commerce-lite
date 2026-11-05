@@ -1,5 +1,6 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "../idempotency";
 import { listGiftCardPaymentLinks } from "../../shared/gift-card-payment-links";
 import { relatedObjectsProjection, withRelatedObjects } from "../related-objects";
@@ -106,7 +107,7 @@ import {
 import { notificationSender } from "../../../background/notification-sender";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const recoveryLinkPaymentTypeSchema = z.enum(["full", "deposit", "balance"]);
 

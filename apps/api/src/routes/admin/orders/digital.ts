@@ -2,7 +2,8 @@
 // delivery message. The outbox row carries ids only; the files and keys are
 // resolved when it is sent. Permission: ORDERS_EDIT in
 // packages/core/src/auth/rbac/route-permissions/digital.ts.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { countOrderDigitalEntitlements } from "@scalius/core/modules/digital";
 import { recordAndSendNotification } from "@scalius/core/modules/notifications";
 import { AppError } from "@scalius/core/errors";
@@ -10,7 +11,7 @@ import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { notificationSender } from "../../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.openapi(createRoute({
     method: "post",

@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     archivePromotionDraft,
     activatePromotion,
@@ -29,7 +30,7 @@ import {
 } from "../../schemas/responses";
 
 // The one discount engine: code and automatic discounts (promotions tables).
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAG = "Admin - Discounts";
 const idParam = z.object({ id: z.string().trim().min(1).max(180) });
 const expectedRevisionField = z.number().int().positive().openapi({

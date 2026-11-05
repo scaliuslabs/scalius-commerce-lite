@@ -193,10 +193,12 @@ export async function turnOnThisDevice(publicKey: string, deviceLabel: string): 
     if (!await messagePushWorker(registration, "scalius:push:enrolled", startedAt)) {
       throw new Error("The notification worker could not confirm this sign-in.");
     }
+    // The endpoint and its keys: the API takes no other part of the subscription.
+    const { endpoint, keys } = subscription.toJSON();
     const saved = await apiData(apiClient.post<{ 200: { success: boolean; data: { id: string } } }>({
       url: `${WEB_PUSH_URL}/subscriptions`,
       headers: JSON_HEADERS,
-      body: { ...subscription.toJSON(), deviceLabel },
+      body: { endpoint, keys, deviceLabel },
     }));
     rememberDevice(saved.id);
     return { id: saved.id };

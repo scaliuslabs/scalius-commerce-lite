@@ -2,7 +2,8 @@
 // row names it as `<plugin id>:<provider id>` and keeps no keys, its
 // settings live in the app (GET/POST /admin/settings/providers lists and
 // tests them). Readiness, activation and tests go through the courier port.
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
     courierFor,
     deleteDeliveryProvider,
@@ -22,7 +23,7 @@ import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 import { providerConnectionSchema } from "../../../schemas/app-settings";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const PROVIDER_TYPE_MAX = 160;
 const DELIVERY_PROVIDER_PAGE_LIMIT = 10;

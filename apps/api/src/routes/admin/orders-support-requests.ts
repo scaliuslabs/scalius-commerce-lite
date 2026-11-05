@@ -1,10 +1,5 @@
-import {
-    OpenAPIHono,
-    createRoute,
-    z,
-    type RouteConfig,
-    type RouteHandler,
-} from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     ADMIN_ORDER_SUPPORT_REQUEST_STATUSES,
     getOrderSupportRequestStatusLabel,
@@ -34,7 +29,7 @@ import { hasPermission } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { notificationSender } from "../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 

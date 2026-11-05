@@ -3,7 +3,8 @@
 
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import type { Context } from "hono";
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     getInventoryOverview,
     getInventoryLabelVariants,
@@ -60,7 +61,7 @@ import { presentSkuCost } from "./cost-access";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];

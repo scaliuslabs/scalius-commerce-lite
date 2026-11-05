@@ -23,7 +23,8 @@
 // writes with their own receipt fields beside it, and every write takes the
 // draft's `revision` as `expectedRevision` (plus `basePublishedRevision`, the
 // live theme the draft was based on).
-import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   STOREFRONT_DECLARATION_THEME_VERSION,
@@ -49,7 +50,7 @@ import { conflictResponse, errorResponses, successEnvelope } from "../../schemas
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

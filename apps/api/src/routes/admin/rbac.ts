@@ -1,7 +1,8 @@
 // src/server/routes/admin/rbac.ts
 // Admin OpenAPI routes for RBAC (roles, permissions, user roles).
 
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { eq, inArray, and, count } from "drizzle-orm";
 import { chunkForD1, type Database } from "@scalius/database/client";
 import { autoSeedRbacIfNeeded } from "@scalius/core/auth/rbac/auto-seed";
@@ -26,7 +27,7 @@ import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
 import { successEnvelope, errorResponses, conflictResponse } from "../../schemas/responses";
 import { delegatingUser } from "./delegation";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const ROLE_LIST_PAGE_LIMIT = 1;
 const ROLE_PERMISSION_LIMIT = 200;
 const ACCOUNT_ROLE_LIMIT = 10;

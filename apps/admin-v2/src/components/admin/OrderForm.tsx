@@ -399,9 +399,10 @@ function OrderEditor({
       city: needsAddress && !abroad ? quoteCity : null,
       zone: needsAddress && !abroad ? quoteZone : null,
       area: needsAddress && !abroad ? quoteArea : null,
-      // Kept lines carry their order line id so they keep their original price.
+      // Kept lines carry their order line id so they keep their original price
+      // (an amendment's only: a new order's quote takes none).
       items: quoteItems.map((item) => ({
-        orderItemId: item.orderItemId,
+        ...(isEdit && item.orderItemId ? { orderItemId: item.orderItemId } : {}),
         productId: item.productId,
         variantId: item.variantId,
         quantity: item.quantity,
@@ -451,8 +452,8 @@ function OrderEditor({
       // The total depends only on lines, destination, delivery and discount; the
       // saved contact details keep the preview valid while the merchant types.
       const saved = defaultValues ?? {};
-      // An amendment keeps the order's delivery method; only the charge is edited.
-      const { shippingMethodId: _method, ...previewInput } = debouncedQuoteInput as typeof debouncedQuoteInput & { shippingMethodId?: string };
+      // An amendment keeps the order's delivery method and payment; only the charge is edited.
+      const { shippingMethodId: _method, paymentMethod: _payment, ...previewInput } = debouncedQuoteInput as typeof debouncedQuoteInput & { shippingMethodId?: string; paymentMethod?: string };
       return apiData(postApiV1AdminOrdersByIdAmendmentsPreview({
         path: { id: String(orderId ?? "") },
         body: {

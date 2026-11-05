@@ -5,7 +5,8 @@
 // machine translation through an app's translation provider (no built-in
 // one). A save replaces the resource's translation in one batch; triggers
 // advance the resource's `tr:` cache key.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   deleteResourceTranslation,
@@ -41,7 +42,7 @@ import {
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Translations";
 const resourceParam = z.object({ type: z.enum(TRANSLATION_EDITOR_TYPES), id: z.string().min(1).max(128) });

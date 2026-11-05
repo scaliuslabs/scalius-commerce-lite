@@ -8,7 +8,8 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 // empty unless they hold `orders.view`. The projection happens here, at the
 // boundary, so no client can read what the role excludes.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
     getDashboardHomeSummary,
@@ -34,7 +35,7 @@ import { timestampSchema } from "../../schemas/timestamps";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
 const BANGLADESH_PACK_ID = "scalius.bangladesh";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const DASHBOARD_RECENT_ORDER_LIMIT = 11;
 const DASHBOARD_ORDER_ID_MAX_LENGTH = 128;
 const DASHBOARD_CUSTOMER_NAME_MAX_LENGTH = 256;

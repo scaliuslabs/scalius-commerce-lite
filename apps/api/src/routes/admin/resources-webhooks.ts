@@ -7,7 +7,8 @@
 // delivery re-checks that grant (plugins/webhook-access.ts), and uninstalling
 // the app deletes its subscriptions. Deliveries are signed like every webhook
 // (COMMERCE-HOOKS H3); the secret is returned once, at create.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import type { Context } from "hono";
 import {
@@ -31,7 +32,7 @@ import { conflictResponse, errorResponses, successEnvelope } from "../../schemas
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { readAppWebhookAccess } from "../../plugins/webhook-access";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

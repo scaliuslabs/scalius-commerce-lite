@@ -158,11 +158,13 @@ export function CollectionForm({
     }
     setIsSubmitting(true);
     try {
+      // The form's id and version name the record; the body carries its fields only.
+      const { id: _id, version: _version, ...fields } = values;
       const submission = {
-        ...values,
+        ...fields,
         config: {
-          ...values.config,
-          featuredProductId: values.config.featuredProductId || "",
+          ...fields.config,
+          featuredProductId: fields.config.featuredProductId || "",
         },
       };
       let savedCollectionId: string;
