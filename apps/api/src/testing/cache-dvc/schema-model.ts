@@ -30,6 +30,8 @@ export interface ColumnModel {
   readonly references: { readonly table: string; readonly column: string } | null;
   /** Registry noise column of a registered table. */
   readonly noise: boolean;
+  /** Its CHECK holds it to a lowercase `#rrggbb` colour (`col GLOB '#[0-9a-f]…'`): values are generated as one. */
+  readonly hexColour: boolean;
 }
 
 export interface TableModel {
@@ -87,6 +89,13 @@ function checkInLists(createSql: string): Map<string, string[]> {
   return lists;
 }
 
+/** Text columns a table's CHECK constraints hold to a lowercase `#rrggbb` colour. */
+function checkHexColourColumns(createSql: string): Set<string> {
+  const columns = new Set<string>();
+  for (const match of createSql.matchAll(/[`"]?([A-Za-z_][A-Za-z0-9_]*)[`"]?\s+GLOB\s+'#\[0-9a-f\]/gi)) columns.add(match[1]!);
+  return columns;
+}
+
 /** Text columns a table's CHECK constraints require to hold JSON (`json_valid(col)`). */
 function checkJsonColumns(createSql: string): Set<string> {
   const columns = new Set<string>();
@@ -120,6 +129,7 @@ export function loadSchemaModel(sqlite: DatabaseSync): SchemaModel {
     const facts = drizzle.get(row.name);
     const checkLists = checkInLists(row.sql ?? "");
     const jsonChecked = checkJsonColumns(row.sql ?? "");
+    const hexChecked = checkHexColourColumns(row.sql ?? "");
     const spec = isCacheDepTable(row.name) ? CACHE_DEP_TABLES[row.name] : null;
     const noise = new Set<string>(spec ? spec.noise : []);
     const columns: ColumnModel[] = info.map((column) => {
@@ -143,6 +153,7 @@ export function loadSchemaModel(sqlite: DatabaseSync): SchemaModel {
         enumValues: fact?.enumValues ?? checkLists.get(column.name) ?? null,
         references: reference ? { table: reference.table, column: reference.to ?? "id" } : null,
         noise: noise.has(column.name),
+        hexColour: hexChecked.has(column.name),
       };
     });
     model.set(row.name, {

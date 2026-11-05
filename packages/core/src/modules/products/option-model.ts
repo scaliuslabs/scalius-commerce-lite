@@ -1,10 +1,13 @@
 import { chunkForD1, type Database } from "@scalius/database/client";
 import {
+    media,
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
     productVariants,
 } from "@scalius/database/schema";
+import { getCurrentMediaUrl } from "../../integrations/storage";
+import { publishedMediaObjectKey } from "../media-references";
 import { and, asc, eq, inArray, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { qualifiedReference } from "../../utils/qualified-column";
@@ -18,10 +21,54 @@ import {
 export { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS };
 export type { ProductOptionStandardMapping };
 
+/**
+ * An option value's swatch (0196): its colour (`#rrggbb`) and/or its image
+ * from Files. `imageUrl` is the file's published URL while it is a ready (or
+ * trashed) image, else null, so a file being deleted never shows; `mediaId`
+ * stays the stored reference for the editor.
+ */
+export interface ProductOptionValueSwatch {
+    color: string | null;
+    mediaId: string | null;
+    imageUrl: string | null;
+}
+
 export interface ProductOptionValueRecord {
     id: string;
     value: string;
     position: number;
+    /** Null without a colour or image. */
+    swatch: ProductOptionValueSwatch | null;
+}
+
+/**
+ * The columns `optionValueSwatch` reads, for a select over
+ * `product_option_values` left-joined to `media` on `swatch_media_id`.
+ */
+export function optionValueSwatchColumns() {
+    return {
+        swatchColor: productOptionValues.swatchColor,
+        swatchMediaId: productOptionValues.swatchMediaId,
+        // The swatch image's published key, while it is an image Files still shows.
+        swatchObjectKey: publishedMediaObjectKey(),
+        swatchVariantWidth: media.variantWidth,
+        swatchUsable: sql<number>`CASE WHEN ${media.kind} = 'image' AND ${media.status} IN ('ready', 'trashed') THEN 1 ELSE 0 END`,
+    };
+}
+
+/** The swatch a value row carries, as the editor and the storefront read it. */
+export function optionValueSwatch(row: {
+    swatchColor: string | null;
+    swatchMediaId: string | null;
+    swatchObjectKey: string | null;
+    swatchVariantWidth: number | null;
+    swatchUsable: number | boolean | null;
+}): ProductOptionValueSwatch | null {
+    if (!row.swatchColor && !row.swatchMediaId) return null;
+    const imageUrl = row.swatchMediaId && row.swatchObjectKey && Boolean(Number(row.swatchUsable))
+        ? getCurrentMediaUrl(row.swatchObjectKey, row.swatchVariantWidth)
+        : null;
+    return { color: row.swatchColor, mediaId: row.swatchMediaId, imageUrl };
 }
 
 export interface ProductOptionDefinitionRecord {
@@ -109,6 +156,7 @@ export async function loadProductOptions(
                 valuePosition: productOptionValues.position,
                 definitionDeletedAt: productOptionDefinitions.deletedAt,
                 valueDeletedAt: productOptionValues.deletedAt,
+                ...optionValueSwatchColumns(),
             })
             .from(productOptionDefinitions)
             .leftJoin(
@@ -118,6 +166,7 @@ export async function loadProductOptions(
                     ...(includeRetired ? [] : [isNull(productOptionValues.deletedAt)]),
                 ),
             )
+            .leftJoin(media, eq(media.id, productOptionValues.swatchMediaId))
             .where(and(
                 inArray(productOptionDefinitions.productId, productIdChunk),
                 ...(includeRetired ? [] : [isNull(productOptionDefinitions.deletedAt)]),
@@ -148,6 +197,7 @@ export async function loadProductOptions(
                     id: row.valueId,
                     value: row.value,
                     position: row.valuePosition,
+                    swatch: optionValueSwatch(row),
                 });
             }
         }

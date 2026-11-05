@@ -30,6 +30,7 @@ import {
   MAX_COMPARE_PRODUCTS,
 } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
+import { productOptionValueSwatchSchema } from "../schemas/entities";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import { publicCursorSigner } from "../utils/public-cursor";
 import { canonicalIntegerQuery } from "../schemas/query-numbers";
@@ -344,6 +345,7 @@ const productOptionSchema = z.object({
     id: z.string(),
     value: z.string(),
     position: z.number().int(),
+    swatch: z.union([productOptionValueSwatchSchema, z.null()]).openapi({ description: "The value's swatch (a colour, an image from Files) for a swatch picker; null without one." }),
   })),
 });
 const productOptionSummarySchema = productOptionSchema.omit({ values: true }).extend({

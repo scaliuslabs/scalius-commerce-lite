@@ -29,12 +29,30 @@ import { pairFromStored, storedFromPair } from "../compare-at";
 const issue = (key: ProductVariantMessageKey, vars?: Record<string, string | number>) =>
   translate(productVariantMessages, key, vars?.max === undefined ? vars : { ...vars, max: formatNumber(Number(vars.max)) });
 
+/** A value's swatch as the editor holds it: what it saves (colour, file) and the file's image to show. */
+export type DraftSwatch = { color: string | null; mediaId: string | null; imageUrl: string | null };
+
 export type DraftOption = {
   id: string;
   name: string;
   standardMapping: ProductOptionStandardMapping;
-  values: Array<{ id: string; value: string }>;
+  /** `swatch` undefined: a value typed in this editor without one (it saves none). */
+  values: Array<{ id: string; value: string; swatch?: DraftSwatch | null }>;
 };
+
+/** The options as the matrix save takes them: each value's swatch as colour and file only. */
+export function matrixSaveOptions(options: readonly DraftOption[]): ProductOptionMatrixInput["options"] {
+  return options.map((option) => ({
+    id: option.id,
+    name: option.name,
+    standardMapping: option.standardMapping,
+    values: option.values.map((value) => ({
+      id: value.id,
+      value: value.value,
+      ...(value.swatch === undefined ? {} : { swatch: value.swatch && (value.swatch.color || value.swatch.mediaId) ? { color: value.swatch.color, mediaId: value.swatch.mediaId } : null }),
+    })),
+  }));
+}
 
 /** Editor rows always carry a quantity; the save payload omits it for untouched rows. */
 type MatrixVariantInput = ProductOptionMatrixInput["variants"][number];
@@ -350,7 +368,11 @@ export function initialOptions(options: ProductOptionDefinition[]): DraftOption[
     id: option.id,
     name: option.name,
     standardMapping: option.standardMapping,
-    values: option.values.map(({ id, value }) => ({ id, value })),
+    values: option.values.map(({ id, value, swatch }) => ({
+      id,
+      value,
+      swatch: swatch ? { color: swatch.color, mediaId: swatch.mediaId ?? null, imageUrl: swatch.imageUrl } : null,
+    })),
   }));
 }
 
