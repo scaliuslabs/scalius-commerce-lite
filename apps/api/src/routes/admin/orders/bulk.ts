@@ -1,5 +1,6 @@
 // Bulk archive, ship, confirm and fulfil.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { assertContactSearchAllowed } from "../contact-access";
 import {
     archiveOrders,
@@ -29,7 +30,7 @@ import {
 } from "./shared";
 import { notificationSender } from "../../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 function isSuccessfulOrderResult(result: unknown): result is { success: true; orderId: string } {
     return typeof result === "object"

@@ -5,7 +5,8 @@
 // One GET feeds both dashboard cards; each card saves its part with the
 // revision it loaded.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
     getNotificationSettings,
     updateNotificationChannels,
@@ -44,7 +45,7 @@ import { readinessSchema } from "../../../schemas/readiness";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { ValidationError } from "../../../utils/api-error";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /**
  * One entry per order event, plus the non-order events each audience can use:

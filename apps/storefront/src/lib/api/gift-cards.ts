@@ -10,6 +10,7 @@
 
 import { normalizeGiftCardCode } from "@scalius/shared/gift-card-code";
 import { apiFetch } from "@/lib/api/transport";
+import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 
 const GIFT_CARD_TIMEOUT_MS = 8_000;
 const SESSION_COOKIE_PATTERN = /(?:^|;\s*)(cs_tok=[^;]+)/;
@@ -223,13 +224,6 @@ export function readAccountGiftCard(value: unknown): AccountGiftCard | null {
 
 // ── Transport ────────────────────────────────────────────────────────────────
 
-function positiveSeconds(value: unknown): number | undefined {
-  const seconds = typeof value === "string" ? Number(value) : value;
-  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
-    ? Math.min(Math.ceil(seconds), 3600)
-    : undefined;
-}
-
 /** Only the account session cookie, never the rest of the buyer's cookies. */
 export function giftCardSessionCookie(request: Request): string | null {
   return request.headers.get("cookie")?.match(SESSION_COOKIE_PATTERN)?.[1] ?? null;
@@ -274,9 +268,8 @@ async function callGiftCardApi(
       return { ok: true, data: json.data };
     }
     const error = isRecord(json) && isRecord(json.error) ? json.error : {};
-    const details = isRecord(error.details) ? error.details : {};
     const status = response.ok ? 502 : response.status;
-    const retryAfterSeconds = positiveSeconds(details.retryAfterSeconds ?? response.headers.get("Retry-After"));
+    const retryAfterSeconds = refusalWaitSeconds(json, response.headers);
     return {
       ok: false,
       reason: failureReason(status, typeof error.code === "string" ? error.code : ""),

@@ -534,8 +534,9 @@ const ROUTER_WRITE_PATHS = new Set([
 
 function tooManyAttempts(waitSeconds = 60): Response {
   const wait = String(waitSeconds);
+  // The wait rides the body too: Better Auth's client hands the page the body, not the headers.
   return json(
-    { code: "RATE_LIMITED", message: "Too many attempts. Wait and try again." },
+    { code: "RATE_LIMITED", message: "Too many attempts. Wait and try again.", retryAfterSeconds: waitSeconds },
     429,
     { "Retry-After": wait, "X-Retry-After": wait },
   );
@@ -639,13 +640,25 @@ async function settleSignIn(
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-/** Better Auth's own limit answers 429 with only `X-Retry-After`; the standard header carries the same wait. */
-function withRetryAfter(response: Response): Response {
-  const wait = response.headers.get("X-Retry-After");
-  if (response.status !== 429 || !wait || response.headers.has("Retry-After")) return response;
+/**
+ * Better Auth's own limit answers 429 with only `X-Retry-After`: the standard
+ * header carries the same wait, and so does the body (as our own refusals do),
+ * since Better Auth's client hands the page the body, not the headers.
+ */
+async function withRetryAfter(response: Response): Promise<Response> {
+  const wait = Number(response.headers.get("X-Retry-After"));
+  if (response.status !== 429 || !(wait > 0) || response.headers.has("Retry-After")) return response;
   const headers = new Headers(response.headers);
-  headers.set("Retry-After", wait);
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  headers.set("Retry-After", String(wait));
+  headers.delete("Content-Length");
+  // Read once: a clone would leave the original body unread.
+  const body = await response.text().then((text) => JSON.parse(text) as unknown).catch(() => null);
+  const fields = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  return new Response(JSON.stringify({ ...fields, retryAfterSeconds: wait }), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function constantTimeEqual(left: string, right: string): boolean {
@@ -800,7 +813,7 @@ export async function handleDashboardAuthRequest(
   const isSignIn = method === "POST" && route === SIGN_IN_EMAIL_PATH;
   const signInGate = isSignIn ? await gateSignIn(authEnv, request) : null;
   if (signInGate && "refused" in signInGate) return signInGate.refused;
-  let response = withRetryAfter(await runWithRetry((attempt) => auth.handler(attempt), routed, isSignIn));
+  let response = await withRetryAfter(await runWithRetry((attempt) => auth.handler(attempt), routed, isSignIn));
   // Better Auth answers 429 (its own limit, its two-step lockout) before checking anything.
   const checked = response.status !== 429;
   if (isSignIn) response = await offerAccountTwoFactorMethods(authEnv, request, response);

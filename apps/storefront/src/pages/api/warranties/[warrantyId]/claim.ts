@@ -71,10 +71,16 @@ export const POST: APIRoute = async ({ request, params, url }) => {
   }
 
   const flag = result.ok ? "unavailable" : result.flag;
+  const wait = !result.ok && flag === "rate" ? result.retryAfterSeconds : undefined;
   if (wantsJson(request)) {
     const language = await getActiveCheckoutLanguage().catch(() => null);
     const copy = pickWarrantyCopy(language?.languageData, getCheckoutLanguagePreset(language?.code));
-    return conversationJson({ success: false, error: { code: flag, message: warrantyClaimFlagText(flag, copy) } }, JSON_STATUS[flag]);
+    const response = conversationJson({
+      success: false,
+      error: { code: flag, message: warrantyClaimFlagText(flag, copy, wait), ...(wait ? { details: { retryAfterSeconds: wait } } : {}) },
+    }, JSON_STATUS[flag]);
+    if (wait) response.headers.set("Retry-After", String(wait));
+    return response;
   }
-  return conversationRedirect(warrantyId ? withWarrantyClaimStatus(returnTo, warrantyId, flag) : returnTo);
+  return conversationRedirect(warrantyId ? withWarrantyClaimStatus(returnTo, warrantyId, flag, wait) : returnTo);
 };

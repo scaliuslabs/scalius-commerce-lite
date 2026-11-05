@@ -3201,6 +3201,8 @@ export const getApiV1AdminCustomersById = <ThrowOnError extends boolean = false>
 
 /**
  * Update a customer
+ *
+ * Changes the contact and tax fields sent. Tags are replaced with `PUT /api/v1/admin/customers/{id}/tags` and addresses through `/addresses`; a field this body does not declare is refused (400 `validation_error`), nothing saved.
  */
 export const putApiV1AdminCustomersById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomersByIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomersByIdResponses, PutApiV1AdminCustomersByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomersByIdResponses, PutApiV1AdminCustomersByIdErrors, ThrowOnError>({
     url: '/api/v1/admin/customers/{id}',

@@ -689,7 +689,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   reviewExistsText: "You've already reviewed this product.",
   reviewEditExistingText: "Edit your review",
   reviewDisabledText: "This store isn't taking reviews right now.",
-  reviewRateLimitedText: "Too many tries. Wait a minute, then try again.",
+  reviewRateLimitedText: "Too many tries. Please wait before trying again.",
   reviewUnavailableText: "Your review couldn't be saved right now. Try again in a moment.",
   reviewChangedText: "This review changed since you opened it. Reload the page and try again.",
   reviewNotEditableText: "This review can't be changed any more.",
@@ -720,7 +720,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   giftCardNotNeededText: "Your other gift cards already cover this order, so this one wasn't used.",
   giftCardLimitText: "You can use up to 5 gift cards on one order.",
   giftCardChangedText: "Your gift card balance changed; review and place the order again.",
-  giftCardRateLimitedText: "Too many tries. Wait a minute, then try again.",
+  giftCardRateLimitedText: "Too many tries. Please wait before trying again.",
   giftCardUnavailableText: "Gift cards can't be used right now. Try again later.",
   giftCardLineText: "Gift card {card}",
   amountDueText: "Amount due",
@@ -760,7 +760,7 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   warrantyClaimPhotoText: "A photo couldn't be added. Use up to 3 JPEG, PNG or WebP photos under 5 MB.",
   warrantyClaimInactiveText: "This warranty isn't active any more.",
   warrantyClaimExistsText: "You already have an open claim for this item.",
-  warrantyClaimRateLimitedText: "Too many tries. Wait a minute, then try again.",
+  warrantyClaimRateLimitedText: "Too many tries. Please wait before trying again.",
   warrantyClaimUnavailableText: "Your claim couldn't be sent right now. Try again in a moment.",
   warrantyClaimSignInText: "Sign in again to make a claim.",
   warrantyClaimReceiptExpiredText: "This order isn't open in this browser any more. Track your order again to make a claim.",
@@ -1456,7 +1456,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   reviewExistsText: "এই পণ্যের রিভিউ আপনি আগেই দিয়েছেন।",
   reviewEditExistingText: "আপনার রিভিউ বদলান",
   reviewDisabledText: "এই দোকান এখন রিভিউ নিচ্ছে না।",
-  reviewRateLimitedText: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।",
+  reviewRateLimitedText: "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   reviewUnavailableText: "এই মুহূর্তে রিভিউ সংরক্ষণ করা যায়নি। একটু পরে আবার চেষ্টা করুন।",
   reviewChangedText: "খোলার পর রিভিউটি বদলে গেছে। পাতাটি আবার লোড করে চেষ্টা করুন।",
   reviewNotEditableText: "এই রিভিউ আর বদলানো যাবে না।",
@@ -1486,7 +1486,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   giftCardNotNeededText: "আপনার অন্য গিফট কার্ডেই পুরো অর্ডারের দাম পরিশোধ হচ্ছে, তাই এটি ব্যবহার করা হয়নি।",
   giftCardLimitText: "একটি অর্ডারে সর্বোচ্চ ৫টি গিফট কার্ড ব্যবহার করা যায়।",
   giftCardChangedText: "আপনার গিফট কার্ডের ব্যালেন্স বদলে গেছে; দেখে নিয়ে আবার অর্ডার করুন।",
-  giftCardRateLimitedText: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।",
+  giftCardRateLimitedText: "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   giftCardUnavailableText: "এই মুহূর্তে গিফট কার্ড ব্যবহার করা যাচ্ছে না। পরে আবার চেষ্টা করুন।",
   giftCardLineText: "গিফট কার্ড {card}",
   amountDueText: "পরিশোধযোগ্য টাকা",
@@ -1525,7 +1525,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   warrantyClaimPhotoText: "ছবি যোগ করা যায়নি। ৫ MB-এর কম সর্বোচ্চ ৩টি JPEG, PNG বা WebP ছবি দিন।",
   warrantyClaimInactiveText: "এই ওয়ারেন্টি আর সক্রিয় নেই।",
   warrantyClaimExistsText: "এই পণ্যের একটি দাবি আগেই খোলা আছে।",
-  warrantyClaimRateLimitedText: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।",
+  warrantyClaimRateLimitedText: "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
   warrantyClaimUnavailableText: "এই মুহূর্তে দাবি পাঠানো যায়নি। একটু পরে আবার চেষ্টা করুন।",
   warrantyClaimSignInText: "দাবি করতে আবার সাইন ইন করুন।",
   warrantyClaimReceiptExpiredText: "এই ব্রাউজারে অর্ডারটি আর খোলা নেই। দাবি করতে আবার অর্ডার ট্র্যাক করুন।",
@@ -1710,8 +1710,21 @@ export function getCheckoutLanguagePreset(code: unknown): CheckoutLanguageData {
 }
 
 /**
+ * Defaults a newer preset replaced. Saving a checkout language stores every
+ * value as resolved, so a store saved before the change holds the old default
+ * as if the merchant had typed it; that exact text reads as the current preset.
+ */
+const RETIRED_CHECKOUT_LANGUAGE_DEFAULTS: Partial<Record<CheckoutLanguageKey, readonly string[]>> = {
+  // They promised "a minute" whatever wait the API named.
+  reviewRateLimitedText: ["Too many tries. Wait a minute, then try again.", "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।"],
+  giftCardRateLimitedText: ["Too many tries. Wait a minute, then try again.", "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।"],
+  warrantyClaimRateLimitedText: ["Too many tries. Wait a minute, then try again.", "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।"],
+};
+
+/**
  * Stored values are merchant overrides on the locale's preset: a blank value
- * keeps the preset's wording, any other value replaces it.
+ * keeps the preset's wording, any other value replaces it, except a default a
+ * newer preset retired, which reads as the preset's wording now.
  */
 export function resolveCheckoutLanguageData(
   code: unknown,
@@ -1722,7 +1735,9 @@ export function resolveCheckoutLanguageData(
 
   for (const key of CHECKOUT_LANGUAGE_KEYS) {
     const value = stored[key];
-    if (typeof value === "string" && value.trim() !== "") resolved[key] = value;
+    if (typeof value !== "string" || value.trim() === "") continue;
+    if (RETIRED_CHECKOUT_LANGUAGE_DEFAULTS[key]?.includes(value.trim())) continue;
+    resolved[key] = value;
   }
 
   return resolved;

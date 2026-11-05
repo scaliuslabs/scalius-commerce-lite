@@ -3,7 +3,8 @@
 // packages/core/src/auth/rbac/route-permissions/warranty.ts. An edit makes the
 // next immutable revision; archive hides a policy from buyers and the editor.
 // Database triggers advance affected product-page dependencies in the write transaction.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   archiveWarrantyPolicy,
@@ -23,7 +24,7 @@ import {
   warrantyPolicyUpdateBodySchema,
 } from "../../schemas/warranty";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Warranty policies";
 const policyParam = z.object({ id: warrantyPolicyIdSchema });

@@ -12,8 +12,8 @@ import { OWN_SAVE_ATTRIBUTE } from "~/components/admin/shared/SaveBar";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
-import { accountMessages, type AccountMessageKey } from "~/i18n/account";
-import { accountFailureKey } from "./account-error";
+import { accountMessages } from "~/i18n/account";
+import { accountFailureMessage, type AccountMessage } from "./account-error";
 
 const MIN_LENGTH = 12;
 type PasswordKey = "current" | "next" | "confirm";
@@ -31,7 +31,7 @@ export function ChangePasswordForm() {
   const [shown, setShown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wrongCurrent, setWrongCurrent] = useState(false);
-  const [error, setError] = useState<AccountMessageKey | null>(null);
+  const [error, setError] = useState<AccountMessage | null>(null);
 
   const reused = values.next.length > 0 && values.next === values.current;
   const errors: Partial<Record<PasswordKey, string>> = {
@@ -60,10 +60,10 @@ export function ChangePasswordForm() {
       setShown(false);
       toast.success(t("passwordChanged"));
     } catch (err) {
-      const key = accountFailureKey(err, ({ code }) =>
+      const failure = accountFailureMessage(err, ({ code }) =>
         code === "PASSWORD_INCORRECT" ? "wrongCurrentPassword" : code === "PASSWORD_REUSED" ? "passwordReused" : null);
-      if (key === "wrongCurrentPassword") setWrongCurrent(true);
-      else setError(key);
+      if (failure.key === "wrongCurrentPassword") setWrongCurrent(true);
+      else setError(failure);
     } finally {
       setSaving(false);
     }
@@ -100,7 +100,7 @@ export function ChangePasswordForm() {
           {error ? (
             <Alert variant="destructive">
               <AlertCircle aria-hidden="true" />
-              <AlertDescription>{t(error)}</AlertDescription>
+              <AlertDescription>{t(error.key, error.vars)}</AlertDescription>
             </Alert>
           ) : null}
           {field("current", t("currentPassword"), "current-password")}

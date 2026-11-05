@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
     BUSINESS_SOCIAL_LINKS_MAX,
     getBusinessSettingsDocument,
@@ -10,7 +11,7 @@ import { successEnvelope, conflictResponse, errorResponses } from "../../../sche
 
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const BUSINESS_FIELD_LIMITS = {
     companyName: 200,
     legalName: 200,

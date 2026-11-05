@@ -55,13 +55,13 @@ if (isPost) {
     const result = await revealAccountGiftCardCode(fields.giftCardId, Astro.request);
     actionResult = result;
     if (result.ok) revealed = { giftCardId: fields.giftCardId, code: result.data };
-    else revealError = { giftCardId: fields.giftCardId, text: giftCardRevealFailureText(result.reason) };
+    else revealError = { giftCardId: fields.giftCardId, text: giftCardRevealFailureText(result) };
   } else if (fields.intent === "save") {
     const result = await saveAccountGiftCard(fields.code ?? null, Astro.request);
     actionResult = result;
     saveMessage = result.ok
       ? { tone: "status", text: giftCardPageCopy().saved.replace("{card}", maskedGiftCard(result.data.last4)) }
-      : { tone: "error", text: giftCardSaveFailureText(result.reason) };
+      : { tone: "error", text: giftCardSaveFailureText(result) };
   }
 }
 

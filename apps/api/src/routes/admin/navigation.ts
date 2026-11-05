@@ -1,7 +1,8 @@
 // src/server/routes/admin/navigation.ts
 // Admin OpenAPI routes for navigation.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     createNavigationMenu,
     createNavigationMenuItem,
@@ -79,7 +80,7 @@ const RESERVED_PREVIEW_QUERY_KEYS = new Set([
     "order",
 ]);
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const menuTargetSchema = z.discriminatedUnion("type", [
     z.object({

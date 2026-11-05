@@ -5,7 +5,8 @@
 // and only a published language's addresses are served. The database keeps
 // the default language published and refuses removing a language a web
 // address uses.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Context } from "hono";
 import {
   addStoreLanguage,
@@ -25,7 +26,7 @@ import {
   updateStoreLanguageSchema,
 } from "../../../schemas/translations";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Languages";
 /** ISO 639-1 has fewer two-letter codes than this. */

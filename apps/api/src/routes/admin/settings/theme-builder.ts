@@ -4,7 +4,8 @@
 // to the shared draft. Every drafted section is validated against the
 // theme's section schemas before it can reach a draft; none goes live
 // until someone publishes.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
   STOREFRONT_PAGE_TEMPLATES,
   STOREFRONT_SECTION_REGISTRY,
@@ -32,7 +33,7 @@ import { conflictResponse, errorResponses, successEnvelope } from "../../../sche
 import { storefrontSectionListApiSchema } from "../../../schemas/storefront-theme";
 import { boundedThemeStatus, themeDraftReceiptSchema, themeStatusSchema, themeIso } from "./theme-contract";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const revisionSchema = z.number().int().nonnegative();
 const draftRevisionFields = { expectedDraftRevision: revisionSchema, basePublishedRevision: revisionSchema };
 

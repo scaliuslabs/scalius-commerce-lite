@@ -118,6 +118,14 @@ mirror a dashboard screen, an editor section or a summary card.
   the name), which never takes a sealed one.
   `stable-operations.snapshot.json` is keyed by app name, so the table is
   sealed with the contract. Agents, MCP and the CLI keep operation ids.
+- **A write refuses a field it does not declare.** A dashboard route with a
+  JSON body (`routes/admin/admin-router.ts`) answers a key its body schema
+  would drop with 400 `validation_error`, one `unrecognized_keys` issue per
+  key whose `path` ends in the key, and changes nothing, so a caller never
+  reads 200 for a field that was not saved (`tags` on `customers.update`:
+  tags have their own write, `customers.set_tags`). A stable operation refuses
+  only an undeclared top-level key, as every app, MCP and CLI call already
+  did (`unknown_body_property`); its nested objects stay open as sealed.
 - **One lane per owner.** Operations reach the merchant's data; an app's
   own data goes through `ctx`. An app writes typed order timeline lines with
   `ctx.timeline.add` (`orders.comment_add`, the staff note, is beta), and its

@@ -1,7 +1,8 @@
 // Admin brand routes: list, picker options, detail and revision-guarded
 // writes. Every write is buyer-visible (brand page, product brand line, feed
 // and JSON-LD brand); database triggers advance the affected dependencies.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { BrandResource, brandRowSchema } from "../../schemas/catalog-resources";
 import {
   createBrand,
@@ -40,7 +41,7 @@ import {
   successEnvelope,
 } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAGS = ["Admin - Brands"];
 
 type BrandResourceData = NonNullable<Awaited<ReturnType<typeof getBrandById>>>;

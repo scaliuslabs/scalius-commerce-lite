@@ -4,7 +4,8 @@
 // or edit buyer text: the only writes are status, reason, reply, settings and
 // opening a private thread with the reviewer. Database triggers advance
 // dependencies when a write changes what buyers see.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   getAdminReview,
@@ -34,7 +35,7 @@ import {
 
 import { UnauthorizedError } from "../../utils/api-error";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Reviews";
 const reviewParam = z.object({ id: z.string().trim().min(1).max(80) });

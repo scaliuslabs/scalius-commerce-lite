@@ -4,7 +4,8 @@
 // Staff may open a goodwill claim on an expired warranty (never a voided one);
 // the description posts as a public message from the store, which tells the
 // buyer the claim exists.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Context } from "hono";
 import { getWarrantyClaim, openWarrantyClaim } from "@scalius/core/modules/warranty";
 import { created } from "../../../utils/api-response";
@@ -13,7 +14,7 @@ import { presentStaffClaim, staffOpenClaimBodySchema, staffWarrantyClaimSchema }
 import { UnauthorizedError } from "../../../utils/api-error";
 import { notificationSender } from "../../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 function staffUserId(c: Context<{ Bindings: Env }>): string {
   const user = c.get("user") as { id?: string } | undefined;

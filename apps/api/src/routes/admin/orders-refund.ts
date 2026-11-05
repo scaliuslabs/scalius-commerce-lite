@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Database } from "@scalius/database/client";
@@ -36,7 +37,7 @@ import { afterResponse } from "../../background/after-response";
 import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 // ─── Inline response schemas ────────────────────────────────────────────────
 

@@ -19,6 +19,7 @@ import type { AgentOperationPolicy } from "../openapi/agent-operation-manifest";
 import { errorResponseFromError } from "../utils/api-response";
 import { AppError } from "../utils/api-error";
 import { AgentDispatchError } from "./dispatch-error";
+import { withUnknownFieldGuard } from "../routes/admin/admin-router";
 
 type RouteDefinition = {
   type: string;
@@ -78,7 +79,8 @@ export function routeConfigForOperation(
 function probeFor(operation: AgentOperationPolicy, route: Record<string, unknown>): OpenAPIHono {
   const cached = probes.get(operation.operationId);
   if (cached) return cached;
-  // The route's own middleware (`middleware:`) is not request validation and never runs here.
+  // The route's own middleware (`middleware:`) is not request validation and never runs here;
+  // a dashboard route's unknown-key refusal is, so the probe runs it as the route does.
   const { middleware: _middleware, hide: _hide, ...config } = route;
   const probe = new OpenAPIHono();
   probe.onError((error, c) => {
@@ -86,8 +88,9 @@ function probeFor(operation: AgentOperationPolicy, route: Record<string, unknown
     return c.json(body, status);
   });
   probe.notFound((c) => c.json({ success: false, error: { code: "not_found", message: "Not found" } }, 404));
+  const definition = { ...config, path: operation.pathTemplate, hide: true } as unknown as Parameters<OpenAPIHono["openapi"]>[0];
   probe.openapi(
-    { ...config, path: operation.pathTemplate, hide: true } as unknown as Parameters<OpenAPIHono["openapi"]>[0],
+    operation.pathTemplate.startsWith(`${API_BASE_PATH}/admin/`) ? withUnknownFieldGuard(definition) : definition,
     ((c: Context) => c.body(null, 204)) as never,
   );
   probes.set(operation.operationId, probe);

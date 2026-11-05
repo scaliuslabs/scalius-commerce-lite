@@ -1,4 +1,6 @@
 import { buyerApiErrorCopy, type BuyerApiErrorKind } from "./buyer-api-error-copy";
+import { checkoutText } from "./checkout-text";
+import { pageWait, refusalWaitSeconds } from "./rate-limit-wait";
 import { pageLanguage } from "./store-time-zone";
 
 const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
@@ -58,12 +60,30 @@ export function buyerApiErrorKind(payload: unknown, status?: number): BuyerApiEr
   }
 }
 
-/** Use the rendered page's language by default; callers may supply their localized operation fallback. */
+/**
+ * A rate limit in the page's words: the wait the API named ("Try again in
+ * 11:10", the page's digits), else a sentence that promises no time.
+ */
+export function rateLimitedText(seconds: number | undefined, locale: string = pageLanguage()): string {
+  const copy = buyerApiErrorCopy(locale);
+  return seconds ? checkoutText(copy.rateLimitedWait, { time: pageWait(seconds, locale) }) : copy.rateLimited;
+}
+
+/**
+ * Use the rendered page's language by default; callers may supply their
+ * localized operation fallback. A rate limit says the wait its body
+ * (`details.retryAfterSeconds`) or `headers` (Retry-After) name, unless the
+ * caller counts that wait down itself (`showWait: false`).
+ */
 export function buyerApiErrorText(
   payload: unknown,
-  options: { locale?: string | null; status?: number; fallback?: string } = {},
+  options: { locale?: string | null; status?: number; fallback?: string; headers?: Pick<Headers, "get"> | null; showWait?: boolean } = {},
 ): string {
-  const copy = buyerApiErrorCopy(options.locale ?? pageLanguage());
+  const locale = options.locale ?? pageLanguage();
+  const copy = buyerApiErrorCopy(locale);
   const kind = buyerApiErrorKind(payload, options.status);
+  if (kind === "rateLimited") {
+    return rateLimitedText(options.showWait === false ? undefined : refusalWaitSeconds(payload, options.headers), locale);
+  }
   return kind ? copy[kind] : options.fallback ?? copy.failed;
 }

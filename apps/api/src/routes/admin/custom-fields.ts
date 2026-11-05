@@ -11,7 +11,8 @@
 // One lane per owner of the data: an app reaches the merchant's fields here
 // and its own through `ctx.customFields` (the bridge), so an app's call
 // reads and answers only `custom` namespace values, never another app's.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import {
@@ -103,7 +104,7 @@ const definitionErrors = { ...errorResponses, 409: conflictResponse };
 // Definitions
 // ─────────────────────────────────────────
 
-export const customFieldDefinitionRoutes = new OpenAPIHono<{ Bindings: Env }>();
+export const customFieldDefinitionRoutes = adminRouter();
 
 /** A store holds at most this many definitions (100 per owner type). */
 const DEFINITIONS_BOUND = CUSTOM_FIELD_DEFINITIONS_PER_OWNER_MAX * CUSTOM_FIELD_OWNER_TYPES.length;
@@ -259,7 +260,7 @@ customFieldDefinitionRoutes.openapi(deleteRoute, async (c) => {
 // Values, per owner type
 // ─────────────────────────────────────────
 
-export const customFieldValueRoutes = new OpenAPIHono<{ Bindings: Env }>();
+export const customFieldValueRoutes = adminRouter();
 
 const OWNER_LABEL: Record<CustomFieldOwnerType, string> = {
   product: "product",

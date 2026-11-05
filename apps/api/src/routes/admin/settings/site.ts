@@ -1,6 +1,7 @@
 import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 
 import {
   STOREFRONT_DECLARATION_THEME_VERSION,
@@ -102,7 +103,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import { STOREFRONT_COMPONENT_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const revisionSchema = z.number().int().nonnegative();
 /** A save answers with the document revision the next save must send back. */
 const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), revision: revisionSchema }));

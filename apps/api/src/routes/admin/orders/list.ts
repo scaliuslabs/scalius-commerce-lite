@@ -1,5 +1,6 @@
 // Dashboard order list, export, payment-recovery lists, and the order form product picker.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { assertContactSearchAllowed } from "../contact-access";
 import {
     ORDER_DELIVERY_METHOD_FILTERS,
@@ -39,7 +40,7 @@ import { matchingSchema } from "../../../schemas/bulk-matching";
 import type { Database } from "@scalius/database/client";
 import type { OrderListFilter } from "@scalius/core/modules/orders";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 type OrderListSort = (typeof ORDER_LIST_SORTS)[number];
 

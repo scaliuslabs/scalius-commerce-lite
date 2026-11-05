@@ -2,13 +2,14 @@
 // rows of the event outbox, newest first, with their thin facts. RBAC:
 // `webhooks.view` (route-permissions/webhooks.ts).
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { EVENT_LIST_MAX_LIMIT, listRecentEvents } from "@scalius/core/modules/events";
 import { EVENT_RESOURCE_TYPES, EVENT_TOPICS } from "@scalius/shared/events";
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const eventSummarySchema = z.object({
   id: z.string(),

@@ -4,7 +4,8 @@
 // send time (digital delivery, gift card, review request). Test sends render a
 // draft with sample data.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
     TEMPLATED_NOTIFICATION_TYPES,
     TEMPLATE_LIMITS,
@@ -28,7 +29,7 @@ import { RateLimitError, ValidationError } from "../../../utils/api-error";
 import { isWithinRateLimit } from "../../../utils/rate-limit";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const eventSchema = z.enum(TEMPLATED_NOTIFICATION_TYPES);
 const emailTemplateSchema = z.object({

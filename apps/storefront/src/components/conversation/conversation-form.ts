@@ -12,6 +12,7 @@ import {
   newClientMessageKey,
 } from "@/lib/account-inbox";
 import { pagePath } from "@/lib/presence-url";
+import { refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { encodeImageAsWebp } from "@scalius/shared/browser-image";
 import { appendConversationItems, conversationRequest, notifyConversationSent, type ConversationItem } from "./conversation-live";
 
@@ -122,6 +123,7 @@ function bindForm(form: HTMLFormElement): void {
     let answer: PostAnswer | null = null;
     let ok = false;
     let responseStatus = 0;
+    let responseHeaders: Headers | null = null;
     const pending = conversationRequest(90_000);
     try {
       const data = new FormData(form);
@@ -136,6 +138,7 @@ function bindForm(form: HTMLFormElement): void {
         signal: pending.signal,
       });
       responseStatus = response.status;
+      responseHeaders = response.headers;
       answer = await response.json().catch(() => null) as PostAnswer | null;
       ok = response.ok && answer?.success === true;
       if (response.ok && !ok) responseStatus = 502;
@@ -156,7 +159,7 @@ function bindForm(form: HTMLFormElement): void {
       const code = answer?.error?.code;
       const flag = isConversationStatusFlag(code) && conversationStatusMessage(code).tone === "error"
         ? code : statusFlagForApiStatus(responseStatus, "post");
-      const message = conversationStatusMessage(flag).text;
+      const message = conversationStatusMessage(flag, flag === "rate" ? refusalWaitSeconds(answer, responseHeaders) : undefined).text;
       setStatus(status, message, "error");
       unknownDraft = { body: sentBody, files: sentFiles };
       body?.focus();

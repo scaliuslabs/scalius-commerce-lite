@@ -3,7 +3,8 @@
 // (encrypted, masked there); this route saves only the choice. A choice
 // saved before the Bangladesh gateways moved into the Bangladesh pack reads
 // as the pack's provider and says why it cannot send until the pack is active.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { getSmsSettings, saveSmsSettings } from "@scalius/core/integrations/sms";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
@@ -12,7 +13,7 @@ import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const SMS_PROVIDER_ERROR_MAX_LENGTH = 1_000;
 
 /** An installed app's SMS provider (`<plugin id>:<provider id>`). */

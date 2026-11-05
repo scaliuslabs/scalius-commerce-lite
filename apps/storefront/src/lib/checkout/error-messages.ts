@@ -1,4 +1,5 @@
 import { buyerApiErrorKind } from "../buyer-api-errors";
+import { checkoutRateLimitedText, refusalWaitSeconds } from "../rate-limit-wait";
 import type { CheckoutLanguageData, CheckoutLanguageKey } from "@scalius/shared/checkout-language";
 
 const DEFAULT_CHECKOUT_ERROR = "Order creation failed";
@@ -70,7 +71,10 @@ export function getCheckoutErrorMessage(
   return fallback;
 }
 
-/** Order refusals use the merchant's checkout catalogue, never API prose. */
+/**
+ * Order refusals use the merchant's checkout catalogue, never API prose. A
+ * rate limit says the wait its `details.retryAfterSeconds` names.
+ */
 export function checkoutOrderFailureText(
   status: number | undefined,
   _message: string,
@@ -85,7 +89,7 @@ export function checkoutOrderFailureText(
   switch (kind) {
     case "signIn": return copy.signInToCheckoutText;
     case "conflict": return copy.checkoutConflictText;
-    case "rateLimited": return copy.tooManyCheckoutAttemptsText;
+    case "rateLimited": return checkoutRateLimitedText(copy, copy.tooManyCheckoutAttemptsText, refusalWaitSeconds({ details }));
     case "purchaseOptionUnavailable": return copy.checkoutUnavailableMessage;
     case "appUnavailable": return copy.checkoutAppUnavailableText;
     case "paymentWindowExpired": return copy.paymentRateExpiredText;

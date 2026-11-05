@@ -9,6 +9,7 @@
 // request is exactly the pre-gift-card payload.
 
 import { pageDigits } from "@/lib/checkout-text";
+import { checkoutRateLimitedText, refusalWaitSeconds } from "@/lib/rate-limit-wait";
 import { normalizeGiftCardCode } from "@scalius/shared/gift-card-code";
 import { MAX_GIFT_CARDS_PER_ORDER } from "@scalius/shared/gift-card-tender";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
@@ -197,7 +198,9 @@ export function readAppliedGiftCard(value: unknown, now = Date.now()): StoredGif
 
 export type ApplyGiftCardOutcome =
   | { ok: true; card: StoredGiftCard }
-  | { ok: false; reason: "invalid" | "unusable" | "rate_limited" | "unavailable" };
+  | { ok: false; reason: "invalid" | "unusable" | "unavailable" }
+  /** The wait the store named, when it named one. */
+  | { ok: false; reason: "rate_limited"; retryAfterSeconds?: number };
 
 const APPLY_ENDPOINT = "/api/gift-cards/apply";
 const APPLY_TIMEOUT_MS = 10_000;
@@ -226,11 +229,27 @@ export async function requestGiftCardApply(
       const card = readAppliedGiftCard(payload.data);
       return card ? { ok: true, card } : { ok: false, reason: "unavailable" };
     }
-    if (response.status === 429) return { ok: false, reason: "rate_limited" };
+    if (response.status === 429) {
+      const retryAfterSeconds = refusalWaitSeconds(payload, response.headers);
+      return { ok: false, reason: "rate_limited", ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
+    }
     if (response.status === 400) return { ok: false, reason: "unusable" };
     return { ok: false, reason: "unavailable" };
   } catch {
     return { ok: false, reason: "unavailable" };
+  }
+}
+
+/** What a refused apply tells the buyer: a rate limit says the wait the store named. */
+export function giftCardApplyFailureText(
+  outcome: Extract<ApplyGiftCardOutcome, { ok: false }>,
+  copy: GiftCardCheckoutCopy,
+): string {
+  switch (outcome.reason) {
+    case "invalid": return copy.giftCardEnterCodeText;
+    case "unusable": return copy.giftCardUnusableText;
+    case "rate_limited": return checkoutRateLimitedText(copy, copy.giftCardRateLimitedText, outcome.retryAfterSeconds);
+    default: return copy.giftCardUnavailableText;
   }
 }
 
@@ -262,7 +281,8 @@ export const GIFT_CARD_CHECKOUT_COPY = {
   giftCardNotNeededText: "Your other gift cards already cover this order, so this one wasn't used.",
   giftCardLimitText: "You can use up to 5 gift cards on one order.",
   giftCardChangedText: "Your gift card balance changed; review and place the order again.",
-  giftCardRateLimitedText: "Too many tries. Wait a minute, then try again.",
+  giftCardRateLimitedText: "Too many tries. Please wait before trying again.",
+  orderCodeTryAgainInText: "Try again in {time}",
   giftCardUnavailableText: "Gift cards can't be used right now. Try again later.",
   giftCardLineText: "Gift card {card}",
   amountDueText: "Amount due",

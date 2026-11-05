@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
   PRODUCT_FEED_ROW_PREVIEW_HARD_RESPONSE_BYTES,
   PRODUCT_FEED_ROW_PREVIEW_MAX_CURSOR_LENGTH,
@@ -21,7 +22,7 @@ import {
   successEnvelope,
 } from "../../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<
   R,
   { Bindings: Env }

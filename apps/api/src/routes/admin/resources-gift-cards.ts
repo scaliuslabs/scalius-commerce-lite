@@ -16,7 +16,8 @@
 //   - it never changes the owner of a card that still has a balance;
 //   - what it adds in a day (issues and top-ups) stays within the merchant's
 //     `gift_cards.appDailyLimitMinor` (core `buildAppGiftCardValueStatements`).
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   adjustGiftCardBalance,
@@ -50,7 +51,7 @@ import { protectedField } from "../../schemas/protected";
 import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

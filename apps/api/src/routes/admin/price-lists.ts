@@ -4,7 +4,8 @@
 // under one revision. Triggers advance the market's pricing cache keys and
 // the checkout authority fence in the write transaction; nothing is
 // precomputed, so a save prices the next read.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   createPriceList,
@@ -29,7 +30,7 @@ import {
   updatePriceListSchema,
 } from "../../schemas/price-lists";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Price lists";
 const idParam = z.object({ id: z.string().min(1).max(64) });

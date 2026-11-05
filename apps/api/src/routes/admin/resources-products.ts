@@ -9,7 +9,8 @@
 // change one at a time (`variants.create`, `variants.update`,
 // `variants.restore`, below) or many prices at once
 // (`dashboard.resources.variants.bulk_set_prices`).
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { nanoid } from "nanoid";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
@@ -41,7 +42,7 @@ import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { registerAppContentRoutes } from "./resources-app-content";
 import { batchItemKeySchema, batchRequestSchema, batchResultSchema, runBatchCreate, type BatchCreateData, type BatchRef } from "./resources-batch";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.use("*", async (c, next) => {
   await next();

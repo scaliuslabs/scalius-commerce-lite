@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
     MAX_DELIVERY_AMOUNT,
     MAX_PROFILE_RATES,
@@ -30,7 +31,7 @@ import { successEnvelope, noContentResponse, errorResponses, conflictResponse } 
 // serves, its delivery rates, and local pickup. Rates are checkout data and
 // feed Product/Offer JSON-LD and catalog feeds on cached pages; database
 // triggers advance dependencies.
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAGS = ["Admin - Shipping Zones"];
 

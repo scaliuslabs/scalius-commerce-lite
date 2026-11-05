@@ -3,7 +3,8 @@
 // GIFT_CARDS_MANAGE (route-permissions/gift-cards.ts); gift cards issue money,
 // so they are never folded into orders permissions. Staff see last 4 only;
 // the full code is in the issue response once, and never in a URL or log.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
   GIFT_CARD_LIST_FILTERS,
   adjustGiftCardBalance,
@@ -41,7 +42,7 @@ import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { requiredRequestKey } from "./idempotency-key";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const isoTimestamp = z.string().openapi({ format: "date-time" });
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();

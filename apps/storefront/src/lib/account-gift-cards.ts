@@ -14,6 +14,7 @@ import type {
   GiftCardBalanceStatus,
   GiftCardFailureReason,
 } from "@/lib/api/gift-cards";
+import { rateLimitedText } from "@/lib/buyer-api-errors";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { pageLanguage } from "@/lib/store-time-zone";
 
@@ -30,7 +31,6 @@ const GIFT_CARD_PAGE_COPY_EN = {
   statusLabel: "Status",
   useAtCheckout: "To use it, enter the code on the payment step at checkout.",
   notFound: "We couldn't find a gift card with that code. Check it and try again.",
-  rateLimited: "Too many tries. Wait a minute, then try again.",
   unavailable: "We couldn't check gift cards right now. Try again in a moment.",
   accountTitle: "Gift cards",
   accountEmpty: "No gift cards on your account yet.",
@@ -72,7 +72,6 @@ const GIFT_CARD_PAGE_COPY_BN: GiftCardPageCopy = {
   statusLabel: "অবস্থা",
   useAtCheckout: "ব্যবহার করতে চেকআউটের পেমেন্ট ধাপে কোডটি লিখুন।",
   notFound: "এই কোডের কোনো গিফট কার্ড পাওয়া যায়নি। কোডটি দেখে আবার চেষ্টা করুন।",
-  rateLimited: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
   unavailable: "এখন গিফট কার্ড দেখা যাচ্ছে না। একটু পরে আবার চেষ্টা করুন।",
   accountTitle: "গিফট কার্ড",
   accountEmpty: "আপনার অ্যাকাউন্টে এখনো কোনো গিফট কার্ড নেই।",
@@ -136,23 +135,26 @@ export function giftCardMoney(amount: number, currencyCode: string): string {
   return accountMoney(amount, currencyCode);
 }
 
+/** A refused gift-card call: why, and the wait the store named for a rate limit. */
+export type GiftCardFailure = Extract<GiftCardApiResult<unknown>, { ok: false }>;
+
 /** One uniform sentence per failure: never says whether a code exists. */
-export function giftCardBalanceFailureText(reason: GiftCardFailureReason): string {
+export function giftCardBalanceFailureText(failure: Pick<GiftCardFailure, "reason" | "retryAfterSeconds">): string {
   const copy = giftCardPageCopy();
-  if (reason === "rate_limited") return copy.rateLimited;
-  if (reason === "unavailable") return copy.unavailable;
+  if (failure.reason === "rate_limited") return rateLimitedText(failure.retryAfterSeconds);
+  if (failure.reason === "unavailable") return copy.unavailable;
   return copy.notFound;
 }
 
-export function giftCardSaveFailureText(reason: GiftCardFailureReason): string {
+export function giftCardSaveFailureText(failure: Pick<GiftCardFailure, "reason" | "retryAfterSeconds">): string {
   const copy = giftCardPageCopy();
-  if (reason === "rate_limited") return copy.rateLimited;
-  if (reason === "unavailable") return copy.unavailable;
+  if (failure.reason === "rate_limited") return rateLimitedText(failure.retryAfterSeconds);
+  if (failure.reason === "unavailable") return copy.unavailable;
   return copy.saveFailed;
 }
 
-export function giftCardRevealFailureText(reason: GiftCardFailureReason): string {
-  return reason === "rate_limited" ? giftCardPageCopy().rateLimited : giftCardPageCopy().revealFailed;
+export function giftCardRevealFailureText(failure: Pick<GiftCardFailure, "reason" | "retryAfterSeconds">): string {
+  return failure.reason === "rate_limited" ? rateLimitedText(failure.retryAfterSeconds) : giftCardPageCopy().revealFailed;
 }
 
 /** "Used on order #1042", "Issued", … */
@@ -206,7 +208,7 @@ export function giftCardBalanceView(result: GiftCardApiResult<GiftCardBalance> |
   if (!result) return { kind: "form" };
   return result.ok
     ? { kind: "result", card: result.data }
-    : { kind: "error", message: giftCardBalanceFailureText(result.reason) };
+    : { kind: "error", message: giftCardBalanceFailureText(result) };
 }
 
 /** HTTP status for a page answer: the page still renders, but a limiter or outage is not a 200. */

@@ -12,6 +12,7 @@
 // return path and, on a receipt, the order id (the proof stays in its
 // httpOnly cookie).
 import { checkoutText } from "@/lib/checkout-text";
+import { checkoutRateLimitedText, readRetryAt, setRetryAt } from "@/lib/rate-limit-wait";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -51,6 +52,7 @@ export const REVIEW_FORM_COPY_KEYS = [
   "reviewEditExistingText",
   "reviewDisabledText",
   "reviewRateLimitedText",
+  "orderCodeTryAgainInText",
   "reviewUnavailableText",
   "reviewChangedText",
   "reviewNotEditableText",
@@ -286,7 +288,8 @@ export function isReviewSuccess(flag: ReviewNoticeFlag): boolean {
   return SUCCESS_FLAGS.has(flag);
 }
 
-export function reviewNoticeText(flag: ReviewNoticeFlag, copy: ReviewFormCopy): string {
+/** The outcome in words; a rate limit says the wait the store named (`retryAfterSeconds`). */
+export function reviewNoticeText(flag: ReviewNoticeFlag, copy: ReviewFormCopy, retryAfterSeconds?: number): string {
   switch (flag) {
     case "published": return copy.reviewPublishedNoticeText;
     case "pending": return copy.reviewPendingNoticeText;
@@ -297,7 +300,7 @@ export function reviewNoticeText(flag: ReviewNoticeFlag, copy: ReviewFormCopy): 
     case "not_eligible": return copy.reviewNotEligibleText;
     case "exists": return copy.reviewExistsText;
     case "disabled": return copy.reviewDisabledText;
-    case "rate_limited": return copy.reviewRateLimitedText;
+    case "rate_limited": return checkoutRateLimitedText(copy, copy.reviewRateLimitedText, retryAfterSeconds);
     case "unavailable": return copy.reviewUnavailableText;
     case "changed": return copy.reviewChangedText;
     case "not_editable": return copy.reviewNotEditableText;
@@ -341,16 +344,21 @@ export function defaultReviewReturnPath(access: ReviewAccess): string {
     : `/order-success?${new URLSearchParams({ orderId: access.orderId })}`;
 }
 
-/** The return page with the outcome: a flag, the line it belongs to and its anchor. Ids only. */
+/**
+ * The return page with the outcome: a flag, the line it belongs to, the end
+ * of a rate limit's wait and its anchor. Ids and a time only.
+ */
 export function withReviewStatus(
   returnTo: string,
   flag: ReviewNoticeFlag,
   lineId: string | null,
   reviewRef: string | null = null,
+  retryAfterSeconds?: number,
 ): string {
   const url = new URL(returnTo, "https://storefront.invalid");
   for (const key of [REVIEW_STATUS_PARAM, REVIEW_LINE_PARAM, REVIEW_REF_PARAM]) url.searchParams.delete(key);
   url.searchParams.set(REVIEW_STATUS_PARAM, flag);
+  setRetryAt(url, flag === "rate_limited" ? retryAfterSeconds : undefined);
   if (lineId && isReviewId(lineId)) url.searchParams.set(REVIEW_LINE_PARAM, lineId);
   if (reviewRef && isReviewId(reviewRef)) url.searchParams.set(REVIEW_REF_PARAM, reviewRef);
   return `${url.pathname}${url.search}${lineId && isReviewId(lineId) ? `#${reviewAnchor(lineId)}` : ""}`;
@@ -360,16 +368,24 @@ export interface ReviewNotice {
   flag: ReviewNoticeFlag;
   lineId: string | null;
   reviewRef: string | null;
+  /** What is left of a rate limit's wait, when the store named one. */
+  retryAfterSeconds?: number;
 }
 
 /** The outcome in a page's query string, when there is one. */
-export function readReviewNotice(search: string): ReviewNotice | null {
+export function readReviewNotice(search: string, nowMs: number = Date.now()): ReviewNotice | null {
   const params = new URLSearchParams(search);
   const flag = params.get(REVIEW_STATUS_PARAM);
   if (!isReviewNoticeFlag(flag)) return null;
   const lineId = params.get(REVIEW_LINE_PARAM);
   const reviewRef = params.get(REVIEW_REF_PARAM);
-  return { flag, lineId: isReviewId(lineId) ? lineId : null, reviewRef: isReviewId(reviewRef) ? reviewRef : null };
+  const retryAfterSeconds = flag === "rate_limited" ? readRetryAt(params, nowMs) : undefined;
+  return {
+    flag,
+    lineId: isReviewId(lineId) ? lineId : null,
+    reviewRef: isReviewId(reviewRef) ? reviewRef : null,
+    ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+  };
 }
 
 /** The anchor of a line's review block (`#review-<orderItemId>`). */
@@ -518,7 +534,7 @@ export function reviewNoticeMarkup(
   const edit = notice.flag === "exists" && notice.reviewRef ? options.editHref?.(notice.reviewRef) ?? null : null;
   const tone = success ? "border-border bg-muted/40 text-foreground" : "border-destructive/30 bg-destructive/10 text-destructive";
   return `<p class="${CLASS.notice} ${tone}" role="${success ? "status" : "alert"}" data-review-notice="${notice.flag}">`
-    + escapeHtml(reviewNoticeText(notice.flag, copy))
+    + escapeHtml(reviewNoticeText(notice.flag, copy, notice.retryAfterSeconds))
     + (edit ? ` <a href="${escapeHtml(edit)}" class="underline">${escapeHtml(copy.reviewEditExistingText)}</a>` : "")
     + `</p>`;
 }

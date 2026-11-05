@@ -86,11 +86,11 @@ function collectionActivationCommand(collection, stage, current) {
     path,
     ...(current?.id ? {} : { pathBindings: { collectionId: reference(stage.logicalKey) } }),
     body: {
-      expectedVersion: reference(stage.logicalKey, "version"),
+      expectedRevision: reference(stage.logicalKey, "revision"),
       isActive: true,
     },
     dependsOn: [stage.logicalKey],
-    preconditions: { expectedVersion: reference(stage.logicalKey, "version") },
+    preconditions: { expectedRevision: reference(stage.logicalKey, "revision") },
   };
 }
 
@@ -181,12 +181,12 @@ export function buildDemoApplyLifecycle({
       phases.get("quarantine").commands.push({
         id: `${command.id}:quarantine`, logicalKey: quarantineKey, phase: "quarantine",
         method: "PUT", path: `${API}/collections/${current.id}`,
-        body: { expectedVersion: current.version, isActive: false },
-        preconditions: { expectedVersion: current.version }, dependsOn: [],
+        body: { expectedRevision: current.revision, isActive: false },
+        preconditions: { expectedRevision: current.revision }, dependsOn: [],
       });
       stage = cloneCommand(stage, {
-        body: { ...stage.body, expectedVersion: reference(quarantineKey, "version") },
-        preconditions: { expectedVersion: reference(quarantineKey, "version") },
+        body: { ...stage.body, expectedRevision: reference(quarantineKey, "revision") },
+        preconditions: { expectedRevision: reference(quarantineKey, "revision") },
         dependsOn: [quarantineKey, ...(stage.dependsOn ?? [])],
       });
     }
