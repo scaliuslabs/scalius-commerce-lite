@@ -1,4 +1,4 @@
-import { createContext, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, isValidElement, Suspense, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 /**
  * A `LazyPart`'s wait: its code, then the data its part reads at once. A
@@ -13,6 +13,35 @@ interface LoadingSpan {
 }
 
 const SpanContext = createContext<LoadingSpan | null>(null);
+
+/**
+ * The wait of each lazy part's code, by the lazy component (one module-level
+ * object per part). A card mounted again while that code still loads (its
+ * form remounting under it) carries on the same wait instead of starting a
+ * new one, which would hide its skeleton for another 300 ms.
+ */
+const spans = new WeakMap<object, LoadingSpan>();
+
+function spanFor(children: ReactNode): LoadingSpan {
+  const type = isValidElement(children) && typeof children.type === "object" && children.type !== null ? children.type : null;
+  const known = type ? spans.get(type) : undefined;
+  if (known && !known.ended) return known;
+  const span = { start: Date.now() };
+  if (type) spans.set(type, span);
+  return span;
+}
+
+/**
+ * The fallback while the code loads: hidden by CSS (`animate-wait-sign`)
+ * until its wait has lasted 300 ms, counted from the wait's start, so a
+ * fallback mounted again mid-wait (the part suspending once more, the card
+ * remounting) keeps a sign already shown on screen. After the part's first
+ * commit a new suspension is a wait of its own.
+ */
+function Waiting({ span, className, children }: { span: LoadingSpan; className?: string; children: ReactNode }) {
+  const [delay] = useState(() => (span.ended ? 300 : Math.max(0, 300 - (Date.now() - span.start))));
+  return <div className={`animate-wait-sign ${className ?? ""}`} style={{ "--wait-sign-delay": `${delay}ms` } as CSSProperties}>{children}</div>;
+}
 
 /**
  * True once `active` has lasted `delay` ms (300: a shorter wait shows no
@@ -65,10 +94,10 @@ function Arrived({ span, fallback, children }: { span: LoadingSpan; fallback: Re
  * waiting wrapper where the skeleton's own box would sit (a grid span, a width).
  */
 export function LazyPart({ fallback, className, children }: { fallback: ReactNode; className?: string; children: ReactNode }) {
-  const [span] = useState<LoadingSpan>(() => ({ start: Date.now() }));
+  const [span] = useState<LoadingSpan>(() => spanFor(children));
   return (
     <SpanContext.Provider value={span}>
-      <Suspense fallback={<div className={`animate-wait-sign ${className ?? ""}`}>{fallback}</div>}>
+      <Suspense fallback={<Waiting span={span} className={className}>{fallback}</Waiting>}>
         <Arrived span={span} fallback={fallback}>{children}</Arrived>
       </Suspense>
     </SpanContext.Provider>

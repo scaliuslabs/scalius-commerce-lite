@@ -1,3 +1,4 @@
+import { urlSearchTerm } from "~/lib/list-search";
 // The purchasing lists' shareable state: the view tab (and a purchase order
 // list's supplier) may sit in the page URL; the search never does.
 import type {
@@ -22,6 +23,8 @@ function pickTab<T extends string>(value: unknown, tabs: readonly T[], skip: T):
 }
 
 export interface PurchaseOrderListSearch {
+  /** A `?q=` deep link, until the list adopts it. */
+  q?: string;
   status?: Exclude<PurchaseOrderTab, "all">;
   /** Only this supplier's purchase orders. */
   supplier?: string;
@@ -30,7 +33,7 @@ export interface PurchaseOrderListSearch {
 export function validatePurchaseOrderListSearch(search: Record<string, unknown>): PurchaseOrderListSearch {
   const status = pickTab(search.status, PURCHASE_ORDER_TABS, "all");
   const supplier = typeof search.supplier === "string" && RECORD_ID.test(search.supplier) ? search.supplier : undefined;
-  return { ...(status ? { status } : {}), ...(supplier ? { supplier } : {}) };
+  return { ...(status ? { status } : {}), ...(supplier ? { supplier } : {}), ...urlSearchTerm(search) };
 }
 
 export function purchaseOrderListQuery(
@@ -50,12 +53,14 @@ export function purchaseOrderListQuery(
 }
 
 export interface TransferListSearch {
+  /** A `?q=` deep link, until the list adopts it. */
+  q?: string;
   status?: Exclude<TransferTab, "all">;
 }
 
 export function validateTransferListSearch(search: Record<string, unknown>): TransferListSearch {
   const status = pickTab(search.status, TRANSFER_TABS, "all");
-  return status ? { status } : {};
+  return { ...(status ? { status } : {}), ...urlSearchTerm(search) };
 }
 
 export function transferListQuery(tab: TransferTab, term: string, page: number, limit: number): TransferListQuery {
@@ -68,11 +73,13 @@ export function transferListQuery(tab: TransferTab, term: string, page: number, 
 }
 
 export interface SupplierListSearch {
+  /** A `?q=` deep link, until the list adopts it. */
+  q?: string;
   status?: "archived";
 }
 
 export function validateSupplierListSearch(search: Record<string, unknown>): SupplierListSearch {
-  return search.status === "archived" ? { status: "archived" } : {};
+  return { ...(search.status === "archived" ? { status: "archived" as const } : {}), ...urlSearchTerm(search) };
 }
 
 export function supplierListQuery(tab: SupplierTab, term: string, page: number, limit: number): SupplierListQuery {
