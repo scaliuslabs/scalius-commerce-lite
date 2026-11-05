@@ -36,6 +36,11 @@ export interface AccountCopy {
     close: string;
     goToOrders: string;
   };
+  /** Contact details shown to the buyer on manual COD deposit orders. */
+  contactPhoneText: string;
+  contactEmailText: string;
+  contactWhatsappText: string;
+  contactStoreText: string;
   format: {
     paymentNeedsAttention: string;
     cancellationRequested: string;
@@ -254,6 +259,10 @@ const EN: AccountCopy = {
     close: "Close",
     goToOrders: "Go to your orders",
   },
+  contactPhoneText: "Phone",
+  contactEmailText: "Email",
+  contactWhatsappText: "WhatsApp",
+  contactStoreText: "Store contact",
   format: {
     paymentNeedsAttention: "Payment needs attention",
     cancellationRequested: "Cancellation requested",
@@ -478,6 +487,10 @@ const BN: AccountCopy = {
     close: "বন্ধ করুন",
     goToOrders: "আপনার অর্ডারে যান",
   },
+  contactPhoneText: "ফোন",
+  contactEmailText: "ইমেইল",
+  contactWhatsappText: "হোয়াটসঅ্যাপ",
+  contactStoreText: "স্টোরের যোগাযোগ",
   format: {
     paymentNeedsAttention: "পেমেন্টে সমস্যা হয়েছে",
     cancellationRequested: "বাতিলের অনুরোধ করা হয়েছে",
