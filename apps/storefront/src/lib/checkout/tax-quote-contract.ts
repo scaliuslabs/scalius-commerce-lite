@@ -141,6 +141,8 @@ export interface TaxQuoteItem {
   /** The app's purchase option the line is bought with (a subscription); absent: one-time. */
   purchaseOption?: CartLinePurchaseOption;
   propertiesHash: string | null;
+  /** The line's share of the discounts in minor units, where the quote names it; a line it pays in full reads free. */
+  discountMinor?: number;
 }
 
 export interface TaxQuotePickup {
@@ -455,6 +457,7 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
     ...adjustmentsOf(value.adjustments),
     ...purchaseOptionOf(value.purchaseOption),
     propertiesHash: typeof value.propertiesHash === "string" ? value.propertiesHash : null,
+    ...(value.discountMinor === undefined ? {} : { discountMinor: nonNegativeSafeInteger(value.discountMinor) }),
   };
 }
 

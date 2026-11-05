@@ -3,6 +3,7 @@
 // when scripts are off; every step is a POST that answers with the next thing
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
+import { checkoutText } from "@/lib/checkout-text";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import BuyerField from "@/components/apps/BuyerField.astro";
 import Layout from "@/layouts/Layout.astro";
@@ -72,10 +73,7 @@ import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   checkoutLanguageBaseCode,
 } from "@scalius/shared/checkout-language";
-import {
-  formatCheckoutLanguageText,
-  formatDiscountLineLabel,
-} from "@scalius/shared/checkout-language-format";
+import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 
 export const prerender = false;
 
@@ -256,7 +254,7 @@ if (!codAvailable) {
   errorMessage = checkoutConfig.unavailableMessage || copy.checkoutUnavailableMessage;
   ruleMessages = [];
 } else if (!codServesDestination) {
-  errorMessage = formatCheckoutLanguageText(copy.cashOnDeliveryCountryUnavailableText, { country: countryName });
+  errorMessage = checkoutText(copy.cashOnDeliveryCountryUnavailableText, { country: countryName });
   ruleMessages = [];
 } else if (!codFitsOrder) {
   errorMessage = copy.cashOnDeliveryUnavailableText;
@@ -325,7 +323,7 @@ const fieldMessage: Record<QuickCheckoutFieldError, string> = {
   customerEmail: copy.emailInvalidText,
   customerEmailRequired: copy.emailRequiredText,
   customerWhatsapp: copy.whatsappInvalidText,
-  shippingAddress: formatCheckoutLanguageText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH }),
+  shippingAddress: checkoutText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH }),
   city: copy.cityZoneRequiredText,
   zone: copy.zoneRequiredText,
 };
@@ -338,7 +336,7 @@ const codeMessage = !form.discountCode || !quote
   : codeRejection
     ? `${form.discountCode}: ${describeRejectedCode(codeRejection, copy)}`
     : codeApplied
-      ? formatCheckoutLanguageText(copy.discountAppliedText, { code: form.discountCode })
+      ? checkoutText(copy.discountAppliedText, { code: form.discountCode })
       : "";
 const deliveryDiscounts = quote?.discounts.filter((line) => line.shippingAmount > 0) ?? [];
 const deliveryCharged = quote
@@ -518,7 +516,7 @@ const secondaryButtonClass =
                   <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsUnavailableText}</p>
                 ) : rates.length === 0 ? (
                   <p class="text-sm text-muted-foreground" role="status">{abroad && !offersDelivery
-                    ? formatCheckoutLanguageText(copy.deliveryCountryUnavailableText, { country: countryName })
+                    ? checkoutText(copy.deliveryCountryUnavailableText, { country: countryName })
                     : copy.noDeliveryToAddressText}</p>
                 ) : (
                   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -531,10 +529,10 @@ const secondaryButtonClass =
                             <span class="shrink-0 tabular-nums">{rateLabel(rate)}</span>
                           </span>
                           {rate.kind === "pickup" && rate.pickupAddress && (
-                            <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.pickupFromText, { address: rate.pickupAddress })}</span>
+                            <span class="block text-muted-foreground">{checkoutText(copy.pickupFromText, { address: rate.pickupAddress })}</span>
                           )}
                           {rate.kind === "pickup" && rate.pickupHours && (
-                            <span class="block text-muted-foreground">{formatCheckoutLanguageText(copy.pickupHoursText, { hours: rate.pickupHours })}</span>
+                            <span class="block text-muted-foreground">{checkoutText(copy.pickupHoursText, { hours: rate.pickupHours })}</span>
                           )}
                           {rate.description && <span class="block text-muted-foreground">{rate.description}</span>}
                         </span>
@@ -617,7 +615,7 @@ const secondaryButtonClass =
                   {item.properties.map((property) => (
                     <p class="text-muted-foreground">{property.label}: {property.displayValue}</p>
                   ))}
-                  <p class="text-muted-foreground">{formatCheckoutLanguageText(copy.quantityShortText, { quantity: item.quantity })} × {quoteMoney(item.unitPrice)}</p>
+                  <p class="text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: item.quantity })} × {quoteMoney(item.unitPrice)}</p>
                 </div>
                 <p class="shrink-0 font-medium tabular-nums text-foreground">{quoteMoney(item.unitPrice * item.quantity)}</p>
               </li>
@@ -625,7 +623,7 @@ const secondaryButtonClass =
             {!quote && lines.map((line) => (
               <li class="flex justify-between gap-3 py-3 text-sm">
                 <p class="min-w-0 font-medium text-foreground">{line.name}</p>
-                <p class="shrink-0 text-muted-foreground">{formatCheckoutLanguageText(copy.quantityShortText, { quantity: line.quantity })}</p>
+                <p class="shrink-0 text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: line.quantity })}</p>
               </li>
             ))}
           </ul>

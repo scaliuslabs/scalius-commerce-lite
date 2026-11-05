@@ -3,7 +3,8 @@
 // Bangladesh keeps the merchant's own copy (a local 01… mobile number); any
 // other country asks for the country code and shows a libphonenumber example.
 // Browser safe: no libphonenumber here; the example comes in as data.
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
+import { checkoutText } from "@/lib/checkout-text";
 import type { PhoneCountryMeta } from "@scalius/shared/phone-example";
 
 export type PhoneHintMode = "delivery" | "pickup" | "none";
@@ -73,7 +74,7 @@ export function phoneHints(
     };
   }
   const example = meta?.example
-    ? ` ${formatCheckoutLanguageText(copy.exampleText, { example: meta.example })}`
+    ? ` ${checkoutText(copy.exampleText, { example: meta.example })}`
     : "";
   return {
     hints: {

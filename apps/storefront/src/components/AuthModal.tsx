@@ -3,6 +3,7 @@
 // code, and you're in. A new buyer adds their name (and phone) after the code
 // proves their contact; nobody is asked whether they "have an account".
 
+import { pageOrderNumber } from "@/lib/checkout-text";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import {
@@ -20,7 +21,7 @@ import type { CheckoutConfig } from "@/lib/api/checkout";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import type { CustomerAuthOtpChannel, CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { formatBdMobile } from "@scalius/shared/phone-input";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
   checkContact,
@@ -647,7 +648,7 @@ export default function AuthModal() {
                     <span className="min-w-0">
                       <span className="block font-medium">
                         {orderAddress.orderNumber != null
-                          ? copy.saveAddressFromOrder(formatOrderNumber(orderAddress.orderNumber, ""))
+                          ? copy.saveAddressFromOrder(pageOrderNumber(orderAddress.orderNumber, ""))
                           : copy.saveAddressFromLastOrder}
                       </span>
                       <span className="block break-words text-muted-foreground">{orderAddress.text}</span>

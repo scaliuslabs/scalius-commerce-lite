@@ -644,8 +644,8 @@ function noorEntries(): GalleryEntry[] {
   const menu = product("noor-menu", "Noor mobile drawer over a core product page");
   menu.interact = [{ click: 'button[popovertarget="noor-drawer"]:not([popovertargetaction])', maxWidth: 1024, expectVisible: "#noor-drawer:popover-open" }];
   entries.push(menu);
-  const search = product("noor-search", "Noor search popover over a core product page");
-  search.interact = [{ click: 'button[popovertarget="noor-search"]:visible', expectVisible: "#noor-search:popover-open" }];
+  const search = product("noor-search", "Noor's search control opens the store's live search over a core product page");
+  search.interact = [{ click: ".noor-header [data-search-open]:visible", expectVisible: '[role="dialog"][aria-label="Search catalogue"]' }];
   entries.push(search);
   // Keep the same tokens and product composition, changing only the skins.
   const core = product("noor-product-core", "Core header + the same product tabs and navigation");

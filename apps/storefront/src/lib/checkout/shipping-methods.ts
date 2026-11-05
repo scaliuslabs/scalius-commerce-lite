@@ -18,7 +18,9 @@
  * A store app may change the options for this cart: the quote then lists the
  * ones to show (`applyQuotedRates`), in its order, with its names and fees.
  */
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
+import { formatCount } from "@/lib/store-time-zone";
+import { checkoutText } from "@/lib/checkout-text";
 import type { ShippingMethod } from "@/lib/api";
 import type { CheckoutDeliveryMode } from "./delivery-mode";
 import type { QuotedShippingRate } from "./tax-quote-contract";
@@ -386,7 +388,7 @@ export function enhanceShippingMethods(
     if (options.isFeeWaived() && rate.fee > 0) {
       return {
         label: copy.freeText,
-        note: formatCheckoutLanguageText(copy.waivedShippingFeeText, { fee: options.formatMoney(rate.fee) }),
+        note: checkoutText(copy.waivedShippingFeeText, { fee: options.formatMoney(rate.fee) }),
       };
     }
     if (rate.fee > 0 && rate.freeOver !== null && subtotal >= rate.freeOver) {
@@ -395,7 +397,7 @@ export function enhanceShippingMethods(
     return {
       label: rate.fee === 0 ? copy.freeText : options.formatMoney(rate.fee),
       note: rate.fee > 0 && rate.freeOver !== null
-        ? formatCheckoutLanguageText(copy.freeOverText, { amount: options.formatMoney(rate.freeOver) })
+        ? checkoutText(copy.freeOverText, { amount: options.formatMoney(rate.freeOver) })
         : "",
     };
   };
@@ -476,11 +478,11 @@ export function enhanceShippingMethods(
       // One line, so every option is the height its loading stand-in holds.
       line(rate.description, "truncate text-muted-foreground");
       if (rate.kind === "pickup" && rate.pickupAddress) {
-        line(formatCheckoutLanguageText(copy.pickupFromText, { address: rate.pickupAddress }), "text-foreground");
+        line(checkoutText(copy.pickupFromText, { address: rate.pickupAddress }), "text-foreground");
       }
       if (rate.kind === "pickup" && rate.pickupHours) {
         line(copy.pickupHoursText
-          ? formatCheckoutLanguageText(copy.pickupHoursText, { hours: rate.pickupHours })
+          ? checkoutText(copy.pickupHoursText, { hours: rate.pickupHours })
           : rate.pickupHours);
       }
       const feeNote = document.createElement("span");
@@ -523,27 +525,28 @@ export function enhanceShippingMethods(
     if (now) {
       return effectiveFee(now) === effectiveFee(previous)
         ? ""
-        : formatCheckoutLanguageText(copy.feeChangedText, { old: money(previous), new: money(now) });
+        : checkoutText(copy.feeChangedText, { old: money(previous), new: money(now) });
     }
     const replacement = selectedRate();
     return replacement
       ? effectiveFee(replacement) === effectiveFee(previous)
-        ? formatCheckoutLanguageText(copy.replacedSameFeeText, {
+        ? checkoutText(copy.replacedSameFeeText, {
             old: previous.name,
             new: replacement.name,
             fee: money(replacement),
           })
         // Say how much delivery went up or down: "Delivery was Free, now ৳80."
-        : formatCheckoutLanguageText(copy.replacedText, {
+        : checkoutText(copy.replacedText, {
             old: previous.name,
             new: replacement.name,
             oldFee: money(previous),
             newFee: money(replacement),
           })
-      : formatCheckoutLanguageText(copy.goneText, { old: previous.name });
+      : checkoutText(copy.goneText, { old: previous.name });
   };
 
-  const kilograms = (grams: number) => String(Math.round(grams / 100) / 10);
+  // In the page's digits ("১.৫" on a Bangla page).
+  const kilograms = (grams: number) => formatCount(Math.round(grams / 100) / 10);
   /** Why no delivery option is left for this address and cart. */
   const noOptionText = () => {
     const country = options.readNoDeliveryReason?.();
@@ -552,7 +555,7 @@ export function enhanceShippingMethods(
     const limits = [...forItems.values()].map((rate) => rate.maxWeightGrams);
     const max = limits.every((limit): limit is number => limit !== null) ? Math.max(...limits) : null;
     return max !== null && itemsWeightGrams !== null
-      ? formatCheckoutLanguageText(copy.overWeightNoneText, { weight: kilograms(itemsWeightGrams), max: kilograms(max) })
+      ? checkoutText(copy.overWeightNoneText, { weight: kilograms(itemsWeightGrams), max: kilograms(max) })
       : copy.itemsUnavailableNoneText;
   };
   /**
@@ -707,10 +710,10 @@ export function enhanceShippingMethods(
         // With another option left the notice names the limit; with none the note does (no empty red box).
         showNotice(previous && shown().some((rate) => rate.kind === "delivery")
           ? limit?.maxWeightGrams != null && itemsWeightGrams !== null
-            ? formatCheckoutLanguageText(copy.overWeightText, {
+            ? checkoutText(copy.overWeightText, {
                 option: previous.name, max: kilograms(limit.maxWeightGrams), weight: kilograms(itemsWeightGrams),
               })
-            : formatCheckoutLanguageText(copy.itemsUnavailableText, { option: previous.name })
+            : checkoutText(copy.itemsUnavailableText, { option: previous.name })
           : "");
         return;
       }

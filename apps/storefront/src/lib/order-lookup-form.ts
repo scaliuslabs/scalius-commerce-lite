@@ -1,3 +1,4 @@
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import { buyerApiErrorCopy } from "./buyer-api-error-copy";
 import { pageLanguage } from "./store-time-zone";
 // Progressive enhancement for the order-code forms. Without JavaScript the
@@ -5,11 +6,8 @@ import { pageLanguage } from "./store-time-zone";
 // same form talks to the JSON proxies, keeps what the buyer typed, says where
 // the code went, and counts down resend and rate-limit waits. The code field
 // appears only once a code was actually sent.
-import {
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+
 import {
   DEFAULT_RESEND_AFTER_SECONDS,
   describeOrderCodeSendRefusal,
@@ -109,7 +107,7 @@ export function enhanceOrderCodeForm(
     countdown(
       resend,
       seconds,
-      (left) => { resend.textContent = formatCheckoutLanguageText(copy.orderCodeResendInText, { time: formatCountdown(left) }); },
+      (left) => { resend.textContent = checkoutText(copy.orderCodeResendInText, { time: formatCountdown(left) }); },
       () => {
         resend.disabled = false;
         resend.textContent = copy.orderCodeSendNewText;
@@ -192,7 +190,7 @@ export function enhanceOrderCodeForm(
         setMessage(sentMessage);
         const orderNumber = orderLine?.querySelector("[data-order-number]");
         if (orderLine && orderNumber && typeof data.orderNumber === "number") {
-          orderNumber.textContent = formatOrderNumber(data.orderNumber, "");
+          orderNumber.textContent = pageOrderNumber(data.orderNumber, "");
           orderLine.hidden = false;
         }
         waitToResend(positiveSeconds(data.resendAfterSeconds) ?? DEFAULT_RESEND_AFTER_SECONDS);

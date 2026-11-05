@@ -22,6 +22,8 @@ export interface CartLineCopy {
   removeUnavailable: (count: string) => string;
   updateQuantities: (count: string) => string;
   refreshPrices: (count: string) => string;
+  /** A line its own discount pays in full (a free gift), as a screen reader hears its struck price and zero. */
+  freeLine: (price: string) => string;
 }
 
 const EN: CartLineCopy = {
@@ -38,6 +40,7 @@ const EN: CartLineCopy = {
   removeUnavailable: (count) => `Remove unavailable (${count})`,
   updateQuantities: (count) => `Update quantities (${count})`,
   refreshPrices: (count) => `Refresh prices (${count})`,
+  freeLine: (price) => `Free, was ${price}`,
 };
 
 const BN: CartLineCopy = {
@@ -54,6 +57,7 @@ const BN: CartLineCopy = {
   removeUnavailable: (count) => `অনুপলভ্য পণ্য সরান (${count})`,
   updateQuantities: (count) => `পরিমাণ হালনাগাদ করুন (${count})`,
   refreshPrices: (count) => `দাম হালনাগাদ করুন (${count})`,
+  freeLine: (price) => `ফ্রি, আগে ছিল ${price}`,
 };
 
 const COPY = { en: EN, bn: BN } as const;

@@ -301,7 +301,7 @@ const EN: CatalogCopy = {
     metaAndMore: (shown) => `${shown} and more`,
     emptyTitle: "No products yet",
     emptyFiltered: "Try fewer filters or a broader price range.",
-    emptyDescription: "Explore the rest of the catalog.",
+    emptyDescription: "Explore the rest of the catalogue.",
     clearFilters: "Clear filters",
     browseProducts: "Browse products",
   },

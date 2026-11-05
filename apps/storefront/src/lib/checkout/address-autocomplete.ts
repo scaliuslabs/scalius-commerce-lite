@@ -12,8 +12,9 @@
  * URL, and are never logged. The module loads only when the layout names an
  * address app (pages/cart.astro).
  */
+import { checkoutText } from "@/lib/checkout-text";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { serviceCoversCountry, type AddressAutocompleteService } from "@/lib/app-services";
 import { formatPageNumber } from "@/lib/store-time-zone";
 import { LOCATION_COUNTRY, shippingCountryOf } from "./shipping-country";
@@ -267,7 +268,7 @@ export function enhanceAddressAutocomplete(options: AddressAutocompleteOptions):
     input.setAttribute("aria-expanded", "true");
     status.textContent = suggestions.length === 1
       ? copy.addressSuggestionText
-      : formatCheckoutLanguageText(copy.addressSuggestionsText, { count: formatPageNumber(suggestions.length, locale) });
+      : checkoutText(copy.addressSuggestionsText, { count: formatPageNumber(suggestions.length, locale) });
     setActive(-1);
   };
 

@@ -4,12 +4,10 @@
 // inputs, and replace the address with pickup facts or "No delivery needed".
 // Pure: no DOM, no fetch. Properties are display-only here; they never go into
 // URLs, analytics payloads, logs or data attributes.
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
-import {
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./api/customer-auth";
 import type { OrderLineProperty, OrderPickup } from "./api/types";
 
@@ -127,7 +125,7 @@ export function groupOrderLines<T extends OrderLineGroupLine>(
       heading: groupHeading(type, copy),
       statusLabel,
       progressLabel: partial && statusLabel && !closed
-        ? formatCheckoutLanguageText(copy.orderLineFulfilledCountText, { done, total })
+        ? checkoutText(copy.orderLineFulfilledCountText, { done, total })
         : null,
       items: lines,
     }];
@@ -183,7 +181,7 @@ export function orderLinePropertyRows(
     const value = (property?.displayValue ?? property?.value ?? "").trim();
     if (!label || !value) return [];
     const surcharge = Number(property.priceMinor) > 0
-      ? formatCheckoutLanguageText(copy.customizationSurchargeText, { price: formatSurcharge(property) })
+      ? checkoutText(copy.customizationSurchargeText, { price: formatSurcharge(property) })
       : null;
     return [{ label, value, surcharge, text: `${label}: ${value}${surcharge ? ` (${surcharge})` : ""}` }];
   });
@@ -243,7 +241,7 @@ export function resolveOrderDeliveryBlock(order: OrderFulfilmentView, copy: Chec
     mode,
     heading: copy.orderPickupHeadingText,
     location: address
-      ? formatCheckoutLanguageText(ready && !collected ? copy.orderPickupReadyText : copy.orderPickupAddressText, { address })
+      ? checkoutText(ready && !collected ? copy.orderPickupReadyText : copy.orderPickupAddressText, { address })
       : ready && !collected ? copy.orderLineReadyForPickupText : null,
     hoursLabel: copy.orderPickupHoursLabelText,
     hours: order.pickup?.hours?.trim() || null,
@@ -352,8 +350,8 @@ export function withOrderCompletionWording<V extends { kind: string; title: stri
       ? {
           title: wording.title,
           // Copy templates already carry the "#": "Order #{orderId} has been picked up."
-          message: formatCheckoutLanguageText(wording.messageTemplate, {
-            orderId: formatOrderNumber(order.orderNumber, order.id).slice(1),
+          message: checkoutText(wording.messageTemplate, {
+            orderId: pageOrderNumber(order.orderNumber, order.id).slice(1),
           }),
         }
       : {}),

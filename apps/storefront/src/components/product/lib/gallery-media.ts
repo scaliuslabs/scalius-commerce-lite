@@ -10,6 +10,7 @@
  */
 import type { Product, ProductMedia, ProductVariant } from "@/lib/api";
 import { hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
+import { pageDigits } from "@/lib/checkout-text";
 
 export interface PageGalleryItem {
   /** The product media id. */
@@ -39,7 +40,8 @@ export function formatVideoDuration(durationMs: number | null): string | null {
   const totalSeconds = Math.round(durationMs / 1_000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds}`;
+  // In the page's digits ("১:০৫" on a Bangla page).
+  return pageDigits(`${minutes}:${seconds}`);
 }
 
 /**

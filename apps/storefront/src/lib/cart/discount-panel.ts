@@ -4,8 +4,9 @@
  * automatic Buy X get Y offers the buyer can complete. Pure DOM rendering from
  * the server's discount facts; amounts always come from the server.
  */
+import { checkoutText } from "@/lib/checkout-text";
 import { formatMoney } from "@/lib/currency";
-import { formatCheckoutLanguageText, formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
+import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import {
   discountLineKey,
@@ -32,7 +33,7 @@ export function describeRejectedCode(
   copy: CheckoutLanguageData,
 ): string {
   const text = (template: string, values: Record<string, string | number>) =>
-    formatCheckoutLanguageText(template, values);
+    checkoutText(template, values);
   const { code, offer } = rejection;
   const item = itemNames(offer);
   switch (rejection.reason) {
@@ -144,12 +145,12 @@ function offerActions(
 function offerHeadline(offer: CheckoutDiscountOffer, copy: CheckoutLanguageData): string {
   const free = offer.percentOff >= 100;
   if (offer.quantity > 1) {
-    return formatCheckoutLanguageText(free ? copy.offerFreeManyHeadingText : copy.offerPercentManyHeadingText, {
+    return checkoutText(free ? copy.offerFreeManyHeadingText : copy.offerPercentManyHeadingText, {
       count: offer.quantity,
       percent: offer.percentOff,
     });
   }
-  return free ? copy.offerFreeHeadingText : formatCheckoutLanguageText(copy.offerPercentHeadingText, { percent: offer.percentOff });
+  return free ? copy.offerFreeHeadingText : checkoutText(copy.offerPercentHeadingText, { percent: offer.percentOff });
 }
 
 /** Renders the discount lines, applied codes and offers into their containers. */
@@ -184,7 +185,7 @@ export function renderDiscountPanel(
     chip.append(element("span", "font-mono", code));
     const remove = element("button", "inline-flex h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring");
     remove.type = "button";
-    remove.setAttribute("aria-label", formatCheckoutLanguageText(copy.removeDiscountCodeText, { code }));
+    remove.setAttribute("aria-label", checkoutText(copy.removeDiscountCodeText, { code }));
     remove.textContent = "×";
     remove.addEventListener("click", () => actions.removeCode(code));
     chip.append(remove);
@@ -196,7 +197,7 @@ export function renderDiscountPanel(
       // An applied code that took the place of an automatic discount says so, once.
       const replaced = facts?.discounts.find((line) => line.code === code)?.replaces;
       return replaced
-        ? [element("li", "basis-full text-sm text-muted-foreground", formatCheckoutLanguageText(copy.discountReplacesText, { code, other: replaced }))]
+        ? [element("li", "basis-full text-sm text-muted-foreground", checkoutText(copy.discountReplacesText, { code, other: replaced }))]
         : [];
     }
     const item = element("li", "basis-full text-sm text-muted-foreground");

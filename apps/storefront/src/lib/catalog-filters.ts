@@ -271,7 +271,7 @@ export function applyCatalogFilterCounts(
       const count = ratingCounts.get(input.value) ?? 0;
       input.disabled = count === 0 && !input.checked;
       const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count], .catalog-facet-count");
-      if (countLabel) countLabel.textContent = String(count);
+      if (countLabel) countLabel.textContent = formatCount(count);
     }
   }
   const counts = new Map(facets?.map((facet) => [
@@ -283,7 +283,7 @@ export function applyCatalogFilterCounts(
     const count = counts.get(input.name)?.get(input.value) ?? 0;
     input.disabled = count === 0 && !input.checked;
     const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count], .catalog-facet-count");
-    if (countLabel) countLabel.textContent = String(count);
+    if (countLabel) countLabel.textContent = formatCount(count);
   }
   const ranges = new Map(facets?.map((facet) => [facet.slug, facet.range]));
   const rangeInputs = facets ? form.querySelectorAll<HTMLInputElement>("input[data-catalog-range]") : [];
@@ -398,7 +398,7 @@ function appendFacetRows(group: HTMLElement, facets: readonly ProductFacet[]): H
       const text = row.querySelector("[data-catalog-facet-label], .catalog-facet-label");
       const count = row.querySelector("[data-catalog-facet-count], .catalog-facet-count");
       if (text) text.textContent = value.label;
-      if (count) count.textContent = String(value.count);
+      if (count) count.textContent = formatCount(value.count);
       if (category) {
         (row as HTMLAnchorElement).href = pagePath(`/categories/${encodeURIComponent(value.value)}${carriedListingQuery()}`);
         const item = document.createElement("li");

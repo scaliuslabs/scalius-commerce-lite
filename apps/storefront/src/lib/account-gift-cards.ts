@@ -4,6 +4,7 @@
 // body and is never written back into the page, a URL or a log. The one code
 // a page shows is the buyer's own card after "Show code" (POST, no-store).
 
+import { pageDigits } from "@/lib/checkout-text";
 import { accountMoney, formatAccountDate } from "@/lib/account-format";
 import type {
   AccountGiftCard,
@@ -119,7 +120,7 @@ export function giftCardStatusTone(status: GiftCardBalanceStatus): string {
 
 /** "•••• 7K2Q" */
 export function maskedGiftCard(last4: string): string {
-  return `•••• ${last4}`;
+  return `•••• ${pageDigits(last4)}`;
 }
 
 export function giftCardTitle(last4: string): string {

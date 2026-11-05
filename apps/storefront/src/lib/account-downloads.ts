@@ -8,8 +8,9 @@
 // path; the proof (session or receipt cookie) never enters markup or a URL,
 // and a revealed licence key is only rendered by `pages/account/licence-key`.
 
+import { pageOrderNumber } from "@/lib/checkout-text";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 import { formatAccountDate } from "@/lib/account-format";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { formatCount, formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
@@ -541,7 +542,7 @@ export function renderDownloadLines(lines: readonly BuyerDigitalLine[], options:
     };
     const delivered = formatAccountDate(line.deliveredAt, { time: false });
     const meta = [
-      `<a href="${escapeHtml(orderHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(fillCopy(downloadCopy().order, { number: formatOrderNumber(line.orderNumber, line.orderId) }))}</a>`,
+      `<a href="${escapeHtml(orderHref)}" data-astro-prefetch="false" class="font-medium text-primary hover:underline">${escapeHtml(fillCopy(downloadCopy().order, { number: pageOrderNumber(line.orderNumber, line.orderId) }))}</a>`,
       delivered ? escapeHtml(fillCopy(downloadCopy().deliveredOn, { date: delivered })) : "",
     ].filter(Boolean).join(" · ");
     return `<li class="rounded-xl border border-border bg-card p-5">

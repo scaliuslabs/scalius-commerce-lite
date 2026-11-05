@@ -3,8 +3,9 @@
 // the /products/<slug>/reviews page and the "Show more" script. Review text
 // is buyer content: it is escaped on the way into HTML and never goes into a
 // URL, a log line or analytics.
+import { checkoutText, pageDigits } from "@/lib/checkout-text";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { formatCount, formatStoreDateTime, storeTimeZone } from "@/lib/store-time-zone";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { ProductReviews, ProductReviewSummary, PublicProductReview } from "@/lib/api/types";
@@ -153,7 +154,8 @@ export function readProductReviews(value: unknown): ProductReviews | null {
 /** The average as buyers and JSON-LD read it: one decimal ("4.7"). */
 export function formatReviewAverage(average: number): string {
   const clamped = Math.min(Math.max(average, 0), 5);
-  return (Math.round(clamped * 10) / 10).toFixed(1);
+  // In the page's digits ("৪.৫" on a Bangla page).
+  return pageDigits((Math.round(clamped * 10) / 10).toFixed(1));
 }
 
 /** The star fill for an average, to the nearest half star (Amazon's rounding): "90%" for 4.6. */
@@ -166,7 +168,7 @@ export function reviewStarFill(average: number): string {
 export function reviewCountText(copy: Pick<ReviewCopy, "reviewsCountOneText" | "reviewsCountText">, total: number): string {
   return total === 1
     ? copy.reviewsCountOneText
-    : formatCheckoutLanguageText(copy.reviewsCountText, { count: formatCount(total) });
+    : checkoutText(copy.reviewsCountText, { count: formatCount(total) });
 }
 
 export interface ReviewHistogramRow {
@@ -263,7 +265,7 @@ function paragraphs(body: string): string {
  */
 export function publicReviewMarkup(review: PublicProductReview, options: ReviewRenderOptions): string {
   const { copy, language, storeName } = options;
-  const rated = formatCheckoutLanguageText(copy.reviewsRatedText, { average: String(review.rating) });
+  const rated = checkoutText(copy.reviewsRatedText, { average: review.rating });
   const date = formatReviewDate(review.publishedAt, language);
   const meta = [
     `<time datetime="${escapeHtml(review.publishedAt)}">${escapeHtml(date)}</time>`,
@@ -276,7 +278,7 @@ export function publicReviewMarkup(review: PublicProductReview, options: ReviewR
   // line edge; the gap and the check mark before "Verified" separate them.
   ].filter(Boolean).join("");
   const replyTitle = storeName
-    ? formatCheckoutLanguageText(copy.reviewsReplyText, { store: storeName })
+    ? checkoutText(copy.reviewsReplyText, { store: storeName })
     : copy.reviewsReplyFallbackText;
   const reply = review.reply
     ? `<div class="review-reply"><p class="review-reply-title">${escapeHtml(replyTitle)}<span class="review-reply-date"> · <time datetime="${escapeHtml(review.reply.repliedAt)}">${escapeHtml(formatReviewDate(review.reply.repliedAt, language))}</time></span></p><div class="review-body">${paragraphs(review.reply.body)}</div></div>`

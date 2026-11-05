@@ -35,7 +35,7 @@ export interface SearchPaletteCopy {
 }
 
 export const SEARCH_PALETTE_EN: SearchPaletteCopy = {
-  dialog: "Search catalog",
+  dialog: "Search catalogue",
   placeholder: "Search products…",
   input: "Search products",
   close: "Close search",

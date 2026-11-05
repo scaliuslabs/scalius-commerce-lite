@@ -8,6 +8,7 @@ import FooterMenus from "./FooterMenus.astro";
 import { mediaImageUrl } from "@/lib/media-url";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { pageDigits } from "@/lib/checkout-text";
 import type { FooterModel } from "./footer-model";
 
 interface Props {
@@ -44,10 +45,24 @@ const copy = storefrontCopy(language).chrome;
               height={256}
               loading="lazy"
               decoding="async"
-              class="h-12 sm:h-14 w-auto object-contain"
+              class:list={["h-12 sm:h-14 w-auto object-contain", logo.darkSrc && "dark:hidden"]}
             />
           ) : (
             <span class="text-lg font-bold">{brandName}</span>
+          )
+        }
+        {/* Dark pages show the logo for dark pages (CSS picks it: a hidden lazy image never loads). */}
+        {
+          logo.darkSrc && (
+            <img
+              src={mediaImageUrl(logo.darkSrc, 480)}
+              alt={brandName || copy.home}
+              width={344}
+              height={256}
+              loading="lazy"
+              decoding="async"
+              class="hidden h-12 sm:h-14 w-auto object-contain dark:block"
+            />
           )
         }
       </a>
@@ -67,7 +82,7 @@ const copy = storefrontCopy(language).chrome;
             <li>
               {copy.footer.callUs}{" "}
               <a href={phoneHref} class="font-semibold underline underline-offset-4">
-                <bdi dir="ltr">{storePhone}</bdi>
+                <bdi dir="ltr">{pageDigits(storePhone)}</bdi>
               </a>
             </li>
           )}

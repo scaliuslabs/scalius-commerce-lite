@@ -1,4 +1,6 @@
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
+import { pageDigits } from "@/lib/checkout-text";
+import { checkoutText } from "@/lib/checkout-text";
 import type { ProductBundleTier, ProductBuyGetOffer } from "@/lib/api/types";
 import type { ProductActionCopy } from "./product-actions";
 
@@ -19,15 +21,15 @@ export function describeBuyGetOffer(
 ): { before: string; item: string; after: string } {
   const benefit = offer.percentOff >= 100
     ? copy.freeBenefitText
-    : formatCheckoutLanguageText(copy.percentBenefitText, { percent: offer.percentOff });
+    : checkoutText(copy.percentBenefitText, { percent: offer.percentOff });
   const given = offer.role === "get";
   const text = offer.buyAmount !== null
-    ? formatCheckoutLanguageText(given ? copy.saleOfferGetSpendText : copy.saleOfferSpendText, {
+    ? checkoutText(given ? copy.saleOfferGetSpendText : copy.saleOfferSpendText, {
         amount: formatPrice(offer.buyAmount),
         item: ITEM,
         benefit,
       })
-    : formatCheckoutLanguageText(given ? copy.saleOfferGetText : copy.saleOfferText, {
+    : checkoutText(given ? copy.saleOfferGetText : copy.saleOfferText, {
         quantity: offer.buyQuantity ?? 1,
         item: ITEM,
         benefit,
@@ -55,10 +57,10 @@ export function describeBundleTiers(
         const percent = Number.isInteger(tier.discountPercentage)
           ? String(tier.discountPercentage)
           : tier.discountPercentage.toFixed(2).replace(/\.?0+$/, "");
-        return [{ tier, text: formatCheckoutLanguageText(copy.productBundleTierText, { quantity: tier.quantity, saving: `${percent}%` }) }];
+        return [{ tier, text: checkoutText(copy.productBundleTierText, { quantity: tier.quantity, saving: pageDigits(`${percent}%`) }) }];
       }
       if (tier.discountType === "fixed_price" && tier.price !== null && tier.price > 0) {
-        return [{ tier, text: formatCheckoutLanguageText(copy.productBundleSetPriceText, { quantity: tier.quantity, price: formatPrice(tier.price) }) }];
+        return [{ tier, text: checkoutText(copy.productBundleSetPriceText, { quantity: tier.quantity, price: formatPrice(tier.price) }) }];
       }
       return [];
     })

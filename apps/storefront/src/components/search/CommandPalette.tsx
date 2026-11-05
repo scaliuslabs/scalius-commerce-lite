@@ -434,7 +434,9 @@ export default function CommandPalette() {
         {/* Results List */}
         <div
           id="catalog-search-results"
-          role="listbox"
+          // A listbox only while it lists results: before a search, or with none, it holds
+          // suggestions and words, which a listbox may not (WCAG 1.3.1, axe aria-required-children).
+          role={flatResults.length > 0 ? "listbox" : undefined}
           aria-busy={isLoading}
           className="scrollbar-hide min-h-0 flex-1 overflow-y-auto bg-muted/30 p-0 sm:bg-background sm:p-2"
           onClick={handleEmptyClick}

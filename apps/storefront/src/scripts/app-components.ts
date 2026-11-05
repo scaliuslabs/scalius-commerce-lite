@@ -21,6 +21,8 @@ import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/curre
 import { productContext } from "./product-context";
 import { DEFERRED_REVEAL_EVENT } from "./browser-events";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
+import { loadLazyScript } from "@/scripts/lazy-script";
+import { formatCount } from "@/lib/store-time-zone";
 
 type CartSummary = { count: number; total: StorefrontMoney };
 
@@ -31,8 +33,8 @@ function cartTotal(total: number): StorefrontMoney {
   return { ...money, formatted: formatMinorMoney(money) };
 }
 
-async function cartStoreModule() {
-  return import("@/store/cart");
+function cartStoreModule() {
+  return loadLazyScript(() => import("@/store/cart"));
 }
 
 function onCart(listener: (cart: CartSummary) => void): () => void {
@@ -59,7 +61,7 @@ function onCart(listener: (cart: CartSummary) => void): () => void {
     // returns its cleanup. Stop it as soon as the handle exists.
     if (stopped) stop();
     else unsubscribe = stop;
-  });
+  }, (error: unknown) => console.warn("The cart did not load for an app", error));
   return stopListening;
 }
 
@@ -91,7 +93,7 @@ async function quickAdd(productUrl: string): Promise<boolean> {
 function addLineFor(pluginId: string): NonNullable<StorefrontIslandContext["addLine"]> {
   return async (line) => {
     try {
-      const { addVariantLine } = await import("@/lib/buyer-ui/actions");
+      const { addVariantLine } = await loadLazyScript(() => import("@/lib/buyer-ui/actions"));
       const addedLineKey = await addVariantLine({
         variantId: typeof line?.variantId === "string" ? line.variantId : "",
         quantity: line?.quantity ?? 1,
@@ -335,7 +337,7 @@ function installCartCount(): void {
   if (counts().length === 0) return;
   onCart(({ count }) => {
     for (const element of counts()) {
-      element.textContent = count > 0 ? String(count) : "";
+      element.textContent = count > 0 ? formatCount(count) : "";
       element.toggleAttribute("data-empty", count === 0);
     }
   });

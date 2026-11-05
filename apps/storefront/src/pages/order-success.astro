@@ -1,4 +1,5 @@
 ---
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import { formatOrderPlaces } from "@/lib/account-format";
 import LineExtras from "@/components/order/LineExtras.astro";
@@ -66,13 +67,9 @@ import { formatCount, formatPageNumber } from "@/lib/store-time-zone";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 import { formatBdMobile } from "@scalius/shared/phone-input";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  checkoutLanguageBaseCode,
-  formatCheckoutLanguageText,
-} from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
@@ -279,11 +276,11 @@ const retryPaymentOptions = order && orderSuccessView && receiptToken && canRetr
           ...option,
           presentation,
           actionLabel: orderSuccessView.kind === "payment_pending"
-            ? formatCheckoutLanguageText(copy.completeWithProviderText, {
+            ? checkoutText(copy.completeWithProviderText, {
                 provider: presentation.providerLabel ?? presentation.buyerLabel,
               })
             : option.current
-              ? formatCheckoutLanguageText(copy.orderReceiptTryAgainWithProviderText, {
+              ? checkoutText(copy.orderReceiptTryAgainWithProviderText, {
                   provider: presentation.providerLabel ?? presentation.buyerLabel,
                 })
               : presentation.buyerLabel,
@@ -358,7 +355,7 @@ const receiptDeliveryDetails = !showsReceiptDeliveryRow
   ? [
       order.shippingMethodDescription,
       order.shippingFeeWaived && savedMoneySummary && order.shippingMethodBaseAmountMinor != null
-        ? formatCheckoutLanguageText(copy.orderReceiptFeeWaivedText, {
+        ? checkoutText(copy.orderReceiptFeeWaivedText, {
             fee: formatReceiptMinor(order.shippingMethodBaseAmountMinor),
           })
         : null,
@@ -378,12 +375,12 @@ const merchantReceiptName = layoutData?.business?.companyName?.trim()
 const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.code);
 // An invoice still owed: "Payment due by 19 November 2026 (net 30)", or that it was due.
 const receiptPaymentTerms = order?.paymentTerms && order.balanceDue > 0
-  ? formatCheckoutLanguageText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
+  ? checkoutText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
       date: formatOrderReceiptDay(order.paymentTerms.dueAt, checkoutLanguage.code) ?? "",
       days: formatPageNumber(order.paymentTerms.days, checkoutLanguageBaseCode(checkoutLanguage.code)),
     })
   : null;
-const orderNumber = order ? formatOrderNumber(order.orderNumber, order.id) : "";
+const orderNumber = order ? pageOrderNumber(order.orderNumber, order.id) : "";
 const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, orderSuccessView.kind, copy) : [];
 // Opened by tracking or later: a status page ("Order #1057", where it is) instead of the checkout confirmation.
 const statusView = orderSuccessView
@@ -393,7 +390,7 @@ const statusView = orderSuccessView
     })
   : false;
 const paymentNeedsBuyer = orderSuccessView?.kind === "payment_pending" || orderSuccessView?.kind === "payment_issue";
-const statusTitle = formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber });
+const statusTitle = checkoutText(copy.orderStatusTitleText, { orderNumber });
 const receiptTracking = statusView ? order?.tracking ?? null : null;
 // Pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
 const tracking = order && receiptTracking
@@ -508,7 +505,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 class={`inline-flex min-h-16 items-center gap-3 rounded-xl border bg-background px-4 py-3 text-start text-sm text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60 ${option.current ? "border-primary ring-1 ring-primary" : "border-border"}`}
                 aria-label={orderSuccessView.kind === "payment_pending" || option.current
                   ? option.actionLabel
-                  : formatCheckoutLanguageText(copy.orderReceiptRetryWithProviderText, {
+                  : checkoutText(copy.orderReceiptRetryWithProviderText, {
                       provider: option.presentation.buyerLabel,
                     })}
                 data-payment-retry-button
@@ -818,13 +815,13 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                       </ul>
                     )}
                     <p class="text-sm text-muted-foreground mt-1">
-                      {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })} × {savedLine
+                      {checkoutText(copy.orderReceiptQuantityText, { quantity: formatCount(item.quantity) })} × {savedLine
                         ? formatReceiptMinor(savedLine.unitPriceMinor)
                         : formatReceiptAmount(item.price)}
                     </p>
                     {savedLine && savedMoneySummary && showsLineDiscounts && savedLine.discountMinor > 0 && (
                       <p class="mt-1 text-xs text-muted-foreground">
-                        {formatCheckoutLanguageText(copy.orderReceiptItemDiscountText, {
+                        {checkoutText(copy.orderReceiptItemDiscountText, {
                           amount: formatReceiptMinor(savedLine.discountMinor),
                         })}
                       </p>
@@ -1198,11 +1195,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
   } from "@/lib/checkout/redirect-url";
   import { writeHostedPaymentRecoverySession } from "@/lib/checkout/session-state";
   import type { CheckoutConfig, PaymentContext } from "@/lib/checkout/types";
-  import {
-    ENGLISH_CHECKOUT_LANGUAGE_DATA,
-    formatCheckoutLanguageText,
-    type CheckoutLanguageData,
-  } from "@scalius/shared/checkout-language";
+  import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+  import { checkoutText } from "@/lib/checkout-text";
 
   document.addEventListener("DOMContentLoaded", () => {
     const checkoutLanguage = window.__CHECKOUT_LANGUAGE__ as { languageData?: CheckoutLanguageData } | undefined;
@@ -1277,7 +1271,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       const slowRedirect = providerName
         ? window.setTimeout(() => {
             if (message) {
-              message.textContent = formatCheckoutLanguageText(
+              message.textContent = checkoutText(
                 copy.redirectSlowMessage || ENGLISH_CHECKOUT_LANGUAGE_DATA.redirectSlowMessage,
                 { provider: providerName },
               );
@@ -1303,7 +1297,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
         }), {
           onProcessing: (event) => {
             if (message) {
-              message.textContent = formatCheckoutLanguageText(
+              message.textContent = checkoutText(
                 copy.orderReceiptPaymentProcessingRetryText,
                 { seconds: event.retryAfterSeconds },
               );
