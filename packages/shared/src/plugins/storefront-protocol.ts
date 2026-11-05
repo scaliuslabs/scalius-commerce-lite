@@ -173,10 +173,17 @@ export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMB
  * The buy form's parts a product_main skin may place apart from it
  * (`buy_form_part` embeds), each once, in the skin's own layout:
  * - `price`: the price, the struck regular price and the discount badge.
- * - `options`: the option buttons (none when `options={false}` is honoured).
+ * - `options`: the option controls (none when `options={false}` is
+ *   honoured), in one of `STOREFRONT_BUY_FORM_OPTION_LAYOUTS`.
  * - `quantity`: the quantity stepper.
- * - `actions`: Add to cart and Buy now (none when `actions={false}` is honoured).
+ * - `actions`: Add to cart and Buy now (hidden while `actions={false}` is
+ *   honoured, shown as the edited cart line's one "Update cart").
  * - `warranty`: the chosen SKU's effective warranty row, its terms in place.
+ * - `inputs`: the buyer inputs (engraving, a protection choice), the form
+ *   itself with its fields, checks and messages.
+ * - `purchase_options`: the apps' ways to buy (a subscription), when any.
+ * - `stock`: the chosen SKU's stock line.
+ * - `status`: where the form says why it refused an add, announced.
  *
  * A placed part leaves the buy form and draws where the skin places it,
  * still the same form's part: the store renders it there, ties its controls
@@ -184,8 +191,20 @@ export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMB
  * moves in the browser. Without the buy form a part renders nothing.
  * The list only grows, at its end.
  */
-export const STOREFRONT_BUY_FORM_PARTS = ["price", "options", "quantity", "actions", "warranty"] as const;
+export const STOREFRONT_BUY_FORM_PARTS = ["price", "options", "quantity", "actions", "warranty", "inputs", "purchase_options", "stock", "status"] as const;
 export type StorefrontBuyFormPart = (typeof STOREFRONT_BUY_FORM_PARTS)[number];
+
+/**
+ * How the buy form draws its option controls (`<BuyForm optionsLayout>`,
+ * `<BuyFormPart name="options" layout>`): `buttons` (each value a button,
+ * the default), `select` (one dropdown per option) or `swatches` (each value
+ * a round colour swatch where its name is a colour, its name beside the
+ * rest). Every layout chooses through the form, shows sold-out and
+ * unavailable values, and falls back to the no-JavaScript picker. The list
+ * only grows, at its end.
+ */
+export const STOREFRONT_BUY_FORM_OPTION_LAYOUTS = ["buttons", "select", "swatches"] as const;
+export type StorefrontBuyFormOptionLayout = (typeof STOREFRONT_BUY_FORM_OPTION_LAYOUTS)[number];
 
 /**
  * Deferred markup (`<Deferred>` in the SDK):
@@ -384,15 +403,25 @@ export interface StorefrontMoney {
 export const STOREFRONT_CARD_FACT_KINDS = ["pack_size", "condition", "delivery"] as const;
 export type StorefrontCardFactKind = (typeof STOREFRONT_CARD_FACT_KINDS)[number];
 
+/** Who honours a warranty (`StorefrontWarranty.provider`). The list only grows, at its end: treat one you do not know as the store's. */
+export const STOREFRONT_WARRANTY_PROVIDERS = ["brand", "store"] as const;
+export type StorefrontWarrantyProvider = (typeof STOREFRONT_WARRANTY_PROVIDERS)[number];
+/** A warranty duration's unit (`StorefrontWarranty.duration.unit`). The list only grows, at its end: show `summary` for one you do not know. */
+export const STOREFRONT_WARRANTY_DURATION_UNITS = ["days", "months", "years"] as const;
+export type StorefrontWarrantyDurationUnit = (typeof STOREFRONT_WARRANTY_DURATION_UNITS)[number];
+
 /**
- * A SKU's effective warranty as the buy form's warranty row shows it: the
- * product's, the SKU's own, or none (null).
+ * A warranty policy one or more of a product's SKUs have, as the buy form's
+ * warranty row shows it (`StorefrontProductPage.product.warranties`, each
+ * policy once; a SKU names its own by `warrantyId`).
  */
 export interface StorefrontWarranty {
+  /** The policy's id, which a SKU's `warrantyId` names. */
+  id: string;
   name: string;
-  /** Who honours it: the brand (manufacturer) or the store. */
-  provider: "brand" | "store";
-  duration: { value: number; unit: "days" | "months" | "years" };
+  /** Who honours it: the brand (manufacturer) or the store (`STOREFRONT_WARRANTY_PROVIDERS`). */
+  provider: StorefrontWarrantyProvider;
+  duration: { value: number; unit: StorefrontWarrantyDurationUnit };
   /** Days in which a faulty item is replaced; null without. */
   replacementDays: number | null;
   /** The merchant's terms (plain text); null without. */
@@ -651,14 +680,20 @@ export interface StorefrontProductPage {
       available: boolean;
       image: StorefrontImage | null;
       /**
-       * The SKU's effective warranty (the product's, its own, or null for
-       * none), as the buy form's warranty row shows it for this SKU. To
-       * show the chosen SKU's as the buyer chooses, place
-       * `<BuyFormPart name="warranty" />`. Absent from older stores.
+       * The id of the SKU's effective warranty in `warranties` (the
+       * product's, its own), or null for none, as the buy form's warranty
+       * row shows it for this SKU. To show the chosen SKU's as the buyer
+       * chooses, place `<BuyFormPart name="warranty" />`. Absent from older stores.
        */
-      warranty?: StorefrontWarranty | null;
+      warrantyId?: string | null;
     }>;
     fields: StorefrontFieldValues;
+    /**
+     * Each warranty policy the SKUs have, once however many SKUs share it
+     * (the SKUs name theirs by `warrantyId`); `[]` without any. Absent from
+     * older stores.
+     */
+    warranties?: StorefrontWarranty[];
     /** Home first, the product last. */
     breadcrumbs: StorefrontLink[];
     /**
@@ -770,7 +805,8 @@ export interface StorefrontListingPage {
    * filters, or this listing's own template), which the `filters` embed
    * draws: `sidebar` (a column beside the results) or `bar` (a row of
    * dropdowns over a full-width grid). Lay the page out around it; a skin
-   * never chooses another. Absent from older stores.
+   * never chooses another. Absent when the listing shows no filters (too few
+   * products, or the theme hides them), and from older stores.
    */
   filters?: { placement: "sidebar" | "bar" };
 }

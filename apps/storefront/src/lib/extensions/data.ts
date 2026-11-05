@@ -457,17 +457,19 @@ export function productPageData(input: {
   warrantyCopy?: Partial<CheckoutLanguageData>;
 }): StorefrontProductPage {
   const { product, page } = input;
-  // Each SKU's effective warranty, as the buy form's warranty row reads it (sku-warranties.ts).
+  // Each SKU's effective warranty, as the buy form's warranty row reads it
+  // (sku-warranties.ts): each policy once, the SKUs naming theirs by id.
   const perSku = skuWarranties(product, input.variants);
   const warrantyWords = pickWarrantyCopy(input.warrantyCopy, ENGLISH_CHECKOUT_LANGUAGE_DATA);
-  const warranties = new Map([...perSku.byId].map(([id, view]): [string, StorefrontWarranty] => [id, {
+  const warranties = [...perSku.byId].map(([id, view]): StorefrontWarranty => ({
+    id,
     name: view.name,
     provider: view.provider,
     duration: { value: view.duration.value, unit: view.duration.unit },
     replacementDays: view.replacementDays,
     terms: view.terms,
     summary: warrantySummaryText(warrantyTerms(view), warrantyWords),
-  }]));
+  }));
   const amount = (value: number): StorefrontMoney => pageAmount(value, page);
   const compare = (current: number, regular: number) => (regular > current ? amount(regular) : null);
   const media = productGalleryItems(product, input.media).flatMap((item) => {
@@ -516,9 +518,10 @@ export function productPageData(input: {
           compareAt: compare(price, variant.price ?? product.price),
           available: isVariantAvailable(variant),
           image,
-          warranty: warranties.get(perSku.byVariant[variant.id] ?? "") ?? null,
+          warrantyId: perSku.byVariant[variant.id] ?? null,
         };
       }),
+      warranties,
       fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,
       buyerInputs: (product.customization?.fields ?? []).map((field) => ({
@@ -553,8 +556,8 @@ export function listingPageData(input: {
   fields: StorefrontFieldValues;
   /** A category's published children (the category read's `children`). */
   children?: ReadonlyArray<{ name: string; slug: string; canonicalPath?: string | null; imageUrl?: string | null }>;
-  /** Where the `filters` embed draws the filters (catalogEmbeddedFilters: a drawer sits as a sidebar). */
-  filtersPlacement?: "sidebar" | "bar";
+  /** Where the `filters` embed draws the filters (a drawer sits as a sidebar); null when it draws none. */
+  filtersPlacement?: "sidebar" | "bar" | null;
 }): StorefrontListingPage {
   return {
     kind: input.kind,
@@ -573,7 +576,7 @@ export function listingPageData(input: {
       url: child.canonicalPath?.startsWith("/") ? child.canonicalPath : `/categories/${encodeURIComponent(child.slug)}`,
       image: child.imageUrl ? storefrontImageOf({ url: child.imageUrl, alt: child.name }) : null,
     })),
-    filters: { placement: input.filtersPlacement ?? "sidebar" },
+    ...(input.filtersPlacement ? { filters: { placement: input.filtersPlacement } } : {}),
   };
 }
 

@@ -17130,7 +17130,16 @@
    "options",
    "quantity",
    "actions",
-   "warranty"
+   "warranty",
+   "inputs",
+   "purchase_options",
+   "stock",
+   "status"
+  ],
+  "STOREFRONT_BUY_FORM_OPTION_LAYOUTS": [
+   "buttons",
+   "select",
+   "swatches"
   ],
   "STOREFRONT_DEFERRED_TAG": "scalius-deferred",
   "STOREFRONT_DEFERRED_HYDRATION": [
@@ -17181,6 +17190,15 @@
    "pack_size",
    "condition",
    "delivery"
+  ],
+  "STOREFRONT_WARRANTY_PROVIDERS": [
+   "brand",
+   "store"
+  ],
+  "STOREFRONT_WARRANTY_DURATION_UNITS": [
+   "days",
+   "months",
+   "years"
   ],
   "STOREFRONT_PRODUCT_ERRORS": [
    "option_required",

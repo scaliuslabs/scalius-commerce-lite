@@ -98,6 +98,8 @@ const cache = {
   actions: null as HTMLElement | null,
   quantity: null as HTMLInputElement | null,
   optionButtons: [] as HTMLButtonElement[],
+  /** The `select` option layout: one dropdown per option axis. */
+  optionSelects: [] as HTMLSelectElement[],
   /** The screen reader's line for a choice ("Selected: Red"). */
   announcer: null as HTMLElement | null,
   /** Where the purchase's problems show (`data-buy-part="status"`). */
@@ -183,10 +185,12 @@ export function init() {
   if (!cache.container || !summary) return;
   cache.summary = summary;
   cache.scopes = buyFormScopes(document, summary);
-  cache.form = summary.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
+  // The form itself may be a part a skin placed apart (`<BuyFormPart name="inputs" />`).
+  cache.form = buyFormQuery<HTMLFormElement>(cache.scopes, "form[data-sx-buy-form]");
   cache.actions = part("actions");
   cache.quantity = part<HTMLInputElement>("quantity");
   cache.optionButtons = parts<HTMLButtonElement>("option");
+  cache.optionSelects = parts<HTMLSelectElement>("option-select");
   cache.announcer = part("announcer");
   cache.statusPart = part("status");
   cache.actionsPart = part("ctas");
@@ -436,6 +440,20 @@ function chooseVariant(variantId: string): boolean {
 
 function bindOptions() {
   const order = state.options.map((option) => option.id);
+  // The `select` layout chooses the same way: a value, through the form's one selection.
+  for (const select of cache.optionSelects) {
+    const definitionId = select.dataset.optionDefinitionId;
+    if (!definitionId) continue;
+    select.addEventListener("change", () => {
+      const valueId = select.value;
+      if (!valueId || state.selection[definitionId] === valueId) return;
+      applySelection(
+        reconcileSelectionForValue(state.variants, definitionId, valueId, state.selection, order),
+        select.selectedOptions[0]?.dataset.optionValue || "",
+        [definitionId],
+      );
+    });
+  }
   cache.optionButtons.forEach((button, _index, buttons) => {
     const definitionId = button.dataset.optionDefinitionId;
     const valueId = button.dataset.optionValueId;
@@ -675,6 +693,21 @@ function updateOptionButtons() {
       option.values.map((value) => value.id),
       state.selection,
     );
+    // A dropdown shows the chosen value, and says which values are sold out or unavailable.
+    for (const select of cache.optionSelects.filter((each) => each.dataset.optionDefinitionId === option.id)) {
+      const chosen = state.selection[option.id] ?? "";
+      for (const entry of Array.from(select.options)) {
+        if (!entry.value) {
+          entry.hidden = Boolean(chosen);
+          continue;
+        }
+        const status = availability.get(entry.value) ?? "sold_out";
+        const value = entry.dataset.optionValue || "";
+        entry.dataset.optionAvailability = status;
+        entry.textContent = status === "available" ? value : optionButtonLabel(option.name, value, status);
+      }
+      select.value = chosen;
+    }
     const buttons = cache.optionButtons.filter((button) => button.dataset.optionDefinitionId === option.id);
     const optionPrices = new Map<string, number>();
     if (buttons.some((button) => button.querySelector("[data-option-price]"))) {
@@ -985,7 +1018,7 @@ function showMissingOption(definitionId: string, message: string, focus = false)
   note.textContent = message;
   note.classList.remove("hidden");
   group!.scrollIntoView({ behavior: "smooth", block: "center" });
-  group!.querySelector<HTMLButtonElement>(".variant-option-btn")?.focus({ preventScroll: true });
+  group!.querySelector<HTMLElement>(".variant-option-btn, select[data-sx-buy=\"option-select\"]")?.focus({ preventScroll: true });
   setError("option_required");
 }
 
@@ -1212,7 +1245,13 @@ function showError(message: string, error: StorefrontProductError, focus = false
   element.textContent = message;
   element.setAttribute("role", "alert");
   element.tabIndex = -1;
-  if (cache.statusPart) {
+  // The message shows where the buyer is looking: in the form's status, or,
+  // when a skin placed the form's buttons apart (and not the status), right
+  // above those buttons. `role="alert"` announces it either way.
+  const apart = (part: HTMLElement | null) => Boolean(part && cache.summary && !cache.summary.contains(part));
+  if (apart(cache.actionsPart) && !apart(cache.statusPart)) {
+    cache.actionsPart!.before(element);
+  } else if (cache.statusPart) {
     cache.statusPart.append(element);
     cache.statusPart.dataset.state = "error";
   } else cache.actions?.insertBefore(element, cache.actions.firstChild);

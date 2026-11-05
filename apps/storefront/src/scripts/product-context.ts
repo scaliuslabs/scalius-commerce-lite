@@ -36,9 +36,8 @@ function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductS
     inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
   }
   const option = buyFormQuery<HTMLInputElement>(scopes, '[data-sx-buy="purchase-option"]:checked')?.value ?? "";
-  // Without the form's own buttons (`actions={false}`), the skin's bound buy button for that SKU says.
-  const add = buyFormPart(scopes, "add")
-    ?? (variant ? summary.ownerDocument.querySelector(`[data-sx-bound][data-buy-variant="${CSS.escape(variant)}"]`) : null);
+  // The form's own Add to cart (hidden, not gone, under `actions={false}`) says whether it can be bought.
+  const add = buyFormPart(scopes, "add");
   return {
     variantId: variant || null,
     quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
@@ -54,7 +53,8 @@ function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductS
 export function productContext(root: Document = document): ProductContext | undefined {
   // Host-only markers (the sanitizer strips `data-sx-*` from app markup): a skin cannot stand in for them.
   const summary = root.querySelector<ProductStateHolder>("[data-sx-product-summary]");
-  const form = summary?.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
+  // The form may be a part a skin placed apart from its container (`<BuyFormPart name="inputs" />`).
+  const form = summary ? buyFormQuery<HTMLFormElement>(buyFormScopes(root, summary), "form[data-sx-buy-form]") : null;
   if (!summary || !form) return undefined;
   const state = () => copy(summary[PRODUCT_STATE_KEY] ?? drawnState(summary, form));
   return {

@@ -15,6 +15,7 @@ import { appSkin, appSlotComponents, renderAppSkin } from "@/lib/extensions";
 import { productPageData } from "@/lib/extensions/data";
 import {
   buyFormLabel,
+  buyFormOptionLayoutOf,
   buyFormPartOf,
   placedBuyFormParts,
   placedDescriptionOmitted,
@@ -641,6 +642,7 @@ const skinBuyBox = {
     details: false,
     title: skinBuyFormData.title !== "false",
     nativeOptions: skinBuyFormData.options !== "false",
+    optionsLayout: buyFormOptionLayoutOf(skinBuyFormData["options-layout"]) ?? "buttons",
     nativeActions: skinBuyFormData.actions !== "false",
     actionCopy: {
       ...buyBox.summary.actionCopy,
@@ -653,7 +655,11 @@ const productEmbeds: EmbedRenderers = {
   "buy_form": () => ({ component: ProductBuyBox as EmbedRender["component"], props: skinBuyBox }),
   "buy_form_part": ({ data }) => {
     const part = buyFormPartOf(data.name);
-    return part && skinBuyForm ? { component: ProductBuyBox as EmbedRender["component"], props: { ...skinBuyBox, only: part } } : null;
+    if (!part || !skinBuyForm) return null;
+    // An options part may draw its own layout; every other part draws as the form does.
+    const layout = part === "options" ? buyFormOptionLayoutOf(data.layout) : undefined;
+    const summary = layout ? { ...skinBuyBox.summary, optionsLayout: layout } : skinBuyBox.summary;
+    return { component: ProductBuyBox as EmbedRender["component"], props: { ...skinBuyBox, summary, only: part } };
   },
   gallery: () => ({ component: ProductGallery as EmbedRender["component"], props: productGalleryProps }),
   reviews: () => ({
@@ -890,7 +896,7 @@ const productCategoryAnalytics = productCategory
     <StickyBuyBar
       productName={product.name}
       action={buyerStockSummary.canPurchaseAny && product.customizationUnavailable !== true && !onlinePaymentUnavailable
-        ? { label: productPageCopy.addToCartText, disabled: false }
+        ? { label: skinBuyLabels.add ?? productPageCopy.addToCartText, disabled: false }
         : { label: productPageCopy.unavailableText, disabled: true }}
       price={formatMoney(buyerDisplayedPrice, { code: currencyCode, symbol: currencySymbol })}
       phone={sticky.phoneBottom === "buy-bar"}
