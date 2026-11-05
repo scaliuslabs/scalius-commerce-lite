@@ -1032,6 +1032,29 @@ describe("HMAC metadata integrity (manual COD deposit refund)", () => {
       expect(result).toEqual({});
     });
 
+    it("rejects tampered metadata with invalid HMAC", async () => {
+      const payload = { manualDepositRefund: true, amountMinor: 2000 };
+      const hmac = await computeRefundMetadataHmac(TEST_ENV, JSON.stringify(payload));
+      const metadata = JSON.stringify({ ...payload, _hmac: hmac });
+
+      // Tamper with the payload but keep the same HMAC
+      const tamperedMetadata = JSON.stringify({ ...payload, amountMinor: 3000, _hmac: hmac });
+
+      const result = await parseAndVerifyRefundMetadata(TEST_ENV, tamperedMetadata);
+      // HMAC verification should fail for tampered metadata
+      expect(result).toEqual({});
+    });
+
+    it("rejects metadata with completely forged HMAC", async () => {
+      const payload = { manualDepositRefund: true, amountMinor: 2000 };
+      // Forge an HMAC (invalid format that passes regex but won't verify)
+      const forgedHmac = "a".repeat(43);
+      const metadata = JSON.stringify({ ...payload, _hmac: forgedHmac });
+
+      const result = await parseAndVerifyRefundMetadata(TEST_ENV, metadata);
+      expect(result).toEqual({});
+    });
+
     it("handles metadata without master secret (no HMAC verification)", async () => {
       const payload = { manualDepositRefund: true, amountMinor: 2000 };
       const hmac = await computeRefundMetadataHmac(TEST_ENV, JSON.stringify(payload));
