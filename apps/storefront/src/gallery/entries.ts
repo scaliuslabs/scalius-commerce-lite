@@ -78,6 +78,8 @@ export interface GalleryScenario {
   checkoutBuyerUi?: boolean;
   /** The store sells to the United Kingdom too, and an address app completes its street lines (the layout names it). */
   addressApp?: boolean;
+  /** A second market and a second language: the footer draws its country and language forms. */
+  localization?: boolean;
   /** The header has the merchant's logo. */
   logo?: boolean;
   /** The cart page opens with these lines in the browser's cart (none: an empty cart). */
@@ -97,6 +99,10 @@ export type GalleryInteraction = {
   | { select: string; value: string; expectVisible?: string }
   /** Types one key at a time, then waits for the expected result if specified. */
   | { type: string; text: string; expectVisible?: string }
+  /** Layout: the first visible match sits inside the container's element and box (a control on its bar, a form in its footer). */
+  | { expectInside: string; container: string }
+  /** Layout: the two first visible matches share one row (neither wrapped below the other). */
+  | { expectSameRow: [string, string] }
 );
 
 export interface GalleryEntry {
@@ -108,6 +114,8 @@ export interface GalleryEntry {
   focus: GalleryFocus;
   scenario: GalleryScenario;
   interact?: GalleryInteraction[];
+  /** Narrow widths the audit adds for this entry, whatever widths a run asks for: a layout that must hold at 320 px. */
+  widths?: number[];
 }
 
 const WHOLE_PAGE: GalleryFocus = { include: ["body"] };
@@ -632,7 +640,8 @@ function noorEntries(): GalleryEntry[] {
   const quiet = product("noor-product-quiet", "Noor header without an announcement", { announcements: [] });
   quiet.theme.blocks.topBar = storefrontBlockDefault("topBar", "none") as typeof quiet.theme.blocks.topBar;
   const entries = [
-    product("noor-product", "Noor centered sticky header + core product tabs and section navigation"),
+    // Its breadcrumbs once reached 345 px at 320: a long title shortens inside the column.
+    { ...product("noor-product", "Noor centered sticky header + core product tabs and section navigation"), widths: [320] },
     product("noor-product-static", "Noor non-sticky header + core product navigation", { sticky: false }),
     quiet,
     product("noor-product-start", "Noor start-aligned header and simple menus", { layout: "start", menu_style: "simple" }),
@@ -714,7 +723,27 @@ function noorEntries(): GalleryEntry[] {
   entries.push({ id: "noor-cart", family: "integration:noor", title: "Noor chrome + populated core cart and checkout", page: "cart", theme: clone(base), focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", cart: "three" } });
   const landing = clone(base);
   landing.pages.landing = { "eid-sale": { title: "Noor product campaign", description: "A packed app campaign with the store's actual checkout form.", sections: noorLandingSections() } };
-  entries.push({ id: "noor-landing", family: "integration:noor", title: "Noor campaign + actual core order form", page: "landing", theme: landing, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", product: "fashion" } });
+  entries.push({ id: "noor-landing", family: "integration:noor", title: "Noor campaign + actual core order form", page: "landing", theme: landing, focus: WHOLE_PAGE, scenario: { noor: "active", menu: "compact", product: "fashion" }, widths: [320] });
+  // The campaign chrome with the store's light or dark switch and its country
+  // and language forms: below 380 px the switch once wrapped onto a row of its
+  // own under the bar, and the forms rendered unstyled below the footer.
+  const campaignChrome = clone(landing);
+  campaignChrome.tokens = { ...campaignChrome.tokens, colorSchemeToggle: true, darkColors: storefrontDarkPalette(campaignChrome.tokens.colors) };
+  entries.push({
+    id: "noor-landing-chrome",
+    family: "integration:noor",
+    title: "Noor campaign header and footer with the colour switch and the country and language forms",
+    page: "landing",
+    theme: campaignChrome,
+    focus: { include: ["body"], exclude: ["#main-content"] },
+    scenario: { noor: "active", menu: "compact", product: "fashion", localization: true },
+    widths: [320, 360],
+    interact: [
+      { expectInside: ".noor-header.is-campaign [data-color-scheme-toggle]", container: ".noor-header.is-campaign .noor-header-bar" },
+      { expectSameRow: [".noor-header.is-campaign [data-noor-order-link]", ".noor-header.is-campaign [data-color-scheme-toggle]"] },
+      { expectInside: "[data-footer-localization]", container: ".noor-footer.is-campaign" },
+    ],
+  });
   const unavailableOrder = clone(landing);
   unavailableOrder.pages.landing!["eid-sale"]!.sections = noorLandingSections().filter((section) => section.type === "app" && section.settings.app === "scalius.noor/landing_order").map((section) => section.type === "app" ? { ...section, settings: { ...section.settings, values: { ...section.settings.values, assurances: [] } } } : section);
   entries.push({ id: "noor-landing-no-cod", family: "integration:noor", title: "Noor order section when inline checkout is unavailable", page: "landing", theme: unavailableOrder, focus: { include: [".scalius-order-form-unavailable"] }, scenario: { noor: "active", menu: "compact", product: "fashion", checkout: "no-cod" } });

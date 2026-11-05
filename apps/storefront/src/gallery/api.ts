@@ -90,6 +90,15 @@ export function galleryStoreShape(entry: GalleryEntry) {
 }
 
 function markets(entry: GalleryEntry) {
+  // Two markets, the first in two languages: the footer offers a country and a language.
+  if (entry.scenario.localization) {
+    return {
+      markets: [
+        { id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "en" }, { value: "bn", locale: "bn" }] },
+        { id: "mkt_gb", handle: "united-kingdom", name: "United Kingdom", isBackup: false, countries: ["GB"], presences: [{ value: "en-gb", locale: "en" }] },
+      ],
+    };
+  }
   // A store that also delivers to the United Kingdom: the checkout offers the country and its free-text fields.
   if (entry.scenario.addressApp) {
     return { markets: [{ id: "mkt_backup", handle: "bangladesh", name: "Bangladesh and United Kingdom", isBackup: true, countries: ["BD", "GB"], presences: [{ value: "", locale: "en" }] }] };

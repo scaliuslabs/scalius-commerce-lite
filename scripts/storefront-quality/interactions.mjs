@@ -1,7 +1,36 @@
 /** Invalid audit states cannot be accepted as measurements of the intended UI. */
 export const REQUIRED_STATE_RULES = new Set(["interaction", "focus-missing"]);
 const TIMEOUT = 5_000;
-const selectorOf = (action) => action.click ?? action.select ?? action.type;
+const selectorOf = (action) => action.click ?? action.select ?? action.type ?? action.expectInside ?? action.expectSameRow?.join(" + ");
+
+/** The first visible match and its box. */
+async function box(page, selector) {
+  const target = page.locator(selector).first();
+  await target.waitFor({ state: "visible", timeout: TIMEOUT });
+  const rect = await target.boundingBox();
+  if (!rect) throw new Error(`${selector} has no box.`);
+  return { target, rect };
+}
+
+/** A layout expectation: an element inside its container, or two on one row. Throws what is wrong. */
+async function checkLayout(page, action) {
+  if (action.expectInside !== undefined) {
+    const inner = await box(page, action.expectInside);
+    const outer = await box(page, action.container);
+    const nested = await inner.target.evaluate((element, container) => element.closest(container) !== null, action.container);
+    const { x, y, width, height } = inner.rect;
+    const o = outer.rect;
+    // Half a pixel for subpixel rounding.
+    const within = x >= o.x - 0.5 && y >= o.y - 0.5 && x + width <= o.x + o.width + 0.5 && y + height <= o.y + o.height + 0.5;
+    if (!nested || !within) throw new Error(`${action.expectInside} sits outside ${action.container} (${nested ? "its box" : "its element"}).`);
+    return;
+  }
+  const [first, second] = action.expectSameRow;
+  const a = (await box(page, first)).rect;
+  const b = (await box(page, second)).rect;
+  const centreIn = (r, s) => r.y + r.height / 2 >= s.y && r.y + r.height / 2 <= s.y + s.height;
+  if (!centreIn(a, b) && !centreIn(b, a)) throw new Error(`${first} and ${second} sit on different rows.`);
+}
 const excluded = (action, width) => action.maxWidth !== undefined && width >= action.maxWidth;
 
 /**
@@ -20,6 +49,11 @@ export async function runInteractions(page, actions, width) {
       continue;
     }
     try {
+      if (action.expectInside !== undefined || action.expectSameRow !== undefined) {
+        await checkLayout(page, action);
+        steps.push({ index, selector, status: "passed" });
+        continue;
+      }
       if (action.click !== undefined && !action.expectVisible) throw new Error("Click needs an expected visible state.");
       const target = page.locator(selector).first();
       await target.waitFor({ state: "visible", timeout: TIMEOUT });

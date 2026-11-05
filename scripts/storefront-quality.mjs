@@ -340,7 +340,8 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
   const consoleErrors = [];
   let page = null;
   try {
-    for (const width of widths) {
+    // An entry's own narrow widths join the run's: a 320 px layout is checked whatever widths were asked for.
+    for (const width of [...new Set([...widths, ...(entry.widths ?? [])])].sort((a, b) => a - b)) {
       consoleErrors.length = 0;
       // A fresh page per width: a click on the previous width (an open
       // drawer) can leave a navigation running.

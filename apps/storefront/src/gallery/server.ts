@@ -83,6 +83,8 @@ export interface GalleryIndexEntry {
   path: string;
   focus: GalleryEntry["focus"];
   interact: NonNullable<GalleryEntry["interact"]>;
+  /** Widths the audit adds for this entry (see GalleryEntry.widths). */
+  widths: number[];
   /** `localStorage` the audit seeds before the page loads (a saved cart). */
   storage: Record<string, string>;
   /** The browser cart (`cart:v3`) the harness writes before the page loads; null: an empty cart. */
@@ -108,6 +110,7 @@ export function galleryIndex(origin?: string): GalleryIndexEntry[] {
       path: `/__gallery/e/${entry.id}`,
       focus: entry.focus,
       interact: entry.interact ?? [],
+      widths: entry.widths ?? [],
       storage: entry.scenario.storage ?? {},
       cartSeed: entry.scenario.cart ? galleryCartSeed(entry.scenario.cart) : null,
       fallbacks: resolved.fallbacks.map((fallback) => `${fallback.kind} ${fallback.key}: ${fallback.requested} -> ${fallback.resolved ?? "left out"}`),
