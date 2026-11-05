@@ -13,6 +13,7 @@ import {
 } from "@/lib/account-inbox";
 import ConversationCartShare from "./ConversationCartShare.astro";
 import { pageLanguage } from "@/lib/store-time-zone";
+import { readRetryAt } from "@/lib/rate-limit-wait";
 
 interface Props {
   variant?: "stack" | "dock";
@@ -61,7 +62,8 @@ const {
   attachLabel = copy.attachLabel,
   attachHint = copy.attachHint,
   submitLabel = copy.send,
-  statusMessage = status ? conversationStatusMessage(status) : null,
+  // A rate limit says what is left of the wait its redirect carried.
+  statusMessage = status ? conversationStatusMessage(status, status === "rate" ? readRetryAt(Astro.url.searchParams) : undefined) : null,
 } = Astro.props;
 const clientMessageKey = newClientMessageKey();
 const dock = variant === "dock";

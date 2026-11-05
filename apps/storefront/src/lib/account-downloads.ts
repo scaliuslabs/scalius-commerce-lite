@@ -12,6 +12,8 @@ import { pageOrderNumber } from "@/lib/checkout-text";
 import { escapeHtml } from "@scalius/shared/html-escape";
 
 import { formatAccountDate } from "@/lib/account-format";
+import { rateLimitedText } from "@/lib/buyer-api-errors";
+import { readRetryAt, setRetryAt } from "@/lib/rate-limit-wait";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { formatCount, formatPageNumber, pageLanguage } from "@/lib/store-time-zone";
 
@@ -45,7 +47,6 @@ const DOWNLOAD_COPY_EN = {
   statusLimit: "You've used every download of this file. Ask the store for more downloads.",
   statusRevoked: "The store removed access to this file.",
   statusExpired: "Access to this file has ended.",
-  statusRate: "Too many tries. Wait a minute and try again.",
   statusSignin: "Sign in again to download this file.",
   statusMissing: "This download isn't available in this browser. Open the order from your account or from the link in your order message.",
   statusUnavailable: "The download couldn't start. Try again in a moment.",
@@ -99,7 +100,6 @@ const DOWNLOAD_COPY_BN: DownloadCopy = {
   statusLimit: "এই ফাইলের সব ডাউনলোড ব্যবহার হয়ে গেছে। আরও ডাউনলোডের জন্য স্টোরকে বলুন।",
   statusRevoked: "স্টোর এই ফাইলটি দেখার সুযোগ বন্ধ করেছে।",
   statusExpired: "এই ফাইলটির মেয়াদ শেষ হয়েছে।",
-  statusRate: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
   statusSignin: "এই ফাইল ডাউনলোড করতে আবার সাইন ইন করুন।",
   statusMissing: "এই ব্রাউজার থেকে ডাউনলোডটি পাওয়া যাচ্ছে না। আপনার অ্যাকাউন্ট থেকে বা অর্ডারের মেসেজের লিংক থেকে অর্ডারটি খুলুন।",
   statusUnavailable: "ডাউনলোড শুরু করা যায়নি। একটু পরে আবার চেষ্টা করুন।",
@@ -181,13 +181,14 @@ export function isDownloadStatusFlag(value: unknown): value is DownloadStatusFla
   return typeof value === "string" && (DOWNLOAD_STATUS_FLAGS as readonly string[]).includes(value);
 }
 
-export function downloadStatusText(flag: DownloadStatusFlag): string {
+/** A refused press in words; a rate limit says the wait the store named (`retryAfterSeconds`). */
+export function downloadStatusText(flag: DownloadStatusFlag, retryAfterSeconds?: number): string {
   const copy = downloadCopy();
+  if (flag === "rate") return rateLimitedText(retryAfterSeconds);
   return {
     limit: copy.statusLimit,
     revoked: copy.statusRevoked,
     expired: copy.statusExpired,
-    rate: copy.statusRate,
     signin: copy.statusSignin,
     missing: copy.statusMissing,
     unavailable: copy.statusUnavailable,
@@ -257,10 +258,19 @@ export function downloadRowId(entitlementId: string): string {
   return `download-${entitlementId}`;
 }
 
-/** `returnTo` with the outcome flag and the file's anchor (the anchor never leaves the browser). */
-export function withDownloadStatus(returnTo: string, flag: DownloadStatusFlag, entitlementId: string | null): string {
+/**
+ * `returnTo` with the outcome flag, the end of a rate limit's wait and the
+ * file's anchor (the anchor never leaves the browser).
+ */
+export function withDownloadStatus(
+  returnTo: string,
+  flag: DownloadStatusFlag,
+  entitlementId: string | null,
+  retryAfterSeconds?: number,
+): string {
   const url = new URL(returnTo, "https://storefront.invalid");
   url.searchParams.set(DOWNLOAD_STATUS_PARAM, flag);
+  setRetryAt(url, flag === "rate" ? retryAfterSeconds : undefined);
   url.hash = entitlementId && isDigitalId(entitlementId) ? downloadRowId(entitlementId) : "";
   return `${url.pathname}${url.search}${url.hash}`;
 }
@@ -274,13 +284,17 @@ export function withDownloadStatus(returnTo: string, flag: DownloadStatusFlag, e
 export interface DownloadNotice {
   flag: DownloadStatusFlag;
   entitlementId: string | null;
+  /** What is left of a rate limit's wait, when the store named one. */
+  retryAfterSeconds?: number;
 }
 
-export function readDownloadNotice(search: string, hash = ""): DownloadNotice | null {
-  const flag = new URLSearchParams(search).get(DOWNLOAD_STATUS_PARAM);
+export function readDownloadNotice(search: string, hash = "", nowMs: number = Date.now()): DownloadNotice | null {
+  const params = new URLSearchParams(search);
+  const flag = params.get(DOWNLOAD_STATUS_PARAM);
   if (!isDownloadStatusFlag(flag)) return null;
   const anchor = hash.startsWith("#download-") ? hash.slice("#download-".length) : "";
-  return { flag, entitlementId: isDigitalId(anchor) ? anchor : null };
+  const retryAfterSeconds = flag === "rate" ? readRetryAt(params, nowMs) : undefined;
+  return { flag, entitlementId: isDigitalId(anchor) ? anchor : null, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,7 +498,7 @@ function noticeMarkup(file: DownloadFileView, notice: DownloadNotice | null | un
   if (notice.entitlementId !== null && notice.entitlementId !== file.entitlementId) return "";
   // Without the anchor (a server render), only the row the page scrolled to shows it.
   const visibility = notice.entitlementId === null ? "hidden group-target:block " : "";
-  return `<p role="status" class="${visibility}mt-1 text-sm font-medium text-destructive">${escapeHtml(downloadStatusText(notice.flag))}</p>`;
+  return `<p role="status" class="${visibility}mt-1 text-sm font-medium text-destructive">${escapeHtml(downloadStatusText(notice.flag, notice.retryAfterSeconds))}</p>`;
 }
 
 /** One file row: name, usage, expiry, and a Download POST form or the reason it is off. */

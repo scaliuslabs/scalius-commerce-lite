@@ -10,6 +10,8 @@
 
 import { formatCount, formatStoreDateTime, pageLanguage, storeTimeZone } from "./store-time-zone";
 import { storefrontLanguage } from "./storefront-language";
+import { pageWait, readRetryAt, RETRY_AT_PARAM, setRetryAt } from "./rate-limit-wait";
+import { checkoutText } from "./checkout-text";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { groupConversationMessages } from "@scalius/shared/conversation-grouping";
 import { formatMoney } from "@/lib/currency";
@@ -128,6 +130,7 @@ const CONVERSATION_COPY_EN = {
   statusInvalid: "Write a message of up to 5,000 characters, then send it again.",
   statusImage: "Those images couldn't be attached. Use up to 3 JPEG, PNG or WebP images of 5 MB or less.",
   statusRate: "You're sending too quickly. Please wait a moment and try again.",
+  statusRateWait: "You're sending too quickly. Try again in {time}.",
   statusLimit: "You already have 5 open conversations. Reply in one of them, or wait for the store to close one.",
   statusSignin: "Your session expired. Sign in again to send messages.",
   statusMissing: "This conversation isn't available from this browser.",
@@ -221,6 +224,7 @@ const CONVERSATION_COPY_BN: ConversationCopy = {
   statusInvalid: "সর্বোচ্চ ৫,০০০ অক্ষরের মেসেজ লিখে আবার পাঠান।",
   statusImage: "ছবিগুলো যোগ করা যায়নি। সর্বোচ্চ ৩টি জেপিইজি, পিএনজি বা ওয়েবপি ছবি দিন, প্রতিটি ৫ মেগাবাইট বা তার কম।",
   statusRate: "আপনি খুব দ্রুত পাঠাচ্ছেন। একটু অপেক্ষা করে আবার চেষ্টা করুন।",
+  statusRateWait: "আপনি খুব দ্রুত পাঠাচ্ছেন। {time} পরে আবার চেষ্টা করুন।",
   statusLimit: "আপনার ইতিমধ্যে ৫টি খোলা কথোপকথন আছে। সেগুলোর একটিতে উত্তর দিন, অথবা স্টোর একটি বন্ধ করা পর্যন্ত অপেক্ষা করুন।",
   statusSignin: "আপনার সেশনের মেয়াদ শেষ। মেসেজ পাঠাতে আবার সাইন ইন করুন।",
   statusMissing: "এই ব্রাউজার থেকে কথোপকথনটি পাওয়া যাচ্ছে না।",
@@ -265,14 +269,21 @@ export function readConversationStatusFlag(url: URL): ConversationStatusFlag | n
   return isConversationStatusFlag(value) ? value : null;
 }
 
-export function conversationStatusMessage(flag: ConversationStatusFlag): { tone: "success" | "error"; text: string } {
+/** The outcome a page URL carries, in words: a rate limit with what is left of its wait. */
+export function readConversationStatusMessage(url: URL, nowMs: number = Date.now()): { tone: "success" | "error"; text: string } | null {
+  const flag = readConversationStatusFlag(url);
+  return flag ? conversationStatusMessage(flag, flag === "rate" ? readRetryAt(url.searchParams, nowMs) : undefined) : null;
+}
+
+/** A post's outcome in words; a rate limit says the wait the store named (`retryAfterSeconds`). */
+export function conversationStatusMessage(flag: ConversationStatusFlag, retryAfterSeconds?: number): { tone: "success" | "error"; text: string } {
   const copy = conversationCopy();
   const text: Record<ConversationStatusFlag, string> = {
     sent: copy.statusSent,
     started: copy.statusStarted,
     invalid: copy.statusInvalid,
     image: copy.statusImage,
-    rate: copy.statusRate,
+    rate: retryAfterSeconds ? checkoutText(copy.statusRateWait, { time: pageWait(retryAfterSeconds) }) : copy.statusRate,
     limit: copy.statusLimit,
     unverified: copy.startNeedsVerification,
     signin: copy.statusSignin,
@@ -320,13 +331,20 @@ export function safeConversationReturnPath(value: unknown): string | null {
   if (url.origin !== "https://storefront.invalid") return null;
   if (!RETURN_PATH_PATTERN.test(url.pathname)) return null;
   url.searchParams.delete(CONVERSATION_STATUS_PARAM);
+  url.searchParams.delete(RETRY_AT_PARAM);
   return `${url.pathname}${url.search}`;
 }
 
-/** `returnTo` with the outcome flag and the thread anchor. */
-export function withConversationStatus(returnTo: string, flag: ConversationStatusFlag, anchor = "conversation"): string {
+/** `returnTo` with the outcome flag, the end of a rate limit's wait and the thread anchor. */
+export function withConversationStatus(
+  returnTo: string,
+  flag: ConversationStatusFlag,
+  anchor = "conversation",
+  retryAfterSeconds?: number,
+): string {
   const url = new URL(returnTo, "https://storefront.invalid");
   url.searchParams.set(CONVERSATION_STATUS_PARAM, flag);
+  setRetryAt(url, flag === "rate" ? retryAfterSeconds : undefined);
   url.hash = anchor;
   return `${url.pathname}${url.search}${url.hash}`;
 }
@@ -335,6 +353,7 @@ export function withConversationStatus(returnTo: string, flag: ConversationStatu
 export function currentReturnPath(url: URL): string {
   const next = new URL(url.pathname + url.search, "https://storefront.invalid");
   next.searchParams.delete(CONVERSATION_STATUS_PARAM);
+  next.searchParams.delete(RETRY_AT_PARAM);
   return `${next.pathname}${next.search}`;
 }
 

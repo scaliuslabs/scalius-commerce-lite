@@ -33,7 +33,7 @@ const ids = {
   honeypot: `${idPrefix}-website`,
 };
 // What the script shows for each outcome (the same words as /newsletter).
-const scriptCopy = JSON.stringify({ sending: copy.sending, status: copy.status });
+const scriptCopy = JSON.stringify({ sending: copy.sending, status: copy.status, rateLimitedWait: copy.rateLimitedWait });
 const field =
   "block min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-destructive";
 const label = "mb-1 block text-sm font-medium";
@@ -129,13 +129,21 @@ const inline = layout === "inline";
 <script>
   // Progressive enhancement: the same post by fetch, the outcome in place.
   // One listener for every newsletter form on the page.
-  type Outcome = { status?: string; field?: string };
-  type FormCopy = { sending: string; status: Record<string, { title: string; text: string }> };
+  // The copy module stays out of this every-page script: only the wait's clock is imported.
+  import { checkoutText } from "@/lib/checkout-text";
+  import { pageWait, positiveSeconds } from "@/lib/rate-limit-wait";
+
+  type Outcome = { status?: string; field?: string; retryAfterSeconds?: unknown };
+  type FormCopy = { sending: string; status: Record<string, { title: string; text: string }>; rateLimitedWait: string };
   const DONE = new Set(["subscribed", "pending"]);
 
-  function show(form: HTMLFormElement, copy: FormCopy, status: string) {
+  function show(form: HTMLFormElement, copy: FormCopy, status: string, retryAfterSeconds?: number) {
     const message = form.querySelector<HTMLElement>("[data-newsletter-message]");
-    const words = copy.status[status] ?? copy.status.error;
+    const base = copy.status[status] ?? copy.status.error;
+    // A rate limit says the wait the store named (newsletterStatusWords, on the server).
+    const words = base && status === "rate_limited" && retryAfterSeconds
+      ? { ...base, text: checkoutText(copy.rateLimitedWait, { time: pageWait(retryAfterSeconds) }) }
+      : base;
     if (!message || !words) return;
     const title = document.createElement("strong");
     title.className = "font-semibold";
@@ -176,7 +184,7 @@ const inline = layout === "inline";
       button.textContent = label;
     }
     const status = outcome.status ?? "error";
-    show(form, copy, status);
+    show(form, copy, status, positiveSeconds(outcome.retryAfterSeconds));
     const message = form.querySelector<HTMLElement>("[data-newsletter-message]");
     if (DONE.has(status)) {
       // Meta Lead, TikTok SubmitForm and GA4 generate_lead (consent permitting).

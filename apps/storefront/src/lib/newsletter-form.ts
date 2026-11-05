@@ -17,6 +17,7 @@ import {
   type NewsletterLanguage,
   type NewsletterStatus,
 } from "@/lib/newsletter-copy";
+import { setRetryAt } from "@/lib/rate-limit-wait";
 
 export const NEWSLETTER_SUBSCRIBE_ENDPOINT = "/api/newsletter/subscribe";
 export const NEWSLETTER_RESULT_PATH = "/newsletter";
@@ -64,9 +65,10 @@ export function newsletterFormModel(
   };
 }
 
-/** Where a form post lands: the result page with only the outcome in the URL. */
-export function newsletterResultPath(status: NewsletterStatus): string {
-  return `${NEWSLETTER_RESULT_PATH}?${new URLSearchParams({ status })}`;
+/** Where a form post lands: the result page with only the outcome (and a rate limit's end) in the URL. */
+export function newsletterResultPath(status: NewsletterStatus, retryAfterSeconds?: number): string {
+  const url = setRetryAt(new URL(`${NEWSLETTER_RESULT_PATH}?${new URLSearchParams({ status })}`, "https://storefront.invalid"), status === "rate_limited" ? retryAfterSeconds : undefined);
+  return `${url.pathname}${url.search}`;
 }
 
 export function readNewsletterStatus(search: URLSearchParams): NewsletterStatus | null {

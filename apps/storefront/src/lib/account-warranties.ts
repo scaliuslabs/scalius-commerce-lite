@@ -4,6 +4,7 @@
 // the receipt, the account order page (in the browser) and the account's
 // Warranties page share it. The copy is the store's checkout language.
 import { checkoutText } from "@/lib/checkout-text";
+import { checkoutRateLimitedText, readRetryAt, setRetryAt } from "@/lib/rate-limit-wait";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -43,6 +44,7 @@ export const WARRANTY_COPY_KEYS = [
   "warrantyClaimInactiveText",
   "warrantyClaimExistsText",
   "warrantyClaimRateLimitedText",
+  "orderCodeTryAgainInText",
   "warrantyClaimUnavailableText",
   "warrantyClaimSignInText",
   "warrantyClaimReceiptExpiredText",
@@ -350,35 +352,39 @@ export type WarrantyClaimFlag = (typeof WARRANTY_CLAIM_FLAGS)[number];
 export const WARRANTY_CLAIM_PARAM = "claim";
 export const WARRANTY_CLAIM_STATUS_PARAM = "claimStatus";
 
-export function warrantyClaimFlagText(flag: WarrantyClaimFlag, copy: WarrantyCopy): string {
+/** A claim post's outcome in words; a rate limit says the wait the store named (`retryAfterSeconds`). */
+export function warrantyClaimFlagText(flag: WarrantyClaimFlag, copy: WarrantyCopy, retryAfterSeconds?: number): string {
   switch (flag) {
     case "invalid": return copy.warrantyClaimInvalidText;
     case "photo": return copy.warrantyClaimPhotoText;
     case "inactive": return copy.warrantyClaimInactiveText;
     case "exists": return copy.warrantyClaimExistsText;
-    case "rate": return copy.warrantyClaimRateLimitedText;
+    case "rate": return checkoutRateLimitedText(copy, copy.warrantyClaimRateLimitedText, retryAfterSeconds);
     case "signin": return copy.warrantyClaimSignInText;
     case "missing": return copy.warrantyClaimReceiptExpiredText;
     default: return copy.warrantyClaimUnavailableText;
   }
 }
 
-/** The warranty whose claim form the page should open, and how its last plain post went. */
-export function readWarrantyClaimNotice(url: URL): { warrantyId: string; flag: WarrantyClaimFlag | null } | null {
+/** The warranty whose claim form the page should open, how its last plain post went and what is left of a rate limit's wait. */
+export function readWarrantyClaimNotice(
+  url: URL,
+  nowMs: number = Date.now(),
+): { warrantyId: string; flag: WarrantyClaimFlag | null; retryAfterSeconds?: number } | null {
   const warrantyId = url.searchParams.get(WARRANTY_CLAIM_PARAM);
   if (!isWarrantyId(warrantyId)) return null;
-  const flag = url.searchParams.get(WARRANTY_CLAIM_STATUS_PARAM);
-  return {
-    warrantyId,
-    flag: (WARRANTY_CLAIM_FLAGS as readonly string[]).includes(flag ?? "") ? flag as WarrantyClaimFlag : null,
-  };
+  const raw = url.searchParams.get(WARRANTY_CLAIM_STATUS_PARAM);
+  const flag = (WARRANTY_CLAIM_FLAGS as readonly string[]).includes(raw ?? "") ? raw as WarrantyClaimFlag : null;
+  const retryAfterSeconds = flag === "rate" ? readRetryAt(url.searchParams, nowMs) : undefined;
+  return { warrantyId, flag, ...(retryAfterSeconds ? { retryAfterSeconds } : {}) };
 }
 
-/** `returnTo` with this warranty's form open, the outcome flag, and its anchor. */
-export function withWarrantyClaimStatus(returnTo: string, warrantyId: string, flag: WarrantyClaimFlag): string {
+/** `returnTo` with this warranty's form open, the outcome flag, the end of a rate limit's wait, and its anchor. */
+export function withWarrantyClaimStatus(returnTo: string, warrantyId: string, flag: WarrantyClaimFlag, retryAfterSeconds?: number): string {
   const url = new URL(returnTo, "https://storefront.invalid");
   url.searchParams.set(WARRANTY_CLAIM_PARAM, warrantyId);
   url.searchParams.set(WARRANTY_CLAIM_STATUS_PARAM, flag);
+  setRetryAt(url, flag === "rate" ? retryAfterSeconds : undefined);
   url.hash = `warranty-${warrantyId}`;
   return `${url.pathname}${url.search}${url.hash}`;
 }

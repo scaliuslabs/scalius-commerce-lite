@@ -25,16 +25,18 @@ interface Props {
   /** Open on arrival (the page was asked for this warranty's form). */
   open?: boolean;
   flag?: WarrantyClaimFlag | null;
+  /** What is left of a rate limit's wait, when the store named one. */
+  retryAfterSeconds?: number;
   class?: string;
 }
 
-const { warrantyId, canClaim, access, copy, returnTo, open = false, flag = null, class: className = "mt-1" } = Astro.props;
+const { warrantyId, canClaim, access, copy, returnTo, open = false, flag = null, retryAfterSeconds, class: className = "mt-1" } = Astro.props;
 const idPrefix = `warrantyClaim${warrantyId.replace(/[^A-Za-z0-9]/g, "")}`;
 const sinkId = `${idPrefix}Messages`;
 ---
 
 {!canClaim && flag && (
-  <p role="status" class:list={["text-sm text-destructive", className]}>{warrantyClaimFlagText(flag, copy)}</p>
+  <p role="status" class:list={["text-sm text-destructive", className]}>{warrantyClaimFlagText(flag, copy, retryAfterSeconds)}</p>
 )}
 {canClaim && <details class:list={["group", className]} open={open || Boolean(flag)} data-warranty-claim>
   <summary class="inline-flex min-h-11 cursor-pointer list-none items-center text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
@@ -52,6 +54,6 @@ const sinkId = `${idPrefix}Messages`;
     attachLabel={copy.warrantyClaimPhotosText}
     attachHint={copy.warrantyClaimPhotosHelpText}
     submitLabel={copy.warrantyClaimSubmitText}
-    statusMessage={flag ? { tone: "error", text: warrantyClaimFlagText(flag, copy) } : null}
+    statusMessage={flag ? { tone: "error", text: warrantyClaimFlagText(flag, copy, retryAfterSeconds) } : null}
   />
 </details>}

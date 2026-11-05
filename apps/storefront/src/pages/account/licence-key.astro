@@ -45,7 +45,7 @@ if (!result.ok) {
 const errorText = result.ok
   ? ""
   : result.flag === "rate" || result.flag === "signin" || result.flag === "missing"
-    ? downloadStatusText(result.flag)
+    ? downloadStatusText(result.flag, result.retryAfterSeconds)
     : copy.keyUnavailable;
 ---
 

@@ -66,7 +66,7 @@ export function initAgentContinuation(): void {
       referrerPolicy: "no-referrer",
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new ContinuationFailure(buyerApiErrorText(payload, { locale: language, status: response.status, fallback: copy.stepFailed }));
+    if (!response.ok) throw new ContinuationFailure(buyerApiErrorText(payload, { locale: language, status: response.status, headers: response.headers, fallback: copy.stepFailed }));
     const data = asRecord(asRecord(payload)?.data);
     if (!data) throw new ContinuationFailure(copy.invalidResponse);
     return data;

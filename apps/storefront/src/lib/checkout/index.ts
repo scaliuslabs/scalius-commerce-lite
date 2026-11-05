@@ -71,6 +71,7 @@ import {
   addStoredGiftCard,
   clearStoredGiftCards,
   giftCardCheckoutCopy,
+  giftCardApplyFailureText,
   giftCardChipLabel,
   giftCardQuoteRefusal,
   giftCardRequestFields,
@@ -1568,13 +1569,6 @@ async function removeGiftCard(handle: string): Promise<void> {
   }
 }
 
-const GIFT_CARD_FAILURE_COPY = {
-  invalid: "giftCardEnterCodeText",
-  unusable: "giftCardUnusableText",
-  rate_limited: "giftCardRateLimitedText",
-  unavailable: "giftCardUnavailableText",
-} as const satisfies Record<string, keyof GiftCardCheckoutCopy>;
-
 async function applyGiftCardFromForm(event?: SubmitEvent): Promise<void> {
   // The code never becomes a navigation: the form's own POST is the no-script path.
   event?.preventDefault();
@@ -1601,7 +1595,7 @@ async function applyGiftCardFromForm(event?: SubmitEvent): Promise<void> {
   try {
     const outcome = await requestGiftCardApply(input.value);
     if (!outcome.ok) {
-      showGiftCardMessage(giftCopy[GIFT_CARD_FAILURE_COPY[outcome.reason]]);
+      showGiftCardMessage(giftCardApplyFailureText(outcome, giftCopy));
       input.setAttribute("aria-invalid", "true");
       return;
     }

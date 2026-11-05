@@ -120,6 +120,7 @@ const sections: Array<{ id: string; title: string; items: BuyerWarranty[] }> = [
                           returnTo="/account/warranties"
                           open={isNoticed}
                           flag={isNoticed ? notice.flag : null}
+                          retryAfterSeconds={isNoticed ? notice.retryAfterSeconds : undefined}
                           class="mt-2"
                         />
 
