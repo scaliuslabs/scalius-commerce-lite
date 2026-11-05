@@ -10,6 +10,7 @@
 // Only pages with app islands load this.
 import type { StorefrontIslandContext, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
 import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buy-form";
+import { buyFormPart, buyFormQuery, buyFormScopes } from "@/components/product/lib/buy-scope";
 import { PRODUCT_STATE_EVENT, PRODUCT_STATE_KEY, type ProductStateHolder } from "@/components/product/scripts/island-state";
 
 type ProductContext = NonNullable<StorefrontIslandContext["product"]>;
@@ -22,8 +23,10 @@ function copy(state: StorefrontProductState): StorefrontProductState {
 /** The buy form as the server drew it: its SKU field, quantity, inputs, purchase option and Add to cart button. */
 function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductState {
   const variant = form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]')?.value.trim() ?? "";
-  // The form's own parts (host-only roles), never an app slot's look-alikes in the same container.
-  const quantityInput = summary.querySelector('[data-sx-buy="quantity"]');
+  // The form's own parts (host-only roles), never an app slot's look-alikes in
+  // the same container; a part a skin placed apart is still the form's.
+  const scopes = buyFormScopes(summary.ownerDocument, summary);
+  const quantityInput = buyFormPart(scopes, "quantity");
   const quantity = Number.parseInt(quantityInput instanceof HTMLInputElement ? quantityInput.value : "1", 10);
   const inputs: Record<string, string> = {};
   for (const element of Array.from(form.elements)) {
@@ -32,8 +35,10 @@ function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductS
     const key = element.name.slice(BUYER_INPUT_FIELD_PREFIX.length);
     inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
   }
-  const option = summary.querySelector<HTMLInputElement>('[data-sx-buy="purchase-option"]:checked')?.value ?? "";
-  const add = summary.querySelector('[data-sx-buy="add"]');
+  const option = buyFormQuery<HTMLInputElement>(scopes, '[data-sx-buy="purchase-option"]:checked')?.value ?? "";
+  // Without the form's own buttons (`actions={false}`), the skin's bound buy button for that SKU says.
+  const add = buyFormPart(scopes, "add")
+    ?? (variant ? summary.ownerDocument.querySelector(`[data-sx-bound][data-buy-variant="${CSS.escape(variant)}"]`) : null);
   return {
     variantId: variant || null,
     quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,

@@ -48,6 +48,7 @@ import {
 } from "../lib/product-actions";
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/line-price";
 import { BUYER_INPUT_FIELD_PREFIX, SKIN_BUY_CONTROL, SKIN_CHOOSE_CONTROL } from "../lib/buy-form";
+import { buyFormQuery, buyFormQueryAll, buyFormScopes } from "../lib/buy-scope";
 import type { BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
 import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
@@ -59,8 +60,9 @@ import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-
 // (`context.product`) all go through this controller's selection and add.
 // Every part of the form is looked up inside its container, which carries
 // a host-only marker (`data-sx-product-summary`; the sanitizer strips every
-// `data-sx-*` from app markup), so a skin's own `.product-price`,
-// `[data-action]` or look-alike container is never taken over. The product's
+// `data-sx-*` from app markup), or inside a part a product_main skin placed
+// apart from it (`data-sx-buy-part`, lib/buy-scope.ts), so a skin's own
+// `.product-price`, `[data-action]` or look-alike container is never taken over. The product's
 // facts come from the page's `#product-container`, which wraps the skin.
 
 const state = {
@@ -87,8 +89,10 @@ const state = {
 
 const cache = {
   container: null as HTMLElement | null,
-  /** The buy form's container: every part below is looked up inside it. */
+  /** The buy form's container: every part below is looked up inside it, or in a part placed apart. */
   summary: null as HTMLElement | null,
+  /** The container, then the parts a skin placed apart from it (`<BuyFormPart />`). */
+  scopes: [] as Element[],
   /** The buy form (with or without buyer inputs). */
   form: null as HTMLFormElement | null,
   actions: null as HTMLElement | null,
@@ -119,11 +123,11 @@ const cache = {
  * the form's container, never stands in for one, whatever it copies.
  */
 function part<T extends Element = HTMLElement>(role: string): T | null {
-  return cache.summary?.querySelector<T>(`[data-sx-buy="${role}"]`) ?? null;
+  return buyFormQuery<T>(cache.scopes, `[data-sx-buy="${role}"]`);
 }
 
 function parts<T extends Element = HTMLElement>(role: string): T[] {
-  return Array.from(cache.summary?.querySelectorAll<T>(`[data-sx-buy="${role}"]`) ?? []);
+  return buyFormQueryAll<T>(cache.scopes, `[data-sx-buy="${role}"]`);
 }
 
 /** The purchase's problem as the form shows it (showError). */
@@ -178,6 +182,7 @@ export function init() {
   const summary = document.querySelector<HTMLElement>("[data-sx-product-summary]");
   if (!cache.container || !summary) return;
   cache.summary = summary;
+  cache.scopes = buyFormScopes(document, summary);
   cache.form = summary.querySelector<HTMLFormElement>("form[data-sx-buy-form]");
   cache.actions = part("actions");
   cache.quantity = part<HTMLInputElement>("quantity");
@@ -479,7 +484,9 @@ function bindOptions() {
 }
 
 function bindActions() {
-  cache.actions?.addEventListener("click", (event) => {
+  // The buttons' row may be a part the skin placed apart from the form: it listens too.
+  const rows = [cache.actions, cache.actionsPart && !cache.actions?.contains(cache.actionsPart) ? cache.actionsPart : null];
+  for (const row of rows) row?.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     // With buyer inputs the buttons submit the form, which the script replaces.
     if (target.closest('[data-sx-buy="add"]')) {
@@ -635,8 +642,8 @@ function setError(error: StorefrontProductError | null) {
   publish();
 }
 
-export function revealSelectedOptions(root: ParentNode = cache.summary ?? document) {
-  root.querySelectorAll<HTMLElement>('[data-sx-buy="option-values"][data-option-overflow]').forEach((list) => {
+export function revealSelectedOptions(roots: readonly ParentNode[] = cache.scopes.length ? cache.scopes : [document]) {
+  roots.flatMap((root) => Array.from(root.querySelectorAll<HTMLElement>('[data-sx-buy="option-values"][data-option-overflow]'))).forEach((list) => {
     const selected = list.querySelector<HTMLElement>('.variant-option-btn[aria-pressed="true"]');
     if (!selected) return;
     const listRect = list.getBoundingClientRect();
@@ -807,6 +814,8 @@ function updateStockAndActions() {
   );
   // Like Shopify, a sold-out product shows one "Sold out" button, not two.
   if (cache.buyButton) cache.buyButton.hidden = actions.buyNow.disabled;
+  // A skin's `actions={false}`: the form's own buttons show only as the edited line's "Update cart".
+  if (cache.actionsPart?.hasAttribute("data-sx-buy-off")) cache.actionsPart.hidden = !state.edit;
   if (state.purchaseBlocked) {
     if (cache.addButton) cache.addButton.disabled = true;
     if (cache.buyButton) {
@@ -914,7 +923,7 @@ let warranty: { box: HTMLElement; byVariant: Record<string, string | null> } | n
  * the rows stay as drawn.
  */
 function readWarranty() {
-  const box = cache.summary?.querySelector<HTMLElement>("[data-sx-warranty-rows]");
+  const box = buyFormQuery(cache.scopes, "[data-sx-warranty-rows]");
   const map = box?.dataset.sxWarrantyByVariant;
   if (!box || !map) return null;
   try {
@@ -956,7 +965,7 @@ let missingOption: string | null = null;
  * publishes that).
  */
 function showMissingOption(definitionId: string, message: string, focus = false) {
-  const group = cache.summary?.querySelector<HTMLElement>(
+  const group = buyFormQuery(cache.scopes,
     `[data-sx-buy="option-group"][data-option-definition-id="${CSS.escape(definitionId)}"]`,
   );
   const note = group?.querySelector<HTMLElement>(".option-missing-message");

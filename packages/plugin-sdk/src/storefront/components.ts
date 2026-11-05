@@ -11,6 +11,7 @@ import type {
   StorefrontIslandHydration,
   StorefrontMoney,
   StorefrontProductCard,
+  StorefrontBuyFormPart,
   StorefrontProductModuleEmbed,
   StorefrontProductPage,
   StorefrontRenderContext,
@@ -333,6 +334,18 @@ export interface BuyFormProps {
    * options, quantity, messages and the form's own buttons always stay.
    */
   options?: boolean;
+  /**
+   * False leaves out the form's own Add to cart and Buy now, when your
+   * `buyVariant` buttons cover every SKU that can be bought; otherwise the
+   * store draws them anyway, so no buyer is stuck. Quantity, buyer inputs,
+   * purchase options and the form's messages stay; Enter in a field still
+   * adds the buyer's own choice.
+   */
+  actions?: boolean;
+  /** The Add to cart button's words (60 characters at most); the store's own words in the page's language otherwise. */
+  addLabel?: string;
+  /** The Buy now button's words (60 characters at most); the store's own words in the page's language otherwise. */
+  buyLabel?: string;
 }
 
 /**
@@ -341,14 +354,42 @@ export interface BuyFormProps {
  * buyer chooses. A real form, so it works before hydration. Without it the
  * store draws its own product page instead of the skin. Style its parts
  * through `[data-buy-part]` (`price`, `options`, `inputs`,
- * `purchase-options`, `quantity`, `actions`, `status`) and their
- * `data-state`; the names hold, their nesting may change.
+ * `purchase-options`, `quantity`, `actions`, `status`, `warranty`) and their
+ * `data-state`; the names hold, their nesting may change. Place a part
+ * apart from it with `<BuyFormPart />`.
  */
 export function BuyForm(props: BuyFormProps = {}): Html {
   return embed("buy_form", {
     title: props.title === false ? "false" : undefined,
     options: props.options === false ? "false" : undefined,
+    actions: props.actions === false ? "false" : undefined,
+    "add-label": props.addLabel,
+    "buy-label": props.buyLabel,
   });
+}
+
+export interface BuyFormPartProps {
+  /** One of the buy form's parts (`STOREFRONT_BUY_FORM_PARTS`): `price`, `options`, `quantity`, `actions` or `warranty`. */
+  name: StorefrontBuyFormPart;
+}
+
+/**
+ * One of the buy form's parts, placed where you put it instead of in the
+ * form (product_main skins, beside `<BuyForm />`, each part once). It is
+ * still the form's: the store draws it there with its own markup, words and
+ * `[data-buy-part]` hooks, ties its controls to the one form, and keeps it
+ * current as the buyer chooses (price, options, stock, the chosen SKU's
+ * warranty); nothing moves in the browser, and it works without
+ * JavaScript. Without `<BuyForm />` it renders nothing; `options` and
+ * `actions` render nothing while `options={false}` or `actions={false}` is
+ * honoured.
+ *
+ *   <div class="acme-pdp-top"><h1>{product.title}</h1><BuyFormPart name="price" /></div>
+ *   <BuyForm title={false} />
+ *   <aside><BuyFormPart name="warranty" /></aside>
+ */
+export function BuyFormPart(props: BuyFormPartProps): Html {
+  return embed("buy_form_part", { name: props.name });
 }
 
 /** The product's reviews and review form (product_main skins); the store's own module below then stays out. */
@@ -356,7 +397,11 @@ export function Reviews(): Html {
   return embed("reviews");
 }
 
-/** Related products (product_main skins); the store's own module below then stays out. */
+/**
+ * Related products (product_main skins); the store's own module below then
+ * stays out. Style it through `[data-recs-part]` (`root`, `title`, `list`)
+ * and `data-recs-reason` on the root; the names hold, their nesting may change.
+ */
 export function Recommendations(): Html {
   return embed("recommendations");
 }
@@ -374,6 +419,13 @@ export function Gallery(): Html {
 export interface ProductModuleProps {
   /** One of the product page's modules (`STOREFRONT_PRODUCT_MODULE_EMBEDS`, the theme's module ids): `spec_table`, `description`, `content_blocks`, … */
   name: StorefrontProductModuleEmbed;
+  /**
+   * `description` only: false draws the details tabs without the
+   * description, for a skin that draws `descriptionHtml` itself where it
+   * likes; the other tabs (additional information, key features) stay the
+   * store's.
+   */
+  description?: boolean;
 }
 
 /**
@@ -383,12 +435,13 @@ export interface ProductModuleProps {
  * them below the fold (its words, sanitizing and scripts); the store's
  * module below then stays out. Each name renders once; a module the theme's
  * template leaves out, or the product has nothing for, renders nothing.
- * `description` carries the details tabs: do not draw `descriptionHtml` as well.
+ * `description` carries the details tabs: do not draw `descriptionHtml` as
+ * well, unless you pass `description={false}`, which leaves it out of them.
  *
  *   <aside class="acme-pdp-facts"><ProductModule name="spec_table" /></aside>
  */
 export function ProductModule(props: ProductModuleProps): Html {
-  return embed("product_module", { name: props.name });
+  return embed("product_module", { name: props.name, description: props.name === "description" && props.description === false ? "false" : undefined });
 }
 
 /** The listing's filters, a GET form that works without JavaScript (listing_main skins). */

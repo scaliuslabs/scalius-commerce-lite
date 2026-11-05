@@ -48,7 +48,7 @@ const summaryOf = (warranty: ProductWarrantyView) => warrantySummaryText(warrant
 ---
 
 {rows.length > 0 && (
-  <div data-sx-warranty-rows data-sx-warranty-by-variant={byVariant}>
+  <div data-sx-warranty-rows data-sx-warranty-by-variant={byVariant} data-buy-part="warranty">
   {rows.map(({ id, warranty, hidden }) => (
   <details class="group mt-3 rounded-lg border border-border bg-card" data-sx-warranty-row data-sx-warranty-id={id} hidden={hidden}>
     <summary class="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">

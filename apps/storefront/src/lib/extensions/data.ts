@@ -22,6 +22,7 @@ import type {
   StorefrontSectionSkinSettings,
   StorefrontSkinnableSection,
   StorefrontTile,
+  StorefrontWarranty,
 } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PROJECTIONS } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_CORE_ROUTES, STOREFRONT_SEARCH_SCOPE_PARAM as SEARCH_SCOPE_PARAM } from "@scalius/shared/storefront-routes";
@@ -57,6 +58,11 @@ import type {
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import { productCardModel, type ProductCardModel, type ProductCardProduct } from "@/components/cards/card-model";
 import { socialProfileIconUrl } from "@/components/footer/footer-model";
+import { skuWarranties, warrantyTerms } from "@/components/product/sku-warranties";
+import { pickWarrantyCopy, warrantySummaryText } from "@/lib/account-warranties";
+import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
+import { pageLanguage } from "@/lib/store-time-zone";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { productGalleryItems } from "@/components/product/lib/gallery-media";
 import { publicSpecificationRows } from "@/components/product/lib/product-page-modules";
@@ -348,6 +354,14 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     ? { url: getProductImageUrl(model.hoverImage.url, 480), srcset: getProductImageSrcSet(model.hoverImage.url) ?? null, width: null, height: null, alt: "" }
     : null;
   const facts = [...model.facts.keySpecs, ...(model.facts.packSize ? [model.facts.packSize] : []), ...(model.condition ? [model.condition] : [])];
+  // The facts beside the key specs, typed, in the core card's words.
+  const delivery = model.facts.delivery;
+  const words = delivery ? storefrontCopy(storefrontLanguage(pageLanguage())).card : null;
+  const cardFacts: NonNullable<StorefrontProductCard["cardFacts"]> = [
+    ...(model.facts.packSize ? [{ kind: "pack_size" as const, text: model.facts.packSize }] : []),
+    ...(model.condition ? [{ kind: "condition" as const, text: model.condition }] : []),
+    ...(delivery && words ? [{ kind: "delivery" as const, text: delivery.free ? words.freeDelivery : words.deliveryFrom(delivery.fee) }] : []),
+  ];
   return {
     id: product.id,
     title: product.name,
@@ -365,6 +379,7 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     facts,
     // Canonical data, as the API sends it (the card's facts lines are what it shows).
     keySpecs: model.facts.keySpecRows.map(({ label, value, unit }) => ({ label, value, unit })),
+    cardFacts,
     fields: Object.fromEntries(Object.entries(product.fields ?? {}).map(([key, value]) => [key, fieldValue(value, page)])) as StorefrontProductCard["fields"],
   };
 }
@@ -438,8 +453,21 @@ export function productPageData(input: {
   /** One SKU's buyer price (the page's price engine). */
   variantPrice: (variant: ProductVariant) => number;
   page: StorefrontPageMoney;
+  /** The page's checkout-language copy: the warranty row's words (English without it). */
+  warrantyCopy?: Partial<CheckoutLanguageData>;
 }): StorefrontProductPage {
   const { product, page } = input;
+  // Each SKU's effective warranty, as the buy form's warranty row reads it (sku-warranties.ts).
+  const perSku = skuWarranties(product, input.variants);
+  const warrantyWords = pickWarrantyCopy(input.warrantyCopy, ENGLISH_CHECKOUT_LANGUAGE_DATA);
+  const warranties = new Map([...perSku.byId].map(([id, view]): [string, StorefrontWarranty] => [id, {
+    name: view.name,
+    provider: view.provider,
+    duration: { value: view.duration.value, unit: view.duration.unit },
+    replacementDays: view.replacementDays,
+    terms: view.terms,
+    summary: warrantySummaryText(warrantyTerms(view), warrantyWords),
+  }]));
   const amount = (value: number): StorefrontMoney => pageAmount(value, page);
   const compare = (current: number, regular: number) => (regular > current ? amount(regular) : null);
   const media = productGalleryItems(product, input.media).flatMap((item) => {
@@ -488,6 +516,7 @@ export function productPageData(input: {
           compareAt: compare(price, variant.price ?? product.price),
           available: isVariantAvailable(variant),
           image,
+          warranty: warranties.get(perSku.byVariant[variant.id] ?? "") ?? null,
         };
       }),
       fields: storefrontFieldValues(product.customFields, page),
@@ -524,6 +553,8 @@ export function listingPageData(input: {
   fields: StorefrontFieldValues;
   /** A category's published children (the category read's `children`). */
   children?: ReadonlyArray<{ name: string; slug: string; canonicalPath?: string | null; imageUrl?: string | null }>;
+  /** Where the `filters` embed draws the filters (catalogEmbeddedFilters: a drawer sits as a sidebar). */
+  filtersPlacement?: "sidebar" | "bar";
 }): StorefrontListingPage {
   return {
     kind: input.kind,
@@ -542,6 +573,7 @@ export function listingPageData(input: {
       url: child.canonicalPath?.startsWith("/") ? child.canonicalPath : `/categories/${encodeURIComponent(child.slug)}`,
       image: child.imageUrl ? storefrontImageOf({ url: child.imageUrl, alt: child.name }) : null,
     })),
+    filters: { placement: input.filtersPlacement ?? "sidebar" },
   };
 }
 

@@ -1,0 +1,28 @@
+---
+// The buy form's quantity part (`data-buy-part="quantity"`): the stepper,
+// a field of the form wherever it is drawn (`form=`). Drawn in the form
+// (ProductSummary.astro) or where a product_main skin placed it
+// (`<BuyFormPart name="quantity" />`).
+import Icon from "@/components/icons/Icon.astro";
+
+interface Props {
+  formId: string;
+  /** Nothing can be bought: no quantity to choose. */
+  hidden: boolean;
+  label: string;
+  decrease: string;
+  increase: string;
+}
+
+const { formId, hidden, label, decrease, increase } = Astro.props;
+---
+
+<div hidden={hidden} data-buy-part="quantity">
+  <label for="quantity" class="mb-1 block text-sm font-medium text-foreground">{label}</label>
+  <div class="flex items-center">
+    <button type="button" id="quantity-minus" data-sx-buy="quantity-minus" class="inline-flex h-11 w-11 items-center justify-center rounded-s-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={decrease}><Icon name="minus" class="h-4 w-4" aria-hidden="true" /></button>
+    <input type="text" inputmode="numeric" pattern="[0-9]*" id="quantity" name="quantity" value="1" form={formId} data-sx-buy="quantity" aria-describedby="quantity-message" class="h-11 w-14 border-y border-input bg-background text-center text-base font-medium tabular-nums text-foreground focus:outline-2 focus:-outline-offset-2 focus:outline-ring lg:h-10" />
+    <button type="button" id="quantity-plus" data-sx-buy="quantity-plus" class="inline-flex h-11 w-11 items-center justify-center rounded-e-md border border-input bg-background text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring lg:h-10 lg:w-10" aria-label={increase}><Icon name="plus" class="h-4 w-4" aria-hidden="true" /></button>
+  </div>
+  <p id="quantity-message" data-sx-buy="quantity-message" class="mt-1 hidden text-sm text-muted-foreground" role="status"></p>
+</div>

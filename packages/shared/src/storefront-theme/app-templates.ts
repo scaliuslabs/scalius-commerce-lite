@@ -5,7 +5,9 @@
 // templates and other content stay. A declaration is written for one document
 // version (`themeVersion`); the API runs it through the stored documents'
 // upgrade chain and lists only what then parses against the live schema,
-// reporting the rest on the app's page. The applied document is checked whole
+// reporting the rest on the app's page. A block a template names may leave
+// nested fields out: they take the default theme's, and the merged block is
+// then validated as any other. The applied document is checked whole
 // (contrast included) when it is saved, so an app can never write a theme the
 // storefront cannot draw.
 
@@ -16,6 +18,7 @@ import { storefrontSectionListSchema, type StorefrontSection } from "./sections"
 import { STOREFRONT_LIGHT_COLOR_SCHEME, storefrontDarkColorsMissing, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
+import { DEFAULT_STOREFRONT_THEME } from "./templates";
 import {
   resolveStorefrontHandles,
   storefrontHandlePlaceholder,
@@ -108,6 +111,29 @@ function resolveTemplateParts(parts: Record<string, unknown>, lookup: Storefront
   return first ? { ok: false, problem: `No ${first.kind} has the handle ${first.handle}.` } : { ok: true, value: value as Record<string, unknown> };
 }
 
+/**
+ * A template's block over the default theme's: a nested field it leaves out
+ * takes the default's (a list is replaced whole). A block that names another
+ * `variant` than the default's keeps only its own `settings` (each variant
+ * has its own).
+ */
+function withDefaultFields(declared: unknown, defaults: unknown): unknown {
+  if (!isRecord(declared) || !isRecord(defaults)) return declared;
+  const otherVariant = "variant" in declared && declared.variant !== defaults.variant;
+  const keys = [...new Set([...Object.keys(defaults), ...Object.keys(declared)])];
+  return Object.fromEntries(keys.flatMap((key): Array<[string, unknown]> => {
+    if (key in declared) return [[key, otherVariant && key === "settings" ? declared[key] : withDefaultFields(declared[key], defaults[key])]];
+    return otherVariant && key === "settings" ? [] : [[key, defaults[key]]];
+  }));
+}
+
+/** The template's blocks, each completed from the default theme's (`withDefaultFields`), before they are validated. */
+function withDefaultBlockFields(parts: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(parts.blocks)) return parts;
+  const defaults = DEFAULT_STOREFRONT_THEME.blocks as unknown as Record<string, unknown>;
+  return { ...parts, blocks: Object.fromEntries(Object.entries(parts.blocks).map(([key, block]) => [key, withDefaultFields(block, defaults[key])])) };
+}
+
 function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHandleLookup): StorefrontAppThemeResolvedRead<StorefrontAppTemplateTheme> {
   if (!isRecord(value)) return { ok: false, problem: "The template's theme is not an object." };
   const { sections: declared, ...declaredRest } = value;
@@ -116,7 +142,8 @@ function readTemplate(value: unknown, themeVersion: number, lookup: StorefrontHa
   const { sections, unresolved } = declared === undefined ? { sections: undefined, unresolved: [] } : resolveSectionHandles(declared, lookup);
   const upgraded = upgradeParts(sections === undefined ? rest.value : { ...rest.value, pages: { home: sections } }, themeVersion);
   if (!upgraded.ok) return upgraded;
-  const { pages, ...parts } = upgraded.value;
+  const { pages, ...upgradedParts } = upgraded.value;
+  const parts = withDefaultBlockFields(upgradedParts);
   const home = isRecord(pages) ? pages.home : undefined;
   const parsed = storefrontAppTemplateThemeSchema.safeParse(home === undefined ? parts : { ...parts, sections: home });
   return parsed.success ? { ok: true, value: parsed.data, unresolved } : { ok: false, problem: issueText(parsed.error) };

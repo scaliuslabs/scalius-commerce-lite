@@ -42,7 +42,7 @@ Sections and components have no render route: they run at the edge with data the
 
 **Scripts** load over https, non-blocking, on `all`, `home`, `product` or `listing` pages only. Their hosts join the storefront CSP. **Head tags** add up to 10 meta tags and 3 JSON-LD blocks (16 KiB each) to public pages; the page keeps its own `robots`, `description`, `og:` and `twitter:` tags.
 
-A **template** holds theme values (`tokens`, `blocks`, `apps` and homepage `sections`, at most 64 KiB) that the theme library applies, keeping the merchant's content. A **page preset** is a ready-made landing page (1 to 24 sections, 64 KiB): when the merchant makes a new landing page, the editor offers a blank page or the active apps' presets, and fills `product` settings with a product the merchant picks. Both are written for one theme document version (`themeVersion`, absent means 10). The store upgrades them through its upgrade chain before listing; one that still does not fit is left out and named, with the reason, on the app's page.
+A **template** holds theme values (`tokens`, `blocks`, `apps` and homepage `sections`, at most 64 KiB) that the theme library applies, keeping the merchant's content. A block it names may leave nested fields out: they take the default theme's, and the merged block is checked like any other (a block naming another `variant` than the default's keeps only its own `settings`). A **page preset** is a ready-made landing page (1 to 24 sections, 64 KiB): when the merchant makes a new landing page, the editor offers a blank page or the active apps' presets, and fills `product` settings with a product the merchant picks. Both are written for one theme document version (`themeVersion`, absent means 10). The store upgrades them through its upgrade chain before listing; one that still does not fit is left out and named, with the reason, on the app's page.
 
 A template's product card fields (`blocks.card.fields`) are store data: a store applies the template keeping only the ones that are storefront-visible product fields there, and tells the merchant which it left out. `custom.<key>` is the merchant's namespace, which an app cannot create; your own `<app id>.<key>` field exists in a store once your app writes a value. `pnpm plugin validate` warns about each card field no store is sure to have.
 
@@ -127,7 +127,7 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 | --- | --- | --- | --- |
 | `header`, `footer` | `StorefrontHeaderData`, `StorefrontFooterData` | its slots | empty: core |
 | `product_card` | `StorefrontProductCardData` (`{ product, position, aboveFold }`) | its two slots | empty: core |
-| `product_main` | `StorefrontProductPage` | `buy_form` (required, exactly one), `gallery`, `reviews`, `recommendations`, `product_module` (each module once) | no buy form: core |
+| `product_main` | `StorefrontProductPage` | `buy_form` (required, exactly one), `gallery`, `reviews`, `recommendations`, `product_module` (each module once), `buy_form_part` (each part once) | no buy form: core |
 | `listing_main` | `StorefrontListingPage` | `filters`, `toolbar`, `pagination` (only an omitted `pagination` is appended; place `filters` and `toolbar` yourself) | empty: core |
 | `section:<type>` | `StorefrontSectionSkinData<StorefrontSectionSkinSettings[type]>` | none | empty: the core section |
 
@@ -136,23 +136,24 @@ A skin is app markup for a core-owned unit. It gets the unit's public projection
 
   | Name | Draws | Renders when |
   | --- | --- | --- |
-  | `description` | The store's details tabs: the description, the merchant's extra tabs and the key features (when the buy form does not list them). A skin that places it does not draw `descriptionHtml` itself. | The product has any of them, even where the theme's template lists no description module |
+  | `description` | The store's details tabs: the description, the merchant's extra tabs and the key features (when the buy form does not list them). A skin that places it does not draw `descriptionHtml` itself, unless it passes `description={false}`: the tabs then leave the description out, and the skin draws it where it likes beside the store's other tabs. | The product has any of them, even where the theme's template lists no description module |
   | `spec_table` | The specification table | The product has specifications |
   | `key_attributes` | The key-spec highlights | The table has more rows than key specs, and the theme's buy box lists no facts column |
   | `about_bullets` | "About this item": the key features | The theme's buy box does not list the features (`<BuyForm />` does then) |
   | `content_blocks`, `compare_similar`, `policies` | The content blocks, compare with similar items, the store's policies | The product or store has them |
   | `recently_viewed` | This browser's recently viewed products | The template lists it; it holds no space until the browser fills it, so place it below the fold |
 
-  Reviews and related products have their own embeds. The warranty is part of `<BuyForm />`, never a module. A placed module keeps its heading.
+  Reviews and related products have their own embeds. The warranty is the buy form's, never a module: place it apart with `<BuyFormPart name="warranty" />`. A placed module keeps its heading.
 - A buy column that should stay in view beside the gallery marks itself `data-sticky-column` and writes its top as `calc(<offset> + var(--sticky-column-shift, 0px))`.
 - **`listing_main`** draws the listing between the collection template's sections. Page links are numbered links on every listing, so crawlers reach every product.
-- **Filter placement is the merchant's.** `<Filters />` draws the form in the placement the listing resolves (the theme's filter style, or the category's own): a sidebar (`sidebar-dense`, `sidebar-comfortable`) or a bar of dropdowns (`bar-dropdowns`). A skin cannot pick another one. A `drawer` style draws as a sidebar in the embed, since an embed cannot host the drawer's dialog. Below 64rem the form stays inline in every placement; there is no phone sheet. Without JavaScript a bar shows all its groups.
+- **Filter placement is the merchant's.** `data.filters.placement` (`sidebar` or `bar`) says where `<Filters />` draws the form, so the skin lays the page out around it (a column beside the results, or a full-width row above them). `<Filters />` draws the form in the placement the listing resolves (the theme's filter style, or the category's own): a sidebar (`sidebar-dense`, `sidebar-comfortable`) or a bar of dropdowns (`bar-dropdowns`). A skin cannot pick another one. A `drawer` style draws as a sidebar in the embed, since an embed cannot host the drawer's dialog. Below 64rem the form stays inline in every placement; there is no phone sheet. Without JavaScript a bar shows all its groups.
   - Style the wrapper with `[data-catalog-embed="filters"][data-placement="sidebar"]` and `[data-catalog-embed="filters"][data-placement="bar"]`. A bar spans its row: a skin that puts `<Filters />` in a fixed-width column needs a `[data-placement="bar"]` rule that lets it run across the results.
   - The wrapper carries the style's measured numbers as `--catalog-filter-column` (a sidebar's width), `--catalog-filter-row` (a row's height) and `--catalog-filter-label` (the label size). Read or override them; a missing property means the theme's density token applies.
 - **Core sections.** Each skinnable section type has its own sealed projection (`StorefrontSectionSkinSettings`, `StorefrontHeroSkinSettings`, …) with its own version. Core's stored settings never reach a skin. Images arrive as `StorefrontImage | null`, product sources as `products` (`{ title, url, cards }`), categories and collections as tiles, a promotion as `{ endsAt } | null`. A projection only gains optional fields; when core changes a section, the host adapts it so your input stays the same. `aboveFold` is true for the homepage's lead section: load its first row of photos eagerly. `recently_viewed`, `endless_grid` and `objects` have no skin.
 - **The header** gets menu items (three levels, at most `STOREFRONT_COMPONENT_LIMITS.menuItems`: the store's header menu and category cut fit whole, a larger tree is cut top levels first and a parent's page lists the rest) with their category's photo, `routes.orders` and `routes.trackOrder`, `searchScopes` (the top published categories) with `searchScopeParam` (a form sending `category=<value>` to `routes.search` searches that category, no JavaScript needed), `market` (country, currency, language and the country form's selection), and the theme's phone navigation (`phoneNavigation.menu`: `accordion` or `drill`; `tabBar`). Signed-in state is not data, since one header serves every buyer: mark the two versions with `whenSignedIn()` and `whenSignedOut()` and the store shows the right one before first paint. On the homepage the header also gets `data.page.lead`, the first section when desktop and phone order agree.
 - **The product page** carries `sku` (a product without options), each variant's `sku`, `installments` (`{ provider, months, monthly }`, the cheapest EMI plan) or null, and `specifications`: the specification table's rows in its order (`{ group, label, value, unit, keySpec }`, plain text). `value` is the stored text, canonical data (ASCII digits, a "." decimal): a number already carries its unit ("15.6 inch"), and `unit` names that unit ("inch"; null for other attributes), so never append it again. The store's own table writes a number in the page's digits ("১৫.৬ inch" on a Bangla page). A category listing carries `children` (published child categories with photos).
-- **A card** carries `keySpecs` (`{ label, value, unit }`, the same shape), the key specs among its `facts` lines, which the card writes from these rows as `label: value` (a number in the page's digits; the rows stay canonical). Read them instead of splitting `facts`.
+- **A card** carries `keySpecs` (`{ label, value, unit }`, the same shape), the key specs among its `facts` lines, which the card writes from these rows as `label: value` (a number in the page's digits; the rows stay canonical), and `cardFacts`, its other facts split from them and typed by `kind` (`STOREFRONT_CARD_FACT_KINDS`: `pack_size`, `condition` for a used or refurbished product, `delivery`), each `{ kind, text }` in the store card's own words. Read these instead of splitting `facts`; treat a kind you do not know as text.
+- **Each SKU's warranty.** `product.variants[].warranty` is the SKU's effective warranty (the product's, its own, or `null` for none): `{ name, provider, duration, replacementDays, terms, summary }`, `summary` being the buy form's one line in the page's language. To show the chosen SKU's as the buyer chooses, place `<BuyFormPart name="warranty" />`; it opens its terms in place.
 - **Every unit's context** carries `context.store.logo` (`StorefrontImage | null`), the logo the store's header draws, and `context.store.darkLogo`, its version for dark pages (swap them as the header data's `darkLogo` says).
 - JSON-LD stays core's on product and listing pages: the host strips app JSON-LD from `product_main`, `listing_main` and product-slot components.
 
@@ -293,6 +294,7 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 - An island's module loads from the store's origin only when its moment comes, once per page however often it appears.
 - `context` carries your file base (`assets`), the store's `language` and `currency`, `formatMoney`, `signedIn()`, the cart (`openCart`, `quickAdd(url)`, `addLine({ variantId, quantity?, purchaseOption? })` for a SKU without buyer inputs, one-time or under one of your own purchase options, and `onCart(listener)`, whose `total` is `StorefrontMoney`), and `fetchApp(path)`, which reaches your public routes through the storefront proxy (same origin, no CSP host needed).
 - An island's `props` are at most 16 KiB of JSON (`STOREFRONT_COMPONENT_LIMITS.islandPropsBytes`). Larger props are left out and the island mounts with `props` undefined; `storefrontShown`, `checkSkinHtml` and `pnpm plugin validate` name it. Load more with `fetchApp`, never by hiding data in extra markup.
+- Keep links out of an island's `props`. The store checks every link in your markup and keeps it on the page's market path (`/en-in/…`); a URL in props reaches the island unchecked and unrewritten. Put links in the markup the island enhances (an `<a>` it reads) or pass handles. `pnpm plugin validate` warns ("Island props") when a part's default render passes one.
 - On a product page, `context.product` gives `state()` and `onChange(listener)`, with or without buyer inputs. The state is `{ variantId, quantity, inputs, purchaseOption, available, busy, error }`: `available` means the chosen SKU can be bought now, `busy` that an add or Buy now is running, and `error` why the form refused the last one (`StorefrontProductError`, one of `STOREFRONT_PRODUCT_ERRORS`: `option_required`, `input_invalid`, `unavailable`, `quantity_limit`, `failed`; null otherwise). The list only grows, at its end: treat a code you don't know as `failed`. `option_required` and `input_invalid` go when the buyer gives the option or fixes the field; the others go as soon as the buyer changes the SKU, quantity, an answer or the purchase option. A listener runs after the store has applied the change: the form, its SKU field and the gallery already show it, and `state()` equals the listener's state. Between a click and that moment, `state()` still returns what the page shows. To choose or buy from your own markup, use `chooseVariant` and `buyVariant`, not clicks on the form's elements.
 - Return a cleanup for your listeners, timers and observers. The host cancels pending hydration on removal and mounts again when the element reconnects.
 
@@ -306,9 +308,10 @@ The store adds kinds, module names and error codes over time: `StorefrontEmbedKi
 
 | Kind (SDK) | Where | Renders |
 | --- | --- | --- |
-| `buy_form` (`<BuyForm title={false} options={false} />`) | `product_main` (required, one) | The real buy form |
+| `buy_form` (`<BuyForm title={false} options={false} actions={false} addLabel="…" buyLabel="…" />`) | `product_main` (required, one) | The real buy form |
+| `buy_form_part` (`<BuyFormPart name="…" />`) | `product_main` (each part once) | One of the buy form's parts, drawn where you place it |
 | `gallery` (`<Gallery />`) | `product_main` (one) | The theme's gallery, in step with the chosen variant |
-| `reviews`, `recommendations` | `product_main` | The product's reviews and related products |
+| `reviews`, `recommendations` | `product_main` | The product's reviews and related products (style the latter by `[data-recs-part]`: `root`, `title`, `list`, and `data-recs-reason` on the root) |
 | `product_module` (`<ProductModule name="…" />`) | `product_main` (each name once) | One of the template's product modules, left out from below |
 | `filters`, `toolbar`, `pagination` | `listing_main` | The filter form, sort and page size, page links |
 | `order_form` (`<OrderForm product={…} />`) | sections (up to two each) | The single-page order form |
@@ -343,8 +346,23 @@ A card that chooses and buys is a `<div>` holding the choice link and the buy bu
   - `data-availability` (`available`, `sold-out`) on both.
   - On a choice: `data-state` (`selected`, `unselected`), plus `aria-current` on a link or `aria-pressed` on a button. The SKU the page opens on (or a `?variant=` link names) is drawn chosen before the first paint; a link that also carries `buyVariant` only chooses. Controls inside `<Deferred>` take the form's state when they enter the page.
   - On a buy button: `type`, `disabled`, `hidden` and `aria-busy`. It is off while its SKU is sold out or the product cannot be bought here, as the form's own buttons are (a `"buy"` button is then gone), busy while it adds, and hidden while the buyer edits a cart line (the form's "Update cart" replaces that line).
-- `<BuyForm options={false} />` leaves out the form's option buttons only when your controls cover every SKU that can be bought. Otherwise the store draws them, so no buyer is stuck. Buyer inputs, purchase options, quantity, messages and the form's own buttons always stay. So does the no-JavaScript picker.
+- `<BuyForm options={false} />` leaves out the form's option buttons only when your controls cover every SKU that can be bought. Otherwise the store draws them, so no buyer is stuck. Buyer inputs, purchase options, quantity and messages always stay. So does the no-JavaScript picker.
+- `<BuyForm actions={false} />` leaves out the form's own Add to cart and Buy now only when your `buyVariant` buttons (choice links do not count) buy every SKU that can be bought, outside `<Deferred>`. Otherwise the store draws them. While the buyer edits a cart line the form's own button comes back as its one "Update cart" (your buy buttons hide then), and Enter in a field still adds the buyer's own choice.
+- `addLabel` and `buyLabel` give the form's buttons your words (60 characters at most, trimmed); without them the store's own words in the page's language stay. Pass them from a text setting so the merchant words them in their language.
 - `data.product.variants` lists every SKU, up to the catalog's 150.
+
+### Placing the buy form's parts
+
+`<BuyFormPart name="…" />` draws one of the buy form's parts where your layout needs it instead of inside the form: `price`, `options`, `quantity`, `actions` or `warranty` (`STOREFRONT_BUY_FORM_PARTS`), each once, beside `<BuyForm />`. The part stays the form's: the store draws it with its own markup, words and `data-buy-part`, ties its fields and buttons to the one form (`form=`), and keeps it current as the buyer chooses (price, option states, stock, the chosen SKU's warranty), with and without JavaScript. Nothing moves in the browser, so there is never a second form or a copied button. The form leaves a placed part out. A part placed twice, or without `<BuyForm />`, renders nothing; `options` and `actions` render nothing while `options={false}` or `actions={false}` is honoured.
+
+```tsx
+<header class="acme-pdp-head">
+  <h1>{product.title}</h1>
+  <BuyFormPart name="price" />
+</header>
+<BuyForm title={false} />
+<aside class="acme-pdp-trust"><BuyFormPart name="warranty" /></aside>
+```
 
 ### Styling the buy form
 
@@ -359,6 +377,7 @@ The form's parts carry `data-buy-part`:
 | `quantity` | |
 | `actions` | `ready`, `busy`, `unavailable` |
 | `status` | `idle`, `error` |
+| `warranty` | |
 
 `status` holds the form's message when it refuses an add. The part names and states are permanent. Their nesting and the classes inside them are not, so never depend on them.
 
@@ -395,6 +414,7 @@ pnpm plugin pack ~/code/acme-studio --key <folder>    # dist/ and the signed upl
 - Fixtures: `fixtureContext`, `fixtureProductCard`, `fixtureProductPage`, `fixtureListingPage`, `fixtureHeaderData`, `fixtureFooterData`, `fixtureSkinData(target)` and `fixtureSectionSkinData(type)`. `fixtureSectionSkinData` returns a complete projection matching the sealed `StorefrontSectionSkinSettings[type]` for that section type, so a correctly typed section skin passes `validate`. `fixtureProductCard()` and `fixtureProductPage()` stay bare (no key specs or specifications); the sample fixture store carries them (`fixtureStore("sample").productPage().product.specifications`, its card's `keySpecs` and `facts`), as the other store does. Optional fields can be added to fixtures as the store gains them, so compare fixture output with `toMatchObject` rather than exact equality.
 - Fixture stores: `fixtureStore(name)` for each of `FIXTURE_STORES` (`sample`, `empty`, `other`) gives that store's `context()`, `productCards()`, `image()`, `productPage()` and `skinData(target)`, the data `pnpm plugin preview` renders with. Loop your skin and section tests over all three ([Build a theme](themes.md#test-on-more-than-one-store)).
 - Fixture changes, newest first. A snapshot of fixture output moves with these; update it once and check the diff is only this.
+  - November 2026 (plugin API 2026-10): every fixture card has `cardFacts` (`[]` on the bare card; the sample store's cards `[{ kind: "delivery", text: "Free delivery" }]`); every fixture SKU has `warranty` (`null` on the bare product page and the empty store; the sample store's in-stock size a store warranty, the other store's sizes a brand warranty); every fixture listing has `filters` (`{ placement: "sidebar" }`; the other store's `bar`).
   - November 2026 (plugin API 2026-10): `fixtureFooterData()`, the sample store's footer, has two social profiles instead of one: `Facebook` (`facebook`, no icon), then `Our video channel` (`youtube`, with an `icon`), each with `id`, `label` and `icon`. The other store's Instagram profile gained `id`, `label: "Instagram"` and `icon: null`. The empty store still has none.
 
 These are author checks, not proof of visual correctness. Exercise the composed page in a local store too.
@@ -411,7 +431,7 @@ These are author checks, not proof of visual correctness. Exercise the composed 
 }
 ```
 
-`product` is merged over the fixture product page. Core embeds appear as placeholders: the preview checks markup and styles, not checkout actions or island behaviour.
+`product` is merged over the fixture product page. Core embeds appear as placeholders: the preview checks markup and styles, not checkout actions or island behaviour. Your public files (`asset()`) show from the packed files beside the preview.
 
 ### The packer
 

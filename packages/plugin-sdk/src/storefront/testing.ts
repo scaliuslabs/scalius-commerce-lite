@@ -23,6 +23,7 @@ import {
   type StorefrontProductCard,
   type StorefrontProductCardData,
   type StorefrontProductPage,
+  type StorefrontWarranty,
   type StorefrontRenderContext,
   type StorefrontRenderJob,
   type StorefrontResolvedSettings,
@@ -109,6 +110,7 @@ export function fixtureProductCard(overrides: Partial<StorefrontProductCard> = {
     quickAdd: true,
     needsOptions: false,
     facts: [],
+    cardFacts: [],
     fields: {},
     ...overrides,
   };
@@ -169,8 +171,8 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       rating: card.rating,
       options: [{ name: "Size", values: [{ label: "M", swatch: null }, { label: "L", swatch: null }] }],
       variants: [
-        { id: "sku_m", title: "M", options: ["M"], price: card.price, compareAt: card.compareAt, available: true, image: null },
-        { id: "sku_l", title: "L", options: ["L"], price: card.price, compareAt: card.compareAt, available: false, image: null },
+        { id: "sku_m", title: "M", options: ["M"], price: card.price, compareAt: card.compareAt, available: true, image: null, warranty: null },
+        { id: "sku_l", title: "L", options: ["L"], price: card.price, compareAt: card.compareAt, available: false, image: null, warranty: null },
       ],
       fields: {},
       breadcrumbs: [{ title: "Home", url: "/" }, { title: "Shirts", url: "/categories/shirts" }, { title: card.title, url: card.url }],
@@ -192,6 +194,7 @@ export function fixtureListingPage(overrides: Partial<StorefrontListingPage> = {
     pageCount: 1,
     breadcrumbs: [{ title: "Home", url: "/" }],
     fields: {},
+    filters: { placement: "sidebar" },
     ...overrides,
   };
 }
@@ -306,16 +309,29 @@ export interface FixtureStore {
 
 /** The sample shop's linen shirt as a card: the bare fixture card with the key specs the store sends. */
 function sampleCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontProductCard {
-  return fixtureProductCard({ ...cardKeySpecs(SAMPLE_SPECIFICATIONS), ...overrides });
+  return fixtureProductCard({ ...cardKeySpecs(SAMPLE_SPECIFICATIONS), cardFacts: SAMPLE_CARD_FACTS, ...overrides });
 }
+
+/** The sample shop's facts beside a card's key specs. */
+const SAMPLE_CARD_FACTS: NonNullable<StorefrontProductCard["cardFacts"]> = [{ kind: "delivery", text: "Free delivery" }];
+
+/** The sample shop's store warranty on its shirt's in-stock size; the sold-out size has none. */
+const SAMPLE_WARRANTY: StorefrontWarranty = {
+  name: "Acme care", provider: "store", duration: { value: 6, unit: "months" }, replacementDays: 7, terms: "Bring it back with the receipt.",
+  summary: "6 months store warranty · 7-day replacement",
+};
 
 const SAMPLE_STORE: FixtureStore = {
   name: "sample",
   description: "A sample shop: Acme Store, clothing, prices in BDT; its shirt has specifications and key specs.",
   context: (overrides) => fixtureContext(overrides),
-  productCards: () => fixtureSectionResolver.products({} as never).cards.map((card) => ({ ...card, ...cardKeySpecs(SAMPLE_SPECIFICATIONS) })),
+  productCards: () => fixtureSectionResolver.products({} as never).cards.map((card) => ({ ...card, ...cardKeySpecs(SAMPLE_SPECIFICATIONS), cardFacts: SAMPLE_CARD_FACTS })),
   image: () => fixtureProductCard().image,
-  productPage: (overrides) => fixtureProductPage({ specifications: SAMPLE_SPECIFICATIONS, ...overrides }),
+  productPage: (overrides) => {
+    const page = fixtureProductPage({ specifications: SAMPLE_SPECIFICATIONS });
+    const variants = page.product.variants.map((variant) => ({ ...variant, warranty: variant.available ? SAMPLE_WARRANTY : null }));
+    return { product: { ...page.product, variants, ...overrides } };
+  },
   skinData: (target) => {
     switch (target) {
       case "product_card": return { product: sampleCard(), position: 0, aboveFold: true };
@@ -354,7 +370,7 @@ const EMPTY_STORE: FixtureStore = {
       product: {
         id: card.id, title: card.title, url: card.url, brand: null, descriptionHtml: "", media: [],
         price: card.price, compareAt: null, priceVaries: false, availability: "in_stock", rating: null,
-        options: [], variants: [{ id: "sku_bare", title: card.title, options: [], price: card.price, compareAt: null, available: true, image: null }],
+        options: [], variants: [{ id: "sku_bare", title: card.title, options: [], price: card.price, compareAt: null, available: true, image: null, warranty: null }],
         fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: card.title, url: card.url }], specifications: [],
         ...overrides,
       },
@@ -402,6 +418,12 @@ function otherCard(overrides: Partial<StorefrontProductCard> = {}): StorefrontPr
   });
 }
 
+/** Harbor & Pine's maker's warranty on every skillet size. */
+const OTHER_WARRANTY: StorefrontWarranty = {
+  name: "Harbor Goods lifetime", provider: "brand", duration: { value: 10, unit: "years" }, replacementDays: null, terms: null,
+  summary: "10 years brand warranty",
+};
+
 function otherCards(): StorefrontProductCard[] {
   return [
     otherCard(),
@@ -438,8 +460,8 @@ const OTHER_STORE: FixtureStore = {
         price: card.price, compareAt: null, priceVaries: true, availability: "in_stock", rating: card.rating,
         options: [{ name: "Diameter", values: [{ label: "10 in", swatch: null }, { label: "12 in", swatch: null }] }],
         variants: [
-          { id: "sku_10", title: "10 in", options: ["10 in"], price: usd(4800), compareAt: null, available: true, image: null },
-          { id: "sku_12", title: "12 in", options: ["12 in"], price: usd(5800), compareAt: null, available: true, image: null },
+          { id: "sku_10", title: "10 in", options: ["10 in"], price: usd(4800), compareAt: null, available: true, image: null, warranty: OTHER_WARRANTY },
+          { id: "sku_12", title: "12 in", options: ["12 in"], price: usd(5800), compareAt: null, available: true, image: null, warranty: OTHER_WARRANTY },
         ],
         fields: {}, breadcrumbs: [{ title: "Home", url: "/" }, { title: "Kitchen", url: "/categories/kitchen" }, { title: card.title, url: card.url }], specifications: OTHER_SPECIFICATIONS,
         ...overrides,
@@ -461,7 +483,7 @@ const OTHER_STORE: FixtureStore = {
       });
       case "product_card": return { product: otherCard(), position: 0, aboveFold: true };
       case "product_main": return OTHER_STORE.productPage();
-      case "listing_main": return fixtureListingPage({ title: "Kitchen", descriptionHtml: "<p>Tools that last.</p>", cards: otherCards(), total: 3, children: [] });
+      case "listing_main": return fixtureListingPage({ title: "Kitchen", descriptionHtml: "<p>Tools that last.</p>", cards: otherCards(), total: 3, children: [], filters: { placement: "bar" } });
       default: return sectionSkinData(target.slice("section:".length) as StorefrontSkinnableSection, {}, otherSectionResolver, [{ id: "brand_h", title: "Harbor Goods", url: "/brands/harbor-goods", image: OTHER_LOGO, cards: [] }]) as StorefrontSectionSkinData;
     }
   },
@@ -495,6 +517,7 @@ export function checkSkinHtml(target: StorefrontSkinTarget, html: string): strin
     const named = [
       ...(rule.slots ? [`slot names ${rule.slots.join(", ")}`] : []),
       ...(rule.productModules ? [`product_module names ${rule.productModules.join(", ")}`] : []),
+      ...(rule.buyFormParts ? [`buy_form_part names ${rule.buyFormParts.join(", ")}`] : []),
     ];
     issues.push(`${split.dropped - wrapped} embed(s) render nothing here: ${target} allows ${Object.keys(rule.allowed).join(", ") || "none"}${named.length ? ` (${named.join("; ")}, each once)` : ""}.`);
   }

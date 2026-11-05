@@ -138,7 +138,7 @@ export function storefrontUiSlotsOn(page: StorefrontUiSlotPage): StorefrontUiSlo
  *   drawn in place as the store draws it below the fold; the template's
  *   module then stays out from below.
  */
-export const STOREFRONT_EMBED_KINDS = ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "product_module"] as const;
+export const STOREFRONT_EMBED_KINDS = ["buy_form", "reviews", "recommendations", "filters", "toolbar", "pagination", "order_form", "gallery", "slot", "product_module", "buy_form_part"] as const;
 export type StorefrontEmbedKind = (typeof STOREFRONT_EMBED_KINDS)[number];
 export const STOREFRONT_EMBED_TAG = "scalius-embed";
 
@@ -159,12 +159,33 @@ export const STOREFRONT_EMBED_TAG = "scalius-embed";
  * product (the template has it and the product has something for it), else
  * nothing. Reviews and related products have their own embeds.
  * Each name is the theme's own module id (`blocks.product.below`). The
- * warranty is part of `<BuyForm />`, never a module.
+ * warranty is the buy form's, never a module: a skin places it apart with
+ * a `buy_form_part` embed (`warranty`). `description` with
+ * `data-description="false"` draws the details tabs without the
+ * description, for a skin that draws `descriptionHtml` itself.
  */
 export const STOREFRONT_PRODUCT_MODULE_EMBEDS = [
   "description", "spec_table", "key_attributes", "about_bullets", "content_blocks", "compare_similar", "policies", "recently_viewed",
 ] as const;
 export type StorefrontProductModuleEmbed = (typeof STOREFRONT_PRODUCT_MODULE_EMBEDS)[number];
+
+/**
+ * The buy form's parts a product_main skin may place apart from it
+ * (`buy_form_part` embeds), each once, in the skin's own layout:
+ * - `price`: the price, the struck regular price and the discount badge.
+ * - `options`: the option buttons (none when `options={false}` is honoured).
+ * - `quantity`: the quantity stepper.
+ * - `actions`: Add to cart and Buy now (none when `actions={false}` is honoured).
+ * - `warranty`: the chosen SKU's effective warranty row, its terms in place.
+ *
+ * A placed part leaves the buy form and draws where the skin places it,
+ * still the same form's part: the store renders it there, ties its controls
+ * to the form (`form=`) and keeps it current as the buyer chooses; nothing
+ * moves in the browser. Without the buy form a part renders nothing.
+ * The list only grows, at its end.
+ */
+export const STOREFRONT_BUY_FORM_PARTS = ["price", "options", "quantity", "actions", "warranty"] as const;
+export type StorefrontBuyFormPart = (typeof STOREFRONT_BUY_FORM_PARTS)[number];
 
 /**
  * Deferred markup (`<Deferred>` in the SDK):
@@ -194,6 +215,8 @@ export interface StorefrontEmbedRule {
   appended: readonly StorefrontEmbedKind[];
   slots?: readonly StorefrontComponentSlot[];
   productModules?: readonly StorefrontProductModuleEmbed[];
+  /** The buy form's parts a `buy_form_part` embed may be (each renders once). */
+  buyFormParts?: readonly StorefrontBuyFormPart[];
 }
 
 const NO_EMBEDS: StorefrontEmbedRule = { allowed: {}, required: [], appended: [] };
@@ -211,10 +234,15 @@ export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSk
       return { allowed: { slot: 2 }, required: [], appended: [], slots: ["product_card.badges", "product_card.meta"] };
     case "product_main":
       return {
-        allowed: { "buy_form": 1, reviews: 1, recommendations: 1, gallery: 1, "product_module": STOREFRONT_PRODUCT_MODULE_EMBEDS.length },
+        allowed: {
+          "buy_form": 1, reviews: 1, recommendations: 1, gallery: 1,
+          "product_module": STOREFRONT_PRODUCT_MODULE_EMBEDS.length,
+          "buy_form_part": STOREFRONT_BUY_FORM_PARTS.length,
+        },
         required: ["buy_form"],
         appended: [],
         productModules: STOREFRONT_PRODUCT_MODULE_EMBEDS,
+        buyFormParts: STOREFRONT_BUY_FORM_PARTS,
       };
     case "listing_main":
       return { allowed: { filters: 1, toolbar: 1, pagination: 1 }, required: [], appended: ["pagination"] };
@@ -352,6 +380,27 @@ export interface StorefrontMoney {
   formatted: string;
 }
 
+/** The kinds of a card's typed facts (`StorefrontProductCard.cardFacts`). The list only grows, at its end. */
+export const STOREFRONT_CARD_FACT_KINDS = ["pack_size", "condition", "delivery"] as const;
+export type StorefrontCardFactKind = (typeof STOREFRONT_CARD_FACT_KINDS)[number];
+
+/**
+ * A SKU's effective warranty as the buy form's warranty row shows it: the
+ * product's, the SKU's own, or none (null).
+ */
+export interface StorefrontWarranty {
+  name: string;
+  /** Who honours it: the brand (manufacturer) or the store. */
+  provider: "brand" | "store";
+  duration: { value: number; unit: "days" | "months" | "years" };
+  /** Days in which a faulty item is replaced; null without. */
+  replacementDays: number | null;
+  /** The merchant's terms (plain text); null without. */
+  terms: string | null;
+  /** The row's one-line summary in the page's language ("1 year brand warranty · 7-day replacement"). */
+  summary: string;
+}
+
 /** One product as a card shows it. */
 export interface StorefrontProductCard {
   id: string;
@@ -372,8 +421,21 @@ export interface StorefrontProductCard {
   quickAdd: boolean;
   /** Has options to choose on its page. */
   needsOptions: boolean;
-  /** Short facts the store shows on cards (key specs, delivery). */
+  /**
+   * Short facts the store shows on cards, as text: the `keySpecs` lines,
+   * then the pack size and the condition. Prefer the typed `keySpecs` and
+   * `cardFacts`.
+   */
   facts: string[];
+  /**
+   * The card's other facts, split from the key specs and typed by `kind`
+   * (`STOREFRONT_CARD_FACT_KINDS`: `pack_size`, `condition` for a used or
+   * refurbished product, `delivery` "Free delivery" or from the cheapest
+   * rate), each with the store card's own words in the page's language and
+   * digits, in that order; only those the product has. Treat a kind you do
+   * not know as text to show or skip. Absent from older stores.
+   */
+  cardFacts?: Array<{ kind: StorefrontCardFactKind; text: string }>;
   /**
    * The key specs among `facts` as rows, in the same order, three at most:
    * `value` as stored (a number in canonical form, ASCII digits and a "."
@@ -588,6 +650,13 @@ export interface StorefrontProductPage {
       compareAt: StorefrontMoney | null;
       available: boolean;
       image: StorefrontImage | null;
+      /**
+       * The SKU's effective warranty (the product's, its own, or null for
+       * none), as the buy form's warranty row shows it for this SKU. To
+       * show the chosen SKU's as the buyer chooses, place
+       * `<BuyFormPart name="warranty" />`. Absent from older stores.
+       */
+      warranty?: StorefrontWarranty | null;
     }>;
     fields: StorefrontFieldValues;
     /** Home first, the product last. */
@@ -696,6 +765,14 @@ export interface StorefrontListingPage {
   fields: StorefrontFieldValues;
   /** A category's published child categories, in order (empty on other listings). Absent from older stores. */
   children?: Array<StorefrontLink & { image: StorefrontImage | null }>;
+  /**
+   * How the merchant placed the listing's filters (the theme's listing
+   * filters, or this listing's own template), which the `filters` embed
+   * draws: `sidebar` (a column beside the results) or `bar` (a row of
+   * dropdowns over a full-width grid). Lay the page out around it; a skin
+   * never chooses another. Absent from older stores.
+   */
+  filters?: { placement: "sidebar" | "bar" };
 }
 
 /** A category, collection or brand as a tile shows it. */
