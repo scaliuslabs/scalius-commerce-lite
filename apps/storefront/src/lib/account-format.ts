@@ -7,6 +7,8 @@ import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { getOrderPaymentPresentation } from "@/lib/order-success-state";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { accountCopy } from "./account-copy";
+import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./api/customer-auth";
+import { relabelOrderProgress, relabelOrderTimeline, type OrderFulfilmentView } from "./order-line-groups";
 
 export function accountMoney(amount: number, currencyCode?: string | null): string {
   return formatMoney(amount, currencyCode ? { code: currencyCode } : undefined);
@@ -181,5 +183,27 @@ export function wordOrderTracking<P extends { steps: TrackingStep[]; outcome: Tr
       }
       return event;
     }),
+  };
+}
+
+/**
+ * An order's tracker and dated updates as every order-status surface shows
+ * them (order success, the account order page, track order): in the page's
+ * words by their keys, then in pickup or no-delivery words ("Ready for
+ * pickup", "Completed"), and each shipment's state by its key ("Booked with
+ * courier"). The one path: a surface that skipped it showed English steps on
+ * a Bangla page.
+ */
+export function presentOrderTracking<S extends { status?: string | null; statusLabel: string }>(
+  tracking: { progress: CustomerOrderProgress | null | undefined; timeline: readonly CustomerOrderTimelineEvent[]; shipments?: readonly S[] },
+  courier: string | null,
+  order: OrderFulfilmentView,
+  copy: CheckoutLanguageData,
+): { progress: CustomerOrderProgress | null; timeline: CustomerOrderTimelineEvent[]; shipments: S[] } {
+  const worded = wordOrderTracking(tracking.progress, tracking.timeline, courier);
+  return {
+    progress: worded.progress ? relabelOrderProgress(worded.progress, order, copy) : null,
+    timeline: relabelOrderTimeline(worded.timeline, order, copy),
+    shipments: (tracking.shipments ?? []).map((shipment) => shipment.status ? { ...shipment, statusLabel: accountShipmentStatusText(shipment.status) } : shipment),
   };
 }

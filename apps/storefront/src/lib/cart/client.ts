@@ -761,6 +761,8 @@ function renderAuthoritativeCartQuote(
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
   elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
   latestAllowedPaymentMethods = quote.allowedPaymentMethods;
+  // The cart page drops the payment step when these leave cash alone (lib/checkout/payment-step.ts).
+  window.dispatchEvent(new CustomEvent("cart-quote-payment-methods", { detail: quote.allowedPaymentMethods }));
   if (quote.shippingMethod) {
     const quotedFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
     // The merchant changed this rate since the options were read: the options

@@ -132,3 +132,13 @@ export function isCodOnly(config: CheckoutConfig): boolean {
   if (config.partialPaymentEnabled) return false;
   return config.gateways.length === 1 && config.gateways[0].id === "cod";
 }
+
+/**
+ * Whether the cart page may place cash on delivery itself: the store takes
+ * cash and asks no advance. It does when cash is the store's only method, or
+ * the only one a buyer's quote leaves (codPaymentStep).
+ */
+export function canPlaceCashHere(config: CheckoutConfig): boolean {
+  if (config.unavailable || config.partialPaymentEnabled) return false;
+  return config.gateways.some((gateway) => gateway.id === "cod");
+}

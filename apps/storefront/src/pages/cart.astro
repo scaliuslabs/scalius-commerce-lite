@@ -34,6 +34,7 @@ import {
   getProductRecommendations,
   isCheckoutConfigReadFailure,
   isCodOnly,
+  canPlaceCashHere,
 } from "@/lib/api";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
@@ -111,6 +112,10 @@ const checkoutUnavailableMessage =
   checkoutLanguageResponse?.languageData.checkoutUnavailableMessage ||
   ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutUnavailableMessage;
 const codOnly = !checkoutUnavailable && isCodOnly(checkoutConfig);
+// The store takes cash among other methods: when this buyer's quote leaves
+// cash alone (a guest never gets the invoice), the page places it here, with
+// no payment step showing one choice (codPaymentStep in lib/checkout/payment-step.ts).
+const codPlaceable = !checkoutUnavailable && canPlaceCashHere(checkoutConfig);
 // Settings → Customer accounts decides the contact fields. With its opt-in, a
 // cart of digital or service lines may go without a phone (email is then
 // required); the page script decides per cart (lib/checkout/contact-need.ts).
@@ -175,11 +180,12 @@ function extractItemIssues(details: unknown): CartValidationIssue[] {
 // Other forms on the page may use POST to avoid URL/query leakage.
 // When multiple gateways are active, the checkout form is intercepted client-side
 // and the user is redirected to /checkout for payment selection.
-if (Astro.request.method === "POST" && codOnly) {
+if (Astro.request.method === "POST" && codPlaceable) {
   try {
     const formData = await Astro.request.formData();
 
-    if (formData.get("formIntent") === "checkout") {
+    // Cash placed here: the store's only method, or the only one this buyer's quote left (the API checks it again).
+    if (formData.get("formIntent") === "checkout" && (codOnly || formData.get("paymentStep") === "skipped")) {
       isProcessing = true;
 
       // Check if cart is empty
@@ -360,6 +366,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   <div
     id="checkout-meta"
     data-cod-only={codOnly ? "true" : "false"}
+    data-cod-placeable={codPlaceable && !codOnly ? "true" : undefined}
     data-checkout-unavailable={checkoutUnavailable ? "true" : "false"}
     data-checkout-unavailable-message={checkoutUnavailableMessage}
     data-gateways={JSON.stringify(checkoutConfig.gateways)}
@@ -435,7 +442,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
       </div>
     </noscript>
     <div class="group-data-[cart-state=empty]:hidden">
-      <CheckoutProgress current="information" paymentRequired={!codOnly} copy={copy} />
+      <CheckoutProgress current="information" paymentRequired={!codOnly} paymentStepMayHide={codPlaceable && !codOnly} copy={copy} />
     </div>
     {
       checkoutUnavailable && (
@@ -737,6 +744,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             novalidate
           >
             <input type="hidden" name="formIntent" value="checkout" />
+            {/* "skipped": this buyer can pay only cash, placed here (set by the page script). */}
+            {codPlaceable && !codOnly && <input type="hidden" name="paymentStep" value="" />}
             <input type="hidden" name="cartItems" id="cartItemsInput" />
             <input type="hidden" name="attributes" id="attributesInput" />
             <input type="hidden" name="checkoutId" id="checkoutIdInput" />
@@ -1060,7 +1069,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
                 // A cash-on-delivery-only store places the order here; a gift
                 // card is used on the payment step (script only: without it
                 // the field there cannot apply a card anyway).
-                codOnly && (
+                codPlaceable && (
                   <button
                     type="button"
                     id="giftCardCheckoutStep"
@@ -1074,8 +1083,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 
               {
                 // Buyers are only asked to agree to policies the store has published.
-                codOnly && hasAgreementPolicies && (
-                  <p class="mt-3 text-center text-sm text-muted-foreground">
+                codPlaceable && hasAgreementPolicies && (
+                  <p id={codOnly ? undefined : "cashAgreement"} class="mt-3 text-center text-sm text-muted-foreground" hidden={!codOnly}>
                     {agreement.map((segment) =>
                       segment.href ? (
                         <a href={segment.href} target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
@@ -1221,6 +1230,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   } from "@/lib/checkout/session-state";
   import { rememberSubmittedCart } from "@/lib/checkout/receipt-finalization";
   import { readStoredGiftCards } from "@/lib/checkout/gift-cards";
+  import { codPaymentStep } from "@/lib/checkout/payment-step";
   import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
   
   import { shippingCountryName } from "@/lib/checkout/shipping-country";
@@ -1308,6 +1318,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   // A cash-on-delivery-only store places the order from this page, unless the
   // buyer brings a gift card: then the payment step (where its field is) follows.
   let codOnly = meta?.dataset.codOnly === "true";
+  // A store that takes cash among other methods (a cash-only store always places it here).
+  const codPlaceable = codOnly || meta?.dataset.codPlaceable === "true";
   const checkoutUnavailable = meta?.dataset.checkoutUnavailable === "true";
   const guestCheckoutEnabled = meta?.dataset.guestCheckoutEnabled !== "false"; // default true
   // The frontmatter always serializes a fully resolved language (English
@@ -1968,24 +1980,46 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     // Gift cards are applied on the payment step: a COD-only store sends a
     // buyer who has one (or already applied one) there instead of placing
     // the order from this page.
+    // A store that takes cash among other methods places it here too when this
+    // buyer's quote leaves cash alone (a guest is never offered the invoice):
+    // no payment step that offers one choice.
     const giftCardStep = document.getElementById("giftCardCheckoutStep") as HTMLButtonElement | null;
-    if (codOnly && giftCardStep) {
-      const useGiftCardStep = () => {
-        codOnly = false;
-        // The cart no longer needs cash to pay: the payment step takes the card.
-        if (meta) meta.dataset.codOnly = "false";
-        refreshCartBlockingState();
-        giftCardStep.hidden = true;
-        initialSubmitText = checkoutCopy.continueToPaymentText;
-        setSubmitButtonText(initialSubmitText);
-      };
-      if (readStoredGiftCards().length > 0) {
-        useGiftCardStep();
-      } else {
-        giftCardStep.hidden = false;
-        giftCardStep.addEventListener("click", useGiftCardStep, { signal: cartPageSignal });
-      }
-    }
+    const paymentStepInput = form.querySelector<HTMLInputElement>('input[name="paymentStep"]');
+    const quoteFingerprint = document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null;
+    const storeCodOnly = codOnly;
+    let giftCardChosen = readStoredGiftCards().length > 0;
+    let quotedPaymentMethods: readonly string[] | null = null;
+    const refreshPaymentStep = () => {
+      // Nothing to decide: the store takes no cash here (or checkout is closed).
+      if (!codPlaceable) return;
+      const placesCash = codPaymentStep({
+        storeCodOnly,
+        codPlaceable,
+        giftCardChosen,
+        quotedMethods: /^taxq_/.test(quoteFingerprint?.value ?? "") ? quotedPaymentMethods : null,
+      });
+      if (placesCash === codOnly && giftCardStep?.hidden === !placesCash) return;
+      codOnly = placesCash;
+      if (meta) meta.dataset.codOnly = placesCash ? "true" : "false";
+      if (paymentStepInput) paymentStepInput.value = placesCash && !storeCodOnly ? "skipped" : "";
+      if (giftCardStep) giftCardStep.hidden = !placesCash;
+      document.getElementById("cashAgreement")?.toggleAttribute("hidden", !placesCash);
+      document.querySelectorAll<HTMLElement>("[data-checkout-payment-step]").forEach((step) => step.toggleAttribute("hidden", placesCash));
+      refreshCartBlockingState();
+      const pressable = submitButtonText?.textContent?.trim() === initialSubmitText;
+      initialSubmitText = placesCash ? checkoutCopy.placeOrderText : checkoutCopy.continueToPaymentText;
+      if (pressable) setSubmitButtonText(initialSubmitText);
+    };
+    giftCardStep?.addEventListener("click", () => {
+      // The cart no longer needs cash to pay: the payment step takes the card.
+      giftCardChosen = true;
+      refreshPaymentStep();
+    }, { signal: cartPageSignal });
+    window.addEventListener("cart-quote-payment-methods", (event) => {
+      quotedPaymentMethods = (event as CustomEvent<readonly string[] | null>).detail;
+      refreshPaymentStep();
+    }, { signal: cartPageSignal });
+    refreshPaymentStep();
 
     const showCheckoutFormError = (message: string, focusTarget?: HTMLElement | null) => {
       if (!checkoutFormMessage) return;

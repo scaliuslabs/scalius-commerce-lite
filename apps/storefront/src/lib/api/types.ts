@@ -868,6 +868,8 @@ export interface OrderReceiptTracking {
   progress: CustomerOrderProgress;
   timeline: CustomerOrderTimelineEvent[];
   shipments: Array<{
+    /** The state key the page words (presentOrderTracking); absent from an older API. */
+    status?: string;
     statusLabel: string;
     courierName: string | null;
     trackingId: string | null;

@@ -9,7 +9,7 @@
 // posts: it works the same without JavaScript, and the order number, contact
 // and code only ever travel in POST bodies.
 import { checkoutText, pageDigits, pageOrderNumber } from "@/lib/checkout-text";
-import { wordOrderTracking } from "@/lib/account-format";
+import { presentOrderTracking } from "@/lib/account-format";
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import {
@@ -45,7 +45,6 @@ import {
   safeTrackingUrl,
   type OrderTrackingText,
 } from "@/lib/order-tracking-markup";
-import { relabelOrderProgress, relabelOrderTimeline } from "@/lib/order-line-groups";
 import { formatMoney } from "@/lib/currency";
 
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
@@ -136,13 +135,13 @@ const trackingText: OrderTrackingText = {
 const deliveryView = status
   ? { status: status.status, requiresShipping: status.requiresShipping, shippingMethodKind: status.shippingMethodKind }
   : null;
-// The API's steps and updates in the page's words, by their keys (as the account order page words them).
-const worded = status
-  ? wordOrderTracking(status.tracking.progress, status.tracking.timeline, status.tracking.shipments[0]?.courierName ?? null)
+// The API's steps, updates and shipments in the page's words, by their keys (presentOrderTracking).
+const tracked = status && deliveryView
+  ? presentOrderTracking(status.tracking, status.tracking.shipments[0]?.courierName ?? null, deliveryView, copy)
   : null;
-const progress = worded?.progress && deliveryView ? relabelOrderProgress(worded.progress, deliveryView, copy) : null;
-const timeline = worded && deliveryView ? relabelOrderTimeline(worded.timeline, deliveryView, copy) : [];
-const shipments = (status?.tracking.shipments ?? []).map((shipment) => orderShipmentMarkup({
+const progress = tracked?.progress ?? null;
+const timeline = tracked?.timeline ?? [];
+const shipments = (tracked?.shipments ?? []).map((shipment) => orderShipmentMarkup({
   statusLabel: shipment.statusLabel,
   courier: shipment.courierName,
   trackingId: shipment.trackingId,

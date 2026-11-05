@@ -164,7 +164,7 @@ export interface OrderLookupStatus {
   tracking: {
     progress: CustomerOrderProgress;
     timeline: CustomerOrderTimelineEvent[];
-    shipments: Array<{ statusLabel: string; courierName: string | null; trackingId: string | null; trackingUrl: string | null }>;
+    shipments: Array<{ status?: string; statusLabel: string; courierName: string | null; trackingId: string | null; trackingUrl: string | null }>;
   };
   /** Where a code for the full order can go: the store's chosen channels, masked contacts. */
   codeOptions: Array<{ channel: OrderCodeChannel; destination: string }>;

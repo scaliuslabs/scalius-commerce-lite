@@ -27,7 +27,7 @@ import {
   formatAccountDate,
   formatOrderPlaces,
   orderPaymentLine,
-  wordOrderTracking,
+  presentOrderTracking,
 } from "@/lib/account-format";
 import { accountCopy } from "@/lib/account-copy";
 import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
@@ -63,8 +63,6 @@ import {
   orderCompletionWording,
   orderLineGroupStatusText,
   orderLinePropertyRows,
-  relabelOrderProgress,
-  relabelOrderTimeline,
   resolveOrderDeliveryBlock,
   showsOrderLineGroupHeadings,
   supportActionDescription,
@@ -572,8 +570,8 @@ function renderProgress(detail: AccountOrderDetail): void {
   // The API's steps and updates in the page's words (by their keys), then
   // pickup and no-delivery orders track as "Ready for pickup"/"Picked up" or "Preparing"/"Completed".
   const courier = detail.shipments[0] ? detail.shipments[0].providerName || detail.shipments[0].courierName : null;
-  const worded = wordOrderTracking(detail.progress, detail.timeline, courier);
-  if (progress && worded.progress) progress.innerHTML = orderProgressMarkup(relabelOrderProgress(worded.progress, detail.order, copy), trackingText());
+  const worded = presentOrderTracking(detail, courier, detail.order, copy);
+  if (progress && worded.progress) progress.innerHTML = orderProgressMarkup(worded.progress, trackingText());
   const expected = byId("orderExpectedDelivery");
   if (expected) {
     const show = Boolean(detail.order.expectedDelivery)
@@ -584,7 +582,7 @@ function renderProgress(detail: AccountOrderDetail): void {
     expected.classList.toggle("hidden", !show);
   }
   const timeline = byId("orderTimeline");
-  if (timeline) timeline.innerHTML = orderTimelineMarkup(relabelOrderTimeline(worded.timeline, detail.order, copy), trackingText());
+  if (timeline) timeline.innerHTML = orderTimelineMarkup(worded.timeline, trackingText());
 }
 
 function renderItemsAndSummary(detail: AccountOrderDetail): void {
