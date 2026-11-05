@@ -54,10 +54,15 @@ export class ConflictError extends AppError {
 }
 
 export class RateLimitError extends AppError {
-  constructor(message = "Too many requests", public readonly retryAfterSeconds?: number) {
+  /**
+   * `reason` is a stable machine word for a refusal a client explains in its
+   * own words (a sign-in code that was just sent is not "too many attempts").
+   */
+  constructor(message = "Too many requests", public readonly retryAfterSeconds?: number, reason?: string) {
     // The wait travels in the body (details) and the Retry-After header so
     // buyers see an honest countdown instead of "try again later".
-    super(429, "rate_limited", message, retryAfterSeconds ? { retryAfterSeconds } : undefined);
+    const details = { ...(retryAfterSeconds ? { retryAfterSeconds } : {}), ...(reason ? { reason } : {}) };
+    super(429, "rate_limited", message, Object.keys(details).length ? details : undefined);
     this.name = "RateLimitError";
   }
 }

@@ -4,6 +4,7 @@ import type { Database } from "@scalius/database/client";
 import { and, eq, gt, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { maskOtpIdentifier } from "./otp-delivery-receipts";
+import { OTP_RESEND_COOLDOWN_REASON } from "./customer-auth-rate-limit";
 import {
     encodeEncryptedCredential,
     encryptCredentials,
@@ -164,6 +165,7 @@ export async function persistCustomerAuthOtpChallenge(
         throw new RateLimitError(
             "A code was just sent. Please wait before asking for another.",
             Math.max(1, (current?.resendAvailableAt ?? resendAvailableAt) - now),
+            OTP_RESEND_COOLDOWN_REASON,
         );
     }
 

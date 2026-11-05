@@ -77,6 +77,7 @@ async function postOrderCodeApi(
         status: response.ok ? 502 : response.status,
         errorCode: trimmedString(error.code) || options.fallbackCode,
         ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+        ...(trimmedString(details.reason) ? { reason: trimmedString(details.reason) } : {}),
         ...(typeof details.attemptsLeft === "number" ? { attemptsLeft: Math.max(0, details.attemptsLeft) } : {}),
       },
     };
@@ -285,11 +286,12 @@ function orderCodeHeaders(extra?: Record<string, string>): Headers {
 
 /** JSON for page scripts: machine facts only; the page chooses localized refusal copy. */
 export function orderCodeFailureResponse(failure: OrderCodeFailure): Response {
-  const { status, errorCode, retryAfterSeconds, attemptsLeft } = failure;
+  const { status, errorCode, retryAfterSeconds, attemptsLeft, reason } = failure;
   return new Response(JSON.stringify({
     success: false,
     errorCode,
     ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+    ...(reason ? { reason } : {}),
     ...(attemptsLeft !== undefined ? { attemptsLeft } : {}),
   }), {
     status,

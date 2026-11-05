@@ -115,7 +115,7 @@ if (isPost) {
       message = result.data.message || copy.trackOrderCodeSentText;
     } else {
       failed = true;
-      const refusal = describeOrderCodeSendRefusal(copy, result.failure, copy.trackOrderUnavailableText);
+      const refusal = describeOrderCodeSendRefusal(copy, result.failure, copy.trackOrderUnavailableText, copy.trackOrderCodeSentText);
       message = refusal.message;
       codeStep = refusal.codeSent;
       needsStoreContact = refusal.needsStoreContact;

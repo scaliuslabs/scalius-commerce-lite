@@ -7,7 +7,7 @@ import {
     orders,
 } from "@scalius/database/schema";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
-import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
+import { CODE_RECENTLY_SENT_REASON, type CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
@@ -384,6 +384,7 @@ export async function persistOrderOtpChallenge(
         throw new RateLimitError(
             "A code was just sent. Please wait before asking for another.",
             Math.max(1, (current?.resendAvailableAt ?? resendAvailableAt) - input.nowSeconds),
+            CODE_RECENTLY_SENT_REASON,
         );
     }
 

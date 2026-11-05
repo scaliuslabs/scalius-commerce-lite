@@ -1220,6 +1220,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   verification: PRIVATE,
   two_factor: PRIVATE,
   rate_limit: PRIVATE,
+  staff_auth_attempts: PRIVATE,
   admin_setup_claims: PRIVATE,
   admin_setup_rate_limits: PRIVATE,
   admin_invitations: PRIVATE,

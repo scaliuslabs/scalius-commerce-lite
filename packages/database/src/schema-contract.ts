@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 193,
-  name: "0193_withheld_units",
+  version: 194,
+  name: "0194_staff_auth_attempts",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -746,6 +746,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 193,
     name: "0193_withheld_units",
     sourceSha256: "2daaecd645600f5e06090e2d4830af36491a634975aa45febd90f887f9cb1333",
+  },
+  {
+    version: 194,
+    name: "0194_staff_auth_attempts",
+    sourceSha256: "e70823b18e8320a9b048ca6c32c1314ef2cf4f5ff4b74b09528d06ac2898615b",
   },
 ] as const;
 

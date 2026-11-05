@@ -4,6 +4,7 @@
 // Browser-safe: no transport imports.
 import { checkoutText } from "@/lib/checkout-text";
 import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { isCodeStillValidRefusal } from "@scalius/shared/customer-auth-policy";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 
 /** The API's resend wait when a response doesn't say (core OTP cooldown). */
@@ -29,6 +30,8 @@ export interface OrderCodeFailure {
   message?: string;
   retryAfterSeconds?: number;
   attemptsLeft?: number;
+  /** `details.reason`: a refused send whose last code still works says so. */
+  reason?: string;
 }
 
 /** "#1001", "1001", "১০০১" or an internal order id; null when it can't be one. */
@@ -124,12 +127,16 @@ export interface OrderCodeSendRefusal {
  */
 export function describeOrderCodeSendRefusal(
   copy: CheckoutLanguageData,
-  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds"> & { errorCode?: string },
+  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds" | "reason"> & { errorCode?: string },
   unavailableText: string,
+  /** The page's own "a code was sent" words, for a refusal whose last code still works. */
+  codeSentText: string,
 ): OrderCodeSendRefusal {
   if (failure.status === 429) {
     return {
-      message: getOrderCodeFailureText(copy, { ...failure, retryAfterSeconds: undefined }, "send", unavailableText),
+      message: isCodeStillValidRefusal(failure.reason)
+        ? codeSentText
+        : getOrderCodeFailureText(copy, { ...failure, retryAfterSeconds: undefined }, "send", unavailableText),
       codeSent: true,
       resendAfterSeconds: positiveSeconds(failure.retryAfterSeconds) ?? 0,
       needsStoreContact: false,
