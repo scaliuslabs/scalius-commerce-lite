@@ -26,7 +26,7 @@ import {
   type AppSkinEntry,
   type AppSkinUnit,
 } from "../theme-settings";
-import { appSettingProblems } from "../schema-form/app-settings";
+import { appSettingFixes } from "../schema-form/app-settings";
 import { settingErrors } from "../schema-form/errors";
 import { appSectionInvalid, type AppSectionEntry } from "./editor-state";
 
@@ -243,17 +243,17 @@ export function heldSettingCount(theme: Theme, held: readonly DraftPart[], apps:
       const section = partSection(theme, part);
       if (section?.type === "app") {
         const entry = apps.sections.get(section.settings.app);
-        fields = entry ? appSettingProblems(entry.section.settings, section.settings.values).size : 0;
+        fields = entry ? appSettingFixes(entry.section.settings, section.settings.values).length : 0;
       } else if (section) {
         fields = settingErrors(STOREFRONT_SECTION_REGISTRY[section.type].settings, section.settings).size;
         const skin = (section as { skin?: { app: string; values: Record<string, unknown> } }).skin;
         const entry = skin ? apps.skins.get(skin.app) : undefined;
-        if (entry && skin) fields += appSettingProblems(entry.skin.settings, skin.values).size;
+        if (entry && skin) fields += appSettingFixes(entry.skin.settings, skin.values).length;
       }
     } else if (part.startsWith("skin:")) {
       const chosen = themeAppSkin(theme, part.slice(5) as AppSkinUnit);
       const entry = chosen ? apps.skins.get(chosen.app) : undefined;
-      fields = entry && chosen ? appSettingProblems(entry.skin.settings, chosen.values).size : 0;
+      fields = entry && chosen ? appSettingFixes(entry.skin.settings, chosen.values).length : 0;
     }
     count += Math.max(1, fields);
   }
