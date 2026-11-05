@@ -112,7 +112,7 @@ const CLOSED_STATUSES = new Set<string>([OrderStatus.CANCELLED, OrderStatus.REFU
  * The planId is NOT included to ensure the same requestKey always maps to the same paymentId. */
 async function recordedPaymentId(orderId: string, requestKey: string): Promise<string> {
   const hashInput = `recorded\n${orderId}\n${requestKey}`;
-  return `recorded:${orderId}:${(await sha256Hex(hashInput)).slice(0, 32)}`;
+  return `recorded:${orderId}:${await sha256Hex(hashInput)}`;
 }
 
 export async function recordOrderPayment(
