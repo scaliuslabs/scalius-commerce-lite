@@ -52,14 +52,18 @@ export async function saveCheckoutFlowSettingsDocument(
     }
 
     const storeCurrency = await readStoreCurrency(db);
+    const saved = await getCheckoutFlowSettingsDocument(db);
+    const deposit = {
+        codDepositEnabled: input.codDepositEnabled ?? saved.codDepositEnabled,
+        codDepositMode: input.codDepositMode ?? saved.codDepositMode,
+        codDepositAmount: input.codDepositAmount ?? saved.codDepositAmount,
+        codDepositPercent: input.codDepositPercent ?? saved.codDepositPercent,
+    };
     const issues = getCheckoutFlowValidationIssues({
         checkoutMode: input.checkoutMode,
         partialPaymentEnabled: input.partialPaymentEnabled,
         partialPaymentAmount: input.partialPaymentAmount,
-        codDepositEnabled: input.codDepositEnabled,
-        codDepositMode: input.codDepositMode,
-        codDepositAmount: input.codDepositAmount,
-        codDepositPercent: input.codDepositPercent,
+        ...deposit,
         availablePaymentMethods: input.availablePaymentMethods,
         paymentProviders: input.paymentProviders,
         currencyCode: storeCurrency.code,
@@ -69,22 +73,18 @@ export async function saveCheckoutFlowSettingsDocument(
     if (input.partialPaymentEnabled) toStoreMinor(input.partialPaymentAmount, storeCurrency);
     // A manual COD deposit must be below the order total to leave a balance
     // for COD collection; whole taka in BDT for fixed mode.
-    let codDepositAmount: number | undefined;
-    let codDepositPercent: number | undefined;
-    if (input.codDepositEnabled) {
-        if (input.codDepositMode === "fixed") {
-            const amount = input.codDepositAmount;
+    if (deposit.codDepositEnabled) {
+        if (deposit.codDepositMode === "fixed") {
+            const amount = deposit.codDepositAmount;
             if (amount === undefined || !Number.isFinite(amount) || amount <= 0) {
                 throw new ValidationError("Cash on delivery deposit amount must be greater than zero.");
             }
-            codDepositAmount = amount;
             toStoreMinor(amount, storeCurrency);
         } else {
-            const percent = input.codDepositPercent;
+            const percent = deposit.codDepositPercent;
             if (percent === undefined || !Number.isInteger(percent) || percent < 1 || percent > 99) {
                 throw new ValidationError("Cash on delivery deposit percentage must be a whole number between 1 and 99.");
             }
-            codDepositPercent = percent;
         }
     }
 
@@ -97,8 +97,8 @@ export async function saveCheckoutFlowSettingsDocument(
         ...(input.requireFullBillingAddress === undefined ? {} : { requireFullBillingAddress: input.requireFullBillingAddress }),
         ...(input.codDepositEnabled === undefined ? {} : { codDepositEnabled: input.codDepositEnabled }),
         ...(input.codDepositMode === undefined ? {} : { codDepositMode: input.codDepositMode }),
-        ...(input.codDepositAmount === undefined ? {} : { codDepositAmount: codDepositAmount }),
-        ...(input.codDepositPercent === undefined ? {} : { codDepositPercent: codDepositPercent }),
+        ...(input.codDepositAmount === undefined ? {} : { codDepositAmount: input.codDepositAmount }),
+        ...(input.codDepositPercent === undefined ? {} : { codDepositPercent: input.codDepositPercent }),
         ...(input.codDepositInstructions === undefined ? {} : { codDepositInstructions: input.codDepositInstructions }),
     }, {}, { expectedRevision: input.expectedRevision });
     return { ...value, revision };

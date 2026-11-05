@@ -1,5 +1,6 @@
 // One signed-in customer order: claim a receipt, detail, support requests and payment sessions.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { merchantContactSnapshotSchema } from "@scalius/core/modules/orders/browser";
 import { claimGuestOrderToAccount } from "@scalius/core/modules/orders";
 import { getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
@@ -296,6 +297,9 @@ const customerOrderDetailSchema = z.object({
   supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
   supportRequestIntro: z.string().nullable().openapi({ description: "The store's own words over the order's requests; null: the storefront shows its default in the page language." }),
   paymentPlan: z.object({
+    kind: z.string(),
+    instructions: z.string().nullable(),
+    contactSnapshot: merchantContactSnapshotSchema.nullable(),
     totalAmount: z.number(),
     depositAmount: z.number(),
     balanceDue: z.number(),

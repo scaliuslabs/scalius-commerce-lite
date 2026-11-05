@@ -3,6 +3,7 @@
 // totals), the order detail with its payments, refunds, shipments, support
 // requests and tracking timeline, and the buyer-facing status words.
 
+import { presentMerchantContactSnapshot } from "./payment-plan-presentation";
 import {
     codTracking,
     customerAddresses,
@@ -953,6 +954,9 @@ export async function getCustomerOrderDetailForOrder(
                 balanceDueMinor: paymentPlans.balanceDueMinor,
                 balanceDueDate: paymentPlans.balanceDueDate,
                 status: paymentPlans.status,
+                kind: paymentPlans.kind,
+                instructions: paymentPlans.instructions,
+                contactSnapshot: paymentPlans.contactSnapshot,
                 depositPaidAt: sql<number>`CAST(${paymentPlans.depositPaidAt} AS INTEGER)`,
                 balancePaidAt: sql<number>`CAST(${paymentPlans.balancePaidAt} AS INTEGER)`,
                 createdAt: sql<number>`CAST(${paymentPlans.createdAt} AS INTEGER)`,
@@ -1051,6 +1055,9 @@ export async function getCustomerOrderDetailForOrder(
             balanceDueMinor: number;
             balanceDueDate: string | null;
             status: string;
+            kind: string;
+            instructions: string | null;
+            contactSnapshot: string | null;
             depositPaidAt: number | null;
             balancePaidAt: number | null;
             createdAt: number | null;
@@ -1120,6 +1127,9 @@ export async function getCustomerOrderDetailForOrder(
             balanceDue: amount(plan.balanceDueMinor),
             balanceDueDate: plan.balanceDueDate,
             status: plan.status,
+            kind: plan.kind,
+            instructions: plan.kind === "manual" ? plan.instructions : null,
+            contactSnapshot: plan.kind === "manual" ? presentMerchantContactSnapshot(plan.contactSnapshot) : null,
             depositPaidAt: timestampToIso(plan.depositPaidAt),
             balancePaidAt: timestampToIso(plan.balancePaidAt),
             createdAt: timestampToIso(plan.createdAt),

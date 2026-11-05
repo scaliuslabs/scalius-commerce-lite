@@ -1,6 +1,7 @@
 // Order lookup OTP, the guest receipt, and the account-owner receipt proof.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { orders, orderItems, media } from "@scalius/database/schema";
+import { orders, orderItems, media, paymentPlans } from "@scalius/database/schema";
+import { buyerPaymentPlanSchema, presentBuyerPaymentPlan } from "@scalius/core/modules/orders/browser";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -87,6 +88,7 @@ const unixToDate = (timestamp: number | null): Date | null => {
 };
 
 const orderReceiptSchema = z.object({
+  paymentPlan: buyerPaymentPlanSchema.nullable(),
   buyerUi: z.array(buyerUiBlockSchema),
   id: z.string(),
   /** Short per-store order number shown as "#1001"; null only for orders placed before numbering. */
@@ -587,6 +589,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     : [];
 
   const money = orderMoneyAmounts(order);
+  const plan = await db.select({
+    kind: paymentPlans.kind, status: paymentPlans.status,
+    depositAmountMinor: paymentPlans.depositAmountMinor, balanceDueMinor: paymentPlans.balanceDueMinor,
+    instructions: paymentPlans.instructions, contactSnapshot: paymentPlans.contactSnapshot,
+  }).from(paymentPlans).where(eq(paymentPlans.orderId, id)).get();
   const apps = createCheckoutAppFunctions({
     env: c.env,
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
@@ -615,6 +622,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   return ok(c, {
     order: {
       buyerUi,
+      paymentPlan: presentBuyerPaymentPlan(plan, order.currencyDecimalPlaces),
       id: order.id,
       orderNumber: order.orderNumber ?? null,
       customerName: order.customerName,

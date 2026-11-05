@@ -52739,6 +52739,64 @@
                           "type": "object",
                           "nullable": true,
                           "properties": {
+                            "kind": {
+                              "type": "string"
+                            },
+                            "instructions": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "contactSnapshot": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "phone": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "whatsappUrl": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "socialLinks": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      },
+                                      "iconUrl": {
+                                        "type": "string",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "label",
+                                      "url",
+                                      "iconUrl"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "phone",
+                                "email",
+                                "whatsappUrl",
+                                "socialLinks"
+                              ]
+                            },
                             "totalAmount": {
                               "type": "number"
                             },
@@ -52769,6 +52827,9 @@
                             }
                           },
                           "required": [
+                            "kind",
+                            "instructions",
+                            "contactSnapshot",
                             "totalAmount",
                             "depositAmount",
                             "balanceDue",
@@ -77230,6 +77291,87 @@
                         "order": {
                           "type": "object",
                           "properties": {
+                            "paymentPlan": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "depositAmount": {
+                                  "type": "number"
+                                },
+                                "balanceDue": {
+                                  "type": "number"
+                                },
+                                "instructions": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "contactSnapshot": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "phone": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "email": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "whatsappUrl": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "socialLinks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          },
+                                          "url": {
+                                            "type": "string"
+                                          },
+                                          "iconUrl": {
+                                            "type": "string",
+                                            "nullable": true
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "label",
+                                          "url",
+                                          "iconUrl"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "phone",
+                                    "email",
+                                    "whatsappUrl",
+                                    "socialLinks"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "status",
+                                "depositAmount",
+                                "balanceDue",
+                                "instructions",
+                                "contactSnapshot"
+                              ]
+                            },
                             "buyerUi": {
                               "type": "array",
                               "items": {
@@ -81396,6 +81538,7 @@
                             }
                           },
                           "required": [
+                            "paymentPlan",
                             "buyerUi",
                             "id",
                             "orderNumber",

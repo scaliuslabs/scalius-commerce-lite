@@ -7,3 +7,4 @@ export * from "./search";
 export * from "./csv-export";
 export * from "./billing-display";
 export * from "./line-presentation";
+export * from "./payment-plan-presentation";

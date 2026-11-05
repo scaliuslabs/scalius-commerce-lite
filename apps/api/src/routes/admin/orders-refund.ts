@@ -457,6 +457,7 @@ app.openapi(reconcileRefundAttemptRoute, async (c) => {
         attemptId,
         {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            masterSecret: (c.env as Record<string, unknown>).SCALIUS_SECRET as string | undefined,
             providers: () => requestPaymentProviders(c),
         },
     );

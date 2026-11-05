@@ -103,6 +103,7 @@ export interface ExternalRefundWebhookReconciliationResult {
 
 export interface RefundReconciliationOptions {
   encryptionKey?: string;
+  masterSecret?: string;
   limit?: number;
   nowSeconds?: number;
   /** The gateways to ask (built-in and app providers); built-in ones alone by default. */
@@ -127,6 +128,7 @@ export interface ManualRefundAttemptReconciliationResult {
 
 export interface ExternalRefundWebhookReconciliationOptions {
   encryptionKey?: string;
+  masterSecret?: string;
   limit?: number;
   nowSeconds?: number;
   providers?: PaymentProvidersSource;
@@ -722,7 +724,7 @@ async function reconcileExternalRefundWebhookEvent(
     importedRefundIds.push(refund.id);
 
     try {
-      const result = await finalizeAcceptedRefundAttemptIds(db, [attemptId]);
+      const result = await finalizeAcceptedRefundAttemptIds(db, [attemptId], options.masterSecret);
       finalized += result.finalizedAttemptIds.length;
       result.orderIds.forEach((orderId) => finalizedOrderIds.add(orderId));
       refundNotifications.push(...result.refundNotifications);
@@ -934,7 +936,7 @@ export async function reconcileRefundAttemptById(
   if (outcome.outcome === "accepted") {
     await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds);
     try {
-      const result = await finalizeAcceptedRefundAttemptIds(db, [attempt.id]);
+      const result = await finalizeAcceptedRefundAttemptIds(db, [attempt.id], options.masterSecret);
       return {
         status: "finalized",
         orderIds: result.orderIds,

@@ -13461,6 +13461,19 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
              */
             supportRequestIntro: string | null;
             paymentPlan: {
+                kind: string;
+                instructions: string | null;
+                contactSnapshot: {
+                    phone: string | null;
+                    email: string | null;
+                    whatsappUrl: string | null;
+                    socialLinks: Array<{
+                        id: string;
+                        label: string;
+                        url: string;
+                        iconUrl: string | null;
+                    }>;
+                } | null;
                 totalAmount: number;
                 depositAmount: number;
                 balanceDue: number;
@@ -20691,6 +20704,24 @@ export type GetApiV1OrdersReceiptByIdResponses = {
         success: true;
         data: {
             order: {
+                paymentPlan: {
+                    kind: string;
+                    status: string;
+                    depositAmount: number;
+                    balanceDue: number;
+                    instructions: string | null;
+                    contactSnapshot: {
+                        phone: string | null;
+                        email: string | null;
+                        whatsappUrl: string | null;
+                        socialLinks: Array<{
+                            id: string;
+                            label: string;
+                            url: string;
+                            iconUrl: string | null;
+                        }>;
+                    } | null;
+                } | null;
                 buyerUi: Array<{
                     appId: string;
                     releaseId: string;

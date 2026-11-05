@@ -642,6 +642,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                   ? copy.codDepositRequiredText
                   : order.paymentPlan.status === "deposit_paid"
                     ? copy.codDepositReceivedText
+                    : order.paymentPlan.status === "completed"
+                      ? copy.codDepositCompletedText
                     : copy.codDepositCancelledText}
               </p>
               {order.paymentPlan.instructions && (

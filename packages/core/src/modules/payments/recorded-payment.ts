@@ -250,6 +250,15 @@ export async function recordOrderPayment(
     sql`${orders.deletedAt} IS NULL`,
   );
   const statements: SQLiteBatchItem[] = [
+    ...(isDeposit && plan ? [buildBatchGuard(db, sql`EXISTS (
+      SELECT 1 FROM ${paymentPlans}
+      WHERE ${paymentPlans.id} = ${plan.id}
+        AND ${paymentPlans.orderId} = ${order.id}
+        AND ${paymentPlans.kind} = 'manual'
+        AND ${paymentPlans.status} = ${PaymentPlanStatus.PENDING}
+        AND ${paymentPlans.depositAmountMinor} = ${plan.depositAmountMinor}
+        AND ${paymentPlans.balanceDueMinor} = ${plan.balanceDueMinor}
+    )`, RECORDED_PAYMENT_BATCH_GUARD) as SQLiteBatchItem] : []),
     // The payment row first, and only while the order is still the one read:
     // its id is the claim (a racing retry inserts nothing), and a payment
     // racing under another key finds the order moved and inserts nothing, so

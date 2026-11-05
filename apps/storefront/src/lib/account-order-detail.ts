@@ -782,8 +782,10 @@ function renderPayment(detail: AccountOrderDetail): void {
             detail.paymentPlan.status === "pending"
               ? copy.codDepositRequiredText ?? "Deposit required before dispatch"
               : detail.paymentPlan.status === "deposit_paid"
-                ? "Deposit received — your order is being prepared"
-                : "Deposit cancelled"
+                ? copy.codDepositReceivedText
+                : detail.paymentPlan.status === "completed"
+                  ? copy.codDepositCompletedText
+                : copy.codDepositCancelledText
           )}</p>
           ${detail.paymentPlan.instructions ? `<p class="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words" data-manual-cod-deposit-instructions>${escapeHtml(detail.paymentPlan.instructions)}</p>` : ""}
           ${detail.paymentPlan.contactSnapshot ? renderManualCodDepositContact(detail.paymentPlan.contactSnapshot) : ""}

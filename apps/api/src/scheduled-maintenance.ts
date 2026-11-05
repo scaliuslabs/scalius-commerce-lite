@@ -404,6 +404,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
       const refundReconciliation = await timed("refund_attempt_reconciliation", () =>
         reconcileDueRefundAttempts(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          masterSecret: (env as unknown as Record<string, unknown>).SCALIUS_SECRET as string | undefined,
           limit: scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT),
           providers: appPaymentProvidersLoader(env, db),
         }),
@@ -436,6 +437,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
       const externalRefunds = await timed("external_refund_reconciliation", () =>
         reconcileExternalRefundWebhooks(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+          masterSecret: (env as unknown as Record<string, unknown>).SCALIUS_SECRET as string | undefined,
           limit: scaled(EXTERNAL_REFUND_RECONCILIATION_LIMIT),
           providers: appPaymentProvidersLoader(env, db),
         }),

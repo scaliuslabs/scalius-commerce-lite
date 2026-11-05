@@ -32,6 +32,7 @@ type Line = CreateStorefrontOrderInput["items"][number];
 export interface GiftCardCheckoutOptions {
     partialPaymentEnabled?: boolean;
     paymentProviders?: PaymentProviders;
+    codDeposit?: { amount: number; instructions: string };
 }
 
 export const line = (productId: string, variantId: string, quantity: number, price: number, properties?: Line["properties"]): Line =>
@@ -159,11 +160,11 @@ export function createGiftCardCheckoutFixture(seedSql = ""): GiftCardCheckoutFix
                 authorityRevision: authority.authorityRevision,
                 orderCreatedNotificationEnabled: false,
                 metaPurchaseEnabled: false,
-                codDepositEnabled: false,
+                codDepositEnabled: options.codDeposit !== undefined,
                 codDepositMode: "fixed",
-                codDepositAmount: 0,
+                codDepositAmount: options.codDeposit?.amount ?? 0,
                 codDepositPercent: 0,
-                codDepositInstructions: "",
+                codDepositInstructions: options.codDeposit?.instructions ?? "",
             }),
             authority.taxAuthority,
             { masterSecret: TEST_MASTER_SECRET },

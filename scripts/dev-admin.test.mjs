@@ -223,9 +223,10 @@ describe("waitForApi", () => {
     globalThis.fetch = vi.fn(() => Promise.reject(new Error("connect ECONNREFUSED")));
 
     const promise = devAdmin.waitForApi("http://localhost:8787");
+    const rejection = expect(promise).rejects.toThrow(/Timed out waiting for API/);
     await vi.advanceTimersByTimeAsync(90_000);
 
-    await expect(promise).rejects.toThrow(/Timed out waiting for API/);
+    await rejection;
   });
 
   it("returns when fetch becomes ready", async () => {
@@ -255,8 +256,9 @@ describe("waitForApi", () => {
       return { code: 1 }; // exited on second poll
     });
 
+    const rejection = expect(promise).rejects.toThrow(/exited before it was ready/);
     await vi.advanceTimersByTimeAsync(500);
-    await expect(promise).rejects.toThrow(/exited before it was ready/);
+    await rejection;
   });
 
   it("cancels child-exit polling timer after each attempt", async () => {
@@ -270,6 +272,7 @@ describe("waitForApi", () => {
     globalThis.fetch = vi.fn(() => Promise.reject(new Error("connect ECONNREFUSED")));
 
     const promise = devAdmin.waitForApi("http://localhost:8787", getChildStatus);
+    const rejection = expect(promise).rejects.toThrow(/Timed out waiting for API/);
 
     // Advance for a few iterations (each iteration sleeps 1000ms)
     await vi.advanceTimersByTimeAsync(3_000);
@@ -279,7 +282,7 @@ describe("waitForApi", () => {
     // Advance to near-deadline
     await vi.advanceTimersByTimeAsync(87_000);
 
-    await expect(promise).rejects.toThrow(/Timed out waiting for API/);
+    await rejection;
 
     // After the function settles, pollCount must not increase (timers cancelled)
     const finalCount = pollCount;

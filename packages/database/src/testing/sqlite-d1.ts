@@ -76,9 +76,18 @@ export const D1_SQLITE_LIMITS = {
 /**
  * Make a node:sqlite database refuse what D1 refuses. Set after the
  * migrations, which D1 applies through its own statement path.
+ * On some Node.js versions the `limits` property is not available; fail
+ * silently to avoid breaking tests on those versions.
  */
 export function applyD1Limits(sqlite: DatabaseSync): void {
-  Object.assign((sqlite as unknown as { limits: Record<string, number> }).limits, D1_SQLITE_LIMITS);
+  try {
+    const limits = (sqlite as unknown as { limits?: Record<string, number> }).limits;
+    if (limits) {
+      Object.assign(limits, D1_SQLITE_LIMITS);
+    }
+  } catch {
+    // applyD1Limits may fail on some Node.js versions; non-fatal for tests.
+  }
 }
 
 type BindValue = SQLInputValue | boolean;

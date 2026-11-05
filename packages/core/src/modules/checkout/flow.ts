@@ -76,26 +76,6 @@ export function getCheckoutFlowValidationIssues(options: {
         }
     }
 
-    if (!options.partialPaymentEnabled) return issues;
-
-    if (!isPositiveDepositAmount(options.partialPaymentAmount)) {
-        issues.push("Advance payment amount must be greater than zero.");
-    }
-    for (const methodId of availablePaymentMethods ?? []) {
-        const gateway = (options.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS).get(methodId);
-        const limits = gateway && (options.currencyCode ? gatewayAmountLimits(gateway, options.currencyCode) : gateway.amountLimits);
-        if (!gateway || !limits) continue;
-        const amountMinor = Math.round(Number(options.partialPaymentAmount) * 10 ** getDecimalPlaces(limits.currency));
-        const amountIssue = getGatewayAmountIssue(gateway, amountMinor, limits.currency, `${gateway.label} advance payment amount`);
-        if (amountIssue) issues.push(amountIssue);
-    }
-    if (checkoutMode === "guest_cod_only") {
-        issues.push("Partial payment needs an online payment gateway, so Fast COD Only cannot be used.");
-    }
-    if (availablePaymentMethods && !hasOnlineGateway) {
-        issues.push("Partial payment needs at least one enabled and configured online payment gateway.");
-    }
-
     // Manual COD deposit validation.
     if (options.codDepositEnabled) {
         if (!hasCod) {
@@ -116,6 +96,28 @@ export function getCheckoutFlowValidationIssues(options: {
             }
         }
     }
+
+
+    if (!options.partialPaymentEnabled) return issues;
+
+    if (!isPositiveDepositAmount(options.partialPaymentAmount)) {
+        issues.push("Advance payment amount must be greater than zero.");
+    }
+    for (const methodId of availablePaymentMethods ?? []) {
+        const gateway = (options.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS).get(methodId);
+        const limits = gateway && (options.currencyCode ? gatewayAmountLimits(gateway, options.currencyCode) : gateway.amountLimits);
+        if (!gateway || !limits) continue;
+        const amountMinor = Math.round(Number(options.partialPaymentAmount) * 10 ** getDecimalPlaces(limits.currency));
+        const amountIssue = getGatewayAmountIssue(gateway, amountMinor, limits.currency, `${gateway.label} advance payment amount`);
+        if (amountIssue) issues.push(amountIssue);
+    }
+    if (checkoutMode === "guest_cod_only") {
+        issues.push("Partial payment needs an online payment gateway, so Fast COD Only cannot be used.");
+    }
+    if (availablePaymentMethods && !hasOnlineGateway) {
+        issues.push("Partial payment needs at least one enabled and configured online payment gateway.");
+    }
+
 
     return issues;
 }
