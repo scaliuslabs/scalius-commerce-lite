@@ -24,19 +24,19 @@ export const RUNTIME_SECRET_HKDF_SALT = "scalius-commerce/runtime-secrets/v1";
 export const RUNTIME_SECRET_BYTES = 32;
 
 export const RUNTIME_SECRET_PURPOSES = {
-  BETTER_AUTH_SECRET: "better-auth-session",
-  JWT_SECRET: "jwt-signing",
-  API_TOKEN: "service-api-token",
-  AGENT_TOKEN_PEPPER: "agent-token-pepper",
-  CUSTOMER_SESSION_HASH_KEY: "customer-session-hash",
+  BETTER_AUTH_SECRET: "auth:better-auth-session:v1",
+  JWT_SECRET: "auth:jwt-signing:v1",
+  API_TOKEN: "services:api-token:v1",
+  AGENT_TOKEN_PEPPER: "auth:agent-token-pepper:v1",
+  CUSTOMER_SESSION_HASH_KEY: "auth:customer-session-hash:v1",
   /** Gates `POST /api/v1/setup` when the Platform setting requires a token. */
-  ADMIN_SETUP_TOKEN: "admin-setup",
+  ADMIN_SETUP_TOKEN: "admin:setup:v1",
   /** HMAC key a trusted front proxy uses to sign forwarded host/proto/IP. */
-  FRONT_PROXY_SECRET: "front-proxy",
+  FRONT_PROXY_SECRET: "network:front-proxy:v1",
   /** HS256 key for operator-minted dashboard identity handoff tokens. */
-  IDENTITY_HANDOFF_SECRET: "identity-handoff",
+  IDENTITY_HANDOFF_SECRET: "auth:identity-handoff:v1",
   /** HMAC key for refund attempt metadata integrity (manualDepositRefund flag). */
-  REFUND_METADATA_HMAC: "refund-metadata-hmac",
+  REFUND_METADATA_HMAC: "payments:refund:metadata:hmac:v1",
 } as const;
 
 export type RuntimeSecretName = keyof typeof RUNTIME_SECRET_PURPOSES;
