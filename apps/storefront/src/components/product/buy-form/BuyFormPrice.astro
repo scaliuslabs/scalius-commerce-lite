@@ -1,0 +1,31 @@
+---
+// The buy form's price part (`data-buy-part="price"`): the price, the struck
+// regular price and the discount badge, which product-controller.ts keeps
+// the chosen SKU's. Drawn in the form (ProductSummary.astro) or where a
+// product_main skin placed it (`<BuyFormPart name="price" />`).
+interface Props {
+  /** The price the page opens on, as written ("From ৳2,200" when the choices are priced differently). */
+  price: string;
+  regularPrice: string;
+  hasDiscount: boolean;
+  discountBadge: string | null;
+  /** The "From {price}" words, for the controller. */
+  fromTemplate: string;
+}
+
+const { price, regularPrice, hasDiscount, discountBadge, fromTemplate } = Astro.props;
+---
+
+<div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1" data-buy-part="price">
+  <div class="buy-box-price-fact">
+    <p data-sx-buy="price" class="product-price whitespace-nowrap text-2xl font-bold text-foreground" aria-live="polite" data-from-template={fromTemplate}>
+      {price}
+    </p>
+  </div>
+  <div class="buy-box-regular-fact">
+    <s data-sx-buy="regular-price" class:list={["product-original-price whitespace-nowrap text-sm text-muted-foreground", { hidden: !hasDiscount }]}>
+      {regularPrice}
+    </s>
+  </div>
+  <span data-sx-buy="discount" class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
+</div>

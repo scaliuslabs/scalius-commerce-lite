@@ -66,6 +66,11 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
   const module = packed.storefront.find((file) => file.path === contract.STOREFRONT_MODULE_FILE);
   const rendered = module ? (await load(module.bytes)).default : null;
   const assetPath = `${relative(dirname(output), join(directory, "dist/storefront")).replaceAll("\\", "/")}/`;
+  // Parts render with the store's own file base (`/_x/<app>/<release>/`), which
+  // the output check keeps; the preview then points it at the packed files
+  // beside it. A relative base would be dropped by the check, with every asset().
+  const storeAssetBase = `/_x/${packed.id}/${"0".repeat(64)}/`;
+  const localAssets = (html) => html.split(storeAssetBase).join(assetPath);
   const empty = {};
   let count = 0;
   const blocks = names.map((name) => {
@@ -88,7 +93,7 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
         data: skin.target === "product_main" ? product : store.skinData(skin.target), ...(skin.target.startsWith("section:") ? { instanceId: "preview" } : {}),
       })),
     ];
-    const context = store.context({ ...(fixture.context ?? {}), assets: assetPath, preview: true });
+    const context = store.context({ ...(fixture.context ?? {}), assets: storeAssetBase, preview: true });
     const results = rendered ? rendered.render({ abi: contract.STOREFRONT_COMPONENT_ABI, context, jobs }).results : [];
     count = results.length;
     empty[name] = [];
@@ -101,7 +106,7 @@ export async function previewPlugin(directory, output = join(directory, "dist/pr
         : name === "sample"
           ? "<p><strong>Rendered nothing with these fixtures.</strong> A component that reads custom fields, records or settings the defaults leave empty draws nothing without them: pass them with <code>--fixture &lt;json&gt;</code>.</p>"
           : "<p><strong>Rendered nothing on this store.</strong> Right for a part with nothing to show (a skin then gives way to the store's own unit); wrong if buyers lose something they need.</p>";
-      return `<section class="preview"><h3>${escapeHtml(result.id)}</h3>${note}${shown.dropped ? `<p>${shown.dropped} unsupported elements or attributes removed by the host.</p>` : ""}<div>${shown.html}</div></section>`;
+      return `<section class="preview"><h3>${escapeHtml(result.id)}</h3>${note}${shown.dropped ? `<p>${shown.dropped} unsupported elements or attributes removed by the host.</p>` : ""}<div>${localAssets(shown.html)}</div></section>`;
     });
     return `<section class="store" id="store-${name}"><h2>${escapeHtml(name)} store</h2><p>${escapeHtml(store.description)}</p>\n${sections.join("\n")}</section>`;
   });

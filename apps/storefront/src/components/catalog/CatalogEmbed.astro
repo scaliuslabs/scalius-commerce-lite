@@ -17,10 +17,10 @@ import {
   PRODUCT_LIST_SHOW_ALL_PARAM,
   DEFAULT_PRODUCT_LIST_PAGE_SIZE,
   buildProductListHref,
-  countActiveProductListFilters,
 } from "@/lib/product-list-query";
-import { catalogFacetGroups, catalogFacetValueCounts, catalogRatingRows, showsCatalogPriceFilter, visibleCatalogFacets } from "@/lib/catalog-filters";
-import { catalogEmbeddedFilters, catalogListingControls, catalogListingPresentation, catalogSortOptions } from "@/lib/catalog-listing";
+import { catalogFacetGroups } from "@/lib/catalog-filters";
+import { catalogEmbedControls } from "@/lib/catalog-embed-controls";
+import { catalogEmbeddedFilters, catalogListingPresentation, catalogSortOptions } from "@/lib/catalog-listing";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { catalogCopy } from "@/lib/catalog-copy";
 import { pageLanguage } from "@/lib/store-time-zone";
@@ -37,18 +37,9 @@ const { products, pagination, facets, ratingFacet = [], priceRange, queryState, 
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const hasReviews = resolved.facts.hasReviews;
-const refinementCount = countActiveProductListFilters(currentFilters) - (query ? 1 : 0);
-const shownFacets = visibleCatalogFacets(facets, currentFilters);
-const showsPrice = showsCatalogPriceFilter(priceRange, currentFilters);
-const ratingRows = catalogRatingRows(ratingFacet, currentFilters, hasReviews);
-const controls = catalogListingControls({
-  total: pagination.total,
-  refinementCount,
-  facetValueCounts: [
-    ...catalogFacetValueCounts(shownFacets, showsPrice ? priceRange : undefined),
-    ratingRows.filter(({ count }) => count > 0).length,
-  ],
-  storeShown: resolved.blocks.listing.filters.shown,
+// One answer with the skin's projection (`filters.placement`): lib/catalog-embed-controls.ts.
+const { controls, refinementCount, shownFacets, ratingRows } = catalogEmbedControls({
+  facets, ratingFacet, priceRange, currentFilters, query, total: pagination.total, hasReviews, storeShown: resolved.blocks.listing.filters.shown,
 });
 const pageUrl = (page: number) =>
   buildProductListHref({ pathname, currentFilters, overrides: { page, [PRODUCT_LIST_SHOW_ALL_PARAM]: null }, defaultSort });

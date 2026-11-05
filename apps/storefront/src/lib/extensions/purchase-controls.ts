@@ -19,10 +19,16 @@
 // - `<BuyForm options={false} />` (`data-options="false"`) leaves the
 //   form's option buttons out only when these controls cover every buyable
 //   SKU; otherwise the host drops the request and the form draws them.
+// - `<BuyForm actions={false} />` (`data-actions="false"`) leaves the form's
+//   own Add to cart and Buy now out only when buy buttons (`buyVariant`)
+//   cover every buyable SKU; otherwise the form draws them.
 //
-// Bound controls placed before the buy form get a hidden default submit
-// button ahead of them, so Enter in a buyer input or the quantity submits
-// the buyer's own choice, never the first skin button's SKU.
+// A skin with bound buy buttons gets a hidden default submit button ahead of
+// all its markup, so Enter in a buyer input or the quantity (the browser's
+// implicit submission takes the form's first submit button in page order)
+// submits the buyer's own choice, never a skin button's SKU, wherever the
+// form's own buttons are: in the form, placed apart (`<BuyFormPart
+// name="actions" />`) after the skin's buttons, or left out.
 
 import type { StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -61,12 +67,18 @@ export interface PurchasePage {
   opening: string | null;
 }
 
-/** The skin's markup with its SKU controls bound to the buy form, and its `options={false}` honoured only when they cover every buyable SKU. */
+/**
+ * The skin's markup with its SKU controls bound to the buy form, and its
+ * `options={false}` and `actions={false}` honoured only when its controls
+ * (for `actions`, its buy buttons) cover every buyable SKU.
+ */
 export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProductPage["product"], page: PurchasePage): AppMarkup {
   const variants = new Map(product.variants.map((variant) => [variant.id, variant]));
   const covered = new Set<string>();
-  let formPlaced = false;
-  let buttonsBeforeForm = false;
+  /** The SKUs a bound buy button (outside deferred markup) buys. */
+  const bought = new Set<string>();
+  /** A bound buy button (deferred ones too: they enter the page as the form's submits). */
+  let buysOwnSkus = false;
   let choicesBound = false;
 
   // `deferred`: inside deferred markup, which may never enter the page: bound, but it covers no SKU.
@@ -84,7 +96,8 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
     const kept = attributes.filter(([name]) => !HOST_ATTRIBUTES.has(name));
     const availability: [string, string] = ["data-availability", variant.available ? "available" : "sold-out"];
     if (buy !== null) {
-      if (!formPlaced) buttonsBeforeForm = true;
+      buysOwnSkus = true;
+      if (!deferred) bought.add(variant.id);
       const intent = read("data-buy-intent") === "buy" ? "buy" : "add";
       const flags: Array<[string, null]> = [];
       // As the form's own buttons: off while sold out or while nothing can
@@ -123,10 +136,7 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   };
 
   const parts = markup.parts.map((part) => {
-    if (part.kind === "embed") {
-      if (part.embed === "buy_form") formPlaced = true;
-      return part;
-    }
+    if (part.kind === "embed") return part;
     if (!part.html.includes("data-choose-variant") && !part.html.includes("data-buy-variant")) return part;
     const inDeferred = deferredAt(part.html);
     return { ...part, html: part.html.replace(CONTROL_TAG, (whole: string, tag: string, rest: string, at: number) => {
@@ -140,15 +150,27 @@ export function bindPurchaseControls(markup: AppMarkup, product: StorefrontProdu
   });
 
   // Every SKU that can be bought has a control (and the skin has some).
-  const coversEveryBuyableSku = covered.size > 0 && product.variants.every((variant) => !variant.available || covered.has(variant.id));
+  const coversEvery = (controls: ReadonlySet<string>) => controls.size > 0 && product.variants.every((variant) => !variant.available || controls.has(variant.id));
+  const coversEveryBuyableSku = coversEvery(covered);
+  const buysEveryBuyableSku = coversEvery(bought);
   const bound = parts.map((part) => {
-    if (part.kind !== "embed" || part.embed !== "buy_form" || part.data.options !== "false" || coversEveryBuyableSku) return part;
-    if (product.options.length > 0) {
-      warnOnce(`${markup.pluginId}:buy-form-options`, `${markup.pluginId} product_main skin asks for <BuyForm options={false} /> without a chooseVariant or buyVariant control (outside deferred markup) for every buyable SKU: the store draws the options.`);
+    if (part.kind !== "embed" || part.embed !== "buy_form") return part;
+    const dropped = new Set<string>();
+    if (part.data.options === "false" && !coversEveryBuyableSku) {
+      dropped.add("options");
+      if (product.options.length > 0) {
+        warnOnce(`${markup.pluginId}:buy-form-options`, `${markup.pluginId} product_main skin asks for <BuyForm options={false} /> without a chooseVariant or buyVariant control (outside deferred markup) for every buyable SKU: the store draws the options.`);
+      }
     }
-    return { ...part, data: Object.fromEntries(Object.entries(part.data).filter(([name]) => name !== "options")) };
+    if (part.data.actions === "false") {
+      if (!buysEveryBuyableSku) {
+        dropped.add("actions");
+        warnOnce(`${markup.pluginId}:buy-form-actions`, `${markup.pluginId} product_main skin asks for <BuyForm actions={false} /> without a buyVariant button (outside deferred markup) for every buyable SKU: the store draws its Add to cart and Buy now.`);
+      }
+    }
+    return dropped.size === 0 ? part : { ...part, data: Object.fromEntries(Object.entries(part.data).filter(([name]) => !dropped.has(name))) };
   });
-  if (buttonsBeforeForm) bound.unshift({ kind: "html", html: defaultSubmit(page.blocked) });
+  if (buysOwnSkus) bound.unshift({ kind: "html", html: defaultSubmit(page.blocked) });
   // A `?variant=` link's SKU is drawn chosen before the first paint.
   if (choicesBound) bound.push({ kind: "html", html: `<script>${SKIN_CHOICE_PREPAINT_SCRIPT}</script>` });
   return { ...markup, parts: bound };

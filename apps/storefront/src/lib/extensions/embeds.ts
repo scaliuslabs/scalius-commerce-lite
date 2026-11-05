@@ -7,7 +7,15 @@
 // store's own component, scripts and words. A kind the page gives no
 // renderer, or whose renderer answers null, renders nothing.
 
-import { STOREFRONT_PRODUCT_MODULE_EMBEDS, type StorefrontEmbedKind, type StorefrontProductModuleEmbed } from "@scalius/shared/plugins/storefront-protocol";
+import {
+  STOREFRONT_BUY_FORM_OPTION_LAYOUTS,
+  STOREFRONT_BUY_FORM_PARTS,
+  STOREFRONT_PRODUCT_MODULE_EMBEDS,
+  type StorefrontBuyFormOptionLayout,
+  type StorefrontBuyFormPart,
+  type StorefrontEmbedKind,
+  type StorefrontProductModuleEmbed,
+} from "@scalius/shared/plugins/storefront-protocol";
 import type { StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import type { StorefrontProductModule } from "@scalius/shared/storefront-theme";
 
@@ -29,6 +37,50 @@ export type EmbedRenderers = Partial<Record<StorefrontEmbedKind, (embed: EmbedPl
 /** The theme module a `product_module` embed names (the names are the module ids); null for any other name. */
 export function productModuleOf(name: string | undefined): StorefrontProductModule | null {
   return name && (STOREFRONT_PRODUCT_MODULE_EMBEDS as readonly string[]).includes(name) ? name as StorefrontProductModuleEmbed : null;
+}
+
+/** The buy form part a `buy_form_part` embed names; null for any other name. */
+export function buyFormPartOf(name: string | undefined): StorefrontBuyFormPart | null {
+  return name && (STOREFRONT_BUY_FORM_PARTS as readonly string[]).includes(name) ? name as StorefrontBuyFormPart : null;
+}
+
+/** The buy form parts a markup places apart from the form: the form leaves those out. */
+export function placedBuyFormParts(parts: readonly StorefrontMarkupPart[]): Set<StorefrontBuyFormPart> {
+  return new Set(parts.flatMap((part) => {
+    const name = part.kind === "embed" && part.embed === "buy_form_part" ? buyFormPartOf(part.data.name) : null;
+    return name ? [name] : [];
+  }));
+}
+
+/** Whether a markup's `description` module asks to leave the description out of the details tabs (`description={false}`). */
+export function placedDescriptionOmitted(parts: readonly StorefrontMarkupPart[]): boolean {
+  return parts.some((part) => part.kind === "embed" && part.embed === "product_module" && part.data.name === "description" && part.data.description === "false");
+}
+
+/** The option layout an embed names (`STOREFRONT_BUY_FORM_OPTION_LAYOUTS`); undefined for any other word. */
+export function buyFormOptionLayoutOf(value: string | undefined): StorefrontBuyFormOptionLayout | undefined {
+  return value && (STOREFRONT_BUY_FORM_OPTION_LAYOUTS as readonly string[]).includes(value) ? value as StorefrontBuyFormOptionLayout : undefined;
+}
+
+const LABEL_MAX = 60;
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/**
+ * Words a skin gives a buy form button (`addLabel`, `buyLabel`): trimmed,
+ * 60 characters at most, cut between graphemes (never inside an emoji or a
+ * Bangla vowel sign); undefined keeps the store's.
+ */
+export function buyFormLabel(value: string | undefined): string | undefined {
+  const text = value?.trim() ?? "";
+  if (!text) return undefined;
+  let kept = "";
+  let count = 0;
+  for (const { segment } of graphemes.segment(text)) {
+    if (count === LABEL_MAX || kept.length + segment.length > LABEL_MAX * 4) break;
+    kept += segment;
+    count += 1;
+  }
+  return kept.trim() || undefined;
 }
 
 /** The theme modules a markup's `product_module` embeds place: the page draws those there, not again below. */

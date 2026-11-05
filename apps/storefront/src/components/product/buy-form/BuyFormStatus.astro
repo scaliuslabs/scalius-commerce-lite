@@ -1,0 +1,10 @@
+---
+// The buy form's status part (`data-buy-part="status"`): the choice for
+// screen readers, and a refused add's problem, announced
+// (product-controller.ts). Drawn in the form (ProductSummary.astro) or where a
+// product_main skin placed it (`<BuyFormPart name="status" />`).
+---
+
+<div class="space-y-2" data-buy-part="status" data-sx-buy="status" data-state="idle">
+  <p id="variant-availability-status" data-sx-buy="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+</div>
