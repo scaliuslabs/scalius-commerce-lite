@@ -98,6 +98,9 @@ export async function reconcileRefundedOrderInventory(
             eq(orders.status, OrderStatus.CANCELLED),
             eq(orders.paymentStatus, PaymentStatus.REFUNDED),
             inArray(orders.inventoryAction, pendingActions),
+            // Only reconcile orders updated within the last 7 days to prevent
+            // inventory restoration from stale/manipulated cancelled+refunded orders.
+            sql`${orders.updatedAt} > (unixepoch() - 604800)`,
         ))
         .limit(limit)
         .all();
