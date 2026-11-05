@@ -327,7 +327,7 @@ function wrapMutationToCaptureChanges(sql: string): string {
 
 /** One SQLite-profile statement in PostgreSQL syntax, its JSON lookup sets sized by their bound values. */
 function compileStatement(sql: string, params: readonly unknown[]) {
-  const statement = compileSqliteStatementForPostgres(sql, params.length);
+  const statement = compileSqliteStatementForPostgres(sql, params);
   return { ...statement, sql: compilePostgresJsonEachRowCounts(statement.sql, params) };
 }
 

@@ -493,7 +493,28 @@ export interface StorefrontFooterData {
     phone: string | null;
     email: string | null;
     address: string | null;
-    social: Array<{ network: string; url: string }>;
+    /**
+     * The store's social profiles (Settings -> Store details), in the order
+     * the merchant saved them; `[]` without any (draw no social band). Only
+     * https profiles reach a skin. `network` is a lowercase identifier for
+     * choosing your own glyph: from the host (`facebook`, `instagram`, ...),
+     * else a whole word of the label, else the label's slug, else `link`.
+     * It is not words: name a link without a label in the page's language.
+     */
+    social: Array<{
+      network: string;
+      url: string;
+      /** The profile's id in Store details: stable across edits and reorders. Absent from older stores. */
+      id?: string;
+      /** The merchant's label, exactly as saved ("" without one): the link's accessible name. Absent from older stores. */
+      label?: string;
+      /**
+       * The merchant's icon from Files, the image the store's own footer draws
+       * (its 160px rendition, no `srcset`; `alt` is the label). Null without
+       * one: draw your own glyph for `network`. Absent from older stores.
+       */
+      icon?: StorefrontImage | null;
+    }>;
   };
   /** The footer menus, each a titled column. */
   menus: Array<{ title: string; items: StorefrontMenuItem[] }>;

@@ -4,3 +4,4 @@
 // writer that embeds a file (settings, categories, pages, staff) can use it.
 export * from "./presentation";
 export * from "./reference-guard";
+export * from "./files-image";

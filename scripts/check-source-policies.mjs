@@ -550,7 +550,7 @@ export const policies = [
   },
   {
     rule: "a JSON path in SQL is $.name(.name)*: no array index, no quoted or punctuated member",
-    why: "PostgreSQL runs SQLite's JSON readers (json_extract, json_each, json_type, json_array_length) through scalius_compat.json_path_value, which takes '$.name' paths only: any other path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard and the related-objects read did). Bind objects and read members by name, or walk an array with json_each and its key. json_set has no PostgreSQL compat at all (a known gap: digital uploads, modules/digital/README.md)",
+    why: "PostgreSQL runs SQLite's JSON readers (json_extract, json_each, json_type, json_array_length) through scalius_compat.json_path_value, which takes '$.name' paths only: any other path compiles and then fails every call on PostgreSQL alone (a refund's settlement guard and the related-objects read did). Bind objects and read members by name, or walk an array with json_each and its key. PostgreSQL's json_set, json_insert, json_replace and json_remove take indexes and quoted members too, but code keeps one path form for reads and writes",
     paths: ["apps/api/src", "packages/core/src", "packages/database/src", "plugins"],
     forbid: [
       // A path literal (quoted, or a template, bound or inline) that starts with an index: '$[0]', `$[${i}]`.

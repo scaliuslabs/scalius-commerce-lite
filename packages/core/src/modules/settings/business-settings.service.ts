@@ -8,6 +8,7 @@ import {
   isMediaReferenceDeletingGuardError,
   MEDIA_REFERENCE_DELETING_MESSAGE,
   noDeletingMediaReferences,
+  urlsNotReadyFilesImages,
 } from "../media-references";
 import { normalizeBdLandline, validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
@@ -66,9 +67,29 @@ function normalizeSocialLinks(links: readonly BusinessSocialLink[], issues: Cont
         if (!url) issues.push({ path: ["socialLinks", index, "url"], message: "Use the profile's https:// address." });
         const iconUrl = link.iconUrl?.trim() ? normalizePublicMediaUrl(link.iconUrl.trim()) : null;
         if (link.iconUrl?.trim() && !iconUrl) {
-            issues.push({ path: ["socialLinks", index, "iconUrl"], message: "Choose the icon from Files." });
+            issues.push({ path: ["socialLinks", index, "iconUrl"], message: ICON_NOT_IN_FILES });
         }
         return { id, label: String(link.label ?? "").trim().slice(0, 200), url: url ?? "", ...(iconUrl ? { iconUrl } : {}) };
+    });
+}
+
+const ICON_NOT_IN_FILES = "Choose the icon from Files.";
+
+/**
+ * Every icon a save newly names is a ready image in Files: the media pipeline
+ * serves it (renditions, the store's media address) and its usage is counted.
+ * An icon the store already saved stays as it is, even once trashed, so an
+ * unrelated edit never fails on it.
+ */
+async function requireFilesIcons(db: Database, links: readonly BusinessSocialLink[], issues: ContactIssue[]): Promise<void> {
+    const icons = links.flatMap((link) => (link.iconUrl ? [link.iconUrl] : []));
+    if (icons.length === 0) return;
+    const saved = new Set((await businessDocument.read(db)).socialLinks.flatMap((link) => (link.iconUrl ? [link.iconUrl] : [])));
+    const missing = await urlsNotReadyFilesImages(db, icons.filter((url) => !saved.has(url)));
+    links.forEach((link, index) => {
+        if (link.iconUrl && missing.has(link.iconUrl)) {
+            issues.push({ path: ["socialLinks", index, "iconUrl"], message: ICON_NOT_IN_FILES });
+        }
     });
 }
 
@@ -129,7 +150,10 @@ export async function saveBusinessSettings(
 
     // Every contact problem at once, each against its field.
     const issues: ContactIssue[] = [];
-    if (Array.isArray(data.socialLinks)) patch.socialLinks = normalizeSocialLinks(data.socialLinks, issues);
+    if (Array.isArray(data.socialLinks)) {
+        patch.socialLinks = normalizeSocialLinks(data.socialLinks, issues);
+        await requireFilesIcons(db, patch.socialLinks, issues);
+    }
     if (patch.email) {
         const email = businessEmailSchema.safeParse(patch.email);
         if (email.success) patch.email = email.data;

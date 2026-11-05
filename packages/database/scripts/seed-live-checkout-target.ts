@@ -103,7 +103,7 @@ function createPostgresSeedConnection(options: SeedTargetOptions): SeedConnectio
   const connection = connectPostgres(options.databaseUrl);
   return {
     async query(sql, args = []) {
-      const compiled = compileSqliteStatementForPostgres(sql, args.length);
+      const compiled = compileSqliteStatementForPostgres(sql, args);
       return postgresRows(await connection.query(
         compiled.sql,
         normalizePostgresParameters(args),
@@ -113,7 +113,7 @@ function createPostgresSeedConnection(options: SeedTargetOptions): SeedConnectio
       const queries = statements.map((statement) => {
         const sql = typeof statement === "string" ? statement : statement.sql;
         const args = typeof statement === "string" ? [] : statement.args;
-        const compiled = compileSqliteStatementForPostgres(sql, args.length);
+        const compiled = compileSqliteStatementForPostgres(sql, args);
         return connection.query(compiled.sql, normalizePostgresParameters(args));
       });
       await connection.transaction(queries, {

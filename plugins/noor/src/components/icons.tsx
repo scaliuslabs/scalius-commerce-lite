@@ -60,6 +60,17 @@ const SOCIAL: Record<string, string> = {
   telegram: '<path d="m3 11 18-7-3 16-6-5-3 3v-5l9-7"/>',
 };
 
+const NETWORK_NAMES: Record<string, string> = {
+  facebook: "Facebook", instagram: "Instagram", youtube: "YouTube", tiktok: "TikTok", whatsapp: "WhatsApp",
+  twitter: "Twitter", x: "X", linkedin: "LinkedIn", pinterest: "Pinterest", telegram: "Telegram",
+  messenger: "Messenger", threads: "Threads",
+};
+
+/** A known network's own name (the same in every language); null for any other, which the caller names in the page's words. */
+export function socialNetworkName(network: string): string | null {
+  return NETWORK_NAMES[network] ?? null;
+}
+
 /** A social network's icon; a generic link icon for others. */
 export function SocialIcon({ network, label }: { network: string; label: string }): Html {
   const path = SOCIAL[network] ?? '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>';

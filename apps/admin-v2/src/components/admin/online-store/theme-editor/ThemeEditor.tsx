@@ -58,7 +58,7 @@ import type { NavigationResourceOption } from "~/lib/api-query-options/navigatio
 import { marketsQueryOptions } from "~/lib/api-query-options/markets";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { languageName } from "../../translations/translation-form";
-import { appSectionFieldPrefix, appSettingDefaults, appSettingFieldId, appSettingProblems } from "../schema-form/app-settings";
+import { appSectionFieldPrefix, appSettingDefaults, appSettingFieldId, appSettingFixes } from "../schema-form/app-settings";
 import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previews";
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
@@ -166,7 +166,7 @@ function sectionAtPath(theme: StorefrontThemeDocument, path: string): Storefront
 }
 
 /** Puts the cursor in a field once the (lazy) pane draws it: its code may take a few seconds on a slow connection. */
-function focusWhenShown(id: string, focus = true) {
+function focusWhenShown(id: string, focus = true, expand?: string) {
   const until = Date.now() + 8000;
   let frame = 0;
   // The merchant moved on (clicked or typed elsewhere): never take the cursor back.
@@ -182,7 +182,11 @@ function focusWhenShown(id: string, focus = true) {
       stop();
       if (focus) target.focus();
       target.scrollIntoView({ block: "center" });
-    } else if (Date.now() < until) frame = requestAnimationFrame(attempt);
+      return;
+    }
+    // A collapsed list item holds the field: open it (a click, not the merchant's own pointer).
+    if (expand) document.querySelector<HTMLElement>(expand)?.click();
+    if (Date.now() < until) frame = requestAnimationFrame(attempt);
     else stop();
   };
   // Capture: the click or key that asked for this has already passed the window.
@@ -652,8 +656,13 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
       // An app's section: its first setting the app would refuse (the form marks every one).
       select(section.id, "tree");
       const entry = appSections.get(section.settings.app);
-      const key = entry ? appSettingProblems(entry.section.settings, section.settings.values).keys().next().value : undefined;
-      if (key) focusWhenShown(appSettingFieldId(appSectionFieldPrefix(section.id), key));
+      const fix = entry ? appSettingFixes(entry.section.settings, section.settings.values)[0] : undefined;
+      const fieldId = fix ? appSettingFieldId(appSectionFieldPrefix(section.id), fix.key) : null;
+      // A list's item opens first, then its failing field takes the cursor (the list's own ids: AppSettingFields).
+      if (fieldId && fix?.item) {
+        focusWhenShown(appSettingFieldId(`${fieldId}-${fix.item.index}`, fix.item.key), true,
+          `#${CSS.escape(fieldId)} [data-app-list-item="${fix.item.index}"] button[aria-expanded="false"]`);
+      } else if (fieldId) focusWhenShown(fieldId);
       return;
     }
     const path = firstSettingError(section);

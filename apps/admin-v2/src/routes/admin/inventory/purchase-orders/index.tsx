@@ -5,7 +5,7 @@ import {
   validatePurchaseOrderListSearch,
 } from "~/components/admin/purchasing/purchasing-list-state";
 import { purchaseOrdersQueryOptions } from "~/lib/api-query-options/purchasing";
-import { readListSearch } from "~/lib/list-search";
+import { adoptListSearch, useDropUrlSearchTerm } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { pageHead } from "~/i18n/page-titles";
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin/inventory/purchase-orders/")({
   loader: ({ context: { queryClient }, deps }) =>
     warmRouteQuery(
       queryClient,
-      purchaseOrdersQueryOptions(purchaseOrderListQuery(deps.status ?? "all", readListSearch("purchaseOrders"), 1, 50, deps.supplier)),
+      purchaseOrdersQueryOptions(purchaseOrderListQuery(deps.status ?? "all", adoptListSearch("purchaseOrders", deps.q), 1, 50, deps.supplier)),
     ),
   head: () => pageHead("purchaseOrders"),
   errorComponent: RouteErrorComponent,
@@ -25,7 +25,8 @@ export const Route = createFileRoute("/admin/inventory/purchase-orders/")({
 });
 
 function PurchaseOrdersPage() {
-  const { status, supplier } = Route.useSearch();
+  const { status, supplier, q } = Route.useSearch();
+  useDropUrlSearchTerm(q);
   const navigate = useNavigate({ from: Route.fullPath });
   return (
     <PurchaseOrderList
