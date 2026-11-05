@@ -417,7 +417,7 @@ function splitSqlCallArguments(body: string): string[] {
 
 function postgresJsonObjectValue(expression: string): string {
   const input = expression.trim();
-  const constructor = /^(?:json_object|json_array|json_group_array|json)\s*\(/i.exec(input);
+  const constructor = /^(?:json_object|json_array|json_group_array|json_set|json_insert|json_replace|json_remove|json)\s*\(/i.exec(input);
   const directJsonValue = constructor !== null
     && findSqlCallEnd(input, constructor[0].lastIndexOf("(")) === input.length - 1;
   // Only a complete constructor argument carries JSON into its consumer.
@@ -433,6 +433,13 @@ function postgresJsonObjectValue(expression: string): string {
 }
 
 const POSTGRES_JSONB_EACH_HINT = "/* scalius:postgres-jsonb */";
+
+/**
+ * Marks a bare parameter that is a JSON editor's value. PostgreSQL types an
+ * unannotated parameter from its use, and a `json_set` value can be of any
+ * type, so the bound value decides (`compilePostgresJsonValueParameters`).
+ */
+const POSTGRES_JSON_VALUE_PARAMETER_HINT = "/* scalius:json-value */";
 
 /**
  * An inert comment opts a hot json_each() source into a JSONB-valued Postgres
@@ -699,6 +706,36 @@ export function compileSqliteJsonObjects(sql: string, jsonValue = false): string
       state = "block-comment";
       continue;
     }
+    const edit = cursor > 0 && (isIdentifierPart(sql[cursor - 1]!) || sql[cursor - 1] === ".")
+      ? null
+      : /^(json_set|json_insert|json_replace|json_remove)\s*\(/i.exec(sql.slice(cursor));
+    if (edit) {
+      const name = edit[1]!.toLowerCase();
+      const opening = cursor + edit[0].lastIndexOf("(");
+      const closing = findSqlCallEnd(sql, opening);
+      const body = sql.slice(opening + 1, closing);
+      const [document, ...rest] = (body.trim() ? splitSqlCallArguments(body) : []).map((argument) => argument.trim());
+      if (document === undefined) throw new Error(`SQLite ${name}() needs a JSON argument.`);
+      const compiled = (argument: string) => compileSqliteJsonObjects(argument).trim();
+      let expression: string;
+      if (name === "json_remove") {
+        expression = `json_remove(${[document, ...rest].map(compiled).join(", ")})`;
+      } else {
+        if (rest.length % 2 !== 0) throw new Error(`SQLite ${name}() needs an odd number of arguments.`);
+        expression = rest.length === 0 ? `scalius_compat.json_text(${compiled(document)})` : compiled(document);
+        // SQLite applies the path/value pairs left to right: one call per pair,
+        // each value keeping its JSON kind.
+        for (let index = 0; index < rest.length; index += 2) {
+          const value = rest[index + 1] === "?"
+            ? `${POSTGRES_JSON_VALUE_PARAMETER_HINT} ?`
+            : postgresJsonObjectValue(rest[index + 1]!);
+          expression = `${name}(${expression}, ${compiled(rest[index]!)}, ${value})`;
+        }
+      }
+      output += jsonValue ? `(${expression}::jsonb)` : expression;
+      cursor = closing + 1;
+      continue;
+    }
     const call = /^(json_object|json_array|json_group_array|json)\s*\(/i.exec(sql.slice(cursor));
     if (call) {
       const kind = call[1]!.toLowerCase();
@@ -895,6 +932,23 @@ export function compilePostgresJsonEachRowCounts(sql: string, params: readonly u
     output += `(SELECT * FROM ${call[0]} LIMIT ${count})${aliased ? "" : ` AS ${call[2]!.toLowerCase()}`}`;
   }
   return output;
+}
+
+/**
+ * A JSON editor's bound value takes the JSON kind SQLite gives it: a safe
+ * integer or a boolean is a number through `bigint`, any other number one
+ * through `double precision`; a string or NULL stays an untyped parameter,
+ * which PostgreSQL reads as text (a JSON string, or JSON null).
+ */
+export function compilePostgresJsonValueParameters(sql: string, params: readonly unknown[]): string {
+  if (!sql.includes(POSTGRES_JSON_VALUE_PARAMETER_HINT)) return sql;
+  return sql.replaceAll(/\/\* scalius:json-value \*\/ \$(\d+)/g, (hint, index: string) => {
+    const value = params[Number(index) - 1];
+    if (typeof value === "bigint" || typeof value === "boolean" || (typeof value === "number" && Number.isSafeInteger(value))) {
+      return `$${index}::bigint`;
+    }
+    return typeof value === "number" ? `$${index}::double precision` : hint;
+  });
 }
 
 /**
@@ -1513,6 +1567,207 @@ $function$;
 `;
 
 /**
+ * SQLite's JSON editors, `json_set`, `json_insert`, `json_replace` and
+ * `json_remove`, with SQLite's answer for every path the document has or
+ * lacks: set writes either way, insert only a missing member or the append
+ * slot (`[#]`, the index one past the end), replace only an existing one;
+ * missing parents are created as objects (`.name`) or one-element arrays
+ * (`[0]`, `[#]`), and a path through a scalar, or an index past the append
+ * slot, changes nothing. Paths take `.name`, `."quoted name"`, `[N]`, `[#]`
+ * and `[#-N]`; any other path raises. A text value is a JSON string, a number
+ * a number, a JSON value (`json()`, a constructor, `json_extract`) itself, SQL
+ * NULL JSON null, a boolean 1 or 0. One path/value pair per call: the compiler
+ * nests SQLite's longer calls, which apply their pairs left to right. The
+ * result prints with PostgreSQL's key order and spacing; readers parse it.
+ * Part of the bootstrap; migration 0195 installs the same text on an existing
+ * store (its PostgreSQL file must contain it verbatim).
+ */
+export const POSTGRES_JSON_EDIT_FUNCTIONS_SQL = String.raw`
+CREATE OR REPLACE FUNCTION scalius_compat.json_path_steps(json_path text)
+RETURNS text[]
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+AS $function$
+DECLARE
+  steps text[] := ARRAY[]::text[];
+  rest text;
+  step text[];
+BEGIN
+  IF left(json_path, 1) <> '$' THEN
+    RAISE EXCEPTION 'bad JSON path: %', quote_literal(json_path) USING ERRCODE = '22023';
+  END IF;
+  rest := substr(json_path, 2);
+  WHILE rest <> '' LOOP
+    step := regexp_match(rest, '^(\."([^"\\]*)"(?=$|[.[])|\.([^.["][^.[]*)|\[([0-9]+|#(?:-[0-9]+)?)\])');
+    IF step IS NULL THEN
+      RAISE EXCEPTION 'bad JSON path: %', quote_literal(json_path) USING ERRCODE = '22023';
+    END IF;
+    steps := steps || CASE WHEN step[4] IS NULL THEN '.' || coalesce(step[2], step[3]) ELSE '[' || step[4] END;
+    rest := substr(rest, length(step[1]) + 1);
+  END LOOP;
+  RETURN steps;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION scalius_compat.json_edit(target jsonb, steps text[], new_value jsonb, mode text)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+AS $function$
+DECLARE
+  step text := steps[1];
+  rest text[] := steps[2:];
+  location text[];
+  child jsonb;
+  empty jsonb;
+  size bigint;
+  position numeric;
+BEGIN
+  IF step IS NULL THEN
+    RETURN CASE mode WHEN 'insert' THEN target WHEN 'remove' THEN NULL ELSE new_value END;
+  END IF;
+  IF left(step, 1) = '.' THEN
+    IF jsonb_typeof(target) IS DISTINCT FROM 'object' THEN RETURN target; END IF;
+    location := ARRAY[substr(step, 2)];
+    child := target -> location[1];
+  ELSE
+    IF jsonb_typeof(target) IS DISTINCT FROM 'array' THEN RETURN target; END IF;
+    size := jsonb_array_length(target);
+    position := CASE WHEN substr(step, 2, 1) = '#'
+      THEN size - coalesce(nullif(substr(step, 4), '')::numeric, 0)
+      ELSE substr(step, 2)::numeric END;
+    IF position < 0 OR position > size THEN RETURN target; END IF;
+    location := ARRAY[position::text];
+    child := target -> position::integer;
+  END IF;
+  IF child IS NOT NULL THEN
+    IF mode = 'remove' AND rest = ARRAY[]::text[] THEN RETURN target #- location; END IF;
+    RETURN jsonb_set(target, location, scalius_compat.json_edit(child, rest, new_value, mode));
+  END IF;
+  IF mode NOT IN ('set', 'insert') THEN RETURN target; END IF;
+  IF rest = ARRAY[]::text[] THEN
+    child := new_value;
+  ELSE
+    empty := CASE WHEN left(rest[1], 1) = '.' THEN '{}'::jsonb ELSE '[]'::jsonb END;
+    child := scalius_compat.json_edit(empty, rest, new_value, mode);
+    IF child = empty THEN RETURN target; END IF;
+  END IF;
+  RETURN CASE WHEN jsonb_typeof(target) = 'array'
+    THEN target || jsonb_build_array(child)
+    ELSE target || jsonb_build_object(location[1], child) END;
+END
+$function$;
+
+CREATE OR REPLACE FUNCTION scalius_compat.json_edit_text(input_text text, json_path text, new_value jsonb, mode text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT CASE
+    WHEN input_text IS NULL THEN NULL
+    WHEN json_path IS NULL THEN input_text::jsonb::text
+    ELSE scalius_compat.json_edit(
+      input_text::jsonb,
+      scalius_compat.json_path_steps(json_path),
+      coalesce(new_value, 'null'::jsonb),
+      mode
+    )::text
+  END
+$function$;
+
+CREATE OR REPLACE FUNCTION scalius_compat.json_value(value anyelement)
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT CASE
+    WHEN value IS NULL THEN 'null'::jsonb
+    WHEN pg_typeof(value) = 'boolean'::regtype THEN to_jsonb(CASE WHEN value::text = 'true' THEN 1 ELSE 0 END)
+    ELSE to_jsonb(value)
+  END
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_set(input_text text, json_path text, value text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT scalius_compat.json_edit_text(input_text, json_path, to_jsonb(value), 'set')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_set(input_text text, json_path text, value anyelement)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_value(value), 'set')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_insert(input_text text, json_path text, value text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT scalius_compat.json_edit_text(input_text, json_path, to_jsonb(value), 'insert')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_insert(input_text text, json_path text, value anyelement)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_value(value), 'insert')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_replace(input_text text, json_path text, value text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT scalius_compat.json_edit_text(input_text, json_path, to_jsonb(value), 'replace')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_replace(input_text text, json_path text, value anyelement)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $function$
+  SELECT scalius_compat.json_edit_text(input_text, json_path, scalius_compat.json_value(value), 'replace')
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_remove(input_text text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+AS $function$
+  SELECT input_text::jsonb::text
+$function$;
+
+CREATE OR REPLACE FUNCTION public.json_remove(input_text text, VARIADIC json_paths text[])
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $function$
+DECLARE
+  result jsonb;
+  json_path text;
+BEGIN
+  IF input_text IS NULL OR json_paths IS NULL OR array_position(json_paths, NULL) IS NOT NULL THEN
+    RETURN NULL;
+  END IF;
+  result := input_text::jsonb;
+  FOREACH json_path IN ARRAY json_paths LOOP
+    result := scalius_compat.json_edit(result, scalius_compat.json_path_steps(json_path), NULL, 'remove');
+    IF result IS NULL THEN RETURN NULL; END IF;
+  END LOOP;
+  RETURN result::text;
+END
+$function$;
+`;
+
+/**
  * Compatibility functions for the SQLite profile used by application SQL.
  * They intentionally live in a dedicated schema; public wrappers are exposed
  * only for names that existing queries call unqualified.
@@ -1683,6 +1938,8 @@ END
 $function$;
 
 ${POSTGRES_JSON_SHAPE_FUNCTIONS_SQL}
+
+${POSTGRES_JSON_EDIT_FUNCTIONS_SQL}
 
 CREATE OR REPLACE FUNCTION public.json_object(VARIADIC entries text[])
 RETURNS text
