@@ -17,7 +17,15 @@ import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
 import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { addProductSku, createProduct, createProductSchema, restoreProductSku, updateProductResourceSections, updateProductSku } from "@scalius/core/modules/product-admin";
+import {
+  addProductSku,
+  createProduct,
+  createProductSchema,
+  optionValueSwatchInputSchema,
+  restoreProductSku,
+  updateProductResourceSections,
+  updateProductSku,
+} from "@scalius/core/modules/product-admin";
 import type { Context } from "hono";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "@scalius/core/modules/products";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
@@ -66,6 +74,8 @@ const optionInput = z.object({
   values: z.array(z.string().trim().min(1).max(100)).min(1).max(MAX_PRODUCT_OPTION_COMBINATIONS),
   standardMapping: z.enum(["size", "color", "material", "pattern", "none"]).default("none")
     .openapi({ description: "Which standard attribute it is for catalog feeds; each one at most once." }),
+  swatches: z.record(z.string().trim().min(1).max(100), optionValueSwatchInputSchema).optional()
+    .openapi({ description: "Swatches by value: `{ \"Red\": { \"color\": \"#c0392b\", \"mediaId\": null } }`, a #rrggbb colour and/or a ready image from Files. Each key is one of `values`; a value left out has no swatch." }),
 }).strict();
 
 const createBody = z.object({
@@ -123,12 +133,22 @@ function editorCreateInput(body: CreateBody, places: number): unknown {
       defaultSku: { sku: variant.sku, trackInventory: variant.trackInventory, stock: 0, ...barcode(variant), weight: variant.weightGrams ?? null },
     };
   }
-  const options = body.options.map((option, optionIndex) => ({
-    id: `draft_opt_${optionIndex}`,
-    name: option.name,
-    standardMapping: option.standardMapping,
-    values: option.values.map((value, valueIndex) => ({ id: `draft_val_${optionIndex}_${valueIndex}`, value })),
-  }));
+  const options = body.options.map((option, optionIndex) => {
+    const unknown = Object.keys(option.swatches ?? {}).find((value) => !option.values.includes(value));
+    if (unknown !== undefined) {
+      throw new ValidationError(`options.${optionIndex}.swatches: "${unknown}" is not one of the ${option.name} values.`, { field: `options.${optionIndex}.swatches` });
+    }
+    return {
+      id: `draft_opt_${optionIndex}`,
+      name: option.name,
+      standardMapping: option.standardMapping,
+      values: option.values.map((value, valueIndex) => ({
+        id: `draft_val_${optionIndex}_${valueIndex}`,
+        value,
+        ...(option.swatches?.[value] ? { swatch: option.swatches[value] } : {}),
+      })),
+    };
+  });
   const variants = body.variants.map((variant, variantIndex) => {
     const chosen = new Map(Object.entries(variant.optionValues ?? {}).map(([name, value]) => [name.toLocaleLowerCase("en-US"), value]));
     const selectedOptionValueIds = options.map((option) => {

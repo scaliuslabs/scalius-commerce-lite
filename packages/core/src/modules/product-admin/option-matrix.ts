@@ -64,10 +64,63 @@ import {
   unitCostAmountSchema,
 } from "../inventory";
 
+/**
+ * An option value's swatch (0196): a colour (`#rrggbb`, stored lowercase)
+ * and/or an image from Files by media id. Null clears it; left out, a value
+ * keeps its stored swatch (a new value has none), so a client that never
+ * edits swatches never clears one.
+ */
+export const optionValueSwatchInputSchema = z.object({
+    color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #1f6feb.")
+        .transform((color) => color.toLowerCase()).nullable(),
+    mediaId: z.string().trim().min(1).max(180).nullable(),
+}).strict();
+
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
     value: z.string().trim().min(1).max(100),
+    swatch: optionValueSwatchInputSchema.nullable().optional(),
 });
+
+export const OPTION_SWATCH_IMAGE_MESSAGE = "Choose a ready image from Files for the swatch.";
+
+/**
+ * Swatch images a write newly names (media id -> the input field naming it)
+ * must be ready images in Files. Every write that stores an option value's
+ * swatch (the matrix save, a product create, a copy) checks through this,
+ * and adds `swatchImagesGuard` to its batch.
+ */
+export async function assertReadySwatchImages(db: Database, named: ReadonlyMap<string, string>): Promise<void> {
+    if (named.size === 0) return;
+    const ready = await readySwatchImageIds(db, [...named.keys()]);
+    for (const [mediaId, field] of named) {
+        if (!ready.has(mediaId)) throw new ValidationError(OPTION_SWATCH_IMAGE_MESSAGE, { field });
+    }
+}
+
+/** Which of these files are ready images in Files (one bound list, any length). */
+export async function readySwatchImageIds(db: Database, mediaIds: readonly string[]): Promise<Set<string>> {
+    if (mediaIds.length === 0) return new Set();
+    return new Set((await db.select({ id: media.id }).from(media).where(and(
+        sql`${media.id} IN (SELECT value FROM json_each(${JSON.stringify(mediaIds)}))`,
+        eq(media.kind, "image"),
+        eq(media.status, "ready"),
+    ))).map((row) => row.id));
+}
+
+/** A newly named swatch image is not one Files is deleting by the time the batch writes it. */
+export function swatchImagesGuard(db: Database, mediaIds: readonly string[]) {
+    return buildBatchGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${media}
+        WHERE ${media.id} IN (SELECT value FROM json_each(${JSON.stringify(mediaIds)}))
+          AND ${media.status} IN ('deleting', 'deleted')
+    )`, "option_matrix_swatch_media_conflict");
+}
+
+/** An option value's stored swatch columns from its input swatch (none for a value without one). */
+export function swatchColumnsOf(swatch: { color: string | null; mediaId: string | null } | null | undefined) {
+    return { swatchColor: swatch?.color ?? null, swatchMediaId: swatch?.mediaId ?? null };
+}
 
 const optionDefinitionInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -574,6 +627,8 @@ export async function planProductOptionMatrix(
             value: productOptionValues.value,
             position: productOptionValues.position,
             deletedAt: productOptionValues.deletedAt,
+            swatchColor: productOptionValues.swatchColor,
+            swatchMediaId: productOptionValues.swatchMediaId,
         }).from(productOptionValues)
             .innerJoin(
                 productOptionDefinitions,
@@ -626,6 +681,36 @@ export async function planProductOptionMatrix(
             valueIdMap.set(value.id, existing ? value.id : revived?.id ?? `pval_${nanoid()}`);
         }
     }
+
+    // Each value's swatch after this save: the input's, else the stored one.
+    // A swatch image newly named must be a ready image in Files; a stored one
+    // stays as it is (even trashed), so an unrelated edit never fails on it.
+    // A removed value brought back keeps its stored swatch, its image only
+    // while that is still ready (Files did not count it while it was removed).
+    const swatchByValueId = new Map<string, { color: string | null; mediaId: string | null }>();
+    const newSwatchMedia = new Map<string, string>();
+    const revivedSwatchMedia = new Set<string>();
+    input.options.forEach((option, optionIndex) => option.values.forEach((value, valueIndex) => {
+        const valueId = valueIdMap.get(value.id)!;
+        const stored = valueById.get(valueId) ?? existingValues.find((candidate) => candidate.id === valueId);
+        const swatch = value.swatch === undefined
+            ? (stored ? { color: stored.swatchColor, mediaId: stored.swatchMediaId } : { color: null, mediaId: null })
+            : { color: value.swatch?.color ?? null, mediaId: value.swatch?.mediaId ?? null };
+        swatchByValueId.set(valueId, swatch);
+        if (value.swatch === undefined && stored?.deletedAt != null && swatch.mediaId) revivedSwatchMedia.add(swatch.mediaId);
+        if (swatch.mediaId && swatch.mediaId !== stored?.swatchMediaId && !newSwatchMedia.has(swatch.mediaId)) {
+            newSwatchMedia.set(swatch.mediaId, `${fieldPrefix}options.${optionIndex}.values.${valueIndex}.swatch.mediaId`);
+        }
+    }));
+    if (revivedSwatchMedia.size > 0) {
+        const ready = await readySwatchImageIds(db, [...revivedSwatchMedia]);
+        for (const [valueId, swatch] of swatchByValueId) {
+            const stored = valueById.get(valueId);
+            if (stored?.deletedAt == null || !swatch.mediaId || ready.has(swatch.mediaId) || swatch.mediaId !== stored.swatchMediaId) continue;
+            swatchByValueId.set(valueId, { color: swatch.color, mediaId: null });
+        }
+    }
+    await assertReadySwatchImages(db, newSwatchMedia);
 
     const persistedOptions = input.options.map((option) => ({
         id: definitionIdMap.get(option.id)!,
@@ -883,6 +968,9 @@ export async function planProductOptionMatrix(
             .where(eq(productOptionValues.id, value.id)));
     }
 
+    // A swatch image newly named is not one Files is deleting by the time the batch writes it.
+    if (newSwatchMedia.size > 0) statements.push(swatchImagesGuard(db, [...newSwatchMedia.keys()]));
+
     input.options.forEach((option, optionPosition) => {
         const optionId = definitionIdMap.get(option.id)!;
         submittedDefinitionIds.add(optionId);
@@ -909,11 +997,14 @@ export async function planProductOptionMatrix(
         option.values.forEach((value, valuePosition) => {
             const valueId = valueIdMap.get(value.id)!;
             submittedValueIds.add(valueId);
+            const swatch = swatchByValueId.get(valueId) ?? { color: null, mediaId: null };
             const valueFields = {
                 optionDefinitionId: optionId,
                 value: value.value,
                 normalizedValue: normalizeOptionIdentity(value.value),
                 position: valuePosition,
+                swatchColor: swatch.color,
+                swatchMediaId: swatch.mediaId,
                 updatedAt: sql`unixepoch()`,
                 deletedAt: null,
             };
@@ -938,6 +1029,8 @@ export async function planProductOptionMatrix(
                 .where(eq(productOptionDefinitions.id, definition.id)));
         }
     }
+    // A removed value keeps its swatch, so bringing it back (a SKU moved back,
+    // a retired SKU restored) restores it; Files does not count it meanwhile.
     for (const value of existingValues) {
         if (value.deletedAt === null && !submittedValueIds.has(value.id)) {
             statements.push(db.update(productOptionValues)
@@ -1164,6 +1257,9 @@ const OPTION_MATRIX_CHANGED_MESSAGE = "This product changed while you were editi
 export function optionMatrixBatchConflict(error: unknown): ConflictError | null {
     if (isBatchGuardError(error, "option_matrix_stock_conflict")) {
         return new ConflictError(STOCK_CHANGED_MESSAGE);
+    }
+    if (isBatchGuardError(error, "option_matrix_swatch_media_conflict")) {
+        return new ConflictError(OPTION_SWATCH_IMAGE_MESSAGE);
     }
     if (
         isBatchGuardError(error, "option_matrix_restore_conflict")

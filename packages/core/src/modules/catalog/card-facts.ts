@@ -209,16 +209,18 @@ export function selectProductCardFactRows(db: Database, productIds: readonly str
         WHERE ${idScope(`axis."product_id"`)} AND axis."deleted_at" IS NULL
         UNION ALL
         SELECT ranked_swatch.product_id, 'swatch', ranked_swatch.label, NULL, NULL, ranked_swatch.axis_position,
-            (SELECT swatch_value."swatch_hex" FROM "product_attributes" swatch_attribute
+            -- The value's own swatch colour (0196) first, else the swatch facet's colour of the same word.
+            COALESCE(ranked_swatch.swatch_color, (SELECT swatch_value."swatch_hex" FROM "product_attributes" swatch_attribute
                 INNER JOIN "attribute_values" swatch_value ON swatch_value."attribute_id" = swatch_attribute."id"
                     AND swatch_value."normalized_value" = ranked_swatch.normalized_value
                     AND swatch_value."deleted_at" IS NULL AND swatch_value."swatch_hex" IS NOT NULL
                 WHERE swatch_attribute."facet_display" = 'swatch' AND swatch_attribute."deleted_at" IS NULL
                 ORDER BY swatch_attribute."sort_order", swatch_attribute."id"
-                LIMIT 1), NULL, NULL
+                LIMIT 1)), NULL, NULL
         FROM (
             SELECT axis."product_id" AS product_id, axis_value."value" AS label,
                 axis_value."normalized_value" AS normalized_value, axis."position" AS axis_position,
+                axis_value."swatch_color" AS swatch_color,
                 ROW_NUMBER() OVER (PARTITION BY axis."id" ORDER BY axis_value."position", axis_value."id") AS swatch_rank
             FROM "product_option_definitions" axis
             INNER JOIN "product_option_values" axis_value ON axis_value."option_definition_id" = axis."id"

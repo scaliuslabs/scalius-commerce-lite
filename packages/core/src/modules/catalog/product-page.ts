@@ -468,6 +468,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     // names (any definition can be renamed, trashed or restored).
     declareProductGallery(product.id, mediaItems);
     deps.mediaItems(content.blocks.mediaIds);
+    // An option value's swatch image (its file's status and renditions; the value row is the product's).
+    deps.mediaItems((optionMap.get(product.id) ?? []).flatMap((option) =>
+        option.values.flatMap((value) => (value.swatch?.mediaId ? [value.swatch.mediaId] : []))));
     deps.anyAttribute();
 
     interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; fulfillmentKind: string; createdAt: number; deletedAt: number | null; listPrices?: string | null; warrantyMode: SkuWarrantyMode; ownWarranty: WarrantyRow | null; }

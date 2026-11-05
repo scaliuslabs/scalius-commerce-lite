@@ -169,7 +169,7 @@ export function fixtureProductPage(overrides: Partial<StorefrontProductPage["pro
       priceVaries: false,
       availability: "in_stock",
       rating: card.rating,
-      options: [{ name: "Size", values: [{ label: "M", swatch: null }, { label: "L", swatch: null }] }],
+      options: [{ name: "Size", values: [{ label: "M", swatch: null, swatchImage: null }, { label: "L", swatch: null, swatchImage: null }] }],
       variants: [
         { id: "sku_m", title: "M", options: ["M"], price: card.price, compareAt: card.compareAt, available: true, image: null, warrantyId: null },
         { id: "sku_l", title: "L", options: ["L"], price: card.price, compareAt: card.compareAt, available: false, image: null, warrantyId: null },
@@ -460,7 +460,7 @@ const OTHER_STORE: FixtureStore = {
         id: card.id, title: card.title, url: card.url, brand: { title: "Harbor Goods", url: "/brands/harbor-goods" },
         descriptionHtml: "<p>Pre-seasoned and oven-safe to 500°F.</p>", media: [card.image!, otherImage("skillet-side", "Skillet from the side")],
         price: card.price, compareAt: null, priceVaries: true, availability: "in_stock", rating: card.rating,
-        options: [{ name: "Diameter", values: [{ label: "10 in", swatch: null }, { label: "12 in", swatch: null }] }],
+        options: [{ name: "Diameter", values: [{ label: "10 in", swatch: null, swatchImage: null }, { label: "12 in", swatch: null, swatchImage: null }] }],
         variants: [
           { id: "sku_10", title: "10 in", options: ["10 in"], price: usd(4800), compareAt: null, available: true, image: null, warrantyId: OTHER_WARRANTY.id },
           { id: "sku_12", title: "12 in", options: ["12 in"], price: usd(5800), compareAt: null, available: true, image: null, warrantyId: OTHER_WARRANTY.id },

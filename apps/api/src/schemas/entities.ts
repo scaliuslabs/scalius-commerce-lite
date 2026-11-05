@@ -101,6 +101,13 @@ export const selectedProductOptionSchema = z.object({
   standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
 });
 
+/** An option value's swatch: its colour and/or its image from Files (`imageUrl` null while that file is not shown). */
+export const productOptionValueSwatchSchema = z.object({
+  color: z.string().nullable().openapi({ description: "`#rrggbb`, lowercase; null without a colour." }),
+  mediaId: z.string().nullable().openapi({ description: "The swatch image's file in Files; null without one." }),
+  imageUrl: z.string().nullable().openapi({ description: "The swatch image's published URL; null without one, or while its file is uploading or being deleted." }),
+}).openapi("ProductOptionValueSwatch");
+
 export const productOptionDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -111,6 +118,7 @@ export const productOptionDefinitionSchema = z.object({
       id: z.string(),
       value: z.string(),
       position: z.number().int(),
+      swatch: z.union([productOptionValueSwatchSchema, z.null()]).openapi({ description: "The value's swatch for a swatch picker; null without one." }),
     }),
   ),
 });

@@ -5,8 +5,9 @@
 // skin placed it (`<BuyFormPart name="options" />`), in one of the layouts
 // `STOREFRONT_BUY_FORM_OPTION_LAYOUTS` names:
 // - `buttons`: each value a button (`data-sx-buy="option"`);
-// - `swatches`: the same buttons, each a round colour swatch where its value
-//   names a colour (its name for assistive technology), a word otherwise;
+// - `swatches`: the same buttons, each the merchant's swatch (its image from
+//   Files, else its colour; its name for assistive technology), a word for a
+//   value without one;
 // - `select`: one dropdown per axis (`data-sx-buy="option-select"`), its
 //   values' words saying sold out or unavailable.
 // Without JavaScript none of them chooses: the form's own picker shows instead.
@@ -26,8 +27,8 @@ export interface BuyFormOptionGroup {
     /** The value's price when values are priced differently (the facts column). */
     price: string | null;
     ariaLabel: string;
-    /** The colour the value names (a swatch), else null. */
-    colour: string | null;
+    /** The merchant's swatch for the value (a colour, an image from Files), else null: a word. */
+    swatch: { color: string | null; imageUrl: string | null } | null;
   }>;
 }
 
@@ -44,70 +45,72 @@ const { groups, pricedValues, layout = "buttons" } = Astro.props;
 <div class="variant-option-panels" data-buy-part="options" data-option-layout={layout}>
   {groups.map((option) => (
     <div class="variant-option-panel">
-      <fieldset class="variant-option-selector" data-sx-buy="option-group" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
-        {layout === "select" ? (
-          <>
-            <legend class="sr-only">{option.name}</legend>
-            <label for={`product-option-${option.id}-select`} class="mb-1 block text-sm font-medium text-foreground">{option.name}</label>
-            <select
-              id={`product-option-${option.id}-select`}
-              class="variant-option-select block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground"
-              data-sx-buy="option-select"
-              data-option-definition-id={option.id}
-            >
-              {/* "Choose": shown while the axis has no value, so a cleared choice reads as one. */}
-              <option value="" disabled selected={!option.values.some((value) => value.selected)} hidden={option.values.some((value) => value.selected)}>{option.name}</option>
-              {option.values.map((value) => (
-                <option
-                  value={value.id}
-                  selected={value.selected}
+      {layout === "select" ? (
+        /* One labelled control per axis: its label names it once, and a missing choice is described on the control itself. */
+        <div class="variant-option-selector" data-sx-buy="option-group" data-option-definition-id={option.id}>
+          <label for={`product-option-${option.id}-select`} class="mb-1 block text-sm font-medium text-foreground">{option.name}</label>
+          <select
+            id={`product-option-${option.id}-select`}
+            class="variant-option-select block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground"
+            data-sx-buy="option-select"
+            data-option-definition-id={option.id}
+            aria-describedby={`product-option-${option.id}-missing`}
+          >
+            {/* "Choose": shown while the axis has no value, so a cleared choice reads as one. */}
+            <option value="" disabled selected={!option.values.some((value) => value.selected)} hidden={option.values.some((value) => value.selected)}>{option.name}</option>
+            {option.values.map((value) => (
+              <option
+                value={value.id}
+                selected={value.selected}
+                data-option-value={value.value}
+                data-option-availability={value.status}
+              >{value.status === "available" ? value.value : value.ariaLabel}</option>
+            ))}
+          </select>
+          <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
+        </div>
+      ) : (
+        <fieldset class="variant-option-selector" data-sx-buy="option-group" data-option-definition-id={option.id} aria-describedby={`product-option-${option.id}-missing`}>
+          <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
+          <div class="variant-option-values flex flex-wrap gap-1.5" data-sx-buy="option-values" data-option-overflow={option.overflow ? "" : undefined}>
+            {option.values.map((value) => {
+              const swatch = layout === "swatches" ? value.swatch : null;
+              return (
+                <button
+                  type="button"
+                  class:list={[
+                    "variant-option-btn cursor-pointer",
+                    {
+                      "border-primary bg-primary text-primary-foreground": value.selected,
+                      "border-input bg-background text-foreground": !value.selected && value.status === "available",
+                      "border-dashed border-muted-foreground bg-muted text-foreground": !value.selected && value.status === "incompatible",
+                      "border-input bg-background text-muted-foreground": !value.selected && value.status === "sold_out",
+                      // Dawn: a sold-out value stays choosable, crossed out, so its photo and "Sold out" show.
+                      "line-through": value.status === "sold_out",
+                    },
+                  ]}
+                  data-sx-buy="option"
+                  data-option-definition-id={option.id}
+                  data-option-value-id={value.id}
                   data-option-value={value.value}
                   data-option-availability={value.status}
-                >{value.status === "available" ? value.value : value.ariaLabel}</option>
-              ))}
-            </select>
-          </>
-        ) : (
-          <>
-            <legend class="mb-1 text-sm font-medium text-foreground">{option.name}</legend>
-            <div class="variant-option-values flex flex-wrap gap-1.5" data-sx-buy="option-values" data-option-overflow={option.overflow ? "" : undefined}>
-              {option.values.map((value) => {
-                const swatch = layout === "swatches" && value.colour ? value.colour : null;
-                return (
-                  <button
-                    type="button"
-                    class:list={[
-                      "variant-option-btn cursor-pointer",
-                      {
-                        "border-primary bg-primary text-primary-foreground": value.selected,
-                        "border-input bg-background text-foreground": !value.selected && value.status === "available",
-                        "border-dashed border-muted-foreground bg-muted text-foreground": !value.selected && value.status === "incompatible",
-                        "border-input bg-background text-muted-foreground": !value.selected && value.status === "sold_out",
-                        // Dawn: a sold-out value stays choosable, crossed out, so its photo and "Sold out" show.
-                        "line-through": value.status === "sold_out",
-                      },
-                    ]}
-                    data-sx-buy="option"
-                    data-option-definition-id={option.id}
-                    data-option-value-id={value.id}
-                    data-option-value={value.value}
-                    data-option-availability={value.status}
-                    data-option-swatch={swatch ? "" : undefined}
-                    aria-pressed={value.selected ? "true" : "false"}
-                    aria-label={value.ariaLabel}
-                  >
-                    {swatch
-                      ? <span class="variant-option-swatch-dot" style={`--option-swatch:${swatch}`} aria-hidden="true"></span>
+                  data-option-swatch={swatch ? "" : undefined}
+                  aria-pressed={value.selected ? "true" : "false"}
+                  aria-label={value.ariaLabel}
+                >
+                  {swatch?.imageUrl
+                    ? <img class="variant-option-swatch-dot" src={swatch.imageUrl} alt="" width="40" height="40" loading="lazy" decoding="async" />
+                    : swatch?.color
+                      ? <span class="variant-option-swatch-dot" style={`--option-swatch:${swatch.color}`} aria-hidden="true"></span>
                       : <span>{value.value}</span>}
-                    {pricedValues && <span data-option-price hidden={!value.price}>{value.price ?? ""}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-        <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
-      </fieldset>
+                  {pricedValues && <span data-option-price hidden={!value.price}>{value.price ?? ""}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <p id={`product-option-${option.id}-missing`} class="option-missing-message mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>
+        </fieldset>
+      )}
     </div>
   ))}
 </div>
@@ -125,7 +128,8 @@ const { groups, pricedValues, layout = "buttons" } = Astro.props;
     height: 100%;
     min-width: 2rem;
     border-radius: 9999px;
-    background: var(--option-swatch);
+    background: var(--option-swatch, transparent);
+    object-fit: cover;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 15%, transparent);
   }
   .variant-option-btn[data-option-swatch][data-option-availability="sold_out"] .variant-option-swatch-dot {

@@ -16,7 +16,7 @@ The Files library itself (uploads, trash, renditions, usage index, permanent del
 ## Layer and imports
 
 - Layer L0. It imports no domain. It reads the `media` table and uses `packages/core/src/integrations/storage.ts` for the URL base.
-- Imported by `agent-storefront`, `categories`, `media`, `orders`, `pages`, `reviews`, `settings` and `warranty`. Because it is a leaf, these writers do not load the Files library.
+- Imported by `agent-storefront`, `categories`, `media`, `orders`, `pages`, `products` (an option value's swatch image), `reviews`, `settings` and `warranty`. Because it is a leaf, these writers do not load the Files library.
 
 ## Rules
 
