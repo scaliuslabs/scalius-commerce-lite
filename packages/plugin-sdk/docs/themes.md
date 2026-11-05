@@ -73,12 +73,13 @@ const Header = ({ data }: HeaderProps) => (
 );
 ```
 
-Social profiles work the same way. A footer's `data.store.social` is the store's own list from Settings -> Store details, in the order the merchant saved it, and only `https` profiles. Each has a `url`, its `id` (stable across edits and reorders), the merchant's `label` exactly as typed (name the link with it), `icon` (the merchant's image from Files, the one the store's own footer draws, or `null`) and `network` (`facebook`, `youtube`, ... read from the label or host). Draw the icon when there is one and your own glyph for `network` when there is not; draw no social band for `[]`. Do not ship profile URLs, icon uploads or artwork settings of your own: the merchant edits a profile once and every footer follows on its next render. Stores older than these fields send only `network` and `url`, so fall back to `network` for the name.
+Social profiles work the same way. A footer's `data.store.social` is the store's own list from Settings -> Store details, in the order the merchant saved it, and only `https` profiles. Each has a `url`, its `id` (stable across edits and reorders), the merchant's `label` exactly as typed (name the link with it), `icon` (the merchant's image from Files, the one the store's own footer draws, or `null`) and `network` (`facebook`, `youtube`, ... from the host, else a whole word of the label; otherwise the label as a slug, or `link`). `network` is an identifier, not words: when the label is blank (or absent on stores older than these fields, which send only `network` and `url`), name the link with the network's own name for a network you know (`Facebook`) and with your own translated word otherwise, never `link`. Draw the icon when there is one and your own glyph for `network` when there is not; draw no social band for `[]`. Do not ship profile URLs, icon uploads or artwork settings of your own: the merchant edits a profile once and every footer follows on its next render.
 
 ```tsx
+const NAMES: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", youtube: "YouTube" };
 <ul>
   {data.store.social.map((link) => (
-    <li><a href={link.url} aria-label={link.label || link.network} rel="noopener" target="_blank">
+    <li><a href={link.url} aria-label={link.label || NAMES[link.network] || t(context, { en: "Social", bn: "সোশ্যাল" })} rel="noopener" target="_blank">
       {link.icon ? <Image image={link.icon} alt="" /> : <MyGlyph network={link.network} />}
     </a></li>
   ))}
