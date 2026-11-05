@@ -727,8 +727,32 @@ function renderDelivery(detail: AccountOrderDetail): void {
   }
 }
 
+/** Only http:/https: URLs are rendered as clickable links; everything else renders as plain text. */
+function isValidUrlScheme(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Renders a single contact line: label + value (link when scheme is valid, plain text otherwise). */
+function contactLine(
+  label: string,
+  value: string,
+  asLink: boolean,
+  copy: ReturnType<typeof accountCopy>,
+): string {
+  const escapedLabel = escapeHtml(label);
+  if (asLink && isValidUrlScheme(value)) {
+    return `<p class="text-sm text-muted-foreground"><span class="font-medium">${escapedLabel}:</span> <a href="${escapeHtml(value)}" class="text-primary underline underline-offset-2">${escapeHtml(value)}</a></p>`;
+  }
+  return `<p class="text-sm text-muted-foreground"><span class="font-medium">${escapedLabel}:</span> ${escapeHtml(value)}</p>`;
+}
+
 /** Renders the contact snapshot the buyer was shown at order placement: phone, WhatsApp, email, social links. */
-function renderManualCodDepositContact(snapshot: ContactSnapshot, copy: ReturnType<typeof accountCopy>): string {
+export function renderManualCodDepositContact(snapshot: ContactSnapshot, copy: ReturnType<typeof accountCopy>): string {
   const parts: string[] = [];
   if (snapshot.phone) {
     parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${copy.contactPhoneText}:</span> ${escapeHtml(formatBdMobile(snapshot.phone))}</p>`);
@@ -737,10 +761,10 @@ function renderManualCodDepositContact(snapshot: ContactSnapshot, copy: ReturnTy
     parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${copy.contactEmailText}:</span> ${escapeHtml(snapshot.email)}</p>`);
   }
   if (snapshot.whatsappUrl) {
-    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${copy.contactWhatsappText}:</span> <a href="${escapeHtml(snapshot.whatsappUrl)}" class="text-primary underline underline-offset-2">${escapeHtml(snapshot.whatsappUrl)}</a></p>`);
+    parts.push(contactLine(copy.contactWhatsappText, snapshot.whatsappUrl, true, copy));
   }
   for (const link of snapshot.socialLinks ?? []) {
-    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${escapeHtml(link.label)}:</span> <a href="${escapeHtml(link.url)}" class="text-primary underline underline-offset-2">${escapeHtml(link.label)}</a></p>`);
+    parts.push(contactLine(link.label, link.url, true, copy));
   }
   return parts.length > 0
     ? `<div class="mt-2 text-sm"><p class="font-medium text-foreground">${copy.contactStoreText}</p>${parts.join("")}</div>`
