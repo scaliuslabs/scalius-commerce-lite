@@ -205,7 +205,7 @@ function tilesPerRow(controls: readonly HTMLElement[]): number {
 /**
  * Arrow keys, Home and End move the choice, as a radiogroup does, along what
  * the buyer sees: in the list Down and Up step through the rows; in tiles
- * Down and Up move a row, the start and end arrows one tile; and the start
+ * Down and Up move a row (and stay put on the top or bottom row), the start and end arrows one tile; and the start
  * and end arrows follow the page's direction (in right-to-left, Left is next).
  */
 export function handlePaymentChoiceKeyDown(event: KeyboardEvent): void {
@@ -226,14 +226,21 @@ export function handlePaymentChoiceKeyDown(event: KeyboardEvent): void {
   let nextIndex: number;
   if (event.key === "Home") nextIndex = 0;
   else if (event.key === "End") nextIndex = cards.length - 1;
-  else if (event.key === "ArrowDown") {
-    nextIndex = columns === 1 ? wrap(currentIndex + 1) : Math.min(cards.length - 1, currentIndex + columns);
-  } else if (event.key === "ArrowUp") {
-    nextIndex = columns === 1 ? wrap(currentIndex - 1) : Math.max(0, currentIndex - columns);
+  else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    // The list wraps, as a radiogroup does. Tiles move straight up or down, and at the top
+    // or bottom row (no tile above or below) the choice stays where it is.
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    if (columns === 1) nextIndex = wrap(currentIndex + step);
+    else {
+      nextIndex = currentIndex + step * columns;
+      if (nextIndex < 0 || nextIndex >= cards.length) return;
+    }
   } else {
     nextIndex = wrap(currentIndex + (event.key === forward ? 1 : -1));
   }
 
+  // A key that lands where it is (Home on the first) chooses nothing anew.
+  if (nextIndex === currentIndex) return;
   const next = cards[nextIndex];
   next?.focus();
   next?.click();

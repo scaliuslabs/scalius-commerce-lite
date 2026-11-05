@@ -33,10 +33,22 @@ export interface FrameBox {
   screenHeight: number;
 }
 
-/** The frame for a canvas of this size. */
-export function frameBox(canvas: { width: number; height: number }, device: PreviewDevice, desktopWidth: DesktopWidth, zoom: PreviewZoom): FrameBox {
+/**
+ * The store's wide-screen breakpoint (Tailwind `lg`), where the buyer pages'
+ * layout choices (the summary beside the form, a two-column receipt, the
+ * account's sidebar) take effect. Narrower, those pages are one column
+ * whatever is chosen.
+ */
+export const WIDE_SCREEN_MIN_WIDTH = 1024;
+
+/**
+ * The frame for a canvas of this size. `minFillWidth`: a page whose choices
+ * only show from that width lays out at least that wide when the computer
+ * preview fills a narrower canvas (scaled to fit), so every choice shows.
+ */
+export function frameBox(canvas: { width: number; height: number }, device: PreviewDevice, desktopWidth: DesktopWidth, zoom: PreviewZoom, minFillWidth = 0): FrameBox {
   const room = Math.max(1, canvas.width - 2 * CANVAS_GUTTER);
-  const width = device === "phone" ? PHONE_WIDTH : desktopWidth === "fill" ? Math.max(320, room) : desktopWidth;
+  const width = device === "phone" ? PHONE_WIDTH : desktopWidth === "fill" ? Math.max(320, room, minFillWidth) : desktopWidth;
   // Two decimals: the scaled frame then measures whole pixels (no blurred outline edges).
   const fit = Math.floor(Math.min(1, room / width) * 100) / 100;
   const scale = zoom === "actual" ? 1 : Math.max(0.1, fit);

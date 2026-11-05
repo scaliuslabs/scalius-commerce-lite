@@ -141,14 +141,16 @@ export function FieldSet({ label, help, error, className, children }: {
   children: React.ReactNode;
 }) {
   const id = React.useId();
+  // The group's description is its error, else its help (as `Field` describes its control).
+  const describedBy = error ? `${id}-error` : help ? `${id}-help` : undefined;
   return (
-    <div role="group" aria-labelledby={`${id}-label`} data-slot="field" className={cn("flex min-w-0 flex-col gap-1", className)}>
+    <div role="group" aria-labelledby={`${id}-label`} aria-describedby={describedBy} data-slot="field" className={cn("flex min-w-0 flex-col gap-1", className)}>
       <span id={`${id}-label`} data-slot="field-label" className="text-body font-medium">{label}</span>
       <div data-slot="field-control">{children}</div>
       {error ? (
-        <p data-slot="field-error" className="text-body text-destructive">{error}</p>
+        <p id={`${id}-error`} data-slot="field-error" className="text-body text-destructive">{error}</p>
       ) : help ? (
-        <p data-slot="field-help" className="text-body text-muted-foreground">{help}</p>
+        <p id={`${id}-help`} data-slot="field-help" className="text-body text-muted-foreground">{help}</p>
       ) : null}
     </div>
   );
