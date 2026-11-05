@@ -429,6 +429,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
   import { debounce } from "@/lib/utils";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { formatMoney } from "@/lib/currency";
+  import { formatCount } from "@/lib/store-time-zone";
   import { installNavDisclosure } from "./nav-disclosure";
   import { installNavMenus } from "./nav-menus";
   import { installDrawer } from "./drawer";
@@ -467,7 +468,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec));
       );
       countElements.forEach((el) => {
         if (el instanceof HTMLElement) {
-          el.textContent = totalItems > 0 ? String(totalItems) : "";
+          el.textContent = totalItems > 0 ? formatCount(totalItems) : "";
           el.classList.remove(
             "scale-0",
             "opacity-0",

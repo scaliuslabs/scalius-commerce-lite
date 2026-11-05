@@ -21,7 +21,7 @@ import { Field } from "~/components/ui/field";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
 import type { ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
-export function PublishDialog({ open, onOpenChange, live, draft, held, keptHere = false, unopenedAi, sectionName, publishing, appsProblem = null, onOpenSection, onShowProblem, onPublish }: {
+export function PublishDialog({ open, onOpenChange, live, draft, held, keptHere = false, unopenedAi, sectionName, publishing, appsProblem = null, settingsMissing = null, onOpenSection, onShowProblem, onPublish }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   live: StorefrontThemeDocument;
@@ -36,6 +36,8 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, keptHere 
   publishing: boolean;
   /** Apps a refused publish named: each app's parts and a link to its page. */
   appsProblem?: { apps: readonly ThemeAppsProblem[]; moreParts: number } | null;
+  /** App parts a refused publish named as missing a required setting: a section links to its settings. */
+  settingsMissing?: ReadonlyArray<{ path: string; section: StorefrontSection | null }> | null;
   onOpenSection: (id: string) => void;
   /** Closes the dialog and puts the cursor in the first setting to fix. */
   onShowProblem: () => void;
@@ -59,6 +61,23 @@ export function PublishDialog({ open, onOpenChange, live, draft, held, keptHere 
         </DialogHeader>
         <div className="space-y-4">
           {appsProblem ? <ThemeAppsUnavailableAlert apps={appsProblem.apps} moreParts={appsProblem.moreParts} /> : null}
+          {settingsMissing ? (
+            <Alert variant="destructive" data-publish-settings-missing>
+              <TriangleAlert aria-hidden="true" />
+              <AlertDescription>
+                <p>{t("publishSettingsMissing", { count: Math.max(1, settingsMissing.length) })}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {settingsMissing.map(({ path, section }) => (
+                    <li key={path}>
+                      {section
+                        ? <Button type="button" variant="link" size="sm" onClick={() => onOpenSection(section.id)}>{t("publishFixPart", { name: sectionName(section) })}</Button>
+                        : t("publishSettingsMissingTheme")}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {unopenedAi.length > 0 ? (
             <Alert variant="warning">
               <Sparkles aria-hidden="true" />

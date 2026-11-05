@@ -16,7 +16,12 @@
  *   app in their slots, drew: a page shows one (`data-color-scheme-switch-yields`
  *   then frees the room the header kept for it). One drawn after a skin
  *   that places no slot stays hidden until it is in the skin's `<header>`
- *   (its landmark), so it never shifts the page.
+ *   (its landmark), so it never shifts the page. The store's switch for a
+ *   header skin has a second button for phones below 23.75rem, which goes
+ *   into the skin's phone menu (`[data-menu-drawer]`) as the core header
+ *   carries its own in its menu (`data-color-scheme-switch-menu` then hides
+ *   the bar's there, where :has() is missing); a skin without a phone menu
+ *   keeps the bar's.
  *
  * It is its own script, and a failure inside it is swallowed: nothing else
  * on the page waits on it. Without JavaScript the theme's scheme stands
@@ -62,7 +67,11 @@ export function colorSchemeBootScript(colorScheme: ThemeColorScheme | null, reme
         + `var o=document.querySelector(${serializeJsonForInlineScript(SKIN_DRAWN_SWITCH)});`
         + 'if(o)r.setAttribute("data-color-scheme-switch-yields","");'
         + 'document.querySelectorAll("[data-sx-host-color-scheme-toggle]").forEach(function(h){'
-        + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d||h.parentElement!==d)return;'
+        + 'if(o){h.hidden=true;return}var d=h.closest("[data-storefront-header]");if(!d)return;'
+        // The phone menu's button goes into a header skin's menu (`menuDrawer()`); without one the bar's stays at every width.
+        + 'if(h.hasAttribute("data-sx-host-color-scheme-menu")){var w=d.querySelector("[data-menu-drawer]");'
+        + 'if(w){w.appendChild(h);h.setAttribute("data-sx-placed","");r.setAttribute("data-color-scheme-switch-menu","")}else h.remove();return}'
+        + 'if(h.parentElement!==d)return;'
         + 'var l=d.querySelector("header,[role=banner]");if(l&&!l.contains(h))l.appendChild(h);h.setAttribute("data-sx-placed","")})});'
       : "",
     toggle

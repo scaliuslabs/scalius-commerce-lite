@@ -3,8 +3,9 @@
 // Account › Warranties and the claim form's outcome. Pure: the product page,
 // the receipt, the account order page (in the browser) and the account's
 // Warranties page share it. The copy is the store's checkout language.
+import { checkoutText } from "@/lib/checkout-text";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatAccountDate } from "@/lib/account-format";
 import { formatCount } from "@/lib/store-time-zone";
@@ -100,18 +101,18 @@ export function warrantyDurationText(value: number, unit: WarrantyDurationUnit, 
     : unit === "months"
       ? [copy.warrantyMonthText, copy.warrantyMonthsText]
       : [copy.warrantyDayText, copy.warrantyDaysText];
-  return value === 1 ? one : formatCheckoutLanguageText(many, { count: formatCount(value) });
+  return value === 1 ? one : checkoutText(many, { count: formatCount(value) });
 }
 
 /** "1 year brand warranty · 7-day replacement". */
 export function warrantySummaryText(terms: WarrantyTerms, copy: WarrantyCopy): string {
   const duration = warrantyDurationText(terms.durationValue, terms.durationUnit, copy);
-  const warranty = formatCheckoutLanguageText(
+  const warranty = checkoutText(
     terms.provider === "brand" ? copy.warrantyBrandText : copy.warrantyStoreText,
     { duration },
   );
   return terms.replacementDays && terms.replacementDays > 0
-    ? `${warranty} · ${formatCheckoutLanguageText(copy.warrantyReplacementText, { days: formatCount(terms.replacementDays) })}`
+    ? `${warranty} · ${checkoutText(copy.warrantyReplacementText, { days: formatCount(terms.replacementDays) })}`
     : warranty;
 }
 
@@ -132,8 +133,8 @@ export function warrantyTimeLeftText(expiresAt: string, now: number, copy: Warra
   const days = Math.ceil((end - now) / DAY_MS);
   if (days <= 1) return copy.warrantyDayLeftText;
   // Two months or more read in months (never "1 months").
-  if (days < 62) return formatCheckoutLanguageText(copy.warrantyDaysLeftText, { count: formatCount(days) });
-  return formatCheckoutLanguageText(copy.warrantyMonthsLeftText, { count: formatCount(Math.floor(days / 30.44)) });
+  if (days < 62) return checkoutText(copy.warrantyDaysLeftText, { count: formatCount(days) });
+  return checkoutText(copy.warrantyMonthsLeftText, { count: formatCount(Math.floor(days / 30.44)) });
 }
 
 function day(iso: string): string {
@@ -148,11 +149,11 @@ export function warrantyDatesText(
 ): string {
   if (record.voided) return copy.warrantyVoidText;
   const end = Date.parse(record.expiresAt);
-  if (!(end > now)) return formatCheckoutLanguageText(copy.warrantyEndedText, { date: day(record.expiresAt) });
-  const until = formatCheckoutLanguageText(copy.warrantyUntilText, { date: day(record.expiresAt) });
+  if (!(end > now)) return checkoutText(copy.warrantyEndedText, { date: day(record.expiresAt) });
+  const until = checkoutText(copy.warrantyUntilText, { date: day(record.expiresAt) });
   const replacementEnd = record.replacementUntil ? Date.parse(record.replacementUntil) : Number.NaN;
   return record.replacementUntil && replacementEnd > now
-    ? `${until} · ${formatCheckoutLanguageText(copy.warrantyReplacementUntilText, { date: day(record.replacementUntil) })}`
+    ? `${until} · ${checkoutText(copy.warrantyReplacementUntilText, { date: day(record.replacementUntil) })}`
     : until;
 }
 

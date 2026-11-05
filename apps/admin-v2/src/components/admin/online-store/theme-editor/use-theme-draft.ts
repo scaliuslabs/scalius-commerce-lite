@@ -51,8 +51,13 @@ export function heldEditsKey(staffId: string | null): string {
   return `scalius.theme-editor.held-edits:${getDashboardBasePath()}:${staffId ?? ""}`;
 }
 
+/** The key held edits had before they were kept per store and staff member: nothing reads it any more. */
+export const UNSCOPED_HELD_EDITS_KEY = "scalius.theme-editor.held-edits";
+
 function readHeldEdits(key: string, revision: number): Theme | null {
   try {
+    // A copy under the old key could belong to anyone who used this browser: it goes, unread.
+    window.localStorage.removeItem(UNSCOPED_HELD_EDITS_KEY);
     const stored = JSON.parse(window.localStorage.getItem(key) ?? "null") as { revision?: unknown; theme?: unknown } | null;
     if (!stored || stored.revision !== revision || typeof stored.theme !== "object" || stored.theme === null) return null;
     return stored.theme as Theme;
@@ -68,6 +73,16 @@ function writeHeldEdits(key: string, value: { revision: number; theme: Theme } |
   } catch {
     // A private window or full storage: the edits stay in this tab only.
   }
+}
+
+/**
+ * A publish the server refused because shown app parts miss a required
+ * setting (an app added one while the editor was open): their document paths.
+ */
+function appSettingsMissing(error: unknown): string[] | null {
+  if (!(error instanceof AdminApiResponseError) || error.code !== "theme_app_settings_missing") return null;
+  const paths = (error.details as { paths?: unknown } | undefined)?.paths;
+  return Array.isArray(paths) ? paths.filter((path): path is string => typeof path === "string") : [];
 }
 
 export interface SavedDraft {
@@ -110,6 +125,8 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
   const [publishing, setPublishing] = useState(false);
   /** The apps a refused publish named (`theme_apps_unavailable`): the publish dialog lists them. */
   const [appsProblem, setAppsProblem] = useState<{ apps: ThemeAppsProblem[]; moreParts: number } | null>(null);
+  /** The app parts a refused publish named as missing a required setting (`theme_app_settings_missing`), by document path. */
+  const [settingsMissing, setSettingsMissing] = useState<string[] | null>(null);
   /** Save without waiting (a change the preview shows only once saved). */
   const [urgent, setUrgent] = useState(false);
 
@@ -298,6 +315,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
   const publish = useCallback(async (note: string) => {
     setPublishing(true);
     setAppsProblem(null);
+    setSettingsMissing(null);
     try {
       if (dirty && !(await save())) return false;
       const { saved: base } = latest.current;
@@ -314,7 +332,9 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
       return true;
     } catch (error) {
       const unavailable = themeAppsUnavailable(error);
+      const missing = appSettingsMissing(error);
       if (unavailable) setAppsProblem(unavailable);
+      else if (missing) setSettingsMissing(missing);
       else if (isAdminApiConflictError(error)) void noteConflict();
       else toast.error(actionErrorText(error));
       return false;
@@ -366,6 +386,10 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
     replaceDraft,
     publish,
     appsProblem,
-    clearAppsProblem: () => setAppsProblem(null),
+    settingsMissing,
+    clearAppsProblem: () => {
+      setAppsProblem(null);
+      setSettingsMissing(null);
+    },
   };
 }

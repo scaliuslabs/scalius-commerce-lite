@@ -153,6 +153,17 @@ function PhoneBottomBar({ label, children }: { label: string; children: ReactNod
   return <nav ref={bar} aria-label={label} className="z-40 flex h-14 gap-1 border-t border-border bg-card px-2">{children}</nav>;
 }
 
+/** The section a document path points into (`pages.home.3.settings.app`), if it is one. */
+function sectionAtPath(theme: StorefrontThemeDocument, path: string): StorefrontSection | null {
+  const home = /^pages\.home\.(\d+)\./.exec(path);
+  if (home) return theme.pages.home[Number(home[1])] ?? null;
+  const landing = /^pages\.landing\.(.+)\.sections\.(\d+)\./.exec(path);
+  if (landing) return theme.pages.landing[landing[1]!]?.sections[Number(landing[2])] ?? null;
+  const template = /^pages\.templates\.(\w+)\.sections\.(\d+)\./.exec(path);
+  if (template) return theme.pages.templates[template[1] as keyof StorefrontThemeDocument["pages"]["templates"]]?.sections[Number(template[2])] ?? null;
+  return null;
+}
+
 /** Puts the cursor in a field once the (lazy) pane draws it: its code may take a few seconds on a slow connection. */
 function focusWhenShown(id: string, focus = true) {
   const until = Date.now() + 8000;
@@ -1182,6 +1193,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
             sectionName={sectionName}
             publishing={draft.publishing}
             appsProblem={draft.appsProblem}
+            settingsMissing={draft.settingsMissing?.map((path) => ({ path, section: sectionAtPath(draft.saved.theme, path) })) ?? null}
             onOpenSection={(id) => {
               setPublishOpen(false);
               const at = (Object.entries(theme.pages.landing).find(([, landing]) => landing.sections.some((section) => section.id === id))?.[0]);

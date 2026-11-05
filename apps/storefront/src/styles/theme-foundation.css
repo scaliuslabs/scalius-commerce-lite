@@ -267,6 +267,35 @@ body {
   display: none !important;
 }
 
+/* The updated-page notice (scripts/lazy-script.ts) sits just below the
+   sticky header (`--header-height`, the header's own measure), clear of
+   every bottom action bar: the product buy bar, the phone tab bar, a skin's
+   order bar, the checkout's submit. It never covers one. */
+[data-stale-page-notice] {
+  top: calc(var(--header-height, 0px) + 0.75rem);
+}
+
+/* The store's switch for a header skin has two places, one showing at a
+   time, as the core header's: the bar, and below 23.75rem (380px) the skin's
+   phone menu (`[data-menu-drawer]`), where the head script puts the menu's
+   button. The menu's button shows only there and only then; the bar's hides
+   then (the :has() rule from the first paint, the attribute where :has() is
+   missing). A skin without a phone menu keeps the bar's at every width. */
+[data-sx-host-color-scheme-menu] {
+  display: none;
+}
+
+@media (max-width: 23.74rem) {
+  [data-menu-drawer] [data-sx-host-color-scheme-menu][data-sx-placed]:not([hidden]) {
+    display: flex;
+  }
+
+  [data-storefront-header]:has([data-menu-drawer]) [data-sx-host-color-scheme-toggle]:not([data-sx-host-color-scheme-menu]),
+  :root[data-color-scheme-switch-menu] [data-storefront-header] [data-sx-host-color-scheme-toggle]:not([data-sx-host-color-scheme-menu]) {
+    display: none !important;
+  }
+}
+
 /* One keyboard focus indicator for every control (WCAG 2.4.7). It is
    unlayered on purpose so it wins over `outline-none` utilities and no
    control can drop its focus ring by accident. Text fields keep their own

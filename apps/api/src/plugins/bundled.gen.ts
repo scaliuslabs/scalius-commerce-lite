@@ -12,7 +12,7 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   },
   "scalius.noor": {
     version: "2.0.6",
-    sha256: "9028ac9689ed774be2c3b5617b7289b52857487f83de8d2adcf886493a8e2015",
+    sha256: "0ff387457f3a65e9cdf3ed39381a3e4fc79ea4980b506bf8e7a2a9ee9fb88bd2",
     load: () => import("../../../../plugins/noor/src/index"),
   },
 };

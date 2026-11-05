@@ -9,7 +9,7 @@ import { trimTrailingCharacter } from "@scalius/plugin-sdk";
 // away from the order. Menus follow the store's disclosure pattern (a button
 // with `aria-expanded` per menu; click, Enter, Escape, arrow keys and hover
 // intent come from the store's nav-disclosure script, and hover or focus
-// opens them before it runs). Search and the drawer are native `popover`s.
+// opens them before it runs). The drawer is a native `popover`; every search control opens the store's live search.
 // The drawer follows the theme's phone navigation: an accordion, or one
 // level at a time; with Bottom tabs the store draws its tab bar, whose menu
 // tab opens this drawer (`menuDrawer()`). The one island marks the bar once
@@ -23,6 +23,7 @@ import {
   accountLink,
   menuDrawer,
   openCart,
+  searchOpener,
   stickyHeader,
   t,
   type HeaderProps,
@@ -262,6 +263,8 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
   const current = menuCurrent(context.page.path, data.store.url);
   // Phones get one search: the header's button when it shows one (with or
   // without the store's tab bar, which never repeats Search), else the drawer's field.
+  // Every one opens the store's own live search (`searchOpener()`), and is a
+  // link to the search page without JavaScript: one search for every header.
   const drawerSearch = !settings.show_search;
   return (
     <div class={cx("noor-header-shell", settings.sticky && "is-sticky", transparent && "is-transparent")} {...(settings.sticky ? stickyHeader() : {})} style={{ "--noor-logo-width": `${data.store.logoWidth}px` }}>
@@ -274,9 +277,9 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
                 <Icon name="menu" size={22} />
               </button>
               {layout === "center" && settings.show_search ? (
-                <button type="button" class="noor-search-trigger noor-desk-only" popovertarget="noor-search">
+                <a class="noor-search-trigger noor-desk-only" href={data.routes.search} aria-haspopup="dialog" {...searchOpener()}>
                   <Icon name="search" size={18} /><span>{searchLabel}</span>
-                </button>
+                </a>
               ) : null}
             </div>
             {logo}
@@ -288,9 +291,9 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
             ) : null}
             <div class="noor-header-end">
               {settings.show_search ? (
-                <button type="button" class={cx("noor-icon-btn", layout === "center" && "noor-phone-only")} popovertarget="noor-search" aria-label={searchLabel}>
+                <a class={cx("noor-icon-btn", layout === "center" && "noor-phone-only")} href={data.routes.search} aria-haspopup="dialog" aria-label={searchLabel} {...searchOpener()}>
                   <Icon name="search" size={21} />
-                </button>
+                </a>
               ) : null}
               <Slot name="header.actions" />
               {settings.show_account ? (
@@ -315,35 +318,15 @@ export function Header({ data, settings, context }: HeaderProps<HeaderSettings>)
           </button>
         </div>
         {drawerSearch ? (
-          <form class="noor-field is-search" action={data.routes.search} method="get" role="search">
-            <Icon name="search" size={18} />
-            <input type="search" name={data.searchParam} placeholder={t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })} aria-label={searchLabel} />
-          </form>
+          <a class="noor-field is-search is-opener" href={data.routes.search} aria-haspopup="dialog" {...searchOpener()}>
+            <Icon name="search" size={18} /><span>{t(context, { en: "Search products", bn: "পণ্য খুঁজুন" })}</span>
+          </a>
         ) : null}
         <nav class="noor-drawer-nav" aria-label={t(context, { en: "Main", bn: "প্রধান" })}><DrawerMenu items={data.menu} context={context} current={current} /></nav>
         <div class="noor-drawer-foot">
           <a href={data.routes.account} {...accountLink()}><Icon name="user" size={18} />{t(context, { en: "My account", bn: "আমার অ্যাকাউন্ট" })}</a>
         </div>
       </div>
-      {settings.show_search ? (
-        <div id="noor-search" popover="auto" class="noor-search" aria-label={searchLabel}>
-          <div class="noor-search-inner">
-            <form class="noor-field is-search is-large" action={data.routes.search} method="get" role="search">
-              <Icon name="search" size={20} />
-              <input type="search" name={data.searchParam} autofocus placeholder={t(context, { en: "What are you looking for?", bn: "আপনি কী খুঁজছেন?" })} aria-label={searchLabel} />
-              <button type="button" class="noor-icon-btn" popovertarget="noor-search" popovertargetaction="hide" aria-label={t(context, { en: "Close search", bn: "সার্চ বন্ধ করুন" })}>
-                <Icon name="close" size={20} />
-              </button>
-            </form>
-            {data.categories.length > 0 ? (
-              <div class="noor-search-suggest">
-                <p class="noor-eyebrow">{t(context, { en: "Popular", bn: "জনপ্রিয়" })}</p>
-                <ul>{data.categories.slice(0, 8).map((category) => <li><a href={category.url}>{category.title}</a></li>)}</ul>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

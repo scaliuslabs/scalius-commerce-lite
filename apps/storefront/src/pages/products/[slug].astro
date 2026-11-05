@@ -971,7 +971,7 @@ const productCategoryAnalytics = productCategory
                     },
                   ],
           });
-        });
+        }).catch(() => undefined); // Analytics only: the page is the same without it.
       };
 
       scheduleNonCriticalAnalytics(triggerAnalytics);

@@ -78,8 +78,8 @@ Format `$sc1$<algorithm>$<params>$<salt>$<hash>`. The plan profile (`planLimits(
 | Wrong 2FA codes | Better Auth locks the 2FA row; the API answers 429 `TWO_FACTOR_LOCKED` ("try again in 15 minutes") | `two_factor.locked_until` |
 | Identity handoff routes | 10 per minute | plugin |
 | First-admin setup | 5 per hour per IP | D1 `admin_setup_rate_limits` |
-| Dashboard sign-in, before Better Auth | 5 per minute per network; from a browser without a valid known-device mark, 20 attempts per 15 minutes per email (any email, reserved atomically before the password check, given back on a right password) | `RL_STRICT`; D1 `rate_limit` (`scalius:` keys, swept by `staff_attempt_cleanup`) |
-| In-session proofs (change password, 2FA setup, method change or off, a code checked against a session) | 5 per minute, and 10 attempts per 15 minutes reserved before the proof (a right answer gives it back), per staff member; 429 before the proof runs (`apps/api/src/utils/staff-proofs.ts`) | `RL_STRICT`; D1 `rate_limit` |
+| Dashboard sign-in, before Better Auth | 5 per minute per network; from a browser without a valid known-device mark, 20 attempts per 15 minutes per email (any email, reserved atomically before the password check, given back on a right password or one Better Auth refused unchecked) | `RL_STRICT`; D1 `staff_auth_attempts` (swept by `staff_attempt_cleanup`) |
+| In-session proofs (change password, 2FA setup, method change or off, a code checked against a session) | 5 per minute, and 10 attempts per 15 minutes reserved before the proof (a right answer gives it back), per staff member; 429 before the proof runs (`apps/api/src/utils/staff-proofs.ts`) | `RL_STRICT`; D1 `staff_auth_attempts` |
 
 The known-device mark is `v1.<userId>.<issuedAt>.<HMAC>` under a key derived from `SCALIUS_SECRET` (label `staff-known-device`) over the person, the issue time and the current password hash: a password change voids it, and it expires after 180 days by its signed issue time.
 

@@ -4,6 +4,7 @@
 // proves the buyer, then the receipt reopens with the payment choices. A
 // signed-in owner goes straight to the receipt. Works without JavaScript: the
 // form posts back here.
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import {
@@ -23,13 +24,9 @@ import {
 } from "@/lib/order-lookup-api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  checkoutLanguageBaseCode,
-  formatCheckoutLanguageText,
-} from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 
 const isPost = Astro.request.method === "POST";
 if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
@@ -81,7 +78,7 @@ if (isPost && orderId) {
       orderNumber = result.data.orderNumber;
       resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
-      ({ message, codeSent, resendAfterSeconds, needsStoreContact } = describeOrderCodeSendRefusal(copy, result.failure, copy.paymentRecoveryCodesUnavailableText));
+      ({ message, codeSent, resendAfterSeconds, needsStoreContact } = describeOrderCodeSendRefusal(copy, result.failure, copy.paymentRecoveryCodesUnavailableText, copy.paymentRecoveryEnterCodeText));
     }
   }
 }
@@ -121,7 +118,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
             <input type="hidden" name="orderId" value={orderId} />
             <p class="text-sm" data-order-code-order hidden={orderNumber === null}>
               <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
-              <span data-order-number class="ms-2 font-medium text-foreground">{orderNumber !== null ? formatOrderNumber(orderNumber, "") : ""}</span>
+              <span data-order-number class="ms-2 font-medium text-foreground">{orderNumber !== null ? pageOrderNumber(orderNumber, "") : ""}</span>
             </p>
             <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
               <label for="paymentRecoveryCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
@@ -150,7 +147,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
               class="inline-flex min-h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-foreground underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
             >
               {resendAfterSeconds
-                ? formatCheckoutLanguageText(copy.orderCodeResendInText, { time: formatCountdown(resendAfterSeconds) })
+                ? checkoutText(copy.orderCodeResendInText, { time: formatCountdown(resendAfterSeconds) })
                 : copy.orderCodeSendNewText}
             </button>
           </form>

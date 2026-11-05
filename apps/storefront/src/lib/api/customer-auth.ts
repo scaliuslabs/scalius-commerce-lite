@@ -22,6 +22,7 @@ import type {
   OrderReceiptDiscount,
 } from "./types";
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
+import { isCodeStillValidRefusal } from "@scalius/shared/customer-auth-policy";
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import type { ReturnableOrderLine } from "./types";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
@@ -36,7 +37,7 @@ import { reconcileCheckoutAfterSignIn } from "../checkout/session-state";
 interface AuthApiEnvelope<T = unknown> {
   success: boolean;
   data?: T;
-  error?: string | { code?: string; message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number } };
+  error?: string | { code?: string; message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string } };
 }
 
 interface SendOtpData {
@@ -135,7 +136,7 @@ export interface VerifyCustomerOtpInput extends SendCustomerOtpInput {
 
 export type SendCustomerOtpResult =
   | { success: true; resendAfterSeconds: number }
-  | { success: false; error: string; retryAfterSeconds?: number };
+  | { success: false; error: string; retryAfterSeconds?: number; codeStillValid?: boolean };
 
 export type VerifyCustomerOtpResult =
   | { success: true; status: "signed_in"; customer: CustomerInfo; isNewUser: boolean }
@@ -208,7 +209,7 @@ async function readEnvelope<T>(res: Response): Promise<AuthApiEnvelope<T>> {
   }
 }
 
-function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number } {
+function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number; reason?: string } {
   return typeof raw.error === "object" && raw.error.details ? raw.error.details : {};
 }
 
@@ -304,6 +305,8 @@ export async function sendCustomerOtp(input: SendCustomerOtpInput): Promise<Send
         success: false,
         error: failureMessage(res, raw),
         retryAfterSeconds: errorDetails(raw).retryAfterSeconds,
+        // The cooldown or the contact's ceiling: the code already sent still works.
+        codeStillValid: isCodeStillValidRefusal(errorDetails(raw).reason),
       };
     }
     return { success: true, resendAfterSeconds: raw.data?.resendAfterSeconds ?? 60 };

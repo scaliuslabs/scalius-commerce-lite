@@ -2,10 +2,9 @@
 // order (order number, then a code for full details) and Finish paying
 // (payment-recovery link).
 // Browser-safe: no transport imports.
-import {
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
+import { checkoutText } from "@/lib/checkout-text";
+import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { isCodeStillValidRefusal } from "@scalius/shared/customer-auth-policy";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 
 /** The API's resend wait when a response doesn't say (core OTP cooldown). */
@@ -31,6 +30,8 @@ export interface OrderCodeFailure {
   message?: string;
   retryAfterSeconds?: number;
   attemptsLeft?: number;
+  /** `details.reason`: a refused send whose last code still works says so. */
+  reason?: string;
 }
 
 /** "#1001", "1001", "১০০১" or an internal order id; null when it can't be one. */
@@ -92,7 +93,7 @@ export function getOrderCodeFailureText(
 ): string {
   if (failure.status === 429) {
     if (!failure.retryAfterSeconds) return copy.paymentRecoveryRateLimitedText;
-    const wait = formatCheckoutLanguageText(copy.orderCodeTryAgainInText, { time: formatCountdown(failure.retryAfterSeconds) });
+    const wait = checkoutText(copy.orderCodeTryAgainInText, { time: formatCountdown(failure.retryAfterSeconds) });
     return wait;
   }
   if (operation === "send" && failure.status === 404) return copy.trackOrderNotFoundText;
@@ -101,7 +102,7 @@ export function getOrderCodeFailureText(
     if (failure.attemptsLeft <= 0) return copy.orderCodeExpiredText;
     return failure.attemptsLeft === 1
       ? copy.orderCodeWrongOneAttemptText
-      : formatCheckoutLanguageText(copy.orderCodeWrongAttemptsText, { count: failure.attemptsLeft });
+      : checkoutText(copy.orderCodeWrongAttemptsText, { count: failure.attemptsLeft });
   }
   if (failure.status === 503) return unavailableText;
   return operation === "send" ? copy.paymentRecoverySendFailedText : copy.paymentRecoveryVerificationFailedText;
@@ -126,12 +127,16 @@ export interface OrderCodeSendRefusal {
  */
 export function describeOrderCodeSendRefusal(
   copy: CheckoutLanguageData,
-  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds"> & { errorCode?: string },
+  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds" | "reason"> & { errorCode?: string },
   unavailableText: string,
+  /** The page's own "a code was sent" words, for a refusal whose last code still works. */
+  codeSentText: string,
 ): OrderCodeSendRefusal {
   if (failure.status === 429) {
     return {
-      message: getOrderCodeFailureText(copy, { ...failure, retryAfterSeconds: undefined }, "send", unavailableText),
+      message: isCodeStillValidRefusal(failure.reason)
+        ? codeSentText
+        : getOrderCodeFailureText(copy, { ...failure, retryAfterSeconds: undefined }, "send", unavailableText),
       codeSent: true,
       resendAfterSeconds: positiveSeconds(failure.retryAfterSeconds) ?? 0,
       needsStoreContact: false,

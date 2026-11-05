@@ -1,10 +1,8 @@
 // The delivery row in a placed order's totals, the same on the receipt and
 // the account order page. A free pickup reads "Pickup · <location>", never
 // "Delivery Free" or "Shipping Free": nothing was shipped and nothing waived.
-import {
-  formatCheckoutLanguageText,
-  type CheckoutLanguageData,
-} from "@scalius/shared/checkout-language";
+import { checkoutText } from "@/lib/checkout-text";
+import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 export interface OrderDeliveryRowInput {
   mode: "ship" | "pickup" | "none";
@@ -38,7 +36,7 @@ export function orderDeliveryRow(
   const label = input.mode === "pickup"
     ? methodName ? `${copy.orderPickupHeadingText} · ${methodName}` : copy.orderPickupHeadingText
     : methodName
-      ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: methodName })
+      ? checkoutText(copy.orderReceiptDeliveryWithMethodText, { method: methodName })
       : copy.orderReceiptDeliveryText;
   return {
     label,

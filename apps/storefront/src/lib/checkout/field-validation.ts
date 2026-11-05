@@ -5,10 +5,11 @@
  * message clears as soon as that field is fixed. Untouched fields are never
  * marked invalid.
  */
+import { checkoutText } from "@/lib/checkout-text";
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "./shipping-address";
 import {
   isCheckoutFieldRequired,
@@ -90,7 +91,7 @@ export function checkoutInformationFields(
     if (!address) return copy.addressRequiredText;
     // Bangladesh's line keeps its minimum; another country's rules are checked by the API.
     return isLocationCountry(country()) && address.length < MIN_SHIPPING_ADDRESS_LENGTH
-      ? formatCheckoutLanguageText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH })
+      ? checkoutText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH })
       : "";
   });
   // City and zone share one message; the zone is marked only once a city is chosen.

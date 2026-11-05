@@ -1,3 +1,4 @@
+import { checkoutText } from "@/lib/checkout-text";
 import { addToCart, cartLineKeyFor, replaceCartLine, startBuyNow, type CartAddFailureReason, type CartItemOption } from "@/store/cart";
 import { clearCartLineEdit, readCartLineEdit, type CartLineEdit } from "@/lib/cart/line-edit";
 import { getCurrencyCode } from "@/lib/currency";
@@ -10,7 +11,7 @@ import {
   type VariantPricing,
   type DiscountType,
 } from "../lib/pricing-engine";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import {
   createInitialSelection,
@@ -355,7 +356,7 @@ function readQuantity(): number {
   const capped = Number.isFinite(typed) && typed > QUANTITY_CONSTRAINTS.MAX;
   if (message) {
     message.textContent = capped
-      ? formatCheckoutLanguageText(cache.actions?.dataset.quantityLimitText ?? "", { count: QUANTITY_CONSTRAINTS.MAX })
+      ? checkoutText(cache.actions?.dataset.quantityLimitText ?? "", { count: QUANTITY_CONSTRAINTS.MAX })
       : "";
     message.classList.toggle("hidden", !capped);
   }
@@ -408,7 +409,7 @@ function applySelection(selection: VariantSelection, announcement: string, chose
   dropRefusal();
   state.selection = selection;
   if (cache.announcer && announcement)
-    cache.announcer.textContent = formatCheckoutLanguageText(
+    cache.announcer.textContent = checkoutText(
       cache.actions?.dataset.optionSelectedText || "{value}",
       { value: announcement },
     );
@@ -737,7 +738,7 @@ function optionButtonLabel(
     : status === "incompatible"
       ? words?.optionUnavailableText || "{option}: {value}. Not available with the current selection."
       : words?.optionValueText || "{option}: {value}";
-  return formatCheckoutLanguageText(template, { option: name, value });
+  return checkoutText(template, { option: name, value });
 }
 
 function exactVariant() {
@@ -872,7 +873,7 @@ function updatePrice() {
   cache.priceElements.forEach((element) => {
     const price = formatPrice(pricing.finalPrice);
     element.textContent = starting
-      ? formatCheckoutLanguageText(element.dataset.fromTemplate || "{price}", { price })
+      ? checkoutText(element.dataset.fromTemplate || "{price}", { price })
       : price;
   });
   cache.originalPriceElements.forEach((element) => {
@@ -1046,7 +1047,7 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
   if (validation.missingOption) {
     return showMissingOption(
       validation.missingOption.id,
-      formatCheckoutLanguageText(cache.actions?.dataset.chooseOptionText || "{option}", {
+      checkoutText(cache.actions?.dataset.chooseOptionText || "{option}", {
         option: validation.missingOption.name,
       }),
       focusProblem,
@@ -1155,7 +1156,7 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
     onFailure(reason: CartAddFailureReason) {
       if (reason === "quantity_limit") {
         failure = "quantity_limit";
-        failureMessage = formatCheckoutLanguageText(cache.actions?.dataset.quantityLimitText ?? "", {
+        failureMessage = checkoutText(cache.actions?.dataset.quantityLimitText ?? "", {
           count: QUANTITY_CONSTRAINTS.MAX,
         });
       }

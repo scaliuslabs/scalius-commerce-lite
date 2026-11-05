@@ -1,6 +1,7 @@
 // /account/orders/[id]: where the order is, what was bought, delivery,
 // payment (with online payment recovery) and order help.
 
+import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import {
   createCustomerOrderPaymentSession,
   createCustomerOrderSupportRequest,
@@ -42,9 +43,9 @@ import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { fromMinor } from "@scalius/shared/money";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 import { formatBdMobile } from "@scalius/shared/phone-input";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
 import { orderDeliveryRow } from "@/lib/order-delivery-row";
 import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
@@ -757,7 +758,7 @@ function renderPayment(detail: AccountOrderDetail): void {
       `<p class="text-muted-foreground">${escapeHtml(line.state)}</p>`,
       // An invoice still owed: "Payment due by November 20, 2026 (net 30)", as the receipt says it.
       order.paymentTerms && line.balanceDue > 0
-        ? `<p class="text-muted-foreground" data-payment-terms>${escapeHtml(formatCheckoutLanguageText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
+        ? `<p class="text-muted-foreground" data-payment-terms>${escapeHtml(checkoutText(order.paymentTerms.overdue ? copy.invoiceOverdueText : copy.invoiceDueText, {
           date: formatStoreDateTime(new Date(order.paymentTerms.dueAt), pageLanguage(), { dateStyle: "long" }),
           days: formatCount(order.paymentTerms.days),
         }))}</p>`
@@ -796,7 +797,7 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const { order } = detail;
   const words = accountCopy().order;
   const title = byId("orderTitle");
-  if (title) title.textContent = words.title(formatOrderNumber(order.orderNumber, order.id));
+  if (title) title.textContent = words.title(pageOrderNumber(order.orderNumber, order.id));
   const subtitle = byId("orderSubtitle");
   if (subtitle) subtitle.textContent = words.placed(formatAccountDate(order.createdAt));
   const status = byId("orderStatus");

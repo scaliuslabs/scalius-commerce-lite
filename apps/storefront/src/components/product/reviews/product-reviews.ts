@@ -4,7 +4,8 @@
 // first, so a failed read (or no JavaScript) still gets the buyer there.
 // Only ids, a sort, a star and an opaque cursor go into a URL; review text
 // never does, and nothing here reaches analytics.
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
+import { checkoutText } from "@/lib/checkout-text";
 import {
   REVIEW_PAGE_SIZE,
   REVIEW_SORTS,
@@ -77,7 +78,7 @@ export function setupProductReviews(): void {
       filter.hidden = view.rating === null;
       filterLabel.textContent = view.rating === null
         ? ""
-        : formatCheckoutLanguageText(copy.reviewsFilteredText, { stars: view.rating });
+        : checkoutText(copy.reviewsFilteredText, { stars: view.rating });
     }
     if (more) {
       more.hidden = !cursor;
@@ -105,7 +106,7 @@ export function setupProductReviews(): void {
       if (append) list.insertAdjacentHTML("beforeend", markup);
       else list.innerHTML = markup;
       showStatus(!append && page.items.length === 0 && next.rating !== null
-        ? formatCheckoutLanguageText(copy.reviewsFilterEmptyText, { stars: next.rating })
+        ? checkoutText(copy.reviewsFilterEmptyText, { stars: next.rating })
         : "");
       syncControls();
     } catch {

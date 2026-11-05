@@ -1,8 +1,9 @@
+import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorText } from "../buyer-api-errors";
 // src/lib/cart/server.ts
 
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
-import { formatCheckoutLanguageText, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import {
   createOrder,
   type CreateOrderPayload,
@@ -353,7 +354,7 @@ export async function processOrder(
     // country cash on delivery doesn't serve) is refused before commit.
     if (Array.isArray(validated.allowedPaymentMethods) && !validated.allowedPaymentMethods.includes("cod")) {
       if (mode === "delivery" && foreignAddress) {
-        throw new CheckoutBuyerMessage(formatCheckoutLanguageText(copy.cashOnDeliveryCountryUnavailableText, {
+        throw new CheckoutBuyerMessage(checkoutText(copy.cashOnDeliveryCountryUnavailableText, {
           country: shippingCountryName(shippingCountryCode, options.languageCode),
         }));
       }

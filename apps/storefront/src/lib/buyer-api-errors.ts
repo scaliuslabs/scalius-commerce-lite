@@ -6,6 +6,7 @@ const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   forbidden: "forbidden", not_found: "notFound", conflict: "conflict",
   validation_error: "invalid", invalid_input: "invalid", bad_request: "invalid",
   rate_limited: "rateLimited", too_many_requests: "rateLimited",
+  code_recently_sent: "codeJustSent", code_limit_reached: "codeLimitReached",
   invalid_code: "wrongCode", invalid_otp: "wrongCode", otp_expired: "expiredCode", code_expired: "expiredCode",
   otp_unavailable: "codesUnavailable", code_channel_unavailable: "codesUnavailable", no_code_channel: "noCodeChannel",
   quantity_unavailable: "stock", insufficient_stock: "stock", out_of_stock: "stock",

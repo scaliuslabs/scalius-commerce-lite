@@ -7,7 +7,14 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
  * structure only.
  */
 import type { FooterMenu, FooterMenuLink, SocialLink } from "@/lib/api";
-import type { StorefrontBrandAsset } from "@scalius/shared/storefront-theme";
+import {
+  buildStorefrontColorCss,
+  storefrontThemeContrast,
+  storefrontThemeShowsDarkColors,
+  type StorefrontBrandAsset,
+  type StorefrontThemeColors,
+  type StorefrontThemeTokens,
+} from "@scalius/shared/storefront-theme";
 import { mediaImageUrl } from "@/lib/media-url";
 import { telHref, whatsappHref } from "@/lib/store-identity";
 import { placeTrackOrderLink } from "@/lib/footer-links";
@@ -30,6 +37,8 @@ export interface FooterInput {
   words: FooterWords;
   /** The theme's footer logo; null: the store name in text. */
   logo: StorefrontBrandAsset | null;
+  /** The image dark pages show instead of the footer logo (`footerDarkPagesLogo`). */
+  darkPagesLogo?: StorefrontBrandAsset | null;
   menus: FooterMenu[];
   storeName: string | null;
   storePhone: string | null;
@@ -41,8 +50,13 @@ export interface FooterInput {
 }
 
 export interface FooterModel {
-  /** The footer logo's image (`src` "" without one: the store name in text). */
-  logo: { src: string };
+  /**
+   * The footer logo's image (`src` "" without one: the store name in text),
+   * and the image dark pages show instead (`darkSrc`, "" for the same one):
+   * set only where the footer's surface turns from light to dark, or dark to
+   * light, with the dark colours (`footerDarkPagesLogo`).
+   */
+  logo: { src: string; darkSrc: string };
   brandName: string;
   storePhone: string | null;
   phoneHref: string | null;
@@ -63,6 +77,38 @@ export interface FooterModel {
   /** Every top-level menu link and policy, in one list (the band footers). */
   flatLinks: Array<{ title: string; href: string }>;
   social: Array<SocialLink & { optimizedIconUrl: string | null }>;
+}
+
+/** The surface a footer is painted on: its tone's colour (the marketplace directory wears the header's). */
+export type FooterSurface = "secondary" | "muted" | "ink" | "header";
+
+function surfaceIsDark(colors: StorefrontThemeColors, headerTone: StorefrontThemeTokens["headerTone"], surface: FooterSurface): boolean {
+  const painted = buildStorefrontColorCss(colors, headerTone);
+  const hex = surface === "ink" ? painted["theme-ink"]
+    : surface === "header" ? painted["theme-header-background"]
+    : surface === "muted" ? colors.muted
+    : colors.secondary;
+  return storefrontThemeContrast(hex, "#ffffff") > storefrontThemeContrast(hex, "#000000");
+}
+
+/**
+ * The logo dark pages show in the footer instead of its footer logo, from
+ * the surface the footer is actually painted on in each colour set: none
+ * when that surface stays light or stays dark (the footer logo was chosen
+ * for it), the logo for dark pages when it turns dark, and the header's logo
+ * (made for light surfaces) when it turns light, as a header-tone footer
+ * under a light brand colour can. Null when dark colours never show.
+ */
+export function footerDarkPagesLogo(
+  tokens: Pick<StorefrontThemeTokens, "colors" | "darkColors" | "headerTone" | "colorScheme" | "colorSchemeToggle">,
+  surface: FooterSurface,
+  brand: { logo: StorefrontBrandAsset | null; darkLogo: StorefrontBrandAsset | null },
+): StorefrontBrandAsset | null {
+  if (!tokens.darkColors || !storefrontThemeShowsDarkColors(tokens)) return null;
+  const light = surfaceIsDark(tokens.colors, tokens.headerTone, surface);
+  const dark = surfaceIsDark(tokens.darkColors, tokens.headerTone, surface);
+  if (light === dark) return null;
+  return dark ? brand.darkLogo : brand.logo;
 }
 
 /** Plain text as paragraphs: blank lines separate them. */
@@ -92,7 +138,7 @@ export function footerModel(input: FooterInput): FooterModel {
     .map((policy) => ({ title: policy.title, href: policy.path }))
     .filter((link) => !linkedHrefs.has(link.href));
   return {
-    logo: { src: logo?.url ?? "" },
+    logo: { src: logo?.url ?? "", darkSrc: logo && input.darkPagesLogo && input.darkPagesLogo.url !== logo.url ? input.darkPagesLogo.url : "" },
     brandName,
     storePhone,
     phoneHref,

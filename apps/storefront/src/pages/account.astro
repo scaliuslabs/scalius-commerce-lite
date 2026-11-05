@@ -3,6 +3,7 @@
 // (status, date, total, thumbnails, Buy again), dense rows on a phone like
 // Daraz and Amazon. Server-rendered from the session cookie, so it works
 // without JavaScript; "Older orders" pages with the API's opaque cursor.
+import { pageOrderNumber } from "@/lib/checkout-text";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
@@ -22,7 +23,6 @@ import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import { accountPill, accountUi as ui, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 
 export const prerender = false;
 
@@ -57,7 +57,7 @@ const cards = orders.map((order) => {
   return {
     id: order.id,
     href: `/account/orders/${encodeURIComponent(order.id)}`,
-    number: formatOrderNumber(order.orderNumber, order.id),
+    number: pageOrderNumber(order.orderNumber, order.id),
     status: accountOrderStatusText(order.status),
     tone: orderStatusTone(order.status),
     request,

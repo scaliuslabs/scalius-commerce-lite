@@ -1,3 +1,4 @@
+import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorText } from "../buyer-api-errors";
 import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
@@ -39,9 +40,13 @@ import {
 } from "./browser-api";
 import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import { isFreeOrderLine } from "@scalius/shared/order-money-presentation";
+
 import { numberLocale } from "@scalius/shared/locale-format";
 import { formatList } from "@scalius/shared/locale-words";
+import { cartPaymentCopy } from "@/lib/cart-payment-copy";
+import { cartLineCopy } from "@/lib/cart-line-copy";
+import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { formatCount, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -283,6 +288,9 @@ function resetCartRuntimeListeners(): AbortSignal {
   pendingDiscountValidation = null;
   latestDiscountFacts = null;
   latestAllowedPaymentMethods = null;
+  // A page opened anew has revealed nothing yet and holds no quote.
+  revealedRepairs = "";
+  quotedLineDiscounts = new Map();
   latestOnlineOnlyLines = { names: [] };
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
@@ -551,6 +559,38 @@ function formStringValue(name: string): string | null {
   return value ? value : null;
 }
 
+/**
+ * The delivery address every cart request carries (the quote and the cart
+ * check), read from the form as it is now: another country's region and
+ * postal code, never the Bangladesh City/Thana a buyer chose before
+ * switching country (MARKETS-DESIGN step 3b); or Bangladesh's
+ * City/Thana/Area. Null while the address names no destination yet.
+ */
+function deliveryDestinationPayload(): Record<string, string | undefined> | null {
+  const country = formStringValue("shippingCountryCode")?.toUpperCase() ?? "";
+  if (country && country !== "BD") {
+    return {
+      shippingCountryCode: country,
+      shippingAdminArea: formStringValue("shippingAdminArea") || undefined,
+      shippingPostalCode: formStringValue("shippingPostalCode") || undefined,
+    };
+  }
+  // The form's own fields win, cleared ones included: a City cleared by a country switch or set by
+  // a saved address without a location event is what the buyer sees. The last location event
+  // stands in only where the page has no such field.
+  const city = addressField("city", latestCheckoutLocation?.cityId);
+  const zone = addressField("zone", latestCheckoutLocation?.zoneId);
+  if (!city || !zone) return null;
+  return { city, zone, area: addressField("area", latestCheckoutLocation?.areaId) || undefined };
+}
+
+/** A Bangladesh address field as the form holds it now ("" when cleared), else `fallback` when the page has no such field. */
+function addressField(name: string, fallback: string | undefined): string {
+  if (typeof document === "undefined") return fallback ?? "";
+  const field = document.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`);
+  return field ? field.value.trim() : fallback ?? "";
+}
+
 function formCanonicalPhoneValue(): string | null {
   if (typeof document === "undefined") return null;
   const input = document.querySelector<HTMLInputElement>(
@@ -576,8 +616,6 @@ function formCanonicalPhoneValue(): string | null {
  */
 function cartTaxQuoteInput(): Record<string, unknown> | null {
   const mode = readCheckoutDeliveryMode();
-  const city = latestCheckoutLocation?.cityId || formStringValue("city");
-  const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
   const method = window.lastShippingEventDetail;
   const cartItems = (
     document.getElementById("cartItemsInput") as HTMLInputElement | null
@@ -605,28 +643,9 @@ function cartTaxQuoteInput(): Record<string, unknown> | null {
   if (mode === "pickup") {
     return method?.kind === "pickup" ? { ...common, shippingMethodId: method.id } : null;
   }
-  // Another country's delivery: its shipping zone matches on its region and
-  // postal code (MARKETS-DESIGN step 3b); Bangladesh's form sends neither.
-  const country = formStringValue("shippingCountryCode")?.toUpperCase() ?? "";
-  if (country && country !== "BD") {
-    if (!method || method.kind !== "delivery") return null;
-    return {
-      ...common,
-      shippingCountryCode: country,
-      shippingAdminArea: formStringValue("shippingAdminArea") || undefined,
-      shippingPostalCode: formStringValue("shippingPostalCode") || undefined,
-      shippingMethodId: method.id,
-    };
-  }
-  if (!city || !zone || !method || method.kind !== "delivery") return null;
-  return {
-    ...common,
-    city,
-    zone,
-    area:
-      latestCheckoutLocation?.areaId || formStringValue("area") || undefined,
-    shippingMethodId: method.id,
-  };
+  const destination = deliveryDestinationPayload();
+  if (!destination || !method || method.kind !== "delivery") return null;
+  return { ...common, ...destination, shippingMethodId: method.id };
 }
 
 /** The codes the latest quote applied; only these go to the order commit. */
@@ -730,7 +749,7 @@ function renderFreeDeliveryProgress(
     ? fromMinor(toMinor(method.freeOver, decimalPlaces) - toMinor(subtotal, decimalPlaces), decimalPlaces)
     : 0;
   progress.textContent = shortfall > 0
-    ? formatCheckoutLanguageText(activeCheckoutCopy().freeDeliveryProgressText, { amount: formatMoney(shortfall) })
+    ? checkoutText(activeCheckoutCopy().freeDeliveryProgressText, { amount: formatMoney(shortfall) })
     : "";
   progress.classList.toggle("hidden", shortfall <= 0);
 }
@@ -822,17 +841,10 @@ function cartValidationDeliveryPayload() {
   if (mode === "none" || !method) return {};
   // A pickup rate is checked on its own: it needs no address.
   if (mode === "pickup") return method.kind === "pickup" ? { shippingMethodId: method.id } : {};
-  const city = formStringValue("city");
-  const zone = formStringValue("zone");
-  // Delivery is checked only against a rate chosen for this address.
-  if (!city || !zone || method.kind !== "delivery") return {};
-
-  return {
-    city,
-    zone,
-    area: formStringValue("area"),
-    shippingMethodId: method.id,
-  };
+  // Delivery is checked only against a rate chosen for this address, as the quote reads it.
+  const destination = deliveryDestinationPayload();
+  if (!destination || method.kind !== "delivery") return {};
+  return { ...destination, shippingMethodId: method.id };
 }
 
 function issueKeyForCart(
@@ -932,9 +944,14 @@ function codRefusedMessage(): string {
   const copy = activeCheckoutCopy();
   // One online-only line refuses cash for the whole order: name those lines.
   const { names } = latestOnlineOnlyLines;
-  if (names.length === 0) return copy.noPaymentMethodsText;
   const language = pageCheckoutLanguage().code;
-  return formatCheckoutLanguageText(copy.cartOnlinePaymentRequiredText, {
+  if (names.length === 0) {
+    // The buyer is on the cart: say what to change here (the delivery country cash on delivery doesn't serve).
+    const words = cartPaymentCopy(language);
+    const country = formStringValue("shippingCountryCode")?.toUpperCase() ?? "";
+    return country && country !== "BD" ? words.codCountry(shippingCountryName(country, language)) : words.noPaymentMethods;
+  }
+  return checkoutText(copy.cartOnlinePaymentRequiredText, {
     items: formatList(names, numberLocale(language || "en", storeRegion())),
   });
 }
@@ -973,11 +990,35 @@ function cartBlockedMessage(): string {
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
   return count === 1
     ? activeCheckoutCopy().cartItemChangedText
-    : formatCheckoutLanguageText(activeCheckoutCopy().cartItemsNeedAttentionText, { count });
+    : checkoutText(activeCheckoutCopy().cartItemsNeedAttentionText, { count });
+}
+
+/** What the cart last needed fixed when it opened the folded summary: each new need opens it once. */
+let revealedRepairs = "";
+
+/**
+ * On phones the order summary folds the lines, their repairs and the cart's
+ * message away: a cart that needs something fixed ("only 1 left", a store
+ * rule, a payment it cannot take) opens it, once for each new need, so the
+ * buyer sees what to fix; folding it again is theirs. A check in flight
+ * clears the needs for a moment, so the same needs coming back are not new
+ * (the summary once reopened on every check, or stayed folded when the first
+ * answer came before the page was ready).
+ */
+function revealCartRepairs(): void {
+  if (Object.keys(cartStore.get().items).length === 0 || !hasBlockingCartIssues()) return;
+  const needs = JSON.stringify([Object.keys(cartValidationIssues).sort(), cartValidationGlobalError, cartRuleErrors().length, codRefusedForCart()]);
+  const root = document.getElementById("cartPageRoot");
+  if (!root || needs === revealedRepairs) return;
+  revealedRepairs = needs;
+  if (root.dataset.summary !== "closed") return;
+  root.dataset.summary = "open";
+  document.getElementById("orderSummaryToggle")?.setAttribute("aria-expanded", "true");
 }
 
 function updateCartValidationMessage() {
   const ruleBannerShown = renderCartRuleBanner();
+  revealCartRepairs();
   const message = document.getElementById("cartValidationMessage");
   if (!message) return;
 
@@ -1263,7 +1304,7 @@ function renderEstimateNote(leftOut: readonly string[]): void {
   if (!note) return;
   const names = [...new Set(leftOut.map((name) => name.trim()).filter(Boolean))];
   note.textContent = names.length > 0
-    ? formatCheckoutLanguageText(activeCheckoutCopy().estimateLeavesOutText, {
+    ? checkoutText(activeCheckoutCopy().estimateLeavesOutText, {
         items: formatList(names, numberLocale(pageCheckoutLanguage().code || "en", storeRegion())),
       })
     : "";
@@ -1379,6 +1420,7 @@ async function refreshTotals() {
     setQuoteRuleErrors([]);
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
+    setQuotedLineDiscounts(quote);
     renderBuyerUi(quote.buyerUi, { onChange: refreshBuyerUi });
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
@@ -1415,6 +1457,36 @@ function setQuoteRuleErrors(next: CartRuleError[]): void {
   updateCheckoutButtonState();
 }
 
+/** Each line's share of the discounts on the latest quote, by cart key, for the quantity it was quoted at. */
+let quotedLineDiscounts = new Map<string, { discountMinor: number; quantity: number; decimalPlaces: number }>();
+
+/** Keeps the latest quote's line shares; the lines repaint when one changes (a gift turning free). */
+function setQuotedLineDiscounts(quote: CheckoutTaxQuote): void {
+  const next = new Map(quote.items.flatMap((line) => (typeof line.discountMinor === "number"
+    ? [[line.cartKey, { discountMinor: line.discountMinor, quantity: line.quantity, decimalPlaces: quote.decimalPlaces }] as const]
+    : [])));
+  const changed = JSON.stringify([...next]) !== JSON.stringify([...quotedLineDiscounts]);
+  quotedLineDiscounts = next;
+  if (changed) paintCartLines();
+}
+
+/**
+ * A line its own discount pays in full (a free gift, the "get" item of a
+ * buy-one-get-one): the cart reads it as the receipt, the account and the
+ * dashboard do, its price struck and then zero, beside the discount line.
+ */
+function freeCartLine(cartKey: string, item: VariantCartItem): boolean {
+  const quoted = quotedLineDiscounts.get(cartKey);
+  if (!quoted || quoted.quantity !== item.quantity) return false;
+  return isFreeOrderLine({ grossSubtotalMinor: toMinor(item.price * item.quantity, quoted.decimalPlaces), discountMinor: quoted.discountMinor });
+}
+
+/** A free line's price as the receipt draws it, struck then zero, and heard as one phrase ("Free, was ৳150"). */
+function freeLinePrice(amount: number): string {
+  const was = formatMoney(amount);
+  return `<span class="sr-only">${escapeHtml(cartLineCopy().freeLine(was))}</span><span aria-hidden="true"><s class="me-1.5 text-muted-foreground">${was}</s>${formatMoney(0)}</span>`;
+}
+
 function renderCartLine(
   cartKey: string,
   item: VariantCartItem,
@@ -1446,7 +1518,7 @@ function renderCartLine(
   const quantityLimit = cartQuantityLimits[cartKey];
   const atLimit = typeof quantityLimit === "number" && item.quantity >= quantityLimit;
   const increaseDisabled = !quantityKnown || atLimit;
-  const increaseLabel = escapeHtml(formatCheckoutLanguageText(
+  const increaseLabel = escapeHtml(checkoutText(
     !quantityKnown
       ? copy.checkingAvailableQuantityText
       : atLimit
@@ -1480,15 +1552,15 @@ function renderCartLine(
           <div class="min-w-0 flex-1">
             <div class="flex justify-between gap-2">
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
-              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: lineName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" aria-label="${escapeHtml(checkoutText(copy.removeFromCartText, { item: lineName }))}"${describedBy} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
-                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: lineName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
+                <button type="button" aria-label="${escapeHtml(checkoutText(copy.decreaseQuantityText, { item: lineName }))}"${describedBy} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
                 <span class="flex h-full min-w-8 items-center justify-center px-1 text-center text-sm tabular-nums text-foreground" aria-live="polite">${escapeHtml(formatCount(item.quantity))}</span>
                 <button type="button" aria-label="${increaseLabel}"${describedBy} ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
-              <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
+              <div class="text-end"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${freeCartLine(cartKey, item) ? freeLinePrice(item.price * item.quantity) : formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
             </div>`}
             ${ruleBlock}
           </div>
@@ -1555,21 +1627,6 @@ export function refreshCartBlockingState() {
   updateCheckoutButtonState();
 }
 
-/** A cart item that needs attention unfolds the phone order summary once, so the buyer sees which. */
-let summaryOpenedForCartIssues = false;
-function revealOrderSummaryForCartIssues(blocked: boolean): void {
-  if (!blocked) {
-    summaryOpenedForCartIssues = false;
-    return;
-  }
-  if (summaryOpenedForCartIssues) return;
-  summaryOpenedForCartIssues = true;
-  const root = document.getElementById("cartPageRoot");
-  if (root?.dataset.summary !== "closed") return;
-  root.dataset.summary = "open";
-  document.getElementById("orderSummaryToggle")?.setAttribute("aria-expanded", "true");
-}
-
 export function updateCheckoutButtonState() {
   const submitButton = document.getElementById(
     "submitButton",
@@ -1585,7 +1642,6 @@ export function updateCheckoutButtonState() {
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
   const copy = activeCheckoutCopy();
   const cartBlocked = hasBlockingCartIssues();
-  revealOrderSummaryForCartIssues(cartBlocked && cartReady && !isEmpty);
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
     unavailableMessage,
@@ -1671,7 +1727,7 @@ async function handleApplyDiscount() {
     return;
   }
   if (discountCodes.includes(code)) {
-    showDiscountMessage(formatCheckoutLanguageText(copy.discountAlreadyAppliedText, { code }), "error");
+    showDiscountMessage(checkoutText(copy.discountAlreadyAppliedText, { code }), "error");
     return;
   }
   if (isDiscountValidationPending()) return;
@@ -1716,7 +1772,7 @@ async function handleApplyDiscount() {
         document.getElementById("customerPhone-input")?.focus();
       }
     } else {
-      showDiscountMessage(formatCheckoutLanguageText(copy.discountAppliedText, { code }), "success");
+      showDiscountMessage(checkoutText(copy.discountAppliedText, { code }), "success");
     }
   } finally {
     if (pendingDiscountValidation === requestSequence) {
@@ -1762,7 +1818,7 @@ function removeLineWithUndo(cartKey: string): void {
   const snapshot = cartStore.get();
   const item = snapshot.items[cartKey];
   if (!item || !removeCartItemByKey(cartKey)) return;
-  offerUndo(formatCheckoutLanguageText(activeCheckoutCopy().itemRemovedText, { item: cartLineName(item) }), snapshot);
+  offerUndo(checkoutText(activeCheckoutCopy().itemRemovedText, { item: cartLineName(item) }), snapshot);
 }
 
 // --- Initialization ---

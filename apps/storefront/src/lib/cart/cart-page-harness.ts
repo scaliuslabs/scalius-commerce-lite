@@ -9,9 +9,10 @@
  * every test. A name no one supplies fails loudly, not as a ReferenceError
  * deep inside a test.
  */
+import { checkoutText } from "@/lib/checkout-text";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+
 import { formatMoney } from "@/lib/currency";
 import { getCustomerSession } from "../api/customer-auth";
 import { browserApiUrl } from "../api/browser-url";
@@ -81,10 +82,12 @@ import {
   hideCheckoutLoadingOverlay,
   showCheckoutLoadingOverlay,
 } from "../checkout/loading-overlay";
+import { loadLazyScript } from "@/scripts/lazy-script";
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
   BILLING_ADDRESS_FIELDS,
+  loadLazyScript,
   addressAutocompleteService,
   applyCheckoutContactNeeds,
   applyCheckoutDeliveryMode,
@@ -109,7 +112,7 @@ const realImports: Record<string, unknown> = {
   fetchDeliveryRates,
   fetchLocationOptions,
   findNamedCheckoutControl,
-  formatCheckoutLanguageText,
+  checkoutText,
   formatMoney,
   getCustomerSession,
   getEffectiveCartShippingFee,
