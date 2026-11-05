@@ -1767,6 +1767,38 @@ async function assignAllocationSettlements(
  * 4. Finalizes order payment status
  * 5. Releases inventory on full refund
  */
+/**
+ * The most a refund naming no lines may give back (minor units) while the
+ * gift cards the order bought bound it, by the same plan `processRefund`
+ * refuses with; null when the order bought none or the bound leaves the whole
+ * paid amount refundable. The dashboard offers it before any refusal.
+ */
+export async function previewGiftCardRefundLimitMinor(
+    db: Database,
+    orderId: string,
+    payments: ReadonlyArray<Pick<OrderPayment, "paymentType" | "status" | "amountMinor">>,
+): Promise<number | null> {
+    const order = await db.select({
+        paymentStatus: orders.paymentStatus,
+        status: orders.status,
+        paymentTermsDays: orders.paymentTermsDays,
+        paidAmountMinor: orders.paidAmountMinor,
+        buysGiftCards: orderHasPurchasedGiftCardsSql(orderId),
+    }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order || !Number(order.buysGiftCards) || order.paidAmountMinor <= 0) return null;
+    const [items, refundedUnits, cards, spent] = await db.batch(giftCardPurchaseReads(db, orderId));
+    const plan = planGiftCardClawback({
+        state: giftCardPurchaseState(items, refundedUnits, cards, spent),
+        refundLines: [],
+        receivedMinor: payments.filter(isCapturedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        refundedBeforeMinor: payments.filter(isRefundedPaymentRow).reduce((sum, row) => sum + row.amountMinor, 0),
+        refundMinor: order.paidAmountMinor,
+        // A refund of everything paid, as processRefund reads it.
+        closesOrder: !giftCardHandoverPending(order, !(order.paymentTermsDays !== null && order.paymentStatus === PaymentStatus.PARTIAL)),
+    });
+    return plan.shortfallMinor > 0 ? Math.max(0, order.paidAmountMinor - plan.shortfallMinor) : null;
+}
+
 export async function processRefund(
     db: Database,
     params: RefundRequest,

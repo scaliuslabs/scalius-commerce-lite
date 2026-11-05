@@ -9,9 +9,11 @@ export const refundRefusalMessages = defineMessages({
   en: {
     giftCardSpent: "{spent} of the gift cards this order sold was already spent, so up to {max} can be refunded.",
     giftCardUnissued: "{unissued} in gift cards from this order is still to be issued: name those units in the lines below to cancel them. Up to {max} can be refunded now.",
+    giftCardLimit: "Up to {max}: part of the gift cards this order sold was already spent.",
   },
   bn: {
     giftCardSpent: "এই অর্ডারে বিক্রি হওয়া গিফট কার্ডের {spent} ইতিমধ্যে খরচ হয়ে গেছে, তাই সর্বোচ্চ {max} ফেরত দেওয়া যাবে।",
     giftCardUnissued: "এই অর্ডারের {unissued} মূল্যের গিফট কার্ড এখনো ইস্যু হয়নি: বাতিল করতে নিচের লাইনে সেই ইউনিটগুলো বেছে নিন। এখন সর্বোচ্চ {max} ফেরত দেওয়া যাবে।",
+    giftCardLimit: "সর্বোচ্চ {max}: এই অর্ডারে বিক্রি হওয়া গিফট কার্ডের কিছু অংশ ইতিমধ্যে খরচ হয়ে গেছে।",
   },
 });
