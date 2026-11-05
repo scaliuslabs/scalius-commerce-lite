@@ -288,14 +288,6 @@ function compatibleUnion(
 }
 
 /**
- * The same type, or one that only grows where apps cannot notice: an object
- * literal gains optional members, and that holds inside a union member, an
- * intersection member (same arity), an array's elements and parentheses, at
- * any depth, unless another part of the same intersection already declares the
- * gained key. A removed or narrowed union member, a new required member and a
- * different primitive stay breaks.
- */
-/**
  * A list type's element, in either spelling: `T[]` or `Array<T>`, and
  * `readonly T[]` or `ReadonlyArray<T>`. Null for any other type.
  */
@@ -311,6 +303,14 @@ function listOf(node: ts.TypeNode): { element: ts.TypeNode; readonly: boolean } 
   return null;
 }
 
+/**
+ * The same type, or one that only grows where apps cannot notice: an object
+ * literal gains optional members, and that holds inside a union member, an
+ * intersection member (same arity), a list's elements and parentheses, at
+ * any depth, unless another part of the same intersection already declares the
+ * gained key. A removed or narrowed union member, a new required member and a
+ * different primitive stay breaks.
+ */
 function compatibleType(
   before: ts.TypeNode | undefined, after: ts.TypeNode | undefined,
   oldSource: ts.SourceFile, newSource: ts.SourceFile,

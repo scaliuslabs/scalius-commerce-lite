@@ -34,6 +34,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
+import { urlsNotReadyFilesImages } from "../media-references";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
   DEFAULT_STOREFRONT_THEME,
@@ -1355,9 +1356,15 @@ export async function saveSeoSettings(
   },
   options: SettingsSaveOptions = {},
 ) {
-  const current = data.discovery !== undefined || data.returnPolicy !== undefined
+  const current = data.discovery !== undefined || data.returnPolicy !== undefined || data.socialImage
     ? await getSeoSettings(db)
     : null;
+  // A newly chosen sharing image is a ready image in Files; the saved one stays, even once trashed.
+  if (data.socialImage && data.socialImage !== current?.socialImage
+    && (await urlsNotReadyFilesImages(db, [data.socialImage])).size > 0) {
+    const message = "Choose the social sharing image from Files.";
+    throw new ValidationError(message, [{ path: "socialImage", message }]);
+  }
   return seoDocument.write(db, {
     homepageTitle: data.homepageTitle,
     homepageMetaDescription: data.homepageMetaDescription,
