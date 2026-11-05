@@ -10,25 +10,45 @@ import { createContext, isValidElement, Suspense, useContext, useEffect, useRef,
 interface LoadingSpan {
   start: number;
   ended?: boolean;
+  /** Mounted `LazyPart`s sharing this wait. */
+  users?: number;
 }
 
 const SpanContext = createContext<LoadingSpan | null>(null);
 
 /**
- * The wait of each lazy part's code, by the lazy component (one module-level
- * object per part). A card mounted again while that code still loads (its
- * form remounting under it) carries on the same wait instead of starting a
- * new one, which would hide its skeleton for another 300 ms.
+ * The open wait of each lazy part's code, by the lazy component (one
+ * module-level object per part). A card mounted again while that code still
+ * loads (its form remounting under it) carries on the same wait instead of
+ * starting a new one, which would hide its skeleton for another 300 ms. The
+ * wait is shared only while a `LazyPart` showing it is mounted: leaving the
+ * page before the code arrives, or a failed download that unmounts the part,
+ * drops it, so a later visit waits on its own.
  */
 const spans = new WeakMap<object, LoadingSpan>();
 
+function lazyTypeOf(children: ReactNode): object | null {
+  return isValidElement(children) && typeof children.type === "object" && children.type !== null ? children.type : null;
+}
+
 function spanFor(children: ReactNode): LoadingSpan {
-  const type = isValidElement(children) && typeof children.type === "object" && children.type !== null ? children.type : null;
+  const type = lazyTypeOf(children);
   const known = type ? spans.get(type) : undefined;
-  if (known && !known.ended) return known;
-  const span = { start: Date.now() };
-  if (type) spans.set(type, span);
-  return span;
+  return known && !known.ended ? known : { start: Date.now() };
+}
+
+/** Shares a mounted part's wait while it lasts; the last part to unmount takes it away. */
+function useSharedSpan(children: ReactNode, span: LoadingSpan): void {
+  const type = lazyTypeOf(children);
+  useEffect(() => {
+    if (!type || span.ended) return;
+    span.users = (span.users ?? 0) + 1;
+    spans.set(type, span);
+    return () => {
+      span.users = (span.users ?? 1) - 1;
+      if (span.users === 0 && spans.get(type) === span) spans.delete(type);
+    };
+  }, [type, span]);
 }
 
 /**
@@ -95,6 +115,7 @@ function Arrived({ span, fallback, children }: { span: LoadingSpan; fallback: Re
  */
 export function LazyPart({ fallback, className, children }: { fallback: ReactNode; className?: string; children: ReactNode }) {
   const [span] = useState<LoadingSpan>(() => spanFor(children));
+  useSharedSpan(children, span);
   return (
     <SpanContext.Provider value={span}>
       <Suspense fallback={<Waiting span={span} className={className}>{fallback}</Waiting>}>
