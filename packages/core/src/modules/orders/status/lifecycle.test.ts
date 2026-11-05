@@ -186,6 +186,18 @@ describe("applyOrderStatusChange — CANCELLED exemption (Fix C)", () => {
     await applyOrderStatusChange(db, "order_1", OrderStatus.CONFIRMED, undefined, { generic: true });
     expect(mockedAssertManualCodDepositVerified).not.toHaveBeenCalled();
   });
+
+  it("rejects status update when assertManualCodDepositVerified throws", async () => {
+    const db = createAppDb(createOrderMock({ paymentMethod: PaymentMethod.COD }));
+    (mockedAssertManualCodDepositVerified as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("The deposit must be recorded before this order can move on."),
+    );
+    await expect(
+      applyOrderStatusChange(db, "order_1", OrderStatus.CONFIRMED, undefined, { generic: true }),
+    ).rejects.toThrow("The deposit must be recorded before this order can move on.");
+    // The order update should not be called when verification fails
+    expect(db.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("reconcileInventoryForStatus — inventory recovery path (Fix A mandatory verification)", () => {

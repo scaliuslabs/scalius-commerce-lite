@@ -660,6 +660,11 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
             expect(result.commitPayload.codDeposit).toBeUndefined();
         });
 
+        // TODO: Add test for gift cards with codDepositEnabled true once
+        // quoteStorefrontGiftCardTender can be properly mocked in the test harness.
+        // The current mock database does not return gift card data, so the tender
+        // calculation returns 0 applied, making giftCardsApplied false.
+
         it("does not create deposit plan when order is in foreign currency (codDepositEnabled disabled)", async () => {
             const policy = createMockCheckoutPolicy({
                 codDepositEnabled: false, // Disable COD deposit to avoid currency authority error
@@ -688,6 +693,35 @@ describe("createStorefrontOrder — manual COD deposit computation (Fix C)", () 
 
             expect(result.depositPlan).toBe(false);
             expect(result.commitPayload.codDeposit).toBeUndefined();
+        });
+
+        it("refuses deposit when order is in foreign currency (codDepositEnabled true)", async () => {
+            const policy = createMockCheckoutPolicy({
+                codDepositEnabled: true,
+                codDepositMode: "fixed",
+                codDepositAmount: 500,
+            });
+            const cart = createMockCartValidation({
+                money: {
+                    currencyCode: "USD",
+                    decimalPlaces: 2,
+                    rate: "0.009",
+                    shopCurrencyCode: "BDT",
+                    shopDecimalPlaces: 2,
+                    incrementMinor: 1,
+                    fxSource: "fx_rate",
+                    fxAsOf: Math.floor(Date.now() / 1000),
+                    lockMinutes: 30,
+                },
+            });
+            const delivery = createMockDeliveryPreflight();
+            const taxQuote = createMockTaxQuote(10500);
+
+            const input = createMockOrderInput();
+
+            await expect(
+                createStorefrontOrder(mockDb, input, requestUrl, undefined, cart, delivery, undefined, requestCurrency, policy, mockTaxAuthoritySnapshot),
+            ).rejects.toThrow("Cash on delivery is unavailable for this order.");
         });
     });
 

@@ -230,7 +230,7 @@ export const paymentsMessages = defineMessages({
     codDepositModeFixed: "নির্ধারিত পরিমাণ",
     codDepositModeFixedHelp: "স্টোরের কারেন্সিতে একটি নির্দিষ্ট টাকা।",
     codDepositModePercentage: "মোটের হার%",
-    codDepositModePercentageHelp: "অর্ডারের মোটের একটি পূর্ণ Hundreds হার, ১–৯৯।",
+    codDepositModePercentageHelp: "অর্ডারের মোটের একটি পূর্ণ শতাংশ হার, ১–৯৯।",
     codDepositAmount: "ডিপোজিটের পরিমাণ",
     codDepositAmountHelp: "কাস্টমার যাকে পূরণের আগে পরিশোধ করতে হবে সে ডিপোজিট।",
     codDepositPercent: "ডিপোজিটের হার%",

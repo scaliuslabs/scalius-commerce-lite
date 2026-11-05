@@ -142,20 +142,21 @@ describe("computePaymentStateFromLedger — manual COD deposit refunds (Fix D)",
   });
 });
 
-vi.mock("../../payments", () => ({
+vi.mock("./order-currency", () => ({
   resolveOrderCurrencySnapshot: vi.fn().mockReturnValue({ code: "EGP", decimalPlaces: 2 }),
   assertOrderPaymentCurrency: vi.fn(),
   buildReconciledRefundNotificationDedupeKey: vi.fn().mockReturnValue("dedupe_key"),
 }));
 
-vi.mock("../../inventory", () => ({
+vi.mock("../inventory", () => ({
   applyInventoryForStatusChangeWithImpact: vi.fn().mockResolvedValue({
     inventoryAction: "none",
     availabilityTransitionVariantIds: [],
   }),
 }));
 
-vi.mock("../../notifications", () => ({
+vi.mock("../notifications", () => ({
+  buildNotificationOutboxInsert: vi.fn().mockResolvedValue(null),
   buildReconciledRefundNotificationDedupeKey: vi.fn().mockReturnValue("dedupe_key"),
 }));
 

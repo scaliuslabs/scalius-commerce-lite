@@ -452,8 +452,8 @@ app.openapi(createRoute({
   method: "post",
   path: "/orders/{id}/payments",
   tags: ["App API - Orders"],
-  summary: "Record a payment against an invoice order",
-  description: "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. When an app records it on an order with gift cards or downloads still owed, the order is held for staff review in the same write: they are handed over once staff release the hold. Send an Idempotency-Key: a repeat returns the first payment.",
+  summary: "Record a payment against an invoice order or a manual COD deposit",
+  description: "Records money received for a deferred (net terms) order: a bank transfer, cheque or cash against its invoice. Also records a manual COD deposit when `paymentType` is `\"deposit\"` against a pending manual payment plan. No provider is called. The order's paid amount and payment status advance in the same write, `payment.updated` (and `order.paid` once nothing is due) follow, and a refund of it is a manual settlement. When an app records it on an order with gift cards or downloads still owed, the order is held for staff review in the same write: they are handed over once staff release the hold. Send an Idempotency-Key: a repeat returns the first payment.",
   request: {
     params: idParam,
     headers: recordPaymentHeaders,
