@@ -111,6 +111,17 @@ export function footerDarkPagesLogo(
   return dark ? brand.darkLogo : brand.logo;
 }
 
+/**
+ * A social profile's icon from Files as the footer draws it: its 160px
+ * rendition on the store's media address. Null without one, and the footer
+ * draws the network's glyph (or the label's first letter) instead. App
+ * footer skins get this same image (`extensions/data.ts#footerData`).
+ */
+export function socialProfileIconUrl(iconUrl: string | null | undefined): string | null {
+  const url = iconUrl?.trim();
+  return url ? mediaImageUrl(url, 160) || null : null;
+}
+
 /** Plain text as paragraphs: blank lines separate them. */
 function paragraphs(text: string): string[] {
   return text
@@ -159,10 +170,7 @@ export function footerModel(input: FooterInput): FooterModel {
       ),
       ...policyLinks,
     ].map((link) => ({ title: link.title, href: link.href })),
-    social: social.map((item) => ({
-      ...item,
-      optimizedIconUrl: item.iconUrl ? mediaImageUrl(item.iconUrl, 160) : null,
-    })),
+    social: social.map((item) => ({ ...item, optimizedIconUrl: socialProfileIconUrl(item.iconUrl) })),
   };
 }
 
