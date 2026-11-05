@@ -17,6 +17,8 @@ import {
 } from "@scalius/shared/plugins/storefront-protocol";
 
 export type { StorefrontIslandContext as IslandContext };
+export type { StorefrontSearchSuggestion as SearchSuggestion } from "@scalius/shared/plugins/storefront-protocol";
+export { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
 
 export function defineIsland<Props = unknown>(
   mount: (element: HTMLElement, props: Props, context: StorefrontIslandContext) => void | (() => void),

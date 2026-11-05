@@ -17228,6 +17228,7 @@
    "seo_text": 1,
    "newsletter": 1
   },
+  "STOREFRONT_SEARCH_SUGGESTIONS_MAX": 7,
   "STOREFRONT_EXTENSION_PREFIX": "/_x/"
  }
 }

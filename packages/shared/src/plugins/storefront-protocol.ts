@@ -1204,6 +1204,26 @@ export interface StorefrontModule {
 // ── Islands (in the buyer's browser) ──────────────────────────────────────
 
 /** What an island's `mount` gets besides its element and props. */
+/** The most product suggestions one `searchSuggestions` call answers. */
+export const STOREFRONT_SEARCH_SUGGESTIONS_MAX = 7;
+
+/** One product the store's search suggests for a typed query (`StorefrontIslandContext.searchSuggestions`). */
+export interface StorefrontSearchSuggestion {
+  productId: string;
+  title: string;
+  /** The product's page on this presence. */
+  url: string;
+  image: StorefrontImage | null;
+  /** What the buyer pays (the lowest when `priceVaries`). */
+  price: StorefrontMoney;
+  /** The regular price while discounted. */
+  compareAt: StorefrontMoney | null;
+  /** The price varies by option ("From …"). */
+  priceVaries: boolean;
+  /** Something of it can be bought now. */
+  available: boolean;
+}
+
 export interface StorefrontIslandContext {
   pluginId: string;
   /** The app's file base URL (its public files are under `public/`). */
@@ -1235,6 +1255,18 @@ export interface StorefrontIslandContext {
   fetchApp(path: string, init?: RequestInit): Promise<Response>;
   /** Whether the buyer is signed in: the store's hint for showing UI (its account pages stay server-authoritative). */
   signedIn(): boolean;
+  /**
+   * The store's own product suggestions for what a buyer typed, as its
+   * search palette gets them: the same public, cached search (one request
+   * per query, shared with the palette; the page remembers answers), priced
+   * in the page's market and currency, at most `limit` (1 to
+   * STOREFRONT_SEARCH_SUGGESTIONS_MAX, default 5). A query too short to
+   * search (one Latin letter) answers `[]` and asks nothing; one Bangla or
+   * Han or Hangul grapheme that is a word searches. Rejects when the search
+   * fails; `signal` stops waiting. Debounce keystrokes as the palette does
+   * (about 150ms). Absent from older stores.
+   */
+  searchSuggestions?(query: string, options?: { limit?: number; signal?: AbortSignal }): Promise<StorefrontSearchSuggestion[]>;
   /**
    * On a product page: the store's buy form, read through the store (never
    * its markup). `onChange` calls the listener when the variant, quantity,

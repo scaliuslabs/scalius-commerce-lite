@@ -60,6 +60,8 @@ export { STOREFRONT_WARRANTY_DURATION_UNITS, STOREFRONT_WARRANTY_PROVIDERS } fro
 export { STOREFRONT_CARD_FACT_KINDS } from "@scalius/shared/plugins/storefront-protocol";
 /** The budgets the packer, the upload and the storefront hold a render to (`islandPropsBytes`, `htmlBytes`, …). */
 export { STOREFRONT_COMPONENT_LIMITS } from "@scalius/shared/plugins/storefront-protocol";
+/** The most product suggestions one `context.searchSuggestions` call answers. */
+export { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
 export type { BuyFormPartProps, BuyFormProps, DeferredProps, ImageProps, IslandProps, OrderFormProps, PriceProps, ProductModuleProps, SlotProps } from "./components";
 export type {
   StorefrontBannerMosaicSkinSettings,
@@ -88,6 +90,7 @@ export type {
   StorefrontObjectFieldView,
   StorefrontProductCard,
   StorefrontProductCardData,
+  StorefrontSearchSuggestion,
   StorefrontProductGridSkinSettings,
   StorefrontProductList,
   StorefrontProductModuleEmbed,
