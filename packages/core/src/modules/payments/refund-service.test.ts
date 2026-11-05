@@ -1012,11 +1012,12 @@ describe("HMAC metadata integrity (manual COD deposit refund)", () => {
       expect(result).toEqual({});
     });
 
-    it("returns parsed metadata for legacy metadata without HMAC (graceful degradation)", async () => {
+    it("rejects legacy metadata without HMAC when master secret is configured", async () => {
       const legacyMetadata = JSON.stringify({ manualDepositRefund: true, amountMinor: 2000 });
 
       const result = await parseAndVerifyRefundMetadata(TEST_ENV, legacyMetadata);
-      expect(result).toEqual({ manualDepositRefund: true, amountMinor: 2000 });
+      // Master secret is configured but metadata has no HMAC - reject for security
+      expect(result).toEqual({});
     });
 
     it("returns empty object for legacy metadata that is not an object", async () => {

@@ -646,6 +646,9 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                       ? copy.codDepositCompletedText
                     : copy.codDepositCancelledText}
               </p>
+              <p class="mt-1 text-sm text-muted-foreground" data-manual-cod-deposit-amount>
+                {copy.codDepositAmountText} {formatReceiptAmount(order.paymentPlan.depositAmount)}
+              </p>
               {order.paymentPlan.instructions && (
                 <p class="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words" data-manual-cod-deposit-instructions>
                   {order.paymentPlan.instructions}

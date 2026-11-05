@@ -391,6 +391,17 @@ export interface OrderDetails extends OrderListItem, OrderBillingAddressFields {
     refundAttempts: OrderRefundAttemptView[];
     activeRefundOperation: ActiveRefundOperationView | null;
     supportRequests: OrderSupportRequestView[];
+    paymentPlan: {
+        totalAmount: number;
+        depositAmount: number;
+        balanceDue: number;
+        balanceDueDate: string | null;
+        status: string;
+        depositPaidAt: string | null;
+        balancePaidAt: string | null;
+        createdAt: string | null;
+        updatedAt: string | null;
+    } | null;
 }
 
 // ─────────────────────────────────────────

@@ -728,22 +728,22 @@ function renderDelivery(detail: AccountOrderDetail): void {
 }
 
 /** Renders the contact snapshot the buyer was shown at order placement: phone, WhatsApp, email, social links. */
-function renderManualCodDepositContact(snapshot: ContactSnapshot): string {
+function renderManualCodDepositContact(snapshot: ContactSnapshot, copy: ReturnType<typeof accountCopy>): string {
   const parts: string[] = [];
   if (snapshot.phone) {
-    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">Phone:</span> ${escapeHtml(formatBdMobile(snapshot.phone))}</p>`);
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${copy.contactPhoneText}:</span> ${escapeHtml(formatBdMobile(snapshot.phone))}</p>`);
   }
   if (snapshot.email) {
-    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">Email:</span> ${escapeHtml(snapshot.email)}</p>`);
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${copy.contactEmailText}:</span> ${escapeHtml(snapshot.email)}</p>`);
   }
   if (snapshot.whatsappUrl) {
-    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">WhatsApp:</span> <a href="${escapeHtml(snapshot.whatsappUrl)}" class="text-primary underline underline-offset-2">${escapeHtml(snapshot.whatsappUrl)}</a></p>`);
+    parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${copy.contactWhatsappText}:</span> <a href="${escapeHtml(snapshot.whatsappUrl)}" class="text-primary underline underline-offset-2">${escapeHtml(snapshot.whatsappUrl)}</a></p>`);
   }
   for (const link of snapshot.socialLinks ?? []) {
     parts.push(`<p class="text-sm text-muted-foreground"><span class="font-medium">${escapeHtml(link.label)}:</span> <a href="${escapeHtml(link.url)}" class="text-primary underline underline-offset-2">${escapeHtml(link.label)}</a></p>`);
   }
   return parts.length > 0
-    ? `<div class="mt-2 text-sm"><p class="font-medium text-foreground">Contact the store</p>${parts.join("")}</div>`
+    ? `<div class="mt-2 text-sm"><p class="font-medium text-foreground">${copy.contactStoreText}</p>${parts.join("")}</div>`
     : "";
 }
 
@@ -788,7 +788,7 @@ function renderPayment(detail: AccountOrderDetail): void {
                 : copy.codDepositCancelledText
           )}</p>
           ${detail.paymentPlan.instructions ? `<p class="mt-1 text-sm text-muted-foreground whitespace-pre-line break-words" data-manual-cod-deposit-instructions>${escapeHtml(detail.paymentPlan.instructions)}</p>` : ""}
-          ${detail.paymentPlan.contactSnapshot ? renderManualCodDepositContact(detail.paymentPlan.contactSnapshot) : ""}
+          ${detail.paymentPlan.contactSnapshot ? renderManualCodDepositContact(detail.paymentPlan.contactSnapshot, copy) : ""}
         </div>
       ` : "",
       refunds,

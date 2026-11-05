@@ -489,6 +489,12 @@ export async function parseAndVerifyRefundMetadata(
             // Return payload without HMAC
             return payload;
         }
+        // If a master secret is configured, require HMAC on flagged metadata
+        const hmacKey = await getRefundHmacKey(env);
+        if (hmacKey) {
+            // Master secret is configured but metadata has no HMAC - reject
+            return {};
+        }
         return obj;
     } catch {
         return {};
@@ -1276,7 +1282,8 @@ export async function buildRefundAttemptMetadata(params: {
     };
     // Add HMAC if master secret is provided
     if (params.masterSecret) {
-        const key = await deriveRuntimeSecret(params.masterSecret, RUNTIME_SECRET_PURPOSES.REFUND_METADATA_HMAC);
+        const trimmedSecret = params.masterSecret.trim();
+        const key = await deriveRuntimeSecret(trimmedSecret, RUNTIME_SECRET_PURPOSES.REFUND_METADATA_HMAC);
         const encoder = new TextEncoder();
         const cryptoKey = await crypto.subtle.importKey(
             "raw",
@@ -1955,6 +1962,10 @@ export async function processRefund(
     const hasManualCodAllocation = manualDepositPlan !== undefined
         && (manualDepositPlan.status === PaymentPlanStatus.DEPOSIT_PAID || manualDepositPlan.status === PaymentPlanStatus.COMPLETED)
         && depositAllocations.length > 0;
+    // Any manual settlement allocation on a manual COD order requires confirmation.
+    const hasManualAllocationOnManualCod = manualDepositPlan !== undefined
+        && (manualDepositPlan.status === PaymentPlanStatus.DEPOSIT_PAID || manualDepositPlan.status === PaymentPlanStatus.COMPLETED)
+        && allocations.some((allocation) => isManualSettlementMethod(allocation.sourcePayment.paymentMethod));
     // A manual COD deposit can only be refunded in full — the total amount
     // allocated to the deposit must exactly equal the plan's depositAmountMinor.
     // This prevents partial deposit refunds and double-counting across attempts.
@@ -1965,7 +1976,7 @@ export async function processRefund(
             "Partial refunds of a manual COD deposit are not supported. The deposit allocation must equal the full deposit amount.",
         );
     }
-    if (hasManualCodAllocation && params.manualSettlementConfirmed !== true) {
+    if (hasManualAllocationOnManualCod && params.manualSettlementConfirmed !== true) {
         throw new ValidationError(
             "Confirm that the customer has already received the refund by hand (cash or transfer) before recording it.",
         );

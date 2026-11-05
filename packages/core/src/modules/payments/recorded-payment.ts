@@ -186,7 +186,8 @@ export async function recordOrderPayment(
   // order has no invoice, and the deposit is paid offline (bank transfer,
   // mobile wallet, cash at counter).
   let isDeposit = false;
-  if (input.paymentType === "deposit"
+  const depositRequested = input.paymentType === "deposit";
+  if (depositRequested
       && plan
       && plan.kind === "manual"
       && plan.status === PaymentPlanStatus.PENDING) {
@@ -200,6 +201,9 @@ export async function recordOrderPayment(
     if (plan.balanceDueMinor !== expectedBalance) {
       throw new ValidationError("The deposit plan's balance does not match the order total.");
     }
+  } else if (depositRequested) {
+    // Explicit deposit request without a matching pending manual plan.
+    throw new ValidationError("No pending manual deposit plan found for this order.");
   } else if (order.paymentTermsDays === null) {
     throw new ValidationError("Payments are recorded here only for invoice (net terms) orders. Record cash on delivery with Collect cash.");
   }

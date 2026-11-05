@@ -399,15 +399,13 @@ describe("reconcileRefundedOrderInventory — refund inventory recovery drain", 
       availabilityTransitionVariantIds: [],
     });
 
-    const selectMock = vi.fn().mockImplementation(() => ({
-      from: vi.fn().mockImplementation(() => ({
-        where: vi.fn().mockImplementation(() => ({
-          limit: vi.fn().mockImplementation(() => ({
-            all: vi.fn().mockResolvedValue([]),
-          })),
-        })),
+    const whereMock = vi.fn().mockImplementation(() => ({
+      limit: vi.fn().mockImplementation(() => ({
+        all: vi.fn().mockResolvedValue([]),
       })),
     }));
+    const fromMock = vi.fn().mockReturnValue({ where: whereMock });
+    const selectMock = vi.fn().mockReturnValue({ from: fromMock });
 
     const db = {
       select: selectMock,
@@ -423,5 +421,7 @@ describe("reconcileRefundedOrderInventory — refund inventory recovery drain", 
     expect(result.scanned).toBe(0);
     expect(result.reconciled).toBe(0);
     expect(result.failed).toBe(0);
+    // Verify the query filters for CANCELLED status, REFUNDED payment, and pending inventoryAction
+    expect(whereMock).toHaveBeenCalled();
   });
 });

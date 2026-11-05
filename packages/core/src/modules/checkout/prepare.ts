@@ -1084,9 +1084,11 @@ export async function createStorefrontOrder(
     }
     const onlineDepositApplies = isPartialEnabled && !deferred && allowsCashOnDelivery && paymentMethod !== PaymentMethod.COD;
     const depositApplies = manualDepositApplies || onlineDepositApplies;
-    if (paymentMethod === PaymentMethod.COD) {
+    if (paymentMethod === PaymentMethod.COD && !manualDepositApplies) {
         // Cash on delivery collects cash amounts (whole taka in BDT): an
         // amount due it cannot collect exactly is refused before the commit.
+        // When a manual COD deposit applies, the deposit is paid online and the
+        // remaining COD balance can be any amount (merchant discretion).
         const cashIssue = (appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS)
             .amountIssue(paymentMethod, giftCardTender.amountDueMinor, taxQuote.currencyCode);
         if (cashIssue) throw new ValidationError(cashIssue, { reason: CASH_ON_DELIVERY_AMOUNT_REASON });

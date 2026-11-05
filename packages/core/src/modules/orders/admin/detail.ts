@@ -13,6 +13,7 @@ import {
     deliveryProviders,
     codTracking,
     inventoryLocations,
+    paymentPlans,
 } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "../../promotions";
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../../order-kernel";
@@ -134,7 +135,7 @@ async function getOrderDetailsOnce(
         .where(eq(orders.id, id))
         .get();
 
-    const [order, items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
+    const [order, items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts, paymentPlanRows] = await Promise.all([
         orderRead,
         db
             .select({
@@ -188,6 +189,21 @@ async function getOrderDetailsOnce(
         listOrderSupportRequests(db, id),
         listOrderDiscountLines(db, id),
         listOrderPaymentSessionAttempts(db, id),
+        db
+            .select({
+                totalAmountMinor: paymentPlans.totalAmountMinor,
+                depositAmountMinor: paymentPlans.depositAmountMinor,
+                balanceDueMinor: paymentPlans.balanceDueMinor,
+                balanceDueDate: paymentPlans.balanceDueDate,
+                status: paymentPlans.status,
+                depositPaidAt: sql<number>`CAST(${paymentPlans.depositPaidAt} AS INTEGER)`,
+                balancePaidAt: sql<number>`CAST(${paymentPlans.balancePaidAt} AS INTEGER)`,
+                createdAt: sql<number>`CAST(${paymentPlans.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${paymentPlans.updatedAt} AS INTEGER)`,
+            })
+            .from(paymentPlans)
+            .where(eq(paymentPlans.orderId, id))
+            .limit(1),
     ]);
 
     if (!order) return null;
@@ -394,6 +410,19 @@ async function getOrderDetailsOnce(
             : null,
         customerRecord: customerRecord
             ? { id: customerRecord.id, name: customerRecord.name, phone: customerRecord.phone, kind: customerKind(customerRecord) }
+            : null,
+        paymentPlan: paymentPlanRows[0]
+            ? {
+                totalAmount: fromMinor(paymentPlanRows[0].totalAmountMinor, order.currencyDecimalPlaces),
+                depositAmount: fromMinor(paymentPlanRows[0].depositAmountMinor, order.currencyDecimalPlaces),
+                balanceDue: fromMinor(paymentPlanRows[0].balanceDueMinor, order.currencyDecimalPlaces),
+                balanceDueDate: paymentPlanRows[0].balanceDueDate,
+                status: paymentPlanRows[0].status,
+                depositPaidAt: paymentPlanRows[0].depositPaidAt ? new Date(paymentPlanRows[0].depositPaidAt * 1000).toISOString() : null,
+                balancePaidAt: paymentPlanRows[0].balancePaidAt ? new Date(paymentPlanRows[0].balancePaidAt * 1000).toISOString() : null,
+                createdAt: paymentPlanRows[0].createdAt ? new Date(paymentPlanRows[0].createdAt * 1000).toISOString() : null,
+                updatedAt: paymentPlanRows[0].updatedAt ? new Date(paymentPlanRows[0].updatedAt * 1000).toISOString() : null,
+            }
             : null,
     };
 }

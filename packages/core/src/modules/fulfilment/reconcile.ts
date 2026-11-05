@@ -579,6 +579,12 @@ export async function reconcileOrderShipment(
 
     if (order.status !== finalOrderStatus) {
         validateTransition("order", order.status, finalOrderStatus);
+        // A manual COD deposit order cannot move to a fulfilment-eligible state
+        // until staff verify the deposit. Check before the ordinary finalization write.
+        if ((finalOrderStatus === OrderStatus.SHIPPED || finalOrderStatus === OrderStatus.DELIVERED)
+            && order.paymentMethod === PaymentMethod.COD) {
+            await assertManualCodDepositVerified(db, orderId);
+        }
         const statusResult = await db
             .update(orders)
             .set({

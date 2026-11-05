@@ -22,6 +22,7 @@ import {
     orderEvents,
     OrderStatus,
     PaymentMethod,
+    PaymentPlanStatus,
     PaymentRecordStatus,
     PaymentStatus,
     ShipmentStatus,
@@ -446,6 +447,8 @@ export interface OrderListFactsRow {
     requiresShipping: boolean;
     shippingMethodKind: "delivery" | "pickup" | null;
     pickupReadyAt: Date | null;
+    paymentPlanKind: string | null;
+    paymentPlanStatus: string | null;
 }
 
 /**
@@ -506,6 +509,9 @@ export function orderListFactsSelection() {
             WHERE ${orderEvents.orderId} = ${outerOrderId}
               AND ${orderEvents.kind} = 'refund_kept'
         ), 0)`,
+        // Payment plan for manual COD deposit status in the list
+        paymentPlanKind: paymentPlans.kind,
+        paymentPlanStatus: paymentPlans.status,
     };
 }
 
@@ -520,6 +526,9 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
         0,
         Math.min(Number(order.returnedValueMinor) || 0, capturedMinor) - refundedMinor - (Number(order.keptMinor) || 0),
     );
+    const hasUnverifiedManualDeposit = order.paymentMethod === PaymentMethod.COD
+        && order.paymentPlanKind === "manual"
+        && (order.paymentPlanStatus === PaymentPlanStatus.PENDING || order.paymentPlanStatus === PaymentPlanStatus.CANCELLED);
     return {
         orderNumber: order.orderNumber,
         currencyCode: order.listCurrencyCode,
@@ -537,6 +546,7 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
         requiresShipping: order.requiresShipping !== false,
         shippingMethodKind: order.shippingMethodKind ?? null,
         pickupReadyAt: order.pickupReadyAt ?? null,
+        hasUnverifiedManualDeposit,
     };
 }
 
