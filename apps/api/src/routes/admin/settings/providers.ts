@@ -7,7 +7,8 @@
 // stay in the app's own settings (encrypted, masked); nothing here reads or
 // returns them.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { listPluginInstallations, type PluginInstallation } from "@scalius/core/modules/plugins";
 import {
   PROVIDER_KINDS,
@@ -27,7 +28,7 @@ import { pluginAssetUrl, providerIconUrl } from "../../../plugins/listing";
 import { providerConnectionSchema } from "../../../schemas/app-settings";
 import { failedConnectionTest, providerConnections, recordProviderConnectionTest } from "../../../plugins/provider-connection";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const appProviderSchema = z.object({
   /** `<plugin id>:<provider id>`: what the port's settings store and orders record. */

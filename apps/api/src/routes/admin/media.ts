@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { created, noContent, ok } from "../../utils/api-response";
 import {
     conflictResponse,
@@ -48,7 +49,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { readExactMediaPart, readMediaVariantsForm } from "./media-upload-body";
 import { importMediaFromUrl } from "./media-url-import";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const mediaErrorResponses = { ...errorResponses, 409: conflictResponse };
 const idParam = z.object({ id: z.string().min(8).max(160) });
 

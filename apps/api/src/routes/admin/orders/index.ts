@@ -3,7 +3,7 @@
 // bulk and detail routes live in it. Mount order is route registration order,
 // which is also the published OpenAPI path order: append new routers, do not
 // reorder.
-import { OpenAPIHono } from "@hono/zod-openapi";
+
 import { adminOrdersInvoiceRoutes } from "../orders-invoice";
 import { adminOrdersRefundRoutes } from "../orders-refund";
 import { adminOrdersReturnRoutes } from "../orders-returns";
@@ -16,8 +16,9 @@ import { adminOrderDigitalRoutes } from "./digital";
 import { adminOrderFulfilmentRoutes } from "./fulfilments";
 import { adminOrderListRoutes } from "./list";
 import { adminOrderWarrantyClaimRoutes } from "./warranty-claims";
+import { adminRouter } from "../admin-router";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 app.route("/", adminOrdersStatusRoutes);
 app.route("/", adminOrdersRefundRoutes);

@@ -3,7 +3,8 @@
 // write keeps them current in its own batch; this heals drift and fills
 // them the first time (a release that adds them runs it once before the
 // readers depend on them). The nightly cron queues the same rebuild.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     CATALOG_PROJECTION_REBUILD_DEFAULT_LIMIT,
     CATALOG_PROJECTION_REBUILD_MAX_LIMIT,
@@ -14,7 +15,7 @@ import { maintainDerivedProjections } from "../../scheduled/derived-projections"
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const rebuildRoute = createRoute({
     method: "post",

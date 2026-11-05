@@ -7,7 +7,8 @@
 // in transit) require an Idempotency-Key; edits and status changes require
 // the document's current revision.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   archiveSupplier,
@@ -108,7 +109,7 @@ const supplierSchema = z.object({
 const supplierEnvelope = successEnvelope(supplierSchema);
 const supplierParams = z.object({ supplierId: z.string().trim().min(1).max(100) });
 
-export const adminSupplierRoutes = new OpenAPIHono<{ Bindings: Env }>();
+export const adminSupplierRoutes = adminRouter();
 
 adminSupplierRoutes.openapi(createRoute({
   method: "get",
@@ -271,7 +272,7 @@ const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
 const purchaseOrderEnvelope = successEnvelope(purchaseOrderDetailSchema.openapi("PurchaseOrder"));
 const poParams = z.object({ purchaseOrderId: z.string().trim().min(1).max(100) });
 
-export const adminPurchaseOrderRoutes = new OpenAPIHono<{ Bindings: Env }>();
+export const adminPurchaseOrderRoutes = adminRouter();
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "get",
@@ -544,7 +545,7 @@ const transferCommandSchema = z.object({
 const transferParams = z.object({ transferId: z.string().trim().min(1).max(100) });
 const keyBody = z.object({ operationKey: inventoryOperationKeySchema.optional() });
 
-export const adminTransferRoutes = new OpenAPIHono<{ Bindings: Env }>();
+export const adminTransferRoutes = adminRouter();
 
 adminTransferRoutes.openapi(createRoute({
   method: "get",

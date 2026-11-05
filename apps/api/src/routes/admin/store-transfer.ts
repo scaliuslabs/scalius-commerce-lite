@@ -4,7 +4,8 @@
 // here; agents send the same JSON. Every batch is validated again with the
 // shared schemas, may stop early (time or the Worker's query limit) and says
 // how many items it processed, and is safe to send again.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
   buildInventoryCsvPage,
   buildProductCsvPage,
@@ -122,7 +123,7 @@ const inventoryResultSchema = z.object({
   issues: z.array(issueSchema),
 });
 
-const importApp = new OpenAPIHono<{ Bindings: Env }>();
+const importApp = adminRouter();
 
 // Before the body is parsed: an oversized batch is refused without reading it.
 importApp.use("*", async (c, next) => {
@@ -244,7 +245,7 @@ importApp.openapi(inventoryRoute, async (c) => {
 
 // ── Exports ────────────────────────────────────────────────────────────────
 
-const exportApp = new OpenAPIHono<{ Bindings: Env }>();
+const exportApp = adminRouter();
 
 const csvHeaders = (filename: string, page: { rowCount: number; itemCount: number; nextCursor: string | null }) => ({
   "Content-Type": "text/csv; charset=utf-8",

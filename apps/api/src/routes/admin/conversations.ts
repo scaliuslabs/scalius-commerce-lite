@@ -3,7 +3,8 @@ import { presentStaffConversation } from "../../utils/conversation-view";
 // Reads need conversations.view; replies, notes, uploads, status and
 // assignment need conversations.reply (route-permissions/conversations.ts).
 // Conversation writes are private and do not affect public cache dependencies.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   getOrCreateOrderThread,
@@ -55,7 +56,7 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { notificationSender } from "../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 function staffActor(c: Context<{ Bindings: Env }>): ConversationActor & { kind: "staff" } {
   const user = c.get("user") as { id?: string } | undefined;

@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import {
@@ -35,7 +36,7 @@ import {
   successEnvelope,
 } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 function serializeTimestamp(value: unknown): string | number | null {
   if (value instanceof Date) return value.toISOString();

@@ -5,7 +5,8 @@
 // on-hand of the locations linked to it. Linking or unlinking a location
 // advances every cache dependency (trigger) and queues a catalogue projection
 // rebuild: the online store's stored availability bands read the links.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Context } from "hono";
 import {
   CHANNEL_PRODUCTS_PAGE_MAX,
@@ -19,7 +20,7 @@ import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { presentSalesChannel, salesChannelRecordSchema, updateSalesChannelSchema } from "../../../schemas/sales-channels";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const TAG = "Admin - Sales channels";
 const channelParam = z.object({ id: z.string().min(1).max(160) });

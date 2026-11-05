@@ -1,7 +1,8 @@
 // Settings → Store details → Store defaults (time zone, unit system, default
 // weight unit) and the store setup step after the first admin (country,
 // currency, language, time zone, units). docs/STORE-DEFAULTS.md.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { TIME_ZONE_MAX_LENGTH } from "@scalius/shared/commerce-time";
 import { SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
 import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
@@ -16,7 +17,7 @@ import { ok } from "../../../utils/api-response";
 import { rebuildCatalogProjectionsAfterWrite } from "../../../background/catalog";
 import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const timeZoneSchema = z.string().trim().min(1).max(TIME_ZONE_MAX_LENGTH).openapi({
   description: "An IANA time zone, such as America/New_York or Asia/Dhaka. Days, weeks and months of reports, date filters and scheduled app jobs are store calendar days in it; daylight saving time is followed.",

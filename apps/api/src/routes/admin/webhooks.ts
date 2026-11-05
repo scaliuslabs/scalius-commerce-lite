@@ -3,7 +3,8 @@
 // rotate the secret, send a test, and the per-endpoint delivery log.
 // RBAC: `webhooks.view` / `webhooks.manage` (route-permissions/webhooks.ts).
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
   DELIVERY_LIST_MAX_LIMIT,
   MAX_WEBHOOK_SUBSCRIPTIONS,
@@ -29,7 +30,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { afterResponse, executionContextOf } from "../../background/after-response";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const isoOrNull = (seconds: number | null) => (seconds === null ? null : new Date(seconds * 1000).toISOString());
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();

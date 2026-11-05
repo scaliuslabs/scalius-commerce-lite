@@ -5,7 +5,8 @@
 // Reports that name customers also need `customers.view`, checked here at the
 // boundary. Money leaves as decimal major units of the store currency,
 // converted once from the integer minor units the service computes in.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   createAnalyticsContext,
@@ -39,7 +40,7 @@ import { REPORT_CSV_MAX_BYTES } from "@scalius/core/modules/analytics";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /** Breakdown rows shown per dimension; the rest are summed into one `__other` row. */
 const BREAKDOWN_TOP_ROWS = 8;

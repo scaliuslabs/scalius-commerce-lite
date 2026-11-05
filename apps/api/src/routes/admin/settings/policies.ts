@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { STORE_POLICY_KINDS } from "@scalius/core/modules/settings";
 import { getStorePolicies, saveStorePolicies } from "@scalius/core/modules/pages";
 
@@ -6,7 +7,7 @@ import { ok } from "../../../utils/api-response";
 
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const pageIdSchema = z.string().trim().min(1).max(64).nullable();
 const policiesSchema = z.object(

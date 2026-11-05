@@ -1,5 +1,6 @@
 import { isEmailAddress } from "@scalius/shared/text-scan";
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import {
     BUILT_IN_EMAIL_PROVIDER_IDS,
@@ -71,7 +72,7 @@ import {
 import { readinessSchema } from "../../../schemas/readiness";
 import { isReady, type Readiness } from "@scalius/shared/readiness";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /** A save that changes a document must say which revision of it the editor loaded. */
 function requireExpectedRevision(value: number | undefined, field: string): number {

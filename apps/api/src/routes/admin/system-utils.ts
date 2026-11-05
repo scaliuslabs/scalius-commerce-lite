@@ -1,7 +1,8 @@
 // src/server/routes/admin/system-utils.ts
 // Admin OpenAPI routes for system utilities (abandoned checkouts, FCM tokens).
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { assertContactSearchAllowed } from "./contact-access";
 import { createId } from "@paralleldrive/cuid2";
 import { sql, inArray, desc, asc, eq } from "drizzle-orm";
@@ -19,7 +20,7 @@ import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/chec
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 // --- Abandoned Checkouts ---
 // ── List Abandoned Checkouts ──

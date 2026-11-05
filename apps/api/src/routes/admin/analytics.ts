@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     analyticsProviderHealthBrowserStatuses,
     analyticsProviderHealthServerStatuses,
@@ -32,7 +33,7 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const timestampSchema = z.string().nullable();
 const analyticsSummarySchema = z.object({

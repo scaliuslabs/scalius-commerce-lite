@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
     recordOrderEvent,
@@ -29,7 +30,7 @@ import { sendOrderNotification, sendOrderNotificationsForStatus } from "../../ut
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
 const returnCommandKeySchema = z.string().trim().min(8).max(200);

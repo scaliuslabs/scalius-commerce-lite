@@ -8,7 +8,8 @@
 import { linePurchaseOptionInputSchema } from "../../schemas/order-lines";
 import { postalAddressLinesInputSchema } from "../../schemas/postal-address";
 import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
@@ -63,7 +64,7 @@ import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const noStore: MiddlewareHandler = async (c, next) => {
   await next();

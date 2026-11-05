@@ -3,7 +3,8 @@
 // export and one customer's marketing consent. Money in segment definitions
 // crosses this edge in decimal major units (the store currency) and is stored
 // in integer minor units.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { assertContactSearchAllowed } from "./contact-access";
 import { protectedField as pii } from "../../schemas/protected";
@@ -95,7 +96,7 @@ export async function readCustomerSlice(
     }, readMatchingCursor(matching.cursor), options.limit ?? BULK_MATCHING_SLICE, { deletableOnly: options.deletableOnly });
 }
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 type Ctx = { get: (key: string) => unknown };
 const staffId = (c: Ctx) => (c.get("user") as { id?: string } | undefined)?.id ?? null;

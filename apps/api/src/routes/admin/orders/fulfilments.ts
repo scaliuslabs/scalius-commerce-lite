@@ -2,7 +2,8 @@
 // your own rider, hand a pickup order over at the counter, mark a service
 // done, void a fulfilment whose parcel came back, and mark a pickup order
 // ready to collect. Courier bookings stay on POST /{id}/shipments.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import { isoTimestampSchema } from "../../../schemas/timestamps";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context } from "hono";
@@ -35,7 +36,7 @@ import { NotFoundError } from "../../../utils/api-error";
 const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfillment, "FulfillmentResource");
 import { notificationSender } from "../../../background/notification-sender";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 function actorIdOf(c: { get(key: "user"): unknown }): string | null {
     return (c.get("user") as { id?: string } | undefined)?.id ?? null;

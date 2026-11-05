@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import {
   CUSTOMER_REQUEST_INTRO_MAX_LENGTH,
   getCustomerRequestIntro,
@@ -9,7 +10,7 @@ import { getCustomerRequestPolicyDocument, saveCustomerRequestPolicy } from "@sc
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const customerRequestPolicySchema = z.object({
   cancellationEnabled: z.boolean(),

@@ -4,7 +4,8 @@
 // access token) are encrypted with CREDENTIAL_ENCRYPTION_KEY and never leave
 // the API: a GET masks them, and a masked or omitted value keeps the stored
 // one. Test mode is readable: GA4 `debugMode`, TikTok `testEventCode`.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "../admin-router";
 import type { Database } from "@scalius/database/client";
 import {
   GA4_MEASUREMENT_ID,
@@ -21,7 +22,7 @@ import { conflictResponse, errorResponses, serviceUnavailableResponse, successEn
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { clearTikTokBrowserCircuit } from "../../../utils/tiktok-events-circuit";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const MASKED_VALUE = "••••••••••••";
 const regime = z.enum(CONSENT_REGIMES as ["opt_in", "notice", "link_only"]);
 

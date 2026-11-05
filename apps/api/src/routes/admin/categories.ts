@@ -2,7 +2,8 @@
 // Admin OpenAPI routes for categories.
 // All DB logic is delegated to src/modules/categories/categories.service.ts.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import { ok, created, noContent } from "../../utils/api-response";
 import { NotFoundError } from "../../utils/api-error";
 import {
@@ -49,7 +50,7 @@ import {
 import { categoryDetailSchema, categorySummarySchema } from "../../schemas/entities";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const categoryIdSchema = z.string().trim().min(1).max(180);
 const categoryIdsSchema = z
     .array(categoryRevisionClaimSchema)

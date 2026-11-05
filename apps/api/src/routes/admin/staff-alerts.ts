@@ -1,5 +1,6 @@
 // Private caller-owned bell. Core rechecks current resource permissions in every read/write.
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
   STAFF_ALERT_COUNT_CAP,
@@ -18,7 +19,7 @@ import { UnauthorizedError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const TAG = "Admin - Staff Alerts";
 const integer = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const scope = z.enum(STAFF_ALERT_SCOPES);

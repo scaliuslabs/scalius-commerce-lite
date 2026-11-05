@@ -1,7 +1,8 @@
 // src/server/routes/admin/collections.ts
 // Admin OpenAPI routes for collections.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     listCollections,
     getCollectionById,
@@ -40,7 +41,7 @@ import { buyerPriceRangeSchema, collectionSchema, collectionSummarySchema } from
 import { CollectionResource, presentCollection, readCollectionResource } from "./resources-catalog-content";
 
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const collectionOptionSchema = z.object({
     id: z.string(),

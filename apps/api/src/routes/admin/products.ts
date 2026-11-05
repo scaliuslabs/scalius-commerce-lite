@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
     createVariantSchema,
     SKU_WARRANTY_MODES,
@@ -75,7 +76,7 @@ import { relatedObjectRecordSchema } from "../../schemas/related-objects";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { readProductRepresentations } from "../../events/representations";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 /** The editor's product detail, with the Wave B warranty reference. */
 const adminProductDetailSchema = productDetailSchema.extend({

@@ -1,4 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import type { Context, MiddlewareHandler } from "hono";
 import {
   createSavedReply,
@@ -11,7 +12,7 @@ import { conflictResponse, errorResponses, successEnvelope } from "../../schemas
 import { UnauthorizedError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const modeSchema = z.enum(["reply", "note"]);
 const paramsSchema = z.object({ replyId: idSchema });

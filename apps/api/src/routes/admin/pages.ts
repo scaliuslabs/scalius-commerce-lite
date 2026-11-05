@@ -1,7 +1,8 @@
 // src/server/routes/admin/pages.ts
 // Admin OpenAPI routes for CMS pages.
 
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import { adminRouter } from "./admin-router";
 import {
   listPages,
   getPageById,
@@ -38,7 +39,7 @@ import { pageSchema } from "../../schemas/entities";
 import { PageResource } from "../../schemas/catalog-resources";
 
 import { ok, created, noContent } from "../../utils/api-response";
-const app = new OpenAPIHono<{ Bindings: Env }>();
+const app = adminRouter();
 
 const pageEnvelope = successEnvelope(z.object({ page: PageResource }));
 
