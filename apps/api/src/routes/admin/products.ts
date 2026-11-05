@@ -58,6 +58,7 @@ import {
     productVariantSchema,
     productVariantMutationSchema,
     selectedProductOptionSchema,
+    productOptionValueSwatchSchema,
 } from "../../schemas/entities";
 import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
 
@@ -124,7 +125,7 @@ const semanticOptionSchema = z.object({
     name: z.string(),
     position: z.number().int(),
     standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
-    values: z.array(z.object({ id: z.string(), value: z.string(), position: z.number().int() })).max(150),
+    values: z.array(z.object({ id: z.string(), value: z.string(), position: z.number().int(), swatch: z.union([productOptionValueSwatchSchema, z.null()]) })).max(150),
 });
 const productSemanticSectionResponseSchema = z.discriminatedUnion("section", [
     z.object({

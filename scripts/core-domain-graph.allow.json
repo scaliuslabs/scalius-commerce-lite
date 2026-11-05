@@ -136,6 +136,7 @@
     "product-admin -> settings",
     "product-admin -> tax",
     "products -> markets",
+    "products -> media-references",
     "products -> settings",
     "promotions -> collections",
     "promotions -> customers",

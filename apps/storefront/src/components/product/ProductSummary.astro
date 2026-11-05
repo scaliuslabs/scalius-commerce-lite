@@ -10,7 +10,7 @@ import BuyFormQuantity from "./buy-form/BuyFormQuantity.astro";
 import BuyFormInputs from "./buy-form/BuyFormInputs.astro";
 import BuyFormStatus from "./buy-form/BuyFormStatus.astro";
 import BuyFormStock from "./buy-form/BuyFormStock.astro";
-import { cssNamedColour } from "@/components/cards/css-colours";
+import { mediaImageUrl } from "@/lib/media-url";
 import { BUY_FORM_PLACED_PART } from "./lib/buy-scope";
 import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
@@ -317,7 +317,10 @@ const optionGroups: BuyFormOptionGroup[] = options.map((option) => {
         status,
         price,
         ariaLabel: `${optionAriaLabel(option, value.value, status)}${price ? ` ${price}.` : ""}`,
-        colour: optionsLayout === "swatches" ? cssNamedColour(value.value) : null,
+        // The merchant's swatch (Products): its image's small rendition, else its colour; none: a word.
+        swatch: optionsLayout === "swatches" && value.swatch && (value.swatch.color || value.swatch.imageUrl)
+          ? { color: value.swatch.color, imageUrl: value.swatch.imageUrl ? mediaImageUrl(value.swatch.imageUrl, 96) || null : null }
+          : null,
       };
     }),
   };

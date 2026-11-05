@@ -3,12 +3,13 @@ import { WeightInput, useWeightUnit } from "./WeightInput";
 import { formatWeight } from "./weight-format";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Palette, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@scalius/shared/utils";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
@@ -53,6 +54,7 @@ import {
   materializeCombination,
   materializeVariants,
   materializeVariantsExcluding,
+  matrixSaveOptions,
   matrixSaveVariants,
   variantInput,
   type VariantSeed,
@@ -424,7 +426,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
               ...(kindRules.showWeight && shownSimpleSku.weight !== null ? { weight: shownSimpleSku.weight } : {}),
             },
           }
-        : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(shownVariants, fulfilmentMode).map((row) => variantInput(row, decimalPlaces)) } } : null);
+        : options.length > 0 ? { optionMatrix: { options: matrixSaveOptions(options), variants: withFulfilmentMode(shownVariants, fulfilmentMode).map((row) => variantInput(row, decimalPlaces)) } } : null);
   }, [readOnly, decimalPlaces, draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
 
   React.useEffect(() => onDraftIssueChange?.(readOnly ? null : draftLine), [readOnly, draftLine, onDraftIssueChange]);
@@ -1008,6 +1010,38 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
 
 OptionMatrixEditor.displayName = "OptionMatrixEditor";
 
+// The swatch editor loads only when a merchant opens it (product routes stay within their budget).
+const OptionSwatchPicker = React.lazy(() => import("./OptionSwatchPicker"));
+
+/** A value's swatch, shown on its chip: the image, else the colour, else a palette mark to add one. */
+function ValueSwatch({ value, onChange }: {
+  value: DraftOption["values"][number];
+  onChange: (swatch: DraftOption["values"][number]["swatch"]) => void;
+}) {
+  const t = useMessages(productVariantMessages);
+  const swatch = value.swatch ?? null;
+  const label = t(swatch ? "valueSwatch" : "valueSwatchNone", { value: value.value });
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label={label} title={label} data-option-value-swatch={value.id}>
+          {swatch?.imageUrl
+            ? <img src={swatch.imageUrl} alt="" className="size-4 rounded-full border object-cover" />
+            : swatch?.color
+              ? <span aria-hidden="true" className="size-4 rounded-full border bg-(--swatch)" style={{ "--swatch": swatch.color } as React.CSSProperties} />
+              : <Palette className="h-3.5 w-3.5" aria-hidden="true" />}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72" aria-label={t("valueSwatch", { value: value.value })}>
+        <p className="mb-2 text-body font-medium">{t("swatchTitle")} · {value.value}</p>
+        <React.Suspense fallback={null}>
+          <OptionSwatchPicker value={value.value} swatch={swatch} onChange={onChange} />
+        </React.Suspense>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function OptionRow({ readOnly, option, index, canMoveUp, canMoveDown, onMove, onChange, onRemove, onRemoveValue }: {
   readOnly: boolean;
   option: DraftOption;
@@ -1105,6 +1139,10 @@ function OptionRow({ readOnly, option, index, canMoveUp, canMoveDown, onMove, on
           <div className="flex flex-wrap gap-1">
             {option.values.map((value) => (
               <Badge key={value.id} variant="secondary">
+                <ValueSwatch
+                  value={value}
+                  onChange={(swatch) => onChange({ ...option, values: option.values.map((each) => (each.id === value.id ? { ...each, swatch } : each)) })}
+                />
                 {value.value}
                 <Button
                   type="button"

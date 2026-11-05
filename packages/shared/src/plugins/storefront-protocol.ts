@@ -198,8 +198,8 @@ export type StorefrontBuyFormPart = (typeof STOREFRONT_BUY_FORM_PARTS)[number];
  * How the buy form draws its option controls (`<BuyForm optionsLayout>`,
  * `<BuyFormPart name="options" layout>`): `buttons` (each value a button,
  * the default), `select` (one dropdown per option) or `swatches` (each value
- * a round colour swatch where its name is a colour, its name beside the
- * rest). Every layout chooses through the form, shows sold-out and
+ * its merchant swatch from Products, an image or a colour, and a text button
+ * where it has none: never a colour guessed from its name). Every layout chooses through the form, shows sold-out and
  * unavailable values, and falls back to the no-JavaScript picker. The list
  * only grows, at its end.
  */
@@ -667,8 +667,13 @@ export interface StorefrontProductPage {
     priceVaries: boolean;
     availability: "untracked" | "out_of_stock" | "low_stock" | "in_stock";
     rating: { average: number; count: number } | null;
-    /** The merchant's option axes, in order, with their values. */
-    options: Array<{ name: string; values: Array<{ label: string; swatch: string | null }> }>;
+    /**
+     * The merchant's option axes, in order, with their values. `swatch` is the value's swatch colour (`#rrggbb`) from Products, null
+     * without one; `swatchImage` its swatch image from Files, null without
+     * one (absent from older stores). Draw the image, else the colour, else
+     * the label: never guess a colour from the label's words.
+     */
+    options: Array<{ name: string; values: Array<{ label: string; swatch: string | null; swatchImage?: StorefrontImage | null }> }>;
     /** The SKU code of a product without options (its one SKU); null otherwise or without one. Absent from older stores. */
     sku?: string | null;
     /** Instalments (EMI) available for this product; null when none applies. Absent from older stores. */

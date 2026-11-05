@@ -7,6 +7,8 @@ import {
     pages,
     productContentBlocks,
     productMedia,
+    productOptionDefinitions,
+    productOptionValues,
     products,
     settings,
     themeSettings,
@@ -171,6 +173,18 @@ async function loadUsageRows(db: Database, ids: readonly string[]): Promise<Usag
         SELECT theme_file.id, 'theme', '', NULL, 0
         FROM ${media} AS theme_file
         WHERE theme_file.id IN ${idSet(ids)} AND ${themeNamesMedia(sql`theme_file.id`)}`);
+    // An option value's swatch image (0196): the product it shows on. Its own
+    // read, since D1 takes at most five terms in one compound SELECT. A value
+    // or option the merchant removed keeps its swatch (brought back, it shows
+    // again) but is no use of the file: it never blocks a delete.
+    rows.push(...await db.all<UsageRow>(sql`
+        SELECT ${productOptionValues.swatchMediaId} AS media_id, 'product' AS kind, ${products.id} AS ref_id,
+               ${products.name} AS name, ${trashedFlag(products.deletedAt)} AS trashed
+        FROM ${productOptionValues}
+        INNER JOIN ${productOptionDefinitions} ON ${productOptionDefinitions.id} = ${productOptionValues.optionDefinitionId}
+        INNER JOIN ${products} ON ${products.id} = ${productOptionDefinitions.productId}
+        WHERE ${productOptionValues.swatchMediaId} IN ${idSet(ids)}
+          AND ${productOptionValues.deletedAt} IS NULL AND ${productOptionDefinitions.deletedAt} IS NULL`));
     // Filter each document source once, not once for every file on the page.
     for (const group of textReferenceGroups()) {
         rows.push(...await db.all<UsageRow>(sql`
@@ -248,9 +262,9 @@ export async function loadMediaUsage(db: Database, id: string): Promise<MediaUsa
 }
 
 /**
- * Atomic guard for the permanent-delete claim: no product photo, video cover,
- * brand logo, theme (published or draft), order snapshot or saved text
- * surface may still point at the file.
+ * Atomic guard for the permanent-delete claim: no product photo, live option
+ * value's swatch (a removed value or option never blocks it), video cover, brand logo, theme (published or draft), order
+ * snapshot or saved text surface may still point at the file.
  */
 export function noMediaUsage(id: string, objectKey: string): SQL {
     const textGuards = textReferenceGroups().map((group) => sql`NOT EXISTS (
@@ -258,6 +272,11 @@ export function noMediaUsage(id: string, objectKey: string): SQL {
     )`);
     return sql`NOT EXISTS (
         SELECT 1 FROM ${productMedia} WHERE ${productMedia.mediaId} = ${id}
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${productOptionValues}
+        INNER JOIN ${productOptionDefinitions} ON ${productOptionDefinitions.id} = ${productOptionValues.optionDefinitionId}
+        WHERE ${productOptionValues.swatchMediaId} = ${id}
+          AND ${productOptionValues.deletedAt} IS NULL AND ${productOptionDefinitions.deletedAt} IS NULL
     ) AND NOT EXISTS (
         SELECT 1 FROM ${media} AS video WHERE video.poster_media_id = ${id} AND video.status <> 'deleted'
     ) AND NOT EXISTS (

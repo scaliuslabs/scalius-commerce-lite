@@ -145,13 +145,23 @@ export const MACHINERY_TABLES: ReadonlySet<string> = new Set(["cache_clock", "ca
 export class RowMutator {
   private counter = 0;
   private idPool: Map<string, string[]> | null = null;
+  /**
+   * Each table's rows as seeded: the clone source of an insert into a table
+   * a cascade has emptied (a product delete takes its translations with it),
+   * which would otherwise never see an insert or an update again.
+   */
+  private readonly seeded = new Map<string, Row[]>();
 
   constructor(
     private readonly sqlite: DatabaseSync,
     private readonly model: SchemaModel,
     private readonly rng: Rng,
     readonly coverage: MutationCoverage = new MutationCoverage(),
-  ) {}
+  ) {
+    for (const table of model.values()) {
+      if (table.columns.length > 0 && writableByGenerator(table.name)) this.seeded.set(table.name, this.rows(table.name, 20));
+    }
+  }
 
   /** Tables the generator may write, with a weight. */
   tableWeights(): Array<readonly [number, TableModel]> {
@@ -305,7 +315,8 @@ export class RowMutator {
     if (!table || !writableByGenerator(tableName)) return null;
     if (tableName === "product_reviews") return this.insertReview();
     if (tableName === "store_languages") return this.insertStoreLanguage();
-    const rows = this.rows(tableName);
+    const current = this.rows(tableName);
+    const rows = current.length > 0 ? current : this.seeded.get(tableName) ?? [];
     if (rows.length === 0) return null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
       const source = { ...this.rng.pick(rows) };
@@ -496,6 +507,13 @@ export class RowMutator {
     if (column.enumValues) {
       const others = column.enumValues.filter((value) => value !== current);
       return others.length > 0 ? this.rng.pick(others) : undefined;
+    }
+    // A swatch colour its CHECK holds to #rrggbb: any other text is refused, so the column would go untested.
+    if (column.hexColour) {
+      const colour = () => `#${Array.from({ length: 6 }, () => "0123456789abcdef"[this.rng.int(0, 15)]).join("")}`;
+      let next = colour();
+      while (next === current) next = colour();
+      return next;
     }
     const peers = rows.map((row) => row[column.name]).filter((value) => value !== null && value !== current) as SQLInputValue[];
     if (column.shape === "boolean") return current === null ? 1 : Number(current) === 0 ? 1 : 0;

@@ -4343,6 +4343,7 @@ export interface StorefrontProductPage {
             values: Array<{
                 label: string;
                 swatch: string | null;
+                swatchImage?: StorefrontImage | null;
             }>;
         }>;
         sku?: string | null;

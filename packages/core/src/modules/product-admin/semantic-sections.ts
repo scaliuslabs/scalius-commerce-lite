@@ -49,6 +49,8 @@ import {
   buildUrlRedirectStatements,
   productPath,
   setProductChannelsStatements,
+  optionValueSwatch,
+  optionValueSwatchColumns,
 } from "../products";
 import { isSalesChannelId } from "@scalius/shared/sales-channels";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
@@ -543,14 +545,19 @@ export async function getProductSemanticSection(
         )).orderBy(asc(productOptionDefinitions.position), asc(productOptionDefinitions.id))
             .limit(1).offset(query.offset).all();
         const definition = definitions[0];
-        const values = definition ? await db.select({
+        const rows = definition ? await db.select({
             id: productOptionValues.id,
             value: productOptionValues.value,
             position: productOptionValues.position,
-        }).from(productOptionValues).where(and(
-            eq(productOptionValues.optionDefinitionId, definition.id),
-            isNull(productOptionValues.deletedAt),
-        )).orderBy(asc(productOptionValues.position), asc(productOptionValues.id)).limit(150).all() : [];
+            ...optionValueSwatchColumns(),
+        }).from(productOptionValues)
+            .leftJoin(media, eq(media.id, productOptionValues.swatchMediaId))
+            .where(and(
+                eq(productOptionValues.optionDefinitionId, definition.id),
+                isNull(productOptionValues.deletedAt),
+            )).orderBy(asc(productOptionValues.position), asc(productOptionValues.id)).limit(150).all() : [];
+        // Each value with its swatch, as the editor and the storefront read it.
+        const values = rows.map((row) => ({ id: row.id, value: row.value, position: row.position, swatch: optionValueSwatch(row) }));
         const items = definition ? [{ ...definition, values }] : [];
         return assertBoundedResult({ section, aggregateRevision: header.aggregateRevision, ...pageResult(items, header.total, query.offset, 1) });
     }

@@ -189,11 +189,11 @@ function seedSql(): string {
     ('opt_silk_size', 'p_silk', 'Size', 'size', 0, 'size'),
     ('opt_silk_color', 'p_silk', 'Colour', 'colour', 1, 'color'),
     ('opt_shoe_size', 'p_shoe', 'Size', 'size', 0, 'size');
-  INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position) VALUES
-    ('ov_linen_m', 'opt_linen_size', 'M', 'm', 0), ('ov_linen_l', 'opt_linen_size', 'L', 'l', 1), ('ov_linen_xl', 'opt_linen_size', 'XL', 'xl', 2),
-    ('ov_silk_m', 'opt_silk_size', 'M', 'm', 0), ('ov_silk_l', 'opt_silk_size', 'L', 'l', 1),
-    ('ov_silk_gold', 'opt_silk_color', 'Gold', 'gold', 0), ('ov_silk_ivory', 'opt_silk_color', 'Ivory', 'ivory', 1),
-    ('ov_shoe_41', 'opt_shoe_size', '41', '41', 0), ('ov_shoe_42', 'opt_shoe_size', '42', '42', 1);
+  INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position, swatch_color) VALUES
+    ('ov_linen_m', 'opt_linen_size', 'M', 'm', 0, NULL), ('ov_linen_l', 'opt_linen_size', 'L', 'l', 1, NULL), ('ov_linen_xl', 'opt_linen_size', 'XL', 'xl', 2, NULL),
+    ('ov_silk_m', 'opt_silk_size', 'M', 'm', 0, NULL), ('ov_silk_l', 'opt_silk_size', 'L', 'l', 1, NULL),
+    ('ov_silk_gold', 'opt_silk_color', 'Gold', 'gold', 0, '#c9a227'), ('ov_silk_ivory', 'opt_silk_color', 'Ivory', 'ivory', 1, '#fffff0'),
+    ('ov_shoe_41', 'opt_shoe_size', '41', '41', 0, NULL), ('ov_shoe_42', 'opt_shoe_size', '42', '42', 1, NULL);
   INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory, option_combination_key, low_stock_threshold, barcode, barcode_type, image_id) VALUES
     ('v_linen_m', 'p_linen', 'LIN-M', 250000, 5, 0, 0, 1, 'M', NULL, '2000000000015', 'ean13', NULL),
     ('v_linen_l', 'p_linen', 'LIN-L', 260000, 2, 1, 0, 1, 'L', 3, NULL, NULL, NULL),

@@ -69,7 +69,14 @@ import {
     rethrowProductAggregateRevisionConflictIfStale,
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
-import { optionMatrixBatchConflict, planProductOptionMatrix } from "./option-matrix";
+import {
+    assertReadySwatchImages,
+    optionMatrixBatchConflict,
+    planProductOptionMatrix,
+    readySwatchImageIds,
+    swatchColumnsOf,
+    swatchImagesGuard,
+} from "./option-matrix";
 import { assertLiveSkuWarrantyPolicies, assertLiveWarrantyPolicy, assertSkuWarrantyAllowed, liveWarrantyPolicyIds } from "./warranty";
 import {
     resolveNewVariantBarcode,
@@ -496,6 +503,13 @@ export async function createProduct(
             : {}),
     };
     const mediaPlan = await validateProductMediaPlan(db, productId, data.media, false);
+    // Each value's swatch image is a ready image in Files, as in the matrix save.
+    const swatchMedia = new Map<string, string>();
+    (data.optionMatrix?.options ?? []).forEach((option, optionIndex) => option.values.forEach((value, valueIndex) => {
+        const mediaId = value.swatch?.mediaId;
+        if (mediaId && !swatchMedia.has(mediaId)) swatchMedia.set(mediaId, `optionMatrix.options.${optionIndex}.values.${valueIndex}.swatch.mediaId`);
+    }));
+    await assertReadySwatchImages(db, swatchMedia);
     const customizationSchema = toStoredCustomizationSchema(data.customizationSchema ?? null, currency);
     const shippingProfile = (await resolveProductShippingProfile(db, data))!;
 
@@ -575,6 +589,7 @@ export async function createProduct(
                     value: value.value,
                     normalizedValue: normalizeOptionIdentity(value.value),
                     position: valuePosition,
+                    ...swatchColumnsOf(value.swatch),
                     createdAt: sql`unixepoch()`,
                     updatedAt: sql`unixepoch()`,
                     deletedAt: null,
@@ -688,6 +703,7 @@ export async function createProduct(
             productInsert(slug),
             // The insert published it to every channel (trigger); the form's choice narrows that.
             ...(data.salesChannelIds ? [productChannelChoiceStatement(db, productId, data.salesChannelIds)] : []),
+            ...(swatchMedia.size > 0 ? [swatchImagesGuard(db, [...swatchMedia.keys()])] : []),
             ...batchOps,
             buildGiftCardProductRulesGuard(db, productId),
             ...catalogProjectionRefreshStatements(db, [productId]),
@@ -705,6 +721,8 @@ export async function createProduct(
         }
     } catch (error) {
         if (isProductSlugConstraintError(error)) throw new ConflictError("A product with this slug already exists");
+        const swatchConflict = optionMatrixBatchConflict(error);
+        if (swatchConflict) throw swatchConflict;
         rethrowGiftCardProductRuleViolation(error);
         rethrowProductVariantIdentityConstraint(error);
     }
@@ -1524,6 +1542,15 @@ export async function duplicateProduct(
     // values some SKU uses: the copy takes exactly the values its SKUs sell.
     const soldValueIds = new Set(optionVariants.flatMap((variant) =>
         variant.selectedOptions.map((option) => option.optionValueId)));
+    // A copy keeps each value's swatch: its colour, and its image while that
+    // is still a ready image in Files (one in trash is not offered to new products).
+    const swatchMediaIds = [...new Set(source.options.flatMap((option) => option.values.flatMap((value) =>
+        value.swatch?.mediaId ? [value.swatch.mediaId] : [])))];
+    const readySwatchMedia = await readySwatchImageIds(db, swatchMediaIds);
+    const copiedSwatch = (swatch: { color: string | null; mediaId: string | null } | null | undefined) => {
+        const mediaId = swatch?.mediaId && readySwatchMedia.has(swatch.mediaId) ? swatch.mediaId : null;
+        return swatch?.color || mediaId ? { color: swatch?.color ?? null, mediaId } : null;
+    };
     const parsed = createProductSchema.safeParse({
         name: name.trim().slice(0, PRODUCT_NAME_MAX_LENGTH),
         description: source.description,
@@ -1561,7 +1588,7 @@ export async function duplicateProduct(
                         standardMapping: option.standardMapping,
                         values: option.values
                             .filter((value) => soldValueIds.has(value.id))
-                            .map((value) => ({ id: value.id, value: value.value })),
+                            .map((value) => ({ id: value.id, value: value.value, swatch: copiedSwatch(value.swatch) })),
                     })),
                     variants: optionVariants.map((variant) => ({
                         id: variant.id,

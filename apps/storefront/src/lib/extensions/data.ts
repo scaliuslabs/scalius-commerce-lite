@@ -505,7 +505,11 @@ export function productPageData(input: {
       rating: summary && summary.count > 0 ? { average: summary.average, count: summary.count } : null,
       options: input.options.map((option) => ({
         name: option.name,
-        values: option.values.map((value) => ({ label: value.value, swatch: null })),
+        values: option.values.map((value) => ({
+          label: value.value,
+          swatch: value.swatch?.color ?? null,
+          swatchImage: value.swatch?.imageUrl ? storefrontImageOf({ url: value.swatch.imageUrl, alt: value.value }) : null,
+        })),
       })),
       variants: input.variants.slice(0, PRODUCT_PAGE_VARIANTS_MAX).map((variant) => {
         const price = input.variantPrice(variant);
