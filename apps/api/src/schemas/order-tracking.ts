@@ -31,6 +31,8 @@ export const buyerOrderTrackingSchema = z.object({
   progress: buyerOrderProgressSchema,
   timeline: buyerOrderTimelineSchema,
   shipments: z.array(z.object({
+    /** The shipment's state key, so a storefront words it in the page's language; `statusLabel` is the English word. */
+    status: z.string().openapi({ description: "The shipment's state key (booked, in_transit, delivered and so on); a storefront words it in its page's language" }),
     statusLabel: z.string(),
     courierName: z.string().nullable(),
     trackingId: z.string().nullable(),

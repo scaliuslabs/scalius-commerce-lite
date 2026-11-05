@@ -66,12 +66,13 @@ import { appBlocksByKey, appSkinsByKey, resolveThemeForStore, toggleProductModul
 import { PreviewColorSetContext, themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
-import { DESKTOP_WIDTHS, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
+import { DESKTOP_WIDTHS, WIDE_SCREEN_MIN_WIDTH, type DesktopWidth, type FrameBox, type PreviewDevice, type PreviewZoom } from "./canvas-geometry";
 import { EditorCanvas, type SelectionActions, type PreviewNotice } from "./EditorCanvas";
 import {
   EDITOR_PARTS,
   isResourcePage,
   isSamplePage,
+  showsWideScreenChoices,
   moduleId,
   pageFixedPart,
   pageMain,
@@ -1084,6 +1085,9 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
         <EditorCanvas
           device={device}
           desktopWidth={view.desktopWidth}
+          // The cart, payment, confirmation and account pages: their layout choices show from the
+          // wide-screen breakpoint, so a narrower fitted canvas lays them out that wide.
+          minFillWidth={showsWideScreenChoices(page) ? WIDE_SCREEN_MIN_WIDTH : 0}
           zoom={phone ? "fit" : view.zoom}
           phase={preview.phase}
           frames={preview.frames}

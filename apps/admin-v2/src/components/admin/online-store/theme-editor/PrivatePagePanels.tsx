@@ -98,6 +98,15 @@ function NavigationSketch({ look: style, theme }: { look: "tabs" | "sidebar"; th
   );
 }
 
+/**
+ * The layout choices show on wide screens only; phones keep one column. The
+ * editor's canvas lays these pages out at least that wide (canvas-geometry.ts).
+ */
+function WideScreensNote() {
+  const t = useMessages(themeEditorPrivatePageMessages);
+  return <p className="text-body text-muted-foreground" data-wide-screens-note>{t("wideScreensNote")}</p>;
+}
+
 function MandatoryNote() {
   const t = useMessages(themeEditorPrivatePageMessages);
   return <p className="text-body text-muted-foreground">{t("mandatoryNote")}</p>;
@@ -110,6 +119,7 @@ export function CartPresentationSettings({ theme, setDraft }: { theme: Theme; se
   const setDrawer = useBlock("cartDrawer", setDraft);
   return (
     <div className="space-y-5" data-private-page-settings="cart">
+      <WideScreensNote />
       <VisualChoice
         label={t("cartLayout")}
         showLabel
@@ -144,6 +154,7 @@ export function CartPresentationSettings({ theme, setDraft }: { theme: Theme; se
         control={(
           <Switch
             id="cart-drawer-recommendations"
+            aria-describedby="cart-drawer-recommendations-help"
             checked={theme.blocks.cartDrawer.recommendations === "shown"}
             onCheckedChange={(checked) => setDrawer({ recommendations: checked ? "shown" : "hidden" })}
           />
@@ -160,6 +171,7 @@ export function CheckoutPresentationSettings({ theme, setDraft }: { theme: Theme
   const setCheckout = useBlock("checkout", setDraft);
   return (
     <div className="space-y-5" data-private-page-settings="checkout">
+      <WideScreensNote />
       <VisualChoice
         label={t("checkoutSummary")}
         showLabel
@@ -222,6 +234,7 @@ export function ReceiptPresentationSettings({ theme, setDraft }: { theme: Theme;
   };
   return (
     <div className="space-y-5" data-private-page-settings="receipt">
+      <WideScreensNote />
       <VisualChoice
         label={t("receiptLayout")}
         showLabel
@@ -267,6 +280,7 @@ export function AccountPresentationSettings({ theme, setDraft }: { theme: Theme;
   const setAccount = useBlock("account", setDraft);
   return (
     <div className="space-y-5" data-private-page-settings="account">
+      <WideScreensNote />
       <VisualChoice
         label={t("accountNavigation")}
         showLabel

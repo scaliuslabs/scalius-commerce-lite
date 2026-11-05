@@ -70,6 +70,7 @@ import {
 } from "../checkout/session-state";
 import { rememberSubmittedCart } from "../checkout/receipt-finalization";
 import { readStoredGiftCards } from "../checkout/gift-cards";
+import { codPaymentStep } from "../checkout/payment-step";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
 import { shippingCountryName } from "../checkout/shipping-country";
 import { enhanceShippingCountry } from "../checkout/country-address";
@@ -86,6 +87,7 @@ import { loadLazyScript } from "@/scripts/lazy-script";
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
+  codPaymentStep,
   BILLING_ADDRESS_FIELDS,
   loadLazyScript,
   addressAutocompleteService,

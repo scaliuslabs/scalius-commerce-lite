@@ -166,9 +166,11 @@ function CanvasVisuals({ visuals, inspector, hovered: treeHovered, selected, nam
   );
 }
 
-export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, activeId, register, visuals, inspector, hovered: treeHovered, selected, names, actions, notice, noticeCollapsed = false, onToggleNotice, behind = false, textEditor, onRetry, onScaleChange }: CanvasVisualProps & {
+export function EditorCanvas({ device, desktopWidth, minFillWidth = 0, zoom, phase, frames, activeId, register, visuals, inspector, hovered: treeHovered, selected, names, actions, notice, noticeCollapsed = false, onToggleNotice, behind = false, textEditor, onRetry, onScaleChange }: CanvasVisualProps & {
   device: PreviewDevice;
   desktopWidth: DesktopWidth;
+  /** The least width a filling computer preview lays out at (canvas-geometry.ts `frameBox`). */
+  minFillWidth?: number;
   zoom: PreviewZoom;
   phase: PreviewPhase;
   frames: ReadonlyArray<{ id: number; src: string }>;
@@ -196,7 +198,7 @@ export function EditorCanvas({ device, desktopWidth, zoom, phase, frames, active
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const box = frameBox(size, device, desktopWidth, zoom);
+  const box = frameBox(size, device, desktopWidth, zoom, minFillWidth);
   const reported = useRef("");
   useLayoutEffect(() => {
     const key = `${box.width}:${box.scale}`;

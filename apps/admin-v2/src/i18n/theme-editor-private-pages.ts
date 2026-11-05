@@ -6,6 +6,7 @@ import { defineMessages } from "./index";
  */
 export const themeEditorPrivatePageMessages = defineMessages({
   en: {
+    wideScreensNote: "These layouts show on computers and screens 1024px and wider, as the preview does; phones always show one column.",
     mandatoryNote: "Contact and delivery details, payment buttons, totals, legal notices and every error always show; these choices only arrange them.",
     cartLayout: "Cart page layout",
     cartSummary_side: "Cart beside the form",
@@ -49,6 +50,7 @@ export const themeEditorPrivatePageMessages = defineMessages({
     accountNavigation_sidebarHelp: "On computers a list beside each account page; tabs on phones.",
   },
   bn: {
+    wideScreensNote: "এই লেআউটগুলো কম্পিউটারে ও ১০২৪px বা তার চেয়ে চওড়া স্ক্রিনে দেখায়, প্রিভিউও তেমনই দেখায়; ফোনে সবসময় এক কলাম।",
     mandatoryNote: "যোগাযোগ ও ডেলিভারির তথ্য, পেমেন্টের বাটন, মোট দাম, আইনি নোটিশ ও প্রতিটি ত্রুটি সবসময় দেখায়; এই পছন্দগুলো শুধু এদের সাজায়।",
     cartLayout: "কার্ট পেজের লেআউট",
     cartSummary_side: "ফর্মের পাশে কার্ট",
