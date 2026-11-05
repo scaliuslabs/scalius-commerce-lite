@@ -43,7 +43,7 @@ export function withUnknownFieldGuard<R extends RouteConfig>(route: R): R {
 /** A dashboard API router whose JSON writes refuse unknown keys. */
 export function adminRouter(): OpenAPIHono<{ Bindings: Env }> {
   const app = new OpenAPIHono<{ Bindings: Env }>();
-  const register = app.openapi;
+  const register = app.openapi.bind(app);
   app.openapi = ((route: RouteConfig, ...rest: unknown[]) =>
     (register as (...args: unknown[]) => unknown)(withUnknownFieldGuard(route), ...rest)) as typeof app.openapi;
   return app;

@@ -24,7 +24,7 @@ export const authMessages = defineMessages({
     ssoDescription: "Your organization manages sign-in for this store.",
     ssoBody: "Open the dashboard from your organization's sign-in page.",
     // Shared errors
-    rateLimited: "Too many attempts. Wait a minute and try again.",
+    rateLimited: "Too many attempts. Wait a moment and try again.",
     rateLimitedSeconds: "Too many attempts. Try again in {count} seconds.",
     rateLimitedMinutes: "Too many attempts. Try again in {count} minutes.",
     offline: "Couldn't reach Scalius. Check your connection and try again.",
@@ -144,7 +144,7 @@ export const authMessages = defineMessages({
     sessionEnded: "আপনার সেশন শেষ হয়ে গেছে। আবার সাইন ইন করুন।",
     ssoDescription: "এই স্টোরের সাইন ইন আপনার প্রতিষ্ঠান পরিচালনা করে।",
     ssoBody: "আপনার প্রতিষ্ঠানের সাইন-ইন পেজ থেকে ড্যাশবোর্ড খুলুন।",
-    rateLimited: "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট পরে আবার চেষ্টা করুন।",
+    rateLimited: "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
     rateLimitedSeconds: "অনেকবার চেষ্টা করা হয়েছে। {count} সেকেন্ড পরে আবার চেষ্টা করুন।",
     rateLimitedMinutes: "অনেকবার চেষ্টা করা হয়েছে। {count} মিনিট পরে আবার চেষ্টা করুন।",
     offline: "Scalius-এর সাথে যোগাযোগ করা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",

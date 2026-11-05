@@ -14,6 +14,13 @@
 // can read (`z.preprocess`) reports nothing. A `.strict()` object would refuse
 // its unknown keys itself, but only after the route's path and header checks,
 // so the walk names them too, in the same shape.
+//
+// Choosing a plain union's option parses the whole value once per option, so
+// nested unions cost more the deeper they go. A discriminated union's option
+// is picked by its discriminator, as zod picks it (no parse), and a body gets
+// a bounded number of option parses: past it, the walk reports nothing more
+// below an undecided union (the route's own validation still runs), so a large
+// or crafted body can never spend the request's CPU here.
 import type { MiddlewareHandler } from "hono";
 import { ValidationError } from "./api-error";
 import { errorResponseFromError } from "./api-response";
@@ -42,6 +49,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 const WRAPPERS = new Set(["optional", "nullable", "default", "prefault", "catch", "readonly", "nonoptional", "success"]);
 const MAX_DEPTH = 32;
+/** Union option parses one body may spend; plenty for every admin body, bounded for any other. */
+export const MAX_UNION_OPTION_PARSES = 256;
+
+interface WalkBudget {
+  parses: number;
+}
 
 /** The schema zod parses a value with, past wrappers, lazies and pipes; null when only a transform reads it. */
 function parsingSchema(schema: unknown): ZodLike | null {
@@ -58,8 +71,11 @@ function parsingSchema(schema: unknown): ZodLike | null {
   return null;
 }
 
-function accepts(schema: unknown, value: unknown): boolean | null {
+function accepts(schema: unknown, value: unknown, budget: WalkBudget): boolean | null {
   if (!isZod(schema)) return null;
+  // Out of budget: undecided, so nothing below is reported.
+  if (budget.parses >= MAX_UNION_OPTION_PARSES) return null;
+  budget.parses += 1;
   try {
     return schema.safeParse(value).success;
   } catch {
@@ -68,7 +84,25 @@ function accepts(schema: unknown, value: unknown): boolean | null {
   }
 }
 
-function walk(schema: unknown, value: unknown, path: FieldPath, out: FieldPath[], depth: number): void {
+/**
+ * A discriminated union's option for `value`, by its discriminator as zod
+ * picks it; undefined when it is no discriminated union or no option claims
+ * the value (the bounded option-by-option reading then names what no option
+ * declares).
+ */
+function discriminatedOption(def: ZodDef, options: readonly unknown[], value: unknown): unknown | undefined {
+  const discriminator = def.discriminator;
+  if (typeof discriminator !== "string" || !isPlainObject(value)) return undefined;
+  const claimed = value[discriminator];
+  for (const option of options) {
+    const values = (option as { _zod?: { propValues?: Record<string, Set<unknown>> } })._zod?.propValues?.[discriminator];
+    if (!values) return undefined;
+    if (values.has(claimed)) return option;
+  }
+  return undefined;
+}
+
+function walk(schema: unknown, value: unknown, path: FieldPath, out: FieldPath[], depth: number, budget: WalkBudget): void {
   if (depth > MAX_DEPTH) return;
   const node = parsingSchema(schema);
   if (!node) return;
@@ -79,53 +113,58 @@ function walk(schema: unknown, value: unknown, path: FieldPath, out: FieldPath[]
       const shape = (def.shape ?? {}) as Record<string, unknown>;
       const catchall = def.catchall as ZodLike | undefined;
       for (const key of Object.keys(value)) {
-        if (Object.hasOwn(shape, key)) walk(shape[key], value[key], [...path, key], out, depth + 1);
+        if (Object.hasOwn(shape, key)) walk(shape[key], value[key], [...path, key], out, depth + 1, budget);
         // Stripped, or refused by `.strict()` (named here too, so a header or path
         // problem zod checks first cannot hide it).
         else if (catchall === undefined || catchall._zod.def.type === "never") out.push([...path, key]);
-        else walk(catchall, value[key], [...path, key], out, depth + 1);
+        else walk(catchall, value[key], [...path, key], out, depth + 1, budget);
       }
       return;
     }
     case "array":
-      if (Array.isArray(value)) value.forEach((item, index) => walk(def.element, item, [...path, index], out, depth + 1));
+      if (Array.isArray(value)) value.forEach((item, index) => walk(def.element, item, [...path, index], out, depth + 1, budget));
       return;
     case "tuple":
       if (Array.isArray(value)) {
         const items = (def.items ?? []) as unknown[];
-        value.forEach((item, index) => walk(index < items.length ? items[index] : def.rest, item, [...path, index], out, depth + 1));
+        value.forEach((item, index) => walk(index < items.length ? items[index] : def.rest, item, [...path, index], out, depth + 1, budget));
       }
       return;
     case "record":
       if (isPlainObject(value)) {
-        for (const key of Object.keys(value)) walk(def.valueType, value[key], [...path, key], out, depth + 1);
+        for (const key of Object.keys(value)) walk(def.valueType, value[key], [...path, key], out, depth + 1, budget);
       }
       return;
     case "union": {
       const options = (def.options ?? []) as unknown[];
+      const picked = discriminatedOption(def, options, value);
+      if (picked !== undefined) {
+        walk(picked, value, path, out, depth + 1, budget);
+        return;
+      }
       for (const option of options) {
-        const verdict = accepts(option, value);
+        const verdict = accepts(option, value, budget);
         if (verdict === null) return;
         if (verdict) {
-          walk(option, value, path, out, depth + 1);
+          walk(option, value, path, out, depth + 1, budget);
           return;
         }
       }
       // No option accepts it: report only what no option declares.
-      intersect(options.map((option) => collect(option, value, path, depth)), out);
+      intersect(options.map((option) => collect(option, value, path, depth, budget)), out);
       return;
     }
     case "intersection":
-      intersect([collect(def.left, value, path, depth), collect(def.right, value, path, depth)], out);
+      intersect([collect(def.left, value, path, depth, budget), collect(def.right, value, path, depth, budget)], out);
       return;
     default:
       return;
   }
 }
 
-function collect(schema: unknown, value: unknown, path: FieldPath, depth: number): FieldPath[] {
+function collect(schema: unknown, value: unknown, path: FieldPath, depth: number, budget: WalkBudget): FieldPath[] {
   const found: FieldPath[] = [];
-  walk(schema, value, path, found, depth + 1);
+  walk(schema, value, path, found, depth + 1, budget);
   return found;
 }
 
@@ -143,7 +182,7 @@ function intersect(lists: FieldPath[][], out: FieldPath[]): void {
 /** Every key of `value`, at any depth, that `schema` would drop when it parses it. */
 export function unknownBodyFields(schema: unknown, value: unknown): FieldPath[] {
   const out: FieldPath[] = [];
-  walk(schema, value, [], out, 0);
+  walk(schema, value, [], out, 0, { parses: 0 });
   return out;
 }
 
@@ -204,7 +243,14 @@ export function unknownFieldsError(paths: readonly FieldPath[], schemaIssues: re
     path,
     message: UNKNOWN_FIELD_MESSAGE,
   }));
-  for (const issue of schemaIssues) if (isPlainObject(issue)) issues.push(issue);
+  const named = new Set(paths.map((path) => JSON.stringify(path)));
+  for (const issue of schemaIssues) {
+    if (!isPlainObject(issue)) continue;
+    // A `.strict()` object names its unknown keys too: keep each key once.
+    if (issue.code === "unrecognized_keys" && Array.isArray(issue.keys) && Array.isArray(issue.path)
+      && issue.keys.every((key) => named.has(JSON.stringify([...(issue.path as FieldPath), key])))) continue;
+    issues.push(issue);
+  }
   return new ValidationError(validationMessage(issues), { issues: issues.slice(0, MAX_ISSUES) });
 }
 

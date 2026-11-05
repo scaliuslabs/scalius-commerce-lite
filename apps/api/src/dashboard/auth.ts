@@ -651,8 +651,10 @@ async function withRetryAfter(response: Response): Promise<Response> {
   const headers = new Headers(response.headers);
   headers.set("Retry-After", String(wait));
   headers.delete("Content-Length");
-  const body = await response.clone().json().catch(() => null) as Record<string, unknown> | null;
-  return new Response(JSON.stringify({ ...(body ?? {}), retryAfterSeconds: wait }), {
+  // Read once: a clone would leave the original body unread.
+  const body = await response.text().then((text) => JSON.parse(text) as unknown).catch(() => null);
+  const fields = body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  return new Response(JSON.stringify({ ...fields, retryAfterSeconds: wait }), {
     status: response.status,
     statusText: response.statusText,
     headers,

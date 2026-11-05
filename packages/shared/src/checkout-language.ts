@@ -1710,8 +1710,21 @@ export function getCheckoutLanguagePreset(code: unknown): CheckoutLanguageData {
 }
 
 /**
+ * Defaults a newer preset replaced. Saving a checkout language stores every
+ * value as resolved, so a store saved before the change holds the old default
+ * as if the merchant had typed it; that exact text reads as the current preset.
+ */
+const RETIRED_CHECKOUT_LANGUAGE_DEFAULTS: Partial<Record<CheckoutLanguageKey, readonly string[]>> = {
+  // They promised "a minute" whatever wait the API named.
+  reviewRateLimitedText: ["Too many tries. Wait a minute, then try again.", "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।"],
+  giftCardRateLimitedText: ["Too many tries. Wait a minute, then try again.", "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।"],
+  warrantyClaimRateLimitedText: ["Too many tries. Wait a minute, then try again.", "অনেকবার চেষ্টা করা হয়েছে। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।"],
+};
+
+/**
  * Stored values are merchant overrides on the locale's preset: a blank value
- * keeps the preset's wording, any other value replaces it.
+ * keeps the preset's wording, any other value replaces it, except a default a
+ * newer preset retired, which reads as the preset's wording now.
  */
 export function resolveCheckoutLanguageData(
   code: unknown,
@@ -1722,7 +1735,9 @@ export function resolveCheckoutLanguageData(
 
   for (const key of CHECKOUT_LANGUAGE_KEYS) {
     const value = stored[key];
-    if (typeof value === "string" && value.trim() !== "") resolved[key] = value;
+    if (typeof value !== "string" || value.trim() === "") continue;
+    if (RETIRED_CHECKOUT_LANGUAGE_DEFAULTS[key]?.includes(value.trim())) continue;
+    resolved[key] = value;
   }
 
   return resolved;
