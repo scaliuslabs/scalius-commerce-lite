@@ -194,7 +194,20 @@ export function applySelectedPaymentChoice(methodId: string | null): void {
   });
 }
 
-/** Arrow keys, Home and End move the choice, as a radiogroup does. */
+/** How many tiles share a row of the grid as it is laid out now (1 for the list, and on a phone). */
+function tilesPerRow(controls: readonly HTMLElement[]): number {
+  const top = (control: HTMLElement) => control.getBoundingClientRect().top;
+  const first = controls[0];
+  if (!first) return 1;
+  return Math.max(1, controls.filter((control) => Math.abs(top(control) - top(first)) < 1).length);
+}
+
+/**
+ * Arrow keys, Home and End move the choice, as a radiogroup does, along what
+ * the buyer sees: in the list Down and Up step through the rows; in tiles
+ * Down and Up move a row, the start and end arrows one tile; and the start
+ * and end arrows follow the page's direction (in right-to-left, Left is next).
+ */
 export function handlePaymentChoiceKeyDown(event: KeyboardEvent): void {
   const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
   if (!keys.includes(event.key)) return;
@@ -205,13 +218,20 @@ export function handlePaymentChoiceKeyDown(event: KeyboardEvent): void {
   if (currentIndex === -1 || cards.length === 0) return;
 
   event.preventDefault();
+  const tiles = current.closest<HTMLElement>("[data-payment-choices]")?.dataset.paymentChoices === "tiles";
+  const columns = tiles ? tilesPerRow(cards) : 1;
+  const rtl = current.closest("[dir]")?.getAttribute("dir") === "rtl";
+  const forward = rtl ? "ArrowLeft" : "ArrowRight";
+  const wrap = (index: number) => (index + cards.length) % cards.length;
   let nextIndex: number;
   if (event.key === "Home") nextIndex = 0;
   else if (event.key === "End") nextIndex = cards.length - 1;
-  else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-    nextIndex = (currentIndex + 1) % cards.length;
+  else if (event.key === "ArrowDown") {
+    nextIndex = columns === 1 ? wrap(currentIndex + 1) : Math.min(cards.length - 1, currentIndex + columns);
+  } else if (event.key === "ArrowUp") {
+    nextIndex = columns === 1 ? wrap(currentIndex - 1) : Math.max(0, currentIndex - columns);
   } else {
-    nextIndex = (currentIndex - 1 + cards.length) % cards.length;
+    nextIndex = wrap(currentIndex + (event.key === forward ? 1 : -1));
   }
 
   const next = cards[nextIndex];

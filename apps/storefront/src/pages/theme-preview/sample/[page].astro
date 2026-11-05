@@ -32,6 +32,7 @@ import { checkoutText } from "@/lib/checkout-text";
 import { formatCount } from "@/lib/store-time-zone";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 import {
   isThemePreviewSamplePage,
   themePreviewSampleAccount,
@@ -59,6 +60,8 @@ const notFound = () => new Response(null, { status: 404, headers: SAMPLE_HEADERS
 
 const page = Astro.params.page;
 if (!isThemePreviewSamplePage(page) || Astro.request.method.toUpperCase() !== "GET") return notFound();
+// No preview cookie (every buyer, every crawler): not found before the page reads anything.
+if (!readThemePreviewCookie(Astro.request.headers.get("cookie"))) return notFound();
 
 const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all([
   getLayoutData(),
@@ -131,7 +134,7 @@ const noticeClass = "mx-auto mt-3 w-fit max-w-[calc(100%-2rem)] rounded-full bor
     </>
   )}
   {page === "receipt" && receiptOrder && receiptState && receiptView && (
-    <section class={blocks.receipt.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"} data-order-success-state={receiptState.kind} data-theme-section-id={THEME_EDITOR_MARKS.receipt}>
+    <section class={blocks.receipt.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"} data-order-success-print="receipt" data-order-success-state={receiptState.kind} data-theme-section-id={THEME_EDITOR_MARKS.receipt}>
       <p class={`${noticeClass} mb-4`} role="note" data-theme-preview-sample>{words.notice}</p>
       <CheckoutProgress current="confirmation" paymentRequired={false} copy={copy} />
       <ReceiptStatusHeader

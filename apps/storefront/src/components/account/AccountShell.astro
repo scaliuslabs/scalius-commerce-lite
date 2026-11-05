@@ -68,7 +68,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
   <ConditionalWrap when={sidebar} class={workspace ? "flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-x-8" : "lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start lg:gap-x-8"}>
   {state !== "signed_out" && (
     <nav aria-label={words.nav} class={sidebar
-      ? (workspace ? "mb-3 shrink-0 border-b border-border lg:mb-0 lg:border-b-0" : "mb-6 border-b border-border sm:mb-8 lg:sticky lg:top-6 lg:mb-0 lg:border-b-0")
+      ? (workspace ? "mb-3 shrink-0 border-b border-border lg:mb-0 lg:border-b-0" : "mb-6 border-b border-border sm:mb-8 lg:sticky lg:top-[calc(var(--header-height,64px)+1rem)] lg:mb-0 lg:border-b-0")
       : (workspace ? "mb-3 shrink-0 border-b border-border" : "mb-6 border-b border-border sm:mb-8")}>
       <div class={sidebar
         ? "-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 lg:flex-col lg:items-stretch lg:overflow-visible [&::-webkit-scrollbar]:hidden"

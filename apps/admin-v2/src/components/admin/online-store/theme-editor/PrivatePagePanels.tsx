@@ -6,7 +6,7 @@
  * buyer must see and do there whatever is chosen, so nothing here hides a
  * part. This module loads only when one of these parts is selected.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import {
   STOREFRONT_ACCOUNT_NAVIGATION_STYLES,
@@ -197,6 +197,19 @@ export function ReceiptPresentationSettings({ theme, setDraft }: { theme: Theme;
   const setReceipt = useBlock("receipt", setDraft);
   const sections = theme.blocks.receipt.sections;
   const [announcement, setAnnouncement] = useState("");
+  const list = useRef<HTMLOListElement>(null);
+  // The moved card keeps the focus: on the button it was moved with, or on its other one when
+  // that button is now disabled (the card reached the top or the bottom).
+  const moved = useRef<{ section: StorefrontReceiptSection; by: -1 | 1 } | null>(null);
+  useEffect(() => {
+    const last = moved.current;
+    moved.current = null;
+    if (!last) return;
+    const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>(`[data-receipt-section="${last.section}"] button`) ?? [])];
+    const [up, down] = buttons;
+    const preferred = last.by === -1 ? up : down;
+    (preferred && !preferred.disabled ? preferred : last.by === -1 ? down : up)?.focus();
+  }, [sections]);
   const move = (section: StorefrontReceiptSection, by: -1 | 1) => {
     const from = sections.indexOf(section);
     const to = from + by;
@@ -205,6 +218,7 @@ export function ReceiptPresentationSettings({ theme, setDraft }: { theme: Theme;
     [next[from], next[to]] = [next[to]!, next[from]!];
     setReceipt({ sections: next });
     setAnnouncement(t("moved", { name: t(`receiptSection_${section}`), position: to + 1, count: next.length }));
+    moved.current = { section, by };
   };
   return (
     <div className="space-y-5" data-private-page-settings="receipt">
@@ -222,7 +236,7 @@ export function ReceiptPresentationSettings({ theme, setDraft }: { theme: Theme;
         onChange={(layout) => setReceipt({ layout })}
       />
       <FieldSet label={t("receiptOrder")} help={t("receiptOrderHelp")}>
-        <ol className="divide-y divide-border rounded-lg border border-border" data-receipt-order>
+        <ol ref={list} className="divide-y divide-border rounded-lg border border-border" data-receipt-order>
           {sections.map((section, index) => {
             const name = t(`receiptSection_${section}`);
             return (

@@ -29,10 +29,11 @@ const [first, ...rest] = block.sections;
 
 {split ? (
   <div class="order-success-print-grid grid gap-6 animate-slide-up lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start" data-receipt-layout="split">
-    <div class="min-w-0">
+    {/* Printed, the columns step aside (`display: contents`): the cards fill the receipt's print grid as in one column. */}
+    <div class="order-success-print-column min-w-0">
       {first && <ReceiptCard section={first} {...card} />}
     </div>
-    <div class="min-w-0 space-y-6">
+    <div class="order-success-print-column min-w-0 space-y-6">
       {rest.map((section) => <ReceiptCard section={section} {...card} />)}
     </div>
   </div>

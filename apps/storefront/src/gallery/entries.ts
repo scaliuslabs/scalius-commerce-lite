@@ -629,9 +629,9 @@ function privatePageEntries(): GalleryEntry[] {
     scenario: { locale: "bn" },
   });
   for (const layout of STOREFRONT_RECEIPT_LAYOUTS) {
-    for (const sections of [["order", "delivery", "items"], ["items", "order", "delivery"]] as const) {
+    for (const sections of [["order", "delivery", "items"], ["items", "order", "delivery"], ["order", "items", "delivery"]] as const) {
       entries.push({
-        id: entryId("private", "receipt", `layout=${layout}`, sections[0]),
+        id: entryId("private", "receipt", `layout=${layout}`, sections.join("-")),
         family: "private:receipt",
         title: `Order confirmation (sample), ${layout}, ${sections.join(", ")}`,
         page: "sample-receipt",
