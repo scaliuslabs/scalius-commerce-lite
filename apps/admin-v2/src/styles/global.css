@@ -377,14 +377,6 @@
   --animate-accordion-up: accordion-up 0.2s ease-out;
   --animate-nav-grow: nav-grow 0.15s ease-out;
   --animate-panel-in: panel-in 0.18s ease-out;
-  /* A loading sign appears only once its wait has lasted 300 ms (L3): hidden until then, then shown at once. */
-  --animate-wait-sign: wait-sign 0s 300ms both;
-
-  @keyframes wait-sign {
-    from {
-      opacity: 0;
-    }
-  }
 
   @keyframes fade-in-up {
     from {
@@ -929,4 +921,16 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
       min-height: 1.5rem;
     }
   }
+}
+
+/* A loading sign appears only once its wait has lasted 300 ms (L3): hidden until then, then shown
+   at once. A wait already under way sets what is left of it (`--wait-sign-delay`, LazyPart). */
+@keyframes wait-sign {
+  from {
+    opacity: 0;
+  }
+}
+
+@utility animate-wait-sign {
+  animation: wait-sign 0s var(--wait-sign-delay, 300ms) both;
 }

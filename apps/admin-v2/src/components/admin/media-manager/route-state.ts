@@ -1,3 +1,4 @@
+import { urlSearchTerm } from "~/lib/list-search";
 import type {
   MediaFilterOptions,
   MediaWorkspaceRouteState,
@@ -19,6 +20,8 @@ export type MediaSortKey = keyof typeof MEDIA_SORTS;
 
 /** Folder, type, sort and tab live in the URL; the search term never does (~/lib/list-search "media"). */
 export interface MediaRouteSearch {
+  /** A `?q=` deep link, until the page adopts it. */
+  q?: string;
   view?: "trash";
   folder?: string;
   kind?: MediaWorkspaceRouteState["kind"];
@@ -41,6 +44,7 @@ export function validateMediaSearch(search: Record<string, unknown>): MediaRoute
     : undefined;
 
   return {
+    ...urlSearchTerm(search),
     view: search.view === "trash" ? "trash" : undefined,
     folder: normalizeFolder(search.folder),
     kind: search.kind === "image" || search.kind === "video" ? search.kind : undefined,

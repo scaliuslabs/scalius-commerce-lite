@@ -198,6 +198,29 @@ export function appSettingProblem(field: ThemeAppSettingField, value: unknown): 
   }
 }
 
+/**
+ * What the form marks for the merchant to fix: each failing setting, and in
+ * a list each item marked "Needs a fix" (not the list once). The first one is
+ * where the fix link goes: the setting, or the list item and its first
+ * failing field.
+ */
+export function appSettingFixes(fields: readonly ThemeAppSettingField[], values: Readonly<Record<string, unknown>>): Array<{ key: string; item?: { index: number; key: string } }> {
+  const fixes: Array<{ key: string; item?: { index: number; key: string } }> = [];
+  for (const [key, problem] of appSettingProblems(fields, values)) {
+    const field = fields.find((each) => each.key === key);
+    const items = problem.kind === "items" && field ? appFieldValue(field, values) : null;
+    if (!Array.isArray(items) || !field) {
+      fixes.push({ key });
+      continue;
+    }
+    items.forEach((item, index) => {
+      const first = appListItemProblems(field, item as AppSettingItem).keys().next().value;
+      if (first !== undefined) fixes.push({ key, item: { index, key: first } });
+    });
+  }
+  return fixes;
+}
+
 /** The DOM id of one app setting (`theme-section-app-values-title`). */
 export const appSettingFieldId = (idPrefix: string, key: string) => `${idPrefix}-${key}`;
 

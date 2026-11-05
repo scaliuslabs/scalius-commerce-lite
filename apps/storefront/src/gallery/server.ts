@@ -18,6 +18,8 @@ if (import.meta.env.PROD) {
 
 export { answerFixtureApi, galleryEntry, GALLERY_API_PREFIX };
 
+const SAMPLE_PAGE = "/src/pages/theme-preview/sample/[page].astro";
+
 const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) => string; params: (entry: GalleryEntry) => Record<string, string> }> = {
   home: { module: "/src/pages/index.astro", path: () => "/", params: () => ({}) },
   landing: { module: "/src/pages/pages/[slug].astro", path: () => "/pages/eid-sale", params: () => ({ slug: "eid-sale" }) },
@@ -36,7 +38,13 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
   },
   cart: { module: "/src/pages/cart.astro", path: () => "/cart", params: () => ({}) },
   page: { module: "/src/pages/[slug].astro", path: () => "/returns", params: () => ({ slug: "returns" }) },
+  "sample-checkout": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/checkout", params: () => ({ page: "checkout" }) },
+  "sample-receipt": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/receipt", params: () => ({ page: "receipt" }) },
+  "sample-account": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/account", params: () => ({ page: "account" }) },
 };
+
+/** The theme editor's sample pages answer only under a live preview: the fixture API resolves this one to the entry's theme. */
+export const GALLERY_PREVIEW_COOKIE = `stp_theme_preview=tpv_${"g".repeat(48)}`;
 
 export interface GalleryRenderPlan {
   entry: GalleryEntry;
@@ -59,7 +67,7 @@ export function galleryRenderPlan(id: string, origin: string): GalleryRenderPlan
     entry,
     page: page.module,
     url: `${origin}${presence ? `/${presence}${path === "/" ? "" : path}` : path}`,
-    headers: {},
+    headers: entry.page.startsWith("sample-") ? { cookie: GALLERY_PREVIEW_COOKIE } : {},
     params: page.params(entry),
     runtime: {
       PUBLIC_API_URL: `${galleryApiBase(origin, entry.id)}/api/v1`,

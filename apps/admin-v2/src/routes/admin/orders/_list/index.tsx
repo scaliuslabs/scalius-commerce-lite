@@ -9,7 +9,7 @@ import {
   type OrderListSearch,
 } from "~/components/admin/order-list/order-list-search";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
-import { readListSearch } from "~/lib/list-search";
+import { adoptListSearch, useDropUrlSearchTerm } from "~/lib/list-search";
 import { resetCursorUnlessPaging } from "~/lib/list-helpers";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { RouteErrorComponent } from "~/lib/route-error";
@@ -21,8 +21,8 @@ export const Route = createFileRoute("/admin/orders/_list/")({
   loaderDeps: ({ search }) => search,
   staleTime: 30_000,
   loader: async ({ context: { queryClient }, deps }) => {
-    // The search term lives in this tab's session (empty on the server), never in the URL.
-    const term = typeof window === "undefined" ? "" : readListSearch(ORDER_SEARCH_LIST);
+    // The search term lives in this tab's session (empty on the server); a `?q=` link becomes it, then leaves the URL.
+    const term = typeof window === "undefined" ? "" : adoptListSearch(ORDER_SEARCH_LIST, deps.q);
     await warmRouteQuery(queryClient, ordersQueryOptions(orderListQuery(deps, term)));
   },
   head: () => pageHead("orders"),
@@ -33,6 +33,7 @@ export const Route = createFileRoute("/admin/orders/_list/")({
 function OrdersIndexPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  useDropUrlSearchTerm(search.q);
   const onChange = useCallback(
     (updates: Partial<OrderListSearch>, options?: { replace?: boolean }) => {
       // A cursor is a position in one filtered, sorted list: anything but a Previous/Next move starts over.

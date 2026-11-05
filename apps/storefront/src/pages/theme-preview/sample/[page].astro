@@ -1,0 +1,198 @@
+---
+// The theme editor's sample pages: the checkout, the receipt and the account
+// drawn with the draft theme from fixed sample orders (lib/theme-preview-samples.ts).
+// A buyer's own page never draws a draft, so the editor previews these
+// instead. Each answers only under a live preview (the merchant's preview
+// cookie, verified by the API): without one it is not found. It reads no
+// buyer's session, receipt proof, cart or account, only the public reads
+// every page makes (the layout, the checkout settings and words); it is
+// never stored, never indexed, and only the dashboard's editor may frame it
+// (the middleware frames a live preview render only). No app code runs here,
+// as on the pages it stands for (`storefrontAppPage`).
+import Layout from "@/layouts/Layout.astro";
+import CheckoutHeader from "@/components/CheckoutHeader.astro";
+import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
+import CheckoutProgress from "@/components/CheckoutProgress.astro";
+import CheckoutPaymentStep from "@/components/checkout/CheckoutPaymentStep.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
+import AccountOrderCards from "@/components/account/AccountOrderCards.astro";
+import ReceiptCards from "@/components/order/ReceiptCards.astro";
+import ReceiptStatusHeader from "@/components/order/ReceiptStatusHeader.astro";
+import { getActiveCheckoutLanguage, getLayoutData, type CheckoutLanguageData } from "@/lib/api";
+import { getCheckoutConfig } from "@/lib/api/checkout";
+import type { CheckoutConfig as CheckoutPageConfig } from "@/lib/checkout/types";
+import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
+import { accountCopy } from "@/lib/account-copy";
+import { accountOrderCards } from "@/lib/account-order-cards";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
+import { orderReceiptView } from "@/lib/order-receipt-view";
+import { getOrderSuccessNextSteps, getOrderSuccessViewState } from "@/lib/order-success-state";
+import { withOrderCompletionWording } from "@/lib/order-line-groups";
+import { checkoutText } from "@/lib/checkout-text";
+import { formatCount } from "@/lib/store-time-zone";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { readThemePreviewCookie } from "@/lib/theme-preview-cookie";
+import {
+  isThemePreviewSamplePage,
+  themePreviewSampleAccount,
+  themePreviewSampleCheckout,
+  themePreviewSampleReceipt,
+  themePreviewSampleWords,
+} from "@/lib/theme-preview-samples";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  checkoutLanguageBaseCode,
+  getCheckoutLanguagePreset,
+} from "@scalius/shared/checkout-language";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
+
+export const prerender = false;
+
+/** What every answer of this route says: private, never stored, never indexed. */
+const SAMPLE_HEADERS = {
+  "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+  "X-Robots-Tag": "noindex, nofollow",
+  "Referrer-Policy": "no-referrer",
+} as const;
+const notFound = () => new Response(null, { status: 404, headers: SAMPLE_HEADERS });
+
+const page = Astro.params.page;
+if (!isThemePreviewSamplePage(page) || Astro.request.method.toUpperCase() !== "GET") return notFound();
+// No preview cookie (every buyer, every crawler): not found before the page reads anything.
+if (!readThemePreviewCookie(Astro.request.headers.get("cookie"))) return notFound();
+
+const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all([
+  getLayoutData(),
+  getCheckoutConfig(),
+  getActiveCheckoutLanguage(),
+]);
+// The draft under the merchant's live preview, or nothing at all.
+const requestTheme = await resolveRequestTheme(Astro, layoutData);
+if (!requestTheme.preview) return notFound();
+for (const [name, value] of Object.entries(SAMPLE_HEADERS)) Astro.response.headers.set(name, value);
+
+const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
+  id: "fallback",
+  name: "English (Fallback)",
+  code: "en",
+  languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
+  fieldVisibility: { showOrderNotesField: true, showAreaField: true },
+  isActive: true,
+  isDefault: true,
+};
+const copy = checkoutLanguage.languageData;
+const languageCode = layoutData?.storefrontCopy?.languageCode ?? checkoutLanguage.code;
+const words = themePreviewSampleWords(languageCode);
+const currency = {
+  code: checkoutConfig.currency?.code ?? layoutData?.currency?.code ?? DEFAULT_CURRENCY.code,
+  decimalPlaces: layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces,
+};
+const blocks = requestTheme.resolved.blocks;
+
+// The checkout: its settings, reviewed details and quote, for lib/checkout's sample drawing.
+const checkout = page === "checkout"
+  ? themePreviewSampleCheckout(checkoutConfig as unknown as CheckoutPageConfig, currency, languageCode)
+  : null;
+// The receipt: a placed cash-on-delivery order, through the receipt's own view.
+const receiptOrder = page === "receipt" ? themePreviewSampleReceipt(currency, languageCode) : null;
+const receiptState = receiptOrder
+  ? withOrderCompletionWording(getOrderSuccessViewState(receiptOrder, copy, null), receiptOrder, copy)
+  : null;
+const receiptView = receiptOrder
+  ? orderReceiptView({ order: receiptOrder, copy, languageCode: checkoutLanguage.code, configuredCurrencyCode: currency.code })
+  : null;
+// The account: two orders and the tab counts, through the account's own cards.
+const account = page === "account" ? themePreviewSampleAccount(currency, languageCode) : null;
+const accountWords = accountCopy();
+const accountCards = account
+  ? accountOrderCards(account.orders, accountWords, getCheckoutLanguagePreset(layoutData?.storefrontCopy?.languageCode))
+  : [];
+const title = page === "checkout" ? copy.paymentPageTitle : page === "receipt" ? receiptState?.title ?? copy.orderReceiptPageTitleText : accountWords.orders.title;
+const noticeClass = "mx-auto mt-3 w-fit max-w-[calc(100%-2rem)] rounded-full border border-border bg-muted px-3 py-1 text-center text-xs font-medium text-foreground";
+---
+
+<Layout
+  title={title}
+  layoutData={layoutData}
+  documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
+  hideHeader={page === "checkout"}
+  hideFooter={page === "checkout"}
+  hideNavigationSidebar={page !== "account"}
+>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  {page === "checkout" && checkout && (
+    <>
+      <CheckoutHeader layoutData={layoutData} copy={copy} />
+      <p class={noticeClass} role="note" data-theme-preview-sample>{words.notice}</p>
+      <div data-theme-section-id={THEME_EDITOR_MARKS.checkout}>
+        <CheckoutPaymentStep copy={copy} giftCopy={giftCardCheckoutCopy(copy)} block={blocks.checkout} sample />
+      </div>
+      <script is:inline type="application/json" id="themePreviewSample" set:html={serializeJsonForInlineScript(checkout)} />
+      <script is:inline set:html={`window.__CHECKOUT_LANGUAGE__=${serializeJsonForInlineScript(checkoutLanguage)};`}></script>
+    </>
+  )}
+  {page === "receipt" && receiptOrder && receiptState && receiptView && (
+    <section class={blocks.receipt.layout === "split" ? "container mx-auto max-w-5xl px-4 py-6 sm:py-8" : "container mx-auto max-w-3xl px-4 py-6 sm:py-8"} data-order-success-print="receipt" data-order-success-state={receiptState.kind} data-theme-section-id={THEME_EDITOR_MARKS.receipt}>
+      <p class={`${noticeClass} mb-4`} role="note" data-theme-preview-sample>{words.notice}</p>
+      <CheckoutProgress current="confirmation" paymentRequired={false} copy={copy} />
+      <ReceiptStatusHeader
+        merchantReceiptName={layoutData?.business?.companyName?.trim() || null}
+        statusView={false}
+        paymentNeedsBuyer={false}
+        showsSuccessHero={receiptState.kind === "order_placed"}
+        orderSuccessView={receiptState}
+        statusTitle={checkoutText(copy.orderStatusTitleText, { orderNumber: receiptView.orderNumber })}
+        nextSteps={getOrderSuccessNextSteps(receiptOrder, receiptState.kind, copy)}
+        copy={copy}
+      />
+      <ReceiptCards
+        order={receiptOrder}
+        orderId={receiptOrder.id}
+        copy={copy}
+        orderSuccessView={receiptState}
+        gateways={checkoutConfig.gateways}
+        view={receiptView}
+        block={blocks.receipt}
+      />
+      {/* Where the store apps' typed blocks land on a buyer's receipt. */}
+      <div data-buyer-ui-target="order.confirmation" data-buyer-ui="[]" class="mt-6 empty:hidden print:hidden"></div>
+    </section>
+  )}
+  {page === "account" && account && (
+    <>
+      <p class={noticeClass} role="note" data-theme-preview-sample>{words.notice}</p>
+      <div data-theme-section-id={THEME_EDITOR_MARKS.account}>
+      <AccountShell
+        current="orders"
+        summary={account.summary}
+        state="ok"
+        title={accountWords.orders.title}
+        intro={accountWords.orders.count(formatCount(account.orders.length), account.orders.length === 1)}
+      >
+        <AccountOrderCards cards={accountCards} words={accountWords.orders} />
+        <div data-buyer-ui-target="account.overview" data-buyer-ui="[]" class="mt-8 empty:hidden"></div>
+      </AccountShell>
+      </div>
+    </>
+  )}
+</Layout>
+
+{page === "checkout" && (
+  <CheckoutLoadingOverlay title={copy.processingPaymentTitle} message={copy.processingPaymentMessage} />
+)}
+
+<script>
+  import { renderCheckoutSample } from "@/lib/checkout";
+
+  // The sample checkout's summary and payment methods, drawn by the checkout's own code.
+  const sample = document.getElementById("themePreviewSample");
+  if (sample?.textContent) {
+    const draw = () => renderCheckoutSample(JSON.parse(sample.textContent ?? "{}"));
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", draw, { once: true });
+    else draw();
+  }
+  // Nothing on a sample page leaves it: the gift card form applies nothing.
+  document.getElementById("giftCardForm")?.addEventListener("submit", (event) => event.preventDefault());
+</script>

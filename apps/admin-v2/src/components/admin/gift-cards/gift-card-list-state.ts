@@ -16,11 +16,14 @@ export type GiftCardTab = (typeof GIFT_CARD_TABS)[number];
 
 export interface GiftCardListSearch {
   status?: Exclude<GiftCardTab, "all">;
+  /** A `?q=` deep link, until the list adopts it. */
+  q?: string;
 }
 
 export function validateGiftCardListSearch(search: Record<string, unknown>): GiftCardListSearch {
   const status = GIFT_CARD_TABS.find((tab): tab is Exclude<GiftCardTab, "all"> => tab !== "all" && tab === search.status);
-  return status ? { status } : {};
+  // A `?q=` link holding a whole code keeps only its last 4, as typed searches do.
+  return { ...(status ? { status } : {}), ...(typeof search.q === "string" ? { q: giftCardSearchTerm(search.q) } : {}) };
 }
 
 /** Looks like a whole gift-card code (16 characters once dashes and spaces are gone). */

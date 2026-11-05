@@ -236,7 +236,41 @@ export function headerPageData(lead: HomepageHeaderLead, extension: StorefrontEx
   };
 }
 
-const SOCIAL_NETWORKS = ["facebook", "instagram", "youtube", "tiktok", "twitter", "x", "linkedin", "pinterest", "whatsapp", "telegram", "messenger", "threads"];
+/** Each network by its profile hosts, in this order (a host matches itself or a subdomain). */
+const SOCIAL_NETWORK_HOSTS: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["facebook", ["facebook.com", "fb.com", "fb.me"]],
+  ["messenger", ["m.me", "messenger.com"]],
+  ["instagram", ["instagram.com"]],
+  ["threads", ["threads.net", "threads.com"]],
+  ["youtube", ["youtube.com", "youtu.be"]],
+  ["tiktok", ["tiktok.com"]],
+  ["x", ["x.com"]],
+  ["twitter", ["twitter.com"]],
+  ["linkedin", ["linkedin.com"]],
+  ["pinterest", ["pinterest.com", "pin.it"]],
+  ["whatsapp", ["whatsapp.com", "wa.me"]],
+  ["telegram", ["telegram.org", "telegram.me", "t.me"]],
+];
+
+/**
+ * A profile's network, for a skin's own glyph: its host first, then a whole
+ * word of its label (in the table's order), else the label as a slug, else
+ * `link`. Never a word's letters: "Inbox" is not `x`.
+ */
+export function socialNetworkOf(url: string, label: string): string {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    host = "";
+  }
+  const byHost = SOCIAL_NETWORK_HOSTS.find(([, hosts]) => hosts.some((name) => host === name || host.endsWith(`.${name}`)));
+  if (byHost) return byHost[0];
+  const words = label.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const byWord = SOCIAL_NETWORK_HOSTS.find(([name]) => words.includes(name));
+  if (byWord) return byWord[0];
+  return words.join("-").replace(/[^a-z0-9-]+/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "") || "link";
+}
 
 export function footerData(input: {
   theme: RequestTheme;
@@ -264,13 +298,11 @@ export function footerData(input: {
       address: address || null,
       social: input.social.flatMap((link) => {
         if (!/^https:\/\//.test(link.url)) return [];
-        const label = link.label.toLowerCase();
-        const host = (() => { try { return new URL(link.url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
-        const network = SOCIAL_NETWORKS.find((name) => label.includes(name) || host.startsWith(`${name}.`)) ?? label.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const network = socialNetworkOf(link.url, link.label);
         const iconUrl = socialProfileIconUrl(link.iconUrl);
         // The store's own footer image: its rendition as drawn, named by the merchant's label.
         const icon = iconUrl ? { url: iconUrl, srcset: null, width: null, height: null, alt: link.label } : null;
-        return [{ network: network || "link", url: link.url, id: link.id, label: link.label, icon }];
+        return [{ network, url: link.url, id: link.id, label: link.label, icon }];
       }),
     },
     menus: input.menus.map((menu) => ({ title: menu.title, items: menuItems(menu.links) })).filter((menu) => menu.items.length > 0),

@@ -5,7 +5,7 @@
  * it; the settings are there before a merchant's first click.
  */
 import { DynamicSourcePicker } from "../schema-form/DynamicSourcePicker";
-import { useState, type FocusEvent, type ReactNode } from "react";
+import { Suspense, lazy, useState, type FocusEvent, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import {
   storefrontSectionBlockLists,
@@ -33,6 +33,9 @@ import { AnnouncementSettings, FooterSettings, HeaderSettings } from "./ThemeSet
 import { AppSkinSettings, SectionSkinSettings } from "./AppSkinSettings";
 
 export { AppSectionSettings } from "./AppSectionSettings";
+
+// The buyer's pages' choices load only when one of those parts is selected.
+const PrivatePagePanel = lazy(() => import("./PrivatePagePanels"));
 export { ThemeSettingsPanel } from "./ThemeSettingsPanel";
 
 type Settings = StorefrontPlatformSection["settings"];
@@ -168,7 +171,16 @@ export function PartSettings({ selected, page, theme, resolved, media, apps, cms
       if (page.kind === "landing") return <LandingPageSettings theme={theme} slug={page.slug} setDraft={setDraft} onRemove={() => onRemoveLanding(page.slug)} />;
       return null;
     case EDITOR_PARTS.pageContent: return <CmsPageContent pageId={cmsPageId} />;
-    case EDITOR_PARTS.cart: return <CartContent />;
+    case EDITOR_PARTS.cart:
+      return (
+        <div className="space-y-6">
+          <Suspense fallback={null}><PrivatePagePanel part="cart" theme={theme} setDraft={setDraft} /></Suspense>
+          <CartContent />
+        </div>
+      );
+    case EDITOR_PARTS.checkout: return <Suspense fallback={null}><PrivatePagePanel part="checkout" theme={theme} setDraft={setDraft} /></Suspense>;
+    case EDITOR_PARTS.receipt: return <Suspense fallback={null}><PrivatePagePanel part="receipt" theme={theme} setDraft={setDraft} /></Suspense>;
+    case EDITOR_PARTS.account: return <Suspense fallback={null}><PrivatePagePanel part="account" theme={theme} setDraft={setDraft} /></Suspense>;
     case EDITOR_PARTS.productMain:
       return (
         <AppSkinSettings unit="product_main" theme={theme} apps={apps} media={media} setDraft={setDraft}>

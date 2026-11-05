@@ -496,9 +496,10 @@ export interface StorefrontFooterData {
     /**
      * The store's social profiles (Settings -> Store details), in the order
      * the merchant saved them; `[]` without any (draw no social band). Only
-     * https profiles reach a skin. `network` is a lowercase name read from
-     * the label or host (`facebook`, `instagram`, ...; else the label's slug,
-     * else `link`) for choosing your own glyph.
+     * https profiles reach a skin. `network` is a lowercase identifier for
+     * choosing your own glyph: from the host (`facebook`, `instagram`, ...),
+     * else a whole word of the label, else the label's slug, else `link`.
+     * It is not words: name a link without a label in the page's language.
      */
     social: Array<{
       network: string;

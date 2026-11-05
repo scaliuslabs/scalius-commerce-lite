@@ -73,12 +73,13 @@ const Header = ({ data }: HeaderProps) => (
 );
 ```
 
-Social profiles work the same way. A footer's `data.store.social` is the store's own list from Settings -> Store details, in the order the merchant saved it, and only `https` profiles. Each has a `url`, its `id` (stable across edits and reorders), the merchant's `label` exactly as typed (name the link with it), `icon` (the merchant's image from Files, the one the store's own footer draws, or `null`) and `network` (`facebook`, `youtube`, ... read from the label or host). Draw the icon when there is one and your own glyph for `network` when there is not; draw no social band for `[]`. Do not ship profile URLs, icon uploads or artwork settings of your own: the merchant edits a profile once and every footer follows on its next render. Stores older than these fields send only `network` and `url`, so fall back to `network` for the name.
+Social profiles work the same way. A footer's `data.store.social` is the store's own list from Settings -> Store details, in the order the merchant saved it, and only `https` profiles. Each has a `url`, its `id` (stable across edits and reorders), the merchant's `label` exactly as typed (name the link with it), `icon` (the merchant's image from Files, the one the store's own footer draws, or `null`) and `network` (`facebook`, `youtube`, ... from the host, else a whole word of the label; otherwise the label as a slug, or `link`). `network` is an identifier, not words: when the label is blank (or absent on stores older than these fields, which send only `network` and `url`), name the link with the network's own name for a network you know (`Facebook`) and with your own translated word otherwise, never `link`. Draw the icon when there is one and your own glyph for `network` when there is not; draw no social band for `[]`. Do not ship profile URLs, icon uploads or artwork settings of your own: the merchant edits a profile once and every footer follows on its next render.
 
 ```tsx
+const NAMES: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", youtube: "YouTube" };
 <ul>
   {data.store.social.map((link) => (
-    <li><a href={link.url} aria-label={link.label || link.network} rel="noopener" target="_blank">
+    <li><a href={link.url} aria-label={link.label || NAMES[link.network] || t(context, { en: "Social", bn: "সোশ্যাল" })} rel="noopener" target="_blank">
       {link.icon ? <Image image={link.icon} alt="" /> : <MyGlyph network={link.network} />}
     </a></li>
   ))}
@@ -204,7 +205,9 @@ Right:
 
 ## Templates
 
-A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 13 today); stores upgrade it from there.
+A template sets tokens, blocks, which skins draw the units (`apps.skins`) and the homepage sections; the merchant's brand, menus, pages and other content stay. Write it for one theme document version (`themeVersion`, 14 today); stores upgrade it from there.
+
+A template may also lay out the buyer's own pages, from closed choices only: `blocks.cart` (`summary`: `side` or `top`), `blocks.cartDrawer` (`width`: `standard` or `wide`; `recommendations`: `shown` or `hidden`), `blocks.checkout` (`summary`; `paymentChoices`: `list` or `tiles`), `blocks.receipt` (`layout`: `stacked` or `split`; `sections`: `order`, `delivery` and `items`, each once, in your order) and `blocks.account` (`navigation`: `tabs` or `sidebar`). The store draws those pages itself with your tokens: no skin, island, stylesheet or script of yours runs there, and the details form, totals, payment methods, Pay button, errors and the Buyer UI targets always show. Set all of a block's choices; a block you leave out keeps the merchant's.
 
 Its `tokens` can set the colour scheme too, checked like any theme when the merchant saves:
 
@@ -220,7 +223,7 @@ A template that leaves dark off (`light`, no switch) keeps the merchant's own sc
 templates: [{
   id: "studio",
   name: "Studio",
-  themeVersion: 13,
+  themeVersion: 14,
   theme: {
     apps: { skins: { header: { app: "acme.studio/header", values: {} }, product_card: { app: "acme.studio/card", values: {} } } },
     sections: [

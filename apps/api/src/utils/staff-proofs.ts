@@ -1,4 +1,4 @@
-import type { Auth } from "@scalius/core/auth";
+import { verifyPendingTotpCode, type Auth } from "@scalius/core/auth";
 import { STAFF_PROOF_ATTEMPTS, reserveStaffAttempt, type StaffAttempt } from "@scalius/core/auth/staff-attempts";
 import type { Database } from "@scalius/database/client";
 import { RateLimitError } from "./api-error";
@@ -63,6 +63,8 @@ export async function staffProofs(env: Env, db: Database, auth: Auth, userId: st
     verifyTwoFactorOTP: counted(auth.api.verifyTwoFactorOTP, attempt),
     verifyBackupCode: counted(auth.api.verifyBackupCode, attempt),
     enableTwoFactor: counted(auth.api.enableTwoFactor, attempt),
+    // The new authenticator's first code, checked against the method change's pending key.
+    verifyPendingTotpCode: counted(verifyPendingTotpCode, attempt, (answer) => answer !== true),
   };
 }
 

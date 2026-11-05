@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { SupplierList } from "~/components/admin/purchasing/SupplierList";
 import { supplierListQuery, validateSupplierListSearch } from "~/components/admin/purchasing/purchasing-list-state";
 import { suppliersQueryOptions } from "~/lib/api-query-options/purchasing";
-import { readListSearch } from "~/lib/list-search";
+import { adoptListSearch, useDropUrlSearchTerm } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { pageHead } from "~/i18n/page-titles";
@@ -12,14 +12,15 @@ export const Route = createFileRoute("/admin/inventory/suppliers/")({
   validateSearch: validateSupplierListSearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) =>
-    warmRouteQuery(queryClient, suppliersQueryOptions(supplierListQuery(deps.status ?? "active", readListSearch("suppliers"), 1, 50))),
+    warmRouteQuery(queryClient, suppliersQueryOptions(supplierListQuery(deps.status ?? "active", adoptListSearch("suppliers", deps.q), 1, 50))),
   head: () => pageHead("suppliers"),
   errorComponent: RouteErrorComponent,
   component: SuppliersPage,
 });
 
 function SuppliersPage() {
-  const { status } = Route.useSearch();
+  const { status, q } = Route.useSearch();
+  useDropUrlSearchTerm(q);
   const navigate = useNavigate({ from: Route.fullPath });
   return (
     <SupplierList

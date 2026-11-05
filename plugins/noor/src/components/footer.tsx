@@ -5,7 +5,7 @@
 
 import { Image, Slot, editable, t, type FooterProps } from "@scalius/plugin-sdk/storefront";
 import { MenuLinks } from "./header";
-import { Icon, SocialIcon } from "./icons";
+import { Icon, SocialIcon, socialNetworkName } from "./icons";
 import { choice, cx, digits, text } from "./ui";
 
 export interface FooterSettings {
@@ -99,7 +99,7 @@ export function Footer({ data, settings, context }: FooterProps<FooterSettings>)
               <ul class="noor-social">
                 {/* The store's profiles as saved: its label names the link, its icon from Files replaces the glyph. */}
                 {data.store.social.map((link) => {
-                  const name = link.label?.trim() || link.network;
+                  const name = link.label?.trim() || socialNetworkName(link.network) || t(context, { en: "Social", bn: "সোশ্যাল" });
                   return (
                     <li>
                       <a href={link.url} rel="noopener" target="_blank" aria-label={name} title={name}>

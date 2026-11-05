@@ -1,0 +1,57 @@
+---
+// The account's orders as cards (lib/account-order-cards.ts): the account
+// page and the theme editor's sample account draw the same list.
+import { accountPill, accountUi as ui } from "@/lib/account-ui";
+import type { AccountOrderCard } from "@/lib/account-order-cards";
+import { formatCount } from "@/lib/store-time-zone";
+
+interface Props {
+  cards: AccountOrderCard[];
+  words: { title: string; order(number: string): string; buyAgain: string };
+}
+
+const { cards, words } = Astro.props;
+---
+
+<ul class="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3" aria-label={words.title}>
+  {cards.map((card) => (
+    <li class="min-w-0">
+      <article class={`${ui.card} group relative flex h-full gap-3 p-3 transition-colors hover:border-foreground/25 sm:flex-col sm:p-4`}>
+        <div class="flex shrink-0 gap-2 sm:order-2" aria-hidden="true">
+          {card.thumbs.map((thumb, index) => (
+            <span class:list={["relative block h-16 w-16 overflow-hidden rounded-lg border border-border bg-muted sm:h-14 sm:w-14", index > 0 && "hidden sm:block"]}>
+              <img src={thumb.src} alt="" width="64" height="64" loading="lazy" decoding="async" class="h-full w-full object-contain" />
+              {index === 0 && card.thumbs.length + card.more > 1 && (
+                <span class="absolute bottom-0.5 inset-e-0.5 rounded-md bg-background/90 px-1 text-[0.6875rem] font-semibold tabular-nums text-foreground sm:hidden">+{formatCount(card.thumbs.length + card.more - 1)}</span>
+              )}
+            </span>
+          ))}
+          {card.more > 0 && <span class="hidden h-14 w-14 items-center justify-center rounded-lg border border-border bg-muted text-xs font-semibold text-muted-foreground sm:flex">+{formatCount(card.more)}</span>}
+        </div>
+
+        <div class="flex min-w-0 flex-1 flex-col sm:order-1 sm:flex-none">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class={accountPill(card.tone)}>{card.status}</span>
+            {card.request && <span class={accountPill("warning")}>{card.request}</span>}
+          </div>
+          <h2 class="mt-1.5 text-sm font-semibold text-foreground sm:text-base">
+            <a href={card.href} data-astro-prefetch="false" class="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring">{words.order(card.number)}</a>
+          </h2>
+          <p class="text-xs text-muted-foreground sm:text-sm">{card.date} · {card.items}</p>
+          <p class:list={["mt-1 truncate text-xs sm:text-sm", card.detail.warn ? "font-medium text-destructive" : "text-muted-foreground"]}>{card.detail.text}</p>
+        </div>
+
+        <div class="flex shrink-0 flex-col items-end justify-between gap-2 sm:order-3 sm:mt-auto sm:flex-row sm:items-center sm:border-t sm:border-border sm:pt-3">
+          <p class="text-sm font-semibold tabular-nums text-foreground sm:text-base">{card.total}</p>
+          <a
+            href={`${card.href}#buy-again`}
+            data-astro-prefetch="false"
+            data-buy-again={card.buyAgain}
+            class="relative z-10 inline-flex min-h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:min-h-10 sm:text-sm"
+          >{words.buyAgain}</a>
+        </div>
+        <p class="relative z-10 hidden w-full text-xs text-muted-foreground empty:hidden sm:order-4" role="status" data-buy-again-status></p>
+      </article>
+    </li>
+  ))}
+</ul>

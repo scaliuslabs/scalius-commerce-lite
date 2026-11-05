@@ -1,0 +1,24 @@
+{
+ "templates": [
+  {
+   "blocks": {
+    "checkout": {
+     "summary": "top",
+     "paymentChoices": "tiles"
+    },
+    "receipt": {
+     "layout": "split",
+     "sections": [
+      "items",
+      "delivery",
+      "order"
+     ]
+    },
+    "account": {
+     "navigation": "sidebar"
+    }
+   }
+  }
+ ],
+ "pagePresets": []
+}

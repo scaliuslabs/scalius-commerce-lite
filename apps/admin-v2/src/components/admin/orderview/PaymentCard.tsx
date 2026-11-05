@@ -678,6 +678,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             money={money}
             locked={isRefundLocked}
             refundSources={refundSources}
+            refundLimit={paymentsResult?.refundLimit ?? null}
           />
         </Suspense>
       ) : null}

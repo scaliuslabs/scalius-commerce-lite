@@ -82,6 +82,7 @@ import {
     listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
     listRefundSources,
+    previewGiftCardRefundLimitMinor,
     paymentReviewFromMetadata,
     summarizeActiveRefundOperation,
 } from "@scalius/core/modules/payments";
@@ -739,6 +740,9 @@ const getPaymentsRoute = createRoute({
                         paymentSessionAttempts: z.array(paymentSessionAttemptSchema),
                         // Where an original-method refund draws from, in refund order (`listRefundSources`).
                         refundSources: z.array(refundSourceSchema),
+                        refundLimit: z.number().nullable().openapi({
+                            description: "The most a refund naming no lines may give back while the gift cards this order sold bound it (some were spent), in the order's currency; null when only the paid amount bounds it.",
+                        }),
                     })),
                 },
             },
@@ -779,6 +783,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
     const amount = (minor: number) => fromMinor(minor, order?.currencyDecimalPlaces ?? 2);
     // After the parallel reads, so the handler never holds more than six D1 connections.
     const giftCardLinks = await listGiftCardPaymentLinks(db, orderId, payments);
+    const refundLimitMinor = await previewGiftCardRefundLimitMinor(db, orderId, payments);
     return ok(c, {
         payments: payments.map(({ amountMinor, metadata, ...payment }) => ({
             ...payment,
@@ -802,6 +807,7 @@ app.openapi(getPaymentsRoute, (async (c: AdminRouteContext<typeof getPaymentsRou
             ...source,
             refundable: amount(refundableMinor),
         })),
+        refundLimit: refundLimitMinor === null ? null : amount(refundLimitMinor),
     });
 }) as unknown as AdminRouteHandler<typeof getPaymentsRoute>);
 

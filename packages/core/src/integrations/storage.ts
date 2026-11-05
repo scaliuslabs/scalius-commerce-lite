@@ -50,6 +50,11 @@ export function withPublicMediaUrl<T>(
   );
 }
 
+/** This request's public media address ("" outside a request that set one). */
+export function currentPublicMediaBase(): string {
+  return publicMediaUrlContext.getStore() ?? "";
+}
+
 export function getPublicMediaUrl(baseUrl: string, key: string): string {
   const normalizedBase = trimTrailingCharacter(baseUrl.trim(), "/");
   const validatedKey = validateMediaObjectKey(key);
