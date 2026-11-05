@@ -295,6 +295,22 @@ function compatibleUnion(
  * gained key. A removed or narrowed union member, a new required member and a
  * different primitive stay breaks.
  */
+/**
+ * A list type's element, in either spelling: `T[]` or `Array<T>`, and
+ * `readonly T[]` or `ReadonlyArray<T>`. Null for any other type.
+ */
+function listOf(node: ts.TypeNode): { element: ts.TypeNode; readonly: boolean } | null {
+  if (ts.isArrayTypeNode(node)) return { element: node.elementType, readonly: false };
+  if (ts.isTypeOperatorNode(node) && node.operator === ts.SyntaxKind.ReadonlyKeyword && ts.isArrayTypeNode(node.type)) {
+    return { element: node.type.elementType, readonly: true };
+  }
+  if (ts.isTypeReferenceNode(node) && ts.isIdentifier(node.typeName) && node.typeArguments?.length === 1) {
+    if (node.typeName.text === "Array") return { element: node.typeArguments[0]!, readonly: false };
+    if (node.typeName.text === "ReadonlyArray") return { element: node.typeArguments[0]!, readonly: true };
+  }
+  return null;
+}
+
 function compatibleType(
   before: ts.TypeNode | undefined, after: ts.TypeNode | undefined,
   oldSource: ts.SourceFile, newSource: ts.SourceFile,
@@ -305,7 +321,9 @@ function compatibleType(
   const was = unparenthesized(before);
   const now = unparenthesized(after);
   if (ts.isTypeLiteralNode(was) && ts.isTypeLiteralNode(now)) return compatibleMembers(was.members, now.members, oldSource, newSource);
-  if (ts.isArrayTypeNode(was) && ts.isArrayTypeNode(now)) return compatibleType(was.elementType, now.elementType, oldSource, newSource);
+  const wasList = listOf(was);
+  const nowList = listOf(now);
+  if (wasList && nowList && wasList.readonly === nowList.readonly) return compatibleType(wasList.element, nowList.element, oldSource, newSource);
   if (ts.isUnionTypeNode(was) && ts.isUnionTypeNode(now)) return compatibleUnion(was.types, now.types, oldSource, newSource);
   if (ts.isIntersectionTypeNode(was) && ts.isIntersectionTypeNode(now)) {
     return compatibleTypeLists(was.types, now.types, oldSource, newSource)

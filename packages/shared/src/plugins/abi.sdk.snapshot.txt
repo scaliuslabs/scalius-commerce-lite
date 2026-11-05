@@ -4240,6 +4240,9 @@ export interface StorefrontFooterData {
         social: Array<{
             network: string;
             url: string;
+            id?: string;
+            label?: string;
+            icon?: StorefrontImage | null;
         }>;
     };
     menus: Array<{

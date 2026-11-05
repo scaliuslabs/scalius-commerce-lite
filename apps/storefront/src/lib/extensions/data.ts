@@ -51,10 +51,12 @@ import type {
   ProductMedia,
   ProductOptionDefinition,
   ProductVariant,
+  SocialLink,
   StorefrontCustomField,
 } from "@/lib/api";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import { productCardModel, type ProductCardModel, type ProductCardProduct } from "@/components/cards/card-model";
+import { socialProfileIconUrl } from "@/components/footer/footer-model";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { productGalleryItems } from "@/components/product/lib/gallery-media";
 import { publicSpecificationRows } from "@/components/product/lib/product-page-modules";
@@ -243,7 +245,7 @@ export function footerData(input: {
   menus: readonly FooterMenu[];
   policies: ReadonlyArray<{ title: string; path: string }>;
   business: StorefrontBusinessInfo | null | undefined;
-  social: ReadonlyArray<{ label: string; url: string }>;
+  social: ReadonlyArray<SocialLink>;
 }): StorefrontFooterData {
   const { resolved } = input.theme;
   const business = input.business ?? {};
@@ -265,7 +267,10 @@ export function footerData(input: {
         const label = link.label.toLowerCase();
         const host = (() => { try { return new URL(link.url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
         const network = SOCIAL_NETWORKS.find((name) => label.includes(name) || host.startsWith(`${name}.`)) ?? label.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-        return [{ network: network || "link", url: link.url }];
+        const iconUrl = socialProfileIconUrl(link.iconUrl);
+        // The store's own footer image: its rendition as drawn, named by the merchant's label.
+        const icon = iconUrl ? { url: iconUrl, srcset: null, width: null, height: null, alt: link.label } : null;
+        return [{ network: network || "link", url: link.url, id: link.id, label: link.label, icon }];
       }),
     },
     menus: input.menus.map((menu) => ({ title: menu.title, items: menuItems(menu.links) })).filter((menu) => menu.items.length > 0),

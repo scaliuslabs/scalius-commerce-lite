@@ -133,7 +133,15 @@ export function fixtureFooterData(overrides: Partial<StorefrontFooterData> = {})
   return {
     store: {
       name: "Acme Store", url: "/", logo: null, darkLogo: null, logoWidth: 140, footerLogo: null,
-      phone: "+8801700000000", email: "hello@acme.example", address: "Dhaka", social: [{ network: "facebook", url: "https://facebook.com/acme" }],
+      phone: "+8801700000000", email: "hello@acme.example", address: "Dhaka",
+      // As Store details saves them, in order: a merchant label, and an icon from Files or none.
+      social: [
+        { id: "social_facebook", network: "facebook", label: "Facebook", url: "https://facebook.com/acme", icon: null },
+        {
+          id: "social_video", network: "youtube", label: "Our video channel", url: "https://youtube.com/@acme",
+          icon: { url: "https://media.example.com/acme/video-icon-160.webp", srcset: null, width: null, height: null, alt: "Our video channel" },
+        },
+      ],
     },
     menus: [{ title: "Help", items: [{ title: "Shipping", url: "/pages/shipping", children: [] }] }],
     policies: [{ title: "Privacy", url: "/policies/privacy" }],
@@ -447,7 +455,7 @@ const OTHER_STORE: FixtureStore = {
         announcement: { text: "Free shipping over $75", url: "/categories/kitchen" },
       });
       case "footer": return fixtureFooterData({
-        store: { name: "Harbor & Pine", url: "/", logo: OTHER_LOGO, darkLogo: OTHER_DARK_LOGO, logoWidth: 180, footerLogo: null, phone: "+1 207 555 0142", email: "hello@harborpine.example", address: "Portland, Maine", social: [{ network: "instagram", url: "https://instagram.com/harborpine" }] },
+        store: { name: "Harbor & Pine", url: "/", logo: OTHER_LOGO, darkLogo: OTHER_DARK_LOGO, logoWidth: 180, footerLogo: null, phone: "+1 207 555 0142", email: "hello@harborpine.example", address: "Portland, Maine", social: [{ id: "harbor_instagram", network: "instagram", label: "Instagram", url: "https://instagram.com/harborpine", icon: null }] },
         menus: [{ title: "Shop", items: [{ title: "Kitchen", url: "/categories/kitchen", children: [] }] }],
         policies: [{ title: "Returns", url: "/policies/returns" }],
       });

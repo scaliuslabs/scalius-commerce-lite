@@ -36,6 +36,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 | You need | Read it from | Never |
 | --- | --- | --- |
 | The store's name and logo | `data.store.name`, `data.store.logo` and `data.store.darkLogo` (header and footer), `data.store.footerLogo`, `context.store.name`, `context.store.logo` and `context.store.darkLogo` (every part) | A wordmark, your app's name, the header's markup |
+| Social profiles | `data.store.social` (footer): `url`, `label`, `icon`, `network`, `id`, in the merchant's order | Your own profile URLs, icon uploads or artwork settings |
 | Specifications, key specs | `product.specifications` (product page), `card.keySpecs` | Splitting `facts` on `": "` |
 | The store's product modules (spec table, details tabs, content blocks) in your layout | `<ProductModule name="spec_table" />`, `<ProductModule name="description" />` in a product skin | Moving the store's markup with an island |
 | Navigation | `data.menu`, `data.categories` (header), `data.menus` (footer) | A link list of your own |
@@ -70,6 +71,18 @@ const Header = ({ data }: HeaderProps) => (
     </a>
   </header>
 );
+```
+
+Social profiles work the same way. A footer's `data.store.social` is the store's own list from Settings -> Store details, in the order the merchant saved it, and only `https` profiles. Each has a `url`, its `id` (stable across edits and reorders), the merchant's `label` exactly as typed (name the link with it), `icon` (the merchant's image from Files, the one the store's own footer draws, or `null`) and `network` (`facebook`, `youtube`, ... read from the label or host). Draw the icon when there is one and your own glyph for `network` when there is not; draw no social band for `[]`. Do not ship profile URLs, icon uploads or artwork settings of your own: the merchant edits a profile once and every footer follows on its next render. Stores older than these fields send only `network` and `url`, so fall back to `network` for the name.
+
+```tsx
+<ul>
+  {data.store.social.map((link) => (
+    <li><a href={link.url} aria-label={link.label || link.network} rel="noopener" target="_blank">
+      {link.icon ? <Image image={link.icon} alt="" /> : <MyGlyph network={link.network} />}
+    </a></li>
+  ))}
+</ul>
 ```
 
 The same holds for shop copy in templates and setting defaults. "How to order on Gaming Theme" tells another store's buyers to order from your app. Write copy any store can keep ("How to order"), or leave the text empty for the merchant. Validate renders your header and footer skins for two probe stores and warns when neither the store's name nor its logo appears, and warns when a template or default says your app's name.
