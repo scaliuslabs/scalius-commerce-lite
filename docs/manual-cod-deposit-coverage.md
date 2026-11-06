@@ -1,6 +1,6 @@
 # Manual COD deposit change coverage matrix
 
-Scope: tracked working-tree diff against `origin/development`, including pre-existing feature commits. Each row identifies a changed file and evidence for its changed behavior. This is a traceable file/unit-group inventory, not a claim of measured branch or line coverage. Tests use the production services and a fully migrated SQLite database through the production D1 adapter unless noted. Generated artifacts and pure type/copy declarations are distinguished from executable units.
+Scope: tracked working-tree diff against `master`, including pre-existing feature commits. Each row identifies a changed file and evidence for its changed behavior. This is a traceable file/unit-group inventory, not a claim of measured branch or line coverage. Tests use the production services and a fully migrated SQLite database through the production D1 adapter unless noted. Generated artifacts and pure type/copy declarations are distinguished from executable units.
 
 ## Test discovery
 
@@ -31,12 +31,12 @@ The checkout initially contained only eight actual source `.test.ts`/`.test.mjs`
 | `apps/api/src/generated/openapi-contract.gen.txt` | Generated | SDK regeneration / migration consistency gate; not an executable unit |
 | `apps/api/src/routes/admin/orders-refund.ts` | Worker verification pending | refund-service.test.ts and refund-deposit.integration.test.ts (refund worker owns exact coverage) |
 | `apps/api/src/routes/admin/resources.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
-| `apps/api/src/routes/admin/settings/payments.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
-| `apps/api/src/routes/admin/settings/system.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
-| `apps/api/src/routes/checkout.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
+| `apps/api/src/routes/admin/settings/payments.ts` | Covered | `apps/api/src/routes/admin/settings/payments.test.ts`: GET /payment-methods returns config and includes COD + net_terms gateway status |
+| `apps/api/src/routes/admin/settings/system.ts` | Covered | `apps/api/src/routes/admin/settings/system.test.ts`: GET /checkout-readiness, GET /checkout-flow, PUT /checkout-flow rejects mismatched revision with 409 |
+| `apps/api/src/routes/checkout.ts` | Covered | `apps/api/src/routes/checkout.test.ts`: GET /api/v1/checkout/config returns checkout configuration |
 | `apps/api/src/routes/customer-auth/orders.ts` | Worker verification pending | buyer response/presentation tests (buyer worker owns exact coverage) |
-| `apps/api/src/routes/payment/payment-method-allowlist.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
-| `apps/api/src/routes/storefront-orders/checkout.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
+| `apps/api/src/routes/payment/payment-method-allowlist.ts` | Covered | `apps/api/src/routes/payment/payment-method-allowlist.test.ts`: rejects disabled gateway, allows COD when enabled, fails closed on missing gateway settings |
+| `apps/api/src/routes/storefront-orders/checkout.ts` | Covered | `apps/api/src/routes/storefront-orders/checkout.test.ts`: POST / rejects missing fields, invalid checkout request id, invalid quote fingerprint |
 | `apps/api/src/routes/storefront-orders/receipt.ts` | Worker verification pending | buyer response/presentation tests (buyer worker owns exact coverage) |
 | `apps/api/src/scheduled-maintenance.ts` | Covered | manual-cod-persistence.integration.test.ts: actual BACKGROUND_DRAINS entry under concurrent retries; manual-cod-deposit.integration.test.ts: production order status transition |
 | `apps/storefront/src/lib/account-order-detail.ts` | Worker verification pending | buyer response/presentation tests (buyer worker owns exact coverage) |
@@ -49,8 +49,6 @@ The checkout initially contained only eight actual source `.test.ts`/`.test.mjs`
 | `apps/storefront/src/lib/checkout/types.ts` | Declaration/copy | Typecheck/build and corresponding consumer integration; no standalone executable unit |
 | `apps/storefront/src/pages/order-success.astro` | Worker verification pending | buyer response/presentation tests (buyer worker owns exact coverage) |
 | `packages/api-client/openapi.json` | Generated | SDK regeneration / migration consistency gate; not an executable unit |
-| `packages/api-client/src/generated/client.gen.ts` | Generated | SDK regeneration / migration consistency gate; not an executable unit |
-| `packages/api-client/src/generated/index.ts` | Generated | SDK regeneration / migration consistency gate; not an executable unit |
 | `packages/api-client/src/generated/sdk.gen.ts` | Generated | SDK regeneration / migration consistency gate; not an executable unit |
 | `packages/api-client/src/generated/types.gen.ts` | Generated | SDK regeneration / migration consistency gate; not an executable unit |
 | `packages/core/src/modules/agent-storefront/buyer-workflow.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
@@ -90,7 +88,7 @@ The checkout initially contained only eight actual source `.test.ts`/`.test.mjs`
 | `packages/database/src/schema-contract.ts` | Covered | packages/database/src/migrations/0189_magical_lucky_pierre.test.ts; database migration preflight |
 | `packages/database/src/schema/orders.ts` | Covered | packages/database/src/migrations/0189_magical_lucky_pierre.test.ts; database migration preflight |
 | `packages/shared/src/checkout-language.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
-| `packages/shared/src/runtime-secrets.ts` | Gap | No direct behavioral test of the changed unit established in this audit |
+| `packages/shared/src/runtime-secrets.ts` | Covered | `packages/shared/src/runtime-secrets.test.ts` covers `deriveRuntimeSecret`, `deriveRuntimeSecrets`, `deriveRuntimeSecretsFromEnv`, `readMasterSecret`, `RUNTIME_SECRET_PURPOSES` domain prefixes |
 | `scripts/dev-admin.test.mjs` | Test code | Executed by root Vitest suite; assertions reviewed separately |
 | `scripts/repository-hygiene.mjs` | Gap | No direct behavioral test of the changed unit established in this audit |
 
