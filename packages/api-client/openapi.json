@@ -36852,6 +36852,10 @@
                               "description": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "appName": {
+                                "type": "string",
+                                "description": "The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options."
                               }
                             },
                             "required": [

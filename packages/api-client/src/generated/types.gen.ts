@@ -9042,6 +9042,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                 id: string;
                 title: string;
                 description: string | null;
+                /**
+                 * The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options.
+                 */
+                appName?: string;
             }>;
             /**
              * Buyer inputs the active apps ask for on each line (manifest `checkout.lineInputs`: a gift message, a protection plan), the ones checkout accepts. The buy form draws them after the product's own inputs under `<app id>.<key>`; one with `products` only on products whose app custom field `<app id>.<customField>` is true. The apps price them at checkout.
