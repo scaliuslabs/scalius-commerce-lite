@@ -28,7 +28,7 @@ import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 import { serverPagePath } from "@/lib/server-presence";
-import { validateNewCartLine } from "@/lib/cart/new-line";
+import { isCartLineRefusal, validateNewCartLine } from "@/lib/cart/new-line";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { themePaint, type ThemePaint } from "@/lib/theme-paint";
 import { colorSchemeBootScript } from "@/lib/color-scheme";
@@ -305,7 +305,7 @@ async function quickBuy({
       ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
       ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     });
-    const validation = !failed && checked ? { success: true as const, data: checked } : { success: false as const };
+    const validation = !failed && checked && !isCartLineRefusal(checked) ? { success: true as const, data: checked } : { success: false as const };
     if (!validation.success) {
       // Two apps both priced the line: the buyer chooses again, on the page.
       const reason = (refusal as { reason?: unknown } | null)?.reason;
