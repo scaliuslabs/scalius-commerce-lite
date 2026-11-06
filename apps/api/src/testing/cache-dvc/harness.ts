@@ -27,8 +27,17 @@
  *
  * Everything random derives from one seed; a failure prints the seed and the
  * step to replay.
+ *
+ * One harness is live per process at a time: it patches process globals (the
+ * faked Date, Math.random, crypto), so a second live harness would render
+ * under the first one's clock and randomness. A harness stops when its test
+ * finishes, timed out included (vitest abandons a timed-out test's promise
+ * but its work keeps running), and when a newer harness starts; every later
+ * call of a stopped harness throws `DvcHarnessStopped` and it records no
+ * finding.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import { onTestFinished } from "vitest";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import {
   createMigratedSqlite,
@@ -69,6 +78,17 @@ import {
   type Frontier,
   type PageEntryMeta,
 } from "./validators";
+
+/** Thrown by every call of a harness after it stopped (its test finished, or a newer harness started). */
+export class DvcHarnessStopped extends Error {
+  constructor(seed: string, reason: string) {
+    super(`DVC harness ${seed} stopped: ${reason}`);
+    this.name = "DvcHarnessStopped";
+  }
+}
+
+/** The process's live harness (see the file comment). */
+let liveHarness: DvcHarness | null = null;
 
 export interface DvcHarnessConfig {
   readonly seed: string;
@@ -224,6 +244,7 @@ export class DvcHarness {
   /** The stream behind Math.random and crypto.getRandomValues inside the application. */
   private appRandom: Rng;
   private restoreRandomness: () => void = () => undefined;
+  private stoppedBecause: string | null = null;
   private readonly tableNames: ReadonlySet<string>;
   private readonly excludedParts = new Set<string>();
 
@@ -252,6 +273,7 @@ export class DvcHarness {
   }
 
   static async create(config: DvcHarnessConfig): Promise<DvcHarness> {
+    liveHarness?.stop(`harness ${config.seed} started`);
     const rng = new Rng(config.seed);
     // Turso runs on its own schema (no FTS5; the search index instead).
     const sqlite = createMigratedSqlite({ provider: config.provider === "turso" ? "turso" : "d1" });
@@ -300,6 +322,13 @@ export class DvcHarness {
       harness.installCapture();
       harness.installRandomness();
       (harness.mutator as unknown as { coverage: MutationCoverage }).coverage = harness.coverage;
+      liveHarness = harness;
+      try {
+        // Runs when the test ends, a timeout included.
+        onTestFinished(() => harness.stop("its test finished"));
+      } catch {
+        // Created outside a running test (a hook or a script): it stops when closed or replaced.
+      }
       return harness;
     } catch (error) {
       sqlite.close();
@@ -468,6 +497,7 @@ export class DvcHarness {
 
   /** Render one part as the API part cache would on a miss. */
   async render(path: string, allowRace = false): Promise<RenderResult> {
+    this.assertLive();
     this.config.setSystemTime(this.now);
     if (process.env.DVC_DEBUG) (this.config.log ?? console.error)(`[render] ${path}`);
     const logPos = this.rowLog.position();
@@ -623,6 +653,7 @@ export class DvcHarness {
    * (`table:op`). The copy has no triggers, so guards cannot refuse the undo.
    */
   private async renderOnRevertedCopy(path: string, changes: readonly LoggedChange[], keep?: string): Promise<{ status: number; body: string }> {
+    this.assertLive();
     const image = (this.sqlite as DatabaseSync & { serialize(): Uint8Array }).serialize();
     const copy = new DatabaseSync(":memory:") as DatabaseSync & { deserialize(image: Uint8Array): void };
     try {
@@ -701,6 +732,8 @@ export class DvcHarness {
   }
 
   private recordFinding(kind: DvcFinding["kind"], route: string, changed: readonly string[], report: string): void {
+    // A stopped harness renders under another harness's clock and randomness: nothing it sees is a finding.
+    this.assertLive();
     const family = route.split("?")[0]!;
     const signature = `${kind} ${family} <- ${changed.join(" ")}`;
     const known = this.findings.get(signature);
@@ -944,6 +977,7 @@ export class DvcHarness {
 
   /** Apply one write; returns the clock after it (the `_sv` a merchant would carry). */
   async write(kind: "mutation" | "curated" | "time" | "band" | "tree" | "json"): Promise<number | null> {
+    this.assertLive();
     this.config.setSystemTime(this.now);
     const before = this.rowLog.position();
     const triggerBefore = this.clock.name === "triggers" ? await this.clock.current() : 0;
@@ -1078,6 +1112,7 @@ export class DvcHarness {
   }
 
   async runStep(): Promise<void> {
+    this.assertLive();
     this.step += 1;
     this.stats.steps += 1;
     this.landRefreshes();
@@ -1113,6 +1148,7 @@ export class DvcHarness {
       plan.push(() => this.mutator.insert(table.name));
       plan.push(() => this.mutator.delete(table.name));
       for (const apply of plan) {
+        this.assertLive();
         this.step += 1;
         this.stats.steps += 1;
         this.config.setSystemTime(this.now);
@@ -1197,8 +1233,26 @@ export class DvcHarness {
     ].filter(Boolean).join("\n");
   }
 
-  close(): void {
+  /** Whether the harness stopped (see the file comment); every later call throws. */
+  get stopped(): boolean {
+    return this.stoppedBecause !== null;
+  }
+
+  /** Stop the harness: give the process globals back and refuse every later call. */
+  stop(reason: string): void {
+    if (this.stoppedBecause !== null) return;
+    this.stoppedBecause = reason;
     this.restoreRandomness();
+    this.restoreRandomness = () => undefined;
+    if (liveHarness === this) liveHarness = null;
+  }
+
+  private assertLive(): void {
+    if (this.stoppedBecause !== null) throw new DvcHarnessStopped(this.config.seed, this.stoppedBecause);
+  }
+
+  close(): void {
+    this.stop("closed");
     this.sqlite.close();
   }
 }
