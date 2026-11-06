@@ -14,7 +14,6 @@ import { acceptedNewCartLine, validateCartLinesInBrowser, validateNewCartLine } 
 import { normalizeCartLinePurchaseOptions } from "@/lib/cart/purchase-option";
 import { appLineInputShown } from "@/components/product/lib/app-line-inputs";
 import {
-  canonicalizeLineProperties,
   resolveLineProperties,
   withAppLineInputs,
   type AppLineInputDeclaration,
@@ -82,7 +81,8 @@ export async function addVariantLine(
   const declared = new Set((schema?.fields ?? []).map((field) => field.key));
   const values = inputs.map(([key, value]) => ({ key: appScopedKey(appId, key), value }));
   if (values.some(({ key }) => !declared.has(key))) throw new Error(UNAVAILABLE);
-  const resolved = resolveLineProperties(schema, canonicalizeLineProperties(schema, values));
+  // The strict check on the values as given: a refused one (a box sent as "on") refuses the add, never drops.
+  const resolved = resolveLineProperties(schema, values);
   if (!resolved.ok) throw new Error(UNAVAILABLE);
   let properties: CartLineProperty[] = resolved.properties.map(({ key, value, label, displayValue, priceMinor }) => ({ key, value, label, displayValue, priceMinor }));
   const options = variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));

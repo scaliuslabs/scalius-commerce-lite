@@ -556,7 +556,9 @@ async function buyAgain(): Promise<void> {
   const words = accountCopy().orders;
   message.textContent = !result
     ? accountOfflineMessage()
-    : result.added === 0
+    : "refused" in result
+      ? result.refused
+      : result.added === 0
       ? words.allGone
       : result.missing > 0
         ? words.someGone

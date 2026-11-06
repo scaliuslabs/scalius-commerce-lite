@@ -271,22 +271,39 @@ function sortedJson(value: unknown): string {
  * that writes back a cart it just read from storage (only reordered) races the
  * tab that wrote it and can put back an older cart over a newer one.
  */
-function storageHolds(stored: string | null, state: unknown): boolean {
+function storageHolds(stored: string | null, json: string): boolean {
   if (stored === null) return false;
   try {
-    return sortedJson(JSON.parse(stored)) === sortedJson(JSON.parse(JSON.stringify(state)));
+    return sortedJson(JSON.parse(stored)) === sortedJson(JSON.parse(json));
   } catch {
     return false;
   }
+}
+
+/**
+ * The cart as storage keeps it. A line with exactly one purchase option also
+ * keeps it as `purchaseOption`, the one field the storefront read before a
+ * line could carry one option per app: a tab still running that build (open
+ * across a deploy) then keys the line as before (one option hashes exactly
+ * as the one-entry list) instead of reading it as one-time and merging it
+ * into the one-time line. The list wins when both are read. Remove once no
+ * page of that build can still be open.
+ */
+export function storedCartJson(state: CartStore): string {
+  const items = Object.fromEntries(Object.entries(state.items).map(([key, item]) => [
+    key,
+    item.purchaseOptions?.length === 1 ? { ...item, purchaseOption: item.purchaseOptions[0] } : item,
+  ]));
+  return JSON.stringify({ ...state, items });
 }
 
 if (typeof window !== "undefined") {
   cartStore.subscribe((state) => {
     if (!canPersistToStorage) return;
     try {
-      const json = JSON.stringify(state);
+      const json = storedCartJson(state);
       const stored = localStorage.getItem(CART_STORAGE_KEY);
-      if (stored !== json && !storageHolds(stored, state)) {
+      if (stored !== json && !storageHolds(stored, json)) {
         localStorage.setItem(CART_STORAGE_KEY, json);
       }
     } catch (error) {
@@ -558,10 +575,10 @@ function readCartFromStorage(resetWhenMissing: boolean): CartStore {
     if (storedCart) {
       const normalized = normalizeStoredCart(JSON.parse(storedCart));
       if (JSON.stringify(normalized) !== JSON.stringify(cartStore.get())) cartStore.set(normalized);
-      const normalizedJson = JSON.stringify(normalized);
+      const normalizedJson = storedCartJson(normalized);
       // Only a real migration writes back; a reordered copy of what another
       // tab just wrote must never be written over its newer cart.
-      if (normalizedJson !== storedCart && !storageHolds(storedCart, normalized)) {
+      if (normalizedJson !== storedCart && !storageHolds(storedCart, normalizedJson)) {
         try {
           localStorage.setItem(CART_STORAGE_KEY, normalizedJson);
         } catch (error) {
@@ -1240,7 +1257,7 @@ function applyLinePatchesToLiveStore(
   if (!result.ok) return result;
   if (requirePersistence) {
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(result.state));
+      localStorage.setItem(CART_STORAGE_KEY, storedCartJson(result.state));
     } catch {
       return patchFailure("storage_unavailable");
     }

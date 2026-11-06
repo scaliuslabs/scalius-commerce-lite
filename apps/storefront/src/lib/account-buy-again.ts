@@ -9,12 +9,17 @@ import type { CartValidationResult } from "@/lib/api/orders";
 import { currentPresence } from "@/lib/presence-url";
 import { accountCopy } from "@/lib/account-copy";
 import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
+import { buyerApiErrorText } from "@/lib/buyer-api-errors";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
 const GONE = new Set(["product_unavailable", "variant_required", "variant_unavailable", "variant_mismatch"]);
 
-/** How many lines went back in the cart, or null when the store couldn't be reached. */
-export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineFulfilmentFacts>): Promise<{ added: number; missing: number } | null> {
+/**
+ * How many lines went back in the cart; `refused` the store's refusal of the
+ * check in the page's words (two apps' options that both price a line); null
+ * when the store couldn't be reached.
+ */
+export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineFulfilmentFacts>): Promise<{ added: number; missing: number } | { refused: string } | null> {
   const lines = items.filter((item): item is CustomerOrderItem & OrderLineFulfilmentFacts & { variantId: string } => Boolean(item.productId && item.variantId));
   if (lines.length === 0) return { added: 0, missing: items.length };
   let result: CartValidationResult | null;
@@ -47,6 +52,7 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
       }),
     });
     const json = await response.json().catch(() => null) as { success?: boolean; data?: CartValidationResult } | null;
+    if (json && !json.success && response.status < 500) return { refused: buyerApiErrorText(json, { status: response.status }) };
     result = json?.success && json.data ? json.data : null;
   } catch {
     result = null;
