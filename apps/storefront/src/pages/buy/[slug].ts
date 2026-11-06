@@ -14,15 +14,17 @@ import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
 import {
   cartLinePropertiesFromOrderLine,
-  customizationSchemaFromView,
+  productBuyerInputSchema,
   readPostedBuyerInputs,
 } from "@/components/product/lib/buyer-inputs";
 import { moneyPlaces, unitPriceWithSurcharge } from "@/components/product/lib/line-price";
 import {
   canonicalizeLineProperties,
+  hasRequiredCustomization,
   resolveLineProperties,
   type LinePropertyInput,
 } from "@scalius/shared/line-properties";
+import { normalizeCartLinePurchaseOptions } from "@/lib/cart/purchase-option";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
@@ -85,6 +87,12 @@ function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
   }
 }
 
+/** The options the store accepted on the line, with their titles, as the cart line keeps them. */
+function validatedPurchaseOptions(value: unknown): Pick<CartItem, "purchaseOptions"> {
+  const options = normalizeCartLinePurchaseOptions(value) ?? [];
+  return options.length > 0 ? { purchaseOptions: options } : {};
+}
+
 function variantLabel(variant: ProductVariant | null): string | null {
   if (!variant) return null;
   const parts = variant.selectedOptions.map((option) => option.value);
@@ -104,8 +112,8 @@ interface QuickBuyRequest {
   quantity: string | null;
   /** Buyer inputs from the product-page form (POST); null for a quick-buy link. */
   properties: LinePropertyInput[] | null;
-  /** An app's purchase option chosen in the form (POST); null: one-time. */
-  purchaseOption: string | null;
+  /** The apps' purchase options chosen in the form (POST, one per app); empty: one-time. */
+  purchaseOptions: string[];
   redirectStatus: 303 | 307;
   /** The request, for the theme the handoff page paints. */
   page: { request: Request; locals: object };
@@ -132,7 +140,7 @@ export const GET: APIRoute = async ({ params, url, request, locals }) => {
     requestedVariantId: url.searchParams.get("variant"),
     quantity: url.searchParams.get("qty"),
     properties: null,
-    purchaseOption: null,
+    purchaseOptions: [],
     redirectStatus: 307,
     page: { request: request ?? new Request(url), locals: locals ?? {} },
   });
@@ -179,7 +187,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     requestedVariantId: posted.variantId,
     quantity: posted.quantity,
     properties: posted.properties,
-    purchaseOption: posted.purchaseOption,
+    purchaseOptions: posted.purchaseOptions,
     redirectStatus: 303,
     page: { request, locals: locals ?? {} },
   });
@@ -190,7 +198,7 @@ async function quickBuy({
   requestedVariantId,
   quantity: requestedQuantity,
   properties: postedProperties,
-  purchaseOption,
+  purchaseOptions,
   redirectStatus,
   page,
 }: QuickBuyRequest): Promise<Response> {
@@ -211,8 +219,10 @@ async function quickBuy({
     if (product.customizationUnavailable) {
       return productRedirect(slug, "customization_unavailable");
     }
-    const schema = customizationSchemaFromView(product.customization);
-    if (postedProperties === null && product.requiresCustomization) {
+    const layoutData = await getLayoutData();
+    // The product's own inputs, then the active apps' line inputs, as the form drew them.
+    const schema = productBuyerInputSchema(product, layoutData?.lineInputs);
+    if (postedProperties === null && (product.requiresCustomization || hasRequiredCustomization(schema))) {
       return productRedirect(slug, "customization_required");
     }
     const canonicalProperties = postedProperties === null
@@ -231,7 +241,6 @@ async function quickBuy({
     if (buyerVariants.length === 0) {
       return productRedirect(slug, "product_unavailable");
     }
-    const layoutData = await getLayoutData();
     setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";
     const quantity = parseQuickBuyQuantity(requestedQuantity);
@@ -279,10 +288,12 @@ async function quickBuy({
 
     // A purchase option's price is its app's (checked again at the store's price).
     let failed = false;
+    let refusal: unknown = null;
     const checked = await validateNewCartLine(async (items) => {
       const result = await validateCartItems(items);
       if (result.success) return result.data;
       failed = true;
+      refusal = result.details;
       return null;
     }, {
       cartKey: `quick_buy:${product.id}:${itemToAdd.id}`,
@@ -293,11 +304,13 @@ async function quickBuy({
       productName: product.name,
       variantLabel: variantLabel(itemToAdd),
       ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
-      ...(purchaseOption ? { purchaseOption } : {}),
+      ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     });
     const validation = !failed && checked ? { success: true as const, data: checked } : { success: false as const };
     if (!validation.success) {
-      return productRedirect(slug, "validation_unavailable");
+      // Two apps both priced the line: the buyer chooses again, on the page.
+      const reason = (refusal as { reason?: unknown } | null)?.reason;
+      return productRedirect(slug, reason === "purchase_options_conflict" ? "purchase_options_conflict" : "validation_unavailable");
     }
     // A store app's rule ("at most 10 per order") is not this item's problem:
     // the cart says it in the app's words and blocks checkout until it holds.
@@ -342,7 +355,7 @@ async function quickBuy({
       ...(options.length > 0 ? { options } : {}),
       freeDelivery: validatedItem.freeDelivery,
       ...(properties.length > 0 ? { properties } : {}),
-      ...(validatedItem.purchaseOption ? { purchaseOption: validatedItem.purchaseOption } : {}),
+      ...validatedPurchaseOptions(validatedItem.purchaseOptions),
       ...(fulfillmentKind ? { fulfillmentKind } : {}),
     };
 

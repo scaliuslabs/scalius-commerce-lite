@@ -1,4 +1,6 @@
 import { buyerApiErrorKind } from "../buyer-api-errors";
+import { buyerApiErrorCopy } from "../buyer-api-error-copy";
+import { pageLanguage } from "../store-time-zone";
 import { checkoutRateLimitedText, refusalWaitSeconds } from "../rate-limit-wait";
 import type { CheckoutLanguageData, CheckoutLanguageKey } from "@scalius/shared/checkout-language";
 
@@ -91,6 +93,8 @@ export function checkoutOrderFailureText(
     case "conflict": return copy.checkoutConflictText;
     case "rateLimited": return checkoutRateLimitedText(copy, copy.tooManyCheckoutAttemptsText, refusalWaitSeconds({ details }));
     case "purchaseOptionUnavailable": return copy.checkoutUnavailableMessage;
+    // Not a checkout-language phrase (merchants never word it): the storefront catalogue, in the page's language.
+    case "purchaseOptionsConflict": return buyerApiErrorCopy(pageLanguage()).purchaseOptionsConflict;
     case "appUnavailable": return copy.checkoutAppUnavailableText;
     case "paymentWindowExpired": return copy.paymentRateExpiredText;
     case "priceChanged": return copy.totalChangedReviewText;

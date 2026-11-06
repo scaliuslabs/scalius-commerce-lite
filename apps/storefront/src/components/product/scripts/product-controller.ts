@@ -51,7 +51,8 @@ import { BUYER_INPUT_FIELD_PREFIX, SKIN_BUY_CONTROL, SKIN_CHOOSE_CONTROL } from 
 import { buyFormQuery, buyFormQueryAll, buyFormScopes } from "../lib/buy-scope";
 import type { BuyerInputsController } from "./buyer-inputs-controller";
 import { pagePath } from "@/lib/presence-url";
-import type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
+import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "@/lib/cart/purchase-option";
+import { isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { DEFERRED_REVEAL_EVENT, STALE_ASSET_EVENT } from "@/scripts/browser-events";
 import type { StorefrontProductError } from "@scalius/shared/plugins/storefront-protocol";
 
@@ -297,7 +298,7 @@ async function loadBuyerInputs(form: HTMLFormElement) {
   refresh();
 }
 
-/** The edited line's quantity, answers and purchase option, in what the buyer has not changed yet. */
+/** The edited line's quantity, answers and purchase options, in what the buyer has not changed yet. */
 function prefillEdit(edit: CartLineEdit) {
   if (cache.quantity?.value === "1") cache.quantity.value = String(edit.quantity);
   const answers = new Map(edit.properties.map(({ key, value }) => [`${BUYER_INPUT_FIELD_PREFIX}${key}`, value]));
@@ -309,24 +310,33 @@ function prefillEdit(edit: CartLineEdit) {
     else field.value = value;
     prefilled.set(field, answer(field));
   }
-  if (!selectedPurchaseOption()) selectPurchaseOption(edit.purchaseOption ?? "");
+  if (selectedPurchaseOptions().length === 0) selectPurchaseOptions(edit.purchaseOptions ?? []);
 }
 
-/** The buy form's purchase-option radios (an app's ways to buy, beside a one-time purchase). */
+/**
+ * The buy form's purchase-option radios: the apps' ways to buy, one radio
+ * group per app (its own "none"), or one group with a one-time purchase.
+ */
 function purchaseOptionInputs(): HTMLInputElement[] {
   return parts<HTMLInputElement>("purchase-option");
 }
 
-function selectPurchaseOption(id: string) {
-  const inputs = purchaseOptionInputs();
-  const match = inputs.find((input) => input.value === id) ?? inputs.find((input) => input.value === "");
-  if (match) match.checked = true;
+/** Checks `ids` in their groups; every other group goes back to its "none". */
+function selectPurchaseOptions(ids: readonly string[]) {
+  const groups = new Map<string, HTMLInputElement[]>();
+  for (const input of purchaseOptionInputs()) groups.set(input.name, [...(groups.get(input.name) ?? []), input]);
+  for (const inputs of groups.values()) {
+    const match = inputs.find((input) => input.value && ids.includes(input.value)) ?? inputs.find((input) => input.value === "");
+    if (match) match.checked = true;
+  }
 }
 
-/** The chosen app option; null for a one-time purchase (or a page without options). */
-function selectedPurchaseOption(): CartLinePurchaseOption | null {
-  const input = purchaseOptionInputs().find((entry) => entry.checked && entry.value);
-  return input ? { id: input.value, title: input.dataset.purchaseOptionTitle || input.value } : null;
+/** The chosen apps' options, one per app, sorted by id; empty for a one-time purchase (or a page without options). */
+function selectedPurchaseOptions(): CartLinePurchaseOption[] {
+  const chosen = purchaseOptionInputs()
+    .filter((entry) => entry.checked && entry.value)
+    .map((input) => ({ id: input.value, title: input.dataset.purchaseOptionTitle || input.value }));
+  return normalizeCartLinePurchaseOptions(chosen) ?? [];
 }
 
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
@@ -555,7 +565,7 @@ function loadExtras() {
     const summary = cache.summary;
     void import("./island-state").then(({ islandState }) => {
       if (signal.aborted) return;
-      publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, option: selectedPurchaseOption, stock: getBuyerStockSummary });
+      publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, options: selectedPurchaseOptions, stock: getBuyerStockSummary });
       // The first state goes out in a frame too, never ahead of what the page shows.
       requestAnimationFrame(publish);
     }, staleAsset);
@@ -1158,11 +1168,12 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
       ? fail(cache.actions?.dataset.unavailableText ?? failureMessage, "unavailable")
       : fail(failureMessage, "failed");
   }
-  // An app's option (a subscription) is priced by the app: the line takes the store's price for it.
-  const purchaseOption = selectedPurchaseOption();
+  // The apps' options (a subscription, a protection plan) and line inputs are
+  // priced by the apps: the line takes the store's price for them.
+  const purchaseOptions = selectedPurchaseOptions();
   let price = cartData.data.price;
-  let chosenOption = purchaseOption;
-  if (purchaseOption) {
+  let chosenOptions = purchaseOptions;
+  if (purchaseOptions.length > 0 || properties.some(({ key }) => isAppScopedKey(key))) {
     // Only app-priced lines need this check; ordinary products do not load it.
     const lineValidation = await import("@/lib/cart/new-line").catch(() => null);
     if (!lineValidation) return fail(failureMessage, "failed");
@@ -1176,11 +1187,13 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
       productName: cartData.data.name,
       variantLabel: selectedCartOptions(validation.variant).map((option) => option.label).join(" / ") || null,
       ...(properties.length > 0 ? { properties: properties.map(({ key, value }) => ({ key, value })) } : {}),
-      purchaseOption: purchaseOption.id,
+      ...(purchaseOptions.length > 0 ? { purchaseOptions: purchaseOptions.map(({ id }) => id) } : {}),
     }));
     if (!checked.item) return fail(checked.message || failureMessage, "failed");
     price = checked.item.unitPrice;
-    chosenOption = checked.item.purchaseOption ?? purchaseOption;
+    // The store's titles for the options it accepted (the same ids).
+    const answered = normalizeCartLinePurchaseOptions(checked.item.purchaseOptions) ?? [];
+    if (answered.length > 0) chosenOptions = answered;
   }
   const line = {
     ...cartData.data,
@@ -1188,7 +1201,7 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
     variantId: validation.variant.id,
     options: selectedCartOptions(validation.variant),
     ...(properties.length > 0 ? { properties } : {}),
-    ...(chosenOption ? { purchaseOption: chosenOption } : {}),
+    ...(chosenOptions.length > 0 ? { purchaseOptions: chosenOptions } : {}),
     ...(validation.variant.fulfillmentKind ? { fulfillmentKind: validation.variant.fulfillmentKind } : {}),
   };
   const edit = state.edit;

@@ -10,17 +10,17 @@
 // Only pages with app islands load this.
 import type { StorefrontIslandContext, StorefrontProductState } from "@scalius/shared/plugins/storefront-protocol";
 import { BUYER_INPUT_FIELD_PREFIX } from "@/components/product/lib/buy-form";
-import { buyFormPart, buyFormQuery, buyFormScopes } from "@/components/product/lib/buy-scope";
+import { buyFormPart, buyFormQuery, buyFormQueryAll, buyFormScopes } from "@/components/product/lib/buy-scope";
 import { PRODUCT_STATE_EVENT, PRODUCT_STATE_KEY, type ProductStateHolder } from "@/components/product/scripts/island-state";
 
 type ProductContext = NonNullable<StorefrontIslandContext["product"]>;
 
 /** Each reader gets its own copy: an island cannot change the store's state. */
 function copy(state: StorefrontProductState): StorefrontProductState {
-  return { ...state, inputs: { ...state.inputs } };
+  return { ...state, inputs: { ...state.inputs }, ...(state.purchaseOptions ? { purchaseOptions: [...state.purchaseOptions] } : {}) };
 }
 
-/** The buy form as the server drew it: its SKU field, quantity, inputs, purchase option and Add to cart button. */
+/** The buy form as the server drew it: its SKU field, quantity, inputs, purchase options and Add to cart button. */
 function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductState {
   const variant = form.querySelector<HTMLInputElement>('input[type="hidden"][name="variant"]')?.value.trim() ?? "";
   // The form's own parts (host-only roles), never an app slot's look-alikes in
@@ -35,14 +35,17 @@ function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductS
     const key = element.name.slice(BUYER_INPUT_FIELD_PREFIX.length);
     inputs[key] = element instanceof HTMLInputElement && element.type === "checkbox" ? (element.checked ? "true" : "") : element.value;
   }
-  const option = buyFormQuery<HTMLInputElement>(scopes, '[data-sx-buy="purchase-option"]:checked')?.value ?? "";
+  // One checked radio per app's group (or the one group); "none" has no value.
+  const options = [...new Set(buyFormQueryAll<HTMLInputElement>(scopes, '[data-sx-buy="purchase-option"]:checked')
+    .map((input) => input.value).filter(Boolean))].sort();
   // The form's own Add to cart (hidden, not gone, under `actions={false}`) says whether it can be bought.
   const add = buyFormPart(scopes, "add");
   return {
     variantId: variant || null,
     quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
     inputs,
-    purchaseOption: option || null,
+    purchaseOption: options[0] ?? null,
+    purchaseOptions: options,
     available: Boolean(variant) && add instanceof HTMLButtonElement && !add.disabled,
     busy: false,
     error: null,

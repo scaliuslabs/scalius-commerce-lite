@@ -3,7 +3,9 @@
  * the buyer-inputs block, the product controller and the no-JavaScript
  * `/buy/<slug>` POST. Validation and pricing reuse the shared
  * `@scalius/shared/line-properties` functions the API runs, so the cart line
- * key and the committed line always agree.
+ * key and the committed line always agree. The form asks the product's own
+ * inputs, then the active apps' line inputs (`withAppLineInputs`, under
+ * `<app id>.<key>`), the same way checkout resolves the line.
  *
  * Values are buyer content: never put them in URLs, analytics or logs.
  */
@@ -14,7 +16,10 @@ import {
   LINE_PROPERTY_INPUT_LIMITS,
   lineInputIssues,
   lineInputLength,
+  normalizeLinePurchaseOptions,
   resolveLineProperties,
+  withAppLineInputs,
+  type AppLineInputs,
   type CanonicalLineProperty,
   type CustomizationField,
   type CustomizationSchema,
@@ -23,10 +28,11 @@ import {
 import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import { fromMinor } from "@scalius/shared/money";
-import { isPurchaseOptionId } from "@scalius/shared/plugins/ids";
-import type { OrderLineProperty, ProductCustomization } from "@/lib/api/types";
+import { isPurchaseOptionId, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
+import type { OrderLineProperty, Product, ProductCustomization, ProductCustomizationField } from "@/lib/api/types";
 import type { CartLineProperty } from "@/store/cart";
-import { BUY_FORM_VARIANT_FIELDS, BUYER_INPUT_FIELD_PREFIX } from "./buy-form";
+import { BUY_FORM_VARIANT_FIELDS, BUYER_INPUT_FIELD_PREFIX, PURCHASE_OPTION_FIELD } from "./buy-form";
+import { appLineInputShown } from "./app-line-inputs";
 
 export const BUYER_INPUT_COPY_KEYS = [
   "customizationRequiredText",
@@ -75,7 +81,7 @@ export function customizationSchemaFromView(
   return {
     version: CUSTOMIZATION_SCHEMA_VERSION,
     fields: fields.map((field): CustomizationField => {
-      const base = { key: field.key, label: field.label, required: field.required, help: field.help };
+      const base = { key: field.key, label: field.label, required: field.required, help: field.help, ...(field.appId ? { appId: field.appId } : {}) };
       switch (field.type) {
         case "select":
           return {
@@ -99,6 +105,44 @@ export function customizationSchemaFromView(
       }
     }),
   };
+}
+
+/**
+ * The buyer inputs the product's buy form asks, as the page draws them: the
+ * product's own, then the active apps' line inputs (`withAppLineInputs`;
+ * the layout's `lineInputs`), shown on this product, priced at nothing. A
+ * gift card (money) takes no app inputs; a product whose own setup is
+ * unreadable asks nothing (it cannot be bought).
+ */
+export function productBuyerInputFields(
+  product: Pick<Product, "customization" | "customizationUnavailable" | "isGiftCard" | "customFields">,
+  lineInputs: readonly AppLineInputs[] | null | undefined,
+): ProductCustomizationField[] {
+  if (product.customizationUnavailable) return [];
+  const own = product.customization?.fields ?? [];
+  if (product.isGiftCard || !lineInputs?.length) return own;
+  const schema = withAppLineInputs(customizationSchemaFromView(product.customization), lineInputs, appLineInputShown(product.customFields));
+  const apps = (schema?.fields ?? []).filter((field) => field.appId).map((field): ProductCustomizationField => ({
+    key: field.key,
+    label: field.label,
+    type: field.type,
+    required: field.required,
+    help: field.help,
+    maxLength: field.type === "text" || field.type === "textarea" ? field.maxLength : null,
+    price: 0,
+    priceMinor: 0,
+    options: field.type === "select" ? field.options.map((option) => ({ value: option.value, label: option.label, price: 0, priceMinor: 0 })) : [],
+    appId: field.appId!,
+  }));
+  return [...own, ...apps];
+}
+
+/** The schema a product's buy form checks and checkout resolves (`productBuyerInputFields`). */
+export function productBuyerInputSchema(
+  product: Parameters<typeof productBuyerInputFields>[0],
+  lineInputs: readonly AppLineInputs[] | null | undefined,
+): CustomizationSchema | null {
+  return customizationSchemaFromView({ fields: productBuyerInputFields(product, lineInputs) });
 }
 
 function safeMinor(value: unknown): number {
@@ -234,8 +278,8 @@ export type PostedBuyerInputs =
     variantId: string | null;
     quantity: string | null;
     properties: LinePropertyInput[];
-    /** An app's purchase option (`<app id>.<key>`); null: one-time. */
-    purchaseOption: string | null;
+    /** The apps' purchase options (`<app id>.<key>`, one per app, sorted); empty: one-time. */
+    purchaseOptions: string[];
   }
   | { ok: false };
 
@@ -243,14 +287,17 @@ export type PostedBuyerInputs =
  * Reads the no-JavaScript form body: the SKU (`BUY_FORM_VARIANT_FIELDS`: the
  * pressed button's, else the picker's, else the form's last, whatever their
  * order in the body; a repeated button or picker field refuses it),
- * `quantity`, `purchaseOption` (empty: one-time; a malformed one refuses
- * the body) and bounded `property.<key>` fields (at most 10, each at most
- * 1,000 characters). Anything else in the body is ignored.
+ * `quantity`, the purchase options (`purchaseOption`, or one
+ * `purchaseOption.<app id>` per app: empty is that app's "none"; a malformed
+ * one, one of another app than its field names, or two of one app refuse
+ * the body) and bounded `property.<key>` fields (the product's and the
+ * apps', at most `LINE_PROPERTY_INPUT_LIMITS.entries`, each at most 1,000
+ * characters). Anything else in the body is ignored.
  */
 export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryValue]>): PostedBuyerInputs {
   const variants = new Map<string, string | null>();
   let quantity: string | null = null;
-  let purchaseOption: string | null = null;
+  const purchaseOptions: string[] = [];
   const properties: LinePropertyInput[] = [];
   const seen = new Set<string>();
   for (const [name, entry] of entries) {
@@ -267,10 +314,12 @@ export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryVa
       quantity = entry.trim().slice(0, 16);
       continue;
     }
-    if (name === "purchaseOption") {
+    if (name === PURCHASE_OPTION_FIELD || name.startsWith(`${PURCHASE_OPTION_FIELD}.`)) {
       const value = entry.trim();
-      if (value && !isPurchaseOptionId(value)) return { ok: false };
-      purchaseOption = value || null;
+      const appId = name === PURCHASE_OPTION_FIELD ? null : name.slice(PURCHASE_OPTION_FIELD.length + 1);
+      if (!value) continue;
+      if (!isPurchaseOptionId(value) || (appId !== null && purchaseOptionAppId(value) !== appId)) return { ok: false };
+      purchaseOptions.push(value);
       continue;
     }
     if (!name.startsWith(BUYER_INPUT_FIELD_PREFIX)) continue;
@@ -289,5 +338,7 @@ export function readPostedBuyerInputs(entries: Iterable<[string, FormDataEntryVa
     ?? variants.get(BUY_FORM_VARIANT_FIELDS.picker)
     ?? variants.get(BUY_FORM_VARIANT_FIELDS.form)
     ?? null;
-  return { ok: true, variantId, quantity, properties, purchaseOption };
+  const options = normalizeLinePurchaseOptions(purchaseOptions);
+  if (!options.ok) return { ok: false };
+  return { ok: true, variantId, quantity, properties, purchaseOptions: options.options };
 }

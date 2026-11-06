@@ -16,6 +16,7 @@
 //   other version.
 
 import type { StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney } from "@scalius/shared/plugins/storefront-protocol";
+import type { AppLineInputDeclaration } from "@scalius/shared/line-properties";
 import { toMinor } from "@scalius/shared/money";
 import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 import { productContext } from "./product-context";
@@ -89,16 +90,33 @@ async function quickAdd(productUrl: string): Promise<boolean> {
   }
 }
 
-/** An island's `addLine`: the buyer UI's add-line flow, for this app (its own purchase options only). */
-function addLineFor(pluginId: string): NonNullable<StorefrontIslandContext["addLine"]> {
+/**
+ * The app's line inputs as the host drew them on its component
+ * (`data-sx-line-inputs`, AppComponent.astro; app markup cannot carry a
+ * `data-sx-*` attribute), or none.
+ */
+function hostLineInputs(host: HTMLElement): AppLineInputDeclaration[] {
+  try {
+    const parsed: unknown = JSON.parse(host.dataset.sxLineInputs ?? "[]");
+    return Array.isArray(parsed) ? parsed as AppLineInputDeclaration[] : [];
+  } catch {
+    return [];
+  }
+}
+
+/** An island's `addLine`: the buyer UI's add-line flow, for this app (its own purchase options and line inputs only). */
+function addLineFor(pluginId: string, host: HTMLElement): NonNullable<StorefrontIslandContext["addLine"]> {
   return async (line) => {
     try {
+      const inputs = line?.inputs;
+      if (inputs !== undefined && (typeof inputs !== "object" || inputs === null || Array.isArray(inputs))) return false;
       const { addVariantLine } = await loadLazyScript(() => import("@/lib/buyer-ui/actions"));
       const addedLineKey = await addVariantLine({
         variantId: typeof line?.variantId === "string" ? line.variantId : "",
         quantity: line?.quantity ?? 1,
         ...(typeof line?.purchaseOption === "string" ? { purchaseOption: line.purchaseOption } : {}),
-      }, pluginId);
+        ...(inputs ? { inputs: { ...inputs } } : {}),
+      }, pluginId, hostLineInputs(host));
       document.dispatchEvent(new CustomEvent("open-cart", { detail: { addedLineKey } }));
       return true;
     } catch {
@@ -122,7 +140,7 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     formatMoney: (money) => formatMinorMoney(money),
     openCart,
     quickAdd,
-    addLine: addLineFor(pluginId),
+    addLine: addLineFor(pluginId, host!),
     onCart,
     fetchApp: (path, init) => fetch(`/apps/${pluginId}/${path.replace(/^\/+/, "")}`, { credentials: "same-origin", ...init }),
     signedIn: signedInHint,

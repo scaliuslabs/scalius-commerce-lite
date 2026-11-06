@@ -1,7 +1,7 @@
 import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import type { PluginUiAction } from "@scalius/shared/plugins/ui";
 import { isCartSlot } from "./state";
-import { PLUGIN_ID_PATTERN, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
+import { appScopedKey, PLUGIN_ID_PATTERN, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
 import type { ProductPageData } from "@/lib/api/products";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import { unwrapEnvelope } from "@/lib/api/unwrap";
@@ -9,8 +9,16 @@ import { currentPresence } from "@/lib/presence-url";
 import { isVariantAvailable, resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
 import { resolveVariantCartMedia } from "@/components/product/lib/cart-media";
-import { addDiscountCode, addToCart, cartLineKeyFor } from "@/store/cart";
+import { addDiscountCode, addToCart, cartLineKeyFor, type CartLineProperty } from "@/store/cart";
 import { acceptedNewCartLine, validateCartLinesInBrowser, validateNewCartLine } from "@/lib/cart/new-line";
+import { normalizeCartLinePurchaseOptions } from "@/lib/cart/purchase-option";
+import { appLineInputShown } from "@/components/product/lib/app-line-inputs";
+import {
+  canonicalizeLineProperties,
+  resolveLineProperties,
+  withAppLineInputs,
+  type AppLineInputDeclaration,
+} from "@scalius/shared/line-properties";
 
 const FAILED = "This action could not be completed. Please try again.";
 const UNAVAILABLE = "This item cannot be added here. Open its product page to choose it.";
@@ -30,18 +38,26 @@ async function publicRead<T>(path: string, query = new URLSearchParams()): Promi
 export type RunnableAction = Exclude<PluginUiAction, { kind: "navigate" } | { op: "set_attribute" }>;
 
 /**
- * Adds a SKU without buyer inputs to the cart: one-time, or under a purchase
- * option of `appId` (the app that asked), priced by the store for that option.
- * Returns the line's key; throws the buyer's words when it can't be added.
+ * Adds a SKU without buyer inputs of its own to the cart: one-time, or under
+ * a purchase option of `appId` (the app that asked), priced by the store for
+ * that option. `inputs` are that app's own line inputs by key (`lineInputs`,
+ * its manifest's `checkout.lineInputs` as the host drew them): the line
+ * carries them as `<app id>.<key>`; a key it does not declare (or does not
+ * show on this product) or a value its input refuses is refused, as is any
+ * input without `lineInputs`. Returns the line's key; throws the buyer's
+ * words when it can't be added.
  */
 export async function addVariantLine(
-  action: { variantId: string; quantity: number; purchaseOption?: string },
+  action: { variantId: string; quantity: number; purchaseOption?: string; inputs?: Record<string, string> },
   appId: string,
+  lineInputs: readonly AppLineInputDeclaration[] = [],
 ): Promise<string> {
   if (!action.variantId || action.variantId.length > 128 || !Number.isInteger(action.quantity)
     || action.quantity < 1 || action.quantity > 10) throw new Error(UNAVAILABLE);
   // An app sells a line only under its own option.
   if (action.purchaseOption !== undefined && purchaseOptionAppId(action.purchaseOption) !== appId) throw new Error(UNAVAILABLE);
+  const inputs = Object.entries(action.inputs ?? {});
+  if (inputs.some(([, value]) => typeof value !== "string")) throw new Error(UNAVAILABLE);
   // Resolve through the online store, independent of feed/agent channel publication.
   const listing = await publicRead<{ products: Array<{ id: string; slug: string }> }>(
     "/products", new URLSearchParams({ ids: action.variantId, limit: "1" }),
@@ -59,25 +75,41 @@ export async function addVariantLine(
     basePrice: product.price, discountType: product.discountType,
     discountPercentage: product.discountPercentage, discountAmount: product.discountAmount,
   }, variant).finalPrice;
-  if (!(price > 0) || (action.purchaseOption && product.isGiftCard)) throw new Error(UNAVAILABLE);
+  if (!(price > 0) || ((action.purchaseOption || inputs.length > 0) && product.isGiftCard)) throw new Error(UNAVAILABLE);
+  // The app's own line inputs, checked as the buy form checks them (the
+  // product's own inputs already sent the buyer to its page).
+  const schema = product.isGiftCard ? null : withAppLineInputs(null, [{ appId, inputs: lineInputs }], appLineInputShown(product.customFields));
+  const declared = new Set((schema?.fields ?? []).map((field) => field.key));
+  const values = inputs.map(([key, value]) => ({ key: appScopedKey(appId, key), value }));
+  if (values.some(({ key }) => !declared.has(key))) throw new Error(UNAVAILABLE);
+  const resolved = resolveLineProperties(schema, canonicalizeLineProperties(schema, values));
+  if (!resolved.ok) throw new Error(UNAVAILABLE);
+  let properties: CartLineProperty[] = resolved.properties.map(({ key, value, label, displayValue, priceMinor }) => ({ key, value, label, displayValue, priceMinor }));
   const options = variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));
   let linePrice = price;
-  let purchaseOption: { id: string; title: string } | undefined;
-  if (action.purchaseOption) {
-    // The app prices its option: the line takes the store's price for it.
+  let purchaseOptions: Array<{ id: string; title: string }> = [];
+  if (action.purchaseOption || properties.length > 0) {
+    // The app prices its option and inputs: the line takes the store's price for them.
     const checked = acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
       cartKey: "new", productId: product.id, variantId: variant.id, quantity: action.quantity, price,
       productName: product.name, variantLabel: options.map((option) => option.label).join(" / ") || null,
-      purchaseOption: action.purchaseOption,
+      ...(properties.length > 0 ? { properties: resolved.canonical } : {}),
+      ...(action.purchaseOption ? { purchaseOptions: [action.purchaseOption] } : {}),
     }));
     if (!checked.item) throw new Error(checked.message || UNAVAILABLE);
     linePrice = checked.item.unitPrice;
-    purchaseOption = checked.item.purchaseOption ?? { id: action.purchaseOption, title: action.purchaseOption };
+    const answeredOptions = normalizeCartLinePurchaseOptions(checked.item.purchaseOptions) ?? [];
+    purchaseOptions = answeredOptions.length > 0 || !action.purchaseOption
+      ? answeredOptions
+      : [{ id: action.purchaseOption, title: action.purchaseOption }];
+    const answered = (checked.item.properties ?? []).map(({ key, value, label, displayValue, priceMinor }) => ({ key, value, label, displayValue, priceMinor: Number.isSafeInteger(priceMinor) && priceMinor > 0 ? priceMinor : 0 }));
+    if (answered.length > 0) properties = answered;
   }
   const line = {
     id: product.id, variantId: variant.id, slug: product.slug, name: product.name,
     price: linePrice, quantity: action.quantity, freeDelivery: product.freeDelivery, options,
-    ...(purchaseOption ? { purchaseOption } : {}),
+    ...(properties.length > 0 ? { properties } : {}),
+    ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     ...resolveVariantCartMedia(variant, product),
     ...(variant.fulfillmentKind ? { fulfillmentKind: variant.fulfillmentKind } : {}),
   };

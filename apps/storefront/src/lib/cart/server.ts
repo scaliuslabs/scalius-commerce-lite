@@ -21,7 +21,7 @@ import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { BILLING_ADDRESS_FIELDS, checkoutBillingFields } from "@/lib/checkout/billing-address";
 import { marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
 import { parseCheckoutAttributes, parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
-import { cartLinePurchaseOptionId } from "./purchase-option";
+import { cartLinePurchaseOptionIds } from "./purchase-option";
 import {
   checkoutAddressForMode,
   missingCheckoutFields,
@@ -64,8 +64,8 @@ interface ValidatedCartItem {
   freeDelivery?: boolean;
   /** Buyer inputs (`{key, value}`), sent in the body to be validated and priced by the API. */
   properties?: Array<{ key: string; value: string }>;
-  /** An app's purchase option for the line (`<app id>.<key>`). */
-  purchaseOption?: string;
+  /** The apps' purchase options for the line (`<app id>.<key>`, one per app, sorted). */
+  purchaseOptions?: string[];
 }
 
 function parseCartItems(raw: unknown): ValidatedCartItem[] {
@@ -138,9 +138,9 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
     } catch {
       throw new CheckoutCopyError("checkoutDetailsUnreadableText", `Cart item "${item.name}" has invalid details.`);
     }
-    // A cart line keeps `{ id, title }`; a malformed one is refused, never bought one-time.
-    const purchaseOption = cartLinePurchaseOptionId(item.purchaseOption);
-    if (item.purchaseOption !== undefined && item.purchaseOption !== null && !purchaseOption) {
+    // A cart line keeps `{ id, title }` per app; malformed ones are refused, never bought one-time.
+    const purchaseOptions = cartLinePurchaseOptionIds(item);
+    if (!purchaseOptions) {
       throw new CheckoutCopyError("checkoutDetailsUnreadableText", `Cart item "${item.name}" has invalid details.`);
     }
 
@@ -156,7 +156,7 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
       options: normalizeCartItemOptions(item.options),
       freeDelivery: typeof item.freeDelivery === "boolean" ? item.freeDelivery : undefined,
       ...(properties ? { properties } : {}),
-      ...(purchaseOption ? { purchaseOption } : {}),
+      ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     };
   });
 }
@@ -293,7 +293,7 @@ export async function processOrder(
         productName: item.name,
         variantLabel: displayVariantLabel(item),
         ...(item.properties ? { properties: item.properties } : {}),
-        ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
+        ...(item.purchaseOptions ? { purchaseOptions: item.purchaseOptions } : {}),
       })),
       {
         ...(attributes ? { attributes } : {}),
@@ -364,8 +364,8 @@ export async function processOrder(
     const inputsByCartKey = new Map(cartItemsArray.map((item) => [item.cartKey, item.properties]));
     const processedItems: CreateOrderPayload["items"] = validated.items.map((item) => {
       const properties = item.cartKey ? inputsByCartKey.get(item.cartKey) : undefined;
-      // The option the server accepted on the line (it refuses one no app offers).
-      const purchaseOption = item.purchaseOption?.id;
+      // The options the server accepted on the line (it refuses one no app offers).
+      const purchaseOptions = (item.purchaseOptions ?? []).map(({ id }) => id);
       return {
         cartKey: item.cartKey,
         productId: item.productId,
@@ -375,7 +375,7 @@ export async function processOrder(
         productName: item.productName,
         variantLabel: item.variantLabel,
         ...(properties ? { properties } : {}),
-        ...(purchaseOption ? { purchaseOption } : {}),
+        ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
       };
     });
     const address = checkoutAddressForMode(mode, {

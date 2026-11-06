@@ -19,6 +19,7 @@ import {
 } from "@/store/cart";
 import { cartLineEditHref, cartLinePropertyText } from "@/lib/cart/line-properties-view";
 import { writeCartLineEdit } from "@/lib/cart/line-edit";
+import { purchaseOptionsField } from "@/lib/cart/purchase-option";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@nanostores/react";
 import { atom } from "nanostores";
@@ -186,7 +187,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             productName: item.name,
             variantLabel: cartItemVariantLabel(item.options),
             ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
-            ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
+            ...purchaseOptionsField(item),
           })),
           // Answers to the apps' checkout questions: their rules and blocks read them.
           ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
@@ -632,11 +633,11 @@ export default function CartFlyout({ onReady }: Props) {
                               ))}
                             </div>
                           )}
-                          {item.purchaseOption && (
-                            <p className="text-xs font-medium text-foreground" data-cart-line-purchase-option>
-                              {item.purchaseOption.title}
+                          {(item.purchaseOptions ?? []).map((option) => (
+                            <p key={option.id} className="text-xs font-medium text-foreground" data-cart-line-purchase-option>
+                              {option.title}
                             </p>
-                          )}
+                          ))}
                           {item.adjustments && item.adjustments.length > 0 && !(item.properties && item.properties.length > 0) && (
                             <ul className="text-xs text-muted-foreground">
                               {item.adjustments.map((adjustment, position) => (
@@ -674,7 +675,7 @@ export default function CartFlyout({ onReady }: Props) {
                                       variantId: item.variantId,
                                       quantity: item.quantity,
                                       properties: cartLinePropertyInputs(item),
-                                      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
+                                      ...purchaseOptionsField(item),
                                     });
                                   }}
                                 >

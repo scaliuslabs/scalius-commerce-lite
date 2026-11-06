@@ -33,3 +33,15 @@ export const BUY_FORM_VARIANT_FIELDS = {
   picker: "variant.picker",
   form: "variant",
 } as const;
+
+/**
+ * The purchase-option radios' field (ProductPurchaseOptions.astro): `purchaseOption`
+ * while one app offers options, `purchaseOption.<app id>` per app when several do
+ * (one radio group each, so a line can carry one option of each app).
+ */
+export const PURCHASE_OPTION_FIELD = "purchaseOption";
+
+/** The radio group name of one app's options (`appId`), or of the one group (null). */
+export function purchaseOptionFieldName(appId: string | null): string {
+  return appId ? `${PURCHASE_OPTION_FIELD}.${appId}` : PURCHASE_OPTION_FIELD;
+}

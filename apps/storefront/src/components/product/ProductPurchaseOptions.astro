@@ -1,51 +1,82 @@
 ---
-// How to buy the item: once, or under an app's purchase option ("Subscribe
-// and save"; manifest `checkout.purchaseOptions`). Radio buttons of the buy
-// form (`form`), so "Buy now" posts the choice to `/buy/<slug>` in the body
-// before the product script runs or without JavaScript; the product
-// controller reads the same inputs (and checks a cart line's option when
-// the line is edited). The app prices the line at checkout, so an option
-// shows no price here.
+// How to buy the item: once, or under the apps' purchase options ("Subscribe
+// and save", a protection plan; manifest `checkout.purchaseOptions`). Radio
+// buttons of the buy form (`form`), so "Buy now" posts the choice to
+// `/buy/<slug>` in the body before the product script runs or without
+// JavaScript; the product controller reads the same inputs (and checks a
+// cart line's options when the line is edited). A line carries at most one
+// option of each app: with one app's options the buyer picks one of them or
+// a one-time purchase (`purchaseOption`); with several apps' options each
+// app is its own group, named by the app, with its own "none"
+// (`purchaseOption.<app id>`), so a subscription and another app's
+// protection plan are chosen together. The apps price the line at checkout,
+// so an option shows no price here.
+import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
+import { purchaseOptionFieldName } from "./lib/buy-form";
+
+type Option = { id: string; title: string; description: string | null; appName?: string };
+
 interface Props {
   formId: string;
-  options: ReadonlyArray<{ id: string; title: string; description: string | null }>;
-  copy: { legend: string; oneTime: string; price: string };
+  options: ReadonlyArray<Option>;
+  copy: { legend: string; oneTime: string; price: string; none: string };
 }
 
 const { formId, options, copy } = Astro.props;
 const choiceClass =
   "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-input bg-background px-3 py-2 has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/30";
+// Each app's options, in the layout's order (apps by id, then manifest order).
+const groups: Array<{ appId: string; appName: string; options: Option[] }> = [];
+for (const option of options) {
+  const appId = purchaseOptionAppId(option.id);
+  if (!appId) continue;
+  const group = groups.find((entry) => entry.appId === appId);
+  if (group) group.options.push(option);
+  else groups.push({ appId, appName: option.appName?.trim() || appId, options: [option] });
+}
+const several = groups.length > 1;
+const fieldsets = groups.map((group) => ({
+  ...group,
+  name: purchaseOptionFieldName(several ? group.appId : null),
+  legend: several ? group.appName : copy.legend,
+  none: several ? copy.none : copy.oneTime,
+}));
+const hint = (id: string) => `product-purchase-option-${id.replace(/[^a-z0-9_-]/g, "-")}`;
+// One app: its fieldset is the part; several: one fieldset per app inside it.
+const partAttributes = { "data-product-purchase-options": "", "data-buy-part": "purchase-options" };
+const Wrapper = several ? "div" : Fragment;
 ---
 
-{options.length > 0 && (
-  <fieldset class="space-y-2" data-product-purchase-options data-buy-part="purchase-options">
-    <legend class="mb-1 text-sm font-medium text-foreground">{copy.legend}</legend>
-    <label class={choiceClass}>
-      <input type="radio" name="purchaseOption" data-sx-buy="purchase-option" value="" form={formId} checked class="mt-0.5 size-5 shrink-0 accent-primary" />
-      <span class="min-w-0 flex-1 text-sm font-medium text-foreground">{copy.oneTime}</span>
-    </label>
-    {options.map((option) => {
-      const hint = `product-purchase-option-${option.id.replace(/[^a-z0-9_-]/g, "-")}`;
-      return (
+{fieldsets.length > 0 && (
+  <Wrapper {...(several ? { class: "space-y-4", ...partAttributes } : {})}>
+    {fieldsets.map((group) => (
+      <fieldset class="space-y-2" {...(several ? { "data-purchase-option-app": group.appId } : partAttributes)}>
+        <legend class="mb-1 text-sm font-medium text-foreground">{group.legend}</legend>
         <label class={choiceClass}>
-          <input
-            type="radio"
-            name="purchaseOption"
-            data-sx-buy="purchase-option"
-            value={option.id}
-            form={formId}
-            aria-describedby={hint}
-            data-purchase-option-title={option.title}
-            class="mt-0.5 size-5 shrink-0 accent-primary"
-          />
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium text-foreground">{option.title}</span>
-            <span id={hint} class="block text-sm text-muted-foreground">
-              {option.description ? `${option.description} ` : ""}{copy.price}
-            </span>
-          </span>
+          <input type="radio" name={group.name} data-sx-buy="purchase-option" value="" form={formId} checked class="mt-0.5 size-5 shrink-0 accent-primary" />
+          <span class="min-w-0 flex-1 text-sm font-medium text-foreground">{group.none}</span>
         </label>
-      );
-    })}
-  </fieldset>
+        {group.options.map((option) => (
+          <label class={choiceClass}>
+            <input
+              type="radio"
+              name={group.name}
+              data-sx-buy="purchase-option"
+              value={option.id}
+              form={formId}
+              aria-describedby={hint(option.id)}
+              data-purchase-option-title={option.title}
+              class="mt-0.5 size-5 shrink-0 accent-primary"
+            />
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-medium text-foreground">{option.title}</span>
+              <span id={hint(option.id)} class="block text-sm text-muted-foreground">
+                {option.description ? `${option.description} ` : ""}{copy.price}
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+    ))}
+  </Wrapper>
 )}

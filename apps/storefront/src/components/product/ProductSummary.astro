@@ -37,7 +37,7 @@ import {
   type ProductActionCopy,
 } from "./lib/product-actions";
 import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
-import { pickBuyerInputCopy } from "./lib/buyer-inputs";
+import { pickBuyerInputCopy, productBuyerInputFields } from "./lib/buyer-inputs";
 import { moneyPlaces } from "./lib/line-price";
 import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "./lib/buy-form";
 import { catalogCopy } from "@/lib/catalog-copy";
@@ -182,8 +182,11 @@ const actionPresentation = purchaseBlocked
     }
   : stockActionPresentation;
 // The buy area is always a real form posting to /buy/<slug> (safe before
-// hydration and without JavaScript); buyer inputs add their fields to it.
-const buyerInputFields = customizationUnavailable ? [] : (product.customization?.fields ?? []);
+// hydration and without JavaScript); buyer inputs add their fields to it:
+// the product's own, then the active apps' line inputs shown on it (the
+// layout read the page already made; none on a gift card).
+const layout = getRuntime() ? await getLayoutData() : null;
+const buyerInputFields = productBuyerInputFields(product, layout?.lineInputs);
 const buyFormId = BUY_FORM_ID;
 const hasBuyerInputs = buyerInputFields.length > 0;
 // Without JavaScript the option buttons cannot choose a SKU; a plain select of
@@ -198,11 +201,9 @@ const noScriptVariants = options.length > 0
       .filter((variant) => variant.label)
   : [];
 const buyerInputCopy = pickBuyerInputCopy(pageCopy);
-// An app's ways to buy (a subscription), from the layout read the page already
-// made; none on a gift card (money), or while nothing can be bought.
-const purchaseOptions = purchaseBlocked || product.isGiftCard
-  ? []
-  : ((getRuntime() ? await getLayoutData() : null)?.purchaseOptions ?? []);
+// The apps' ways to buy (a subscription, a protection plan), from the same
+// layout read; none on a gift card (money), or while nothing can be bought.
+const purchaseOptions = purchaseBlocked || product.isGiftCard ? [] : (layout?.purchaseOptions ?? []);
 const stockAvailable = buyerStockSummary.tone === "available";
 // A price on each option value only when the values are priced differently.
 const onlyWhenDifferent = (prices: Map<string, number>) => new Set(prices.values()).size > 1 ? prices : new Map<string, number>();
@@ -342,7 +343,7 @@ const formInputs = {
     : null,
 };
 const stockProps = { available: stockAvailable, tone: buyerStockSummary.tone, text: stockLabel(buyerStockSummary.text), fulfilmentBadge };
-const purchaseOptionsCopy = { legend: catalogWords.purchaseOptions, oneTime: catalogWords.oneTimePurchase, price: catalogWords.purchaseOptionPrice };
+const purchaseOptionsCopy = { legend: catalogWords.purchaseOptions, oneTime: catalogWords.oneTimePurchase, price: catalogWords.purchaseOptionPrice, none: catalogWords.purchaseOptionNone };
 const showPart = (part: StorefrontBuyFormPart) => (only ? only === part : !placedParts.has(part)) && partHasContent(part);
 const offers = (product.offers ?? []).map((offer) => ({
   ...offer,

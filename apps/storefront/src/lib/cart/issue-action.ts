@@ -28,7 +28,7 @@ const LINK = "inline-flex min-h-11 items-center text-xs font-semibold text-foreg
 export function renderCartIssueAction(
   cartKey: string,
   issue: CartValidationIssue,
-  line: { name: string; slug?: string; options?: unknown; purchaseOption?: { title: string } | null } | undefined,
+  line: { name: string; slug?: string; options?: unknown; purchaseOptions?: ReadonlyArray<{ title: string }> | null } | undefined,
   describedBy = "",
 ): string {
   const copy = cartLineCopy();

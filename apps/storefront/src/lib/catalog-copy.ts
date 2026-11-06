@@ -152,6 +152,8 @@ export interface CatalogCopy {
     /** The legend of an app's ways to buy (a subscription) beside a one-time purchase. */
     purchaseOptions: string;
     oneTimePurchase: string;
+    /** With several apps' options, each app's own "none" choice (its legend is the app's name). */
+    purchaseOptionNone: string;
     /** Under an app's option: its price is set at checkout. */
     purchaseOptionPrice: string;
     zoom: string;
@@ -208,6 +210,8 @@ export interface CatalogCopy {
       quantityUnavailable: string;
       priceChanged: string;
       purchaseOptionUnavailable: string;
+      /** Two apps' options the buyer chose both price the item. */
+      purchaseOptionsConflict: string;
       validationUnavailable: string;
       processingFailed: string;
     };
@@ -373,6 +377,7 @@ const EN: CatalogCopy = {
     decreaseQuantity: "Decrease quantity",
     purchaseOptions: "How to buy",
     oneTimePurchase: "One-time purchase",
+    purchaseOptionNone: "None",
     purchaseOptionPrice: "Price shown in your cart",
     zoom: "Zoom",
     zoomedView: (name) => `${name} — zoomed view`,
@@ -409,6 +414,7 @@ const EN: CatalogCopy = {
       quantityUnavailable: "The requested quantity is not available. Please lower the quantity.",
       priceChanged: "This item's price changed. Please review it before buying.",
       purchaseOptionUnavailable: "That way of buying this item is not offered any more. Please choose another.",
+      purchaseOptionsConflict: "These ways of buying this item can't be combined. Please choose one of them.",
       validationUnavailable: "We could not refresh this item. Please try again.",
       processingFailed: "We could not prepare this item. Please try again.",
     },
@@ -582,6 +588,7 @@ const BN: CatalogCopy = {
     decreaseQuantity: "পরিমাণ কমান",
     purchaseOptions: "কীভাবে কিনবেন",
     oneTimePurchase: "একবার কেনা",
+    purchaseOptionNone: "কোনোটি নয়",
     purchaseOptionPrice: "দাম কার্টে দেখানো হবে",
     zoom: "বড় করুন",
     zoomedView: (name) => `${name} — বড় করে দেখা`,
@@ -618,6 +625,7 @@ const BN: CatalogCopy = {
       quantityUnavailable: "এই পরিমাণ এখন পাওয়া যাচ্ছে না। পরিমাণ কমিয়ে দিন।",
       priceChanged: "এই পণ্যের দাম বদলেছে। কেনার আগে দেখে নিন।",
       purchaseOptionUnavailable: "এই পণ্যটি ওভাবে আর কেনা যায় না। অন্য একটি উপায় বেছে নিন।",
+      purchaseOptionsConflict: "এই উপায়গুলো একসাথে বেছে এই পণ্যটি কেনা যায় না। এগুলোর একটি বেছে নিন।",
       validationUnavailable: "পণ্যটির তথ্য হালনাগাদ করা যায়নি। আবার চেষ্টা করুন।",
       processingFailed: "পণ্যটি প্রস্তুত করা যায়নি। আবার চেষ্টা করুন।",
     },
