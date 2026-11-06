@@ -68,7 +68,7 @@ staff get a push when it opens and the app page lists open circuits.
   allocation line id, unit price and the line total after the platform's
   discounts, SKU, category with ancestors, collections, brand, buyer inputs,
   `requiresShipping` (a physical SKU that is not a gift card, whatever
-  delivery is picked), `weightGrams` and the line's `purchaseOption`; the
+  delivery is picked), `weightGrams` and the line's `purchaseOptions`; the
   order `channel` and `salesChannelId` (`defaultOrderSalesChannelId` of the
   channel, as the commit derives it; a manual order's resolved channel); the
   signed-in customer's tags, order count, spend and `segmentIds` (the
@@ -80,25 +80,32 @@ staff get a push when it opens and the app page lists open circuits.
   facts ride its existing product and SKU statements.
 - **Purchase options** (manifest `checkout.purchaseOptions`, at most 10 per
   app; id `<app id>.<key>`): a cart line, the tax quote, the order and a
-  staff or app order line may name one (`purchaseOption`). One no active app
-  declares is refused on its line (`purchase_option_unavailable`), never
-  dropped. It is part of the line's identity (`lineIdentityProperties`: the
-  hash, the cart key and the quote fingerprint) and of the checkout attempt
-  hash. Core prices nothing for it: the owning app prices it
-  (`cart.line_prices`, `checkout.discounts`) and checks it (`cart.validate`).
-  Only that app's line price applies to the line, and it outranks every
-  price list (`resolvePrice()`); without it the line keeps its one-time price.
-  Checkout reads the options of every app among its registrations (a
-  function or a payment provider, before the per-point grant filter), and
-  the layout read's `purchaseOptions` (`activePluginPurchaseOptions`) offers
-  the same set: the product page's buy form lists them, the storefront cart
-  keeps the choice per line (its identity hash includes it) and sends it on
-  every cart check, tax quote and order, and `/buy/<slug>` takes it from the
-  form body without JavaScript.
-  The order line freezes it as its `_purchase_option` property
-  (`LINE_PURCHASE_OPTION_PROPERTY_KEY`, after the add-ons), so every
-  line-property surface shows it, and the order representation's line
-  carries it as `purchaseOption`. An expanded bundle's components keep it.
+  staff or app order line carry `purchaseOptions`, at most one of each app
+  (`normalizeLinePurchaseOptions`, sorted by id). One no active app declares,
+  or two of one app, is refused on its line (`purchase_option_unavailable`),
+  never dropped. They are part of the line's identity
+  (`lineIdentityProperties`: the hash, the cart key and the quote
+  fingerprint; one option hashes as before) and of the checkout attempt hash.
+  Core prices nothing for them: every owning app answers the line in
+  `cart.line_prices` with a price or an add-on (`resolveAppLinePricing`);
+  only those apps may price it, one at most (a second price refuses with
+  `purchase_options_conflict`), and that price outranks every price list
+  (`resolvePrice()`). Checkout reads the options of every app among its
+  registrations (a function or a payment provider, before the per-point
+  grant filter), and the layout read's `purchaseOptions`
+  (`activePluginPurchaseOptions`) offers the same set. The order line
+  freezes each as a `_purchase_option` entry with its `appId`
+  (`LINE_PURCHASE_OPTION_PROPERTY_KEY`, after the add-ons), and the order
+  representation's line carries `purchaseOptions`. An expanded bundle's
+  components keep them.
+- **Line inputs** (manifest `checkout.lineInputs`, at most 10 per app):
+  `withAppLineInputs()` appends the active apps' inputs to the product's
+  buyer-input schema (apps by id, keys `<app id>.<key>`, priced 0), so cart
+  validation, the quote, the order and staff orders resolve, hash and freeze
+  them with the product's own (`checkoutLineInputs`, read from the same
+  registrations; the layout's `lineInputs` offers the same set). A gift card
+  takes none. Each app's functions see the product's inputs and its own
+  (`apps/api/src/plugins/functions.ts`).
 - **Buyer UI and checkout attributes** (`attributes.ts`, shared `plugins/buyer-ui.ts`): private cart/quote/receipt/account responses carry declarative storefront-extension blocks (manifest `storefront.extensions`). Active declarations validate values; unknown keys are dropped, invalid values return `attribute_invalid`, and required fields are checked only on placement so the initial quote can draw them. The accepted map (at most 8 KiB) joins quote/replay identity and the existing order insert. Attributes never enter events or URLs. Buyer UI sees only its app's attributes; object snapshots are shared within the request.
 - **`cart.validate`**: on the cart page (catalog totals, no codes), the quote
   and the order. Errors land on their line (`index`, `cartKey`) or the whole

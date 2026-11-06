@@ -72,7 +72,7 @@ Every point gets `cart` (`FunctionCart`):
 - Money: `currency`, `decimalPlaces`, `subtotalMinor`, and per line `unitPriceMinor` and `lineTotalMinor` (after the platform's own discounts, before app discounts). All integer minor units.
 - Who and where: `channel` (`online_store`, `admin`, `pos`, `agent`, `app`), `salesChannelId`, `market: { id, country }` (country is null before an address is known), `destination: { country, city, zone }` (region only), `discountCodes`.
 - `customer` (null for guests): `id`, `tags` (at most 50), `segmentIds` (the segments of the market's live segment price lists that price this buyer, at most 50), `orderCount`, `totalSpentMinor`, and `roles`: the roles **your** app gave this customer.
-- `lines` (at most 250): `lineId`, `productId`, `variantId`, `sku`, `title`, `quantity`, `categoryIds`, `collectionIds`, `brandId`, `properties` (buyer inputs), `requiresShipping`, `weightGrams` (null when unset) and `purchaseOption` (`<app id>.<key>` or null).
+- `lines` (at most 250): `lineId`, `productId`, `variantId`, `sku`, `title`, `quantity`, `categoryIds`, `collectionIds`, `brandId`, `properties` (buyer inputs: the product's own and **your** line inputs under `<app id>.<key>`, never another app's), `requiresShipping`, `weightGrams` (null when unset) and `purchaseOptions` (the line's options, `<app id>.<key>`, at most one per app, sorted; empty for a one-time purchase).
 - `attributes`: **only your own app's** accepted checkout attributes, keyed `<app id>.<key>`. A function never sees another app's buyer answers. Reading another app's answers is not offered; if it ever is, it will be a declared read the merchant consents to.
 
 Core cart facts (lines, customer, market, destination, codes, channel) are the same for every app.
@@ -240,11 +240,22 @@ Core runs no subscription logic. A renewal is your `orders.create` plus `payment
 
 An app declares `checkout.purchaseOptions` (up to 10, `{ key, title, description? }`): ways to buy a line, such as a subscription or a rental.
 
-- A cart line names one as `<app id>.<key>`. An option no active app declares is refused (`purchase_option_unavailable`).
-- The option is part of the line's identity: the same SKU one-time and under an option are two lines. Functions see `line.purchaseOption`. The order line freezes it, and the order representation carries `purchaseOption`.
-- Core prices nothing for it. Your `cart.line_prices` price wins over every list for that line; without your valid answer checkout is refused. `checkout.discounts` and `cart.validate` handle the rest.
+- A cart line names its options in `purchaseOptions` as `<app id>.<key>`, at most one of each app: your subscription and another app's protection plan can share a line. An option no active app declares, or two of one app, is refused (`purchase_option_unavailable`).
+- The options are part of the line's identity: the same SKU one-time and under an option are two lines. Functions see `line.purchaseOptions` (test with `includes`). The order line freezes each, and the order representation carries `purchaseOptions`.
+- Core prices nothing for it. Answer every line carrying your option in `cart.line_prices`: a price (it wins over every list) or an add-on. Without your answer checkout is refused; if another app whose option the line carries prices it too, checkout refuses (`purchase_options_conflict`), so an option that adds to the price answers with an add-on. `checkout.discounts` and `cart.validate` handle the rest.
+- A method kept for a renewal belongs to the one app owning every option of its order. An add-on that bills nothing later (a protection plan paid once) is a line input, not a purchase option.
 - The product page's buy form lists every active app's options. A Buyer UI button (`ui.cart.addLine`) and an island's `context.addLine` may add a line under one of your own options, never another app's.
 - The app needs a checkout function or a payment provider; a manifest with neither is refused.
+
+### Line inputs
+
+An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per line, such as a gift message, a device serial for a protection plan or a delivery date for a booking.
+
+- Each is `{ key, label, help?, type, required?, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`).
+- The buy form draws them after the product's own inputs, under `<app id>.<key>`; the cart edits them; they are part of the line, and the order line freezes them with your app's id.
+- `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`. Checkout does not read the flag, so a gated input is never required: ask for it in `cart.validate` with an error on the line.
+- Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`.
+- Your functions see the product's inputs and your own in `line.properties`, never another app's; `orders.get` and your own webhooks show you the same. An island's `context.addLine({ variantId, inputs: { gift_message: "…" } })` sets your own by key.
 
 ### Discount classes
 
