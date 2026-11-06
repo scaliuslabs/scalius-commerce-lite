@@ -15987,12 +15987,6 @@
                 "taxMinor": {
                   "type": "integer"
                 },
-                "purchaseOption": {
-                  "type": "string",
-                  "nullable": true,
-                  "minLength": 1,
-                  "maxLength": 160
-                },
                 "purchaseOptions": {
                   "type": "array",
                   "items": {
@@ -16087,7 +16081,6 @@
                 "subtotalMinor",
                 "discountMinor",
                 "taxMinor",
-                "purchaseOption",
                 "purchaseOptions",
                 "properties",
                 "adjustments"
@@ -16181,8 +16174,7 @@
                 "shippingAmountMinor",
                 "lines"
               ]
-            },
-            "maxItems": 60
+            }
           },
           "createdAt": {
             "type": "string",

@@ -3122,7 +3122,6 @@ export type OrderResource = {
         subtotalMinor: number;
         discountMinor: number;
         taxMinor: number;
-        purchaseOption: string | null;
         purchaseOptions: Array<string>;
         properties: Array<{
             key: string;

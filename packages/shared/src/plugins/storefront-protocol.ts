@@ -781,8 +781,6 @@ export interface StorefrontProductState {
   quantity: number;
   /** Buyer input answers by key (`buyerInputs`); a checkbox is "true" when ticked. */
   inputs: Record<string, string>;
-  /** The purchase option the buyer chose (`<app id>.<key>`, a subscription); null for a one-time purchase. With several apps' options chosen, the first by id. Absent from older stores. */
-  purchaseOption?: string | null;
   /** Every purchase option the buyer chose, one per app, sorted by id; empty for a one-time purchase. Absent from older stores. */
   purchaseOptions?: string[];
   /** The chosen SKU can be bought now (chosen, in stock, and the store sells it); false until one is chosen. Absent from older stores. */

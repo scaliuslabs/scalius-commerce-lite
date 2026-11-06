@@ -480,12 +480,6 @@
         "minimum": -9007199254740991,
         "maximum": 9007199254740991
        },
-       "purchaseOption": {
-        "nullable": true,
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 160
-       },
        "purchaseOptions": {
         "maxItems": 10,
         "type": "array",
@@ -584,7 +578,6 @@
        "subtotalMinor",
        "discountMinor",
        "taxMinor",
-       "purchaseOption",
        "purchaseOptions",
        "properties",
        "adjustments"
@@ -600,7 +593,6 @@
      "x-scalius-app-owned": "keys"
     },
     "discountApplications": {
-     "maxItems": 60,
      "type": "array",
      "items": {
       "type": "object",

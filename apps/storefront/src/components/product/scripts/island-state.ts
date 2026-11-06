@@ -36,8 +36,6 @@ export function islandState(source: IslandStateSource): () => void {
       variantId: exact?.id ?? null,
       quantity: source.quantity(),
       inputs: Object.fromEntries((state.buyerInputs?.values() ?? []).map(({ key, value }) => [key, value])),
-      // `purchaseOption` is the first by id, for islands built before a line had one option per app.
-      purchaseOption: options[0] ?? null,
       purchaseOptions: options,
       available: Boolean(exact) && !state.purchaseBlocked && source.stock([exact!]).canPurchaseAny,
       busy: state.adding,

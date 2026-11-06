@@ -44,7 +44,6 @@ function drawnState(summary: Element, form: HTMLFormElement): StorefrontProductS
     variantId: variant || null,
     quantity: Number.isInteger(quantity) && quantity > 0 ? quantity : 1,
     inputs,
-    purchaseOption: options[0] ?? null,
     purchaseOptions: options,
     available: Boolean(variant) && add instanceof HTMLButtonElement && !add.disabled,
     busy: false,

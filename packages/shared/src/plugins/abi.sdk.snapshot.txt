@@ -4445,7 +4445,6 @@ export interface StorefrontProductState {
     variantId: string | null;
     quantity: number;
     inputs: Record<string, string>;
-    purchaseOption?: string | null;
     purchaseOptions?: string[];
     available?: boolean;
     busy?: boolean;

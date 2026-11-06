@@ -38,6 +38,14 @@ export const LINE_PROPERTY_INPUT_LIMITS = {
   /** The product's own inputs (at most 10) and the active apps' line inputs, together. */
   entries: 40,
   valueLength: 1_000,
+  /**
+   * A line's resolved answers, serialized as the order line stores them. A
+   * text answer is stored twice (value and what the buyer saw), so 40 long
+   * answers would outgrow the stored snapshot (`ORDER_LINE_PROPERTIES_MAX_LENGTH`);
+   * the rest of the snapshot is left for what checkout freezes beside them
+   * (the apps' add-ons, options and a bundle).
+   */
+  serializedLength: 49_152,
 } as const;
 
 /** Serialized snapshot bound; the `order_items.properties` CHECK enforces the same number. */
@@ -758,6 +766,9 @@ export function resolveLineProperties(
     canonical.push({ key: field.key, value });
     properties.push({ key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor, ...(field.appId ? { appId: field.appId } : {}) });
     propertiesPriceMinor += priceMinor;
+  }
+  if (JSON.stringify(properties).length > LINE_PROPERTY_INPUT_LIMITS.serializedLength) {
+    return invalid(null, "the answers on this line are too long together");
   }
   return { ok: true, canonical, properties, propertiesPriceMinor };
 }

@@ -3040,5 +3040,59 @@
   "from": "dfdda9e352de2f92",
   "change": "orders.create input body.items[].purchaseOption: the field is no longer accepted.",
   "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): an order line carries at most one purchase option of each app, so two apps never overwrite each other. `items[].purchaseOption` becomes `items[].purchaseOptions` (a list of `<app id>.<key>`, one per app; empty or absent for a one-time purchase); a renewal sends `purchaseOptions: [<its option>]`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "fulfillments.void output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.mark_delivered output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.mark_pickup_ready output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.set_status output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "fulfillments.create output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.create output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.get output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.list output data.orders[].lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "880cef270038b5be",
+  "change": "orders.release_hold output data.order.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
  }
 ]

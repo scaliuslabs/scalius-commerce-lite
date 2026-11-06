@@ -63,10 +63,19 @@ import type {
     StorefrontCartValidationResult,
 } from "./cart-validation";
 
+/**
+ * An app's add-on core did not keep: it added nothing once rounded to the
+ * price increment (`nothing_to_add`), or the line takes none (a bundle line,
+ * a gift card, or one that already holds the most add-ons: `not_taken`).
+ */
+export type AddOnSetAside = "nothing_to_add" | "not_taken";
+
 /** The apps' answers for a cart, by line index: unit prices and add-ons. */
 export interface AppLinePricing {
     prices: ReadonlyMap<number, AppLinePrice>;
     adjustments: ReadonlyMap<number, ResolvedLineProperty[]>;
+    /** Add-ons core set aside, by line index and app: an owner's answer the line could not keep. */
+    setAside?: ReadonlyMap<number, ReadonlyMap<string, AddOnSetAside>>;
 }
 
 const NO_APP_LINE_PRICING: AppLinePricing = { prices: new Map(), adjustments: new Map() };
@@ -166,9 +175,11 @@ export function resolveAppLinePricing(
     incrementMinor: number,
     apps?: Pick<CheckoutAppFunctions, "report">,
 ): AppLinePricing {
+    const setAside = new Map<number, Map<string, AddOnSetAside>>();
     const pricing = {
         prices: resolveAppLinePrices(items, lineIds, results, apps),
-        adjustments: resolveAppLineAdjustments(items, lineIds, results, incrementMinor, apps),
+        adjustments: resolveAppLineAdjustments(items, lineIds, results, incrementMinor, apps, setAside),
+        setAside,
     };
     assertPurchaseOptionPrices(items, pricing);
     return pricing;
@@ -245,8 +256,12 @@ function assertPurchaseOptionPrices(
         const addOns = pricing.adjustments.get(item.index) ?? [];
         for (const option of options) {
             const appId = purchaseOptionAppId(option);
-            const answered = (validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId);
-            if (!answered) throw purchaseOptionUnavailable();
+            if ((validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId)) continue;
+            const aside = pricing.setAside?.get(item.index)?.get(appId);
+            // The owner answered, and its option adds nothing to this line once rounded.
+            if (aside === "nothing_to_add") continue;
+            // The owner answered, but the line cannot take its add-on: waiting never helps.
+            throw aside === "not_taken" ? purchaseOptionNotTaken() : purchaseOptionUnavailable();
         }
     }
 }
@@ -257,6 +272,15 @@ function purchaseOptionUnavailable(): ValidationError {
     });
 }
 
+/** The line cannot carry what its option adds (a bundle line, a gift card, the most add-ons a line holds). */
+export const PURCHASE_OPTION_UNAVAILABLE_REASON = "purchase_option_unavailable";
+
+function purchaseOptionNotTaken(): ValidationError {
+    return new ValidationError("This purchase option can't be used on this item. Choose another way to buy it.", {
+        reason: PURCHASE_OPTION_UNAVAILABLE_REASON,
+    });
+}
+
 /** Each line's add-ons, by line index (see the rules above). */
 export function resolveAppLineAdjustments(
     items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle">>,
@@ -264,9 +288,18 @@ export function resolveAppLineAdjustments(
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     incrementMinor: number,
     apps?: Pick<CheckoutAppFunctions, "report">,
+    /** Filled with the add-ons core did not keep, by line index and app. */
+    setAside?: Map<number, Map<string, AddOnSetAside>>,
 ): Map<number, ResolvedLineProperty[]> {
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
     const adjustments = new Map<number, ResolvedLineProperty[]>();
+    const putAside = (index: number, appId: string, why: AddOnSetAside) => {
+        if (!setAside) return;
+        const line = setAside.get(index) ?? new Map<string, AddOnSetAside>();
+        // A line that could not take one of the app's add-ons stays so.
+        if (line.get(appId) !== "not_taken") line.set(appId, why);
+        setAside.set(index, line);
+    };
     for (const result of results) {
         for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).adjustments ?? []) {
             const item = byLineId.get(answer.lineId);
@@ -276,15 +309,20 @@ export function resolveAppLineAdjustments(
             }
             if (item.isGiftCard || item.bundle) {
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is ${item.isGiftCard ? "a gift card" : "part of a bundle"}, which takes no add-on; "${answer.title}" was skipped.`);
+                putAside(item.index, result.pluginId, "not_taken");
                 continue;
             }
             const list = adjustments.get(item.index) ?? [];
             if (list.length >= LINE_ADJUSTMENTS_PER_LINE_MAX) {
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" was skipped.`);
+                putAside(item.index, result.pluginId, "not_taken");
                 continue;
             }
             const amountMinor = roundToIncrementMinor(answer.amountMinor, incrementMinor);
-            if (amountMinor <= 0) continue;
+            if (amountMinor <= 0) {
+                putAside(item.index, result.pluginId, "nothing_to_add");
+                continue;
+            }
             list.push(lineAdjustmentProperty(answer.title, amountMinor, result.pluginId));
             adjustments.set(item.index, list);
         }

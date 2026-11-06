@@ -335,7 +335,6 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[], discountAppl
       return {
       ...line,
       ...entries,
-      purchaseOption: entries.purchaseOptions[0] ?? null,
       unitPriceMinor: line.unitPriceMinor ?? 0,
       subtotalMinor: line.subtotalMinor ?? 0,
       discountMinor: line.discountMinor ?? 0,

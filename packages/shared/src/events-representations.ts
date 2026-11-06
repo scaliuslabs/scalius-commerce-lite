@@ -87,13 +87,10 @@ const orderLineSchema = z.object({
   discountMinor: minor,
   taxMinor: minor,
   /**
-   * The app purchase option the line was bought with (`<app id>.<key>`, a
-   * subscription), frozen at checkout as its `_purchase_option` property;
-   * null for a one-time purchase. A line may carry one option of each of
-   * several apps: this is the first by id, and `purchaseOptions` lists all.
+   * The app purchase options the line was bought with (`<app id>.<key>`: a
+   * subscription, a rental), one per app, sorted by id, frozen at checkout;
+   * empty for a one-time purchase. Test for yours with `includes`.
    */
-  purchaseOption: z.string().min(1).max(160).nullable(),
-  /** Every purchase option the line was bought with, one per app, sorted by id; empty for a one-time purchase. */
   purchaseOptions: z.array(appScopedKey).max(10),
   /**
    * What the buyer entered for the line, frozen at checkout: the product's
@@ -206,8 +203,13 @@ export const orderRepresentationSchema = z.object({
    * the order sees only its own keys; the store's endpoints see all.
    */
   attributes: appOwned("keys", z.record(appScopedKey, z.string().max(500))),
-  /** The discounts the order used, store discounts first, then apps' in the order they applied. */
-  discountApplications: z.array(discountApplicationSchema).max(60),
+  /**
+   * The discounts the order used, store discounts first, then apps' in the
+   * order they applied. Unbounded like `lines`: it lists what checkout
+   * committed (up to 50 automatic discounts and the codes, and up to 10 per
+   * app that discounts), never a page of it.
+   */
+  discountApplications: z.array(discountApplicationSchema),
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),
