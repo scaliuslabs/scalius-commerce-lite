@@ -25694,7 +25694,13 @@ export type PostApiV1AdminResourcesOrdersData = {
              * A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.
              */
             unitPriceMinor?: number;
+            /**
+             * Buyer inputs the line carries, as checkout takes them: the product's own and the active apps' line inputs under `<app id>.<key>` (a renewal copies the order line's own).
+             */
             properties?: Array<{
+                /**
+                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
+                 */
                 key: string;
                 value: string;
             }>;

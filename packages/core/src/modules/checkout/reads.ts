@@ -66,7 +66,8 @@ function tagCheckoutError(error: unknown, code: string): unknown {
  * even if authority changed. `paymentProviders` turns the active payment
  * provider registrations into the request's gateways (the API builds them;
  * without it only built-in gateways are offered). `apps` builds the
- * request's checkout functions from the function registrations, and
+ * request's checkout functions from every checkout registration (payment
+ * providers included, as the quote does), and
  * `linePricer` the `cart.line_prices` pricer from them, before the cart
  * is priced.
  */
@@ -259,7 +260,10 @@ async function readCheckoutOnce<TResponse>(
         ? options.paymentProviders(paymentRegistrations)
         : BUILT_IN_PAYMENT_PROVIDERS;
     const functionRegistrations = registrations.filter((registration) => registration.kind !== "provider");
-    const apps = options.apps?.(functionRegistrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
+    // Every checkout registration, as the quote reads them: an app that only
+    // provides payment still declares purchase options and line inputs (it
+    // runs no function; the builder keeps only the points it was approved for).
+    const apps = options.apps?.(registrations) ?? NO_CHECKOUT_APP_FUNCTIONS;
     // A line's purchase option is checked against the apps this batch found.
     bound = { ...bind(apps, customerId), purchaseOptions: () => checkoutPurchaseOptions(apps), lineInputs: () => checkoutLineInputs(apps) };
     const settled: SettledAuthority = existingAttempt

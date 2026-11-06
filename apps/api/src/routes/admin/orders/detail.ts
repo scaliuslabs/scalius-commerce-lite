@@ -5,7 +5,7 @@ import { idempotencyKeyHeaderSchema, scopedRequestKey } from "../idempotency";
 import { listGiftCardPaymentLinks } from "../../shared/gift-card-payment-links";
 import { relatedObjectsProjection, withRelatedObjects } from "../related-objects";
 import { relatedObjectRecordSchema } from "../../../schemas/related-objects";
-import { protectedField as pii } from "../../../schemas/protected";
+import { appOwnedField, protectedField as pii } from "../../../schemas/protected";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     ORDER_COMMENT_MAX_LENGTH,
@@ -266,7 +266,7 @@ const formDataItemSchema = z.object({
      * `orderItemId` keeps them (and its agreed price) whatever it sends;
      * only new lines resolve `properties` against today's schema.
      */
-    properties: z.array(orderLinePropertySchema),
+    properties: appOwnedField("items", z.array(orderLinePropertySchema)),
 });
 
 const formDataProductSchema = z.object({

@@ -1,8 +1,11 @@
 // Protected customer data in route schemas (COMMERCE-HOOKS H5): a buyer
 // contact field is marked once here with its category, and an app without
 // that category's scope reads it as null (plugins/protected-response.ts).
-// Staff and the merchant's own agents see it as declared.
+// Buyer answers given to apps (H13) are marked `x-scalius-app-owned`: an
+// app reads the store's and its own, never another app's. Staff and the
+// merchant's own agents see both as declared.
 import type { z } from "@hono/zod-openapi";
+import { APP_OWNED_FIELD_KEYWORD, type AppOwnedMode } from "@scalius/shared/plugins/app-owned-data";
 import { PROTECTED_FIELD_KEYWORD, type ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
 
 type Category = ProtectedCustomerData | readonly ProtectedCustomerData[];
@@ -21,4 +24,13 @@ export function protectedShape<S extends Record<string, z.ZodType>>(shape: S, ca
     if (category && marked[key]) marked[key] = protectedField(category, marked[key]!);
   }
   return marked as S;
+}
+
+/**
+ * Marks buyer answers apps own (`x-scalius-app-owned`): `keys` for a record
+ * keyed by `<app id>.<key>` (checkout attributes), `items` for a list of
+ * entries with an `appId` or an app-scoped `key` (line properties).
+ */
+export function appOwnedField<T extends z.ZodType>(mode: AppOwnedMode, schema: T): T {
+  return (schema as unknown as { openapi(metadata: Record<string, unknown>): T }).openapi({ [APP_OWNED_FIELD_KEYWORD]: mode });
 }

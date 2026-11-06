@@ -15,6 +15,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { nullableTimestampSchema } from "./timestamps";
+import { appOwnedField } from "./protected";
 
 export const fulfillmentKindSchema = z.enum(FULFILLMENT_KINDS).openapi({
   description: "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).",
@@ -77,7 +78,8 @@ export const orderLineFulfilmentShape = {
   fulfillmentType: fulfillmentTypeSchema,
   /** Units handed over so far (sent, picked up, performed or delivered digitally). */
   fulfilledQuantity: z.number().int(),
-  properties: z.array(orderLinePropertySchema),
+  /** The frozen buyer inputs: an app reads the product's own and its own entries, never another app's. */
+  properties: appOwnedField("items", z.array(orderLinePropertySchema)),
   /** Sum of the surcharges included in the unit price, in major units. */
   propertiesPrice: z.number(),
   propertiesPriceMinor: z.number().int(),

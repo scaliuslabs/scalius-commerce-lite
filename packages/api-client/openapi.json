@@ -53798,7 +53798,8 @@
                                     "price",
                                     "priceMinor"
                                   ]
-                                }
+                                },
+                                "x-scalius-app-owned": "items"
                               },
                               "propertiesPrice": {
                                 "type": "number"
@@ -82913,7 +82914,8 @@
                                         "price",
                                         "priceMinor"
                                       ]
-                                    }
+                                    },
+                                    "x-scalius-app-owned": "items"
                                   },
                                   "propertiesPrice": {
                                     "type": "number"
@@ -99170,7 +99172,8 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160,
+                                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
                               },
                               "value": {
                                 "type": "string",
@@ -99182,7 +99185,8 @@
                               "value"
                             ]
                           },
-                          "maxItems": 20
+                          "maxItems": 40,
+                          "description": "Buyer inputs the line carries, as checkout takes them: the product's own and the active apps' line inputs under `<app id>.<key>` (a renewal copies the order line's own)."
                         },
                         "purchaseOptions": {
                           "type": "array",
@@ -214790,7 +214794,7 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160
                               },
                               "value": {
                                 "type": "string",
@@ -216684,7 +216688,7 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160
                               },
                               "value": {
                                 "type": "string",
@@ -217221,7 +217225,7 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160
                               },
                               "value": {
                                 "type": "string",
@@ -217764,7 +217768,7 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160
                               },
                               "value": {
                                 "type": "string",
@@ -220279,7 +220283,8 @@
                           "type": "object",
                           "additionalProperties": {
                             "type": "string"
-                          }
+                          },
+                          "x-scalius-app-owned": "keys"
                         },
                         "shippingAddress": {
                           "type": "string",
@@ -220512,7 +220517,8 @@
                                     "price",
                                     "priceMinor"
                                   ]
-                                }
+                                },
+                                "x-scalius-app-owned": "items"
                               },
                               "propertiesPrice": {
                                 "type": "number"
@@ -222324,7 +222330,8 @@
                                 "price",
                                 "priceMinor"
                               ]
-                            }
+                            },
+                            "x-scalius-app-owned": "items"
                           },
                           "propertiesPrice": {
                             "type": "number"
@@ -224717,7 +224724,8 @@
                                         "price",
                                         "priceMinor"
                                       ]
-                                    }
+                                    },
+                                    "x-scalius-app-owned": "items"
                                   }
                                 },
                                 "required": [

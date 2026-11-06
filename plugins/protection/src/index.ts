@@ -28,7 +28,7 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.0.1",
+  version: "1.0.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
   author: { name: "Scalius Labs" },
@@ -51,7 +51,9 @@ export const manifest = defineManifest({
     },
   ],
   functions: [
-    { point: "cart.line_prices", priority: 300, reads: [{ as: "flags", customFields: ["product:eligible"] }] },
+    // A plan must never sell unpaid: if pricing fails, checkout stops instead of
+    // freezing the plan without its add-on (the default, skip, would).
+    { point: "cart.line_prices", priority: 300, onError: "block", reads: [{ as: "flags", customFields: ["product:eligible"] }] },
     { point: "cart.validate", priority: 300, reads: [{ as: "flags", customFields: ["product:eligible"] }] },
   ],
   checkout: {
@@ -161,7 +163,7 @@ export interface Coverage extends Record<string, unknown> {
   ends_at: string;
 }
 
-/** One coverage per protected line of the order, from what the order says the buyer chose and paid. */
+/** One coverage per protected line of the order, from what the order says the buyer chose and paid: no add-on, no coverage. */
 export function coveragesOf(order: OrderRead): Coverage[] {
   const discountByLine = new Map<string, number>();
   for (const application of order.discountApplications) {
@@ -172,6 +174,7 @@ export function coveragesOf(order: OrderRead): Coverage[] {
     const plan = line.properties.find((property) => property.appId === APP_ID && property.key === PLAN_KEY)?.value;
     if (!isPlan(plan) || line.quantity <= 0) return [];
     const planPerUnit = line.adjustments.filter((adjustment) => adjustment.appId === APP_ID).reduce((total, adjustment) => total + adjustment.amountMinor, 0);
+    if (planPerUnit <= 0) return [];
     const endsAt = new Date(startsAt);
     endsAt.setUTCFullYear(endsAt.getUTCFullYear() + PLANS[plan].years);
     // The item's own price: the unit price less every add-on (this plan and any other app's,
@@ -259,11 +262,14 @@ export default definePlugin({
         return amountMinor > 0 ? [{ lineId: line.lineId, amountMinor, title: plan === "one_year" ? "1-year protection plan" : "2-year protection plan" }] : [];
       }),
     }),
-    // A plan on a product the merchant did not mark eligible never sells.
-    "cart.validate": ({ cart, reads }) => ({
-      errors: cart.lines.flatMap((line) => isPlan(line.properties[PLAN_KEY]) && !eligibleOf(reads, line.productId)
-        ? [{ code: "protection_unavailable", message: "A protection plan isn't offered for this item. Remove the plan to continue.", lineId: line.lineId }]
-        : []),
+    // A plan sells only on a product the merchant marked eligible, at a price the merchant set.
+    "cart.validate": ({ cart, reads }, settings) => ({
+      errors: cart.lines.flatMap((line) => {
+        const plan = line.properties[PLAN_KEY];
+        return isPlan(plan) && (!eligibleOf(reads, line.productId) || planPriceMinor(plan, line.unitPriceMinor, settings) === 0)
+          ? [{ code: "protection_unavailable", message: "A protection plan isn't offered for this item. Remove the plan to continue.", lineId: line.lineId }]
+          : [];
+      }),
     }),
   },
 

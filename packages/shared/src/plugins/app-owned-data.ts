@@ -5,9 +5,9 @@
 //
 //   - `"keys"` on a record keyed by `<app id>.<key>` (an order's attributes):
 //     an app keeps only its own keys;
-//   - `"items"` on a list of objects with an `appId` (an order line's
-//     properties): an app keeps the store's own items (`appId` null) and its
-//     own, never another app's.
+//   - `"items"` on a list of entries keyed `<app id>.<key>` or by the
+//     store (an order line's properties): an app keeps the store's entries
+//     and its own, never another app's.
 //
 // The marked paths are derived once per schema; applying them is a walk of
 // the value, never another read. Store readers (the dashboard, agents, the
@@ -80,7 +80,15 @@ export function projectAppOwnedData<T>(value: T, paths: readonly AppOwnedPath[],
       return field;
     }
     if (!Array.isArray(field)) return field;
-    return field.filter((item) => !isRecord(item) || item.appId === null || item.appId === undefined || item.appId === appId);
+    // An answer belongs to the app its key names (`<app id>.<key>`), whatever
+    // `appId` the entry carries or leaves out; an entry keyed for no app (the
+    // product's inputs, a frozen add-on or option) is the store's. Without a
+    // key, the entry's `appId` decides.
+    return field.filter((item) => {
+      if (!isRecord(item)) return true;
+      const owner = typeof item.key === "string" ? appScopedKeyAppId(item.key) : typeof item.appId === "string" ? item.appId : null;
+      return owner === null || owner === appId;
+    });
   };
   const visit = (node: unknown, path: readonly string[], depth: number, mode: AppOwnedMode) => {
     if (!node || typeof node !== "object") return;

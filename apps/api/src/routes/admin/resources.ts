@@ -5,12 +5,13 @@
 // orders, in integer minor units. Lists page by cursor in (updatedAt, id)
 // order and stop early before a page passes the response budget, so a sync
 // walks every change once without offsets or counts.
-import { linePurchaseOptionsInputSchema } from "../../schemas/order-lines";
+import { linePropertyInputSchema, linePurchaseOptionsInputSchema } from "../../schemas/order-lines";
 import { postalAddressLinesInputSchema } from "../../schemas/postal-address";
 import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
+import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products } from "@scalius/database/schema";
@@ -296,7 +297,9 @@ const orderCreateBody = z.object({
     unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional().openapi({
       description: "A unit price set by hand (a quote, an agreed renewal price), in minor units of the store currency at its price increment; it replaces the catalogue price and the order's timeline records it.",
     }),
-    properties: z.array(z.object({ key: z.string().min(1).max(40), value: z.string().max(1000) })).max(20).optional(),
+    properties: z.array(linePropertyInputSchema).max(LINE_PROPERTY_INPUT_LIMITS.entries).optional().openapi({
+      description: "Buyer inputs the line carries, as checkout takes them: the product's own and the active apps' line inputs under `<app id>.<key>` (a renewal copies the order line's own).",
+    }),
     purchaseOptions: linePurchaseOptionsInputSchema,
   }).strict()).min(1).max(MAX_ORDER_LINES),
   shippingMethodId: z.string().trim().min(1).max(180).nullable().optional().openapi({ description: "The delivery or pickup method; a physical line needs one with an address, or a pickup method." }),

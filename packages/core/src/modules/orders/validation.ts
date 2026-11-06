@@ -3,7 +3,7 @@
 // Imported by admin API routes and OrderService.
 
 import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
-import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
+import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { LINE_PURCHASE_OPTIONS_MAX } from "@scalius/shared/line-properties";
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
@@ -104,9 +104,9 @@ const orderBaseContentSchema = z.object({
         .min(0, "Shipping charge must be greater than or equal to 0"),
 });
 
-/** Buyer inputs for one line, as the storefront sends them (line-item properties). */
+/** Buyer inputs for one line, as checkout takes them: the product's own and the apps' `<app id>.<key>` line inputs. */
 export const orderLinePropertiesInputSchema = z.array(z.object({
-    key: z.string().min(1).max(40),
+    key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH),
     value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
 })).max(LINE_PROPERTY_INPUT_LIMITS.entries);
 

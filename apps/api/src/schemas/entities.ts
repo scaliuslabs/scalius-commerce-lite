@@ -7,7 +7,7 @@
 import { localizedHandleFields } from "./translations";
 import { z } from "@hono/zod-openapi";
 import { orderBillingAddressShape } from "./billing-address";
-import { protectedField as pii } from "./protected";
+import { appOwnedField, protectedField as pii } from "./protected";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { SKU_WARRANTY_MODES } from "@scalius/core/modules/products";
@@ -647,7 +647,8 @@ export const orderDetailSchema = z.object({
   paymentMethod: z.string().nullable(),
   fulfillmentStatus: z.string().nullable(),
   notes: z.string().nullable(),
-  attributes: z.record(z.string(), z.string()),
+  /** Checkout attributes (`<app id>.<key>`): an app reads its own keys only. */
+  attributes: appOwnedField("keys", z.record(z.string(), z.string())),
   ...orderShippingAddressShape,
   /** The billing snapshot (Shopify's rule): the shipping address bills when `billingSameAsShipping`. */
   ...orderBillingAddressShape,
