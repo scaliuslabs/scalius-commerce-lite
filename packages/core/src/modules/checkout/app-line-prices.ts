@@ -257,7 +257,7 @@ function assertPurchaseOptionPrices(
         for (const option of options) {
             const appId = purchaseOptionAppId(option);
             if ((validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId)) continue;
-            const aside = pricing.setAside?.get(item.index)?.get(appId);
+            const aside = appId === null ? undefined : pricing.setAside?.get(item.index)?.get(appId);
             // The owner answered, and its option adds nothing to this line once rounded.
             if (aside === "nothing_to_add") continue;
             // The owner answered, but the line cannot take its add-on: waiting never helps.
