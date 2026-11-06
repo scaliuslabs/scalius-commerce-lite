@@ -1,4 +1,5 @@
-import { createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { adminRouter } from "./admin-router";
 import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import {
@@ -16,6 +17,7 @@ import {
     reconcileOrderReturnReceipt,
     type ApproveOrderReturnInput,
     type CancelOrderReturnInput,
+    type CreateOrderReturnInput,
     type ReceiveOrderReturnInput,
 } from "@scalius/core/modules/orders";
 import { created, ok } from "../../utils/api-response";
@@ -31,7 +33,6 @@ import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
 
 const app = adminRouter();
-type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
 const returnCommandKeySchema = z.string().trim().min(8).max(200);
 const returnIdempotencyHeadersSchema = z.object({
@@ -211,13 +212,21 @@ const reconcileRoute = createRoute({
     },
 });
 
+// ── The return commands, one implementation for every surface ─────────
+// The dashboard's routes here and the stable app API's
+// (resources-returns.ts) run these: the core command, then its order
+// timeline line and the customer's notification, each once per return.
+
+/** A request the return commands run in: its database, its caller and its background work. */
+export type ReturnCommandContext = Context<{ Bindings: Env }>;
+
 function actor(c: { get(name: "user"): unknown }) {
     const user = c.get("user") as { id?: string } | undefined;
     return { type: "admin" as const, id: user?.id ?? null };
 }
 
 async function postReceiptSideEffects(
-    c: Parameters<AdminRouteHandler<typeof receiveRoute>>[0],
+    c: ReturnCommandContext,
     result: Awaited<ReturnType<typeof receiveOrderReturn>>,
 ) {
 
@@ -233,6 +242,81 @@ async function postReceiptSideEffects(
     }
 }
 
+/** Requests a return of an order's lines (no stock moves) and notes it on the order timeline. */
+export async function runCreateOrderReturn(c: ReturnCommandContext, orderId: string, input: CreateOrderReturnInput) {
+    const result = await createOrderReturn(c.get("db"), orderId, input, actor(c));
+    await recordOrderEvent(c.get("db"), {
+        orderId,
+        kind: "return_created",
+        actorId: actor(c).id,
+        requestKey: input.commandKey,
+        body: input.reason?.trim() || null,
+        data: { quantity: input.lines.reduce((sum, line) => sum + line.quantity, 0) },
+    });
+    return result;
+}
+
+/** Approves (or rejects) a return's quantities; the customer hears an approval once. */
+export async function runApproveOrderReturn(c: ReturnCommandContext, orderId: string, returnId: string, input: ApproveOrderReturnInput) {
+    const result = await approveOrderReturn(c.get("db"), orderId, returnId, input, actor(c));
+    // The review is its own step on the timeline (R3-ORD-14).
+    await recordOrderEvent(c.get("db"), {
+        orderId,
+        kind: "return_approved",
+        actorId: actor(c).id,
+        requestKey: input.commandKey,
+        data: {
+            approved: input.lines.reduce((sum, line) => sum + line.approvedQuantity, 0),
+            rejected: input.lines.reduce((sum, line) => sum + line.rejectedQuantity, 0),
+        },
+    });
+    // The customer hears it was approved (and to send the items), once per return.
+    if (input.lines.some((line) => line.approvedQuantity > 0)) {
+        await sendOrderNotification({
+            db: c.get("db"),
+            send: notificationSender(c),
+            orderId,
+            notificationType: "return_approved",
+            dedupeKey: `return:${returnId}:approved`,
+            source: "orders-return-approve",
+        });
+    }
+    return result;
+}
+
+/** Receives returned units (restocking or writing them off); the customer hears they arrived once. */
+export async function runReceiveOrderReturn(c: ReturnCommandContext, orderId: string, returnId: string, input: ReceiveOrderReturnInput) {
+    const result = await receiveOrderReturn(c.get("db"), orderId, returnId, input, actor(c));
+    await postReceiptSideEffects(c, result);
+    await recordOrderEvent(c.get("db"), {
+        orderId,
+        kind: "return_received",
+        actorId: actor(c).id,
+        requestKey: input.commandKey,
+        data: {
+            received: input.lines.reduce((sum, line) => sum + line.receivedQuantity, 0),
+            restocked: result.restockedQuantity,
+            damaged: input.lines.reduce((sum, line) => sum + line.damagedQuantity, 0),
+        },
+    });
+    // The customer hears the items arrived, once per return.
+    await sendOrderNotification({
+        db: c.get("db"),
+        send: notificationSender(c),
+        orderId,
+        notificationType: "return_received",
+        dedupeKey: `return:${returnId}:received`,
+        source: "orders-return-receive",
+    });
+    const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
+    return response;
+}
+
+/** Cancels a return that has not been received. */
+export function runCancelOrderReturn(c: ReturnCommandContext, orderId: string, returnId: string, input: CancelOrderReturnInput) {
+    return cancelOrderReturn(c.get("db"), orderId, returnId, input, actor(c));
+}
+
 app.openapi(listRoute, async (c) => ok(c, { returns: await listOrderReturns(c.get("db"), c.req.valid("param").id) }));
 app.openapi(getRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -245,17 +329,7 @@ app.openapi(createRouteDefinition, async (c) => {
         bodyCommandKey,
         "commandKey",
     );
-    const orderId = c.req.valid("param").id;
-    const result = await createOrderReturn(c.get("db"), orderId, { ...payload, commandKey }, actor(c));
-    await recordOrderEvent(c.get("db"), {
-        orderId,
-        kind: "return_created",
-        actorId: actor(c).id,
-        requestKey: commandKey,
-        body: payload.reason?.trim() || null,
-        data: { quantity: payload.lines.reduce((sum, line) => sum + line.quantity, 0) },
-    });
-    return created(c, result);
+    return created(c, await runCreateOrderReturn(c, c.req.valid("param").id, { ...payload, commandKey }));
 });
 app.openapi(approveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -265,31 +339,7 @@ app.openapi(approveRoute, async (c) => {
         bodyCommandKey,
         "commandKey",
     );
-    const input = { ...payload, commandKey } as ApproveOrderReturnInput;
-    const result = await approveOrderReturn(c.get("db"), id, returnId, input, actor(c));
-    // The review is its own step on the timeline (R3-ORD-14).
-    await recordOrderEvent(c.get("db"), {
-        orderId: id,
-        kind: "return_approved",
-        actorId: actor(c).id,
-        requestKey: commandKey,
-        data: {
-            approved: input.lines.reduce((sum, line) => sum + line.approvedQuantity, 0),
-            rejected: input.lines.reduce((sum, line) => sum + line.rejectedQuantity, 0),
-        },
-    });
-    // The customer hears it was approved (and to send the items), once per return.
-    if (input.lines.some((line) => line.approvedQuantity > 0)) {
-        await sendOrderNotification({
-            db: c.get("db"),
-            send: notificationSender(c),
-            orderId: id,
-            notificationType: "return_approved",
-            dedupeKey: `return:${returnId}:approved`,
-            source: "orders-return-approve",
-        });
-    }
-    return ok(c, result);
+    return ok(c, await runApproveOrderReturn(c, id, returnId, { ...payload, commandKey } as ApproveOrderReturnInput));
 });
 app.openapi(receiveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -299,32 +349,7 @@ app.openapi(receiveRoute, async (c) => {
         bodyCommandKey,
         "commandKey",
     );
-    const result = await receiveOrderReturn(
-        c.get("db"), id, returnId, { ...payload, commandKey } as ReceiveOrderReturnInput, actor(c),
-    );
-    await postReceiptSideEffects(c, result);
-    await recordOrderEvent(c.get("db"), {
-        orderId: id,
-        kind: "return_received",
-        actorId: actor(c).id,
-        requestKey: commandKey,
-        data: {
-            received: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.receivedQuantity, 0),
-            restocked: result.restockedQuantity,
-            damaged: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.damagedQuantity, 0),
-        },
-    });
-    // The customer hears the items arrived, once per return.
-    await sendOrderNotification({
-        db: c.get("db"),
-        send: notificationSender(c),
-        orderId: id,
-        notificationType: "return_received",
-        dedupeKey: `return:${returnId}:received`,
-        source: "orders-return-receive",
-    });
-    const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
-    return ok(c, response);
+    return ok(c, await runReceiveOrderReturn(c, id, returnId, { ...payload, commandKey } as ReceiveOrderReturnInput));
 });
 app.openapi(cancelRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -334,14 +359,12 @@ app.openapi(cancelRoute, async (c) => {
         bodyCommandKey,
         "commandKey",
     );
-    return ok(c, await cancelOrderReturn(
-        c.get("db"), id, returnId, { ...payload, commandKey } as CancelOrderReturnInput, actor(c),
-    ));
+    return ok(c, await runCancelOrderReturn(c, id, returnId, { ...payload, commandKey } as CancelOrderReturnInput));
 });
 app.openapi(reconcileRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
     const result = await reconcileOrderReturnReceipt(c.get("db"), id, returnId);
-    await postReceiptSideEffects(c as Parameters<AdminRouteHandler<typeof receiveRoute>>[0], result);
+    await postReceiptSideEffects(c, result);
     const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
     return ok(c, response);
 });
