@@ -14,6 +14,7 @@ export const fieldErrorMessages = defineMessages({
     email: "Enter an email address like name@example.com.",
     url: "Enter a full web address starting with https://",
     invalid: "Check this value.",
+    unknownField: "This form doesn't save this field, so nothing was saved.",
   },
   bn: {
     required: "এটি খালি রাখা যাবে না।",
@@ -27,6 +28,7 @@ export const fieldErrorMessages = defineMessages({
     email: "name@example.com এর মতো একটি ইমেইল দিন।",
     url: "https:// দিয়ে শুরু পুরো ওয়েব ঠিকানা দিন।",
     invalid: "এই মানটি দেখে নিন।",
+    unknownField: "এই ফর্ম এই ঘরটি সংরক্ষণ করে না, তাই কিছুই সংরক্ষণ হয়নি।",
   },
 });
 

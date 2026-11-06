@@ -208,7 +208,11 @@ function tilesPerRow(controls: readonly HTMLElement[]): number {
  * Down and Up move a row (and stay put on the top or bottom row), the start and end arrows one tile; and the start
  * and end arrows follow the page's direction (in right-to-left, Left is next).
  */
-export function handlePaymentChoiceKeyDown(event: KeyboardEvent): void {
+export function handlePaymentChoiceKeyDown(
+  event: KeyboardEvent,
+  /** Chooses the method a key moved to: the page's own choose (a click by default). */
+  choose: (control: HTMLButtonElement) => void = (control) => control.click(),
+): void {
   const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
   if (!keys.includes(event.key)) return;
 
@@ -242,6 +246,7 @@ export function handlePaymentChoiceKeyDown(event: KeyboardEvent): void {
   // A key that lands where it is (Home on the first) chooses nothing anew.
   if (nextIndex === currentIndex) return;
   const next = cards[nextIndex];
-  next?.focus();
-  next?.click();
+  if (!next) return;
+  next.focus();
+  choose(next);
 }

@@ -20,7 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
 import { Button } from "~/components/ui/button";
 import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
-import { readApiFieldIssues } from "~/lib/api-field-errors";
+import { issueLine, readApiFieldIssues } from "~/lib/api-field-errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { UnsavedChangesGuard, type GuardedLocation } from "./UnsavedChangesGuard";
 import { translate, useMessages } from "~/i18n";
@@ -230,12 +230,14 @@ function readFailure(entry: SaveBarEntry, error: unknown, fieldErrors: Record<st
   if (error instanceof SaveNotCompleted) return error.lines.map((line) => prefix + line);
   const issues = readApiFieldIssues(error);
   if (!issues) return [prefix + describeSaveError(error)];
-  return issues.flatMap((issue) => {
+  const lines = issues.flatMap((issue) => {
     const field = findField(entry, issue.path);
-    if (!field) return [prefix + issue.message];
+    // Listed away from its field: named by its path, so two fields never read as one line.
+    if (!field) return [prefix + issueLine(issue)];
     fieldErrors[field.id] ??= issue.message;
     return [];
   });
+  return [...new Set(lines)];
 }
 
 /**
@@ -538,7 +540,8 @@ export function SaveErrorBanner() {
       banner.scrollIntoView({ block: "nearest" });
     }
   }, [attempt, errors, fieldErrors]);
-  const lines = [...errors, ...shownRevealed.map((line) => line.line).filter((line) => !errors.includes(line))];
+  // Each line once: it is also the list's key.
+  const lines = [...new Set([...errors, ...shownRevealed.map((line) => line.line)])];
   const lineFocus = { ...revealFocus, ...focus };
   const count = lines.length + marked;
   const validation = kind === "validation" || (kind === null && shownRevealed.length > 0);
