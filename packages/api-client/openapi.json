@@ -37940,7 +37940,7 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "`<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app)."
+                                "description": "`<app id>.<key>`, as a line sends it in `purchaseOptions`."
                               },
                               "title": {
                                 "type": "string"
@@ -37950,8 +37950,7 @@
                                 "nullable": true
                               },
                               "appName": {
-                                "type": "string",
-                                "description": "The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options."
+                                "type": "string"
                               }
                             },
                             "required": [

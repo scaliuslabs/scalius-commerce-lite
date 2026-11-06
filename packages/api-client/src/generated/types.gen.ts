@@ -9243,14 +9243,11 @@ export type GetApiV1StorefrontLayoutResponses = {
              */
             purchaseOptions?: Array<{
                 /**
-                 * `<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app).
+                 * `<app id>.<key>`, as a line sends it in `purchaseOptions`.
                  */
                 id: string;
                 title: string;
                 description: string | null;
-                /**
-                 * The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options.
-                 */
                 appName?: string;
             }>;
             /**

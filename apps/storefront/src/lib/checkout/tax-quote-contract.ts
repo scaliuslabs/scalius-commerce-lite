@@ -299,6 +299,8 @@ function parseRequestItem(value: unknown): TaxQuoteRequestItem {
   const variantId = requiredString(value.variantId, MAX_ID_LENGTH);
   if (variantId === "default") fail();
   const properties = parseRequestProperties(value.properties);
+  // The single `purchaseOption` of a page from the build before a line carried one per app: refused, never quoted one-time.
+  if (value.purchaseOption !== undefined && value.purchaseOption !== null) fail();
   const purchaseOptions = parseRequestPurchaseOptions(value.purchaseOptions);
 
   return {

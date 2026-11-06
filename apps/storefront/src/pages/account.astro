@@ -110,7 +110,9 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
         if (!status) return;
         status.textContent = !result
           ? accountOfflineMessage()
-          : result.added === 0
+          : "refused" in result
+            ? result.refused
+            : result.added === 0
             ? accountCopy().orders.allGone
             : result.missing > 0 ? accountCopy().orders.someGone : "";
         status.classList.toggle("hidden", !status.textContent);

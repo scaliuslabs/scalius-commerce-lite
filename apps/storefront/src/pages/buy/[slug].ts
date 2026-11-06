@@ -20,7 +20,6 @@ import {
 import { moneyPlaces, unitPriceWithSurcharge } from "@/components/product/lib/line-price";
 import {
   canonicalizeLineProperties,
-  hasRequiredCustomization,
   resolveLineProperties,
   type LinePropertyInput,
 } from "@scalius/shared/line-properties";
@@ -29,7 +28,7 @@ import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 import { serverPagePath } from "@/lib/server-presence";
-import { validateNewCartLine } from "@/lib/cart/new-line";
+import { isCartLineRefusal, validateNewCartLine } from "@/lib/cart/new-line";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { themePaint, type ThemePaint } from "@/lib/theme-paint";
 import { colorSchemeBootScript } from "@/lib/color-scheme";
@@ -222,7 +221,7 @@ async function quickBuy({
     const layoutData = await getLayoutData();
     // The product's own inputs, then the active apps' line inputs, as the form drew them.
     const schema = productBuyerInputSchema(product, layoutData?.lineInputs);
-    if (postedProperties === null && (product.requiresCustomization || hasRequiredCustomization(schema))) {
+    if (postedProperties === null && product.requiresCustomization) {
       return productRedirect(slug, "customization_required");
     }
     const canonicalProperties = postedProperties === null
@@ -306,7 +305,7 @@ async function quickBuy({
       ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
       ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
     });
-    const validation = !failed && checked ? { success: true as const, data: checked } : { success: false as const };
+    const validation = !failed && checked && !isCartLineRefusal(checked) ? { success: true as const, data: checked } : { success: false as const };
     if (!validation.success) {
       // Two apps both priced the line: the buyer chooses again, on the page.
       const reason = (refusal as { reason?: unknown } | null)?.reason;

@@ -437,10 +437,10 @@ const layoutDataSchema = z.object({
     description: "Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
   purchaseOptions: z.array(z.object({
-    id: z.string().openapi({ description: "`<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app)." }),
+    id: z.string().openapi({ description: "`<app id>.<key>`, as a line sends it in `purchaseOptions`." }),
     title: z.string(),
     description: z.string().nullable(),
-    appName: z.string().optional().openapi({ description: "The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options." }),
+    appName: z.string().optional(),
   })).optional().openapi({
     description: "Ways to buy a line the active apps offer (`checkout.purchaseOptions`), as checkout accepts them. The buy form lists each app's options beside a one-time purchase; a line carries at most one per app.",
   }),

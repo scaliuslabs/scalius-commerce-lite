@@ -23,6 +23,9 @@ function normalizeItem(value: unknown): CartValidationRequestItem | null {
   ) return null;
   if (typeof value.quantity !== "number" || !Number.isInteger(value.quantity)) return null;
   if (typeof value.price !== "number" || !Number.isFinite(value.price)) return null;
+  // A page from the build before a line carried one option per app sends one
+  // `purchaseOption`: refused, never checked (or sold) as a one-time line.
+  if (value.purchaseOption !== undefined && value.purchaseOption !== null) return null;
   let properties: CartValidationRequestItem["properties"];
   let purchaseOptions: string[] | undefined;
   try {
