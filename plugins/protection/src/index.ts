@@ -28,7 +28,7 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.0.0",
+  version: "1.0.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
   author: { name: "Scalius Labs" },
@@ -174,8 +174,10 @@ export function coveragesOf(order: OrderRead): Coverage[] {
     const planPerUnit = line.adjustments.filter((adjustment) => adjustment.appId === APP_ID).reduce((total, adjustment) => total + adjustment.amountMinor, 0);
     const endsAt = new Date(startsAt);
     endsAt.setUTCFullYear(endsAt.getUTCFullYear() + PLANS[plan].years);
-    // The item's own price: the unit price less the plan, less its share of the order's discounts.
-    const itemUnit = line.unitPriceMinor - planPerUnit;
+    // The item's own price: the unit price less every add-on (this plan and any other app's,
+    // a gift wrap is not the item), less its share of the order's discounts.
+    const addOnsPerUnit = line.adjustments.reduce((total, adjustment) => total + adjustment.amountMinor, 0);
+    const itemUnit = line.unitPriceMinor - addOnsPerUnit;
     return [{
       order_id: order.id,
       order_number: order.orderNumber,
