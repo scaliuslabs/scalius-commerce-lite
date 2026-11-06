@@ -9239,7 +9239,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 connect: Array<string>;
             }>;
             /**
-             * Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental, a protection plan), the ones checkout accepts. The product page's buy form lists each app's options as their own choice beside a one-time purchase; a line carries at most one of each app, and the apps price the line at checkout.
+             * Ways to buy a line the active apps offer (`checkout.purchaseOptions`), as checkout accepts them. The buy form lists each app's options beside a one-time purchase; a line carries at most one per app.
              */
             purchaseOptions?: Array<{
                 /**
@@ -9250,7 +9250,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 description: string | null;
             }>;
             /**
-             * Buyer inputs the active apps ask for on each line (manifest `checkout.lineInputs`: a gift message, a protection plan), the ones checkout accepts. The buy form draws them after the product's own inputs under `<app id>.<key>`; one with `products` only on products whose app custom field `<app id>.<customField>` is true. The apps price them at checkout.
+             * Per-line inputs the active apps ask for (`checkout.lineInputs`), drawn after the product's own under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.
              */
             lineInputs?: Array<{
                 appId: string;
