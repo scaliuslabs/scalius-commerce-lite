@@ -319,6 +319,11 @@ export function draftFromDiscount(record: DiscountRecord, currencyCode: string):
   };
 }
 
+/** The draft leaves the start empty: the discount has no start date (`startsAt: null`). */
+export function hasNoStart(draft: Pick<DiscountDraft, "startDate" | "startTime">): boolean {
+  return draft.startDate.trim() === "" && draft.startTime.trim() === "";
+}
+
 export function validateDraft(
   draft: DiscountDraft,
   currencyCode: string,
@@ -369,8 +374,11 @@ export function validateDraft(
     if (draft.customerSegmentIds.length === 0) errors.customerSegmentIds = "errorPickSegments";
     else if (draft.customerSegmentIds.length > MAX_CUSTOMER_SEGMENTS) errors.customerSegmentIds = "errorSegmentsMax";
   }
-  const start = storeTimeToEpoch(draft.startDate, draft.startTime);
-  if (start === null) errors.startDate = "errorDate";
+  // No start date (`startsAt: null`) means it applies as soon as it's active; only a date that
+  // can't be read is wrong.
+  const noStart = hasNoStart(draft);
+  const start = noStart ? null : storeTimeToEpoch(draft.startDate, draft.startTime);
+  if (!noStart && start === null) errors.startDate = "errorDate";
   if (draft.hasEnd) {
     const end = storeTimeToEpoch(draft.endDate, draft.endTime);
     if (end === null) errors.endDate = "errorDate";
@@ -681,6 +689,8 @@ export function summarizeDraft(
     lines.push(end !== null && end > start
       ? { key: "summaryActiveBetween", vars: { start: format.date(start), end: format.date(end) } }
       : { key: "summaryActiveFrom", vars: { start: format.date(start) } });
+  } else if (end !== null) {
+    lines.push({ key: "summaryActiveUntil", vars: { end: format.date(end) } });
   }
   return lines;
 }
