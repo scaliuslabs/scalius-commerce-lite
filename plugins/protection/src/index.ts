@@ -91,13 +91,22 @@ export const manifest = defineManifest({
     admin: [
       { name: "coverages", methods: ["GET"], description: "Every coverage sold, newest order first." },
       { name: "order_coverage", methods: ["GET"], description: "The coverages of one order." },
+      { name: "product_plans", methods: ["GET"], description: "Whether a product offers protection plans." },
+      { name: "set_eligible", methods: ["POST"], description: "Offer or stop offering protection plans on products." },
     ],
     public: [],
     webhooks: [],
   },
   admin: {
     pages: [{ id: "coverages", title: "Protection plans", route: "coverages", placement: "orders" }],
-    cards: [{ id: "order_coverage", target: "order", title: "Protection plans", route: "order_coverage" }],
+    cards: [
+      { id: "order_coverage", target: "order", title: "Protection plans", route: "order_coverage" },
+      { id: "product_plans", target: "product", title: "Protection plans", route: "product_plans" },
+    ],
+    actions: [
+      { id: "offer_plans", target: "product", label: "Offer protection plans", route: "set_eligible", bulk: true },
+      { id: "stop_plans", target: "product", label: "Stop offering protection plans", route: "set_eligible", bulk: true },
+    ],
   },
 });
 
@@ -189,15 +198,19 @@ const COPY = {
     item: "Item", plan: "Plan", units: "Units", paid: "Plan paid", covered: "Covered value", ends: "Ends", order: "Order",
     plans: { one_year: "1 year", two_years: "2 years" },
     none: "No protection plan on this order.",
-    emptyTitle: "No plans sold yet", emptyText: "Mark products as eligible (Products → a product → Custom fields → Protection plans offered), and buyers can add a plan to them.",
+    emptyTitle: "No plans sold yet", emptyText: "Offer plans on your products (Products → select → Offer protection plans), and buyers can add one to them.",
     title: "Protection plans", description: "Every plan sold, with what it covers and until when.",
+    offered: "Buyers can add a protection plan to this product.", notOffered: "This product offers no protection plan.",
+    offer: "Offer protection plans", stop: "Stop offering", saved: "Saved for {n} product(s).", select: "Select at least one product.",
   },
   bn: {
     item: "পণ্য", plan: "প্ল্যান", units: "সংখ্যা", paid: "প্ল্যানের দাম", covered: "কভার মূল্য", ends: "শেষ", order: "অর্ডার",
     plans: { one_year: "১ বছর", two_years: "২ বছর" },
     none: "এই অর্ডারে কোনো প্রোটেকশন প্ল্যান নেই।",
-    emptyTitle: "এখনও কোনো প্ল্যান বিক্রি হয়নি", emptyText: "পণ্যকে উপযুক্ত চিহ্নিত করুন (পণ্য → একটি পণ্য → কাস্টম ফিল্ড → প্রোটেকশন প্ল্যান), তাহলে ক্রেতারা প্ল্যান যোগ করতে পারবেন।",
+    emptyTitle: "এখনও কোনো প্ল্যান বিক্রি হয়নি", emptyText: "পণ্যে প্ল্যান চালু করুন (পণ্য → বেছে নিন → প্রোটেকশন প্ল্যান চালু করুন), তাহলে ক্রেতারা প্ল্যান যোগ করতে পারবেন।",
     title: "প্রোটেকশন প্ল্যান", description: "বিক্রি হওয়া প্রতিটি প্ল্যান, কী কভার করে এবং কতদিন।",
+    offered: "ক্রেতারা এই পণ্যে প্রোটেকশন প্ল্যান যোগ করতে পারবেন।", notOffered: "এই পণ্যে কোনো প্রোটেকশন প্ল্যান নেই।",
+    offer: "প্রোটেকশন প্ল্যান চালু করুন", stop: "বন্ধ করুন", saved: "{n}টি পণ্যে সংরক্ষিত হয়েছে।", select: "অন্তত একটি পণ্য বেছে নিন।",
   },
 } satisfies Record<PluginAdminLocale, unknown>;
 
@@ -268,6 +281,27 @@ export default definePlugin({
         const { records, nextCursor } = await ctx.objects.coverages.query({ orderBy: { field: "order_number", direction: "desc" }, limit: 25, cursor: adminContext(request).cursor });
         const table = coverageTable(records, copy, true);
         return { body: ui.page([{ ...table, pagination: { next: nextCursor } } as typeof table], { title: copy.title, description: copy.description }) };
+      },
+      // The flag the buy form reads: the merchant turns it on here, the app writes its own field.
+      product_plans: async (request, ctx: Context) => {
+        const copy = COPY[adminLocale(request)];
+        const { id } = adminContext(request);
+        const offered = id ? (await ctx.customFields.get("product", id)).eligible === true : false;
+        return {
+          body: ui.view([
+            ui.text(offered ? copy.offered : copy.notOffered),
+            ...(id ? [ui.button(offered ? copy.stop : copy.offer, ui.route("set_eligible", { body: { ids: [id], offer: !offered } }), { tone: offered ? "secondary" : "primary" })] : []),
+          ]),
+        };
+      },
+      set_eligible: async (request, ctx: Context) => {
+        const copy = COPY[adminLocale(request)];
+        const { ids, action } = adminContext(request);
+        const body = (request.body ?? {}) as { offer?: unknown };
+        const offer = action === "offer_plans" || (action === null && body.offer === true);
+        if (ids.length === 0) return { status: 422, body: ui.result({ toast: { message: copy.select, tone: "critical" } }) };
+        for (const productId of ids) await ctx.customFields.set("product", productId, { eligible: offer });
+        return { body: ui.result({ toast: copy.saved.replace("{n}", String(ids.length)), refresh: true }) };
       },
       order_coverage: async (request, ctx: Context) => {
         const copy = COPY[adminLocale(request)];
