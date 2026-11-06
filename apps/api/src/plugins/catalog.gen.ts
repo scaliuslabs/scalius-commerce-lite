@@ -4,4 +4,6 @@
 import type { PluginCatalogEntry } from "./listing";
 
 export const PLUGIN_CATALOG: readonly PluginCatalogEntry[] = [
+  {"id":"scaliuslabs.gift-notes","source":"plugins/gift-notes","sha256":"813671a6d3f1a79d086e426fbe034e820b2ebebc3dafe12ecb3c1b7606f121d2","listing":{"name":"Gift Notes","version":"1.0.0","description":"Buyers add a gift message and gift wrap to any item. Staff get a packing slip for every gift, with the prices left off when the buyer asks.","author":{"name":"Scalius Labs"},"tagline":"Gift messages and gift wrap on every item","categories":["checkout","orders"],"screenshots":[]}},
+  {"id":"scaliuslabs.protection","source":"plugins/protection","sha256":"4fff1c1b23498fe564395c95edfc670144448fa09ca9018b2737c8c6d5808b8a","listing":{"name":"Protection Plans","version":"1.0.0","description":"Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.","author":{"name":"Scalius Labs"},"tagline":"Protection plans on the items you choose","categories":["checkout","support"],"screenshots":[]}},
 ];
