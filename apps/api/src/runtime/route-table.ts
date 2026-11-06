@@ -157,6 +157,9 @@ export const ROUTE_TABLE = [
   { mount: "/admin/pages", router: "adminPageRoutes", group: "admin-content" },
   { mount: "/admin/discounts", router: "adminDiscountRoutes", group: "admin-sales" },
   { mount: "/admin/media", router: "adminMediaRoutes", group: "admin-catalog" },
+  // The stable app API's stock documents (levels, suppliers, purchase orders,
+  // transfers): longer prefixes than /admin/resources, served with inventory.
+  { mount: "/admin/resources", router: "adminResourceInventoryRoutes", group: "admin-catalog", prefixes: ["/admin/resources/inventory-levels", "/admin/resources/suppliers", "/admin/resources/purchase-orders", "/admin/resources/inventory-transfers"] },
   { mount: "/admin/inventory/suppliers", router: "adminSupplierRoutes", group: "admin-catalog" },
   { mount: "/admin/inventory/purchase-orders", router: "adminPurchaseOrderRoutes", group: "admin-catalog" },
   { mount: "/admin/inventory/transfers", router: "adminTransferRoutes", group: "admin-catalog" },

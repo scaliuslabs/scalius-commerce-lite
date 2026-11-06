@@ -9,6 +9,7 @@ import { adminCollectionRoutes } from "../routes/admin/collections";
 import { adminInventoryRoutes } from "../routes/admin/inventory";
 import { adminPurchaseOrderRoutes, adminSupplierRoutes, adminTransferRoutes } from "../routes/admin/inventory-purchasing";
 import { adminMediaRoutes } from "../routes/admin/media";
+import { adminResourceInventoryRoutes } from "../routes/admin/resources-inventory";
 import { adminProductsRoutes } from "../routes/admin/products";
 import { adminReviewRoutes } from "../routes/admin/reviews";
 import { adminExportRoutes, adminImportRoutes } from "../routes/admin/store-transfer";
@@ -26,6 +27,7 @@ export const adminCatalogParts: RouteGroupParts<"admin-catalog"> = {
     adminPriceListRoutes,
     adminCollectionRoutes,
     adminMediaRoutes,
+    adminResourceInventoryRoutes,
     adminSupplierRoutes,
     adminPurchaseOrderRoutes,
     adminTransferRoutes,

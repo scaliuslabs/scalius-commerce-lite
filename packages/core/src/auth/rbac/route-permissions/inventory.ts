@@ -8,6 +8,10 @@ const MANAGE: RoutePermission = { permission: PERMISSIONS.INVENTORY_MANAGE };
 const MANAGE_WITH_COSTS: RoutePermission = {
   allOf: [PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS],
 };
+// Reads that always carry unit costs (the sealed purchase order).
+const VIEW_WITH_COSTS: RoutePermission = {
+  allOf: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.PRODUCTS_VIEW_COSTS],
+};
 // A location is store setup as much as stock: Settings and inventory staff
 // both look after it.
 const LOCATION_WRITE: RoutePermission = {
@@ -153,6 +157,64 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
     POST: MANAGE,
   },
   "/api/v1/admin/inventory/transfers/*/cancel": {
+    POST: MANAGE,
+  },
+
+  // =============================================
+  // The stable app API's stock documents (resources-inventory.ts): the same
+  // permissions as above. A purchase order is a cost document: its sealed
+  // representation always carries its money, so every purchase-order
+  // operation also needs products.view_costs (an app: read_product_costs).
+  // =============================================
+  "/api/v1/admin/resources/inventory-levels": {
+    GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] },
+  },
+  "/api/v1/admin/resources/suppliers": {
+    GET: VIEW,
+    POST: MANAGE,
+  },
+  "/api/v1/admin/resources/suppliers/*": {
+    GET: VIEW,
+    PATCH: MANAGE,
+  },
+  "/api/v1/admin/resources/suppliers/*/archive": {
+    POST: MANAGE,
+  },
+  "/api/v1/admin/resources/suppliers/*/restore": {
+    POST: MANAGE,
+  },
+  "/api/v1/admin/resources/purchase-orders": {
+    GET: VIEW_WITH_COSTS,
+    POST: MANAGE_WITH_COSTS,
+  },
+  "/api/v1/admin/resources/purchase-orders/*": {
+    GET: VIEW_WITH_COSTS,
+    PATCH: MANAGE_WITH_COSTS,
+  },
+  "/api/v1/admin/resources/purchase-orders/*/mark-ordered": {
+    POST: MANAGE_WITH_COSTS,
+  },
+  "/api/v1/admin/resources/purchase-orders/*/receive": {
+    POST: MANAGE_WITH_COSTS,
+  },
+  "/api/v1/admin/resources/purchase-orders/*/cancel": {
+    POST: MANAGE_WITH_COSTS,
+  },
+  "/api/v1/admin/resources/inventory-transfers": {
+    GET: VIEW,
+    POST: MANAGE,
+  },
+  "/api/v1/admin/resources/inventory-transfers/*": {
+    GET: VIEW,
+    PATCH: MANAGE,
+  },
+  "/api/v1/admin/resources/inventory-transfers/*/ship": {
+    POST: MANAGE,
+  },
+  "/api/v1/admin/resources/inventory-transfers/*/receive": {
+    POST: MANAGE,
+  },
+  "/api/v1/admin/resources/inventory-transfers/*/cancel": {
     POST: MANAGE,
   },
 };

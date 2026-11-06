@@ -10835,6 +10835,128 @@
     ]
    }
   },
+  "inventory_levels.list": {
+   "operationId": "dashboard.resources.inventory_levels.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/inventory-levels",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products",
+    "read_inventory",
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 250,
+       "default": 100,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "description": "Only these SKUs: 1 to 90 variant ids, comma separated."
+      },
+      "required": false,
+      "description": "Only these SKUs: 1 to 90 variant ids, comma separated.",
+      "name": "variantIds",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "Only this product's SKUs."
+      },
+      "required": false,
+      "description": "Only this product's SKUs.",
+      "name": "productId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "Only this location (`inventory_locations.list`)."
+      },
+      "required": false,
+      "description": "Only this location (`inventory_locations.list`).",
+      "name": "locationId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "levels": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/InventoryLevelResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "levels",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "inventory_locations.list": {
    "operationId": "dashboard.resources.inventory_locations.list",
    "method": "GET",
@@ -10918,6 +11040,693 @@
       "required": [
        "locations",
        "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.cancel": {
+   "operationId": "dashboard.resources.inventory_transfers.cancel",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/inventory-transfers/{id}/cancel",
+   "risk": "destructive",
+   "idempotency": "required",
+   "revision": "required",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfer": {
+        "$ref": "#/components/schemas/InventoryTransferResource"
+       }
+      },
+      "required": [
+       "transfer"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.create": {
+   "operationId": "dashboard.resources.inventory_transfers.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/inventory-transfers",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "originLocationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Where the units leave from."
+         },
+         "destinationLocationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Where they arrive."
+         },
+         "expectedOn": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Expected arrival date (YYYY-MM-DD)."
+         },
+         "reference": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 100
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "variantId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            }
+           },
+           "required": [
+            "variantId",
+            "quantity"
+           ],
+           "additionalProperties": false
+          },
+          "maxItems": 100
+         }
+        },
+        "required": [
+         "originLocationId",
+         "destinationLocationId"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfer": {
+        "$ref": "#/components/schemas/InventoryTransferResource"
+       }
+      },
+      "required": [
+       "transfer"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.get": {
+   "operationId": "dashboard.resources.inventory_transfers.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/inventory-transfers/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_inventory",
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfer": {
+        "$ref": "#/components/schemas/InventoryTransferResource"
+       }
+      },
+      "required": [
+       "transfer"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.list": {
+   "operationId": "dashboard.resources.inventory_transfers.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/inventory-transfers",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_inventory",
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "draft",
+        "in_transit",
+        "partially_received",
+        "received",
+        "cancelled"
+       ],
+       "description": "Only transfers in this status."
+      },
+      "required": false,
+      "description": "Only transfers in this status.",
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "Only transfers from or to this location."
+      },
+      "required": false,
+      "description": "Only transfers from or to this location.",
+      "name": "locationId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfers": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/InventoryTransferResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "transfers",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.receive": {
+   "operationId": "dashboard.resources.inventory_transfers.receive",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/inventory-transfers/{id}/receive",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "lineId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128,
+             "description": "The line's `id` in the representation."
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            }
+           },
+           "required": [
+            "lineId",
+            "quantity"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 100
+         }
+        },
+        "required": [
+         "lines"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfer": {
+        "$ref": "#/components/schemas/InventoryTransferResource"
+       }
+      },
+      "required": [
+       "transfer"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.ship": {
+   "operationId": "dashboard.resources.inventory_transfers.ship",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/inventory-transfers/{id}/ship",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "required",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfer": {
+        "$ref": "#/components/schemas/InventoryTransferResource"
+       }
+      },
+      "required": [
+       "transfer"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "inventory_transfers.update": {
+   "operationId": "dashboard.resources.inventory_transfers.update",
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/inventory-transfers/{id}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         },
+         "originLocationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Where the units leave from."
+         },
+         "destinationLocationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Where they arrive."
+         },
+         "expectedOn": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+         },
+         "reference": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 100
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "variantId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            }
+           },
+           "required": [
+            "variantId",
+            "quantity"
+           ],
+           "additionalProperties": false
+          },
+          "maxItems": 100
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "transfer": {
+        "$ref": "#/components/schemas/InventoryTransferResource"
+       }
+      },
+      "required": [
+       "transfer"
       ]
      }
     },
@@ -14809,6 +15618,793 @@
     ]
    }
   },
+  "purchase_orders.cancel": {
+   "operationId": "dashboard.resources.purchase_orders.cancel",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/purchase-orders/{id}/cancel",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrder": {
+        "$ref": "#/components/schemas/PurchaseOrderResource"
+       }
+      },
+      "required": [
+       "purchaseOrder"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "purchase_orders.create": {
+   "operationId": "dashboard.resources.purchase_orders.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/purchase-orders",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "supplierId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "An active supplier (`suppliers.list`), or null for none."
+         },
+         "expectedOn": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Expected arrival date (YYYY-MM-DD)."
+         },
+         "reference": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 100,
+          "description": "The supplier's invoice or order reference."
+         },
+         "shippingMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "Shipping charged by the supplier, in minor units."
+         },
+         "otherCostsMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "Other charges, in minor units."
+         },
+         "taxMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "Tax charged by the supplier, in minor units."
+         },
+         "destinationLocationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Where the goods arrive (an active location); the default location when omitted."
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "variantId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            },
+            "unitCostMinor": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9000000000000,
+             "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`)."
+            }
+           },
+           "required": [
+            "variantId",
+            "quantity",
+            "unitCostMinor"
+           ],
+           "additionalProperties": false
+          },
+          "maxItems": 100
+         }
+        },
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrder": {
+        "$ref": "#/components/schemas/PurchaseOrderResource"
+       }
+      },
+      "required": [
+       "purchaseOrder"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "purchase_orders.get": {
+   "operationId": "dashboard.resources.purchase_orders.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/purchase-orders/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "read_inventory",
+     "read_product_costs"
+    ],
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrder": {
+        "$ref": "#/components/schemas/PurchaseOrderResource"
+       }
+      },
+      "required": [
+       "purchaseOrder"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "purchase_orders.list": {
+   "operationId": "dashboard.resources.purchase_orders.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/purchase-orders",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "read_inventory",
+     "read_product_costs"
+    ],
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "draft",
+        "ordered",
+        "partially_received",
+        "received",
+        "cancelled"
+       ],
+       "description": "Only purchase orders in this status."
+      },
+      "required": false,
+      "description": "Only purchase orders in this status.",
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": false,
+      "name": "supplierId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "Only purchase orders arriving at this location."
+      },
+      "required": false,
+      "description": "Only purchase orders arriving at this location.",
+      "name": "locationId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrders": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/PurchaseOrderResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "purchaseOrders",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "purchase_orders.mark_ordered": {
+   "operationId": "dashboard.resources.purchase_orders.mark_ordered",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/purchase-orders/{id}/mark-ordered",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrder": {
+        "$ref": "#/components/schemas/PurchaseOrderResource"
+       }
+      },
+      "required": [
+       "purchaseOrder"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "purchase_orders.receive": {
+   "operationId": "dashboard.resources.purchase_orders.receive",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/purchase-orders/{id}/receive",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "lineId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128,
+             "description": "The line's `id` in the representation."
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            }
+           },
+           "required": [
+            "lineId",
+            "quantity"
+           ],
+           "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 100
+         },
+         "updateCost": {
+          "type": "boolean",
+          "default": false
+         }
+        },
+        "required": [
+         "lines"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrder": {
+        "$ref": "#/components/schemas/PurchaseOrderResource"
+       }
+      },
+      "required": [
+       "purchaseOrder"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "purchase_orders.update": {
+   "operationId": "dashboard.resources.purchase_orders.update",
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/purchase-orders/{id}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [],
+   "scopeSets": [
+    [
+     "write_inventory",
+     "read_product_costs"
+    ]
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         },
+         "supplierId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "An active supplier (`suppliers.list`), or null for none."
+         },
+         "expectedOn": {
+          "type": "string",
+          "nullable": true,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Expected arrival date (YYYY-MM-DD)."
+         },
+         "reference": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 100,
+          "description": "The supplier's invoice or order reference."
+         },
+         "shippingMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "Shipping charged by the supplier, in minor units."
+         },
+         "otherCostsMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "Other charges, in minor units."
+         },
+         "taxMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9000000000000,
+          "description": "Tax charged by the supplier, in minor units."
+         },
+         "destinationLocationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Drafts only: where the goods arrive."
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "variantId": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 128
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 1000000
+            },
+            "unitCostMinor": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9000000000000,
+             "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`)."
+            }
+           },
+           "required": [
+            "variantId",
+            "quantity",
+            "unitCostMinor"
+           ],
+           "additionalProperties": false
+          },
+          "maxItems": 100,
+          "description": "Drafts only: replaces every line."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "purchaseOrder": {
+        "$ref": "#/components/schemas/PurchaseOrderResource"
+       }
+      },
+      "required": [
+       "purchaseOrder"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "refunds.create": {
    "operationId": "dashboard.resources.refunds.create",
    "method": "POST",
@@ -15426,6 +17022,531 @@
       "required": [
        "shipments",
        "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "suppliers.archive": {
+   "operationId": "dashboard.resources.suppliers.archive",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/suppliers/{id}/archive",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "supplier": {
+        "$ref": "#/components/schemas/SupplierResource"
+       }
+      },
+      "required": [
+       "supplier"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "suppliers.create": {
+   "operationId": "dashboard.resources.suppliers.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/suppliers",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+         },
+         "contactName": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 120
+         },
+         "phone": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 32
+         },
+         "email": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 254,
+          "format": "email"
+         },
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 2000
+         }
+        },
+        "required": [
+         "name"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "supplier": {
+        "$ref": "#/components/schemas/SupplierResource"
+       }
+      },
+      "required": [
+       "supplier"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "suppliers.get": {
+   "operationId": "dashboard.resources.suppliers.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/suppliers/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_inventory",
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "supplier": {
+        "$ref": "#/components/schemas/SupplierResource"
+       }
+      },
+      "required": [
+       "supplier"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "suppliers.list": {
+   "operationId": "dashboard.resources.suppliers.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/suppliers",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_inventory",
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "active",
+        "archived"
+       ],
+       "description": "Only suppliers in this status."
+      },
+      "required": false,
+      "description": "Only suppliers in this status.",
+      "name": "status",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "suppliers": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/SupplierResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "suppliers",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "suppliers.restore": {
+   "operationId": "dashboard.resources.suppliers.restore",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/suppliers/{id}/restore",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "supplier": {
+        "$ref": "#/components/schemas/SupplierResource"
+       }
+      },
+      "required": [
+       "supplier"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "suppliers.update": {
+   "operationId": "dashboard.resources.suppliers.update",
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/suppliers/{id}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_inventory"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
+         },
+         "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+         },
+         "contactName": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 120
+         },
+         "phone": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 32
+         },
+         "email": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 254,
+          "format": "email"
+         },
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 2000
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "supplier": {
+        "$ref": "#/components/schemas/SupplierResource"
+       }
+      },
+      "required": [
+       "supplier"
       ]
      }
     },
@@ -19579,6 +21700,45 @@
     "createdAt"
    ]
   },
+  "InventoryLevelResource": {
+   "type": "object",
+   "properties": {
+    "variantId": {
+     "type": "string"
+    },
+    "productId": {
+     "type": "string"
+    },
+    "sku": {
+     "type": "string"
+    },
+    "locationId": {
+     "type": "string"
+    },
+    "onHand": {
+     "type": "integer",
+     "description": "Units physically at the location. A SKU's levels sum to its on-hand stock; reservations are not per location."
+    },
+    "stockVersion": {
+     "type": "integer",
+     "description": "The SKU's stock version now: the `expectedStockVersion` its stock writes (`inventory.adjust`, `inventory.set_stock`) take."
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time",
+     "description": "When units last moved in or out of this location."
+    }
+   },
+   "required": [
+    "variantId",
+    "productId",
+    "sku",
+    "locationId",
+    "onHand",
+    "stockVersion",
+    "updatedAt"
+   ]
+  },
   "InventoryLocationAddress": {
    "type": "object",
    "properties": {
@@ -19720,6 +21880,134 @@
     "position",
     "revision",
     "address",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "InventoryTransferResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "number": {
+     "type": "integer"
+    },
+    "status": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "originLocationId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "destinationLocationId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "reference": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "expectedOn": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "quantity": {
+        "type": "integer"
+       },
+       "receivedQuantity": {
+        "type": "integer"
+       },
+       "shippedQuantity": {
+        "type": "integer"
+       },
+       "returnedQuantity": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "id",
+       "variantId",
+       "quantity",
+       "receivedQuantity",
+       "shippedQuantity",
+       "returnedQuantity"
+      ]
+     }
+    },
+    "shippedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "receivedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "cancelledAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "number",
+    "status",
+    "originLocationId",
+    "destinationLocationId",
+    "reference",
+    "expectedOn",
+    "revision",
+    "lines",
+    "shippedAt",
+    "receivedAt",
+    "cancelledAt",
     "createdAt",
     "updatedAt"
    ]
@@ -21704,6 +23992,149 @@
     "options"
    ]
   },
+  "PurchaseOrderResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "number": {
+     "type": "integer"
+    },
+    "status": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "supplierId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "destinationLocationId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "reference": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "expectedOn": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "shippingMinor": {
+     "type": "integer"
+    },
+    "otherCostsMinor": {
+     "type": "integer"
+    },
+    "taxMinor": {
+     "type": "integer"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "quantity": {
+        "type": "integer"
+       },
+       "receivedQuantity": {
+        "type": "integer"
+       },
+       "unitCostMinor": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "id",
+       "variantId",
+       "quantity",
+       "receivedQuantity",
+       "unitCostMinor"
+      ]
+     }
+    },
+    "orderedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "receivedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "cancelledAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "number",
+    "status",
+    "supplierId",
+    "destinationLocationId",
+    "reference",
+    "expectedOn",
+    "currency",
+    "shippingMinor",
+    "otherCostsMinor",
+    "taxMinor",
+    "revision",
+    "lines",
+    "orderedAt",
+    "receivedAt",
+    "cancelledAt",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "RefundResource": {
    "type": "object",
    "properties": {
@@ -22120,6 +24551,64 @@
     "isDefault",
     "presences",
     "translatedResources"
+   ]
+  },
+  "SupplierResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "contactName": {
+     "type": "string",
+     "nullable": true,
+     "description": "The person to speak to at the supplier."
+    },
+    "phone": {
+     "type": "string",
+     "nullable": true
+    },
+    "email": {
+     "type": "string",
+     "nullable": true
+    },
+    "notes": {
+     "type": "string",
+     "nullable": true
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "archived"
+     ]
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "contactName",
+    "phone",
+    "email",
+    "notes",
+    "status",
+    "revision",
+    "createdAt",
+    "updatedAt"
    ]
   },
   "ThemeDraftReceipt": {

@@ -310,5 +310,41 @@
   "from": "600d697d672275b0",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_PRODUCT_MODULE_EMBEDS: an existing signature changed or gained a required member.",
   "reason": "Unreleased: STOREFRONT_PRODUCT_MODULE_EMBEDS was added after v2.0.0-beta.2 in this same wave; it is in no tag and not in the public export (only on the private origin), so no app can depend on it. `details` is renamed `description`, the module's theme id."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
  }
 ]

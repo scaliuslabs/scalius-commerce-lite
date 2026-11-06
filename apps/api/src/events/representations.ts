@@ -561,67 +561,112 @@ async function customerRepresentation(db: Database, customerId: string) {
   return (await readCustomerRepresentations(db, [customerId]))[0] ?? null;
 }
 
+/** A stock document read per batch: at most this many ids per wave (D1's statement limits). */
+const STOCK_DOCUMENT_WAVE = 90;
+
+function idWaves(ids: readonly string[]): string[][] {
+  const unique = [...new Set(ids)];
+  const waves: string[][] = [];
+  for (let start = 0; start < unique.length; start += STOCK_DOCUMENT_WAVE) waves.push(unique.slice(start, start + STOCK_DOCUMENT_WAVE));
+  return waves;
+}
+
+/**
+ * Purchase orders' sealed representations, in the order of `ids` (missing
+ * ones left out): the headers and their lines, two reads in one batch per
+ * wave of 90 ids, each id list bound as one value.
+ */
+export async function readPurchaseOrderRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"purchase_order">[]> {
+  const byId = new Map<string, EventRepresentation<"purchase_order">>();
+  for (const wave of idWaves(ids)) {
+    const [headers, lineRows] = await db.batch([
+      db.select().from(purchaseOrders).where(inJsonArray(purchaseOrders.id, wave)),
+      db.select({
+        purchaseOrderId: purchaseOrderLines.purchaseOrderId,
+        id: purchaseOrderLines.id,
+        variantId: purchaseOrderLines.variantId,
+        quantity: purchaseOrderLines.quantity,
+        receivedQuantity: purchaseOrderLines.receivedQuantity,
+        unitCostMinor: purchaseOrderLines.unitCostMinor,
+      }).from(purchaseOrderLines).where(inJsonArray(purchaseOrderLines.purchaseOrderId, wave))
+        .orderBy(asc(purchaseOrderLines.purchaseOrderId), asc(purchaseOrderLines.position), asc(purchaseOrderLines.id)),
+    ]);
+    const lines = groupBy(lineRows, (line) => line.purchaseOrderId);
+    for (const order of headers) {
+      byId.set(order.id, sealed("purchase_order", {
+        id: order.id,
+        number: order.number,
+        status: order.status,
+        supplierId: order.supplierId ?? null,
+        destinationLocationId: order.destinationLocationId,
+        reference: order.reference ?? null,
+        expectedOn: order.expectedOn ?? null,
+        currency: order.currencyCode,
+        shippingMinor: order.shippingMinor,
+        otherCostsMinor: order.otherCostsMinor,
+        taxMinor: order.taxMinor,
+        revision: order.revision,
+        lines: (lines.get(order.id) ?? []).map(({ purchaseOrderId: _purchaseOrderId, ...line }) => line),
+        orderedAt: iso(order.orderedAt),
+        receivedAt: iso(order.receivedAt),
+        cancelledAt: iso(order.cancelledAt),
+        createdAt: isoRequired(order.createdAt),
+        updatedAt: isoRequired(order.updatedAt),
+      }));
+    }
+  }
+  return inIdOrder([...new Set(ids)], byId);
+}
+
 async function purchaseOrderRepresentation(db: Database, purchaseOrderId: string) {
-  const order = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, purchaseOrderId)).get();
-  if (!order) return null;
-  const lines = await db.select({
-    id: purchaseOrderLines.id,
-    variantId: purchaseOrderLines.variantId,
-    quantity: purchaseOrderLines.quantity,
-    receivedQuantity: purchaseOrderLines.receivedQuantity,
-    unitCostMinor: purchaseOrderLines.unitCostMinor,
-  }).from(purchaseOrderLines).where(eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId))
-    .orderBy(asc(purchaseOrderLines.position)).limit(MAX_LINES).all();
-  return sealed("purchase_order", {
-    id: order.id,
-    number: order.number,
-    status: order.status,
-    supplierId: order.supplierId ?? null,
-    destinationLocationId: order.destinationLocationId,
-    reference: order.reference ?? null,
-    expectedOn: order.expectedOn ?? null,
-    currency: order.currencyCode,
-    shippingMinor: order.shippingMinor,
-    otherCostsMinor: order.otherCostsMinor,
-    taxMinor: order.taxMinor,
-    revision: order.revision,
-    lines,
-    orderedAt: iso(order.orderedAt),
-    receivedAt: iso(order.receivedAt),
-    cancelledAt: iso(order.cancelledAt),
-    createdAt: isoRequired(order.createdAt),
-    updatedAt: isoRequired(order.updatedAt),
-  });
+  return (await readPurchaseOrderRepresentations(db, [purchaseOrderId]))[0] ?? null;
+}
+
+/**
+ * Transfers' sealed representations, in the order of `ids` (missing ones
+ * left out): two reads in one batch per wave of 90 ids.
+ */
+export async function readInventoryTransferRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"inventory_transfer">[]> {
+  const byId = new Map<string, EventRepresentation<"inventory_transfer">>();
+  for (const wave of idWaves(ids)) {
+    const [headers, lineRows] = await db.batch([
+      db.select().from(inventoryTransfers).where(inJsonArray(inventoryTransfers.id, wave)),
+      db.select({
+        transferId: inventoryTransferLines.transferId,
+        id: inventoryTransferLines.id,
+        variantId: inventoryTransferLines.variantId,
+        quantity: inventoryTransferLines.quantity,
+        shippedQuantity: inventoryTransferLines.shippedQuantity,
+        receivedQuantity: inventoryTransferLines.receivedQuantity,
+        returnedQuantity: inventoryTransferLines.returnedQuantity,
+      }).from(inventoryTransferLines).where(inJsonArray(inventoryTransferLines.transferId, wave))
+        .orderBy(asc(inventoryTransferLines.transferId), asc(inventoryTransferLines.position), asc(inventoryTransferLines.id)),
+    ]);
+    const lines = groupBy(lineRows, (line) => line.transferId);
+    for (const transfer of headers) {
+      byId.set(transfer.id, sealed("inventory_transfer", {
+        id: transfer.id,
+        number: transfer.number,
+        status: transfer.status,
+        originLocationId: transfer.originLocationId,
+        destinationLocationId: transfer.destinationLocationId,
+        reference: transfer.reference ?? null,
+        expectedOn: transfer.expectedOn ?? null,
+        revision: transfer.revision,
+        lines: (lines.get(transfer.id) ?? []).map(({ transferId: _transferId, ...line }) => line),
+        shippedAt: iso(transfer.shippedAt),
+        receivedAt: iso(transfer.receivedAt),
+        cancelledAt: iso(transfer.cancelledAt),
+        createdAt: isoRequired(transfer.createdAt),
+        updatedAt: isoRequired(transfer.updatedAt),
+      }));
+    }
+  }
+  return inIdOrder([...new Set(ids)], byId);
 }
 
 async function transferRepresentation(db: Database, transferId: string) {
-  const transfer = await db.select().from(inventoryTransfers).where(eq(inventoryTransfers.id, transferId)).get();
-  if (!transfer) return null;
-  const lines = await db.select({
-    id: inventoryTransferLines.id,
-    variantId: inventoryTransferLines.variantId,
-    quantity: inventoryTransferLines.quantity,
-    shippedQuantity: inventoryTransferLines.shippedQuantity,
-    receivedQuantity: inventoryTransferLines.receivedQuantity,
-    returnedQuantity: inventoryTransferLines.returnedQuantity,
-  }).from(inventoryTransferLines).where(eq(inventoryTransferLines.transferId, transferId))
-    .orderBy(asc(inventoryTransferLines.position)).limit(MAX_LINES).all();
-  return sealed("inventory_transfer", {
-    id: transfer.id,
-    number: transfer.number,
-    status: transfer.status,
-    originLocationId: transfer.originLocationId,
-    destinationLocationId: transfer.destinationLocationId,
-    reference: transfer.reference ?? null,
-    expectedOn: transfer.expectedOn ?? null,
-    revision: transfer.revision,
-    lines,
-    shippedAt: iso(transfer.shippedAt),
-    receivedAt: iso(transfer.receivedAt),
-    cancelledAt: iso(transfer.cancelledAt),
-    createdAt: isoRequired(transfer.createdAt),
-    updatedAt: isoRequired(transfer.updatedAt),
-  });
+  return (await readInventoryTransferRepresentations(db, [transferId]))[0] ?? null;
 }
 
 const fulfillmentColumns = {

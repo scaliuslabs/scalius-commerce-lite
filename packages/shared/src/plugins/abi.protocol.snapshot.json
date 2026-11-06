@@ -15061,6 +15061,13 @@
     "settings.delivery_locations.import"
    ],
    "staff": "settings.delivery_locations.import"
+  },
+  "read_product_costs": {
+   "rbac": [
+    "products.view_costs"
+   ],
+   "staff": "products.view_costs",
+   "sensitive": true
   }
  },
  "errors": {

@@ -75,6 +75,8 @@ const en = {
   scope_write_navigation_help: "Create menus, replace their links and publish them. Where a menu shows stays your choice; a published menu that sits in your header or footer changes what buyers see at once.",
   scope_write_places: "Load delivery places",
   scope_write_places_help: "Add and update the cities, areas and postal codes buyers pick for delivery. It can't delete one.",
+  scope_read_product_costs: "View product costs",
+  scope_read_product_costs_help: "What you pay for stock: purchase order costs, shipping, other charges and tax, and the cost per item a receipt can update. With inventory access it reads or manages purchase orders.",
 } satisfies ScopeCopy;
 
 const bn = {
@@ -144,6 +146,8 @@ const bn = {
   scope_write_navigation_help: "মেনু তৈরি, তার লিংক বদলানো ও পাবলিশ করা। মেনু কোথায় দেখাবে তা আপনিই ঠিক করেন; হেডার বা ফুটারে থাকা মেনু পাবলিশ হলে ক্রেতারা সঙ্গে সঙ্গে পরিবর্তন দেখেন।",
   scope_write_places: "ডেলিভারির জায়গা লোড করা",
   scope_write_places_help: "ডেলিভারির জন্য ক্রেতারা যে শহর, এলাকা ও পোস্টাল কোড বেছে নেন সেগুলো যোগ ও আপডেট করা। কোনোটি ডিলিট করতে পারে না।",
+  scope_read_product_costs: "প্রোডাক্টের খরচ দেখা",
+  scope_read_product_costs_help: "স্টক কিনতে আপনার খরচ: পারচেজ অর্ডারের খরচ, শিপিং, অন্যান্য চার্জ ও ট্যাক্স, এবং রিসিভ করার সময় যে প্রতি আইটেমের খরচ বদলাতে পারে। ইনভেন্টরির অনুমতির সঙ্গে পারচেজ অর্ডার দেখা বা সামলানো যায়।",
 } satisfies ScopeCopy;
 
 export const appScopeMessages = defineMessages({ en, bn });
