@@ -9812,6 +9812,492 @@
     ]
    }
   },
+  "customer_segments.create": {
+   "operationId": "dashboard.resources.customer_segments.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/customer-segments",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "1 to 80 characters after trimming, unique in the store (any case)."
+         },
+         "description": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 600,
+          "description": "At most 300 characters after trimming; empty or null clears it."
+         },
+         "definition": {
+          "$ref": "#/components/schemas/CustomerSegmentRules"
+         }
+        },
+        "required": [
+         "name",
+         "definition"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "segment": {
+        "$ref": "#/components/schemas/CustomerSegmentResource"
+       }
+      },
+      "required": [
+       "segment"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "customer_segments.delete": {
+   "operationId": "dashboard.resources.customer_segments.delete",
+   "method": "DELETE",
+   "path": "/api/v1/admin/resources/customer-segments/{id}",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "description": "The segment's `revision` you read."
+      },
+      "required": true,
+      "description": "The segment's `revision` you read.",
+      "name": "expectedRevision",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "deleted": {
+        "type": "boolean",
+        "enum": [
+         true
+        ]
+       }
+      },
+      "required": [
+       "id",
+       "deleted"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "customer_segments.get": {
+   "operationId": "dashboard.resources.customer_segments.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/customer-segments/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_customers",
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "segment": {
+        "$ref": "#/components/schemas/CustomerSegmentResource"
+       }
+      },
+      "required": [
+       "segment"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "customer_segments.list": {
+   "operationId": "dashboard.resources.customer_segments.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/customer-segments",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_customers",
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "segments": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/CustomerSegmentResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "segments",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "customer_segments.list_members": {
+   "operationId": "dashboard.resources.customer_segments.list_members",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/customer-segments/{id}/members",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_customers",
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many customers; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many customers; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "customers": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/CustomerResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "customers",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "customer_segments.update": {
+   "operationId": "dashboard.resources.customer_segments.update",
+   "method": "PATCH",
+   "path": "/api/v1/admin/resources/customer-segments/{id}",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_customers"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "1 to 80 characters after trimming, unique in the store (any case)."
+         },
+         "description": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 600,
+          "description": "At most 300 characters after trimming; empty or null clears it."
+         },
+         "definition": {
+          "$ref": "#/components/schemas/CustomerSegmentRules"
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The segment's `revision` you read."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "segment": {
+        "$ref": "#/components/schemas/CustomerSegmentResource"
+       }
+      },
+      "required": [
+       "segment"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "customers.bulk_tag": {
    "operationId": "dashboard.resources.customers.bulk_tag",
    "method": "POST",
@@ -10064,6 +10550,18 @@
       "schema": {
        "type": "string",
        "minLength": 1,
+       "maxLength": 11610,
+       "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+      },
+      "required": false,
+      "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+      "name": "ids",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
        "maxLength": 40,
        "description": "Customers with this tag (any case)."
       },
@@ -10114,6 +10612,108 @@
       },
       "required": [
        "customers",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "discounts.list": {
+   "operationId": "dashboard.resources.discounts.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/discounts",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_discounts",
+    "write_discounts"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "draft",
+        "active",
+        "paused",
+        "archived"
+       ],
+       "description": "Only discounts in this status; omitted, every status (archived too)."
+      },
+      "required": false,
+      "description": "Only discounts in this status; omitted, every status (archived too).",
+      "name": "status",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "discounts": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/DiscountSummary"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "discounts",
        "nextCursor"
       ]
      }
@@ -11771,6 +12371,18 @@
       },
       "required": false,
       "name": "fulfillmentStatus",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 11610,
+       "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+      },
+      "required": false,
+      "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+      "name": "ids",
       "in": "query"
      },
      {
@@ -14567,6 +15179,18 @@
       "schema": {
        "type": "string",
        "minLength": 1,
+       "maxLength": 11610,
+       "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+      },
+      "required": false,
+      "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+      "name": "ids",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
        "maxLength": 100,
        "description": "The product with this SKU (any case)."
       },
@@ -15038,6 +15662,348 @@
     ]
    }
   },
+  "returns.approve": {
+   "operationId": "dashboard.resources.returns.approve",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/returns/{id}/approve",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "required",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 2000
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "lineId": {
+             "type": "string",
+             "minLength": 1
+            },
+            "approvedQuantity": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 99999
+            },
+            "rejectedQuantity": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 99999
+            },
+            "notes": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 2000
+            }
+           },
+           "required": [
+            "lineId",
+            "approvedQuantity",
+            "rejectedQuantity"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 50
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The return's `revision` you read; a return changed since is refused with 409 and nothing changes."
+         }
+        },
+        "required": [
+         "lines",
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "return": {
+        "$ref": "#/components/schemas/ReturnResource"
+       }
+      },
+      "required": [
+       "return"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "returns.cancel": {
+   "operationId": "dashboard.resources.returns.cancel",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/returns/{id}/cancel",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "required",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 2000
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The return's `revision` you read; a return changed since is refused with 409 and nothing changes."
+         }
+        },
+        "required": [
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "return": {
+        "$ref": "#/components/schemas/ReturnResource"
+       }
+      },
+      "required": [
+       "return"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "returns.create": {
+   "operationId": "dashboard.resources.returns.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/orders/{id}/returns",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "required",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+         },
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 2000
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "orderItemId": {
+             "type": "string",
+             "minLength": 1
+            },
+            "quantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 99999
+            },
+            "reason": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 500
+            },
+            "notes": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 2000
+            }
+           },
+           "required": [
+            "orderItemId",
+            "quantity"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 50
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The order's `revision` you read; an order changed since is refused with 409 and nothing changes."
+         }
+        },
+        "required": [
+         "reason",
+         "lines",
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "return": {
+        "$ref": "#/components/schemas/ReturnResource"
+       }
+      },
+      "required": [
+       "return"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "returns.get": {
    "operationId": "dashboard.resources.returns.get",
    "method": "GET",
@@ -15174,6 +16140,142 @@
       "required": [
        "returns",
        "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "returns.receive": {
+   "operationId": "dashboard.resources.returns.receive",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/returns/{id}/receive",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "required",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "notes": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 2000
+         },
+         "restockLocationId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 100
+         },
+         "lines": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "properties": {
+            "lineId": {
+             "type": "string",
+             "minLength": 1
+            },
+            "receivedQuantity": {
+             "type": "integer",
+             "minimum": 1,
+             "maximum": 99999
+            },
+            "restockQuantity": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 99999
+            },
+            "damagedQuantity": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 99999
+            },
+            "notes": {
+             "type": "string",
+             "nullable": true,
+             "maxLength": 2000
+            }
+           },
+           "required": [
+            "lineId",
+            "receivedQuantity",
+            "restockQuantity",
+            "damagedQuantity"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 50
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The return's `revision` you read; a return changed since is refused with 409 and nothing changes."
+         }
+        },
+        "required": [
+         "lines",
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "return": {
+        "$ref": "#/components/schemas/ReturnResource"
+       }
+      },
+      "required": [
+       "return"
       ]
      }
     },
@@ -18956,6 +20058,636 @@
     "erasedAt"
    ]
   },
+  "CustomerSegmentResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string",
+     "description": "1 to 80 characters, unique in the store (any case)."
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "definition": {
+     "$ref": "#/components/schemas/CustomerSegmentRules"
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3,
+     "description": "The store currency: `definition`'s spend (`amount_spent` minMinor and maxMinor) is in its integer minor units."
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 1,
+     "description": "Send it as `expectedRevision` to change or delete the segment; every change advances it."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "description",
+    "definition",
+    "currency",
+    "revision",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "CustomerSegmentRules": {
+   "type": "object",
+   "properties": {
+    "match": {
+     "type": "string",
+     "enum": [
+      "all",
+      "any"
+     ],
+     "default": "all"
+    },
+    "conditions": {
+     "type": "array",
+     "items": {
+      "oneOf": [
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "amount_spent"
+          ]
+         },
+         "minMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000000
+         },
+         "maxMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000000
+         }
+        },
+        "required": [
+         "field"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "orders_count"
+          ]
+         },
+         "min": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+         },
+         "max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+         }
+        },
+        "required": [
+         "field"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "last_order_date"
+          ]
+         },
+         "filter": {
+          "oneOf": [
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "within_last"
+              ]
+             },
+             "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+             }
+            },
+            "required": [
+             "op",
+             "days"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "not_within_last"
+              ]
+             },
+             "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+             }
+            },
+            "required": [
+             "op",
+             "days"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "on_or_after"
+              ]
+             },
+             "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+             }
+            },
+            "required": [
+             "op",
+             "date"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "before"
+              ]
+             },
+             "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+             }
+            },
+            "required": [
+             "op",
+             "date"
+            ],
+            "additionalProperties": false
+           }
+          ]
+         }
+        },
+        "required": [
+         "field",
+         "filter"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "first_order_date"
+          ]
+         },
+         "filter": {
+          "oneOf": [
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "within_last"
+              ]
+             },
+             "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+             }
+            },
+            "required": [
+             "op",
+             "days"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "not_within_last"
+              ]
+             },
+             "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+             }
+            },
+            "required": [
+             "op",
+             "days"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "on_or_after"
+              ]
+             },
+             "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+             }
+            },
+            "required": [
+             "op",
+             "date"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "before"
+              ]
+             },
+             "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+             }
+            },
+            "required": [
+             "op",
+             "date"
+            ],
+            "additionalProperties": false
+           }
+          ]
+         }
+        },
+        "required": [
+         "field",
+         "filter"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "customer_since"
+          ]
+         },
+         "filter": {
+          "oneOf": [
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "within_last"
+              ]
+             },
+             "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+             }
+            },
+            "required": [
+             "op",
+             "days"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "not_within_last"
+              ]
+             },
+             "days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+             }
+            },
+            "required": [
+             "op",
+             "days"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "on_or_after"
+              ]
+             },
+             "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+             }
+            },
+            "required": [
+             "op",
+             "date"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "op": {
+              "type": "string",
+              "enum": [
+               "before"
+              ]
+             },
+             "date": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+             }
+            },
+            "required": [
+             "op",
+             "date"
+            ],
+            "additionalProperties": false
+           }
+          ]
+         }
+        },
+        "required": [
+         "field",
+         "filter"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "city"
+          ]
+         },
+         "op": {
+          "type": "string",
+          "enum": [
+           "in",
+           "not_in"
+          ]
+         },
+         "ids": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "minItems": 1,
+          "maxItems": 50
+         }
+        },
+        "required": [
+         "field",
+         "op",
+         "ids"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "zone"
+          ]
+         },
+         "op": {
+          "type": "string",
+          "enum": [
+           "in",
+           "not_in"
+          ]
+         },
+         "ids": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "minItems": 1,
+          "maxItems": 50
+         }
+        },
+        "required": [
+         "field",
+         "op",
+         "ids"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "tags"
+          ]
+         },
+         "op": {
+          "type": "string",
+          "enum": [
+           "has_any",
+           "has_all",
+           "has_none"
+          ]
+         },
+         "tags": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "maxLength": 200
+          },
+          "minItems": 1,
+          "maxItems": 50
+         }
+        },
+        "required": [
+         "field",
+         "op",
+         "tags"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "marketing_consent"
+          ]
+         },
+         "channel": {
+          "type": "string",
+          "enum": [
+           "email",
+           "sms",
+           "whatsapp",
+           "push"
+          ]
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "subscribed",
+           "pending",
+           "unsubscribed",
+           "not_subscribed"
+          ]
+         }
+        },
+        "required": [
+         "field",
+         "channel",
+         "status"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "customer_type"
+          ]
+         },
+         "types": {
+          "type": "array",
+          "items": {
+           "type": "string",
+           "enum": [
+            "account",
+            "guest",
+            "merchant"
+           ]
+          },
+          "minItems": 1,
+          "maxItems": 3
+         }
+        },
+        "required": [
+         "field",
+         "types"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "object",
+        "properties": {
+         "field": {
+          "type": "string",
+          "enum": [
+           "custom_field"
+          ]
+         },
+         "definitionId": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 68
+         },
+         "op": {
+          "type": "string",
+          "enum": [
+           "equals",
+           "is_set",
+           "is_not_set"
+          ]
+         },
+         "value": {
+          "type": "string",
+          "maxLength": 500
+         }
+        },
+        "required": [
+         "field",
+         "definitionId",
+         "op"
+        ],
+        "additionalProperties": false
+       }
+      ]
+     },
+     "minItems": 1,
+     "maxItems": 12
+    }
+   },
+   "required": [
+    "conditions"
+   ],
+   "additionalProperties": false
+  },
   "DiscountResource": {
    "type": "object",
    "properties": {
@@ -19216,6 +20948,101 @@
     "conditions",
     "effects",
     "customerSegmentIds"
+   ]
+  },
+  "DiscountSummary": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "name": {
+     "type": "string",
+     "maxLength": 4000
+    },
+    "title": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "method": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "status": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "priority": {
+     "type": "integer"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "codeCount": {
+     "type": "integer"
+    },
+    "startsAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "endsAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "maxRedemptions": {
+     "type": "integer",
+     "nullable": true
+    },
+    "redemptions": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "deletedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "title",
+    "method",
+    "status",
+    "priority",
+    "revision",
+    "codeCount",
+    "startsAt",
+    "endsAt",
+    "maxRedemptions",
+    "redemptions",
+    "createdAt",
+    "updatedAt",
+    "deletedAt"
    ]
   },
   "FulfillmentResource": {

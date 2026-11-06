@@ -12,7 +12,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import type { Context, MiddlewareHandler } from "hono";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products } from "@scalius/database/schema";
 import { canViewLocationDetails, listInventoryLocations } from "@scalius/core/modules/inventory";
 import { isoTimestampSchema } from "../../schemas/timestamps";
@@ -21,6 +21,7 @@ import { MANUAL_FULFILLMENT_TYPES } from "@scalius/shared/fulfilment";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
 import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
+import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
 import { AppError } from "@scalius/core/errors";
@@ -97,6 +98,42 @@ const pageQuery = {
     .openapi({ description: "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync." }),
 };
 
+/** Records one `ids` filter names: one bound list within D1's 100 parameters. */
+export const LIST_IDS_MAX = 90;
+
+/** The ids of an `ids` filter, unique, in the order sent; null when it names none, more than 90 or an id over 128 characters. */
+export function parseListIds(value: string): string[] | null {
+  const ids = [...new Set(value.split(",").map((id) => id.trim()).filter((id) => id.length > 0))];
+  if (ids.length === 0 || ids.length > LIST_IDS_MAX || ids.some((id) => id.length > 128)) return null;
+  return ids;
+}
+
+/**
+ * `ids`: read these records (comma-separated, at most 90), still in the
+ * list's order and pages; ids that match nothing are left out. Bound as one
+ * JSON value (`inJsonArray`), however many it names.
+ */
+export const listIdsQuery = z.string().trim().min(1).max(LIST_IDS_MAX * 129)
+  .refine((value) => parseListIds(value) !== null, { message: `Send 1 to ${LIST_IDS_MAX} comma-separated ids, each 1 to 128 characters.` })
+  .optional()
+  .openapi({ description: `Only these records: up to ${LIST_IDS_MAX} comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.` });
+
+/**
+ * The list's trash filter. Beside an `ids` list it is written `+deleted_at`:
+ * without planner statistics (D1 keeps none) SQLite would otherwise walk a
+ * deleted_at-led index instead of seeking the ids.
+ */
+function trashFilter(column: SQLWrapper, trashed: boolean, ids: string | undefined): SQL {
+  if (ids === undefined) return trashed ? isNotNull(column) : isNull(column);
+  return trashed ? sql`+${column} IS NOT NULL` : sql`+${column} IS NULL`;
+}
+
+/** The `ids` filter as one condition on the list's id column (the query schema already refused a bad list). */
+function idsCondition(column: Parameters<typeof inJsonArray>[0], value: string | undefined): SQL | null {
+  const ids = value === undefined ? null : parseListIds(value);
+  return ids ? inJsonArray(column, ids) : null;
+}
+
 /** An order's fulfilments, shipments, payments or returns: read whole (in creation order) and cut into cursor pages. */
 const ORDER_CHILD_BOUND = 100;
 const orderChildQuery = z.object(boundedPageQuery(ORDER_CHILD_BOUND));
@@ -164,6 +201,7 @@ const ordersQuery = z.object({
   status: z.string().min(1).max(64).optional(),
   paymentStatus: z.string().min(1).max(64).optional(),
   fulfillmentStatus: z.string().min(1).max(64).optional(),
+  ids: listIdsQuery,
   customerId: z.string().min(1).max(128).optional(),
   orderNumber: z.coerce.number().int().positive().optional(),
   email: z.string().trim().email().max(254).optional()
@@ -193,11 +231,13 @@ app.openapi(createRoute({
   if (query.email) assertContactFilterAllowed(c, "email", "email");
   if (query.phone) assertContactFilterAllowed(c, "phone", "phone");
   const db = c.get("db");
-  const where: SQL[] = [query.trashed === "true" ? isNotNull(orders.deletedAt) : isNull(orders.deletedAt)];
+  const where: SQL[] = [trashFilter(orders.deletedAt, query.trashed === "true", query.ids)];
   if (query.updatedSince) where.push(gte(sql`${orders.updatedAt}`, seconds(query.updatedSince)));
   if (query.status) where.push(eq(orders.status, query.status as typeof orders.$inferSelect.status));
   if (query.paymentStatus) where.push(eq(orders.paymentStatus, query.paymentStatus as typeof orders.$inferSelect.paymentStatus));
   if (query.fulfillmentStatus) where.push(eq(orders.fulfillmentStatus, query.fulfillmentStatus as typeof orders.$inferSelect.fulfillmentStatus));
+  const orderIds = idsCondition(orders.id, query.ids);
+  if (orderIds) where.push(orderIds);
   if (query.customerId) where.push(eq(orders.customerId, query.customerId));
   if (query.orderNumber) where.push(eq(orders.orderNumber, query.orderNumber));
   if (query.email) where.push(sql`lower(trim(${orders.customerEmail})) = ${query.email.toLowerCase()}`);
@@ -828,6 +868,7 @@ app.openapi(createRoute({
 const productsQuery = z.object({
   ...pageQuery,
   status: z.enum(["active", "draft", "trashed"]).optional().openapi({ description: "Omit for active and draft products." }),
+  ids: listIdsQuery,
   sku: z.string().trim().min(1).max(100).optional().openapi({ description: "The product with this SKU (any case)." }),
   barcode: z.string().trim().min(1).max(50).optional().openapi({ description: "The product with a SKU of this barcode (any case)." }),
   categoryId: z.string().min(1).max(180).optional(),
@@ -850,12 +891,14 @@ app.openapi(createRoute({
   const query = c.req.valid("query");
   const db = c.get("db");
   const where: SQL[] = [];
-  if (query.status === "trashed") where.push(isNotNull(products.deletedAt));
+  if (query.status === "trashed") where.push(trashFilter(products.deletedAt, true, query.ids));
   else {
-    where.push(isNull(products.deletedAt));
+    where.push(trashFilter(products.deletedAt, false, query.ids));
     if (query.status) where.push(eq(products.isActive, query.status === "active"));
   }
   if (query.updatedSince) where.push(gte(sql`${products.updatedAt}`, seconds(query.updatedSince)));
+  const productIds = idsCondition(products.id, query.ids);
+  if (productIds) where.push(productIds);
   if (query.categoryId) where.push(eq(products.categoryId, query.categoryId));
   if (query.brandId) where.push(eq(products.brandId, query.brandId));
   if (query.sku) {
@@ -957,6 +1000,7 @@ const customersQuery = z.object({
     .openapi({ description: "The customer's email, matched whole. Needs read_customer_emails." }),
   phone: z.string().trim().regex(/^\+[1-9]\d{6,14}$/u, "Use the E.164 number, such as +8801712345678.").optional()
     .openapi({ description: "The customer's phone in E.164, matched whole. Needs read_customer_phones." }),
+  ids: listIdsQuery,
   tag: z.string().trim().min(1).max(40).optional().openapi({ description: "Customers with this tag (any case)." }),
   trashed: z.enum(["true", "false"]).optional().openapi({ description: "true lists trashed and merged customers instead." }),
 });
@@ -978,10 +1022,12 @@ app.openapi(createRoute({
   if (query.email) assertContactFilterAllowed(c, "email", "email");
   if (query.phone) assertContactFilterAllowed(c, "phone", "phone");
   const db = c.get("db");
-  const where: SQL[] = [query.trashed === "true" ? isNotNull(customers.deletedAt) : isNull(customers.deletedAt)];
+  const where: SQL[] = [trashFilter(customers.deletedAt, query.trashed === "true", query.ids)];
   if (query.updatedSince) where.push(gte(sql`${customers.updatedAt}`, seconds(query.updatedSince)));
   if (query.email) where.push(inArray(customers.email, [...new Set([query.email, query.email.toLowerCase()])]));
   if (query.phone) where.push(sql`${customers.phone} = ${query.phone}`);
+  const customerIds = idsCondition(customers.id, query.ids);
+  if (customerIds) where.push(customerIds);
   if (query.tag) {
     where.push(inArray(customers.id, db.select({ id: customerTagLinks.customerId }).from(customerTagLinks)
       .where(eq(customerTagLinks.tag, query.tag.toLowerCase().replace(/\s+/gu, " ")))));

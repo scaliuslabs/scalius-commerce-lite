@@ -85,7 +85,11 @@ export const PLUGIN_SCOPES = {
   write_inventory: { rbac: [...INVENTORY_READ, "products.adjust_stock", "inventory.manage"], staff: "products.adjust_stock" },
   /** Orders, their lines, payments, shipments, returns and timeline; abandoned checkouts. Contact fields need the protected data scopes. */
   read_orders: { rbac: ["orders.view"], staff: "orders.view" },
-  /** Create orders, change their status and details, add timeline notes, set order custom fields. */
+  /**
+   * Create orders, change their status and details, add timeline notes, set
+   * order custom fields; request, approve, receive and cancel item returns
+   * (receiving restocks what comes back, through the stock ledger).
+   */
   write_orders: { rbac: ["orders.view", "orders.create", "orders.edit", "orders.change_status"], staff: "orders.edit" },
   /**
    * Record money received against an invoice (pay-later) order: a bank
@@ -117,9 +121,9 @@ export const PLUGIN_SCOPES = {
   write_refunds: { rbac: ["orders.view", "orders.refund"], staff: "orders.refund", sensitive: true },
   /** Hand over order lines, create and void fulfilments and courier shipments. */
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
-  /** Customers, their tags and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
+  /** Customers, their tags, saved segments and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
   read_customers: { rbac: ["customers.view"], staff: "customers.view" },
-  /** Create and edit customers, their tags and custom fields. */
+  /** Create and edit customers, their tags and custom fields; save, change and delete customer segments. */
   write_customers: { rbac: ["customers.view", "customers.create", "customers.edit"], staff: "customers.edit" },
   /** Send marketing email and SMS to customers who agreed to receive it. The platform resolves the address; the app never sees it. */
   write_marketing: { rbac: ["marketing.send"], staff: "marketing.send" },
