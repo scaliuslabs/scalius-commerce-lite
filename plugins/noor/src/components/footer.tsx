@@ -22,11 +22,11 @@ type FooterStore = FooterProps<FooterSettings>["data"]["store"];
 type Logo = NonNullable<FooterStore["logo"]>;
 
 /**
- * The footer's logo for the surface it sits on in each scheme. A dark surface
- * takes the store's logo for dark pages, the one logo made for dark; without
- * one, its logo is knocked out in white, as the footer always drew it, since
- * a footer or header logo may be dark. The dark footer (`ink`, the store's
- * ink) is dark in both schemes. The soft and plain footers follow the page:
+ * The footer's logo for the surface it sits on in each scheme. The dark
+ * footer (`ink`, the store's ink) is dark in both schemes: the merchant's own
+ * footer logo wins there (they chose it for the footer, drawn as it is), then
+ * the store's logo for dark pages, then the main logo knocked out in white,
+ * since it may be dark. The soft and plain footers follow the page:
  * light with the footer logo (the header's when there is none), dark while
  * the store paints its dark colours. `dark` is the image dark pages show
  * instead, set only when it differs; `knockout` names where the white
@@ -36,8 +36,8 @@ export function footerLogos(store: Pick<FooterStore, "logo" | "darkLogo" | "foot
   // The merchant's own footer logo, or null: then the header's logo stands in.
   const own = store.footerLogo;
   if (tone === "ink") {
-    const light = store.darkLogo ?? own ?? store.logo;
-    return { light, dark: null, knockout: light !== null && light !== store.darkLogo ? "always" : null };
+    const light = own ?? store.darkLogo ?? store.logo;
+    return { light, dark: null, knockout: !own && !store.darkLogo && light ? "always" : null };
   }
   const light = own ?? store.logo;
   if (store.darkLogo) return { light, dark: store.darkLogo.url !== light?.url ? store.darkLogo : null, knockout: null };

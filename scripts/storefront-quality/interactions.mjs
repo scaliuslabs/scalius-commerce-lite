@@ -1,7 +1,7 @@
 /** Invalid audit states cannot be accepted as measurements of the intended UI. */
 export const REQUIRED_STATE_RULES = new Set(["interaction", "focus-missing"]);
 const TIMEOUT = 5_000;
-const selectorOf = (action) => action.click ?? action.select ?? action.type ?? action.expectInside ?? action.expectAboveFold ?? action.expectSameRow?.join(" + ");
+const selectorOf = (action) => action.click ?? action.select ?? action.type ?? action.expectInside ?? action.expectAboveFold ?? action.expectSameRow?.join(" + ") ?? action.expectTouching?.join(" over ");
 
 /** The first visible match and its box. */
 async function box(page, selector) {
@@ -31,6 +31,15 @@ async function checkLayout(page, action) {
     if (!nested || !within) throw new Error(`${action.expectInside} sits outside ${action.container} (${nested ? "its box" : "its element"}).`);
     return;
   }
+  if (action.expectTouching !== undefined) {
+    // The upper one reaches the lower one (they meet or overlap): nothing of the page shows between them.
+    const [upper, lower] = action.expectTouching;
+    const a = (await box(page, upper)).rect;
+    const b = (await box(page, lower)).rect;
+    const gap = b.y - (a.y + a.height);
+    if (gap > 0.5) throw new Error(`${upper} ends ${Math.round(gap)}px above ${lower}: the page shows between them.`);
+    return;
+  }
   const [first, second] = action.expectSameRow;
   const a = (await box(page, first)).rect;
   const b = (await box(page, second)).rect;
@@ -55,7 +64,7 @@ export async function runInteractions(page, actions, width) {
       continue;
     }
     try {
-      if (action.expectInside !== undefined || action.expectSameRow !== undefined || action.expectAboveFold !== undefined) {
+      if (action.expectInside !== undefined || action.expectSameRow !== undefined || action.expectAboveFold !== undefined || action.expectTouching !== undefined) {
         await checkLayout(page, action);
         steps.push({ index, selector, status: "passed" });
         continue;

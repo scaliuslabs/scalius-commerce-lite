@@ -114,6 +114,8 @@ export type GalleryInteraction = {
   | { expectSameRow: [string, string] }
   /** Layout: the first visible match starts within the first screen (the page at its top), or within `fold` px (a short phone's screen). */
   | { expectAboveFold: string; fold?: number }
+  /** Layout: the first visible match of the first reaches the second (they meet or overlap; no gap shows the page). */
+  | { expectTouching: [string, string] }
 );
 
 export interface GalleryEntry {
@@ -408,6 +410,15 @@ function listingEntries(): GalleryEntry[] {
       { expectSameRow: ['[data-sx-embed="filters"] .catalog-facet:first-of-type > summary', '[data-sx-embed="filters"] .catalog-facet:nth-of-type(2) > summary'] },
       // A short phone's first screen (iPhone SE, 568px).
       { expectAboveFold: ".gallery-listing-results > li", fold: 568 },
+    ],
+  });
+  // Its open dropdown on a phone: a modal sheet whose rows reach the apply bar, with no gap showing the listing through.
+  entries.push({
+    id: "listing-skin-filters-sheet-phone", family: "listing", title: "A listing skin's filter dropdown as a phone sheet", page: "category",
+    theme: skinTheme, focus: MAIN, scenario: { listingApp: true }, widths: [320, 360, 390],
+    interact: [
+      { click: '[data-sx-embed="filters"] .catalog-facet:first-of-type > summary', expectVisible: '[data-sx-embed="filters"] .catalog-facet[open] > .catalog-facet-body', maxWidth: 1024 },
+      { expectTouching: ['[data-sx-embed="filters"] .catalog-facet[open] > .catalog-facet-body', '[data-sx-embed="filters"] [data-catalog-apply-bar]'], maxWidth: 1024 },
     ],
   });
   for (const listing of ["empty", "small"] as const) {

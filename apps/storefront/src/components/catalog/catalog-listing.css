@@ -1250,15 +1250,19 @@
     white-space: nowrap;
   }
 
-  /* The open dropdown: a sheet over the page, the apply bar under it. */
+  /* The open dropdown: a sheet over the page reaching the screen's bottom
+     edge, the apply bar laid over its foot. The sheet keeps room for the bar
+     under its rows, so no gap opens between them whatever the bar's height
+     (a safe-area inset, a second button); it once floated 5.25rem up and the
+     listing showed through below it. */
   .catalog-filter-form[data-placement="bar"][data-inline] .catalog-facet[open] > .catalog-facet-body {
     position: fixed;
     inset-inline: 0;
-    bottom: var(--catalog-apply-bar, 5.25rem);
+    bottom: 0;
     z-index: 60;
-    max-height: min(60vh, 28rem);
+    max-height: min(70vh, 34rem);
     overflow-y: auto;
-    padding: 1rem;
+    padding: 1rem 1rem calc(6.5rem + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border);
     border-radius: var(--radius) var(--radius) 0 0;
     background: var(--background);
@@ -1273,7 +1277,7 @@
     position: fixed;
     inset-inline: 0;
     bottom: 0;
-    z-index: 60;
+    z-index: 61;
   }
 
   .catalog-filter-form[data-placement="bar"][data-inline]:has(.catalog-facet[open])::before {
