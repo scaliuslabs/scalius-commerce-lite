@@ -5,9 +5,9 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { buyerUiBlockSchema, checkoutAttributesSchema, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
-import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
-import { isPurchaseOptionId } from "@scalius/shared/plugins/ids";
-import { normalizeCartLinePurchaseOption, type CartLinePurchaseOption } from "../cart/purchase-option";
+import { LINE_PROPERTY_INPUT_LIMITS, normalizeLinePurchaseOptions } from "@scalius/shared/line-properties";
+import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
+import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
 import { GIFT_CARD_HANDLE_PATTERN, MAX_GIFT_CARDS_PER_ORDER } from "./gift-cards";
 import {
   MAX_CODE_LENGTH,
@@ -78,8 +78,8 @@ export interface TaxQuoteRequestItem {
   variantLabel?: string;
   /** Buyer inputs (body only, never a URL). */
   properties?: Array<{ key: string; value: string }>;
-  /** An app's purchase option for the line (`<app id>.<key>`); absent: one-time. */
-  purchaseOption?: string;
+  /** The apps' purchase options for the line (`<app id>.<key>`, one per app, sorted); absent: one-time. */
+  purchaseOptions?: string[];
 }
 
 export interface TaxQuoteRequest {
@@ -138,8 +138,8 @@ export interface TaxQuoteItem {
   propertiesPriceMinor: number;
   /** Apps' add-ons to each unit, in `unitPrice` ("Add-on: …"); never buyer inputs. */
   adjustments?: TaxQuoteItemProperty[];
-  /** The app's purchase option the line is bought with (a subscription); absent: one-time. */
-  purchaseOption?: CartLinePurchaseOption;
+  /** The apps' purchase options the line is bought with (a subscription, a protection plan), sorted by id; absent: one-time. */
+  purchaseOptions?: CartLinePurchaseOption[];
   propertiesHash: string | null;
   /** The line's share of the discounts in minor units, where the quote names it; a line it pays in full reads free. */
   discountMinor?: number;
@@ -270,7 +270,7 @@ export function parseRequestProperties(value: unknown): Array<{ key: string; val
     if (
       !isRecord(entry) ||
       typeof entry.key !== "string" ||
-      !PROPERTY_KEY_PATTERN.test(entry.key) ||
+      !(PROPERTY_KEY_PATTERN.test(entry.key) || isAppScopedKey(entry.key)) ||
       typeof entry.value !== "string" ||
       entry.value.length > LINE_PROPERTY_INPUT_LIMITS.valueLength
     ) {
@@ -281,11 +281,14 @@ export function parseRequestProperties(value: unknown): Array<{ key: string; val
   return properties.length > 0 ? properties : undefined;
 }
 
-/** A line's purchase option as the API accepts it (`<app id>.<key>`); absent or null: one-time. */
-export function parseRequestPurchaseOption(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!isPurchaseOptionId(value)) fail();
-  return value;
+/**
+ * A line's purchase options as the API accepts them (`<app id>.<key>`, at
+ * most one per app), sorted; absent, null or empty: one-time (undefined).
+ */
+export function parseRequestPurchaseOptions(value: unknown): string[] | undefined {
+  const normalized = normalizeLinePurchaseOptions(value);
+  if (!normalized.ok) fail();
+  return normalized.options.length > 0 ? normalized.options : undefined;
 }
 
 function parseRequestItem(value: unknown): TaxQuoteRequestItem {
@@ -296,7 +299,7 @@ function parseRequestItem(value: unknown): TaxQuoteRequestItem {
   const variantId = requiredString(value.variantId, MAX_ID_LENGTH);
   if (variantId === "default") fail();
   const properties = parseRequestProperties(value.properties);
-  const purchaseOption = parseRequestPurchaseOption(value.purchaseOption);
+  const purchaseOptions = parseRequestPurchaseOptions(value.purchaseOptions);
 
   return {
     ...(cartKey ? { cartKey } : {}),
@@ -306,7 +309,7 @@ function parseRequestItem(value: unknown): TaxQuoteRequestItem {
     ...(productName ? { productName } : {}),
     ...(variantLabel ? { variantLabel } : {}),
     ...(properties ? { properties } : {}),
-    ...(purchaseOption ? { purchaseOption } : {}),
+    ...(purchaseOptions ? { purchaseOptions } : {}),
   };
 }
 
@@ -418,10 +421,10 @@ function adjustmentsOf(value: unknown): { adjustments?: TaxQuoteItemProperty[] }
   return adjustments.length > 0 ? { adjustments } : {};
 }
 
-function purchaseOptionOf(value: unknown): { purchaseOption?: CartLinePurchaseOption } {
-  const option = normalizeCartLinePurchaseOption(value);
-  if (option === null) fail();
-  return option ? { purchaseOption: option } : {};
+function purchaseOptionsOf(value: unknown): { purchaseOptions?: CartLinePurchaseOption[] } {
+  const options = normalizeCartLinePurchaseOptions(value);
+  if (options === null) fail();
+  return options.length > 0 ? { purchaseOptions: options } : {};
 }
 
 function parseQuoteItem(value: unknown): TaxQuoteItem {
@@ -444,7 +447,7 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
     properties: properties.map((property) => {
       if (!isRecord(property)) fail();
       return {
-        key: requiredString(property.key, 40),
+        key: requiredString(property.key, APP_SCOPED_KEY_MAX_LENGTH),
         label: requiredString(property.label, 120),
         value: nullableDescription(property.value, LINE_PROPERTY_INPUT_LIMITS.valueLength) ?? fail(),
         displayValue: nullableDescription(property.displayValue, LINE_PROPERTY_INPUT_LIMITS.valueLength) ?? fail(),
@@ -455,7 +458,7 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
       ? 0
       : nonNegativeSafeInteger(value.propertiesPriceMinor),
     ...adjustmentsOf(value.adjustments),
-    ...purchaseOptionOf(value.purchaseOption),
+    ...purchaseOptionsOf(value.purchaseOptions),
     propertiesHash: typeof value.propertiesHash === "string" ? value.propertiesHash : null,
     ...(value.discountMinor === undefined ? {} : { discountMinor: nonNegativeSafeInteger(value.discountMinor) }),
   };

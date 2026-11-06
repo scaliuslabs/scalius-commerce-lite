@@ -26,6 +26,7 @@ import {
 } from "@/store/cart";
 import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
 import { writeCartLineEdit } from "./line-edit";
+import { purchaseOptionsField } from "./purchase-option";
 import { cartLineInputsId, renderCartLineProperties } from "./line-properties-view";
 import type {
   CartRuleError,
@@ -545,7 +546,7 @@ function cartValidationPayload(items: Record<string, VariantCartItem>) {
       productName: item.name,
       variantLabel: cartItemVariantLabel(item),
       ...(properties.length > 0 ? { properties } : {}),
-      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
+      ...purchaseOptionsField(item),
     };
   });
 }
@@ -1550,9 +1551,9 @@ function renderCartLine(
   ));
   const variantInfo = options
     .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
-    .join("") + (item.purchaseOption
-      ? `<span class="block font-medium text-foreground" data-cart-line-purchase-option>${escapeHtml(item.purchaseOption.title)}</span>`
-      : "") + renderCartLineProperties(item, {
+    .join("") + (item.purchaseOptions ?? [])
+      .map((option) => `<span class="block font-medium text-foreground" data-cart-line-purchase-option>${escapeHtml(option.title)}</span>`)
+      .join("") + renderCartLineProperties(item, {
       surchargeText: copy.customizationSurchargeText,
       editText: copy.editLineText,
       editLabelText: copy.editLineLabelText,
@@ -1900,7 +1901,7 @@ export async function initCartFunctionality() {
         variantId: item.variantId,
         quantity: item.quantity,
         properties: cartLinePropertyInputs(item),
-        ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
+        ...purchaseOptionsField(item),
       });
     }
     return true;

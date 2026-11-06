@@ -485,9 +485,9 @@ function appendOrderItemRows(
     if (item.fulfillmentType !== "digital" && item.fulfillmentType !== "service" && shipsFreeLines.has(item.cartKey)) {
       appendTextElement(itemCopy, "p", "text-xs font-medium leading-5 text-foreground", checkoutCopy.cartLineShipsFreeText);
     }
-    // How the line is bought, when an app's option ("Subscribe and save").
-    if (item.purchaseOption) {
-      appendTextElement(itemCopy, "p", "break-words text-xs font-medium leading-5 text-foreground", item.purchaseOption.title);
+    // How the line is bought, when apps' options ("Subscribe and save", a protection plan).
+    for (const option of item.purchaseOptions ?? []) {
+      appendTextElement(itemCopy, "p", "break-words text-xs font-medium leading-5 text-foreground", option.title);
     }
     // Buyer inputs as the order will keep them: "Engraving: Anika (+৳200)",
     // then the apps' add-ons: "Add-on: Gift wrap (+৳50)".

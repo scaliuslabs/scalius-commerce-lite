@@ -8,7 +8,7 @@ import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
 import type { CartValidationResult } from "@/lib/api/orders";
 import { currentPresence } from "@/lib/presence-url";
 import { accountCopy } from "@/lib/account-copy";
-import { readLinePurchaseOption } from "@scalius/shared/line-properties";
+import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
 
 /** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
 const GONE = new Set(["product_unavailable", "variant_required", "variant_unavailable", "variant_mismatch"]);
@@ -23,22 +23,25 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: lines.map((item, index) => ({
-          cartKey: String(index),
-          productId: item.productId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: item.price,
-          productName: item.productName,
-          variantLabel: item.variantLabel,
-          // The same buyer inputs again; the store re-checks and re-prices them.
-          // Keys starting "_" are the platform's (an app bundle), never inputs.
-          ...(item.properties?.some(({ key }) => !key.startsWith("_"))
-            ? { properties: item.properties.filter(({ key }) => !key.startsWith("_")).map(({ key, value }) => ({ key, value })) }
-            : {}),
-          // Bought under an app's option (a subscription): again under it, if it is still offered.
-          ...(readLinePurchaseOption(item.properties ?? null) ? { purchaseOption: readLinePurchaseOption(item.properties ?? null)! } : {}),
-        })),
+        items: lines.map((item, index) => {
+          const purchaseOptions = readLinePurchaseOptions(item.properties ?? null);
+          return {
+            cartKey: String(index),
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.price,
+            productName: item.productName,
+            variantLabel: item.variantLabel,
+            // The same buyer inputs again (the product's and the apps'); the store re-checks and re-prices them.
+            // Keys starting "_" are the platform's (an app bundle), never inputs.
+            ...(item.properties?.some(({ key }) => !key.startsWith("_"))
+              ? { properties: item.properties.filter(({ key }) => !key.startsWith("_")).map(({ key, value }) => ({ key, value })) }
+              : {}),
+            // Bought under apps' options (a subscription, a protection plan): again under them, if they are still offered.
+            ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
+          };
+        }),
         // Today's price in the page's market (MARKETS-DESIGN D5).
         ...(currentPresence() ? { presence: currentPresence() } : {}),
       }),
@@ -66,7 +69,7 @@ export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineF
       imageMediaId: line.productImageMediaId ?? undefined,
       options: line.variantLabel ? [{ name: accountCopy().format.variant, label: line.variantLabel }] : undefined,
       freeDelivery: line.freeDelivery,
-      ...(line.purchaseOption ? { purchaseOption: line.purchaseOption } : {}),
+      ...(line.purchaseOptions?.length ? { purchaseOptions: line.purchaseOptions } : {}),
       ...(line.fulfillmentKind ? { fulfillmentKind: line.fulfillmentKind } : {}),
       ...(line.properties?.length
         ? {

@@ -194,11 +194,20 @@ export interface LayoutData {
     signIn: Array<{ id: string; name: string }>;
   };
   /**
-   * Ways to buy a line the active apps offer (a subscription), the ones
-   * checkout accepts: the buy form lists them beside a one-time purchase.
-   * Absent from an older API: none.
+   * Ways to buy a line the active apps offer (a subscription, a protection
+   * plan), the ones checkout accepts: the buy form lists each app's beside a
+   * one-time purchase, and a line carries at most one of each app. `appName`
+   * names the app's group when several apps offer options (absent from an
+   * older API). Absent from an older API: none.
    */
-  purchaseOptions?: Array<{ id: string; title: string; description: string | null }>;
+  purchaseOptions?: Array<{ id: string; title: string; description: string | null; appName?: string }>;
+  /**
+   * Buyer inputs the active apps ask on each line (manifest
+   * `checkout.lineInputs`), the ones checkout accepts: the buy form draws
+   * them after the product's own (`withAppLineInputs`). Absent from an older
+   * API: none.
+   */
+  lineInputs?: import("@scalius/shared/line-properties").AppLineInputs[];
   /**
    * Every active market with its countries and subfolder presences (backup
    * first): hreflang, the market selector and the presence a page renders.

@@ -21,7 +21,8 @@ export interface IslandStateSource {
   summary: Element;
   selected(): Variant | null;
   quantity(): number;
-  option(): { id: string } | null;
+  /** The chosen apps' options, one per app, sorted by id. */
+  options(): ReadonlyArray<{ id: string }>;
   stock(variants: Variant[]): { canPurchaseAny: boolean };
 }
 
@@ -30,11 +31,14 @@ export function islandState(source: IslandStateSource): () => void {
   const { state } = source;
   return () => {
     const exact = source.selected();
+    const options = source.options().map(({ id }) => id);
     const detail: StorefrontProductState = {
       variantId: exact?.id ?? null,
       quantity: source.quantity(),
       inputs: Object.fromEntries((state.buyerInputs?.values() ?? []).map(({ key, value }) => [key, value])),
-      purchaseOption: source.option()?.id ?? null,
+      // `purchaseOption` is the first by id, for islands built before a line had one option per app.
+      purchaseOption: options[0] ?? null,
+      purchaseOptions: options,
       available: Boolean(exact) && !state.purchaseBlocked && source.stock([exact!]).canPurchaseAny,
       busy: state.adding,
       error: state.error,

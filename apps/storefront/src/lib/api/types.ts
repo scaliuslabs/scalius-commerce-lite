@@ -381,6 +381,12 @@ export interface ProductCustomizationField {
   price: number;
   priceMinor: number;
   options: Array<{ value: string; label: string; price: number; priceMinor: number }>;
+  /**
+   * The app that asks for it (an app's line input, manifest
+   * `checkout.lineInputs`; its key is then `<app id>.<key>`). Absent for the
+   * product's own inputs. The storefront adds these (`productBuyerInputFields`).
+   */
+  appId?: string;
 }
 
 export interface ProductCustomization {

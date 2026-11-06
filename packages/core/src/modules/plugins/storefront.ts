@@ -47,6 +47,8 @@ export interface PluginStorefrontPurchaseOption {
   id: string;
   title: string;
   description: string | null;
+  /** The app's name (its manifest `name`): the buy form's legend for its options beside another app's. */
+  appName: string;
 }
 
 /**
@@ -64,7 +66,7 @@ export function activePluginPurchaseOptions(installations: Iterable<PluginInstal
       || manifest.providers.some((provider) => provider.kind === "payment");
     if (!readByCheckout) continue;
     for (const option of manifest.checkout?.purchaseOptions ?? []) {
-      options.push({ id: purchaseOptionId(pluginId, option.key), title: option.title, description: option.description ?? null });
+      options.push({ id: purchaseOptionId(pluginId, option.key), title: option.title, description: option.description ?? null, appName: manifest.name });
     }
   }
   return options;

@@ -76,10 +76,10 @@ export function normalizeCartItemOptions(
 export function cartLineName(item: {
   name: string;
   options?: unknown;
-  purchaseOption?: { title: string } | null;
+  purchaseOptions?: ReadonlyArray<{ title: string }> | null;
 }): string {
   const parts = (normalizeCartItemOptions(item.options) ?? []).map((option) => option.label);
-  if (item.purchaseOption?.title) parts.push(item.purchaseOption.title);
+  for (const option of item.purchaseOptions ?? []) if (option.title) parts.push(option.title);
   return parts.length > 0 ? `${item.name} (${parts.join(", ")})` : item.name;
 }
 

@@ -49,6 +49,7 @@ import type {
   FooterMenu,
   NavigationItem,
   Product,
+  ProductCustomizationField,
   ProductMedia,
   ProductOptionDefinition,
   ProductVariant,
@@ -456,6 +457,8 @@ export function productPageData(input: {
   page: StorefrontPageMoney;
   /** The page's checkout-language copy: the warranty row's words (English without it). */
   warrantyCopy?: Partial<CheckoutLanguageData>;
+  /** The buy form's buyer inputs (`productBuyerInputFields`: the product's, then the apps' line inputs); the product's own without it. */
+  buyerInputs?: readonly ProductCustomizationField[];
 }): StorefrontProductPage {
   const { product, page } = input;
   // Each SKU's effective warranty, as the buy form's warranty row reads it
@@ -529,7 +532,7 @@ export function productPageData(input: {
       warranties,
       fields: storefrontFieldValues(product.customFields, page),
       breadcrumbs: input.breadcrumbs,
-      buyerInputs: (product.customization?.fields ?? []).map((field) => ({
+      buyerInputs: (input.buyerInputs ?? product.customization?.fields ?? []).map((field) => ({
         key: field.key,
         type: field.type,
         label: field.label,

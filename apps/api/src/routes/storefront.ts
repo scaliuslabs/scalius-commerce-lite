@@ -440,6 +440,7 @@ const layoutDataSchema = z.object({
     id: z.string().openapi({ description: "`<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app)." }),
     title: z.string(),
     description: z.string().nullable(),
+    appName: z.string().optional().openapi({ description: "The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options." }),
   })).optional().openapi({
     description: "Ways to buy a line the active apps offer (`checkout.purchaseOptions`), as checkout accepts them. The buy form lists each app's options beside a one-time purchase; a line carries at most one per app.",
   }),

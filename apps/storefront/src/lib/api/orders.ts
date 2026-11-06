@@ -90,8 +90,8 @@ export type CartValidationRequestItem = {
   variantLabel?: string | null;
   /** Buyer inputs, body only (never a URL). */
   properties?: Array<{ key: string; value: string }>;
-  /** An app's purchase option for the line (`<app id>.<key>`); absent: one-time. */
-  purchaseOption?: string;
+  /** The apps' purchase options for the line (`<app id>.<key>`, one per app, sorted); absent: one-time. */
+  purchaseOptions?: string[];
 };
 
 export type CartValidationItem = {
@@ -110,8 +110,8 @@ export type CartValidationItem = {
   properties?: OrderLineProperty[];
   /** Apps' add-ons to each unit, in `unitPrice` ("Add-on: …"); never sent back. */
   adjustments?: OrderLineProperty[];
-  /** The app's purchase option the line is bought with, and its title. */
-  purchaseOption?: { id: string; title: string };
+  /** The apps' purchase options the line is bought with, sorted by id, and their titles. */
+  purchaseOptions?: Array<{ id: string; title: string }>;
   /** Canonical identity hash (inputs, then purchase option) for the v3 line key; "none" without either. */
   propertiesHash?: string;
   fulfillmentKind?: FulfillmentKind;

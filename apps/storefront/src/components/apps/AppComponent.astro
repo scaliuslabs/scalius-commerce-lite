@@ -7,8 +7,13 @@
 // grids and sticky headers lay out as the app wrote them. Each embed renders
 // the store's own component in place, as the page's `embeds` say
 // (lib/extensions/embeds.ts); one the page gives no renderer renders nothing.
+// The app's line inputs (manifest `checkout.lineInputs`) go on the wrapper
+// for its islands' `addLine` (scripts/app-components.ts): app markup cannot
+// carry a `data-sx-*` attribute, so only the host writes it.
 import type { AppMarkup } from "@/lib/extensions";
 import type { EmbedRenderers } from "@/lib/extensions/embeds";
+import { getLayoutData } from "@/lib/api/storefront";
+import { getRuntime } from "@/lib/api/runtime";
 
 interface Props {
   markup: AppMarkup;
@@ -18,6 +23,8 @@ interface Props {
 }
 
 const { markup, embeds = {}, editorMark } = Astro.props;
+const lineInputs = (getRuntime() ? await getLayoutData() : null)?.lineInputs
+  ?.find((app) => app.appId === markup.pluginId)?.inputs ?? [];
 type AnyComponent = (props: Record<string, unknown>) => unknown;
 const parts = markup.parts.map((part) => {
   if (part.kind === "html") return part;
@@ -26,7 +33,7 @@ const parts = markup.parts.map((part) => {
 });
 ---
 
-<div class="contents" data-sx-app={markup.pluginId} data-sx-base={markup.base} data-theme-section-id={editorMark}>
+<div class="contents" data-sx-app={markup.pluginId} data-sx-base={markup.base} data-sx-line-inputs={lineInputs.length > 0 ? JSON.stringify(lineInputs) : undefined} data-theme-section-id={editorMark}>
   {parts.map((part) => part.kind === "html"
     ? <Fragment set:html={part.html} />
     : part.Embed && <div class="contents" data-sx-embed={part.embed}><part.Embed {...part.props} /></div>)}

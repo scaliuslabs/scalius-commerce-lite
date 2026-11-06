@@ -30,7 +30,7 @@ import { THEME_EDITOR_MARKS, themeEditorModuleMark } from "@scalius/shared/theme
 import TemplateSections from "@/components/homepage/TemplateSections.astro";
 import { templateSectionData } from "@/lib/template-sections";
 import { buildDeliveryFacts, productFulfilment, shippingMethodsForProfile, shippingMethodsForUnitPrice } from "@/lib/delivery-facts";
-import { resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
+import { productBuyerInputFields, resolveProductPageCopy } from "@/components/product/lib/buyer-inputs";
 import { formatMoney } from "@/lib/currency";
 import { localizedPaths } from "@/lib/localized-paths";
 import Layout from "@/layouts/Layout.astro";
@@ -261,6 +261,7 @@ const quickBuyNoticeByError: Record<string, string> = {
   quantity_unavailable: productWords.quickBuy.quantityUnavailable,
   price_changed: productWords.quickBuy.priceChanged,
   purchase_option_unavailable: productWords.quickBuy.purchaseOptionUnavailable,
+  purchase_options_conflict: productWords.quickBuy.purchaseOptionsConflict,
   validation_unavailable: productWords.quickBuy.validationUnavailable,
   processing_failed: productWords.quickBuy.processingFailed,
 };
@@ -522,6 +523,8 @@ const productPageProjection = (): StorefrontProductPage => pageProjection ??= pr
   variantPrice: getVariantSchemaPrice,
   page: { currencyCode, currencySymbol },
   warrantyCopy: productPageCopy,
+  // The form's inputs: the product's, then the apps' line inputs shown on it.
+  buyerInputs: productBuyerInputFields(product, layoutData.lineInputs),
 });
 const productMainSkin = await appSkin(Astro.locals, Astro.url, "product_main");
 const productMainMarkup = productMainSkin

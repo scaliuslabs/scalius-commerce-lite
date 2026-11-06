@@ -1,9 +1,11 @@
 import { buyerApiErrorText } from "../buyer-api-errors";
 // One line the buyer is adding, checked by the store before it joins the
-// cart. A line bought with an app's purchase option (a subscription) is
-// priced by that app at checkout, so the product page's price is only the
-// first guess: when the store's only objection is the price, the line is
-// checked once more at the price the store answered, and that is its price.
+// cart. A line bought with apps' purchase options (a subscription), or
+// carrying an app's line inputs (a gift message it charges for), is priced
+// by those apps at checkout, so the product page's price is only the first
+// guess: when the store's only objection is the price, the line is checked
+// once more at the price the store answered, and that is its price.
+import { isAppScopedKey } from "@scalius/shared/plugins/ids";
 import type {
   CartValidationItem,
   CartValidationRequestItem,
@@ -13,12 +15,17 @@ import { currentPresence } from "@/lib/presence-url";
 
 export type CartLineValidator = (items: CartValidationRequestItem[]) => Promise<CartValidationResult | null>;
 
+/** The line is priced by apps at checkout: it has their purchase options or line inputs. */
+export function appPricedLine(item: Pick<CartValidationRequestItem, "purchaseOptions" | "properties">): boolean {
+  return (item.purchaseOptions?.length ?? 0) > 0 || (item.properties ?? []).some(({ key }) => isAppScopedKey(key));
+}
+
 export async function validateNewCartLine(
   validate: CartLineValidator,
   item: CartValidationRequestItem,
 ): Promise<CartValidationResult | null> {
   const first = await validate([item]);
-  if (!first || first.valid || !item.purchaseOption || first.issues.length !== 1) return first;
+  if (!first || first.valid || !appPricedLine(item) || first.issues.length !== 1) return first;
   const [issue] = first.issues;
   if (issue?.code !== "price_changed" || typeof issue.currentPrice !== "number") return first;
   return validate([{ ...item, price: issue.currentPrice }]);
