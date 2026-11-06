@@ -68,11 +68,12 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // commands, each keyed by the required Idempotency-Key (the command's own
   // durable key derives from it) under the revision it was based on (the
   // order's for a request, the return's after). Receiving restocks through
-  // the stock ledger; cancelling closes the request, so agents confirm it.
+  // the stock ledger. Cancelling closes a request as `orders.set_status`
+  // closes an order (a write), so write_orders stays a write scope.
   "dashboard.resources.returns.create": returnCommand(),
   "dashboard.resources.returns.approve": returnCommand(),
   "dashboard.resources.returns.receive": returnCommand(),
-  "dashboard.resources.returns.cancel": returnCommand({ risk: "destructive" }),
+  "dashboard.resources.returns.cancel": returnCommand(),
   // Discounts as their webhooks carry them (routes/admin/resources-discounts.ts).
   "dashboard.resources.discounts.list": { uncurated: true },
   // Saved customer segments (routes/admin/resources-customer-segments.ts):
@@ -211,13 +212,12 @@ function bulkRun(overrides: Partial<OperationRegistryEntry> = {}): OperationRegi
   };
 }
 
-function returnCommand(overrides: Partial<OperationRegistryEntry> = {}): OperationRegistryEntry {
+function returnCommand(): OperationRegistryEntry {
   return {
     idempotency: "required",
     revision: "required",
     batch: "forbidden",
     uncurated: true,
-    ...overrides,
   };
 }
 

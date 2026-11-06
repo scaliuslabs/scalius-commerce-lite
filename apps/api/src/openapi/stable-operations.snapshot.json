@@ -15787,7 +15787,7 @@
    "operationId": "dashboard.resources.returns.cancel",
    "method": "POST",
    "path": "/api/v1/admin/resources/returns/{id}/cancel",
-   "risk": "destructive",
+   "risk": "write",
    "idempotency": "required",
    "revision": "required",
    "scopes": [

@@ -112141,7 +112141,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "required",
           "revision": "required",
@@ -112153,7 +112153,7 @@
           "oneTimeSecretOutput": false,
           "when": "Use when an app cancels an item return before any of it was received.",
           "dryRun": "none",
-          "confirmation": "required"
+          "confirmation": "none"
         },
         "x-scalius-rbac": {
           "type": "permission",
