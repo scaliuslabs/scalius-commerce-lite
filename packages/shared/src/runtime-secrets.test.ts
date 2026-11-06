@@ -6,13 +6,13 @@ import {
   deriveRuntimeSecretsFromEnv,
   readMasterSecret,
   MASTER_SECRET_MIN_LENGTH,
-  RuntimeSecretName,
 } from "./runtime-secrets";
+import type { RuntimeSecretName } from "./runtime-secrets";
 
 describe("RUNTIME_SECRET_PURPOSES — domain-prefixed purpose labels", () => {
   it("all purposes are domain-prefixed (no bare purpose labels)", () => {
     for (const [name, purpose] of Object.entries(RUNTIME_SECRET_PURPOSES)) {
-      expect(purpose).toMatch(/^[a-z]+:/, `${name} purpose '${purpose}' must be domain-prefixed`);
+      expect(purpose).toMatch(/^[a-z]+:/);
     }
   });
 

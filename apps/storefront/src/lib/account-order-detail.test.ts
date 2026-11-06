@@ -21,8 +21,8 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
       email: "buyer@example.test",
       whatsappUrl: "https://wa.me/8801712345678",
       socialLinks: [
-        { label: "Facebook", url: "https://facebook.com/store" },
-        { label: "Instagram", url: "https://instagram.com/store" },
+        { id: "fb", label: "Facebook", url: "https://facebook.com/store", iconUrl: null },
+        { id: "ig", label: "Instagram", url: "https://instagram.com/store", iconUrl: null },
       ],
     };
     const html = renderManualCodDepositContact(snapshot, accountCopy("en"));
@@ -42,6 +42,8 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
     const snapshot: ContactSnapshot = {
       phone: "+8801712345678",
       email: "buyer@example.test",
+      whatsappUrl: null,
+      socialLinks: [],
     };
     const html = renderManualCodDepositContact(snapshot, accountCopy("bn"));
     expect(html).toContain("ফোন:");
@@ -52,7 +54,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders only phone when snapshot has only phone", () => {
     const html = renderManualCodDepositContact(
-      { phone: "+8801712345678" },
+      { phone: "+8801712345678", email: null, whatsappUrl: null, socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).toContain("Phone:");
@@ -64,7 +66,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders only email when snapshot has only email", () => {
     const html = renderManualCodDepositContact(
-      { email: "buyer@example.test" },
+      { phone: null, email: "buyer@example.test", whatsappUrl: null, socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).toContain("Email:");
@@ -76,7 +78,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders only WhatsApp when snapshot has only whatsappUrl", () => {
     const html = renderManualCodDepositContact(
-      { whatsappUrl: "https://wa.me/8801712345678" },
+      { phone: null, email: null, whatsappUrl: "https://wa.me/8801712345678", socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).toContain("WhatsApp:");
@@ -88,7 +90,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders social links when present", () => {
     const html = renderManualCodDepositContact(
-      { socialLinks: [{ label: "Facebook", url: "https://facebook.com/store" }] },
+      { phone: null, email: null, whatsappUrl: null, socialLinks: [{ id: "fb", label: "Facebook", url: "https://facebook.com/store", iconUrl: null }] },
       accountCopy("en"),
     );
     expect(html).toContain("Facebook:");
@@ -97,13 +99,13 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
   });
 
   it("returns empty string for empty snapshot", () => {
-    const html = renderManualCodDepositContact({}, accountCopy("en"));
+    const html = renderManualCodDepositContact({ phone: null, email: null, whatsappUrl: null, socialLinks: [] }, accountCopy("en"));
     expect(html).toBe("");
   });
 
   it("escapes HTML in contact values", () => {
     const html = renderManualCodDepositContact(
-      { phone: "<script>alert('xss')</script>" },
+      { phone: "<script>alert('xss')</script>", email: null, whatsappUrl: null, socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).not.toContain("<script>");
@@ -113,10 +115,12 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
   it("renders valid http/https URLs as clickable links", () => {
     const html = renderManualCodDepositContact(
       {
+        phone: null,
+        email: null,
         whatsappUrl: "https://wa.me/8801712345678",
         socialLinks: [
-          { label: "Website", url: "http://example.com" },
-          { label: "Secure", url: "https://secure.example.com" },
+          { id: "web", label: "Website", url: "http://example.com", iconUrl: null },
+          { id: "secure", label: "Secure", url: "https://secure.example.com", iconUrl: null },
         ],
       },
       accountCopy("en"),
@@ -128,7 +132,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders javascript: URLs as plain text, not clickable links (XSS prevention)", () => {
     const html = renderManualCodDepositContact(
-      { whatsappUrl: "javascript:alert(1)" },
+      { phone: null, email: null, whatsappUrl: "javascript:alert(1)", socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).not.toContain('<a href="javascript:alert(1)"');
@@ -138,7 +142,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders data: URLs as plain text, not clickable links (XSS prevention)", () => {
     const html = renderManualCodDepositContact(
-      { whatsappUrl: "data:text/html,<script>alert(1)</script>" },
+      { phone: null, email: null, whatsappUrl: "data:text/html,<script>alert(1)</script>", socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).not.toContain('<a href="data:');
@@ -148,7 +152,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("renders invalid URLs as plain text, not clickable links", () => {
     const html = renderManualCodDepositContact(
-      { whatsappUrl: "not-a-url" },
+      { phone: null, email: null, whatsappUrl: "not-a-url", socialLinks: [] },
       accountCopy("en"),
     );
     expect(html).not.toContain('<a href="not-a-url"');
@@ -157,7 +161,7 @@ describe("renderManualCodDepositContact — manual COD deposit contact rendering
 
   it("escapes HTML in social link labels", () => {
     const html = renderManualCodDepositContact(
-      { socialLinks: [{ label: "<b>Facebook</b>", url: "https://facebook.com/store" }] },
+      { phone: null, email: null, whatsappUrl: null, socialLinks: [{ id: "fb", label: "<b>Facebook</b>", url: "https://facebook.com/store", iconUrl: null }] },
       accountCopy("en"),
     );
     expect(html).not.toContain("<b>");

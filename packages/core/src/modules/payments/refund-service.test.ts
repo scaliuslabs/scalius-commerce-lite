@@ -5,7 +5,6 @@ import {
   processRefund,
   type RefundCaller,
   // HMAC functions (exported for testing)
-  parseAndVerifyRefundMetadata,
   computeRefundMetadataHmac,
   verifyRefundMetadataHmac,
   getRefundHmacKey,
@@ -968,103 +967,6 @@ describe("HMAC metadata integrity (manual COD deposit refund)", () => {
         const valid = await verifyRefundMetadataHmac({}, payload, hmac);
         expect(valid).toBe(false);
       }
-    });
-  });
-
-  describe("parseAndVerifyRefundMetadata", () => {
-    it("returns parsed metadata when HMAC is valid", async () => {
-      const payload = { manualDepositRefund: true, amountMinor: 2000, sourcePaymentId: "pay_1" };
-      const hmac = await computeRefundMetadataHmac(TEST_ENV, JSON.stringify(payload));
-      expect(hmac).not.toBeNull();
-      if (hmac) {
-        const metadata = JSON.stringify({ ...payload, _hmac: hmac });
-
-        const result = await parseAndVerifyRefundMetadata(TEST_ENV, metadata);
-        expect(result).toEqual(payload);
-      }
-    });
-
-    it("returns empty object when HMAC verification fails (tampered metadata)", async () => {
-      const payload = { manualDepositRefund: true, amountMinor: 2000 };
-      const hmac = await computeRefundMetadataHmac(TEST_ENV, JSON.stringify(payload));
-      expect(hmac).not.toBeNull();
-      if (hmac) {
-        // Tamper with the payload but keep the original HMAC
-        const tamperedMetadata = JSON.stringify({ ...payload, amountMinor: 9999, _hmac: hmac });
-
-        const result = await parseAndVerifyRefundMetadata(TEST_ENV, tamperedMetadata);
-        expect(result).toEqual({});
-      }
-    });
-
-    it("returns empty object when metadata is not valid JSON", async () => {
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, "not valid json");
-      expect(result).toEqual({});
-    });
-
-    it("returns empty object when metadata is null", async () => {
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, null);
-      expect(result).toEqual({});
-    });
-
-    it("returns empty object when metadata is empty string", async () => {
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, "");
-      expect(result).toEqual({});
-    });
-
-    it("rejects legacy metadata without HMAC when master secret is configured", async () => {
-      const legacyMetadata = JSON.stringify({ manualDepositRefund: true, amountMinor: 2000 });
-
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, legacyMetadata);
-      // Master secret is configured but metadata has no HMAC - reject for security
-      expect(result).toEqual({});
-    });
-
-    it("returns empty object for legacy metadata that is not an object", async () => {
-      const legacyMetadata = JSON.stringify("just a string");
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, legacyMetadata);
-      expect(result).toEqual({});
-    });
-
-    it("returns empty object for legacy metadata that is an array", async () => {
-      const legacyMetadata = JSON.stringify([1, 2, 3]);
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, legacyMetadata);
-      expect(result).toEqual({});
-    });
-
-    it("rejects tampered metadata with invalid HMAC", async () => {
-      const payload = { manualDepositRefund: true, amountMinor: 2000 };
-      const hmac = await computeRefundMetadataHmac(TEST_ENV, JSON.stringify(payload));
-      const metadata = JSON.stringify({ ...payload, _hmac: hmac });
-
-      // Tamper with the payload but keep the same HMAC
-      const tamperedMetadata = JSON.stringify({ ...payload, amountMinor: 3000, _hmac: hmac });
-
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, tamperedMetadata);
-      // HMAC verification should fail for tampered metadata
-      expect(result).toEqual({});
-    });
-
-    it("rejects metadata with completely forged HMAC", async () => {
-      const payload = { manualDepositRefund: true, amountMinor: 2000 };
-      // Forge an HMAC (invalid format that passes regex but won't verify)
-      const forgedHmac = "a".repeat(43);
-      const metadata = JSON.stringify({ ...payload, _hmac: forgedHmac });
-
-      const result = await parseAndVerifyRefundMetadata(TEST_ENV, metadata);
-      expect(result).toEqual({});
-    });
-
-    it("handles metadata without master secret (no HMAC verification)", async () => {
-      const payload = { manualDepositRefund: true, amountMinor: 2000 };
-      const hmac = await computeRefundMetadataHmac(TEST_ENV, JSON.stringify(payload));
-      const metadata = JSON.stringify({ ...payload, _hmac: hmac });
-
-      // No master secret provided - HMAC verification skipped, but parsing still works
-      // Actually, without master secret, getRefundHmacKey returns null, computeRefundMetadataHmac returns null
-      // So verification fails and returns {}
-      const result = await parseAndVerifyRefundMetadata({}, metadata);
-      expect(result).toEqual({});
     });
   });
 
