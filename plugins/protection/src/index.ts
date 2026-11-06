@@ -214,7 +214,9 @@ const COPY = {
   },
 } satisfies Record<PluginAdminLocale, unknown>;
 
-function coverageTable(records: Array<{ id: string; data: Partial<Coverage> }>, copy: (typeof COPY)[PluginAdminLocale], withOrder: boolean) {
+type CoverageRecord = { id: string; data: { [K in keyof Coverage]?: (K extends "plan" ? string : Coverage[K]) | null } };
+
+function coverageTable(records: readonly CoverageRecord[], copy: (typeof COPY)[PluginAdminLocale], withOrder: boolean) {
   return ui.table({
     columns: [
       ...(withOrder ? [{ key: "order", label: copy.order }] : []),

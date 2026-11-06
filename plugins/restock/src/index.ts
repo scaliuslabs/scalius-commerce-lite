@@ -12,7 +12,7 @@
 // The rules are the app's own records (`ctx.objects.rules`, one per SKU). The
 // costs a purchase order carries need the Sensitive `read_product_costs`
 // scope beside `write_inventory`.
-import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type PluginAdminLocale, type PluginContextOf } from "@scalius/plugin-sdk";
+import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type PluginAdminLocale, type PluginApiResult, type PluginContextOf } from "@scalius/plugin-sdk";
 
 export const APP_ID = "scaliuslabs.restock";
 
@@ -61,6 +61,7 @@ export const manifest = defineManifest({
 
 type Context = PluginContextOf<typeof manifest>;
 
+
 export interface Rule extends Record<string, unknown> {
   sku: string;
   title: string;
@@ -92,7 +93,7 @@ export async function onHandByVariant(ctx: Pick<Context, "api">, variantIds: rea
   for (let offset = 0; offset < variantIds.length; offset += LEVEL_BATCH) {
     let cursor: string | null = null;
     do {
-      const page = await ctx.api.call<{ levels: Level[]; nextCursor: string | null }>("inventory_levels.list", {
+      const page: PluginApiResult<{ levels: Level[]; nextCursor: string | null }> = await ctx.api.call<{ levels: Level[]; nextCursor: string | null }>("inventory_levels.list", {
         query: { variantIds: variantIds.slice(offset, offset + LEVEL_BATCH).join(","), limit: 100, ...(cursor ? { cursor } : {}) },
       });
       if (!page.ok || !page.data) throw new Error(`inventory_levels.list failed: ${page.error?.code ?? page.status}`);
@@ -125,7 +126,7 @@ async function allRules(ctx: Context) {
   const rules: Array<{ id: string; data: Rule }> = [];
   let cursor: string | null = null;
   do {
-    const page = await ctx.objects.rules.query({ limit: 100, ...(cursor ? { cursor } : {}) });
+    const page: Awaited<ReturnType<Context["objects"]["rules"]["query"]>> = await ctx.objects.rules.query({ limit: 100, ...(cursor ? { cursor } : {}) });
     for (const record of page.records) rules.push({ id: record.id, data: record.data as Rule });
     cursor = page.nextCursor;
   } while (cursor && rules.length < 1_000);
@@ -137,7 +138,7 @@ async function activeSuppliers(ctx: Context): Promise<Supplier[]> {
   const suppliers: Supplier[] = [];
   let cursor: string | null = null;
   do {
-    const page = await ctx.api.call<{ suppliers: Supplier[]; nextCursor: string | null }>("suppliers.list", { query: { status: "active", limit: 50, ...(cursor ? { cursor } : {}) } });
+    const page: PluginApiResult<{ suppliers: Supplier[]; nextCursor: string | null }> = await ctx.api.call<{ suppliers: Supplier[]; nextCursor: string | null }>("suppliers.list", { query: { status: "active", limit: 50, ...(cursor ? { cursor } : {}) } });
     if (!page.ok || !page.data) throw new Error(`suppliers.list failed: ${page.error?.code ?? page.status}`);
     suppliers.push(...page.data.suppliers);
     cursor = page.data.nextCursor;
