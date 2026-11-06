@@ -41,6 +41,7 @@ import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { isValidUrlScheme } from "@scalius/shared/url-scheme";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
@@ -724,16 +725,6 @@ function renderDelivery(detail: AccountOrderDetail): void {
         updated: updated ? words.updated(updated) : null,
       }, trackingText());
     }).join("");
-  }
-}
-
-/** Only http:/https: URLs are rendered as clickable links; everything else renders as plain text. */
-function isValidUrlScheme(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
   }
 }
 

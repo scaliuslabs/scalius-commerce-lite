@@ -463,44 +463,6 @@ function parseRefundMetadata(metadata: string | null): Record<string, unknown> {
     }
 }
 
-/** Parses refund metadata and verifies HMAC integrity if present. */
-export async function parseAndVerifyRefundMetadata(
-    env: MasterSecretEnvironment | null | undefined,
-    metadata: string | null,
-): Promise<Record<string, unknown>> {
-    if (!metadata) return {};
-    try {
-        const parsed = JSON.parse(metadata) as unknown;
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-            return {};
-        }
-        const obj = parsed as Record<string, unknown>;
-        // Verify HMAC if present
-        const hmac = obj._hmac;
-        if (typeof hmac === "string") {
-            // Remove HMAC from payload for verification
-            const { _hmac, ...payload } = obj;
-            const payloadStr = JSON.stringify(payload);
-            const valid = await verifyRefundMetadataHmac(env, payloadStr, hmac);
-            if (!valid) {
-                // HMAC verification failed - metadata may have been tampered with
-                return {};
-            }
-            // Return payload without HMAC
-            return payload;
-        }
-        // If a master secret is configured, require HMAC on flagged metadata
-        const hmacKey = await getRefundHmacKey(env);
-        if (hmacKey) {
-            // Master secret is configured but metadata has no HMAC - reject
-            return {};
-        }
-        return obj;
-    } catch {
-        return {};
-    }
-}
-
 /** Derives the HMAC key for refund metadata integrity. No module-level cache to comply with source policy. */
 export async function getRefundHmacKey(env: MasterSecretEnvironment | null | undefined): Promise<string | null> {
     const master = readMasterSecret(env);
