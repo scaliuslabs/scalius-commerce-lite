@@ -1928,7 +1928,7 @@ export async function processRefund(
         refundRows: priorRefundRows,
         currency,
     });
-    if (settlement === "store_credit" && (params.caller ?? "staff") !== "staff"
+    if (settlement === "store_credit" && (params.caller ?? "app") !== "staff"
         && allocations.some((allocation) => isManualSettlementMethod(allocation.sourcePayment.paymentMethod))) {
         // Store credit over money no provider captured would mint a live
         // gift card from a claim (an app's own "bank transfer").

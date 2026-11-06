@@ -121,7 +121,7 @@ async function timedScheduledOperation<T>(
     console.error(
       `[scheduled] event=scheduled_operation_failed, runId=${runContext.runId}, operation=${operation}, ` +
         `durationMs=${Date.now() - startedAt}`,
-      error,
+      String(error),
     );
     throw error;
   }
