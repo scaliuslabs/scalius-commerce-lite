@@ -106,6 +106,23 @@ mirror a dashboard screen, an editor section or a summary card.
   `quantity_exceeds_open`, `stock_committed`, `variant_retired`,
   `supplier_has_open_purchase_orders`. Each list walks an (updated_at,
   tie-break) index (migration 0197).
+- **RMA, discount and segment apps.** `returns.create`, `returns.approve`,
+  `returns.receive` and `returns.cancel` (`routes/admin/resources-returns.ts`)
+  run the dashboard's return commands (`orders-returns.ts` `run*OrderReturn`:
+  the core command, its timeline line and the customer's notification) under
+  the order's revision for a request and the return's after; the return
+  command's durable key derives from the required Idempotency-Key, so a
+  repeat after a lost response runs again safely. Each answers `{ return }`.
+  `discounts.list` (`resources-discounts.ts`) pages the `discount`
+  representation (`events/discount-representations.ts`, one batch per page).
+  `customer_segments.*` (`resources-customer-segments.ts`) carry one
+  `CustomerSegmentResource` whose rules spell spend `minMinor`/`maxMinor`
+  beside the store `currency` (`customerSegmentDefinitionAppSchema`); members
+  page as `CustomerResource` in id order; an app's rules name only `custom`
+  customer fields, and it retargets a segment a live discount or price list
+  uses only with `discounts.edit` or `products.edit`. Segment delete is not
+  stable: a delete is destructive risk, so it would raise `write_customers`. `products.list`, `customers.list`
+  and `orders.list` read up to 90 records by `ids`, bound as one JSON value.
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
   `currency` on the same object or the resource that holds it. Inputs take

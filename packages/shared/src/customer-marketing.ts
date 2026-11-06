@@ -232,9 +232,9 @@ const dateFilter = /* @__PURE__ */ (() => z.discriminatedUnion("op", [
 
 const MONEY_MINOR_MAX = 1_000_000_000_000;
 
-function conditionSchema(money: z.ZodNumber) {
-  return z.discriminatedUnion("field", [
-    z.object({ field: z.literal("amount_spent"), min: money.optional(), max: money.optional() }).strict(),
+/** Every condition but `amount_spent`, whose money each contract spells its own way. */
+function moneylessConditions() {
+  return [
     z.object({ field: z.literal("orders_count"), min: z.number().int().min(0).max(1_000_000).optional(), max: z.number().int().min(0).max(1_000_000).optional() }).strict(),
     z.object({ field: z.literal("last_order_date"), filter: dateFilter }).strict(),
     z.object({ field: z.literal("first_order_date"), filter: dateFilter }).strict(),
@@ -250,17 +250,30 @@ function conditionSchema(money: z.ZodNumber) {
       op: z.enum(["equals", "is_set", "is_not_set"]),
       value: z.string().max(500).optional(),
     }).strict(),
+  ] as const;
+}
+
+function checkRange(min: number | undefined, max: number | undefined, context: z.RefinementCtx): void {
+  if (min === undefined && max === undefined) {
+    context.addIssue({ code: "custom", message: "Give a minimum, a maximum or both." });
+  } else if (min !== undefined && max !== undefined && min > max) {
+    context.addIssue({ code: "custom", message: "The minimum is above the maximum." });
+  }
+}
+
+function checkCustomField(condition: { field: string; op?: string; value?: string }, context: z.RefinementCtx): void {
+  if (condition.field === "custom_field" && (condition.op === "equals") !== (condition.value !== undefined)) {
+    context.addIssue({ code: "custom", message: "Give a value only for equals." });
+  }
+}
+
+function conditionSchema(money: z.ZodNumber) {
+  return z.discriminatedUnion("field", [
+    z.object({ field: z.literal("amount_spent"), min: money.optional(), max: money.optional() }).strict(),
+    ...moneylessConditions(),
   ]).superRefine((condition, context) => {
-    if (condition.field === "custom_field" && (condition.op === "equals") !== (condition.value !== undefined)) {
-      context.addIssue({ code: "custom", message: "Give a value only for equals." });
-    }
-    if ((condition.field === "amount_spent" || condition.field === "orders_count")) {
-      if (condition.min === undefined && condition.max === undefined) {
-        context.addIssue({ code: "custom", message: "Give a minimum, a maximum or both." });
-      } else if (condition.min !== undefined && condition.max !== undefined && condition.min > condition.max) {
-        context.addIssue({ code: "custom", message: "The minimum is above the maximum." });
-      }
-    }
+    checkCustomField(condition, context);
+    if (condition.field === "amount_spent" || condition.field === "orders_count") checkRange(condition.min, condition.max, context);
   });
 }
 
@@ -325,6 +338,65 @@ export function mapSegmentMoney<T extends CustomerSegmentDefinition | CustomerSe
       }
       : condition),
   } as T;
+}
+
+/**
+ * A segment's conditions in the stable app API: `amount_spent` is
+ * `minMinor`/`maxMinor`, integer minor units of the store currency (the
+ * segment's `currency`); every other condition is as stored.
+ */
+export const customerSegmentConditionAppSchema = /* @__PURE__ */ (() => z.discriminatedUnion("field", [
+  z.object({
+    field: z.literal("amount_spent"),
+    minMinor: z.number().int().min(0).max(MONEY_MINOR_MAX).optional(),
+    maxMinor: z.number().int().min(0).max(MONEY_MINOR_MAX).optional(),
+  }).strict(),
+  ...moneylessConditions(),
+]).superRefine((condition, context) => {
+  checkCustomField(condition, context);
+  if (condition.field === "amount_spent") checkRange(condition.minMinor, condition.maxMinor, context);
+  if (condition.field === "orders_count") checkRange(condition.min, condition.max, context);
+}))();
+
+/**
+ * A segment's definition in the stable app API (money in minor units). It has
+ * no `version`: the stored definition's format version is the store's own.
+ */
+export const customerSegmentDefinitionAppSchema = /* @__PURE__ */ (() => z.object({
+  /** `all`: every condition (AND); `any`: at least one (OR). */
+  match: z.enum(["all", "any"]).default("all"),
+  conditions: z.array(customerSegmentConditionAppSchema).min(1).max(CUSTOMER_SEGMENT_CONDITIONS_MAX),
+}).strict())();
+
+export type CustomerSegmentDefinitionApp = z.infer<typeof customerSegmentDefinitionAppSchema>;
+
+/** A stored definition as the stable app API carries it. */
+export function segmentDefinitionToApp(definition: CustomerSegmentDefinition): CustomerSegmentDefinitionApp {
+  return {
+    match: definition.match,
+    conditions: definition.conditions.map((condition) => condition.field === "amount_spent"
+      ? {
+        field: "amount_spent" as const,
+        ...(condition.min !== undefined ? { minMinor: condition.min } : {}),
+        ...(condition.max !== undefined ? { maxMinor: condition.max } : {}),
+      }
+      : condition),
+  };
+}
+
+/** A definition from the stable app API, as stored (still to be parsed with the store's references). */
+export function segmentDefinitionFromApp(definition: CustomerSegmentDefinitionApp): CustomerSegmentDefinition {
+  return {
+    version: CUSTOMER_SEGMENT_DEFINITION_VERSION,
+    match: definition.match,
+    conditions: definition.conditions.map((condition) => condition.field === "amount_spent"
+      ? {
+        field: "amount_spent" as const,
+        ...(condition.minMinor !== undefined ? { min: condition.minMinor } : {}),
+        ...(condition.maxMinor !== undefined ? { max: condition.maxMinor } : {}),
+      }
+      : condition),
+  };
 }
 
 /** Stable JSON for storage and comparison (keys in schema order). */

@@ -3609,6 +3609,126 @@ export type AppWebhookSubscription = {
     updatedAt: string;
 };
 
+export type DiscountSummary = {
+    id: string;
+    name: string;
+    title: string | null;
+    method: string;
+    status: string;
+    priority: number;
+    revision: number;
+    codeCount: number;
+    startsAt: string | null;
+    endsAt: string | null;
+    maxRedemptions: number | null;
+    redemptions: number;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+};
+
+export type CustomerSegmentResource = {
+    id: string;
+    /**
+     * 1 to 80 characters, unique in the store (any case).
+     */
+    name: string;
+    description: string | null;
+    definition: CustomerSegmentRules;
+    /**
+     * The store currency: `definition`'s spend (`amount_spent` minMinor and maxMinor) is in its integer minor units.
+     */
+    currency: string;
+    /**
+     * Send it as `expectedRevision` to change the segment; every change advances it.
+     */
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type CustomerSegmentRules = {
+    match?: 'all' | 'any';
+    conditions: Array<{
+        field: 'amount_spent';
+        minMinor?: number;
+        maxMinor?: number;
+    } | {
+        field: 'orders_count';
+        min?: number;
+        max?: number;
+    } | {
+        field: 'last_order_date';
+        filter: {
+            op: 'within_last';
+            days: number;
+        } | {
+            op: 'not_within_last';
+            days: number;
+        } | {
+            op: 'on_or_after';
+            date: string;
+        } | {
+            op: 'before';
+            date: string;
+        };
+    } | {
+        field: 'first_order_date';
+        filter: {
+            op: 'within_last';
+            days: number;
+        } | {
+            op: 'not_within_last';
+            days: number;
+        } | {
+            op: 'on_or_after';
+            date: string;
+        } | {
+            op: 'before';
+            date: string;
+        };
+    } | {
+        field: 'customer_since';
+        filter: {
+            op: 'within_last';
+            days: number;
+        } | {
+            op: 'not_within_last';
+            days: number;
+        } | {
+            op: 'on_or_after';
+            date: string;
+        } | {
+            op: 'before';
+            date: string;
+        };
+    } | {
+        field: 'city';
+        op: 'in' | 'not_in';
+        ids: Array<string>;
+    } | {
+        field: 'zone';
+        op: 'in' | 'not_in';
+        ids: Array<string>;
+    } | {
+        field: 'tags';
+        op: 'has_any' | 'has_all' | 'has_none';
+        tags: Array<string>;
+    } | {
+        field: 'marketing_consent';
+        channel: 'email' | 'sms' | 'whatsapp' | 'push';
+        status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+    } | {
+        field: 'customer_type';
+        types: Array<'account' | 'guest' | 'merchant'>;
+    } | {
+        field: 'custom_field';
+        definitionId: string;
+        op: 'equals' | 'is_set' | 'is_not_set';
+        value?: string;
+    }>;
+};
+
 export type CategoryResource = {
     id: string;
     name: string;
@@ -25409,6 +25529,10 @@ export type GetApiV1AdminResourcesOrdersData = {
         status?: string;
         paymentStatus?: string;
         fulfillmentStatus?: string;
+        /**
+         * Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.
+         */
+        ids?: string;
         customerId?: string;
         orderNumber?: number;
         /**
@@ -26338,6 +26462,85 @@ export type GetApiV1AdminResourcesOrdersByIdReturnsResponses = {
 
 export type GetApiV1AdminResourcesOrdersByIdReturnsResponse = GetApiV1AdminResourcesOrdersByIdReturnsResponses[keyof GetApiV1AdminResourcesOrdersByIdReturnsResponses];
 
+export type PostApiV1AdminResourcesOrdersByIdReturnsData = {
+    body: {
+        reason: string;
+        notes?: string | null;
+        lines: Array<{
+            orderItemId: string;
+            quantity: number;
+            reason?: string | null;
+            notes?: string | null;
+        }>;
+        /**
+         * The order's `revision` you read; an order changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/orders/{id}/returns';
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReturnsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReturnsError = PostApiV1AdminResourcesOrdersByIdReturnsErrors[keyof PostApiV1AdminResourcesOrdersByIdReturnsErrors];
+
+export type PostApiV1AdminResourcesOrdersByIdReturnsResponses = {
+    /**
+     * The return, requested
+     */
+    201: {
+        success: true;
+        data: {
+            return: ReturnResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesOrdersByIdReturnsResponse = PostApiV1AdminResourcesOrdersByIdReturnsResponses[keyof PostApiV1AdminResourcesOrdersByIdReturnsResponses];
+
 export type GetApiV1AdminResourcesReturnsByIdData = {
     body?: never;
     path: {
@@ -26477,6 +26680,10 @@ export type GetApiV1AdminResourcesProductsData = {
          * Omit for active and draft products.
          */
         status?: 'active' | 'draft' | 'trashed';
+        /**
+         * Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.
+         */
+        ids?: string;
         /**
          * The product with this SKU (any case).
          */
@@ -26952,6 +27159,10 @@ export type GetApiV1AdminResourcesCustomersData = {
          * The customer's phone in E.164, matched whole. Needs read_customer_phones.
          */
         phone?: string;
+        /**
+         * Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.
+         */
+        ids?: string;
         /**
          * Customers with this tag (any case).
          */
@@ -29876,6 +30087,633 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponses = {
 };
 
 export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponse = PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponses[keyof PatchApiV1AdminResourcesWebhookSubscriptionsByIdResponses];
+
+export type PostApiV1AdminResourcesReturnsByIdApproveData = {
+    body: {
+        notes?: string | null;
+        lines: Array<{
+            lineId: string;
+            approvedQuantity: number;
+            rejectedQuantity: number;
+            notes?: string | null;
+        }>;
+        /**
+         * The return's `revision` you read; a return changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/returns/{id}/approve';
+};
+
+export type PostApiV1AdminResourcesReturnsByIdApproveErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesReturnsByIdApproveError = PostApiV1AdminResourcesReturnsByIdApproveErrors[keyof PostApiV1AdminResourcesReturnsByIdApproveErrors];
+
+export type PostApiV1AdminResourcesReturnsByIdApproveResponses = {
+    /**
+     * The return, decided
+     */
+    200: {
+        success: true;
+        data: {
+            return: ReturnResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesReturnsByIdApproveResponse = PostApiV1AdminResourcesReturnsByIdApproveResponses[keyof PostApiV1AdminResourcesReturnsByIdApproveResponses];
+
+export type PostApiV1AdminResourcesReturnsByIdReceiveData = {
+    body: {
+        notes?: string | null;
+        restockLocationId?: string | null;
+        lines: Array<{
+            lineId: string;
+            receivedQuantity: number;
+            restockQuantity: number;
+            damagedQuantity: number;
+            notes?: string | null;
+        }>;
+        /**
+         * The return's `revision` you read; a return changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/returns/{id}/receive';
+};
+
+export type PostApiV1AdminResourcesReturnsByIdReceiveErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesReturnsByIdReceiveError = PostApiV1AdminResourcesReturnsByIdReceiveErrors[keyof PostApiV1AdminResourcesReturnsByIdReceiveErrors];
+
+export type PostApiV1AdminResourcesReturnsByIdReceiveResponses = {
+    /**
+     * The return, received
+     */
+    200: {
+        success: true;
+        data: {
+            return: ReturnResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesReturnsByIdReceiveResponse = PostApiV1AdminResourcesReturnsByIdReceiveResponses[keyof PostApiV1AdminResourcesReturnsByIdReceiveResponses];
+
+export type PostApiV1AdminResourcesReturnsByIdCancelData = {
+    body: {
+        notes?: string | null;
+        /**
+         * The return's `revision` you read; a return changed since is refused with 409 and nothing changes.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/returns/{id}/cancel';
+};
+
+export type PostApiV1AdminResourcesReturnsByIdCancelErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesReturnsByIdCancelError = PostApiV1AdminResourcesReturnsByIdCancelErrors[keyof PostApiV1AdminResourcesReturnsByIdCancelErrors];
+
+export type PostApiV1AdminResourcesReturnsByIdCancelResponses = {
+    /**
+     * The return, cancelled
+     */
+    200: {
+        success: true;
+        data: {
+            return: ReturnResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesReturnsByIdCancelResponse = PostApiV1AdminResourcesReturnsByIdCancelResponses[keyof PostApiV1AdminResourcesReturnsByIdCancelResponses];
+
+export type GetApiV1AdminResourcesDiscountsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only discounts in this status; omitted, every status (archived too).
+         */
+        status?: 'draft' | 'active' | 'paused' | 'archived';
+    };
+    url: '/api/v1/admin/resources/discounts';
+};
+
+export type GetApiV1AdminResourcesDiscountsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesDiscountsError = GetApiV1AdminResourcesDiscountsErrors[keyof GetApiV1AdminResourcesDiscountsErrors];
+
+export type GetApiV1AdminResourcesDiscountsResponses = {
+    /**
+     * A page of discounts
+     */
+    200: {
+        success: true;
+        data: {
+            discounts: Array<DiscountSummary>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesDiscountsResponse = GetApiV1AdminResourcesDiscountsResponses[keyof GetApiV1AdminResourcesDiscountsResponses];
+
+export type GetApiV1AdminResourcesCustomerSegmentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+    };
+    url: '/api/v1/admin/resources/customer-segments';
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsError = GetApiV1AdminResourcesCustomerSegmentsErrors[keyof GetApiV1AdminResourcesCustomerSegmentsErrors];
+
+export type GetApiV1AdminResourcesCustomerSegmentsResponses = {
+    /**
+     * A page of segments
+     */
+    200: {
+        success: true;
+        data: {
+            segments: Array<CustomerSegmentResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsResponse = GetApiV1AdminResourcesCustomerSegmentsResponses[keyof GetApiV1AdminResourcesCustomerSegmentsResponses];
+
+export type PostApiV1AdminResourcesCustomerSegmentsData = {
+    body: {
+        /**
+         * 1 to 80 characters after trimming, unique in the store (any case).
+         */
+        name: string;
+        /**
+         * At most 300 characters after trimming; empty or null clears it.
+         */
+        description?: string | null;
+        definition: CustomerSegmentRules;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/customer-segments';
+};
+
+export type PostApiV1AdminResourcesCustomerSegmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesCustomerSegmentsError = PostApiV1AdminResourcesCustomerSegmentsErrors[keyof PostApiV1AdminResourcesCustomerSegmentsErrors];
+
+export type PostApiV1AdminResourcesCustomerSegmentsResponses = {
+    /**
+     * The segment
+     */
+    201: {
+        success: true;
+        data: {
+            segment: CustomerSegmentResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesCustomerSegmentsResponse = PostApiV1AdminResourcesCustomerSegmentsResponses[keyof PostApiV1AdminResourcesCustomerSegmentsResponses];
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/customer-segments/{id}';
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdError = GetApiV1AdminResourcesCustomerSegmentsByIdErrors[keyof GetApiV1AdminResourcesCustomerSegmentsByIdErrors];
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdResponses = {
+    /**
+     * The segment
+     */
+    200: {
+        success: true;
+        data: {
+            segment: CustomerSegmentResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdResponse = GetApiV1AdminResourcesCustomerSegmentsByIdResponses[keyof GetApiV1AdminResourcesCustomerSegmentsByIdResponses];
+
+export type PatchApiV1AdminResourcesCustomerSegmentsByIdData = {
+    body: {
+        /**
+         * 1 to 80 characters after trimming, unique in the store (any case).
+         */
+        name?: string;
+        /**
+         * At most 300 characters after trimming; empty or null clears it.
+         */
+        description?: string | null;
+        definition?: CustomerSegmentRules;
+        /**
+         * The segment's `revision` you read.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/customer-segments/{id}';
+};
+
+export type PatchApiV1AdminResourcesCustomerSegmentsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminResourcesCustomerSegmentsByIdError = PatchApiV1AdminResourcesCustomerSegmentsByIdErrors[keyof PatchApiV1AdminResourcesCustomerSegmentsByIdErrors];
+
+export type PatchApiV1AdminResourcesCustomerSegmentsByIdResponses = {
+    /**
+     * The segment
+     */
+    200: {
+        success: true;
+        data: {
+            segment: CustomerSegmentResource;
+        };
+    };
+};
+
+export type PatchApiV1AdminResourcesCustomerSegmentsByIdResponse = PatchApiV1AdminResourcesCustomerSegmentsByIdResponses[keyof PatchApiV1AdminResourcesCustomerSegmentsByIdResponses];
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many customers; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/resources/customer-segments/{id}/members';
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersError = GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors[keyof GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors];
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses = {
+    /**
+     * A page of members
+     */
+    200: {
+        success: true;
+        data: {
+            customers: Array<CustomerResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponse = GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses[keyof GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -40248,140 +41086,6 @@ export type PatchApiV1AdminResourcesSuppliersByIdResponses = {
 };
 
 export type PatchApiV1AdminResourcesSuppliersByIdResponse = PatchApiV1AdminResourcesSuppliersByIdResponses[keyof PatchApiV1AdminResourcesSuppliersByIdResponses];
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveData = {
-    body: {
-        /**
-         * The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing.
-         */
-        expectedRevision: number;
-    };
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/resources/suppliers/{id}/archive';
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveError = PostApiV1AdminResourcesSuppliersByIdArchiveErrors[keyof PostApiV1AdminResourcesSuppliersByIdArchiveErrors];
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveResponses = {
-    /**
-     * The supplier
-     */
-    200: {
-        success: true;
-        data: {
-            supplier: SupplierResource;
-        };
-    };
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveResponse = PostApiV1AdminResourcesSuppliersByIdArchiveResponses[keyof PostApiV1AdminResourcesSuppliersByIdArchiveResponses];
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreData = {
-    body: {
-        /**
-         * The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing.
-         */
-        expectedRevision: number;
-    };
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/resources/suppliers/{id}/restore';
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreError = PostApiV1AdminResourcesSuppliersByIdRestoreErrors[keyof PostApiV1AdminResourcesSuppliersByIdRestoreErrors];
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreResponses = {
-    /**
-     * The supplier
-     */
-    200: {
-        success: true;
-        data: {
-            supplier: SupplierResource;
-        };
-    };
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreResponse = PostApiV1AdminResourcesSuppliersByIdRestoreResponses[keyof PostApiV1AdminResourcesSuppliersByIdRestoreResponses];
 
 export type GetApiV1AdminResourcesPurchaseOrdersData = {
     body?: never;

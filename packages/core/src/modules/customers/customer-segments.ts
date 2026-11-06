@@ -289,6 +289,22 @@ export async function getCustomerSegment(db: Database, id: string): Promise<Cust
     return record;
 }
 
+/** Live segments by id (at most 90, bound as one value), in the order asked; unknown and deleted ids are left out. */
+export async function getCustomerSegmentsByIds(db: Database, ids: readonly string[]): Promise<CustomerSegmentRecord[]> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return [];
+    if (unique.length > 90) throw new ValidationError("Read at most 90 segments at once.");
+    const rows = await db.select({ segment: customerSegments, promotionCount: livePromotionUse })
+        .from(customerSegments)
+        // `+deleted_at`: seek the id list, not the deleted_at-led list index.
+        .where(and(sql`${customerSegments.id} IN (SELECT value FROM json_each(${JSON.stringify(unique)}))`, sql`+${customerSegments.deletedAt} IS NULL`));
+    const byId = new Map(rows.flatMap((row) => {
+        const record = toRecord(row.segment, Number(row.promotionCount));
+        return record ? [[record.id, record] as const] : [];
+    }));
+    return unique.flatMap((id) => byId.get(id) ?? []);
+}
+
 function cleanName(name: string): string {
     const value = name.normalize("NFC").replace(/\s+/g, " ").trim();
     if (value.length < 1 || value.length > 80) throw new ValidationError("A segment name is 1 to 80 characters.");

@@ -56,6 +56,7 @@ export const APP_OPERATION_VERBS = [
   "receive",
   "ship",
   "cancel",
+  "approve",
 ] as const;
 
 /** A stable name: `<resource>.<verb phrase>`, the phrase starting with a verb from {@link APP_OPERATION_VERBS}. */
@@ -80,6 +81,10 @@ export const STABLE_APP_OPERATIONS = {
   "order_timeline.list": "dashboard.orders.timeline",
   "returns.list": "dashboard.resources.returns.list",
   "returns.get": "dashboard.resources.returns.get",
+  "returns.create": "dashboard.resources.returns.create",
+  "returns.approve": "dashboard.resources.returns.approve",
+  "returns.receive": "dashboard.resources.returns.receive",
+  "returns.cancel": "dashboard.resources.returns.cancel",
   "fulfillments.list": "dashboard.resources.fulfillments.list",
   "fulfillments.create": "dashboard.resources.fulfillments.create",
   "fulfillments.void": "dashboard.orders.fulfillment_void",
@@ -123,8 +128,6 @@ export const STABLE_APP_OPERATIONS = {
   "suppliers.get": "dashboard.resources.suppliers.get",
   "suppliers.create": "dashboard.resources.suppliers.create",
   "suppliers.update": "dashboard.resources.suppliers.update",
-  "suppliers.archive": "dashboard.resources.suppliers.archive",
-  "suppliers.restore": "dashboard.resources.suppliers.restore",
   "purchase_orders.list": "dashboard.resources.purchase_orders.list",
   "purchase_orders.get": "dashboard.resources.purchase_orders.get",
   "purchase_orders.create": "dashboard.resources.purchase_orders.create",
@@ -179,6 +182,7 @@ export const STABLE_APP_OPERATIONS = {
   "pages.get": "dashboard.content.get",
   "pages.create": "dashboard.content.create",
   "pages.update": "dashboard.content.update",
+  "discounts.list": "dashboard.resources.discounts.list",
   "discounts.get": "dashboard.discounts.get",
   "discounts.create": "dashboard.discounts.create",
   "discounts.update": "dashboard.discounts.update",
@@ -204,6 +208,11 @@ export const STABLE_APP_OPERATIONS = {
   "customers.update": "dashboard.customers.update",
   "customers.set_tags": "dashboard.customers.tags_set",
   "customers.bulk_tag": "dashboard.resources.customers.bulk_tag",
+  "customer_segments.list": "dashboard.resources.customer_segments.list",
+  "customer_segments.get": "dashboard.resources.customer_segments.get",
+  "customer_segments.create": "dashboard.resources.customer_segments.create",
+  "customer_segments.update": "dashboard.resources.customer_segments.update",
+  "customer_segments.list_members": "dashboard.resources.customer_segments.list_members",
 
   // ── Gift cards ──
   "gift_cards.list": "dashboard.resources.gift_cards.list",

@@ -22,7 +22,6 @@ import {
   suppliers,
 } from "@scalius/database/schema";
 import {
-  archiveSupplier,
   cancelPurchaseOrder,
   cancelTransfer,
   createPurchaseOrder,
@@ -35,7 +34,6 @@ import {
   receivePurchaseOrder,
   receiveTransfer,
   shipTransfer,
-  unarchiveSupplier,
   updatePurchaseOrder,
   updateSupplier,
   updateTransfer,
@@ -325,37 +323,6 @@ app.openapi(createRoute({
 });
 
 const revisionBody = z.object({ expectedRevision }).strict();
-
-app.openapi(createRoute({
-  operationId: "dashboard.resources.suppliers.archive",
-  method: "post",
-  path: "/suppliers/{id}/archive",
-  tags: [TAG],
-  summary: "Archive a supplier",
-  description: "New purchase orders can no longer name it; past ones keep it. Refused (409) while purchase orders are still expected from it.",
-  request: { params: idParam, headers: idempotencyKeyHeaderSchema, body: { required: true, content: { "application/json": { schema: revisionBody } } } },
-  responses: {
-    200: { description: "The supplier", content: { "application/json": { schema: supplierEnvelope } } },
-    ...writeResponses,
-  },
-}), async (c) => ok(c, {
-  supplier: supplierResource(await archiveSupplier(c.get("db"), c.req.valid("param").id, { expectedVersion: c.req.valid("json").expectedRevision })),
-}));
-
-app.openapi(createRoute({
-  operationId: "dashboard.resources.suppliers.restore",
-  method: "post",
-  path: "/suppliers/{id}/restore",
-  tags: [TAG],
-  summary: "Make an archived supplier active again",
-  request: { params: idParam, headers: idempotencyKeyHeaderSchema, body: { required: true, content: { "application/json": { schema: revisionBody } } } },
-  responses: {
-    200: { description: "The supplier", content: { "application/json": { schema: supplierEnvelope } } },
-    ...writeResponses,
-  },
-}), async (c) => ok(c, {
-  supplier: supplierResource(await unarchiveSupplier(c.get("db"), c.req.valid("param").id, { expectedVersion: c.req.valid("json").expectedRevision })),
-}));
 
 // ─── Purchase orders ─────────────────────────────────────────────────────────
 

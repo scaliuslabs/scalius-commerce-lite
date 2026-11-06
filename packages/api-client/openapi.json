@@ -18033,6 +18033,731 @@
           "updatedAt"
         ]
       },
+      "DiscountSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "codeCount": {
+            "type": "integer"
+          },
+          "startsAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "maxRedemptions": {
+            "type": "integer",
+            "nullable": true
+          },
+          "redemptions": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "deletedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title",
+          "method",
+          "status",
+          "priority",
+          "revision",
+          "codeCount",
+          "startsAt",
+          "endsAt",
+          "maxRedemptions",
+          "redemptions",
+          "createdAt",
+          "updatedAt",
+          "deletedAt"
+        ]
+      },
+      "CustomerSegmentResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "1 to 80 characters, unique in the store (any case)."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "definition": {
+            "$ref": "#/components/schemas/CustomerSegmentRules"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "The store currency: `definition`'s spend (`amount_spent` minMinor and maxMinor) is in its integer minor units."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Send it as `expectedRevision` to change the segment; every change advances it."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "definition",
+          "currency",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CustomerSegmentRules": {
+        "type": "object",
+        "properties": {
+          "match": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "default": "all"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "amount_spent"
+                      ]
+                    },
+                    "minMinor": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000000000
+                    },
+                    "maxMinor": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000000000
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "orders_count"
+                      ]
+                    },
+                    "min": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    },
+                    "max": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000000
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "last_order_date"
+                      ]
+                    },
+                    "filter": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "within_last"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3650
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "not_within_last"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3650
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "on_or_after"
+                              ]
+                            },
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "date"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "before"
+                              ]
+                            },
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "date"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "filter"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "first_order_date"
+                      ]
+                    },
+                    "filter": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "within_last"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3650
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "not_within_last"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3650
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "on_or_after"
+                              ]
+                            },
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "date"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "before"
+                              ]
+                            },
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "date"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "filter"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "customer_since"
+                      ]
+                    },
+                    "filter": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "within_last"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3650
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "not_within_last"
+                              ]
+                            },
+                            "days": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 3650
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "on_or_after"
+                              ]
+                            },
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "date"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "before"
+                              ]
+                            },
+                            "date": {
+                              "type": "string",
+                              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "date"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "filter"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "city"
+                      ]
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "in",
+                        "not_in"
+                      ]
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "minItems": 1,
+                      "maxItems": 50
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "op",
+                    "ids"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "zone"
+                      ]
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "in",
+                        "not_in"
+                      ]
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "minItems": 1,
+                      "maxItems": 50
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "op",
+                    "ids"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "tags"
+                      ]
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "has_any",
+                        "has_all",
+                        "has_none"
+                      ]
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "minItems": 1,
+                      "maxItems": 50
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "op",
+                    "tags"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "marketing_consent"
+                      ]
+                    },
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "email",
+                        "sms",
+                        "whatsapp",
+                        "push"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "subscribed",
+                        "pending",
+                        "unsubscribed",
+                        "not_subscribed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "channel",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "customer_type"
+                      ]
+                    },
+                    "types": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "account",
+                          "guest",
+                          "merchant"
+                        ]
+                      },
+                      "minItems": 1,
+                      "maxItems": 3
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "types"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "custom_field"
+                      ]
+                    },
+                    "definitionId": {
+                      "type": "string",
+                      "minLength": 4,
+                      "maxLength": 68
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "equals",
+                        "is_set",
+                        "is_not_set"
+                      ]
+                    },
+                    "value": {
+                      "type": "string",
+                      "maxLength": 500
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "definitionId",
+                    "op"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 12
+          }
+        },
+        "required": [
+          "conditions"
+        ],
+        "additionalProperties": false
+      },
       "CategoryResource": {
         "type": "object",
         "properties": {
@@ -97839,6 +98564,18 @@
             "schema": {
               "type": "string",
               "minLength": 1,
+              "maxLength": 11610,
+              "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+            },
+            "required": false,
+            "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+            "name": "ids",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
               "maxLength": 128
             },
             "required": false,
@@ -100509,6 +101246,252 @@
           "type": "permission",
           "permission": "orders.view"
         }
+      },
+      "post": {
+        "operationId": "dashboard.resources.returns.create",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Request an item return",
+        "description": "Requests the return of a delivered order's lines (`orderItemId` and quantity, at most what is still returnable) with a reason. No stock moves until the return is received. The order timeline records it. Send the order's `revision` as expectedRevision and an Idempotency-Key: a repeat returns the first return.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "orderItemId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99999
+                        },
+                        "reason": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 500
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "orderItemId",
+                        "quantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The order's `revision` you read; an order changed since is refused with 409 and nothing changes."
+                  }
+                },
+                "required": [
+                  "reason",
+                  "lines",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The return, requested",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "return": {
+                          "$ref": "#/components/schemas/ReturnResource"
+                        }
+                      },
+                      "required": [
+                        "return"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app records a customer's request to return some of a delivered order's items, with a reason; nothing is restocked yet.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.change_status"
+        }
       }
     },
     "/api/v1/admin/resources/returns/{id}": {
@@ -100909,6 +101892,18 @@
             "required": false,
             "description": "Omit for active and draft products.",
             "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 11610,
+              "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+            },
+            "required": false,
+            "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+            "name": "ids",
             "in": "query"
           },
           {
@@ -102308,6 +103303,18 @@
             "required": false,
             "description": "The customer's phone in E.164, matched whole. Needs read_customer_phones.",
             "name": "phone",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 11610,
+              "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+            },
+            "required": false,
+            "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+            "name": "ids",
             "in": "query"
           },
           {
@@ -110816,6 +111823,1815 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "webhooks.manage"
+        }
+      }
+    },
+    "/api/v1/admin/resources/returns/{id}/approve": {
+      "post": {
+        "operationId": "dashboard.resources.returns.approve",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Approve or reject an item return",
+        "description": "Decides every line of a requested return: its approved and rejected units add up to the units requested. A return with no unit approved is rejected. The customer is told once that it was approved and to send the items. Send the return's `revision` as expectedRevision and an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "lineId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "approvedQuantity": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 99999
+                        },
+                        "rejectedQuantity": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 99999
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "lineId",
+                        "approvedQuantity",
+                        "rejectedQuantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The return's `revision` you read; a return changed since is refused with 409 and nothing changes."
+                  }
+                },
+                "required": [
+                  "lines",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The return, decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "return": {
+                          "$ref": "#/components/schemas/ReturnResource"
+                        }
+                      },
+                      "required": [
+                        "return"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app approves or rejects a requested return, line by line, before the items come back.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.change_status"
+        }
+      }
+    },
+    "/api/v1/admin/resources/returns/{id}/receive": {
+      "post": {
+        "operationId": "dashboard.resources.returns.receive",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Receive returned items",
+        "description": "Records units of an approved return arriving back, per line: how many were received, restocked and written off as damaged (a tracked item's received units are each restocked or damaged). Restocked units go to `restockLocationId` (an active location) or, omitted, back to where they were sent from, through the stock ledger. The customer is told once that they arrived; a return that brings the whole order back marks it returned. Send the return's `revision` as expectedRevision and an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "restockLocationId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "lineId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "receivedQuantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99999
+                        },
+                        "restockQuantity": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 99999
+                        },
+                        "damagedQuantity": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 99999
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": [
+                        "lineId",
+                        "receivedQuantity",
+                        "restockQuantity",
+                        "damagedQuantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The return's `revision` you read; a return changed since is refused with 409 and nothing changes."
+                  }
+                },
+                "required": [
+                  "lines",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The return, received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "return": {
+                          "$ref": "#/components/schemas/ReturnResource"
+                        }
+                      },
+                      "required": [
+                        "return"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when returned items arrived back: an app records what was received, restocked and damaged, and where the restock goes.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.change_status"
+        }
+      }
+    },
+    "/api/v1/admin/resources/returns/{id}/cancel": {
+      "post": {
+        "operationId": "dashboard.resources.returns.cancel",
+        "tags": [
+          "App API - Orders"
+        ],
+        "summary": "Cancel an item return",
+        "description": "Cancels a return before any unit is received; no stock moves. Send the return's `revision` as expectedRevision and an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The return's `revision` you read; a return changed since is refused with 409 and nothing changes."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The return, cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "return": {
+                          "$ref": "#/components/schemas/ReturnResource"
+                        }
+                      },
+                      "required": [
+                        "return"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app cancels an item return before any of it was received.",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.change_status"
+        }
+      }
+    },
+    "/api/v1/admin/resources/discounts": {
+      "get": {
+        "operationId": "dashboard.resources.discounts.list",
+        "tags": [
+          "App API - Discounts"
+        ],
+        "summary": "List discounts, least recently updated first",
+        "description": "Code and automatic discounts as webhooks carry them (DiscountSummary: status, schedule, code and redemption counts, revision), archived ones included, in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor; read a discount's rules and codes with discounts.get.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "paused",
+                "archived"
+              ],
+              "description": "Only discounts in this status; omitted, every status (archived too)."
+            },
+            "required": false,
+            "description": "Only discounts in this status; omitted, every status (archived too).",
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of discounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "discounts": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/DiscountSummary"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "discounts",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app syncs the store's discounts: their status, schedule and code and redemption counts, changes since a time.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "discounts.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/customer-segments": {
+      "get": {
+        "operationId": "dashboard.resources.customer_segments.list",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "List saved customer segments, least recently updated first",
+        "description": "The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of segments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "segments": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CustomerSegmentResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "segments",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app lists or syncs the store's saved customer segments and their rules.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.resources.customer_segments.create",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "Save a customer segment",
+        "description": "Saves a segment (a store keeps at most 200): a named filter over customers, evaluated live wherever it is used (discounts, price lists, campaigns). Spend is in minor units of the store currency. A name another segment has is refused with 409. An app's rules filter only by the store's own customer fields (`custom` namespace; 403 `forbidden` with reason `custom_field_not_visible` otherwise).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "1 to 80 characters after trimming, unique in the store (any case)."
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 600,
+                    "description": "At most 300 characters after trimming; empty or null clears it."
+                  },
+                  "definition": {
+                    "$ref": "#/components/schemas/CustomerSegmentRules"
+                  }
+                },
+                "required": [
+                  "name",
+                  "definition"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The segment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "segment": {
+                          "$ref": "#/components/schemas/CustomerSegmentResource"
+                        }
+                      },
+                      "required": [
+                        "segment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app saves a customer segment, such as wholesale buyers or customers who spent over an amount.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.edit"
+        }
+      }
+    },
+    "/api/v1/admin/resources/customer-segments/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.customer_segments.get",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "Get a saved customer segment",
+        "description": "The segment's rules, with the revision to change it at.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The segment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "segment": {
+                          "$ref": "#/components/schemas/CustomerSegmentResource"
+                        }
+                      },
+                      "required": [
+                        "segment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one saved customer segment's rules.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.view"
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.resources.customer_segments.update",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "Change a saved customer segment",
+        "description": "Changes the fields sent (name, description, the whole rules) under the revision read; a segment changed since is refused with 409 and nothing changes. A segment a live discount or a price list uses changes only with write_discounts or write_products respectively (403 `forbidden` otherwise).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "1 to 80 characters after trimming, unique in the store (any case)."
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 600,
+                    "description": "At most 300 characters after trimming; empty or null clears it."
+                  },
+                  "definition": {
+                    "$ref": "#/components/schemas/CustomerSegmentRules"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The segment's `revision` you read."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The segment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "segment": {
+                          "$ref": "#/components/schemas/CustomerSegmentResource"
+                        }
+                      },
+                      "required": [
+                        "segment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app renames a saved customer segment or changes its rules.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.edit"
+        }
+      }
+    },
+    "/api/v1/admin/resources/customer-segments/{id}/members": {
+      "get": {
+        "operationId": "dashboard.resources.customer_segments.list_members",
+        "tags": [
+          "App API - Customers"
+        ],
+        "summary": "List a segment's members",
+        "description": "The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor to walk the whole segment. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many customers; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many customers; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "customers": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CustomerResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "customers",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app walks the customers in a saved segment, page by page, to sync or message them.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "customers.view"
         }
       }
     },
@@ -144034,391 +146850,6 @@
         }
       }
     },
-    "/api/v1/admin/resources/suppliers/{id}/archive": {
-      "post": {
-        "operationId": "dashboard.resources.suppliers.archive",
-        "tags": [
-          "App API - Inventory"
-        ],
-        "summary": "Archive a supplier",
-        "description": "New purchase orders can no longer name it; past ones keep it. Refused (409) while purchase orders are still expected from it.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\x20-\\x7E]{8,200}$",
-              "minLength": 8,
-              "maxLength": 200
-            },
-            "required": false,
-            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-            "name": "idempotency-key",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
-                  }
-                },
-                "required": [
-                  "expectedRevision"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The supplier",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "supplier": {
-                          "$ref": "#/components/schemas/SupplierResource"
-                        }
-                      },
-                      "required": [
-                        "supplier"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "stability": "stable",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "supported",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "when": "Use when an app retires a supplier no purchase order still waits on.",
-          "dryRun": "none",
-          "confirmation": "required"
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "inventory.manage"
-        }
-      }
-    },
-    "/api/v1/admin/resources/suppliers/{id}/restore": {
-      "post": {
-        "operationId": "dashboard.resources.suppliers.restore",
-        "tags": [
-          "App API - Inventory"
-        ],
-        "summary": "Make an archived supplier active again",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\x20-\\x7E]{8,200}$",
-              "minLength": 8,
-              "maxLength": 200
-            },
-            "required": false,
-            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-            "name": "idempotency-key",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
-                  }
-                },
-                "required": [
-                  "expectedRevision"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The supplier",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "supplier": {
-                          "$ref": "#/components/schemas/SupplierResource"
-                        }
-                      },
-                      "required": [
-                        "supplier"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "stability": "stable",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "supported",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "when": "Use when an app makes an archived supplier active again.",
-          "dryRun": "none",
-          "confirmation": "none"
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "inventory.manage"
-        }
-      }
-    },
     "/api/v1/admin/resources/purchase-orders": {
       "get": {
         "operationId": "dashboard.resources.purchase_orders.list",
@@ -145907,7 +148338,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "supported",
           "revision": "required",
@@ -147334,7 +149765,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "required",
           "revision": "required",
@@ -295220,6 +297651,46 @@
           ]
         },
         {
+          "operationId": "dashboard.resources.customer_segments.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customer_segments.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.customer_segments.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customer_segments.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.customer_segments.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customer_segments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.customer_segments.list_members",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customer_segments.list_members"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.customer_segments.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.customer_segments.update"
+          ]
+        },
+        {
           "operationId": "dashboard.resources.customers.bulk_tag",
           "surface": "dashboard",
           "mode": "curated",
@@ -295241,6 +297712,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.customers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.discounts.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.discounts.list"
           ]
         },
         {
@@ -295676,6 +298155,30 @@
           ]
         },
         {
+          "operationId": "dashboard.resources.returns.approve",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.returns.approve"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.returns.cancel",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.returns.cancel"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.returns.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.returns.create"
+          ]
+        },
+        {
           "operationId": "dashboard.resources.returns.get",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -295689,6 +298192,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.returns.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.returns.receive",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.returns.receive"
           ]
         },
         {
@@ -295716,14 +298227,6 @@
           ]
         },
         {
-          "operationId": "dashboard.resources.suppliers.archive",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.resources.suppliers.archive"
-          ]
-        },
-        {
           "operationId": "dashboard.resources.suppliers.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -295745,14 +298248,6 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.suppliers.list"
-          ]
-        },
-        {
-          "operationId": "dashboard.resources.suppliers.restore",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.resources.suppliers.restore"
           ]
         },
         {

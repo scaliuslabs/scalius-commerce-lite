@@ -15,6 +15,9 @@ import { adminResourceProductRoutes } from "../routes/admin/resources-products";
 import { adminResourceRefundRoutes } from "../routes/admin/resources-refunds";
 import { adminResourcePaymentMethodRoutes } from "../routes/admin/resources-payment-methods";
 import { adminResourceWebhookRoutes } from "../routes/admin/resources-webhooks";
+import { adminResourceReturnRoutes } from "../routes/admin/resources-returns";
+import { adminResourceDiscountRoutes } from "../routes/admin/resources-discounts";
+import { adminResourceCustomerSegmentRoutes } from "../routes/admin/resources-customer-segments";
 
 export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
   routers: {
@@ -25,6 +28,9 @@ export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
     adminResourceRefundRoutes,
     adminResourcePaymentMethodRoutes,
     adminResourceWebhookRoutes,
+    adminResourceReturnRoutes,
+    adminResourceDiscountRoutes,
+    adminResourceCustomerSegmentRoutes,
     adminCustomerMarketingRoutes,
     adminCustomerRoutes,
     adminDiscountRoutes,
