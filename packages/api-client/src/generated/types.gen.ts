@@ -41163,140 +41163,6 @@ export type PatchApiV1AdminResourcesSuppliersByIdResponses = {
 
 export type PatchApiV1AdminResourcesSuppliersByIdResponse = PatchApiV1AdminResourcesSuppliersByIdResponses[keyof PatchApiV1AdminResourcesSuppliersByIdResponses];
 
-export type PostApiV1AdminResourcesSuppliersByIdArchiveData = {
-    body: {
-        /**
-         * The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing.
-         */
-        expectedRevision: number;
-    };
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/resources/suppliers/{id}/archive';
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveError = PostApiV1AdminResourcesSuppliersByIdArchiveErrors[keyof PostApiV1AdminResourcesSuppliersByIdArchiveErrors];
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveResponses = {
-    /**
-     * The supplier
-     */
-    200: {
-        success: true;
-        data: {
-            supplier: SupplierResource;
-        };
-    };
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdArchiveResponse = PostApiV1AdminResourcesSuppliersByIdArchiveResponses[keyof PostApiV1AdminResourcesSuppliersByIdArchiveResponses];
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreData = {
-    body: {
-        /**
-         * The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing.
-         */
-        expectedRevision: number;
-    };
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/resources/suppliers/{id}/restore';
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreError = PostApiV1AdminResourcesSuppliersByIdRestoreErrors[keyof PostApiV1AdminResourcesSuppliersByIdRestoreErrors];
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreResponses = {
-    /**
-     * The supplier
-     */
-    200: {
-        success: true;
-        data: {
-            supplier: SupplierResource;
-        };
-    };
-};
-
-export type PostApiV1AdminResourcesSuppliersByIdRestoreResponse = PostApiV1AdminResourcesSuppliersByIdRestoreResponses[keyof PostApiV1AdminResourcesSuppliersByIdRestoreResponses];
-
 export type GetApiV1AdminResourcesPurchaseOrdersData = {
     body?: never;
     path?: never;
@@ -41388,15 +41254,15 @@ export type PostApiV1AdminResourcesPurchaseOrdersData = {
          */
         reference?: string | null;
         /**
-         * Shipping charged by the supplier, in minor units.
+         * Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
          */
         shippingMinor?: number;
         /**
-         * Other charges, in minor units.
+         * Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
          */
         otherCostsMinor?: number;
         /**
-         * Tax charged by the supplier, in minor units.
+         * Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
          */
         taxMinor?: number;
         /**
@@ -41407,7 +41273,7 @@ export type PostApiV1AdminResourcesPurchaseOrdersData = {
             variantId: string;
             quantity: number;
             /**
-             * Cost per unit, in minor units of the store currency (the purchase order's `currency`).
+             * Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
              */
             unitCostMinor: number;
         }>;
@@ -41541,15 +41407,15 @@ export type PatchApiV1AdminResourcesPurchaseOrdersByIdData = {
          */
         reference?: string | null;
         /**
-         * Shipping charged by the supplier, in minor units.
+         * Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
          */
         shippingMinor?: number;
         /**
-         * Other charges, in minor units.
+         * Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
          */
         otherCostsMinor?: number;
         /**
-         * Tax charged by the supplier, in minor units.
+         * Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
          */
         taxMinor?: number;
         /**
@@ -41563,7 +41429,7 @@ export type PatchApiV1AdminResourcesPurchaseOrdersByIdData = {
             variantId: string;
             quantity: number;
             /**
-             * Cost per unit, in minor units of the store currency (the purchase order's `currency`).
+             * Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error.
              */
             unitCostMinor: number;
         }>;

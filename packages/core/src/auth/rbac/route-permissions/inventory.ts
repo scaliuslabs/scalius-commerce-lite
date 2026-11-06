@@ -177,12 +177,6 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: VIEW,
     PATCH: MANAGE,
   },
-  "/api/v1/admin/resources/suppliers/*/archive": {
-    POST: MANAGE,
-  },
-  "/api/v1/admin/resources/suppliers/*/restore": {
-    POST: MANAGE,
-  },
   "/api/v1/admin/resources/purchase-orders": {
     GET: VIEW_WITH_COSTS,
     POST: MANAGE_WITH_COSTS,

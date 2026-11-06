@@ -33,7 +33,7 @@ import {
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { type StoreCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
@@ -48,6 +48,15 @@ import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 export const PURCHASE_ORDER_MAX_LINES = 100;
 export const PURCHASE_ORDER_OPEN_STATUSES = ["ordered", "partially_received"] as const satisfies readonly PurchaseOrderStatus[];
 const STALE = "purchase_order_stale";
+/** A write based on a revision that is no longer current. */
+export const PURCHASE_ORDER_REVISION_CONFLICT = "purchase_order_revision_conflict";
+/** A write the purchase order's status refuses (its lines once ordered, a received or cancelled order). */
+export const PURCHASE_ORDER_STATE_CONFLICT = "purchase_order_state_conflict";
+/** A receipt or transfer move of more units than its line still has to come. */
+export const QUANTITY_EXCEEDS_OPEN = "quantity_exceeds_open";
+
+const staleOrder = () => new AppError(409, PURCHASE_ORDER_REVISION_CONFLICT, "This purchase order changed. Reload to see the latest.");
+const orderState = (message: string) => new AppError(409, PURCHASE_ORDER_STATE_CONFLICT, message);
 const NUMBER_START = 1000;
 
 // ─────────────────────────────────────────
@@ -530,21 +539,21 @@ function assertStatus(
   action: string,
 ): void {
   if (!allowed.includes(header.status)) {
-    throw new ConflictError(`${formatPurchaseOrderNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`);
+    throw orderState(`${formatPurchaseOrderNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`);
   }
 }
 
 function assertRevision(header: { revision: number }, expected: number): void {
-  if (header.revision !== expected) throw new ConflictError("This purchase order changed. Reload to see the latest.");
+  if (header.revision !== expected) throw staleOrder();
 }
 
 async function runGuarded(db: Database, statements: BatchItem<"sqlite">[]): Promise<void> {
   try {
     await safeBatch(db, statements as never);
   } catch (error) {
-    if (isBatchGuardError(error, STALE)) throw new ConflictError("This purchase order changed. Reload to see the latest.");
+    if (isBatchGuardError(error, STALE)) throw staleOrder();
     if (/PURCHASE_ORDER_LINES_LOCKED/.test(String((error as Error)?.message ?? "") + String((error as { cause?: Error })?.cause?.message ?? ""))) {
-      throw new ConflictError("An ordered purchase order's lines can't change.");
+      throw orderState("An ordered purchase order's lines can't change.");
     }
     throw error;
   }
@@ -614,9 +623,9 @@ export async function updatePurchaseOrder(
   assertRevision(header, data.expectedRevision);
   assertStatus(header, ["draft", "ordered", "partially_received"], "edited");
   const isDraft = header.status === "draft";
-  if (!isDraft && data.lines !== undefined) throw new ConflictError("An ordered purchase order's lines can't change.");
+  if (!isDraft && data.lines !== undefined) throw orderState("An ordered purchase order's lines can't change.");
   if (!isDraft && data.destinationLocationId !== undefined && data.destinationLocationId !== header.destinationLocationId) {
-    throw new ConflictError("An ordered purchase order's destination can't change.");
+    throw orderState("An ordered purchase order's destination can't change.");
   }
   const currency = { code: header.currencyCode, decimalPlaces: getDecimalPlaces(header.currencyCode) };
   const destination = data.destinationLocationId !== undefined && data.destinationLocationId !== header.destinationLocationId
@@ -812,7 +821,7 @@ export async function receivePurchaseOrder(
         if (!line) throw new NotFoundError("A line in this receipt is not on the purchase order.");
         const open = line.quantity - line.receivedQuantity;
         if (requested.quantity > open) {
-          throw new ConflictError(open === 0
+          throw new AppError(409, QUANTITY_EXCEEDS_OPEN, open === 0
             ? "A line in this receipt is already fully received."
             : `Only ${open} of a line are still to receive.`);
         }

@@ -147151,391 +147151,6 @@
         }
       }
     },
-    "/api/v1/admin/resources/suppliers/{id}/archive": {
-      "post": {
-        "operationId": "dashboard.resources.suppliers.archive",
-        "tags": [
-          "App API - Inventory"
-        ],
-        "summary": "Archive a supplier",
-        "description": "New purchase orders can no longer name it; past ones keep it. Refused (409) while purchase orders are still expected from it.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\x20-\\x7E]{8,200}$",
-              "minLength": 8,
-              "maxLength": 200
-            },
-            "required": false,
-            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-            "name": "idempotency-key",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
-                  }
-                },
-                "required": [
-                  "expectedRevision"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The supplier",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "supplier": {
-                          "$ref": "#/components/schemas/SupplierResource"
-                        }
-                      },
-                      "required": [
-                        "supplier"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "stability": "stable",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "supported",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "when": "Use when an app retires a supplier no purchase order still waits on.",
-          "dryRun": "none",
-          "confirmation": "required"
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "inventory.manage"
-        }
-      }
-    },
-    "/api/v1/admin/resources/suppliers/{id}/restore": {
-      "post": {
-        "operationId": "dashboard.resources.suppliers.restore",
-        "tags": [
-          "App API - Inventory"
-        ],
-        "summary": "Make an archived supplier active again",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\x20-\\x7E]{8,200}$",
-              "minLength": 8,
-              "maxLength": 200
-            },
-            "required": false,
-            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-            "name": "idempotency-key",
-            "in": "header"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing."
-                  }
-                },
-                "required": [
-                  "expectedRevision"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The supplier",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "supplier": {
-                          "$ref": "#/components/schemas/SupplierResource"
-                        }
-                      },
-                      "required": [
-                        "supplier"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "stability": "stable",
-          "principals": [
-            "admin"
-          ],
-          "risk": "write",
-          "openWorld": false,
-          "idempotency": "supported",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "when": "Use when an app makes an archived supplier active again.",
-          "dryRun": "none",
-          "confirmation": "none"
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "inventory.manage"
-        }
-      }
-    },
     "/api/v1/admin/resources/purchase-orders": {
       "get": {
         "operationId": "dashboard.resources.purchase_orders.list",
@@ -147812,19 +147427,19 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
-                    "description": "Shipping charged by the supplier, in minor units."
+                    "description": "Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "otherCostsMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
-                    "description": "Other charges, in minor units."
+                    "description": "Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "taxMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
-                    "description": "Tax charged by the supplier, in minor units."
+                    "description": "Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "destinationLocationId": {
                     "type": "string",
@@ -147851,7 +147466,7 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
-                          "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`)."
+                          "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                         }
                       },
                       "required": [
@@ -148230,19 +147845,19 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
-                    "description": "Shipping charged by the supplier, in minor units."
+                    "description": "Shipping charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "otherCostsMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
-                    "description": "Other charges, in minor units."
+                    "description": "Other charges, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "taxMinor": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9000000000000,
-                    "description": "Tax charged by the supplier, in minor units."
+                    "description": "Tax charged by the supplier, in minor units. At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                   },
                   "destinationLocationId": {
                     "type": "string",
@@ -148269,7 +147884,7 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000,
-                          "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`)."
+                          "description": "Cost per unit, in minor units of the store currency (the purchase order's `currency`). At most 9,000,000,000 in major units of the purchase order's currency (900,000,000,000 minor units for a currency of two decimals); a larger value is refused with validation_error."
                         }
                       },
                       "required": [
@@ -149024,7 +148639,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "supported",
           "revision": "required",
@@ -150451,7 +150066,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "required",
           "revision": "required",
@@ -298938,14 +298553,6 @@
           ]
         },
         {
-          "operationId": "dashboard.resources.suppliers.archive",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.resources.suppliers.archive"
-          ]
-        },
-        {
           "operationId": "dashboard.resources.suppliers.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -298967,14 +298574,6 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.suppliers.list"
-          ]
-        },
-        {
-          "operationId": "dashboard.resources.suppliers.restore",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.resources.suppliers.restore"
           ]
         },
         {

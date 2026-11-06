@@ -472,5 +472,17 @@
   "from": "26eb1473805110d6",
   "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
   "reason": "App line inputs are never required: every way to add a line (a product card's quick add, an island, an order form, an agent) adds it without the product page, so a required app input could not be enforced on most of them. `checkout.lineInputs[].required` is gone from the manifest, its input type and the harness built from it; an app whose input must be answered asks for it from `cart.validate` with an error on the line. No app was published with the field (line inputs are new on this branch)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8fa12220d7c0b07a",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Sealed codes are only added (APP_ERROR_CODES): the stock document operations (G2) name each refusal instead of the generic conflict (supplier, purchase order and transfer revision and state conflicts, quantity_exceeds_open, stock_committed, variant_retired, supplier_has_open_purchase_orders) and an app webhook for purchase orders without read_product_costs is cost_scope_required. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "95235214433083a4",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory fix round onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. Sealed codes are only added (APP_ERROR_CODES): the stock document operations (G2) name each refusal instead of the generic conflict (supplier, purchase order and transfer revision and state conflicts, quantity_exceeds_open, stock_committed, variant_retired, supplier_has_open_purchase_orders) and an app webhook for purchase orders without read_product_costs is cost_scope_required. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
  }
 ]

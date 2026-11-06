@@ -429,8 +429,6 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.resources.suppliers.get": "Use when an app reads one supplier's contact details and status.",
   "dashboard.resources.suppliers.create": "Use when an ERP or purchasing app adds a supplier the store buys stock from.",
   "dashboard.resources.suppliers.update": "Use when an app changes a supplier's name or contact details at the revision it read.",
-  "dashboard.resources.suppliers.archive": "Use when an app retires a supplier no purchase order still waits on.",
-  "dashboard.resources.suppliers.restore": "Use when an app makes an archived supplier active again.",
   "dashboard.resources.purchase_orders.list": "Use when an ERP syncs purchase orders to suppliers page by page by updatedAt, costs in minor units.",
   "dashboard.resources.purchase_orders.get": "Use when an app reads one purchase order with its lines, received quantities and costs in minor units.",
   "dashboard.resources.purchase_orders.create": "Use when an ERP drafts a purchase order to a supplier with unit costs in minor units.",

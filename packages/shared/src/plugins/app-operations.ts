@@ -128,8 +128,6 @@ export const STABLE_APP_OPERATIONS = {
   "suppliers.get": "dashboard.resources.suppliers.get",
   "suppliers.create": "dashboard.resources.suppliers.create",
   "suppliers.update": "dashboard.resources.suppliers.update",
-  "suppliers.archive": "dashboard.resources.suppliers.archive",
-  "suppliers.restore": "dashboard.resources.suppliers.restore",
   "purchase_orders.list": "dashboard.resources.purchase_orders.list",
   "purchase_orders.get": "dashboard.resources.purchase_orders.get",
   "purchase_orders.create": "dashboard.resources.purchase_orders.create",

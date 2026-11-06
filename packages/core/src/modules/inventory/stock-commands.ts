@@ -28,7 +28,7 @@ import {
   productVariants,
   type InventoryCommandType,
 } from "@scalius/database/schema";
-import { ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { buildStockMovementClaim, type StockMovementClaimType } from "./stock-movement-claims";
 import {
   assertInventoryLocationCovers,
@@ -325,7 +325,7 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
     const sku = skus.get(line.variantId);
     if (!sku) throw new NotFoundError("A SKU on this document no longer exists.");
     if (sku.deletedAt && !line.allowRetired) {
-      throw new ConflictError(`SKU ${sku.sku} was removed from its product. Restore it, or leave it out.`);
+      throw new AppError(409, "variant_retired", `SKU ${sku.sku} was removed from its product. Restore it, or leave it out.`);
     }
     // A digital SKU's stock is its licence keys: no receipt or transfer moves it.
     if (isDigitalKind(sku.fulfillmentKind)) throw digitalStockError({ sku: sku.sku, variantId: sku.id });
@@ -335,7 +335,9 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
     if (lineDelta(line) < 0) {
       const after = sku.stock + lineDelta(line);
       if (after < sku.reservedStock) {
-        throw new ConflictError(
+        throw new AppError(
+          409,
+          "stock_committed",
           `SKU ${sku.sku} has ${Math.max(0, sku.stock - sku.reservedStock)} units free to move: ${sku.reservedStock} of its ${sku.stock} on hand are committed to orders.`,
         );
       }

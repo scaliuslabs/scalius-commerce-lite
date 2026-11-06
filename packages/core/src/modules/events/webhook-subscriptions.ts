@@ -17,8 +17,11 @@ import {
 } from "@scalius/database/schema";
 import {
   EVENTS_API_VERSION,
+  EVENT_TOPIC_RESOURCE,
   WEBHOOK_SECRET_PREFIX,
   normalizeEventTopicFilters,
+  type EventResourceType,
+  type EventTopic,
   type EventTopicFilter,
 } from "@scalius/shared/events";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
@@ -63,6 +66,19 @@ export interface AppWebhookAccess {
   allowedHosts: readonly string[];
   topics: readonly EventTopicFilter[];
   customerData: readonly ProtectedCustomerData[];
+  /** The grant confers `products.view_costs` (`read_product_costs`): purchase order events carry costs. */
+  productCosts: boolean;
+}
+
+/** Resources whose representation carries the store's costs: an app endpoint receives them only with `productCosts`. */
+export const COST_BEARING_EVENT_RESOURCES: ReadonlySet<EventResourceType> = new Set<EventResourceType>(["purchase_order"]);
+
+const COST_BEARING_TOPICS = (Object.keys(EVENT_TOPIC_RESOURCE) as EventTopic[])
+  .filter((topic) => COST_BEARING_EVENT_RESOURCES.has(EVENT_TOPIC_RESOURCE[topic]));
+
+/** The cost-bearing topics a filter reaches (`*`, `purchase_order.*`, `purchase_order.updated`). */
+export function costBearingTopicsOf(filter: EventTopicFilter): EventTopic[] {
+  return COST_BEARING_TOPICS.filter((topic) => eventFilterCovered(topic, [filter]));
 }
 
 /** Whose subscriptions a call reaches: an app's own, or (omitted) every one, for staff. */
@@ -241,6 +257,10 @@ function assertWithinAppAccess(
   const ungranted = values.topics?.filter((topic) => !eventFilterCovered(topic, owner.access.topics)) ?? [];
   if (ungranted.length > 0) {
     throw new ValidationError(`The app's grant does not cover ${ungranted.join(", ")}: request the events in its manifest.`, { field: "topics" });
+  }
+  const costly = owner.access.productCosts ? [] : values.topics?.filter((topic) => costBearingTopicsOf(topic).length > 0) ?? [];
+  if (costly.length > 0) {
+    throw new AppError(403, "cost_scope_required", `${costly.join(", ")} delivers purchase orders with their costs: the app needs read_product_costs, or name the topics it receives without them.`, { field: "topics" });
   }
   const hidden = values.customerData?.filter((category) => !owner.access.customerData.includes(category)) ?? [];
   if (hidden.length > 0) {

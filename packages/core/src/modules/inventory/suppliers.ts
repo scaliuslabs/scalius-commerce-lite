@@ -8,7 +8,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { Database } from "@scalius/database/client";
 import { purchaseOrders, suppliers, SUPPLIER_STATUSES, type SupplierStatus } from "@scalius/database/schema";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { blankToNull, optionalTextSchema, parseInventoryInput } from "./validation";
 
 
@@ -145,8 +145,13 @@ export interface SupplierWriteOptions {
   expectedVersion?: number;
 }
 
+/** A write based on a version that is no longer current. */
+export const SUPPLIER_REVISION_CONFLICT = "supplier_revision_conflict";
+/** Archiving refused: purchase orders are still expected from the supplier. */
+export const SUPPLIER_HAS_OPEN_PURCHASE_ORDERS = "supplier_has_open_purchase_orders";
+
 function staleSupplier(): never {
-  throw new ConflictError("This supplier changed. Reload to see the latest.");
+  throw new AppError(409, SUPPLIER_REVISION_CONFLICT, "This supplier changed. Reload to see the latest.");
 }
 
 /** Archives a supplier; refused while purchase orders are still expected from it. */
@@ -168,13 +173,13 @@ export async function archiveSupplier(db: Database, id: string, options: Supplie
   )).returning({ id: suppliers.id });
   const supplier = await getSupplier(db, id);
   if (archived.length > 0) return supplier;
-  if (expectedVersion === undefined) {
-    if (supplier.status === "archived") return supplier;
-  } else {
-    if (supplier.status === "archived" && supplier.version === expectedVersion + 1) return supplier;
-    if (supplier.version !== expectedVersion) staleSupplier();
+  if (supplier.status === "archived") {
+    // Already archived: at the version the caller read (nothing to do) or the one its own archive made (a repeat).
+    if (expectedVersion === undefined || supplier.version === expectedVersion || supplier.version === expectedVersion + 1) return supplier;
+    staleSupplier();
   }
-  throw new ConflictError(`Purchase orders are still expected from ${supplier.name}. Receive or cancel them first.`);
+  if (expectedVersion !== undefined && supplier.version !== expectedVersion) staleSupplier();
+  throw new AppError(409, SUPPLIER_HAS_OPEN_PURCHASE_ORDERS, `Purchase orders are still expected from ${supplier.name}. Receive or cancel them first.`);
 }
 
 export async function unarchiveSupplier(db: Database, id: string, options: SupplierWriteOptions = {}): Promise<SupplierRecord> {

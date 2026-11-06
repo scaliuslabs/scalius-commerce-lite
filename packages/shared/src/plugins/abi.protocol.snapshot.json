@@ -15210,6 +15210,26 @@
    "status": 409,
    "meaning": "The object type changed since its revision was read."
   },
+  "supplier_revision_conflict": {
+   "status": 409,
+   "meaning": "The supplier changed since its revision was read."
+  },
+  "purchase_order_revision_conflict": {
+   "status": 409,
+   "meaning": "The purchase order changed since its revision was read."
+  },
+  "purchase_order_state_conflict": {
+   "status": 409,
+   "meaning": "The purchase order's status refuses the write (an ordered one's lines, a received or cancelled one)."
+  },
+  "inventory_transfer_revision_conflict": {
+   "status": 409,
+   "meaning": "The stock transfer changed since its revision was read."
+  },
+  "inventory_transfer_state_conflict": {
+   "status": 409,
+   "meaning": "The stock transfer's status refuses the write (a shipped one's lines, nothing left in transit)."
+  },
   "price_changed": {
    "status": 409,
    "meaning": "A price moved since it was read; read it again."
@@ -15229,6 +15249,26 @@
   "inventory_location_shortfall": {
    "status": 409,
    "meaning": "The location holds fewer units than the move takes."
+  },
+  "quantity_exceeds_open": {
+   "status": 409,
+   "meaning": "A receipt takes more units than its line still has to come (ordered and not received, or in transit)."
+  },
+  "stock_committed": {
+   "status": 409,
+   "meaning": "Fewer units are free to move than the move takes: the rest are committed to orders."
+  },
+  "variant_retired": {
+   "status": 409,
+   "meaning": "The SKU was retired from its product; restore it or leave it out."
+  },
+  "supplier_has_open_purchase_orders": {
+   "status": 409,
+   "meaning": "Purchase orders are still expected from the supplier; receive or cancel them first."
+  },
+  "cost_scope_required": {
+   "status": 403,
+   "meaning": "Purchase order events carry costs: the app's endpoint needs read_product_costs to receive them."
   },
   "menu_in_trash": {
    "status": 409,

@@ -56,7 +56,7 @@ const INVENTORY_READ = ["inventory.view"] as const;
 const OBJECTS_READ = ["objects.view"] as const;
 
 export const PLUGIN_SCOPES = {
-  /** Products, variants with their stock totals, collections, categories, brands and attributes. */
+  /** Products, variants with their stock totals and per-location levels, collections, categories, brands and attributes. */
   read_products: { rbac: PRODUCTS_READ, staff: "products.view" },
   /**
    * Create, edit, trash and restore products, variants, collections,
@@ -75,12 +75,12 @@ export const PLUGIN_SCOPES = {
     ],
     staff: "products.edit",
   },
-  /** Stock levels per location, locations, suppliers, purchase orders and transfers. */
+  /** Stock levels per location, locations, suppliers and transfers; purchase orders also need `read_product_costs`. */
   read_inventory: { rbac: INVENTORY_READ, staff: "inventory.view" },
   /**
    * Adjust and set stock (on hand, per location), including the quantities a
-   * product or SKU write sets; manage locations, suppliers, purchase orders
-   * and transfers.
+   * product or SKU write sets; manage locations, suppliers and transfers
+   * (purchase orders also need `read_product_costs`).
    */
   write_inventory: { rbac: [...INVENTORY_READ, "products.adjust_stock", "inventory.manage"], staff: "products.adjust_stock" },
   /** Orders, their lines, payments, shipments, returns and timeline; abandoned checkouts. Contact fields need the protected data scopes. */
@@ -204,9 +204,11 @@ export const PLUGIN_SCOPES = {
   /**
    * What the store pays for stock: purchase-order costs (unit costs,
    * shipping, other charges and tax) and the SKU unit costs a receipt may
-   * move. Alone it reaches nothing: beside `read_inventory` it reads purchase
-   * orders, beside `write_inventory` it drafts, orders, receives and cancels
-   * them. Sensitive: costs and margins are the merchant's trade secrets.
+   * move. Alone it reaches no stable operation (a bundled first-party app
+   * also reads inventory valuation with it): beside `read_inventory` it reads
+   * purchase orders, beside `write_inventory` it drafts, orders, receives and
+   * cancels them, and an app's webhooks for purchase orders need it.
+   * Sensitive: costs and margins are the merchant's trade secrets.
    */
   read_product_costs: { rbac: ["products.view_costs"], staff: "products.view_costs", sensitive: true },
 } as const satisfies Record<string, PluginScopeDefinition>;
