@@ -641,7 +641,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
             : {}),
         },
       }
-    : { optionMatrix: { options, variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode, decimalPlaces) } };
+    : { optionMatrix: { options: matrixSaveOptions(options), variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode, decimalPlaces) } };
 
   const mutation = useMutation({
     mutationFn: (revisionOverride?: number) => {

@@ -7,7 +7,6 @@ import {
     productVariants,
 } from "@scalius/database/schema";
 import { getCurrentMediaUrl } from "../../integrations/storage";
-import { publishedMediaObjectKey } from "../media-references";
 import { and, asc, eq, inArray, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { qualifiedReference } from "../../utils/qualified-column";
@@ -49,8 +48,8 @@ export function optionValueSwatchColumns() {
     return {
         swatchColor: productOptionValues.swatchColor,
         swatchMediaId: productOptionValues.swatchMediaId,
-        // The swatch image's published key, while it is an image Files still shows.
-        swatchObjectKey: publishedMediaObjectKey(),
+        // The swatch image's stored key: `optionValueSwatch` adds its rendition once.
+        swatchObjectKey: media.objectKey,
         swatchVariantWidth: media.variantWidth,
         swatchUsable: sql<number>`CASE WHEN ${media.kind} = 'image' AND ${media.status} IN ('ready', 'trashed') THEN 1 ELSE 0 END`,
     };
@@ -65,6 +64,7 @@ export function optionValueSwatch(row: {
     swatchUsable: number | boolean | null;
 }): ProductOptionValueSwatch | null {
     if (!row.swatchColor && !row.swatchMediaId) return null;
+    // The rendition (`<key>/<width>.webp`) is added here, once, from the stored key.
     const imageUrl = row.swatchMediaId && row.swatchObjectKey && Boolean(Number(row.swatchUsable))
         ? getCurrentMediaUrl(row.swatchObjectKey, row.swatchVariantWidth)
         : null;
