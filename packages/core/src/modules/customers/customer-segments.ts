@@ -289,6 +289,22 @@ export async function getCustomerSegment(db: Database, id: string): Promise<Cust
     return record;
 }
 
+/** Live segments by id (at most 90, bound as one value), in the order asked; unknown and deleted ids are left out. */
+export async function getCustomerSegmentsByIds(db: Database, ids: readonly string[]): Promise<CustomerSegmentRecord[]> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return [];
+    if (unique.length > 90) throw new ValidationError("Read at most 90 segments at once.");
+    const rows = await db.select({ segment: customerSegments, promotionCount: livePromotionUse })
+        .from(customerSegments)
+        // `+deleted_at`: seek the id list, not the deleted_at-led list index.
+        .where(and(sql`${customerSegments.id} IN (SELECT value FROM json_each(${JSON.stringify(unique)}))`, sql`+${customerSegments.deletedAt} IS NULL`));
+    const byId = new Map(rows.flatMap((row) => {
+        const record = toRecord(row.segment, Number(row.promotionCount));
+        return record ? [[record.id, record] as const] : [];
+    }));
+    return unique.flatMap((id) => byId.get(id) ?? []);
+}
+
 function cleanName(name: string): string {
     const value = name.normalize("NFC").replace(/\s+/g, " ").trim();
     if (value.length < 1 || value.length > 80) throw new ValidationError("A segment name is 1 to 80 characters.");
@@ -372,9 +388,15 @@ export async function updateCustomerSegment(
     return getCustomerSegment(db, id);
 }
 
-/** Soft delete; refused while a live (not archived) promotion is limited to it. */
-export async function deleteCustomerSegment(db: Database, id: string): Promise<void> {
+/**
+ * Soft delete; refused while a live (not archived) promotion is limited to it.
+ * With `expectedRevision`, a segment changed since is refused (409) and stays.
+ */
+export async function deleteCustomerSegment(db: Database, id: string, options: { expectedRevision?: number } = {}): Promise<void> {
     const current = await getCustomerSegment(db, id);
+    if (options.expectedRevision !== undefined && current.revision !== options.expectedRevision) {
+        throw new ConflictError("This segment changed since you opened it. Reload it and try again.");
+    }
     if (current.promotionCount > 0) {
         throw new ConflictError("Discounts are limited to this segment. Remove it from them first.");
     }
@@ -386,15 +408,21 @@ export async function deleteCustomerSegment(db: Database, id: string): Promise<v
     if (priced.length > 0) {
         throw new ConflictError("A price list prices this segment. Delete that price list first.");
     }
-    await db.update(customerSegments)
+    const deleted = await db.update(customerSegments)
         .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(and(
             eq(customerSegments.id, id),
             isNull(customerSegments.deletedAt),
+            options.expectedRevision === undefined ? undefined : eq(customerSegments.revision, options.expectedRevision),
             sql`NOT EXISTS (SELECT 1 FROM ${promotionCustomerSegments} JOIN ${promotions} ON ${promotions.id} = ${promotionCustomerSegments.promotionId}
                 WHERE ${promotionCustomerSegments.segmentId} = ${id} AND ${promotions.deletedAt} IS NULL AND ${promotions.status} <> 'archived')`,
             sql`NOT EXISTS (SELECT 1 FROM price_lists AS segment_price_list WHERE segment_price_list.segment_id = ${id})`,
-        ));
+        ))
+        .returning({ id: customerSegments.id });
+    // A change, a discount or a price list that won the race since the reads above.
+    if (options.expectedRevision !== undefined && deleted.length === 0) {
+        throw new ConflictError("This segment changed since you opened it. Reload it and try again.");
+    }
 }
 
 /** Stored definitions of these segments (deleted or unreadable ones are null: they match nobody). */

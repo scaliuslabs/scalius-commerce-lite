@@ -10,6 +10,8 @@ const shipments = { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS };
 const products = { permission: PERMISSIONS.PRODUCTS_VIEW };
 const productsEdit = { permission: PERMISSIONS.PRODUCTS_EDIT };
 const customers = { permission: PERMISSIONS.CUSTOMERS_VIEW };
+const customersEdit = { permission: PERMISSIONS.CUSTOMERS_EDIT };
+const returns = { permission: PERMISSIONS.ORDERS_CHANGE_STATUS };
 const giftCards = { permission: PERMISSIONS.GIFT_CARDS_VIEW };
 const giftCardsManage = { permission: PERMISSIONS.GIFT_CARDS_MANAGE };
 const webhooks = { permission: PERMISSIONS.WEBHOOKS_VIEW };
@@ -39,8 +41,13 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders/*/fulfillments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/orders/*/shipments": { GET: orders, POST: shipments },
   "/api/v1/admin/resources/shipments/*": { GET: orders },
-  "/api/v1/admin/resources/orders/*/returns": { GET: orders },
+  // Return writes need what the dashboard's return commands need.
+  "/api/v1/admin/resources/orders/*/returns": { GET: orders, POST: returns },
   "/api/v1/admin/resources/returns/*": { GET: orders },
+  "/api/v1/admin/resources/returns/*/approve": { POST: returns },
+  "/api/v1/admin/resources/returns/*/receive": { POST: returns },
+  "/api/v1/admin/resources/returns/*/cancel": { POST: returns },
+  "/api/v1/admin/resources/discounts": { GET: { permission: PERMISSIONS.DISCOUNTS_VIEW } },
   // Stock screens read locations by name; their addresses need inventory.view
   // or settings.general.view (the handler nulls them otherwise), as on
   // /admin/inventory/locations.
@@ -64,6 +71,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/variants/*": { GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] } },
   "/api/v1/admin/resources/customers": { GET: customers },
   "/api/v1/admin/resources/customers/*": { GET: customers },
+  // Saved segments: deleting a saved filter deletes no customer, an edit.
+  "/api/v1/admin/resources/customer-segments": { GET: customers, POST: customersEdit },
+  "/api/v1/admin/resources/customer-segments/*": { GET: customers, PATCH: customersEdit, DELETE: customersEdit },
+  "/api/v1/admin/resources/customer-segments/*/members": { GET: customers },
   // Price lists read and write with the catalog, as the dashboard's editor does.
   "/api/v1/admin/resources/price-lists": { GET: products, POST: productsEdit },
   "/api/v1/admin/resources/price-lists/*": { GET: products, PATCH: productsEdit, DELETE: productsEdit },
