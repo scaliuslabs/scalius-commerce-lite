@@ -201,6 +201,14 @@ export const PLUGIN_SCOPES = {
     rbac: ["settings.delivery_locations.view", "settings.delivery_locations.import"],
     staff: "settings.delivery_locations.import",
   },
+  /**
+   * What the store pays for stock: purchase-order costs (unit costs,
+   * shipping, other charges and tax) and the SKU unit costs a receipt may
+   * move. Alone it reaches nothing: beside `read_inventory` it reads purchase
+   * orders, beside `write_inventory` it drafts, orders, receives and cancels
+   * them. Sensitive: costs and margins are the merchant's trade secrets.
+   */
+  read_product_costs: { rbac: ["products.view_costs"], staff: "products.view_costs", sensitive: true },
 } as const satisfies Record<string, PluginScopeDefinition>;
 
 export type PluginScope = keyof typeof PLUGIN_SCOPES;

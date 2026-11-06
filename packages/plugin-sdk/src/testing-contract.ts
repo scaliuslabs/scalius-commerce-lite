@@ -9,7 +9,7 @@
 //   404 api_unknown_operation      no operation has this app name
 //   400 api_invalid_input          input is not { path, query, body, idempotencyKey }
 //   403 api_operation_not_stable   the operation is beta or internal
-//   403 api_operation_forbidden    no granted scope covers the operation
+//   403 api_operation_forbidden    no granted scope (or granted pair) covers the operation
 //   400 idempotency_key_required   a stock move without idempotencyKey
 //   400 idempotency_not_supported  idempotencyKey on an operation that takes none
 //   400 body_not_allowed           a body on a GET
@@ -51,6 +51,12 @@ export interface StableContractOperation {
   revision: "none" | "optional" | "required" | string;
   /** Every scope that alone lets a third-party app call it. */
   scopes: string[];
+  /**
+   * Only where no scope alone covers it: the pairs of scopes that together
+   * do (a purchase order needs `read_inventory` or `write_inventory` and
+   * `read_product_costs`).
+   */
+  scopeSets?: string[][];
   input: { parameters?: StableContractParameter[]; requestBody?: { required?: boolean; content?: Record<string, { schema?: ContractSchema }> } } | null;
   output: ContractSchema | null;
 }
@@ -109,6 +115,17 @@ const MAX_BODY_BYTES = 1024 * 1024;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const refusal = (status: number, code: string, message: string): PluginApiResult => ({ ok: false, status, data: null, error: { code, message } });
+
+/** As the host, which checks the union of the granted scopes' permissions: one covering scope, or a whole covering pair. */
+function grantCovers(operation: StableContractOperation, granted: readonly string[]): boolean {
+  return operation.scopes.some((scope) => granted.includes(scope))
+    || (operation.scopeSets ?? []).some((set) => set.every((scope) => granted.includes(scope)));
+}
+
+function coveringScopesText(operation: StableContractOperation): string {
+  const options = [...operation.scopes, ...(operation.scopeSets ?? []).map((set) => set.join(" + "))];
+  return options.length > 0 ? `one of ${options.join(", ")}` : "(no app scope)";
+}
 
 /** The input as the host normalizes it (api-call.ts `normalizePluginApiInput`), or what is wrong with it. */
 function normalize(input: unknown): Required<Pick<ContractCall, "path" | "query">> & { body: unknown; idempotencyKey: string | undefined } | string {
@@ -322,8 +339,8 @@ export function createContractApi(options: ContractApiOptions = {}): ContractApi
     if (typeof input === "string") return refusal(400, "api_invalid_input", input);
     // As the host: an operation that exists but is beta or internal is refused, not unknown.
     if (!operation) return refusal(403, "api_operation_not_stable", `${operationId} is not part of the stable app API.`);
-    if (granted && !operation.scopes.some((scope) => granted.includes(scope))) {
-      return refusal(403, "api_operation_forbidden", `Operation is not authorized: ${operationId} needs one of ${operation.scopes.join(", ") || "(no app scope)"}.`);
+    if (granted && !grantCovers(operation, granted)) {
+      return refusal(403, "api_operation_forbidden", `Operation is not authorized: ${operationId} needs ${coveringScopesText(operation)}.`);
     }
 
     // The dispatcher's checks, in its order.

@@ -98,6 +98,21 @@ mirror a dashboard screen, an editor section or a summary card.
   beside the store `currency` (`customerSegmentDefinitionAppSchema`); members
   page as `CustomerResource` in id order. `products.list`, `customers.list`
   and `orders.list` read up to 90 records by `ids`, bound as one JSON value.
+- **Apps keep stock documents in step with an ERP.**
+  `dashboard.resources.inventory_levels.list` reads on-hand per SKU per
+  location (with the SKU's `stockVersion`) by up to 90 `variantIds` (one bound
+  value), a product or a location, cursor-paged in (updatedAt, SKU and
+  location) order. `suppliers.*`, `purchase_orders.*` and
+  `inventory_transfers.*` (`routes/admin/resources-inventory.ts`) call the
+  dashboard's inventory services: purchase orders and transfers answer the
+  `purchase_order` and `inventory_transfer` representations, costs in minor
+  units of the purchase order's `currency`. Receiving and shipping are
+  ledger-v2 stock commands whose key derives from the required
+  Idempotency-Key, so a repeat (even after a lost response) moves nothing; a
+  receipt is bounded by each line's open quantity, so it takes no revision.
+  A purchase order is a cost document: its operations need
+  `products.view_costs` too (an app: `read_product_costs` beside an inventory
+  scope; the snapshot lists the covering pairs as `scopeSets`).
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
   `currency` on the same object or the resource that holds it. Inputs take

@@ -153,7 +153,7 @@
    },
    "scopes": {
     "default": [],
-    "maxItems": 33,
+    "maxItems": 34,
     "type": "array",
     "items": {
      "type": "string",
@@ -190,7 +190,8 @@
       "read_settings",
       "write_themes",
       "write_navigation",
-      "write_places"
+      "write_places",
+      "read_product_costs"
      ]
     }
    },
@@ -1717,7 +1718,8 @@
           "read_settings",
           "write_themes",
           "write_navigation",
-          "write_places"
+          "write_places",
+          "read_product_costs"
          ]
         }
        },
@@ -3393,7 +3395,7 @@
       },
       "scopes": {
        "default": [],
-       "maxItems": 33,
+       "maxItems": 34,
        "type": "array",
        "items": {
         "type": "string",
@@ -3430,7 +3432,8 @@
          "read_settings",
          "write_themes",
          "write_navigation",
-         "write_places"
+         "write_places",
+         "read_product_costs"
         ]
        }
       },

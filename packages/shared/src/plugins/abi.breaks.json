@@ -388,5 +388,65 @@
   "from": "fbce8360941dfbc5",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
   "reason": "Pre-release (gap G3): `addLine` takes an optional `inputs` (the app's own line inputs by key), so an island adds a line carrying them; every call written before (variantId, quantity, purchaseOption) is still valid and behaves the same."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "6668dff056e411e3",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "6668dff056e411e3",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "6668dff056e411e3",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "6668dff056e411e3",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "6668dff056e411e3",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "6668dff056e411e3",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
  }
 ]

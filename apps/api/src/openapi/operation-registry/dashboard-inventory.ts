@@ -83,4 +83,29 @@ export const DASHBOARD_INVENTORY_OPERATIONS = {
   "dashboard.inventory_transfers.receive": { idempotency: "required" },
   "dashboard.inventory_transfers.cancel": { risk: "destructive", idempotency: "required", revision: "required" },
   "dashboard.inventory_transfers.delete": { risk: "destructive", revision: "required" },
+  // The stable app API's stock documents (routes/admin/resources-inventory.ts):
+  // the same inventory services as above, minor units in and out, the sealed
+  // purchase_order and inventory_transfer representations. Stock commands
+  // derive their operation key from the required Idempotency-Key.
+  "dashboard.resources.inventory_levels.list": { uncurated: true },
+  "dashboard.resources.suppliers.list": { uncurated: true },
+  "dashboard.resources.suppliers.get": { uncurated: true },
+  "dashboard.resources.suppliers.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.suppliers.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.suppliers.archive": { risk: "destructive", revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.suppliers.restore": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.purchase_orders.list": { uncurated: true },
+  "dashboard.resources.purchase_orders.get": { uncurated: true },
+  "dashboard.resources.purchase_orders.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.purchase_orders.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.purchase_orders.mark_ordered": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.purchase_orders.receive": { idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.purchase_orders.cancel": { risk: "destructive", revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.inventory_transfers.list": { uncurated: true },
+  "dashboard.resources.inventory_transfers.get": { uncurated: true },
+  "dashboard.resources.inventory_transfers.create": { batch: "forbidden", uncurated: true },
+  "dashboard.resources.inventory_transfers.update": { revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.inventory_transfers.ship": { idempotency: "required", revision: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.inventory_transfers.receive": { idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.inventory_transfers.cancel": { risk: "destructive", idempotency: "required", revision: "required", batch: "forbidden", uncurated: true },
 } satisfies Record<string, OperationRegistryEntry>;

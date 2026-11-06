@@ -131,13 +131,27 @@ export async function updateSupplier(db: Database, id: string, input: UpdateSupp
   }).where(and(eq(suppliers.id, id), eq(suppliers.version, expectedVersion))).returning({ id: suppliers.id });
   if (updated.length === 0) {
     await getSupplier(db, id);
-    throw new ConflictError("This supplier changed. Reload to see the latest.");
+    staleSupplier();
   }
   return getSupplier(db, id);
 }
 
+/**
+ * The version a supplier write was based on. With it, a write to a supplier
+ * that changed since is refused (409), and a repeat of the write that already
+ * moved it (status reached at exactly the next version) answers the supplier.
+ */
+export interface SupplierWriteOptions {
+  expectedVersion?: number;
+}
+
+function staleSupplier(): never {
+  throw new ConflictError("This supplier changed. Reload to see the latest.");
+}
+
 /** Archives a supplier; refused while purchase orders are still expected from it. */
-export async function archiveSupplier(db: Database, id: string): Promise<SupplierRecord> {
+export async function archiveSupplier(db: Database, id: string, options: SupplierWriteOptions = {}): Promise<SupplierRecord> {
+  const { expectedVersion } = options;
   const archived = await db.update(suppliers).set({
     status: "archived",
     version: sql`${suppliers.version} + 1`,
@@ -145,6 +159,7 @@ export async function archiveSupplier(db: Database, id: string): Promise<Supplie
   }).where(and(
     eq(suppliers.id, id),
     eq(suppliers.status, "active"),
+    ...(expectedVersion === undefined ? [] : [eq(suppliers.version, expectedVersion)]),
     sql`NOT EXISTS (
       SELECT 1 FROM ${purchaseOrders}
       WHERE ${purchaseOrders.supplierId} = ${id}
@@ -152,17 +167,31 @@ export async function archiveSupplier(db: Database, id: string): Promise<Supplie
     )`,
   )).returning({ id: suppliers.id });
   const supplier = await getSupplier(db, id);
-  if (archived.length > 0 || supplier.status === "archived") return supplier;
+  if (archived.length > 0) return supplier;
+  if (expectedVersion === undefined) {
+    if (supplier.status === "archived") return supplier;
+  } else {
+    if (supplier.status === "archived" && supplier.version === expectedVersion + 1) return supplier;
+    if (supplier.version !== expectedVersion) staleSupplier();
+  }
   throw new ConflictError(`Purchase orders are still expected from ${supplier.name}. Receive or cancel them first.`);
 }
 
-export async function unarchiveSupplier(db: Database, id: string): Promise<SupplierRecord> {
+export async function unarchiveSupplier(db: Database, id: string, options: SupplierWriteOptions = {}): Promise<SupplierRecord> {
+  const { expectedVersion } = options;
   await db.update(suppliers).set({
     status: "active",
     version: sql`${suppliers.version} + 1`,
     updatedAt: sql`unixepoch()`,
-  }).where(and(eq(suppliers.id, id), eq(suppliers.status, "archived")));
-  return getSupplier(db, id);
+  }).where(and(
+    eq(suppliers.id, id),
+    eq(suppliers.status, "archived"),
+    ...(expectedVersion === undefined ? [] : [eq(suppliers.version, expectedVersion)]),
+  ));
+  const supplier = await getSupplier(db, id);
+  if (expectedVersion !== undefined && supplier.version !== expectedVersion
+    && !(supplier.status === "active" && supplier.version === expectedVersion + 1)) staleSupplier();
+  return supplier;
 }
 
 /** An active supplier a purchase order can name (or a clear error). */

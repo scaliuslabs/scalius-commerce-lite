@@ -90,7 +90,8 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
  * effect is keyed by the request (`scopedRequestKey`, batch item keys, a bulk
  * run's operation key), sets a target state (restore, void, delivered, ready
  * for pickup, capture), matches by a natural key (an object type, a place
- * import) or only reads (`variants.lookup`). Any other POST or PATCH without
+ * import) or only reads (`variants.lookup`). Purchase-order and transfer
+ * receipts are stock commands keyed by the request. Any other POST or PATCH without
  * a required revision answers `idempotency_outcome_unknown` instead, so a new
  * stable create stays safe until it is listed here with a key of its own
  * (`idempotency.test.ts` holds the list to the stable contract).
@@ -117,6 +118,8 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.resources.products.batch_create",
   "dashboard.resources.products.bulk_publish",
   "dashboard.resources.products.bulk_set_status",
+  "dashboard.resources.purchase_orders.receive",
+  "dashboard.resources.inventory_transfers.receive",
   "dashboard.resources.refunds.create",
   "dashboard.resources.variants.bulk_set_prices",
   "dashboard.resources.variants.bulk_set_stock",
