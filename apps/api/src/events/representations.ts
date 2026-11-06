@@ -35,14 +35,11 @@ import {
   productVariantOptionValues,
   productVariants,
   products,
-  promotionCodes,
-  promotionRedemptions,
-  promotions,
   purchaseOrderLines,
   purchaseOrders,
   refundAttempts,
 } from "@scalius/database/schema";
-import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { loadProductMediaProjections, parsePublishedChannelIds, productVariantBarcodeIdentityIn, publishedChannelIdsSql, resolveProductImageRepresentation } from "@scalius/core/modules/products";
@@ -55,6 +52,7 @@ import {
   type EventRepresentationType,
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
+import { readDiscountRepresentations } from "./discount-representations";
 import { isLineInputEntry, LINE_ADJUSTMENT_PROPERTY_KEY, readLinePurchaseOptions, readOrderLineProperties } from "@scalius/shared/line-properties";
 import { appScopedKeyAppId } from "@scalius/shared/plugins/ids";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
@@ -967,30 +965,9 @@ async function checkoutRepresentation(db: Database, abandonedCheckoutId: string)
   });
 }
 
+/** The one discount builder: the batched reader `discounts.list` pages through too. */
 async function discountRepresentation(db: Database, promotionId: string) {
-  const promotion = await db.select().from(promotions).where(eq(promotions.id, promotionId)).get();
-  if (!promotion) return null;
-  const [codes, redemptions] = await Promise.all([
-    db.select({ count: count() }).from(promotionCodes).where(eq(promotionCodes.promotionId, promotionId)).get(),
-    db.select({ count: count() }).from(promotionRedemptions).where(eq(promotionRedemptions.promotionId, promotionId)).get(),
-  ]);
-  return sealed("discount", {
-    id: promotion.id,
-    name: promotion.name,
-    title: promotion.title ?? null,
-    method: promotion.method,
-    status: promotion.status,
-    priority: promotion.priority,
-    revision: promotion.revision,
-    codeCount: Number(codes?.count ?? 0),
-    startsAt: iso(promotion.startsAt),
-    endsAt: iso(promotion.endsAt),
-    maxRedemptions: promotion.maxRedemptions ?? null,
-    redemptions: Number(redemptions?.count ?? 0),
-    createdAt: isoRequired(promotion.createdAt),
-    updatedAt: isoRequired(promotion.updatedAt),
-    deletedAt: iso(promotion.deletedAt),
-  });
+  return (await readDiscountRepresentations(db, [promotionId]))[0] ?? null;
 }
 
 async function reviewRepresentation(db: Database, reviewId: string) {
