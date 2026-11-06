@@ -115,7 +115,7 @@ A `checkout.discounts` answer may carry `commit: [{ as, record }]` (up to four) 
 ### Failure policy and limits
 
 - A function that throws, times out, answers invalidly (`function_invalid_output`) or exceeds its read bounds is left out: `onError: "skip"` (the default).
-- Only `cart.transform`, `cart.line_prices`, `cart.validate` and `checkout.payment_methods` may declare `onError: "block"`. Checkout then stops with the store's buyer-safe text.
+- Only `cart.transform`, `cart.line_prices`, `cart.validate` and `checkout.payment_methods` may declare `onError: "block"`. Checkout then stops with the store's buyer-safe text. The merchant approves it as access of its own ("can pause checkout"): an update that adds `onError: "block"` to a function pauses the app until the store owner approves it.
 - Wall budget: the smaller of `limits.wallMs` and 1.5 s. CPU: the smaller of your manifest `limits.cpuMs` and the plan ceiling (50 ms on the default, up to 200 ms on Paid), with a fixed 50 ms cap for `buyer.ui`.
 - `priority` (0 to 1000, default 100): lower runs first among apps at the same point.
 
