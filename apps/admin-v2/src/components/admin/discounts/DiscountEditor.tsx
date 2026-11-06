@@ -21,6 +21,7 @@ import {
   emptyDraft,
   exceedsEveryPrice,
   generateDiscountCode,
+  hasNoStart,
   latinDigits,
   summarizeDraft,
   sameDiscountDraft,
@@ -626,7 +627,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
               <CardHeader><CardTitle>{t("datesCard")}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <FieldRow>
-                  <Field id="start-date" label={t("startDate")} error={shown("startDate")}>
+                  <Field id="start-date" label={t("startDate")} error={shown("startDate")} help={hasNoStart(draft) ? t("startEmptyHelp") : undefined}>
                     <DateInput
                       value={draft.startDate}
                       onValueChange={(startDate) => update({ startDate })}

@@ -33,8 +33,8 @@ export function DiscountSavedView({ draft, format, redemptionCount }: {
       <Card>
         <CardHeader><CardTitle>{t("datesCard")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <ReadOnlyValue label={t("startDate")} value={date(start)} />
-          <ReadOnlyValue label={t("endDate")} value={date(end)} />
+          <ReadOnlyValue label={t("startDate")} value={date(start) ?? t("noStartDate")} />
+          <ReadOnlyValue label={t("endDate")} value={date(end) ?? t("noEndDate")} />
         </CardContent>
       </Card>
 

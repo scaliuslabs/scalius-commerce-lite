@@ -24,10 +24,12 @@ interface ZodIssueLike {
 const ZOD_DEFAULT = /^(Invalid|Too (small|big)|Expected|Unrecognized|Required$)/;
 
 function friendly(issue: ZodIssueLike): string {
-  const own = typeof issue.message === "string" ? issue.message.trim() : "";
-  if (own && !ZOD_DEFAULT.test(own)) return own;
   const t = (key: keyof typeof fieldErrorMessages.en, vars?: Record<string, string | number>) =>
     translate(fieldErrorMessages, key, vars);
+  // A field the route does not take: the dashboard's own words, in its language.
+  if (issue.code === "unrecognized_keys") return t("unknownField");
+  const own = typeof issue.message === "string" ? issue.message.trim() : "";
+  if (own && !ZOD_DEFAULT.test(own)) return own;
   const min = typeof issue.minimum === "number" ? issue.minimum : null;
   const max = typeof issue.maximum === "number" ? issue.maximum : null;
   switch (issue.code) {
@@ -58,11 +60,23 @@ function toPath(path: unknown): string | null {
 
 function fromIssues(value: unknown): ApiFieldIssue[] | null {
   if (!Array.isArray(value)) return null;
+  const seen = new Set<string>();
   const issues = value.flatMap((item: ZodIssueLike) => {
     const path = item && typeof item === "object" ? toPath(item.path) : null;
-    return path === null ? [] : [{ path, message: friendly(item) }];
+    if (path === null) return [];
+    const issue = { path, message: friendly(item) };
+    // One line per field and problem, however many times the API names it.
+    const key = `${issue.path}\u0000${issue.message}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [issue];
   });
   return issues.length ? issues : null;
+}
+
+/** A field problem shown away from its field: the field's path, then the problem. */
+export function issueLine(issue: ApiFieldIssue): string {
+  return issue.path ? `${issue.path}: ${issue.message}` : issue.message;
 }
 
 /**

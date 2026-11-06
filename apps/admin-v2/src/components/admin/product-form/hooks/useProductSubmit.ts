@@ -13,7 +13,7 @@ import {
 import { apiData } from "~/lib/api";
 import { saveProductChannels, salesChannelKeys } from "~/lib/api-query-options/sales-channels";
 import { getServerFnError } from "~/lib/api-helpers";
-import { readApiFieldIssues } from "~/lib/api-field-errors";
+import { issueLine, readApiFieldIssues } from "~/lib/api-field-errors";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readProductMediaSkuReferenceConflict, readProductRevisionConflict, type ProductMediaSkuReferenceConflict, type ProductRevisionConflict } from "~/lib/admin-api-conflicts";
 import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
@@ -225,9 +225,10 @@ export function useProductSubmit({
           form.setError(field, { type: "server", message });
           return problemLine(t(FIELD_LABELS[field]!), message);
         }
-        return onVariantIssue?.(path, message) ?? message;
+        return onVariantIssue?.(path, message) ?? issueLine({ path, message });
       });
-      throw new SaveNotCompleted(lines[0], lines);
+      const unique = [...new Set(lines)];
+      throw new SaveNotCompleted(unique[0], unique);
     }
     throw new SaveNotCompleted(getServerFnError(error, t("saveFailed")));
   };
