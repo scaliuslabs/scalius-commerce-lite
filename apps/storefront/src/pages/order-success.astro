@@ -68,6 +68,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { isValidUrlScheme } from "@scalius/shared/url-scheme";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   checkoutLanguageBaseCode,
@@ -106,16 +107,6 @@ if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
 
 // Same shape the receipt proxies accept; anything else is never echoed or looked up.
 const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
-
-/** Only http:/https: URLs are rendered as clickable links; everything else renders as plain text. */
-function isValidUrlScheme(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 const requestedOrderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
 const orderId = ORDER_ID_PATTERN.test(requestedOrderId) ? requestedOrderId : "";
 const requestCookieHeader = Astro.request.headers.get("cookie");
