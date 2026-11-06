@@ -96,7 +96,10 @@ mirror a dashboard screen, an editor section or a summary card.
   `customer_segments.*` (`resources-customer-segments.ts`) carry one
   `CustomerSegmentResource` whose rules spell spend `minMinor`/`maxMinor`
   beside the store `currency` (`customerSegmentDefinitionAppSchema`); members
-  page as `CustomerResource` in id order. `products.list`, `customers.list`
+  page as `CustomerResource` in id order; an app's rules name only `custom`
+  customer fields, and it retargets a segment a live discount or price list
+  uses only with `discounts.edit` or `products.edit`. Segment delete is not
+  stable: a delete is destructive risk, so it would raise `write_customers`. `products.list`, `customers.list`
   and `orders.list` read up to 90 records by `ids`, bound as one JSON value.
 - **Apps keep stock documents in step with an ERP.**
   `dashboard.resources.inventory_levels.list` reads on-hand per SKU per

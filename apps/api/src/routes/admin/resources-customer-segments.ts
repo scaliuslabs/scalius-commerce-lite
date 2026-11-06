@@ -4,20 +4,25 @@
 // which every write answers (`{ segment }`). A segment is a saved filter over
 // customers, evaluated live; its rules are `CustomerSegmentRules`, with
 // spend in integer minor units of the store currency (`currency` beside
-// them). Writes after create take the segment's `revision` as
-// `expectedRevision` (a DELETE in its query). Members page by cursor in id
-// order as customers carry them (`CustomerResource`, contact fields gated by
-// the read_customer_* scopes). The dashboard's own segment routes, previews
-// and counts stay `dashboard.customers.segments_*` (beta, money in major units).
+// them). An update takes the segment's `revision` as `expectedRevision`.
+// Members page by cursor in id order as customers carry them
+// (`CustomerResource`, contact fields gated by the read_customer_* scopes).
+// An app's rules may name only the merchant's own customer fields (`custom`),
+// and an app retargets a segment a live discount or price list uses only with
+// the permission that edits those. Deleting stays the dashboard's
+// (`dashboard.customers.segments_delete`, beta): a delete is destructive risk,
+// which would raise write_customers to a destructive scope for every app.
+// The dashboard's own segment routes, previews and counts stay
+// `dashboard.customers.segments_*` (beta, money in major units).
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import type { MiddlewareHandler } from "hono";
-import { gte, isNull, type SQL } from "drizzle-orm";
-import { customerSegments } from "@scalius/database/schema";
+import type { Context } from "hono";
+import { and, eq, gte, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { customFieldDefinitions, customerSegments, priceLists } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import {
   createCustomerSegment,
-  deleteCustomerSegment,
   getCustomerSegment,
   getCustomerSegmentsByIds,
   listSegmentMemberIds,
@@ -36,6 +41,7 @@ import {
 } from "@scalius/shared/customer-marketing";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
 import { created, ok } from "../../utils/api-response";
+import { AppError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import { nextCursorSchema } from "../../utils/bounded-page";
@@ -61,7 +67,7 @@ const CustomerSegmentResource = z.object({
   /** Who is in it: up to 12 conditions, all or any of them. */
   definition: CustomerSegmentRules,
   currency: z.string().length(3).openapi({ description: "The store currency: `definition`'s spend (`amount_spent` minMinor and maxMinor) is in its integer minor units." }),
-  revision: z.number().int().min(1).openapi({ description: "Send it as `expectedRevision` to change or delete the segment; every change advances it." }),
+  revision: z.number().int().min(1).openapi({ description: "Send it as `expectedRevision` to change the segment; every change advances it." }),
   createdAt: isoTimestampSchema,
   updatedAt: isoTimestampSchema,
 }).openapi("CustomerSegmentResource");
@@ -90,9 +96,52 @@ async function storeCurrency(db: Database): Promise<string> {
   return (await readStoreCurrency(db)).code;
 }
 
-/** Rules from the app API, as stored and checked against the store (its custom fields). */
-function storedDefinition(db: Database, definition: CustomerSegmentDefinitionApp) {
-  return parseSegmentDefinition(db, segmentDefinitionFromApp(definition));
+/**
+ * Rules from the app API, as stored and checked against the store (its
+ * custom fields). An app filters only by the merchant's own customer fields
+ * (namespace `custom`), as `custom_fields.*` shows it only those: a segment
+ * on another app's field would tell it who holds which value.
+ */
+async function storedDefinition(c: Context, definition: CustomerSegmentDefinitionApp) {
+  const db = c.get("db");
+  const parsed = await parseSegmentDefinition(db, segmentDefinitionFromApp(definition));
+  if (!c.get("pluginPrincipal")) return parsed;
+  const fieldIds = [...new Set(parsed.conditions.flatMap((condition) => condition.field === "custom_field" ? [condition.definitionId] : []))];
+  if (fieldIds.length === 0) return parsed;
+  const foreign = await db.select({ id: customFieldDefinitions.id }).from(customFieldDefinitions)
+    .where(and(sql`${customFieldDefinitions.id} IN (SELECT value FROM json_each(${JSON.stringify(fieldIds)}))`, ne(customFieldDefinitions.namespace, "custom")));
+  if (foreign.length > 0) {
+    throw new AppError(403, "forbidden", "An app's segment may filter only by the store's own customer fields.", {
+      reason: "custom_field_not_visible",
+      definitionIds: foreign.map((row) => row.id),
+    });
+  }
+  return parsed;
+}
+
+/**
+ * An app retargets (renames or re-rules) a segment that a live discount or a
+ * price list uses only with the permission that edits those: who gets the
+ * discount or the price is theirs to change.
+ */
+async function assertAppMayRetarget(c: Context, record: CustomerSegmentRecord): Promise<void> {
+  if (!c.get("pluginPrincipal")) return;
+  const permissions = (c.get("adminPermissions") as ReadonlySet<string> | undefined) ?? new Set<string>();
+  if (record.promotionCount > 0 && !permissions.has("discounts.edit")) {
+    throw new AppError(403, "forbidden", "A live discount is limited to this segment: changing it needs the write_discounts scope.", {
+      reason: "segment_used_by_discount",
+      permission: "discounts.edit",
+    });
+  }
+  if (!permissions.has("products.edit")) {
+    const priced = await c.get("db").select({ id: priceLists.id }).from(priceLists).where(eq(priceLists.segmentId, record.id)).limit(1).get();
+    if (priced) {
+      throw new AppError(403, "forbidden", "A price list prices this segment: changing it needs the write_products scope.", {
+        reason: "segment_used_by_price_list",
+        permission: "products.edit",
+      });
+    }
+  }
 }
 
 app.openapi(createRoute({
@@ -154,7 +203,7 @@ app.openapi(createRoute({
   path: "/customer-segments",
   tags: ["App API - Customers"],
   summary: "Save a customer segment",
-  description: "Saves a segment (a store keeps at most 200): a named filter over customers, evaluated live wherever it is used (discounts, price lists, campaigns). Spend is in minor units of the store currency. A name another segment has is refused with 409.",
+  description: "Saves a segment (a store keeps at most 200): a named filter over customers, evaluated live wherever it is used (discounts, price lists, campaigns). Spend is in minor units of the store currency. A name another segment has is refused with 409. An app's rules filter only by the store's own customer fields (`custom` namespace; 403 `forbidden` with reason `custom_field_not_visible` otherwise).",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: segmentBody } } },
@@ -170,7 +219,7 @@ app.openapi(createRoute({
   const record = await createCustomerSegment(db, {
     name: body.name,
     description: body.description,
-    definition: await storedDefinition(db, body.definition),
+    definition: await storedDefinition(c, body.definition),
   }, c.get("pluginPrincipal") ? null : user?.id ?? null);
   return created(c, { segment: segmentResource(record, await storeCurrency(db)) });
 });
@@ -181,7 +230,7 @@ app.openapi(createRoute({
   path: "/customer-segments/{id}",
   tags: ["App API - Customers"],
   summary: "Change a saved customer segment",
-  description: "Changes the fields sent (name, description, the whole rules) under the revision read; a segment changed since is refused with 409 and nothing changes.",
+  description: "Changes the fields sent (name, description, the whole rules) under the revision read; a segment changed since is refused with 409 and nothing changes. A segment a live discount or a price list uses changes only with write_discounts or write_products respectively (403 `forbidden` otherwise).",
   request: {
     params: idParam,
     headers: idempotencyKeyHeaderSchema,
@@ -203,37 +252,15 @@ app.openapi(createRoute({
 }), async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  const record = await updateCustomerSegment(db, c.req.valid("param").id, {
+  const id = c.req.valid("param").id;
+  await assertAppMayRetarget(c, await getCustomerSegment(db, id));
+  const record = await updateCustomerSegment(db, id, {
     expectedRevision: body.expectedRevision,
     name: body.name,
     description: body.description,
-    definition: body.definition ? await storedDefinition(db, body.definition) : undefined,
+    definition: body.definition ? await storedDefinition(c, body.definition) : undefined,
   });
   return ok(c, { segment: segmentResource(record, await storeCurrency(db)) });
-});
-
-app.openapi(createRoute({
-  operationId: "dashboard.resources.customer_segments.delete",
-  method: "delete",
-  path: "/customer-segments/{id}",
-  tags: ["App API - Customers"],
-  summary: "Delete a saved customer segment",
-  description: "Deletes the segment (no customer is deleted). Refused with 409 while a discount (not archived) or a price list uses it, or when it changed since the revision read.",
-  request: {
-    params: idParam,
-    headers: idempotencyKeyHeaderSchema,
-    query: z.object({
-      expectedRevision: z.coerce.number().int().min(1).openapi({ description: "The segment's `revision` you read." }),
-    }),
-  },
-  responses: {
-    200: { description: "Deleted", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), deleted: z.literal(true) })) } } },
-    ...writeResponses,
-  },
-}), async (c) => {
-  const id = c.req.valid("param").id;
-  await deleteCustomerSegment(c.get("db"), id, { expectedRevision: c.req.valid("query").expectedRevision });
-  return ok(c, { id, deleted: true as const });
 });
 
 /** Members per page: customers as webhooks carry them, within the response budget. */

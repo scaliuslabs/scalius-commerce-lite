@@ -18329,7 +18329,7 @@
           "revision": {
             "type": "integer",
             "minimum": 1,
-            "description": "Send it as `expectedRevision` to change or delete the segment; every change advances it."
+            "description": "Send it as `expectedRevision` to change the segment; every change advances it."
           },
           "createdAt": {
             "type": "string",
@@ -112824,7 +112824,7 @@
           "oneTimeSecretOutput": false,
           "when": "Use when an app cancels an item return before any of it was received.",
           "dryRun": "none",
-          "confirmation": "none"
+          "confirmation": "required"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -113211,7 +113211,7 @@
           "App API - Customers"
         ],
         "summary": "Save a customer segment",
-        "description": "Saves a segment (a store keeps at most 200): a named filter over customers, evaluated live wherever it is used (discounts, price lists, campaigns). Spend is in minor units of the store currency. A name another segment has is refused with 409.",
+        "description": "Saves a segment (a store keeps at most 200): a named filter over customers, evaluated live wherever it is used (discounts, price lists, campaigns). Spend is in minor units of the store currency. A name another segment has is refused with 409. An app's rules filter only by the store's own customer fields (`custom` namespace; 403 `forbidden` with reason `custom_field_not_visible` otherwise).",
         "parameters": [
           {
             "schema": {
@@ -113552,7 +113552,7 @@
           "App API - Customers"
         ],
         "summary": "Change a saved customer segment",
-        "description": "Changes the fields sent (name, description, the whole rules) under the revision read; a segment changed since is refused with 409 and nothing changes.",
+        "description": "Changes the fields sent (name, description, the whole rules) under the revision read; a segment changed since is refused with 409 and nothing changes. A segment a live discount or a price list uses changes only with write_discounts or write_products respectively (403 `forbidden` otherwise).",
         "parameters": [
           {
             "schema": {
@@ -113745,194 +113745,6 @@
           "when": "Use when an app renames a saved customer segment or changes its rules.",
           "dryRun": "none",
           "confirmation": "none"
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "customers.edit"
-        }
-      },
-      "delete": {
-        "operationId": "dashboard.resources.customer_segments.delete",
-        "tags": [
-          "App API - Customers"
-        ],
-        "summary": "Delete a saved customer segment",
-        "description": "Deletes the segment (no customer is deleted). Refused with 409 while a discount (not archived) or a price list uses it, or when it changed since the revision read.",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 64
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "The segment's `revision` you read."
-            },
-            "required": true,
-            "description": "The segment's `revision` you read.",
-            "name": "expectedRevision",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "pattern": "^[\\x20-\\x7E]{8,200}$",
-              "minLength": 8,
-              "maxLength": 200
-            },
-            "required": false,
-            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-            "name": "idempotency-key",
-            "in": "header"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "deleted": {
-                          "type": "boolean",
-                          "enum": [
-                            true
-                          ]
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "deleted"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "stability": "stable",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "supported",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false,
-          "when": "Use when an app deletes a saved customer segment it no longer needs.",
-          "dryRun": "none",
-          "confirmation": "required"
         },
         "x-scalius-rbac": {
           "type": "permission",
@@ -298550,14 +298362,6 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.customer_segments.create"
-          ]
-        },
-        {
-          "operationId": "dashboard.resources.customer_segments.delete",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.resources.customer_segments.delete"
           ]
         },
         {

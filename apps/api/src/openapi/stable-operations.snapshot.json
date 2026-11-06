@@ -9896,87 +9896,6 @@
     ]
    }
   },
-  "customer_segments.delete": {
-   "operationId": "dashboard.resources.customer_segments.delete",
-   "method": "DELETE",
-   "path": "/api/v1/admin/resources/customer-segments/{id}",
-   "risk": "destructive",
-   "idempotency": "supported",
-   "revision": "required",
-   "scopes": [
-    "write_customers"
-   ],
-   "input": {
-    "parameters": [
-     {
-      "schema": {
-       "type": "string",
-       "minLength": 1,
-       "maxLength": 64
-      },
-      "required": true,
-      "name": "id",
-      "in": "path"
-     },
-     {
-      "schema": {
-       "type": "integer",
-       "minimum": 1,
-       "description": "The segment's `revision` you read."
-      },
-      "required": true,
-      "description": "The segment's `revision` you read.",
-      "name": "expectedRevision",
-      "in": "query"
-     },
-     {
-      "schema": {
-       "type": "string",
-       "pattern": "^[\\x20-\\x7E]{8,200}$",
-       "minLength": 8,
-       "maxLength": 200
-      },
-      "required": false,
-      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
-      "name": "idempotency-key",
-      "in": "header"
-     }
-    ]
-   },
-   "output": {
-    "type": "object",
-    "properties": {
-     "success": {
-      "type": "boolean",
-      "enum": [
-       true
-      ]
-     },
-     "data": {
-      "type": "object",
-      "properties": {
-       "id": {
-        "type": "string"
-       },
-       "deleted": {
-        "type": "boolean",
-        "enum": [
-         true
-        ]
-       }
-      },
-      "required": [
-       "id",
-       "deleted"
-      ]
-     }
-    },
-    "required": [
-     "success",
-     "data"
-    ]
-   }
-  },
   "customer_segments.get": {
    "operationId": "dashboard.resources.customer_segments.get",
    "method": "GET",
@@ -22205,7 +22124,7 @@
     "revision": {
      "type": "integer",
      "minimum": 1,
-     "description": "Send it as `expectedRevision` to change or delete the segment; every change advances it."
+     "description": "Send it as `expectedRevision` to change the segment; every change advances it."
     },
     "createdAt": {
      "type": "string",

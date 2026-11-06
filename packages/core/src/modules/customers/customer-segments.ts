@@ -388,15 +388,9 @@ export async function updateCustomerSegment(
     return getCustomerSegment(db, id);
 }
 
-/**
- * Soft delete; refused while a live (not archived) promotion is limited to it.
- * With `expectedRevision`, a segment changed since is refused (409) and stays.
- */
-export async function deleteCustomerSegment(db: Database, id: string, options: { expectedRevision?: number } = {}): Promise<void> {
+/** Soft delete; refused while a live (not archived) promotion is limited to it. */
+export async function deleteCustomerSegment(db: Database, id: string): Promise<void> {
     const current = await getCustomerSegment(db, id);
-    if (options.expectedRevision !== undefined && current.revision !== options.expectedRevision) {
-        throw new ConflictError("This segment changed since you opened it. Reload it and try again.");
-    }
     if (current.promotionCount > 0) {
         throw new ConflictError("Discounts are limited to this segment. Remove it from them first.");
     }
@@ -408,21 +402,15 @@ export async function deleteCustomerSegment(db: Database, id: string, options: {
     if (priced.length > 0) {
         throw new ConflictError("A price list prices this segment. Delete that price list first.");
     }
-    const deleted = await db.update(customerSegments)
+    await db.update(customerSegments)
         .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
         .where(and(
             eq(customerSegments.id, id),
             isNull(customerSegments.deletedAt),
-            options.expectedRevision === undefined ? undefined : eq(customerSegments.revision, options.expectedRevision),
             sql`NOT EXISTS (SELECT 1 FROM ${promotionCustomerSegments} JOIN ${promotions} ON ${promotions.id} = ${promotionCustomerSegments.promotionId}
                 WHERE ${promotionCustomerSegments.segmentId} = ${id} AND ${promotions.deletedAt} IS NULL AND ${promotions.status} <> 'archived')`,
             sql`NOT EXISTS (SELECT 1 FROM price_lists AS segment_price_list WHERE segment_price_list.segment_id = ${id})`,
-        ))
-        .returning({ id: customerSegments.id });
-    // A change, a discount or a price list that won the race since the reads above.
-    if (options.expectedRevision !== undefined && deleted.length === 0) {
-        throw new ConflictError("This segment changed since you opened it. Reload it and try again.");
-    }
+        ));
 }
 
 /** Stored definitions of these segments (deleted or unreadable ones are null: they match nobody). */

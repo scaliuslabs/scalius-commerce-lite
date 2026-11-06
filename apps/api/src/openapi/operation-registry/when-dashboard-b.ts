@@ -240,7 +240,6 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.resources.customer_segments.get": "Use when an app reads one saved customer segment's rules.",
   "dashboard.resources.customer_segments.create": "Use when an app saves a customer segment, such as wholesale buyers or customers who spent over an amount.",
   "dashboard.resources.customer_segments.update": "Use when an app renames a saved customer segment or changes its rules.",
-  "dashboard.resources.customer_segments.delete": "Use when an app deletes a saved customer segment it no longer needs.",
   "dashboard.resources.customer_segments.list_members": "Use when an app walks the customers in a saved segment, page by page, to sync or message them.",
   "dashboard.resources.inventory_locations.list": "Use when listing the store's stock locations with their addresses, for stock per location or courier pickups.",
   "dashboard.resources.shipments.list": "Use when listing an order's shipments in webhook representation.",

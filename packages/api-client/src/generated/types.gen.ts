@@ -3671,7 +3671,7 @@ export type CustomerSegmentResource = {
      */
     currency: string;
     /**
-     * Send it as `expectedRevision` to change or delete the segment; every change advances it.
+     * Send it as `expectedRevision` to change the segment; every change advances it.
      */
     revision: number;
     createdAt: string;
@@ -30592,74 +30592,6 @@ export type PostApiV1AdminResourcesCustomerSegmentsResponses = {
 };
 
 export type PostApiV1AdminResourcesCustomerSegmentsResponse = PostApiV1AdminResourcesCustomerSegmentsResponses[keyof PostApiV1AdminResourcesCustomerSegmentsResponses];
-
-export type DeleteApiV1AdminResourcesCustomerSegmentsByIdData = {
-    body?: never;
-    headers?: {
-        /**
-         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
-         */
-        'idempotency-key'?: string;
-    };
-    path: {
-        id: string;
-    };
-    query: {
-        /**
-         * The segment's `revision` you read.
-         */
-        expectedRevision: number;
-    };
-    url: '/api/v1/admin/resources/customer-segments/{id}';
-};
-
-export type DeleteApiV1AdminResourcesCustomerSegmentsByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: ErrorResponse;
-    /**
-     * Unauthorized
-     */
-    401: ErrorResponse;
-    /**
-     * Forbidden
-     */
-    403: ErrorResponse;
-    /**
-     * Not found
-     */
-    404: ErrorResponse;
-    /**
-     * Conflict
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limit exceeded
-     */
-    429: ErrorResponse;
-    /**
-     * Server error
-     */
-    500: ErrorResponse;
-};
-
-export type DeleteApiV1AdminResourcesCustomerSegmentsByIdError = DeleteApiV1AdminResourcesCustomerSegmentsByIdErrors[keyof DeleteApiV1AdminResourcesCustomerSegmentsByIdErrors];
-
-export type DeleteApiV1AdminResourcesCustomerSegmentsByIdResponses = {
-    /**
-     * Deleted
-     */
-    200: {
-        success: true;
-        data: {
-            id: string;
-            deleted: true;
-        };
-    };
-};
-
-export type DeleteApiV1AdminResourcesCustomerSegmentsByIdResponse = DeleteApiV1AdminResourcesCustomerSegmentsByIdResponses[keyof DeleteApiV1AdminResourcesCustomerSegmentsByIdResponses];
 
 export type GetApiV1AdminResourcesCustomerSegmentsByIdData = {
     body?: never;

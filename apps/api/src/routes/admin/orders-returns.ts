@@ -220,9 +220,22 @@ const reconcileRoute = createRoute({
 /** A request the return commands run in: its database, its caller and its background work. */
 export type ReturnCommandContext = Context<{ Bindings: Env }>;
 
-function actor(c: { get(name: "user"): unknown }) {
+/**
+ * Who acts: staff by their id; an app as itself (`system`, `app:<id>`, the
+ * id the return, its receipt lines and the stock ledger record), never as
+ * the Super Admin who approved it. An app's timeline line names no staff.
+ */
+function actor(c: ReturnCommandContext): { type: "admin" | "system"; id: string | null } {
+    const app = c.get("pluginPrincipal") as { pluginId?: string } | undefined;
+    if (app?.pluginId) return { type: "system", id: `app:${app.pluginId}` };
     const user = c.get("user") as { id?: string } | undefined;
-    return { type: "admin" as const, id: user?.id ?? null };
+    return { type: "admin", id: user?.id ?? null };
+}
+
+/** The staff member a timeline line names (none for an app). */
+function timelineActorId(c: ReturnCommandContext): string | null {
+    const acting = actor(c);
+    return acting.type === "admin" ? acting.id : null;
 }
 
 async function postReceiptSideEffects(
@@ -248,7 +261,7 @@ export async function runCreateOrderReturn(c: ReturnCommandContext, orderId: str
     await recordOrderEvent(c.get("db"), {
         orderId,
         kind: "return_created",
-        actorId: actor(c).id,
+        actorId: timelineActorId(c),
         requestKey: input.commandKey,
         body: input.reason?.trim() || null,
         data: { quantity: input.lines.reduce((sum, line) => sum + line.quantity, 0) },
@@ -263,7 +276,7 @@ export async function runApproveOrderReturn(c: ReturnCommandContext, orderId: st
     await recordOrderEvent(c.get("db"), {
         orderId,
         kind: "return_approved",
-        actorId: actor(c).id,
+        actorId: timelineActorId(c),
         requestKey: input.commandKey,
         data: {
             approved: input.lines.reduce((sum, line) => sum + line.approvedQuantity, 0),
@@ -291,7 +304,7 @@ export async function runReceiveOrderReturn(c: ReturnCommandContext, orderId: st
     await recordOrderEvent(c.get("db"), {
         orderId,
         kind: "return_received",
-        actorId: actor(c).id,
+        actorId: timelineActorId(c),
         requestKey: input.commandKey,
         data: {
             received: input.lines.reduce((sum, line) => sum + line.receivedQuantity, 0),

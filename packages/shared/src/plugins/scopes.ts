@@ -123,7 +123,7 @@ export const PLUGIN_SCOPES = {
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
   /** Customers, their tags, saved segments and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
   read_customers: { rbac: ["customers.view"], staff: "customers.view" },
-  /** Create and edit customers, their tags and custom fields; save, change and delete customer segments. */
+  /** Create and edit customers, their tags and custom fields; save and change customer segments (not one a live discount or price list uses, without that area's write scope). */
   write_customers: { rbac: ["customers.view", "customers.create", "customers.edit"], staff: "customers.edit" },
   /** Send marketing email and SMS to customers who agreed to receive it. The platform resolves the address; the app never sees it. */
   write_marketing: { rbac: ["marketing.send"], staff: "marketing.send" },

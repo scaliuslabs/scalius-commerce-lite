@@ -214,7 +214,6 @@ export const STABLE_APP_OPERATIONS = {
   "customer_segments.get": "dashboard.resources.customer_segments.get",
   "customer_segments.create": "dashboard.resources.customer_segments.create",
   "customer_segments.update": "dashboard.resources.customer_segments.update",
-  "customer_segments.delete": "dashboard.resources.customer_segments.delete",
   "customer_segments.list_members": "dashboard.resources.customer_segments.list_members",
 
   // ── Gift cards ──
