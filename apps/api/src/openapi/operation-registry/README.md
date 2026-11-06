@@ -98,7 +98,14 @@ mirror a dashboard screen, an editor section or a summary card.
   receipt is bounded by each line's open quantity, so it takes no revision.
   A purchase order is a cost document: its operations need
   `products.view_costs` too (an app: `read_product_costs` beside an inventory
-  scope; the snapshot lists the covering pairs as `scopeSets`).
+  scope; the snapshot lists the covering pairs as `scopeSets`), and so does an
+  app's webhook subscription to a purchase order topic (`cost_scope_required`;
+  a delivery is cancelled once the live grant loses it). Refusals are named:
+  `<supplier|purchase_order|inventory_transfer>_revision_conflict`,
+  `purchase_order_state_conflict`, `inventory_transfer_state_conflict`,
+  `quantity_exceeds_open`, `stock_committed`, `variant_retired`,
+  `supplier_has_open_purchase_orders`. Each list walks an (updated_at,
+  tie-break) index (migration 0197).
 - **Money is integer minor units beside its currency**, the same rule as the
   webhook representations: `*Minor` integer fields, and an ISO 4217
   `currency` on the same object or the resource that holds it. Inputs take

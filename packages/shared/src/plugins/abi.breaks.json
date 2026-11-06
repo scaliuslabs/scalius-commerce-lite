@@ -346,5 +346,11 @@
   "from": "fbce8360941dfbc5",
   "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
   "reason": "A new scope, read_product_costs (G2: purchase orders in the stable app API carry costs), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member, the same widening every scope added before the lock made."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8fa12220d7c0b07a",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Sealed codes are only added (APP_ERROR_CODES): the stock document operations (G2) name each refusal instead of the generic conflict (supplier, purchase order and transfer revision and state conflicts, quantity_exceeds_open, stock_committed, variant_retired, supplier_has_open_purchase_orders) and an app webhook for purchase orders without read_product_costs is cost_scope_required. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
  }
 ]

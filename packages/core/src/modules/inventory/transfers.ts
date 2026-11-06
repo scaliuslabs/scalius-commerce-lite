@@ -31,7 +31,8 @@ import {
   type InventoryTransferMovementKind,
   type InventoryTransferStatus,
 } from "@scalius/database/schema";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { QUANTITY_EXCEEDS_OPEN } from "./purchase-orders";
 import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
@@ -41,6 +42,13 @@ import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJs
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
 export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
 const STALE = "inventory_transfer_stale";
+/** A write based on a revision that is no longer current. */
+export const INVENTORY_TRANSFER_REVISION_CONFLICT = "inventory_transfer_revision_conflict";
+/** A write the transfer's status refuses (its lines once shipped, nothing left in transit). */
+export const INVENTORY_TRANSFER_STATE_CONFLICT = "inventory_transfer_state_conflict";
+
+const staleTransfer = () => new AppError(409, INVENTORY_TRANSFER_REVISION_CONFLICT, "This transfer changed. Reload to see the latest.");
+const transferState = (message: string) => new AppError(409, INVENTORY_TRANSFER_STATE_CONFLICT, message);
 const NUMBER_START = 1000;
 
 const locationIdSchema = z.string().trim().min(1).max(100);
@@ -448,6 +456,7 @@ async function readHeader(db: Database, id: string) {
     revision: inventoryTransfers.revision,
     originLocationId: inventoryTransfers.originLocationId,
     destinationLocationId: inventoryTransfers.destinationLocationId,
+    shippedAt: inventoryTransfers.shippedAt,
   }).from(inventoryTransfers).where(eq(inventoryTransfers.id, id)).get();
   if (!row) throw new NotFoundError("Transfer not found");
   return row;
@@ -463,12 +472,12 @@ const STATUS_WORDS: Record<InventoryTransferStatus, string> = {
 
 function assertStatus(header: { number: number; status: InventoryTransferStatus }, allowed: readonly InventoryTransferStatus[], action: string): void {
   if (!allowed.includes(header.status)) {
-    throw new ConflictError(`Transfer ${formatTransferNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`);
+    throw transferState(`Transfer ${formatTransferNumber(header.number)} is ${STATUS_WORDS[header.status]}, so it can't be ${action}.`);
   }
 }
 
 function assertRevision(header: { revision: number }, expected: number): void {
-  if (header.revision !== expected) throw new ConflictError("This transfer changed. Reload to see the latest.");
+  if (header.revision !== expected) throw staleTransfer();
 }
 
 function subjectCondition(id: string, revision: number, statuses: readonly InventoryTransferStatus[]): SQL {
@@ -484,9 +493,9 @@ async function runGuarded(db: Database, statements: BatchItem<"sqlite">[]): Prom
   try {
     await safeBatch(db, statements as never);
   } catch (error) {
-    if (isBatchGuardError(error, STALE)) throw new ConflictError("This transfer changed. Reload to see the latest.");
+    if (isBatchGuardError(error, STALE)) throw staleTransfer();
     if (/INVENTORY_TRANSFER_LINES_LOCKED/.test(String((error as Error)?.message ?? "") + String((error as { cause?: Error })?.cause?.message ?? ""))) {
-      throw new ConflictError("A shipped transfer's lines can't change.");
+      throw transferState("A shipped transfer's lines can't change.");
     }
     throw error;
   }
@@ -738,7 +747,7 @@ export async function receiveTransfer(db: Database, id: string, input: ReceiveTr
         if (!line) throw new NotFoundError("A line in this receipt is not on the transfer.");
         const inTransit = line.shippedQuantity - line.receivedQuantity - line.returnedQuantity;
         if (requested.quantity > inTransit) {
-          throw new ConflictError(inTransit === 0
+          throw new AppError(409, QUANTITY_EXCEEDS_OPEN, inTransit === 0
             ? "A line in this receipt has nothing left in transit."
             : `Only ${inTransit} of a line are still in transit.`);
         }
@@ -793,6 +802,17 @@ export async function cancelTransfer(db: Database, id: string, input: CancelTran
   const data = parseInventoryInput(cancelTransferSchema, input, "Invalid transfer");
   const operationKey = data.operationKey.trim();
   const header = await readHeader(db, id);
+  const draftCancelled = {
+    transferId: id,
+    displayNumber: formatTransferNumber(header.number),
+    kind: "return" as const,
+    status: "cancelled" as const,
+    revision: data.expectedRevision + 1,
+    locationId: null,
+    lines: [],
+  };
+  // A repeat of the draft cancel that already happened (its answer was lost): it moved nothing, so it records no command.
+  if (header.status === "cancelled" && header.shippedAt === null && header.revision === data.expectedRevision + 1) return draftCancelled;
   if (header.status === "draft") {
     assertRevision(header, data.expectedRevision);
     await runGuarded(db, [
@@ -804,15 +824,7 @@ export async function cancelTransfer(db: Database, id: string, input: CancelTran
         updatedAt: sql`unixepoch()`,
       }).where(and(eq(inventoryTransfers.id, id), eq(inventoryTransfers.revision, data.expectedRevision))) as unknown as BatchItem<"sqlite">,
     ]);
-    return {
-      transferId: id,
-      displayNumber: formatTransferNumber(header.number),
-      kind: "return",
-      status: "cancelled",
-      revision: data.expectedRevision + 1,
-      locationId: null,
-      lines: [],
-    };
+    return draftCancelled;
   }
   return executeStockCommand<TransferCommandResult>(db, {
     operationKey,
@@ -828,7 +840,7 @@ export async function cancelTransfer(db: Database, id: string, input: CancelTran
       const lines = (await readLines(db, id))
         .map((line) => ({ line, quantity: line.shippedQuantity - line.receivedQuantity - line.returnedQuantity }))
         .filter((entry) => entry.quantity > 0);
-      if (lines.length === 0) throw new ConflictError("Nothing is left in transit to return.");
+      if (lines.length === 0) throw transferState("Nothing is left in transit to return.");
       const lineByVariant = new Map(lines.map((entry) => [entry.line.variantId, entry]));
       const label = formatTransferNumber(current.number);
       return {

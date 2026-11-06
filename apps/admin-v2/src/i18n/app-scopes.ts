@@ -10,13 +10,13 @@ type ScopeCopy = Record<`scope_${PluginScope}` | `scope_${PluginScope}_help`, st
 
 const en = {
   scope_read_products: "View products",
-  scope_read_products_help: "Products, variants and their total stock, collections, categories, brands and attributes.",
+  scope_read_products_help: "Products, variants with their total stock and the units at each location, collections, categories, brands and attributes.",
   scope_write_products: "Manage products",
   scope_write_products_help: "Create, edit, trash and restore products, variants, collections, categories and brands. It can't change stock or delete anything permanently.",
   scope_read_inventory: "View inventory",
-  scope_read_inventory_help: "Stock at each location, your locations, suppliers, purchase orders and transfers.",
+  scope_read_inventory_help: "Stock at each location, your locations, suppliers and transfers. Purchase orders also need View product costs.",
   scope_write_inventory: "Manage inventory",
-  scope_write_inventory_help: "Adjust and count stock at your locations, and manage locations, suppliers, purchase orders and transfers.",
+  scope_write_inventory_help: "Adjust and count stock at your locations, and manage locations, suppliers and transfers. Purchase orders also need View product costs.",
   scope_read_orders: "View orders",
   scope_read_orders_help: "Orders with their items, payments, shipments, returns and timeline, and abandoned checkouts. Buyers' contact details stay hidden unless the app may also see them.",
   scope_write_orders: "Manage orders",
@@ -76,18 +76,18 @@ const en = {
   scope_write_places: "Load delivery places",
   scope_write_places_help: "Add and update the cities, areas and postal codes buyers pick for delivery. It can't delete one.",
   scope_read_product_costs: "View product costs",
-  scope_read_product_costs_help: "What you pay for stock: purchase order costs, shipping, other charges and tax, and the cost per item a receipt can update. With inventory access it reads or manages purchase orders.",
+  scope_read_product_costs_help: "What you pay for stock: purchase order costs, shipping, other charges and tax, and the cost per item a receipt can update. With inventory access it reads or manages purchase orders; webhooks for purchase orders need it too.",
 } satisfies ScopeCopy;
 
 const bn = {
   scope_read_products: "প্রোডাক্ট দেখা",
-  scope_read_products_help: "প্রোডাক্ট, ভ্যারিয়েন্ট ও তাদের মোট স্টক, কালেকশন, ক্যাটাগরি, ব্র্যান্ড ও অ্যাট্রিবিউট।",
+  scope_read_products_help: "প্রোডাক্ট, ভ্যারিয়েন্ট ও তাদের মোট স্টক এবং প্রতিটি লোকেশনের ইউনিট, কালেকশন, ক্যাটাগরি, ব্র্যান্ড ও অ্যাট্রিবিউট।",
   scope_write_products: "প্রোডাক্ট পরিচালনা",
   scope_write_products_help: "প্রোডাক্ট, ভ্যারিয়েন্ট, কালেকশন, ক্যাটাগরি ও ব্র্যান্ড তৈরি, এডিট, ট্র্যাশ ও ফিরিয়ে আনা। স্টক বদলাতে বা কোনো কিছু স্থায়ীভাবে ডিলিট করতে পারে না।",
   scope_read_inventory: "ইনভেন্টরি দেখা",
-  scope_read_inventory_help: "প্রতিটি লোকেশনের স্টক, আপনার লোকেশন, সাপ্লায়ার, পারচেজ অর্ডার ও ট্রান্সফার।",
+  scope_read_inventory_help: "প্রতিটি লোকেশনের স্টক, আপনার লোকেশন, সাপ্লায়ার ও ট্রান্সফার। পারচেজ অর্ডারের জন্য প্রোডাক্টের খরচ দেখার অনুমতিও লাগে।",
   scope_write_inventory: "ইনভেন্টরি পরিচালনা",
-  scope_write_inventory_help: "আপনার লোকেশনগুলোতে স্টক বদলানো ও গোনা, এবং লোকেশন, সাপ্লায়ার, পারচেজ অর্ডার ও ট্রান্সফার সামলানো।",
+  scope_write_inventory_help: "আপনার লোকেশনগুলোতে স্টক বদলানো ও গোনা, এবং লোকেশন, সাপ্লায়ার ও ট্রান্সফার সামলানো। পারচেজ অর্ডারের জন্য প্রোডাক্টের খরচ দেখার অনুমতিও লাগে।",
   scope_read_orders: "অর্ডার দেখা",
   scope_read_orders_help: "অর্ডারের আইটেম, পেমেন্ট, শিপমেন্ট, রিটার্ন ও টাইমলাইন, এবং অসম্পূর্ণ চেকআউট। অ্যাপটিকে আলাদা করে অনুমতি না দিলে ক্রেতার যোগাযোগের তথ্য লুকানো থাকে।",
   scope_write_orders: "অর্ডার পরিচালনা",
@@ -147,7 +147,7 @@ const bn = {
   scope_write_places: "ডেলিভারির জায়গা লোড করা",
   scope_write_places_help: "ডেলিভারির জন্য ক্রেতারা যে শহর, এলাকা ও পোস্টাল কোড বেছে নেন সেগুলো যোগ ও আপডেট করা। কোনোটি ডিলিট করতে পারে না।",
   scope_read_product_costs: "প্রোডাক্টের খরচ দেখা",
-  scope_read_product_costs_help: "স্টক কিনতে আপনার খরচ: পারচেজ অর্ডারের খরচ, শিপিং, অন্যান্য চার্জ ও ট্যাক্স, এবং রিসিভ করার সময় যে প্রতি আইটেমের খরচ বদলাতে পারে। ইনভেন্টরির অনুমতির সঙ্গে পারচেজ অর্ডার দেখা বা সামলানো যায়।",
+  scope_read_product_costs_help: "স্টক কিনতে আপনার খরচ: পারচেজ অর্ডারের খরচ, শিপিং, অন্যান্য চার্জ ও ট্যাক্স, এবং রিসিভ করার সময় যে প্রতি আইটেমের খরচ বদলাতে পারে। ইনভেন্টরির অনুমতির সঙ্গে পারচেজ অর্ডার দেখা বা সামলানো যায়; পারচেজ অর্ডারের ওয়েবহুকেও এটি লাগে।",
 } satisfies ScopeCopy;
 
 export const appScopeMessages = defineMessages({ en, bn });

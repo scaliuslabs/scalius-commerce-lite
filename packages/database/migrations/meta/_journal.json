@@ -1380,6 +1380,13 @@
       "when": 1793903019077,
       "tag": "0196_option_value_swatches",
       "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "6",
+      "when": 1793954247298,
+      "tag": "0197_stock_document_sync_indexes",
+      "breakpoints": true
     }
   ]
 }

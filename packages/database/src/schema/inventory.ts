@@ -82,6 +82,10 @@ export const inventoryLevels = sqliteTable("inventory_levels", {
     primaryKey({ columns: [table.variantId, table.locationId] }),
     index("inventory_levels_location_idx").on(table.locationId, table.onHand, table.variantId),
     index("inventory_levels_positive_variant_idx").on(table.variantId).where(sql`${table.onHand} > 0`),
+    // The app API's sync order: when units last moved, then the SKU and the location.
+    index("inventory_levels_updated_idx").on(table.updatedAt, table.variantId, table.locationId),
+    // The same order within one location (`locationId` filter).
+    index("inventory_levels_location_updated_idx").on(table.locationId, table.updatedAt, table.variantId),
     check("inventory_levels_on_hand_nonnegative", sql`${table.onHand} >= 0`),
 ]);
 
@@ -266,6 +270,9 @@ export const inventoryTransfers = sqliteTable("inventory_transfers", {
     index("inventory_transfers_status_created_idx").on(table.status, table.createdAt),
     index("inventory_transfers_origin_idx").on(table.originLocationId, table.status),
     index("inventory_transfers_destination_idx").on(table.destinationLocationId, table.status),
+    // The app API's sync order (updatedAt, id).
+    index("inventory_transfers_updated_idx").on(table.updatedAt, table.id),
+    index("inventory_transfers_status_updated_idx").on(table.status, table.updatedAt, table.id),
     check("inventory_transfers_number_positive", sql`${table.number} >= 1`),
     check("inventory_transfers_locations_differ", sql`${table.originLocationId} <> ${table.destinationLocationId}`),
     check(

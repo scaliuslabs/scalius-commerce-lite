@@ -35,6 +35,9 @@ export const suppliers = sqliteTable("suppliers", {
         .default(UNIX_NOW),
 }, (table) => [
     index("suppliers_status_name_idx").on(table.status, table.name),
+    // The app API's sync order (updatedAt, id).
+    index("suppliers_updated_idx").on(table.updatedAt, table.id),
+    index("suppliers_status_updated_idx").on(table.status, table.updatedAt, table.id),
     check("suppliers_name_length", sql`length(trim(${table.name})) BETWEEN 1 AND 120`),
     check("suppliers_status_check", sql`${table.status} IN ('active', 'archived')`),
     check(
@@ -92,6 +95,9 @@ export const purchaseOrders = sqliteTable("purchase_orders", {
     index("purchase_orders_status_created_idx").on(table.status, table.createdAt),
     index("purchase_orders_supplier_idx").on(table.supplierId, table.createdAt),
     index("purchase_orders_destination_idx").on(table.destinationLocationId, table.status),
+    // The app API's sync order (updatedAt, id).
+    index("purchase_orders_updated_idx").on(table.updatedAt, table.id),
+    index("purchase_orders_status_updated_idx").on(table.status, table.updatedAt, table.id),
     check("purchase_orders_number_positive", sql`${table.number} >= 1`),
     check(
         "purchase_orders_status_check",

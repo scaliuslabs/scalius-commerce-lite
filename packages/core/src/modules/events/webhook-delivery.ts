@@ -36,6 +36,7 @@ import {
   signWebhookPayload,
   topicMatchesAnyFilter,
   type EventRepresentation,
+  type EventResourceType,
   type EventTopicFilter,
 } from "@scalius/shared/events";
 import type { ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
@@ -49,7 +50,7 @@ import {
   type FannedOutDelivery,
   type OutboxEvent,
 } from "./event-outbox";
-import { parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
+import { COST_BEARING_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
 import { jsonChunks } from "../../utils/json-chunks";
@@ -396,7 +397,7 @@ export async function processWebhookDelivery(options: {
   let customerData = new Set(parseStoredCustomerData(subscription.customerData));
   if (subscription.pluginId) {
     const access = options.appAccess ? await options.appAccess(subscription.pluginId) : null;
-    const refusal = appDeliveryRefusal(access, subscription.url, event.topic);
+    const refusal = appDeliveryRefusal(access, subscription.url, event.topic, event.resourceType);
     if (refusal) {
       await finishDelivery(db, delivery, claimId, { status: "cancelled", error: refusal });
       return { status: "cancelled", deliveryId, subscriptionDisabled: false, retryInSeconds: null };
@@ -472,9 +473,11 @@ export async function processWebhookDelivery(options: {
 }
 
 /** Why an app's delivery may not send under its live grant, or null when it may. */
-function appDeliveryRefusal(access: AppWebhookAccess | null, url: string, topic: EventTopicFilter): string | null {
+function appDeliveryRefusal(access: AppWebhookAccess | null, url: string, topic: EventTopicFilter, resourceType: EventResourceType): string | null {
   if (!access) return "app_inactive";
   if (!eventFilterCovered(topic, access.topics)) return "app_topic_not_granted";
+  // A purchase order carries the store's costs: only while the live grant may see them.
+  if (!access.productCosts && COST_BEARING_EVENT_RESOURCES.has(resourceType)) return "app_cost_scope_not_granted";
   let parsed: URL;
   try {
     parsed = new URL(url);

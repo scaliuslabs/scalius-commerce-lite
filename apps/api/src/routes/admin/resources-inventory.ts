@@ -10,7 +10,7 @@
 // (updatedAt, id) order; `updatedSince` starts a sync.
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
-import { and, eq, gte, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, eq, gt, gte, or, sql, type SQL } from "drizzle-orm";
 import {
   INVENTORY_TRANSFER_STATUSES,
   PURCHASE_ORDER_STATUSES,
@@ -39,15 +39,17 @@ import {
   updatePurchaseOrder,
   updateSupplier,
   updateTransfer,
+  UNIT_COST_MAX,
   type SupplierRecord,
 } from "@scalius/core/modules/inventory";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
-import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
+import { keysetCondition, keysetOrderBy } from "@scalius/core/utils/keyset";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
-import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
+import { formatNumber } from "@scalius/shared/locale-format";
+import type { ListCursorShape } from "@scalius/shared/pagination";
 import { adminRouter } from "./admin-router";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { readInventoryTransferRepresentations, readPurchaseOrderRepresentations } from "../../events/representations";
@@ -55,7 +57,8 @@ import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } 
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import { nextCursorSchema } from "../../utils/bounded-page";
 import { created, ok } from "../../utils/api-response";
-import { NotFoundError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
+import { epochSeconds, keysetRowsPage, resourcePage, resourcePageQueryWith, updatedOrder, updatedSeconds } from "../../utils/resource-page";
 
 const app = adminRouter();
 
@@ -69,24 +72,12 @@ const TAG = "App API - Inventory";
 const PurchaseOrderResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.purchase_order, "PurchaseOrderResource");
 const InventoryTransferResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.inventory_transfer, "InventoryTransferResource");
 
-/** A page stops before its JSON passes this, so a list always fits an app or agent result (64 KiB). */
-const PAGE_BYTE_BUDGET = 56 * 1024;
 /** Variant ids one level list may name: one bound value, read in one wave (D1's limits). */
 const MAX_LEVEL_VARIANT_IDS = 90;
 
 const idParam = z.object({ id: z.string().min(1).max(128) });
 const readResponses = { 400: errorResponses[400], 401: errorResponses[401], 403: errorResponses[403], 404: errorResponses[404], 429: errorResponses[429], 500: errorResponses[500] };
 const writeResponses = { ...errorResponses, 409: conflictResponse };
-
-function pageQuery(max: number, fallback: number) {
-  return {
-    cursor: z.string().max(1024).optional().openapi({ description: "The `nextCursor` of the page before; leave it out for the first page." }),
-    limit: z.coerce.number().int().min(1).max(max).default(fallback)
-      .openapi({ description: "At most this many records; a page may hold fewer to stay within the response budget." }),
-    updatedSince: z.string().datetime({ offset: true }).optional()
-      .openapi({ description: "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync." }),
-  };
-}
 
 const expectedRevision = z.number().int().min(1).openapi({ description: "The `revision` you read: a write to a record that changed since is refused with 409 and changes nothing." });
 
@@ -97,53 +88,11 @@ const stockCommandHeaders = z.object({
   }),
 });
 
-const minorCost = (description: string) => z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description });
+/** The largest cost the inventory service keeps, in minor units of a currency with `places` decimals. */
+const unitCostLimitMinor = (places: number) => Math.min(MAX_MINOR_AMOUNT, UNIT_COST_MAX * 10 ** places);
+const COST_BOUND = `At most ${formatNumber(UNIT_COST_MAX, "en")} in major units of the purchase order's currency (${formatNumber(unitCostLimitMinor(2), "en")} minor units for a currency of two decimals); a larger value is refused with validation_error.`;
+const minorCost = (description: string) => z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description: `${description} ${COST_BOUND}` });
 
-function seconds(iso: string): number {
-  return Math.floor(Date.parse(iso) / 1000);
-}
-
-const CURSOR_SHAPE: ListCursorShape = { sort: "updatedAt", direction: "asc", kinds: ["number"] };
-
-/**
- * One page of a list in (updatedAt, id) order: the page's rows (or ids) by
- * keyset, then what each answers, cut before the response budget.
- */
-async function updatedPage<Row, Item>(options: {
-  order: KeysetOrder;
-  cursor: string | undefined;
-  limit: number;
-  where: SQL[];
-  rows: (where: SQL | undefined, limit: number) => Promise<Row[]>;
-  load: (rows: Row[]) => Promise<Item[]> | Item[];
-  key: (item: Item) => { updatedAt: string; id: string };
-}): Promise<{ items: Item[]; nextCursor: string | null }> {
-  const where = [...options.where];
-  if (options.cursor) where.push(keysetCondition(options.order, readListCursor(options.cursor, CURSOR_SHAPE)));
-  const rows = await options.rows(where.length > 0 ? and(...where) : undefined, options.limit + 1);
-  const more = rows.length > options.limit;
-  const items = await options.load(rows.slice(0, options.limit));
-  const kept: Item[] = [];
-  let bytes = 0;
-  const encoder = new TextEncoder();
-  for (const item of items) {
-    const size = encoder.encode(JSON.stringify(item)).byteLength + 1;
-    if (kept.length > 0 && bytes + size > PAGE_BYTE_BUDGET) break;
-    kept.push(item);
-    bytes += size;
-  }
-  const last = kept.at(-1);
-  const cut = more || kept.length < items.length;
-  const position = last ? options.key(last) : null;
-  return {
-    items: kept,
-    nextCursor: cut && position
-      ? encodeListCursorOrNull({ sort: CURSOR_SHAPE.sort, direction: "asc", values: [seconds(position.updatedAt)], id: position.id })
-      : null,
-  };
-}
-
-const ascending = (column: SQLWrapper, id: SQLWrapper): KeysetOrder => ({ column, id, direction: "asc" });
 const actorId = (c: Context): string | null => (c.get("user") as { id?: string } | undefined)?.id ?? null;
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
@@ -158,11 +107,24 @@ const InventoryLevelResource = z.object({
   updatedAt: isoTimestampSchema.openapi({ description: "When units last moved in or out of this location." }),
 }).openapi("InventoryLevelResource");
 
-/** The level's position in the list: one SKU at one location. */
-const levelKey = sql`${inventoryLevels.variantId} || ' ' || ${inventoryLevels.locationId}`;
+/** A level's place in the list: when units last moved, then its key (the SKU, then the location); `inventory_levels_updated_idx` serves it. */
+const LEVEL_CURSOR: ListCursorShape = { sort: "updatedAt", direction: "asc", kinds: ["number", "text"] };
+
+function levelsAfter(cursor: { values: readonly unknown[]; id: string }): SQL {
+  const [at, variantId] = cursor.values as [number, string];
+  const updated = sql`${inventoryLevels.updatedAt}`;
+  return and(
+    gte(updated, at),
+    or(
+      gt(updated, at),
+      and(eq(updated, at), gt(inventoryLevels.variantId, variantId)),
+      and(eq(updated, at), eq(inventoryLevels.variantId, variantId), gt(inventoryLevels.locationId, cursor.id)),
+    ),
+  )!;
+}
 
 const levelsQuery = z.object({
-  ...pageQuery(250, 100),
+  ...resourcePageQueryWith(250, 100),
   variantIds: z.string().max(MAX_LEVEL_VARIANT_IDS * 129).optional()
     .transform((value) => value === undefined ? undefined : [...new Set(value.split(",").map((part) => part.trim()).filter(Boolean))])
     .refine((ids) => ids === undefined || (ids.length >= 1 && ids.length <= MAX_LEVEL_VARIANT_IDS && ids.every((id) => id.length <= 128)), {
@@ -192,10 +154,10 @@ app.openapi(createRoute({
   if (query.variantIds) where.push(inJsonArray(inventoryLevels.variantId, query.variantIds));
   if (query.locationId) where.push(eq(inventoryLevels.locationId, query.locationId));
   if (query.productId) where.push(eq(productVariants.productId, query.productId));
-  if (query.updatedSince) where.push(gte(sql`${inventoryLevels.updatedAt}`, seconds(query.updatedSince)));
-  const order = ascending(inventoryLevels.updatedAt, levelKey);
-  const page = await updatedPage({
-    order,
+  if (query.updatedSince) where.push(gte(sql`${inventoryLevels.updatedAt}`, epochSeconds(query.updatedSince)));
+  const page = await keysetRowsPage({
+    shape: LEVEL_CURSOR,
+    after: levelsAfter,
     cursor: query.cursor,
     limit: query.limit,
     where,
@@ -209,9 +171,11 @@ app.openapi(createRoute({
       updatedAt: inventoryLevels.updatedAt,
     }).from(inventoryLevels)
       .innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId))
-      .where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
+      .where(condition)
+      .orderBy(asc(inventoryLevels.updatedAt), asc(inventoryLevels.variantId), asc(inventoryLevels.locationId))
+      .limit(limit).all(),
     load: (rows) => rows.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() })),
-    key: (level) => ({ updatedAt: level.updatedAt, id: `${level.variantId} ${level.locationId}` }),
+    position: (level) => ({ values: [updatedSeconds(level.updatedAt), level.variantId], id: level.locationId }),
   });
   return ok(c, { levels: page.items, nextCursor: page.nextCursor });
 });
@@ -266,7 +230,7 @@ app.openapi(createRoute({
   description: "Suppliers active and archived, in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor.",
   request: {
     query: z.object({
-      ...pageQuery(50, 20),
+      ...resourcePageQueryWith(50, 20),
       status: z.enum(SUPPLIER_STATUSES).optional().openapi({ description: "Only suppliers in this status." }),
     }),
   },
@@ -279,16 +243,17 @@ app.openapi(createRoute({
   const db = c.get("db");
   const where: SQL[] = [];
   if (query.status) where.push(eq(suppliers.status, query.status));
-  if (query.updatedSince) where.push(gte(sql`${suppliers.updatedAt}`, seconds(query.updatedSince)));
-  const order = ascending(suppliers.updatedAt, suppliers.id);
-  const page = await updatedPage({
-    order,
+  if (query.updatedSince) where.push(gte(sql`${suppliers.updatedAt}`, epochSeconds(query.updatedSince)));
+  const order = updatedOrder(suppliers.updatedAt, suppliers.id);
+  const page = await keysetRowsPage({
+    shape: { sort: "updatedAt", direction: "asc", kinds: ["number"] },
+    after: (cursor) => keysetCondition(order, cursor),
     cursor: query.cursor,
     limit: query.limit,
     where,
     rows: (condition, limit) => db.select().from(suppliers).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
     load: (rows) => rows.map(supplierResource),
-    key: (supplier) => supplier,
+    position: (supplier) => ({ values: [updatedSeconds(supplier.updatedAt)], id: supplier.id }),
   });
   return ok(c, { suppliers: page.items, nextCursor: page.nextCursor });
 });
@@ -418,6 +383,16 @@ const purchaseOrderHeaderInput = {
   taxMinor: minorCost("Tax charged by the supplier, in minor units.").optional(),
 };
 
+/** Refuses a cost above what the service keeps for this currency, naming the field. */
+function assertCostBounds(input: { shippingMinor?: number; otherCostsMinor?: number; taxMinor?: number; lines?: { unitCostMinor: number }[] }, currencyCode: string): void {
+  const limit = unitCostLimitMinor(getDecimalPlaces(currencyCode));
+  const issues = [
+    ...(["shippingMinor", "otherCostsMinor", "taxMinor"] as const).filter((field) => (input[field] ?? 0) > limit).map((field) => ({ path: [field] })),
+    ...(input.lines ?? []).flatMap((line, index) => line.unitCostMinor > limit ? [{ path: ["lines", index, "unitCostMinor"] }] : []),
+  ].map((issue) => ({ ...issue, code: "too_big", maximum: limit, message: `At most ${limit} minor units of ${currencyCode}.` }));
+  if (issues.length > 0) throw new ValidationError(`A cost is over the most the store keeps (${limit} minor units of ${currencyCode}).`, { issues });
+}
+
 /** Minor units of `currencyCode` as the inventory service's major-unit cost (exact: it converts back to the same minor units). */
 function majorCosts<T extends { shippingMinor?: number; otherCostsMinor?: number; taxMinor?: number; lines?: z.infer<typeof purchaseOrderLineInput>[] }>(
   input: T,
@@ -444,7 +419,7 @@ app.openapi(createRoute({
   description: "Purchase orders to suppliers as webhooks carry them (PurchaseOrderResource), in (updatedAt, id) order, money in minor units of `currency`. Start a sync with updatedSince and follow nextCursor.",
   request: {
     query: z.object({
-      ...pageQuery(50, 20),
+      ...resourcePageQueryWith(50, 20),
       status: z.enum(PURCHASE_ORDER_STATUSES).optional().openapi({ description: "Only purchase orders in this status." }),
       supplierId: z.string().min(1).max(128).optional(),
       locationId: z.string().min(1).max(128).optional().openapi({ description: "Only purchase orders arriving at this location." }),
@@ -461,16 +436,15 @@ app.openapi(createRoute({
   if (query.status) where.push(eq(purchaseOrders.status, query.status));
   if (query.supplierId) where.push(eq(purchaseOrders.supplierId, query.supplierId));
   if (query.locationId) where.push(eq(purchaseOrders.destinationLocationId, query.locationId));
-  if (query.updatedSince) where.push(gte(sql`${purchaseOrders.updatedAt}`, seconds(query.updatedSince)));
-  const order = ascending(purchaseOrders.updatedAt, purchaseOrders.id);
-  const page = await updatedPage({
+  if (query.updatedSince) where.push(gte(sql`${purchaseOrders.updatedAt}`, epochSeconds(query.updatedSince)));
+  const order = updatedOrder(purchaseOrders.updatedAt, purchaseOrders.id);
+  const page = await resourcePage({
     order,
     cursor: query.cursor,
     limit: query.limit,
     where,
-    rows: (condition, limit) => db.select({ id: purchaseOrders.id }).from(purchaseOrders).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
-    load: (rows) => readPurchaseOrderRepresentations(db, rows.map((row) => row.id)),
-    key: (purchaseOrder) => purchaseOrder,
+    ids: (condition, limit) => db.select({ id: purchaseOrders.id }).from(purchaseOrders).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
+    load: (ids) => readPurchaseOrderRepresentations(db, ids),
   });
   return ok(c, { purchaseOrders: page.items, nextCursor: page.nextCursor });
 });
@@ -519,6 +493,7 @@ app.openapi(createRoute({
   const db = c.get("db");
   const body = c.req.valid("json");
   const currency = await readStoreCurrency(db);
+  assertCostBounds(body, currency.code);
   const draft = await createPurchaseOrder(db, {
     ...(body.supplierId !== undefined ? { supplierId: body.supplierId } : {}),
     ...(body.destinationLocationId !== undefined ? { destinationLocationId: body.destinationLocationId } : {}),
@@ -563,6 +538,7 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   const header = await db.select({ currencyCode: purchaseOrders.currencyCode }).from(purchaseOrders).where(eq(purchaseOrders.id, id)).get();
   if (!header) throw new NotFoundError("Purchase order not found");
+  assertCostBounds(body, header.currencyCode);
   await updatePurchaseOrder(db, id, {
     expectedRevision: body.expectedRevision,
     ...(body.supplierId !== undefined ? { supplierId: body.supplierId } : {}),
@@ -674,7 +650,7 @@ app.openapi(createRoute({
   description: "Transfers between locations as webhooks carry them (InventoryTransferResource), in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor.",
   request: {
     query: z.object({
-      ...pageQuery(50, 20),
+      ...resourcePageQueryWith(50, 20),
       status: z.enum(INVENTORY_TRANSFER_STATUSES).optional().openapi({ description: "Only transfers in this status." }),
       locationId: z.string().min(1).max(128).optional().openapi({ description: "Only transfers from or to this location." }),
     }),
@@ -689,16 +665,15 @@ app.openapi(createRoute({
   const where: SQL[] = [];
   if (query.status) where.push(eq(inventoryTransfers.status, query.status));
   if (query.locationId) where.push(or(eq(inventoryTransfers.originLocationId, query.locationId), eq(inventoryTransfers.destinationLocationId, query.locationId))!);
-  if (query.updatedSince) where.push(gte(sql`${inventoryTransfers.updatedAt}`, seconds(query.updatedSince)));
-  const order = ascending(inventoryTransfers.updatedAt, inventoryTransfers.id);
-  const page = await updatedPage({
+  if (query.updatedSince) where.push(gte(sql`${inventoryTransfers.updatedAt}`, epochSeconds(query.updatedSince)));
+  const order = updatedOrder(inventoryTransfers.updatedAt, inventoryTransfers.id);
+  const page = await resourcePage({
     order,
     cursor: query.cursor,
     limit: query.limit,
     where,
-    rows: (condition, limit) => db.select({ id: inventoryTransfers.id }).from(inventoryTransfers).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
-    load: (rows) => readInventoryTransferRepresentations(db, rows.map((row) => row.id)),
-    key: (transfer) => transfer,
+    ids: (condition, limit) => db.select({ id: inventoryTransfers.id }).from(inventoryTransfers).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
+    load: (ids) => readInventoryTransferRepresentations(db, ids),
   });
   return ok(c, { transfers: page.items, nextCursor: page.nextCursor });
 });
