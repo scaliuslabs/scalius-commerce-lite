@@ -451,7 +451,6 @@ const layoutDataSchema = z.object({
       label: z.string(),
       help: z.string().optional(),
       type: z.enum(CUSTOMIZATION_FIELD_TYPES),
-      required: z.boolean().optional(),
       maxLength: z.number().int().optional(),
       options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
       products: z.object({ customField: z.string() }).optional(),

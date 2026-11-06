@@ -251,9 +251,10 @@ An app declares `checkout.purchaseOptions` (up to 10, `{ key, title, description
 
 An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per line, such as a gift message, a device serial for a protection plan or a delivery date for a booking.
 
-- Each is `{ key, label, help?, type, required?, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`).
+- Each is `{ key, label, help?, type, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`).
 - The buy form draws them after the product's own inputs, under `<app id>.<key>`; the cart edits them; they are part of the line, and the order line freezes them with your app's id.
-- `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`. Checkout does not read the flag, so a gated input is never required: ask for it in `cart.validate` with an error on the line.
+- `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`. Checkout does not read the flag.
+- An app input is never required: a card's quick add, an island or an order form adds a line without the product page, so ask for a missing one in `cart.validate` with an error on the line.
 - Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`.
 - Your functions see the product's inputs and your own in `line.properties`, never another app's; `orders.get` and your own webhooks show you the same. An island's `context.addLine({ variantId, inputs: { gift_message: "…" } })` sets your own by key.
 

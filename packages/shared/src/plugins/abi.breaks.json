@@ -448,5 +448,29 @@
   "from": "6668dff056e411e3",
   "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
   "reason": "Merge of the inventory promotions onto the line-sharing branch: the same change acknowledged above from the inventory branch's snapshot, against this branch's. `PluginScope` gained `read_product_costs` (Sensitive, confers only products.view_costs), so every declaration that names a scope list (features, the manifest, its input and the harness built from it) widened by one member; no app's existing scope list stops parsing."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "a8e84bf5a0a06a61",
+  "change": "manifest checkout.lineInputs[].required: the field is no longer accepted.",
+  "reason": "App line inputs are never required: every way to add a line (a product card's quick add, an island, an order form, an agent) adds it without the product page, so a required app input could not be enforced on most of them. `checkout.lineInputs[].required` is gone from the manifest, its input type and the harness built from it; an app whose input must be answered asks for it from `cart.validate` with an error on the line. No app was published with the field (line inputs are new on this branch)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "26eb1473805110d6",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "App line inputs are never required: every way to add a line (a product card's quick add, an island, an order form, an agent) adds it without the product page, so a required app input could not be enforced on most of them. `checkout.lineInputs[].required` is gone from the manifest, its input type and the harness built from it; an app whose input must be answered asks for it from `cart.validate` with an error on the line. No app was published with the field (line inputs are new on this branch)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "26eb1473805110d6",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "App line inputs are never required: every way to add a line (a product card's quick add, an island, an order form, an agent) adds it without the product page, so a required app input could not be enforced on most of them. `checkout.lineInputs[].required` is gone from the manifest, its input type and the harness built from it; an app whose input must be answered asks for it from `cart.validate` with an error on the line. No app was published with the field (line inputs are new on this branch)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "26eb1473805110d6",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "App line inputs are never required: every way to add a line (a product card's quick add, an island, an order form, an agent) adds it without the product page, so a required app input could not be enforced on most of them. `checkout.lineInputs[].required` is gone from the manifest, its input type and the harness built from it; an app whose input must be answered asks for it from `cart.validate` with an error on the line. No app was published with the field (line inputs are new on this branch)."
  }
 ]

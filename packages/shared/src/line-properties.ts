@@ -499,7 +499,6 @@ export interface AppLineInputDeclaration {
   label: string;
   help?: string;
   type: CustomizationFieldType;
-  required?: boolean;
   maxLength?: number;
   options?: ReadonlyArray<{ value: string; label: string }>;
   products?: { customField: string };
@@ -517,10 +516,11 @@ export interface AppLineInputs {
  * declared order, under `<app id>.<key>` and priced at nothing (an app adds
  * to the line with `cart.line_prices` adjustments). The order is part of
  * the line's identity, so the product page and checkout build it the same
- * way. `shown` decides an input limited to some products (`products`): the
- * product page passes the product's custom fields; checkout passes none, so
- * such an input is accepted, optional, on any line and the app decides.
- * Gift cards take no app inputs: callers leave them out.
+ * way. An app input is never required (the app's `cart.validate` asks for
+ * a missing one). `shown` decides an input limited to some products
+ * (`products`): the product page passes the product's custom fields;
+ * checkout passes none, so such an input is accepted on any line and the app
+ * decides. Gift cards take no app inputs: callers leave them out.
  */
 export function withAppLineInputs(
   schema: CustomizationSchema | null,
@@ -531,7 +531,7 @@ export function withAppLineInputs(
   for (const app of [...apps].sort((left, right) => (left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0))) {
     for (const input of app.inputs) {
       if (input.products && !shown(app.appId, input.products)) continue;
-      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: Boolean(input.required) && !input.products, help: input.help ?? null, appId: app.appId };
+      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: false, help: input.help ?? null, appId: app.appId };
       if (input.type === "select") {
         fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0 })) });
       } else if (input.type === "checkbox") {

@@ -37993,9 +37993,6 @@
                                         "checkbox"
                                       ]
                                     },
-                                    "required": {
-                                      "type": "boolean"
-                                    },
                                     "maxLength": {
                                       "type": "integer"
                                     },

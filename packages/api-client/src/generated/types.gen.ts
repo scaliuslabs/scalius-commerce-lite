@@ -9263,7 +9263,6 @@ export type GetApiV1StorefrontLayoutResponses = {
                     label: string;
                     help?: string;
                     type: 'text' | 'textarea' | 'select' | 'checkbox';
-                    required?: boolean;
                     maxLength?: number;
                     options?: Array<{
                         value: string;

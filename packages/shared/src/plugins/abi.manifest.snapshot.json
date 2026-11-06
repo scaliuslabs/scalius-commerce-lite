@@ -511,9 +511,6 @@
           "checkbox"
          ]
         },
-        "required": {
-         "type": "boolean"
-        },
         "maxLength": {
          "type": "integer",
          "minimum": 1,

@@ -51,15 +51,16 @@ const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLe
  * order line. Core prices nothing for it: the app adds to the line with
  * `cart.line_prices` adjustments. `products` shows it only on products whose
  * app custom field (a storefront-visible boolean product field the app
- * declares) is true; such an input cannot be required, since checkout does
- * not read that field: the app's `cart.validate` asks for it instead.
+ * declares) is true. An app input is never required: every way to add a
+ * line (a card's quick add, an island, an order form) adds it without the
+ * product page, so the app's `cart.validate` asks for a missing one with an
+ * error on the line.
  */
 export const lineInputDeclarationSchema = z.object({
   key,
   label: lineInputLabel,
   help: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.helpLength).optional(),
   type: z.enum(CUSTOMIZATION_FIELD_TYPES),
-  required: z.boolean().optional(),
   /** text up to 200 characters, textarea up to 1,000 (the default). */
   maxLength: z.number().int().min(1).max(CUSTOMIZATION_LIMITS.textareaMaxLength).optional(),
   options: z.array(z.object({
@@ -72,7 +73,6 @@ export const lineInputDeclarationSchema = z.object({
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option values must be unique." });
   if (field.maxLength !== undefined && field.type !== "text" && field.type !== "textarea") ctx.addIssue({ code: "custom", path: ["maxLength"], message: "Only text inputs have a maximum length." });
   if (field.maxLength !== undefined && field.type === "text" && field.maxLength > CUSTOMIZATION_LIMITS.textMaxLength) ctx.addIssue({ code: "custom", path: ["maxLength"], message: `A text input holds at most ${CUSTOMIZATION_LIMITS.textMaxLength} characters.` });
-  if (field.required && field.products) ctx.addIssue({ code: "custom", path: ["required"], message: "An input shown on some products only cannot be required: ask for it with cart.validate." });
 });
 export type LineInputDeclaration = z.infer<typeof lineInputDeclarationSchema>;
 export const CHECKOUT_ATTRIBUTES_MAX_BYTES = 8 * 1024;
