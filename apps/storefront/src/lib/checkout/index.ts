@@ -964,6 +964,13 @@ function drawPaymentChoices(
   const stripeSection = document.getElementById("stripeSection");
   const singleMethod = shown.length === 1;
   const style = paymentChoiceStyle(container, shown.length);
+  // The arrow keys choose through the same function a click does, never a synthetic click:
+  // the theme editor's frame takes clicks for selecting parts (its inspector), not a method.
+  const byControl = new Map<HTMLElement, CheckoutConfig["gateways"][number]>();
+  const chooseControl = (control: HTMLElement) => {
+    const gateway = byControl.get(control);
+    if (gateway) choose(gateway);
+  };
   shown.forEach((gw, index) => {
     const fallbackLabel = (gw as { name?: string }).name || gw.id;
     const known = getGatewayPresentation(gw.id, fallbackLabel, checkoutCopy);
@@ -981,8 +988,9 @@ function drawPaymentChoices(
       style,
     });
     if (parts.control instanceof HTMLButtonElement) {
+      byControl.set(parts.control, gw);
       parts.control.addEventListener("click", () => choose(gw));
-      parts.control.addEventListener("keydown", handlePaymentChoiceKeyDown);
+      parts.control.addEventListener("keydown", (event) => handlePaymentChoiceKeyDown(event, chooseControl));
     }
     if (gw.id === "stripe" && stripeSection) parts.details.appendChild(stripeSection);
     placePaymentChoice(container, parts, style);
