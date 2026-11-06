@@ -9248,6 +9248,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                 id: string;
                 title: string;
                 description: string | null;
+                /**
+                 * The offering app's name (its manifest `name`): the buy form names each app's options by it when several apps offer options.
+                 */
+                appName?: string;
             }>;
             /**
              * Per-line inputs the active apps ask for (`checkout.lineInputs`), drawn after the product's own under `<app id>.<key>`; one with `products` only where the app's field `<app id>.<customField>` is true.
