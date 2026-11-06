@@ -71,9 +71,9 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/variants/*": { GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW] } },
   "/api/v1/admin/resources/customers": { GET: customers },
   "/api/v1/admin/resources/customers/*": { GET: customers },
-  // Saved segments: deleting a saved filter deletes no customer, an edit.
+  // Saved segments (deleting one stays the dashboard's).
   "/api/v1/admin/resources/customer-segments": { GET: customers, POST: customersEdit },
-  "/api/v1/admin/resources/customer-segments/*": { GET: customers, PATCH: customersEdit, DELETE: customersEdit },
+  "/api/v1/admin/resources/customer-segments/*": { GET: customers, PATCH: customersEdit },
   "/api/v1/admin/resources/customer-segments/*/members": { GET: customers },
   // Price lists read and write with the catalog, as the dashboard's editor does.
   "/api/v1/admin/resources/price-lists": { GET: products, POST: productsEdit },

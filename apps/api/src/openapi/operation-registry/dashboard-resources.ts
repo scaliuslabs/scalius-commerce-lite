@@ -68,12 +68,13 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // commands, each keyed by the required Idempotency-Key (the command's own
   // durable key derives from it) under the revision it was based on (the
   // order's for a request, the return's after). Receiving restocks through
-  // the stock ledger. Cancelling closes a request as `orders.set_status`
-  // closes an order (a write), so write_orders stays a write scope.
+  // the stock ledger. Cancelling closes a request for good, so agents confirm
+  // it as on the dashboard; its risk stays a write (it deletes nothing), so
+  // write_orders stays a write scope on the consent screen.
   "dashboard.resources.returns.create": returnCommand(),
   "dashboard.resources.returns.approve": returnCommand(),
   "dashboard.resources.returns.receive": returnCommand(),
-  "dashboard.resources.returns.cancel": returnCommand(),
+  "dashboard.resources.returns.cancel": { ...returnCommand(), confirmation: "required" },
   // Discounts as their webhooks carry them (routes/admin/resources-discounts.ts).
   "dashboard.resources.discounts.list": { uncurated: true },
   // Saved customer segments (routes/admin/resources-customer-segments.ts):
@@ -82,7 +83,6 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.customer_segments.get": { uncurated: true },
   "dashboard.resources.customer_segments.create": { batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.update": { revision: "required", batch: "forbidden", uncurated: true },
-  "dashboard.resources.customer_segments.delete": { risk: "destructive", revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.list_members": { uncurated: true },
   "dashboard.resources.inventory_locations.list": { uncurated: true },
   "dashboard.resources.shipments.create": {
