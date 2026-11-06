@@ -8,6 +8,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { readStoreOriginCountry } from "@scalius/core/modules/tax";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
+  checkoutLineInputs,
   checkoutPurchaseOptions,
   checkStorefrontCartRules,
   validateCheckoutAttributes,
@@ -42,8 +43,8 @@ import {
   fulfillmentKindSchema,
   fulfillmentTypeSchema,
   linePropertiesInputSchema,
-  linePurchaseOptionInputSchema,
-  linePurchaseOptionSchema,
+  linePurchaseOptionsInputSchema,
+  linePurchaseOptionsSchema,
   orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import {
@@ -125,7 +126,7 @@ const cartValidationItemSchema = z.object({
   productName: z.string().optional().nullable(),
   variantLabel: z.string().optional().nullable(),
   properties: linePropertiesInputSchema,
-  purchaseOption: linePurchaseOptionInputSchema,
+  purchaseOptions: linePurchaseOptionsInputSchema,
 });
 
 const cartValidationRoute = createRoute({
@@ -196,7 +197,7 @@ const cartValidationRoute = createRoute({
                * buyer inputs: the cart does not send them back.
                */
               adjustments: z.array(orderLinePropertySchema),
-              purchaseOption: linePurchaseOptionSchema.optional(),
+              purchaseOptions: linePurchaseOptionsSchema.optional(),
               /** Canonical inputs hash for the cart line key (`line:v3:…:p:<hash>`), the purchase option included; "none" without either. */
               propertiesHash: z.string(),
               fulfillmentKind: fulfillmentKindSchema,
@@ -339,6 +340,7 @@ app.openapi(cartValidationRoute, async (c) => {
     transformer: createCartTransformer(db, apps, appContext),
     // A line's purchase option must be one an active app offers.
     purchaseOptions: checkoutPurchaseOptions(apps),
+    lineInputs: checkoutLineInputs(apps),
   });
   // Apps that rewrote the lines (`cart.transform`): the buyer sees their own
   // lines (a bundle priced as its components), checkout the rewritten ones.

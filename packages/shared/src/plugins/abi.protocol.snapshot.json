@@ -120,7 +120,7 @@
            "type": "object",
            "propertyNames": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 160
            },
            "additionalProperties": {
             "type": "string",
@@ -149,18 +149,15 @@
            "minLength": 1,
            "maxLength": 128
           },
-          "purchaseOption": {
-           "default": null,
-           "anyOf": [
-            {
-             "type": "string",
-             "maxLength": 160,
-             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-            },
-            {
-             "type": "null"
-            }
-           ]
+          "purchaseOptions": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
           }
          },
          "required": [
@@ -668,7 +665,7 @@
            "type": "object",
            "propertyNames": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 160
            },
            "additionalProperties": {
             "type": "string",
@@ -697,18 +694,15 @@
            "minLength": 1,
            "maxLength": 128
           },
-          "purchaseOption": {
-           "default": null,
-           "anyOf": [
-            {
-             "type": "string",
-             "maxLength": 160,
-             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-            },
-            {
-             "type": "null"
-            }
-           ]
+          "purchaseOptions": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
           }
          },
          "required": [
@@ -1243,7 +1237,7 @@
            "type": "object",
            "propertyNames": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 160
            },
            "additionalProperties": {
             "type": "string",
@@ -1272,18 +1266,15 @@
            "minLength": 1,
            "maxLength": 128
           },
-          "purchaseOption": {
-           "default": null,
-           "anyOf": [
-            {
-             "type": "string",
-             "maxLength": 160,
-             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-            },
-            {
-             "type": "null"
-            }
-           ]
+          "purchaseOptions": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
           }
          },
          "required": [
@@ -1731,7 +1722,7 @@
            "type": "object",
            "propertyNames": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 160
            },
            "additionalProperties": {
             "type": "string",
@@ -1760,18 +1751,15 @@
            "minLength": 1,
            "maxLength": 128
           },
-          "purchaseOption": {
-           "default": null,
-           "anyOf": [
-            {
-             "type": "string",
-             "maxLength": 160,
-             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-            },
-            {
-             "type": "null"
-            }
-           ]
+          "purchaseOptions": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
           }
          },
          "required": [
@@ -2356,7 +2344,7 @@
            "type": "object",
            "propertyNames": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 160
            },
            "additionalProperties": {
             "type": "string",
@@ -2385,18 +2373,15 @@
            "minLength": 1,
            "maxLength": 128
           },
-          "purchaseOption": {
-           "default": null,
-           "anyOf": [
-            {
-             "type": "string",
-             "maxLength": 160,
-             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-            },
-            {
-             "type": "null"
-            }
-           ]
+          "purchaseOptions": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
           }
          },
          "required": [
@@ -2961,7 +2946,7 @@
            "type": "object",
            "propertyNames": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 160
            },
            "additionalProperties": {
             "type": "string",
@@ -2990,18 +2975,15 @@
            "minLength": 1,
            "maxLength": 128
           },
-          "purchaseOption": {
-           "default": null,
-           "anyOf": [
-            {
-             "type": "string",
-             "maxLength": 160,
-             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-            },
-            {
-             "type": "null"
-            }
-           ]
+          "purchaseOptions": {
+           "default": [],
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+           }
           }
          },
          "required": [
@@ -3580,7 +3562,7 @@
             "type": "object",
             "propertyNames": {
              "type": "string",
-             "maxLength": 64
+             "maxLength": 160
             },
             "additionalProperties": {
              "type": "string",
@@ -3609,18 +3591,15 @@
             "minLength": 1,
             "maxLength": 128
            },
-           "purchaseOption": {
-            "default": null,
-            "anyOf": [
-             {
-              "type": "string",
-              "maxLength": 160,
-              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
-             },
-             {
-              "type": "null"
-             }
-            ]
+           "purchaseOptions": {
+            "default": [],
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+             "type": "string",
+             "maxLength": 160,
+             "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+            }
            }
           },
           "required": [

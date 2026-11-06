@@ -11,6 +11,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins";
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
+import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -42,7 +43,7 @@ export function activePluginInstallationsFromRows(rows: readonly PluginInstallat
 
 /** A way to buy a line an active app offers (`checkout.purchaseOptions`), as the product page lists it. */
 export interface PluginStorefrontPurchaseOption {
-  /** `<app id>.<key>`: what a cart line sends as its `purchaseOption`. */
+  /** `<app id>.<key>`: what a cart line sends in its `purchaseOptions`. */
   id: string;
   title: string;
   description: string | null;
@@ -67,6 +68,23 @@ export function activePluginPurchaseOptions(installations: Iterable<PluginInstal
     }
   }
   return options;
+}
+
+/**
+ * The line inputs the product page draws beside the product's own buyer
+ * inputs (`checkout.lineInputs`): those checkout accepts (`checkoutLineInputs`),
+ * from the same apps as the purchase options. Plugin id order.
+ */
+export function activePluginLineInputs(installations: Iterable<PluginInstallation>): AppLineInputs[] {
+  const apps: AppLineInputs[] = [];
+  const sorted = [...installations].sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+  for (const { pluginId, manifest } of sorted) {
+    const readByCheckout = manifest.functions.length > 0 || manifest.storefront.extensions.length > 0
+      || manifest.providers.some((provider) => provider.kind === "payment");
+    const inputs = manifest.checkout?.lineInputs ?? [];
+    if (readByCheckout && inputs.length > 0) apps.push({ appId: pluginId, inputs });
+  }
+  return apps;
 }
 
 /** The pages a storefront script may load on (`storefront.scripts[].pages`). */

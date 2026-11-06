@@ -17,7 +17,7 @@
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { customerPaymentMethods, orderItems, type CustomerPaymentMethodStatus } from "@scalius/database/schema";
-import { LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOption } from "@scalius/shared/line-properties";
+import { readLinePurchaseOptions, readOrderLineProperties, LINE_PURCHASE_OPTION_PROPERTY_KEY } from "@scalius/shared/line-properties";
 import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
@@ -103,21 +103,11 @@ export interface SavedPaymentMethodOwner {
 
 const NO_OWNER: SavedPaymentMethodOwner = { ownerPluginId: null, purchaseOptionId: null, purchaseOptionTitle: null };
 
-/** The title frozen beside a line's purchase option (`displayValue`), or null. */
-function purchaseOptionTitleOf(properties: string | null): string | null {
-  try {
-    const entries: unknown = properties ? JSON.parse(properties) : null;
-    if (!Array.isArray(entries)) return null;
-    for (const entry of entries) {
-      if (entry && typeof entry === "object" && (entry as { key?: unknown }).key === LINE_PURCHASE_OPTION_PROPERTY_KEY) {
-        const title = (entry as { displayValue?: unknown }).displayValue;
-        return typeof title === "string" && title.trim() ? title.trim().slice(0, 80) : null;
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
+/** The title frozen beside one of a line's purchase options (`displayValue`), or null. */
+function purchaseOptionTitleOf(properties: string | null, option: string): string | null {
+  const entry = readOrderLineProperties(properties).find((candidate) => candidate.key === LINE_PURCHASE_OPTION_PROPERTY_KEY && candidate.value === option);
+  const title = entry?.displayValue.trim();
+  return title ? title.slice(0, 80) : null;
 }
 
 /**
@@ -130,8 +120,9 @@ export async function readSavedPaymentMethodOwner(db: Database, orderId: string)
   const lines = await db.select({ properties: orderItems.properties }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
   const options = new Map<string, string | null>();
   for (const line of lines) {
-    const option = readLinePurchaseOption(line.properties);
-    if (option && !options.has(option)) options.set(option, purchaseOptionTitleOf(line.properties));
+    for (const option of readLinePurchaseOptions(line.properties)) {
+      if (!options.has(option)) options.set(option, purchaseOptionTitleOf(line.properties, option));
+    }
   }
   const apps = new Set([...options.keys()].map((option) => purchaseOptionAppId(option)));
   const [app] = [...apps];

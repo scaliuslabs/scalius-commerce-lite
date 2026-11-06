@@ -5,6 +5,7 @@ import { z } from "zod";
 import { STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { pluginUiDocumentSchema, pluginUiTreeSchema, type PluginUiNode } from "./ui";
 import { pluginKeySchema } from "./manifest-patterns";
+import { CUSTOMIZATION_FIELD_TYPES, CUSTOMIZATION_LIMITS } from "../line-properties";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
 const key = pluginKeySchema();
@@ -36,6 +37,44 @@ export const purchaseOptionDeclarationSchema = z.object({
   description: z.string().trim().min(1).max(300).optional(),
 }).strict();
 export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclarationSchema>;
+
+/** The most line inputs one app declares. */
+export const LINE_INPUTS_MAX = 10;
+const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLength);
+/**
+ * A buyer input the app asks for on each cart line (manifest
+ * `checkout.lineInputs`): a gift message, a protection plan, an engraving
+ * an app prices. It is the product's own buyer-input vocabulary (text,
+ * textarea, select, checkbox) under the app's key `<app id>.<key>`, so it is
+ * drawn by the buy form beside the merchant's inputs, edited from the cart,
+ * part of the line's identity, seen by the app's functions and frozen on the
+ * order line. Core prices nothing for it: the app adds to the line with
+ * `cart.line_prices` adjustments. `products` shows it only on products whose
+ * app custom field (a storefront-visible boolean product field the app
+ * declares) is true; such an input cannot be required, since checkout does
+ * not read that field: the app's `cart.validate` asks for it instead.
+ */
+export const lineInputDeclarationSchema = z.object({
+  key,
+  label: lineInputLabel,
+  help: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.helpLength).optional(),
+  type: z.enum(CUSTOMIZATION_FIELD_TYPES),
+  required: z.boolean().optional(),
+  /** text up to 200 characters, textarea up to 1,000 (the default). */
+  maxLength: z.number().int().min(1).max(CUSTOMIZATION_LIMITS.textareaMaxLength).optional(),
+  options: z.array(z.object({
+    value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).regex(/^[^\r\n]*$/u),
+    label: lineInputLabel,
+  }).strict()).min(1).max(CUSTOMIZATION_LIMITS.selectOptions).optional(),
+  products: z.object({ customField: z.string().max(64) }).strict().optional(),
+}).strict().superRefine((field, ctx) => {
+  if (field.type === "select" ? !field.options?.length : field.options !== undefined) ctx.addIssue({ code: "custom", path: ["options"], message: field.type === "select" ? "A select needs options." : "Only a select has options." });
+  if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option values must be unique." });
+  if (field.maxLength !== undefined && field.type !== "text" && field.type !== "textarea") ctx.addIssue({ code: "custom", path: ["maxLength"], message: "Only text inputs have a maximum length." });
+  if (field.maxLength !== undefined && field.type === "text" && field.maxLength > CUSTOMIZATION_LIMITS.textMaxLength) ctx.addIssue({ code: "custom", path: ["maxLength"], message: `A text input holds at most ${CUSTOMIZATION_LIMITS.textMaxLength} characters.` });
+  if (field.required && field.products) ctx.addIssue({ code: "custom", path: ["required"], message: "An input shown on some products only cannot be required: ask for it with cart.validate." });
+});
+export type LineInputDeclaration = z.infer<typeof lineInputDeclarationSchema>;
 export const CHECKOUT_ATTRIBUTES_MAX_BYTES = 8 * 1024;
 export const checkoutAttributesSchema = z.record(z.string().max(160), z.string().max(500)).refine(
   (value) => new TextEncoder().encode(JSON.stringify(value)).byteLength <= CHECKOUT_ATTRIBUTES_MAX_BYTES,

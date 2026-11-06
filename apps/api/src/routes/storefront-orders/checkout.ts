@@ -60,7 +60,7 @@ import { isWithinRateLimit } from "../../utils/rate-limit";
 import { enforceCheckoutPreparationLimit } from "../../utils/checkout-rate-limit";
 import { created } from "../../utils/api-response";
 import { errorResponses, serviceUnavailableResponse, conflictResponse } from "../../schemas/responses";
-import { linePropertiesInputSchema, linePurchaseOptionInputSchema } from "../../schemas/order-lines";
+import { linePropertiesInputSchema, linePurchaseOptionsInputSchema } from "../../schemas/order-lines";
 import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
     getCustomerSessionTokenFromRequest,
@@ -298,7 +298,7 @@ const createOrderSchema = z.object({
       productName: z.string().optional().nullable(),
       variantLabel: z.string().optional().nullable(),
       properties: linePropertiesInputSchema,
-      purchaseOption: linePurchaseOptionInputSchema,
+      purchaseOptions: linePurchaseOptionsInputSchema,
     }),
   ).min(1, "At least one item is required").max(MAX_ORDER_LINES, `Checkout supports at most ${MAX_ORDER_LINES} line items.`),
   discountCodes: discountCodesSchema,
@@ -508,7 +508,7 @@ app.openapi(createOrderRoute, async (c) => {
           productName: item.productName,
           variantLabel: item.variantLabel,
           properties: item.properties,
-          purchaseOption: item.purchaseOption,
+          purchaseOptions: item.purchaseOptions,
         })),
         inventoryPool: data.inventoryPool,
         shippingCountryCode: data.shippingCountryCode,
@@ -613,7 +613,7 @@ app.openapi(createOrderRoute, async (c) => {
             ...(item.productName ? { productName: item.productName } : {}),
             ...(item.variantLabel ? { variantLabel: item.variantLabel } : {}),
             ...(item.properties !== undefined ? { properties: item.properties as typeof data.items[number]["properties"] } : {}),
-            ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
+            ...(item.purchaseOptions?.length ? { purchaseOptions: [...item.purchaseOptions] } : {}),
           })),
         }
         : data,

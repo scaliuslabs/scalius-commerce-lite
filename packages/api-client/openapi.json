@@ -15992,6 +15992,86 @@
                   "nullable": true,
                   "minLength": 1,
                   "maxLength": 160
+                },
+                "purchaseOptions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "maxItems": 10
+                },
+                "properties": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "displayValue": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "priceMinor": {
+                        "type": "integer"
+                      },
+                      "appId": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "value",
+                      "displayValue",
+                      "priceMinor",
+                      "appId"
+                    ]
+                  },
+                  "maxItems": 60,
+                  "x-scalius-app-owned": "items"
+                },
+                "adjustments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "appId": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "title": {
+                        "type": "string",
+                        "maxLength": 4000
+                      },
+                      "amountMinor": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "appId",
+                      "title",
+                      "amountMinor"
+                    ]
+                  },
+                  "maxItems": 10
                 }
               },
               "required": [
@@ -16007,9 +16087,102 @@
                 "subtotalMinor",
                 "discountMinor",
                 "taxMinor",
-                "purchaseOption"
+                "purchaseOption",
+                "purchaseOptions",
+                "properties",
+                "adjustments"
               ]
             }
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "x-scalius-app-owned": "keys"
+          },
+          "discountApplications": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "store",
+                    "app"
+                  ]
+                },
+                "discountId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "appId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "code": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 64
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "automatic",
+                    "code"
+                  ]
+                },
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "shippingAmountMinor": {
+                  "type": "integer"
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "orderItemId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "amountMinor": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "orderItemId",
+                      "amountMinor"
+                    ]
+                  },
+                  "maxItems": 500
+                }
+              },
+              "required": [
+                "source",
+                "discountId",
+                "appId",
+                "title",
+                "code",
+                "method",
+                "amountMinor",
+                "shippingAmountMinor",
+                "lines"
+              ]
+            },
+            "maxItems": 60
           },
           "createdAt": {
             "type": "string",
@@ -16061,6 +16234,8 @@
           "fulfillmentLocationId",
           "revision",
           "lines",
+          "attributes",
+          "discountApplications",
           "createdAt",
           "updatedAt",
           "deletedAt"
@@ -36669,7 +36844,7 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "`<app id>.<key>`: what a cart, tax-quote or order line sends as its `purchaseOption`."
+                                "description": "`<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app)."
                               },
                               "title": {
                                 "type": "string"
@@ -36685,7 +36860,89 @@
                               "description"
                             ]
                           },
-                          "description": "Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental), the ones checkout accepts. The product page's buy form lists them beside a one-time purchase; the app prices the line at checkout."
+                          "description": "Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental, a protection plan), the ones checkout accepts. The product page's buy form lists each app's options as their own choice beside a one-time purchase; a line carries at most one of each app, and the apps price the line at checkout."
+                        },
+                        "lineInputs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "appId": {
+                                "type": "string"
+                              },
+                              "inputs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "help": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "required": {
+                                      "type": "boolean"
+                                    },
+                                    "maxLength": {
+                                      "type": "integer"
+                                    },
+                                    "options": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "value": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "value",
+                                          "label"
+                                        ]
+                                      }
+                                    },
+                                    "products": {
+                                      "type": "object",
+                                      "properties": {
+                                        "customField": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "customField"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "label",
+                                    "type"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "appId",
+                              "inputs"
+                            ]
+                          },
+                          "description": "Buyer inputs the active apps ask for on each line (manifest `checkout.lineInputs`: a gift message, a protection plan), the ones checkout accepts. The buy form draws them after the product's own inputs under `<app id>.<key>`; one with `products` only on products whose app custom field `<app id>.<customField>` is true. The apps price them at checkout."
                         },
                         "appServices": {
                           "type": "object",
@@ -52430,6 +52687,9 @@
                                     },
                                     "priceMinor": {
                                       "type": "integer"
+                                    },
+                                    "appId": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -81542,6 +81802,9 @@
                                         },
                                         "priceMinor": {
                                           "type": "integer"
+                                        },
+                                        "appId": {
+                                          "type": "string"
                                         }
                                       },
                                       "required": [
@@ -82558,7 +82821,8 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160,
+                                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
                               },
                               "value": {
                                 "type": "string",
@@ -82570,15 +82834,18 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10,
-                          "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                          "maxItems": 40,
+                          "description": "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
-                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5,
+                          "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -86215,6 +86482,9 @@
                                     },
                                     "priceMinor": {
                                       "type": "integer"
+                                    },
+                                    "appId": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -86259,6 +86529,9 @@
                                     },
                                     "priceMinor": {
                                       "type": "integer"
+                                    },
+                                    "appId": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -86272,21 +86545,24 @@
                                   ]
                                 }
                               },
-                              "purchaseOption": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
+                              "purchaseOptions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    }
                                   },
-                                  "title": {
-                                    "type": "string"
-                                  }
+                                  "required": [
+                                    "id",
+                                    "title"
+                                  ]
                                 },
-                                "required": [
-                                  "id",
-                                  "title"
-                                ],
-                                "description": "The line's purchase option (absent: a one-time purchase). The app that offers it prices it."
+                                "description": "The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them."
                               },
                               "propertiesHash": {
                                 "type": "string"
@@ -86695,7 +86971,8 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160,
+                                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
                               },
                               "value": {
                                 "type": "string",
@@ -86707,15 +86984,18 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10,
-                          "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                          "maxItems": 40,
+                          "description": "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
-                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5,
+                          "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -90872,6 +91152,9 @@
                                     },
                                     "priceMinor": {
                                       "type": "integer"
+                                    },
+                                    "appId": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -90919,6 +91202,9 @@
                                     },
                                     "priceMinor": {
                                       "type": "integer"
+                                    },
+                                    "appId": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -90932,21 +91218,24 @@
                                   ]
                                 }
                               },
-                              "purchaseOption": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
+                              "purchaseOptions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    }
                                   },
-                                  "title": {
-                                    "type": "string"
-                                  }
+                                  "required": [
+                                    "id",
+                                    "title"
+                                  ]
                                 },
-                                "required": [
-                                  "id",
-                                  "title"
-                                ],
-                                "description": "The line's purchase option (absent: a one-time purchase). The app that offers it prices it."
+                                "description": "The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them."
                               },
                               "propertiesHash": {
                                 "type": "string"
@@ -91300,7 +91589,8 @@
                               "key": {
                                 "type": "string",
                                 "minLength": 1,
-                                "maxLength": 40
+                                "maxLength": 160,
+                                "description": "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)."
                               },
                               "value": {
                                 "type": "string",
@@ -91312,15 +91602,18 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10,
-                          "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
+                          "maxItems": 40,
+                          "description": "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
-                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5,
+                          "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -97782,12 +98075,15 @@
                           },
                           "maxItems": 20
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$",
-                          "description": "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`)."
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5,
+                          "description": "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`)."
                         }
                       },
                       "required": [
@@ -207011,18 +207307,21 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10
+                          "maxItems": 40
                         },
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5
                         }
                       },
                       "required": [
@@ -208902,18 +209201,21 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10
+                          "maxItems": 40
                         },
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5
                         }
                       },
                       "required": [
@@ -209436,18 +209738,21 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10
+                          "maxItems": 40
                         },
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5
                         },
                         "orderItemId": {
                           "type": "string",
@@ -209976,18 +210281,21 @@
                               "value"
                             ]
                           },
-                          "maxItems": 10
+                          "maxItems": 40
                         },
                         "unitPriceMinor": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9000000000000
                         },
-                        "purchaseOption": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 160,
-                          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                        "purchaseOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160,
+                            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\\.[a-z][a-z0-9_]{0,47}$"
+                          },
+                          "maxItems": 5
                         },
                         "orderItemId": {
                           "type": "string",
@@ -212695,6 +213003,9 @@
                                     },
                                     "priceMinor": {
                                       "type": "integer"
+                                    },
+                                    "appId": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -214504,6 +214815,9 @@
                                 },
                                 "priceMinor": {
                                   "type": "integer"
+                                },
+                                "appId": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
@@ -216894,6 +217208,9 @@
                                         },
                                         "priceMinor": {
                                           "type": "integer"
+                                        },
+                                        "appId": {
+                                          "type": "string"
                                         }
                                       },
                                       "required": [

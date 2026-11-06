@@ -310,5 +310,83 @@
   "from": "600d697d672275b0",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#variable:STOREFRONT_PRODUCT_MODULE_EMBEDS: an existing signature changed or gained a required member.",
   "reason": "Unreleased: STOREFRONT_PRODUCT_MODULE_EMBEDS was added after v2.0.0-beta.2 in this same wave; it is in no tag and not in the public export (only on the private origin), so no app can depend on it. `details` is renamed `description`, the module's theme id."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "functions.cart.transform input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "functions.cart.line_prices input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "functions.cart.validate input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "functions.checkout.discounts input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "functions.checkout.shipping_rates input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "functions.checkout.payment_methods input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4fb01daffe879255",
+  "change": "extensions input cart.lines[].purchaseOption: the field was removed.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (gap G3): the harness is typed by the function inputs and the parsed manifest, whose line `purchaseOption` became `purchaseOptions` and whose `checkout` gained `lineInputs`; its call shape is unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`. BuyerUiInput carries the same cart."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): a line carries at most one purchase option of each app, so two apps (a subscription and another app's protection plan) never overwrite each other on one line. The single `purchaseOption` becomes `purchaseOptions`, the line's options sorted by id (one per app, empty for a one-time purchase); keeping a lone field beside the list would name one app's option arbitrarily. A function that read `line.purchaseOption === id` reads `line.purchaseOptions.includes(id)`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (gap G3): the parsed manifest's `checkout` gains `lineInputs` (per-line buyer inputs under the app's own `<app id>.<key>`), defaulted to [] by the parser exactly as `purchaseOptions` and `attributes` are; apps write `PluginManifestInput`/`defineManifest`, where it is optional, so every manifest that parsed before parses unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fbce8360941dfbc5",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (gap G3): `addLine` takes an optional `inputs` (the app's own line inputs by key), so an island adds a line carrying them; every call written before (variantId, quantity, purchaseOption) is still valid and behaves the same."
  }
 ]

@@ -56,6 +56,10 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   // layout's `purchaseOptions` offers the same); core prices nothing for them.
   const purchaseOptions = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, options: installation.manifest.checkout?.purchaseOptions ?? [] }])).values()]
     .filter((app) => app.options.length > 0);
+  // Line inputs (manifest `checkout.lineInputs`): what a cart line may carry
+  // beside the product's own inputs, read from the same apps; core prices nothing for them.
+  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: installation.manifest.checkout?.lineInputs ?? [] }])).values()]
+    .filter((app) => app.inputs.length > 0);
   const registrations = active
     // The approved grant decides: an app runs only at the points (and UI slots) it was approved for.
     .filter((registration) => registration.name === PLUGIN_EXTENSION_RUN
@@ -65,7 +69,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
   const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: installation.manifest.checkout?.attributes ?? [] }]));
   const attributes = [...attributeApps.values()];
   const points = new Set(registrations.map((registration) => registration.name as PluginRunPoint));
-  if (points.size === 0) return { points, attributes, purchaseOptions, buyerUi: async () => [], run: async () => [], report: () => undefined };
+  if (points.size === 0) return { points, attributes, purchaseOptions, lineInputs, buyerUi: async () => [], run: async () => [], report: () => undefined };
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
@@ -100,6 +104,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     points,
     attributes,
     purchaseOptions,
+    lineInputs,
     reads,
     readRequests(wanted) {
       return wanted.flatMap((point) => functionReadRequests(registrations.filter((registration) => registration.name === point), point));

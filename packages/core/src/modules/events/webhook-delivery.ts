@@ -215,7 +215,8 @@ export type WebhookRepresentationResolver = (event: OutboxEvent) => Promise<Even
 
 /**
  * The signed body: the envelope with the representation as this endpoint may
- * see it (protected fields outside `customerData` read null). A body above
+ * see it (protected fields outside `customerData` read null; an app's own
+ * endpoint sees only its own app-owned answers, `appId`). A body above
  * 512 KiB carries the documented truncation shape in `data` instead (the id
  * and the operation that reads it), never a silent null.
  */
@@ -224,6 +225,7 @@ export function buildWebhookBody(
   apiVersion: string,
   data: EventRepresentation | null,
   customerData: ReadonlySet<ProtectedCustomerData> = new Set(),
+  appId: string | null = null,
 ): string {
   const envelope = {
     id: event.id,
@@ -232,7 +234,7 @@ export function buildWebhookBody(
     occurredAt: new Date(event.occurredAt * 1000).toISOString(),
     resource: { type: event.resourceType, id: event.resourceId },
     facts: event.facts,
-    data: data ? projectEventRepresentation(event.resourceType, data, customerData) : null,
+    data: data ? projectEventRepresentation(event.resourceType, data, customerData, appId) : null,
   };
   const body = JSON.stringify(envelope);
   if (new TextEncoder().encode(body).byteLength <= WEBHOOK_MAX_BODY_BYTES) return body;
@@ -414,6 +416,7 @@ export async function processWebhookDelivery(options: {
         subscription.apiVersion,
         await options.resolveRepresentation(event),
         customerData,
+        subscription.pluginId ?? null,
       );
     } catch (error) {
       internalError = `representation_failed: ${normalizeError(error)}`;

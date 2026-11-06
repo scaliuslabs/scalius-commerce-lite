@@ -11,8 +11,9 @@ import {
 import {
   CUSTOMIZATION_FIELD_TYPES,
   LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PURCHASE_OPTIONS_MAX,
 } from "@scalius/shared/line-properties";
-import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
+import { APP_SCOPED_KEY_MAX_LENGTH, PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { nullableTimestampSchema } from "./timestamps";
 
 export const fulfillmentKindSchema = z.enum(FULFILLMENT_KINDS).openapi({
@@ -29,7 +30,7 @@ export const deliveryMethodKindSchema = z.enum(DELIVERY_METHOD_KINDS).openapi({
 
 /** One buyer input sent with a cart line. Buyer content: sent in the body only, never in a URL. */
 export const linePropertyInputSchema = z.object({
-  key: z.string().min(1).max(40),
+  key: z.string().min(1).max(APP_SCOPED_KEY_MAX_LENGTH).openapi({ description: "The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`)." }),
   value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
 });
 
@@ -38,25 +39,23 @@ export const linePropertiesInputSchema = z
   .max(LINE_PROPERTY_INPUT_LIMITS.entries)
   .optional()
   .openapi({
-    description: "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line.",
+    description: "Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line.",
   });
 
-/** The purchase option a cart line is bought with (an active app's `checkout.purchaseOptions`). */
-export const linePurchaseOptionInputSchema = z
-  .string()
-  .max(PURCHASE_OPTION_ID_MAX_LENGTH)
-  .regex(PURCHASE_OPTION_ID_PATTERN, "Use a purchase option id: <app id>.<key>.")
-  .nullable()
+/** The purchase options a cart line is bought with (active apps' `checkout.purchaseOptions`, one per app). */
+export const linePurchaseOptionsInputSchema = z
+  .array(z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN, "Use a purchase option id: <app id>.<key>."))
+  .max(LINE_PURCHASE_OPTIONS_MAX)
   .optional()
   .openapi({
-    description: "An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).",
+    description: "Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).",
   });
 
-/** The purchase option a validated line carries, with the title the buyer sees. */
-export const linePurchaseOptionSchema = z.object({
+/** The purchase options a validated line carries, with the titles the buyer sees. */
+export const linePurchaseOptionsSchema = z.array(z.object({
   id: z.string(),
   title: z.string(),
-}).openapi({ description: "The line's purchase option (absent: a one-time purchase). The app that offers it prices it." });
+})).openapi({ description: "The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them." });
 
 /** A resolved buyer input as priced and frozen on the order line. */
 export const orderLinePropertySchema = z.object({
@@ -69,6 +68,8 @@ export const orderLinePropertySchema = z.object({
   /** Surcharge this input adds to one unit, in major units. */
   price: z.number(),
   priceMinor: z.number().int(),
+  /** The app the entry belongs to (its line input, add-on or purchase option); absent for the product's own inputs. */
+  appId: z.string().optional(),
 });
 
 /** Buyer-input fields every order line projection carries. */

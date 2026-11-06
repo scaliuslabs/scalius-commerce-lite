@@ -19,6 +19,7 @@ import {
   inventoryLevels,
   inventoryTransferLines,
   inventoryTransfers,
+  orderDiscountAllocations,
   orderFulfillmentLines,
   orderFulfillments,
   orderItems,
@@ -54,7 +55,10 @@ import {
   type EventRepresentationType,
 } from "@scalius/shared/events";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
-import { readLinePurchaseOption } from "@scalius/shared/line-properties";
+import { isLineInputEntry, LINE_ADJUSTMENT_PROPERTY_KEY, readLinePurchaseOptions, readOrderLineProperties } from "@scalius/shared/line-properties";
+import { appScopedKeyAppId } from "@scalius/shared/plugins/ids";
+import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "@scalius/core/modules/order-kernel";
 import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
 
 /** The most lines a representation lists (an order's, a return's, a purchase order's): a bigger one is truncated as a whole. */
@@ -137,13 +141,14 @@ function inIdOrder<T>(ids: readonly string[], byId: ReadonlyMap<string, T>): T[]
 
 /**
  * The orders' sealed representations, in the order of `ids` (missing ones
- * left out): one read of the orders and one of their lines, so a page of
- * orders costs two queries (the API's lists read through here too).
+ * left out): one round trip of four reads (the orders, their lines, their
+ * store discount allocations and their app discount facts), whatever the
+ * count (the API's lists read through here too).
  */
 export async function readOrderRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"order">[]> {
   if (ids.length === 0) return [];
-  const [rows, lineRows] = await Promise.all([
-    db.select().from(orders).where(inArray(orders.id, [...ids])).all(),
+  const [rows, lineRows, allocationRows, appFactRows] = await db.batch([
+    db.select().from(orders).where(inArray(orders.id, [...ids])),
     db.select({
       orderId: orderItems.orderId,
       id: orderItems.id,
@@ -159,13 +164,105 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       subtotalMinor: orderItems.lineSubtotalMinor,
       discountMinor: orderItems.discountAmountMinor,
       taxMinor: orderItems.taxAmountMinor,
-      // The line's frozen inputs, in the same read: its purchase option rides there.
+      // The line's frozen inputs, in the same read: its add-ons and purchase options ride there.
       properties: orderItems.properties,
     }).from(orderItems).where(inArray(orderItems.orderId, [...ids]))
-      .orderBy(asc(orderItems.orderId), asc(orderItems.createdAt), asc(orderItems.id)).all(),
+      .orderBy(asc(orderItems.orderId), asc(orderItems.createdAt), asc(orderItems.id)),
+    // Immutable order-time facts (`order_discount_allocations_order_idx`): one row per discount effect and line.
+    db.select({
+      orderId: orderDiscountAllocations.orderId,
+      orderItemId: orderDiscountAllocations.orderItemId,
+      promotionId: orderDiscountAllocations.promotionId,
+      title: orderDiscountAllocations.promotionName,
+      code: orderDiscountAllocations.promotionCode,
+      method: orderDiscountAllocations.method,
+      target: orderDiscountAllocations.target,
+      amountMinor: orderDiscountAllocations.discountAmountMinor,
+    }).from(orderDiscountAllocations).where(inJsonArray(orderDiscountAllocations.orderId, ids))
+      .orderBy(asc(orderDiscountAllocations.orderId), asc(orderDiscountAllocations.createdAt), asc(orderDiscountAllocations.id)),
+    selectOrderAppFactRows(db, ids, ["app_discount"]),
   ]);
   const lines = groupBy(lineRows, (line) => line.orderId);
-  return inIdOrder(ids, new Map(rows.map((order) => [order.id, orderFrom(order, lines.get(order.id) ?? [])])));
+  const discounts = orderDiscountApplications(allocationRows, appFactRows as OrderAppFactRow[]);
+  return inIdOrder(ids, new Map(rows.map((order) => [order.id, orderFrom(order, lines.get(order.id) ?? [], discounts.get(order.id) ?? [])])));
+}
+
+type DiscountApplication = EventRepresentationInput<"order">["discountApplications"][number];
+
+/**
+ * Each order's discount applications: its store discounts (one per discount
+ * and code, lines in allocation order) then its apps' (in the order they
+ * applied), from the immutable facts the order committed with.
+ */
+function orderDiscountApplications(
+  allocations: ReadonlyArray<{ orderId: string; orderItemId: string | null; promotionId: string; title: string; code: string | null; method: "automatic" | "code"; target: string; amountMinor: number }>,
+  appFacts: readonly OrderAppFactRow[],
+): Map<string, DiscountApplication[]> {
+  const byOrder = new Map<string, Map<string, DiscountApplication>>();
+  for (const row of allocations) {
+    const applications = byOrder.get(row.orderId) ?? new Map<string, DiscountApplication>();
+    byOrder.set(row.orderId, applications);
+    const key = `${row.promotionId}\u0000${row.code ?? ""}`;
+    const application = applications.get(key) ?? {
+      source: "store" as const,
+      discountId: row.promotionId,
+      appId: null,
+      title: row.title,
+      code: row.code ?? null,
+      method: row.method,
+      amountMinor: 0,
+      shippingAmountMinor: 0,
+      lines: [],
+    };
+    applications.set(key, application);
+    if (row.target === "shipping" || !row.orderItemId) {
+      application.shippingAmountMinor += row.amountMinor;
+    } else {
+      application.amountMinor += row.amountMinor;
+      const line = application.lines.find((entry) => entry.orderItemId === row.orderItemId);
+      if (line) line.amountMinor += row.amountMinor;
+      else if (application.lines.length < MAX_LINES) application.lines.push({ orderItemId: row.orderItemId, amountMinor: row.amountMinor });
+    }
+  }
+  const result = new Map<string, DiscountApplication[]>();
+  for (const [orderId, applications] of byOrder) result.set(orderId, [...applications.values()]);
+  const factsByOrder = groupBy(appFacts, (row) => row.orderId);
+  for (const [orderId, rows] of factsByOrder) {
+    const apps = resolveOrderAppFacts(rows).discounts.map((fact): DiscountApplication => ({
+      source: "app",
+      discountId: null,
+      appId: fact.pluginId,
+      title: fact.title,
+      code: fact.code,
+      method: fact.code ? "code" : "automatic",
+      amountMinor: fact.amountMinor,
+      shippingAmountMinor: fact.shippingAmountMinor,
+      lines: fact.lines.slice(0, MAX_LINES),
+    }));
+    result.set(orderId, [...(result.get(orderId) ?? []), ...apps]);
+  }
+  return result;
+}
+
+/** A line's frozen entries as the representation lists them: what the buyer entered, the apps' add-ons, its purchase options. */
+function orderLineEntries(properties: string | null) {
+  const entries = readOrderLineProperties(properties);
+  return {
+    properties: entries.filter((entry) => isLineInputEntry(entry.key)).map((entry) => ({
+      key: entry.key,
+      label: entry.label,
+      value: entry.value,
+      displayValue: entry.displayValue,
+      priceMinor: entry.priceMinor,
+      appId: entry.appId ?? appScopedKeyAppId(entry.key),
+    })),
+    adjustments: entries.filter((entry) => entry.key === LINE_ADJUSTMENT_PROPERTY_KEY).map((entry) => ({
+      appId: entry.appId ?? null,
+      title: entry.displayValue,
+      amountMinor: entry.priceMinor,
+    })),
+    purchaseOptions: readLinePurchaseOptions(entries),
+  };
 }
 
 async function orderRepresentation(db: Database, orderId: string) {
@@ -189,7 +286,7 @@ type OrderLineRow = {
   properties: string | null;
 };
 
-function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
+function orderFrom(order: OrderRow, lines: readonly OrderLineRow[], discountApplications: readonly DiscountApplication[]) {
   return sealed("order", {
     id: order.id,
     orderNumber: order.orderNumber ?? null,
@@ -221,15 +318,21 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[]) {
     billingAddress: billingAddress(order),
     fulfillmentLocationId: order.fulfillmentLocationId ?? null,
     revision: order.version,
-    lines: lines.map(({ orderId: _orderId, properties, ...line }) => ({
+    lines: lines.map(({ orderId: _orderId, properties, ...line }) => {
+      const entries = orderLineEntries(properties);
+      return {
       ...line,
-      purchaseOption: readLinePurchaseOption(properties),
+      ...entries,
+      purchaseOption: entries.purchaseOptions[0] ?? null,
       unitPriceMinor: line.unitPriceMinor ?? 0,
       subtotalMinor: line.subtotalMinor ?? 0,
       discountMinor: line.discountMinor ?? 0,
       taxMinor: line.taxMinor ?? 0,
       fulfilledQuantity: line.fulfilledQuantity ?? 0,
-    })),
+      };
+    }),
+    attributes: readCheckoutAttributes(order.attributes),
+    discountApplications: [...discountApplications],
     createdAt: isoRequired(order.createdAt),
     updatedAt: isoRequired(order.updatedAt),
     deletedAt: iso(order.deletedAt),

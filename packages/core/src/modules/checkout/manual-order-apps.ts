@@ -44,11 +44,12 @@ import type {
     ManualOrderAppOutcome,
 } from "@scalius/shared/checkout-app-facts";
 import { ValidationError } from "@scalius/core/errors";
-import { LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOption } from "@scalius/shared/line-properties";
+import { LINE_ADJUSTMENT_PROPERTY_KEY, LINE_PURCHASE_OPTION_PROPERTY_KEY, readLinePurchaseOptions } from "@scalius/shared/line-properties";
 import {
     applyAppPaymentMethodOperations,
     applyAppShippingRateOperations,
     buildAppFunctionCart,
+    checkoutLineInputs,
     checkoutPurchaseOptions,
     CHECKOUT_RULES_FAILED_REASON,
     collectCheckoutRuleErrors,
@@ -74,6 +75,7 @@ export function createManualOrderAppFunctions(db: Database, apps: CheckoutAppFun
     return {
         price: (input) => applyManualOrderAppFunctions(db, apps, input),
         purchaseOptions: checkoutPurchaseOptions(apps),
+        lineInputs: checkoutLineInputs(apps),
     };
 }
 
@@ -87,8 +89,8 @@ function parseLineInputs(serialized: string | null): Array<{ key: string; value:
         return parsed.flatMap((entry: unknown) => {
             if (!entry || typeof entry !== "object") return [];
             const { key, value } = entry as { key?: unknown; value?: unknown };
-            // The purchase option is the line's own field, not a buyer input.
-            if (key === LINE_PURCHASE_OPTION_PROPERTY_KEY) return [];
+            // Purchase options and add-ons are the line's own facts, not buyer inputs.
+            if (key === LINE_PURCHASE_OPTION_PROPERTY_KEY || key === LINE_ADJUSTMENT_PROPERTY_KEY) return [];
             return typeof key === "string" && typeof value === "string" ? [{ key, value }] : [];
         });
     } catch {
@@ -148,7 +150,7 @@ function cartOf(
             unitPriceMinor: line.unitPriceMinor,
             discountMinor: platformLine.get(line.lineId) ?? 0,
             properties: parseLineInputs(line.properties),
-            purchaseOption: readLinePurchaseOption(line.properties),
+            purchaseOptions: readLinePurchaseOptions(line.properties),
         })),
         facts,
         destination: destinationOf(input),

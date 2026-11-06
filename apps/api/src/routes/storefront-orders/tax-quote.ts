@@ -22,6 +22,7 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
+    checkoutLineInputs,
     checkoutPurchaseOptions,
     validateCheckoutAttributes,
     createAppLinePricer,
@@ -55,8 +56,8 @@ import {
     deliveryMethodKindSchema,
     fulfillmentTypeSchema,
     linePropertiesInputSchema,
-    linePurchaseOptionInputSchema,
-    linePurchaseOptionSchema,
+    linePurchaseOptionsInputSchema,
+    linePurchaseOptionsSchema,
     orderLinePropertySchema,
 } from "../../schemas/order-lines";
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
@@ -91,7 +92,7 @@ const taxQuoteItemSchema = z.object({
   productName: z.string().max(200).optional().nullable(),
   variantLabel: z.string().max(200).optional().nullable(),
   properties: linePropertiesInputSchema,
-  purchaseOption: linePurchaseOptionInputSchema,
+  purchaseOptions: linePurchaseOptionsInputSchema,
 });
 
 const taxQuoteResponseSchema = z.object({
@@ -184,7 +185,7 @@ const taxQuoteResponseSchema = z.object({
     propertiesPriceMinor: z.number().int(),
     /** Apps' add-ons to each unit (in `unitPrice`), shown as line components; never buyer inputs. */
     adjustments: z.array(orderLinePropertySchema),
-    purchaseOption: linePurchaseOptionSchema.optional(),
+    purchaseOptions: linePurchaseOptionsSchema.optional(),
     propertiesHash: z.string(),
     discountMinor: z.number().int().min(0).optional().openapi({
       description: "The line's own share of the order's discounts, as the order will keep it; present only where the quoted line is the buyer's own (not one a store app rewrote). A line it pays in full (a free gift) reads zero with its price struck.",
@@ -308,6 +309,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     transformer: createCartTransformer(db, apps, appContext),
     // A line's purchase option must be one an active app offers.
     purchaseOptions: checkoutPurchaseOptions(apps),
+    lineInputs: checkoutLineInputs(apps),
   });
   // Apps that rewrote the lines (`cart.transform`): issues and the listed
   // lines are the buyer's; tax and discounts are the rewritten lines'.
@@ -480,7 +482,7 @@ app.openapi(taxQuoteRoute, async (c) => {
         ...adjustment,
         price: toAmount(adjustment.priceMinor),
       })),
-      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
+      ...(item.purchaseOptions?.length ? { purchaseOptions: item.purchaseOptions } : {}),
       propertiesHash: linePropertiesHashes[position]!,
       // The line's share of the discounts, as the order keeps it (a rewritten line's share is not the buyer's line).
       ...(buyerView ? {} : lineDiscountMinor(cartValidation.items[position]!)),

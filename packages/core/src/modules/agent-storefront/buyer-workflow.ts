@@ -23,6 +23,7 @@ import {
   createAtomicCheckoutAttempt,
   createAppLinePricer,
   createCartTransformer,
+  checkoutLineInputs,
   checkoutPurchaseOptions,
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
@@ -436,6 +437,7 @@ export async function submitAgentStorefrontCheckout(
       linePricer: () => createAppLinePricer(db, apps, appContext),
       transformer: createCartTransformer(db, apps, appContext),
       purchaseOptions: () => checkoutPurchaseOptions(apps),
+      lineInputs: () => checkoutLineInputs(apps),
     }, options.credentialEncryptionKey, appPayments));
   if (!authority.cartValidation.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
@@ -516,7 +518,7 @@ export async function submitAgentStorefrontCheckout(
       variantLabel: item.variantLabel,
       properties: item.properties,
       ...(item.cartKey ? { cartKey: item.cartKey } : {}),
-      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption.id } : {}),
+      ...(item.purchaseOptions?.length ? { purchaseOptions: item.purchaseOptions.map((option) => option.id) } : {}),
     })),
     discountCodes: owned.discountCode ? [owned.discountCode] : [],
     shippingCharge: fromMinor(delivery.shippingMinor, storeDecimalPlaces),

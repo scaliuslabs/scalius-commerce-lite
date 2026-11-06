@@ -4,6 +4,7 @@
 
 import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "@scalius/shared/plugins/ids";
+import { LINE_PURCHASE_OPTIONS_MAX } from "@scalius/shared/line-properties";
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
@@ -127,11 +128,13 @@ const sellableOrderItemSchema = z.object({
      */
     unitPriceMinor: z.number().int().min(0).max(MAX_MINOR_AMOUNT).optional(),
     /**
-     * An installed app's purchase option for the line (`<app id>.<key>`, a
-     * subscription renewal); frozen on the line as `_purchase_option`. The
-     * app prices it; one no active app offers is refused.
+     * Installed apps' purchase options for the line (`<app id>.<key>`, a
+     * subscription renewal and another app's protection plan), at most one
+     * per app; each is frozen on the line as `_purchase_option`. The apps
+     * price them; one no active app offers is refused.
      */
-    purchaseOption: z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN, "Use a purchase option id: <app id>.<key>.").nullable().optional(),
+    purchaseOptions: z.array(z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN, "Use a purchase option id: <app id>.<key>."))
+        .max(LINE_PURCHASE_OPTIONS_MAX).optional(),
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({

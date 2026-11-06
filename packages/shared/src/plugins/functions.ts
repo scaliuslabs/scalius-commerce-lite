@@ -21,7 +21,8 @@ import { z } from "zod";
 import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
 import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
-import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
+import { APP_SCOPED_KEY_MAX_LENGTH, APP_SCOPED_KEY_PATTERN } from "./ids";
+import { LINE_PURCHASE_OPTIONS_MAX } from "../line-properties";
 import type { PluginFunctionPoint } from "./manifest";
 import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
 import { ORDER_CHANNELS } from "../order-channel";
@@ -48,8 +49,12 @@ export const functionCartLineSchema = z.object({
   categoryIds: z.array(id).max(20),
   collectionIds: z.array(id).max(50),
   brandId: id.nullable(),
-  /** Buyer inputs captured on the line (engraving text, gift note…). */
-  properties: z.record(z.string().max(64), z.string().max(500)),
+  /**
+   * Buyer inputs captured on the line, by key: the merchant's own (engraving
+   * text, a gift note) and this app's line inputs (`checkout.lineInputs`)
+   * under `<app id>.<key>`. Another app's line inputs are never shown.
+   */
+  properties: z.record(z.string().max(APP_SCOPED_KEY_MAX_LENGTH), z.string().max(500)),
   /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping
@@ -64,14 +69,16 @@ export const functionCartLineSchema = z.object({
    */
   shippingProfileId: id.default("shp_default"),
   /**
-   * The purchase option the buyer chose for the line (`<app id>.<key>`, an
-   * active app's manifest `checkout.purchaseOptions`), or null for a one-time
-   * purchase. Buyer checkout requires the owning app's valid `cart.line_prices`
-   * quote; `checkout.discounts` and `cart.validate` handle discounts and
-   * eligibility. Staff orders keep staff-set prices. The same SKU with
-   * another option is another line.
+   * The purchase options the buyer chose for the line (`<app id>.<key>`,
+   * active apps' manifest `checkout.purchaseOptions`), sorted by id, at most
+   * one per app: a subscription and another app's protection plan side by
+   * side. Empty for a one-time purchase. Buyer checkout requires each owning
+   * app's answer for the line from `cart.line_prices` (a price or an
+   * add-on); `checkout.discounts` and `cart.validate` handle discounts and
+   * eligibility. Staff orders keep staff-set prices. The same SKU with other
+   * options is another line.
    */
-  purchaseOption: z.string().max(PURCHASE_OPTION_ID_MAX_LENGTH).regex(PURCHASE_OPTION_ID_PATTERN).nullable().default(null),
+  purchaseOptions: z.array(z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN)).max(LINE_PURCHASE_OPTIONS_MAX).default([]),
 }).strict();
 
 /** Who places the order (`orders.channel`, `@scalius/shared/order-channel`). */
@@ -305,8 +312,8 @@ export const FUNCTION_PRICE_SOURCES = ["sale", "segment", "market", "fx", "base"
  * Per line: where its price came from and the bundle it belongs to (an
  * expanded line's components). A one-time line takes an app price only when
  * it is priced at `sale`, `fx` or `base`: override, segment and market lists stay
- * authoritative. A line bought with a purchase option takes only its owning
- * app's price, which outranks every list (`resolvePrice()`).
+ * authoritative. A line bought with purchase options takes a price only from
+ * an app whose option it carries, which outranks every list (`resolvePrice()`).
  */
 export const functionLinePriceFactsSchema = z.object({
   lineId: id,
@@ -324,8 +331,11 @@ export const LINE_ADJUSTMENT_MAX_MINOR = 1_000_000_000_000;
  * buyer-input surcharges (they are added on top), for one-time lines priced
  * at `sale`, `fx` or `base` and for lines bought with the app's own purchase option
  * (above every list). Several apps: the first in priority order that prices
- * a line wins. A sale only lowers that offer. An unnamed one-time line keeps
- * its price; a purchase-option line without its owner's valid price refuses checkout.
+ * a one-time line wins. A sale only lowers that offer. An unnamed one-time
+ * line keeps its price. A purchase-option line takes a price only from an
+ * app whose option it carries, and each of those apps must answer it with a
+ * price or an add-on, else checkout refuses; two of them pricing one line
+ * refuse too (`purchase_options_conflict`): one line has one price.
  *
  * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
  * gift wrap), applied after the whole price precedence, so sale, segment

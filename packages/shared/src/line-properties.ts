@@ -1,4 +1,5 @@
 import { sha256Hex } from "./hash";
+import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
 /**
  * Line-item properties: the buyer inputs a product asks for (engraving text,
  * gift wrap, a fit choice) and what they add to the line price (Wave A §3).
@@ -34,7 +35,8 @@ export const CUSTOMIZATION_LIMITS = {
 } as const;
 
 export const LINE_PROPERTY_INPUT_LIMITS = {
-  entries: 10,
+  /** The product's own inputs (at most 10) and the active apps' line inputs, together. */
+  entries: 40,
   valueLength: 1_000,
 } as const;
 
@@ -51,6 +53,12 @@ interface CustomizationFieldBase {
   label: string;
   required: boolean;
   help: string | null;
+  /**
+   * The app that asks for it (manifest `checkout.lineInputs`; its key is then
+   * `<app id>.<key>`). Absent for the merchant's own inputs, which a stored
+   * schema never carries.
+   */
+  appId?: string;
 }
 
 export interface CustomizationTextField extends CustomizationFieldBase {
@@ -360,57 +368,194 @@ export interface CanonicalLineProperty {
 export const LINE_ADJUSTMENT_PROPERTY_KEY = "_adjustment";
 export const LINE_ADJUSTMENT_LABEL = "Add-on";
 
-export function lineAdjustmentProperty(title: string, amountMinor: number): ResolvedLineProperty {
+export function lineAdjustmentProperty(title: string, amountMinor: number, appId?: string): ResolvedLineProperty {
   const text = title.trim().slice(0, 80);
-  return { key: LINE_ADJUSTMENT_PROPERTY_KEY, type: "text", label: LINE_ADJUSTMENT_LABEL, value: text, displayValue: text, priceMinor: amountMinor };
+  return { key: LINE_ADJUSTMENT_PROPERTY_KEY, type: "text", label: LINE_ADJUSTMENT_LABEL, value: text, displayValue: text, priceMinor: amountMinor, ...(appId ? { appId } : {}) };
 }
 
 /**
  * A line's purchase option (an app's `checkout.purchaseOptions`, "Subscribe
  * and save"), frozen on the order line after its buyer inputs: `value` is the
- * option's public id `<app id>.<key>`, `displayValue` its title. The key is a
- * contract: payments ask the provider to keep the buyer's payment method when
- * an order has such a line. It is not a buyer input (no price, never sent
- * back as a property); the cart sends it as the line's `purchaseOption`, and
- * it is part of the line's identity (`lineIdentityProperties`).
+ * option's public id `<app id>.<key>`, `displayValue` its title, `appId` its
+ * app. A line carries at most one option of each app, each frozen as its own
+ * entry. The key is a contract: payments ask the provider to keep the buyer's
+ * payment method when an order has such a line. It is not a buyer input (no
+ * price, never sent back as a property); the cart sends the line's
+ * `purchaseOptions`, and they are part of its identity (`lineIdentityProperties`).
  */
 export const LINE_PURCHASE_OPTION_PROPERTY_KEY = "_purchase_option";
 export const LINE_PURCHASE_OPTION_LABEL = "Purchase option";
+/** The most purchase options one line carries (one per app). */
+export const LINE_PURCHASE_OPTIONS_MAX = 5;
 
 export function linePurchaseOptionProperty(id: string, title: string): ResolvedLineProperty {
   const text = title.trim().slice(0, 80);
-  return { key: LINE_PURCHASE_OPTION_PROPERTY_KEY, type: "text", label: LINE_PURCHASE_OPTION_LABEL, value: id, displayValue: text, priceMinor: 0 };
+  const appId = appScopedKeyAppId(id);
+  return { key: LINE_PURCHASE_OPTION_PROPERTY_KEY, type: "text", label: LINE_PURCHASE_OPTION_LABEL, value: id, displayValue: text, priceMinor: 0, ...(appId ? { appId } : {}) };
+}
+
+export type LinePurchaseOptionsResult =
+  | { ok: true; options: string[] }
+  | { ok: false; reason: "invalid" | "same_app" | "too_many"; option: string | null };
+
+/**
+ * A line's purchase options in their one canonical form: valid ids, at most
+ * one per app (two from one app are refused, never chosen between), at most
+ * LINE_PURCHASE_OPTIONS_MAX, sorted by id. Absent, null or empty is none.
+ */
+export function normalizeLinePurchaseOptions(value: unknown): LinePurchaseOptionsResult {
+  if (value === undefined || value === null) return { ok: true, options: [] };
+  if (!Array.isArray(value)) return { ok: false, reason: "invalid", option: null };
+  const apps = new Set<string>();
+  const options = new Set<string>();
+  for (const entry of value) {
+    if (!isAppScopedKey(entry)) return { ok: false, reason: "invalid", option: typeof entry === "string" ? entry.slice(0, 160) : null };
+    if (options.has(entry)) continue;
+    const appId = appScopedKeyAppId(entry)!;
+    if (apps.has(appId)) return { ok: false, reason: "same_app", option: entry };
+    apps.add(appId);
+    options.add(entry);
+  }
+  if (options.size > LINE_PURCHASE_OPTIONS_MAX) return { ok: false, reason: "too_many", option: null };
+  return { ok: true, options: [...options].sort() };
 }
 
 /**
  * What a cart line's identity hashes (`linePropertiesHash`, `lineCartKey`):
- * its canonical buyer inputs, then its purchase option when it has one. A
- * line without an option hashes exactly as before.
+ * its canonical buyer inputs, then one entry per purchase option, sorted by
+ * id. A line with one option hashes exactly as it did when a line could have
+ * only one; a line with none exactly as one without options.
  */
 export function lineIdentityProperties(
   canonical: readonly CanonicalLineProperty[],
-  purchaseOption: string | null | undefined,
+  purchaseOptions: readonly string[] | null | undefined,
 ): CanonicalLineProperty[] {
-  return purchaseOption ? [...canonical, { key: LINE_PURCHASE_OPTION_PROPERTY_KEY, value: purchaseOption }] : [...canonical];
+  const options = [...new Set(purchaseOptions ?? [])].filter(Boolean).sort();
+  return [...canonical, ...options.map((value) => ({ key: LINE_PURCHASE_OPTION_PROPERTY_KEY, value }))];
 }
 
-/** The purchase option frozen on an order line (`order_items.properties` JSON or entries), or null. */
-export function readLinePurchaseOption(properties: string | readonly unknown[] | null | undefined): string | null {
-  let entries: unknown = properties;
-  if (typeof properties === "string") {
-    try {
-      entries = JSON.parse(properties);
-    } catch {
-      return null;
+function frozenEntries(properties: string | readonly unknown[] | null | undefined): unknown[] {
+  if (typeof properties !== "string") return Array.isArray(properties) ? [...properties] : [];
+  try {
+    const parsed: unknown = JSON.parse(properties);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The purchase options frozen on an order line (`order_items.properties` JSON or entries), sorted by id. */
+export function readLinePurchaseOptions(properties: string | readonly unknown[] | null | undefined): string[] {
+  const options = new Set<string>();
+  for (const entry of frozenEntries(properties)) {
+    if (isRecord(entry) && entry.key === LINE_PURCHASE_OPTION_PROPERTY_KEY && isAppScopedKey(entry.value)) options.add(entry.value);
+  }
+  return [...options].sort();
+}
+
+/** A transformed line's bundle (`cart.transform`), frozen beside its inputs as its title. */
+export const LINE_BUNDLE_PROPERTY_KEY = "_bundle";
+
+/**
+ * Whether a frozen entry is something the buyer entered (the product's own
+ * input or an app's line input), not a fact the platform froze beside them:
+ * an add-on, a purchase option, a bundle, a gift card's recipient.
+ */
+export function isLineInputEntry(key: string): boolean {
+  return key !== LINE_ADJUSTMENT_PROPERTY_KEY && key !== LINE_PURCHASE_OPTION_PROPERTY_KEY
+    && key !== LINE_BUNDLE_PROPERTY_KEY && !key.startsWith(RESERVED_PROPERTY_KEY_PREFIX);
+}
+
+/** The frozen entries of an order line, as stored: `[]` for none or a malformed column. */
+export function readOrderLineProperties(properties: string | readonly unknown[] | null | undefined): ResolvedLineProperty[] {
+  const resolved: ResolvedLineProperty[] = [];
+  for (const entry of frozenEntries(properties)) {
+    if (
+      !isRecord(entry) || typeof entry.key !== "string" || typeof entry.label !== "string"
+      || typeof entry.value !== "string" || typeof entry.displayValue !== "string"
+      || typeof entry.priceMinor !== "number" || !Number.isSafeInteger(entry.priceMinor)
+      || !(CUSTOMIZATION_FIELD_TYPES as readonly unknown[]).includes(entry.type)
+    ) continue;
+    resolved.push({
+      key: entry.key,
+      type: entry.type as CustomizationFieldType,
+      label: entry.label,
+      value: entry.value,
+      displayValue: entry.displayValue,
+      priceMinor: entry.priceMinor,
+      ...(typeof entry.appId === "string" && entry.appId ? { appId: entry.appId } : {}),
+    });
+  }
+  return resolved;
+}
+
+// ---------------------------------------------------------------------------
+// App line inputs (manifest `checkout.lineInputs`)
+// ---------------------------------------------------------------------------
+
+/** One app line input as a manifest declares it (buyer-ui.ts `lineInputDeclarationSchema`). */
+export interface AppLineInputDeclaration {
+  key: string;
+  label: string;
+  help?: string;
+  type: CustomizationFieldType;
+  required?: boolean;
+  maxLength?: number;
+  options?: ReadonlyArray<{ value: string; label: string }>;
+  products?: { customField: string };
+}
+
+/** An active app's line inputs. */
+export interface AppLineInputs {
+  appId: string;
+  inputs: readonly AppLineInputDeclaration[];
+}
+
+/**
+ * The fields a product's buy form and checkout resolve a line against: the
+ * merchant's schema, then every app's line inputs, apps by id, each in its
+ * declared order, under `<app id>.<key>` and priced at nothing (an app adds
+ * to the line with `cart.line_prices` adjustments). The order is part of
+ * the line's identity, so the product page and checkout build it the same
+ * way. `shown` decides an input limited to some products (`products`): the
+ * product page passes the product's custom fields; checkout passes none, so
+ * such an input is accepted, optional, on any line and the app decides.
+ * Gift cards take no app inputs: callers leave them out.
+ */
+export function withAppLineInputs(
+  schema: CustomizationSchema | null,
+  apps: readonly AppLineInputs[],
+  shown: (appId: string, gate: { customField: string }) => boolean = () => true,
+): CustomizationSchema | null {
+  const fields: CustomizationField[] = [];
+  for (const app of [...apps].sort((left, right) => (left.appId < right.appId ? -1 : left.appId > right.appId ? 1 : 0))) {
+    for (const input of app.inputs) {
+      if (input.products && !shown(app.appId, input.products)) continue;
+      const base = { key: appScopedKey(app.appId, input.key), label: input.label, required: Boolean(input.required) && !input.products, help: input.help ?? null, appId: app.appId };
+      if (input.type === "select") {
+        fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0 })) });
+      } else if (input.type === "checkbox") {
+        fields.push({ ...base, type: "checkbox", priceMinor: 0 });
+      } else {
+        const limit = input.type === "text" ? CUSTOMIZATION_LIMITS.textMaxLength : CUSTOMIZATION_LIMITS.textareaMaxLength;
+        fields.push({ ...base, type: input.type, maxLength: Math.min(input.maxLength ?? limit, limit), priceMinor: 0 });
+      }
     }
   }
-  if (!Array.isArray(entries)) return null;
-  for (const entry of entries) {
-    if (isRecord(entry) && entry.key === LINE_PURCHASE_OPTION_PROPERTY_KEY && typeof entry.value === "string" && entry.value) {
-      return entry.value.slice(0, 160);
-    }
-  }
-  return null;
+  if (fields.length === 0) return schema;
+  return { version: CUSTOMIZATION_SCHEMA_VERSION, fields: [...(schema?.fields ?? []), ...fields] };
+}
+
+/**
+ * The properties one app may see of a line (`line.properties` in its
+ * functions): the merchant's inputs and its own line inputs, never another
+ * app's, as checkout attributes are kept.
+ */
+export function appVisibleLineProperties<T extends { key: string }>(properties: readonly T[], appId: string): T[] {
+  return properties.filter((property) => {
+    const owner = appScopedKeyAppId(property.key);
+    return owner === null || owner === appId;
+  });
 }
 
 /** The frozen `order_items.properties` entry. */
@@ -422,6 +567,8 @@ export interface ResolvedLineProperty {
   /** What to print after the label: the option label for selects, "Yes" for ticked boxes. */
   displayValue: string;
   priceMinor: number;
+  /** The app the entry belongs to: its line input, add-on or purchase option. Absent for the merchant's inputs. */
+  appId?: string;
 }
 
 export const LINE_PROPERTY_ISSUE_CODES = ["properties_required", "properties_invalid"] as const;
@@ -609,7 +756,7 @@ export function resolveLineProperties(
     const priceMinor = option ? option.priceMinor : (field as CustomizationTextField | CustomizationCheckboxField).priceMinor;
     const displayValue = option ? option.label : field.type === "checkbox" ? CHECKBOX_DISPLAY : value;
     canonical.push({ key: field.key, value });
-    properties.push({ key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor });
+    properties.push({ key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor, ...(field.appId ? { appId: field.appId } : {}) });
     propertiesPriceMinor += priceMinor;
   }
   return { ok: true, canonical, properties, propertiesPriceMinor };

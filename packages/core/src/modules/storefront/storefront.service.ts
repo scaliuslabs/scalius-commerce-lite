@@ -80,6 +80,7 @@ import {
 import { publicCategoryConditions } from "../categories";
 import {
   activePluginInstallationsFromRows,
+  activePluginLineInputs,
   activePluginPurchaseOptions,
   activePluginStorefrontExtensions,
   activePluginStorefrontScripts,
@@ -860,6 +861,8 @@ export async function getLayoutData(
     appExtensions,
     // Ways to buy a line the active apps offer (a subscription): the buy form lists them.
     purchaseOptions: activePluginPurchaseOptions(activeApps.values()),
+    // Per-line inputs the active apps ask for (a gift message, a protection plan): the buy form draws them.
+    lineInputs: activePluginLineInputs(activeApps.values()),
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
     // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.

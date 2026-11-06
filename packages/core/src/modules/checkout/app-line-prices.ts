@@ -16,10 +16,13 @@ import { validateCheckoutAttributes } from "./attributes";
 // Rules (pure, `resolveAppLinePrices`):
 // - Apps in priority order (lower first, then app id); the first app that
 //   prices a line wins it.
-// - A line bought with a purchase option is priced only by the app that
-//   declares the option, and that price outranks every list; another app's
-//   answer for it is skipped and logged. Without the owner's valid answer
-//   checkout is refused, including when the app fails open for other lines.
+// - A line bought with purchase options (at most one per app) is priced only
+//   by an app whose option it carries, and that price outranks every list;
+//   another app's price for it is skipped and logged. Every such app must
+//   answer the line, with a valid price or a kept add-on (a protection plan
+//   adds to a subscription's price), or checkout is refused, including when
+//   the app fails open for other lines. Two of them pricing one line refuse
+//   too (`purchase_options_conflict`): a line has one price.
 // - A one-time line priced by an override, segment or market list keeps that
 //   price: the answer is skipped and logged for the merchant. So is a
 //   gift-card line (money) and a line that is not in the cart. Sale lines
@@ -43,6 +46,9 @@ import type { AppLinePrice, ResolvedPriceSource } from "@scalius/shared/market-p
 import { lineAdjustmentProperty, type ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
+
+/** Two apps whose purchase options a line carries both priced it. */
+export const PURCHASE_OPTIONS_CONFLICT_REASON = "purchase_options_conflict";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
 import {
     CHECKOUT_APP_UNAVAILABLE_REASON,
@@ -123,7 +129,7 @@ export function createAppLinePricer(
                     unitPriceMinor: item.unitPriceMinor,
                     discountMinor: 0,
                     properties: item.properties,
-                    purchaseOption: item.purchaseOption?.id ?? null,
+                    purchaseOptions: (item.purchaseOptions ?? []).map((option) => option.id),
                 })),
                 facts,
                 destination: context.destination ?? null,
@@ -144,16 +150,33 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300) } : null,
             })),
         });
-        return {
-            prices: resolveAppLinePrices(items, lineIds, results, apps),
-            adjustments: resolveAppLineAdjustments(items, lineIds, results, preliminary.money.incrementMinor, apps),
-        };
+        return resolveAppLinePricing(items, lineIds, results, preliminary.money.incrementMinor, apps);
     };
+}
+
+/**
+ * The apps' answers for a cart (unit prices and add-ons, by line index),
+ * checked against the purchase-option rule: every app whose option a line
+ * carries answered it. Throws the checkout refusal otherwise.
+ */
+export function resolveAppLinePricing(
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOptions" | "bundle">>,
+    lineIds: readonly string[],
+    results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
+    incrementMinor: number,
+    apps?: Pick<CheckoutAppFunctions, "report">,
+): AppLinePricing {
+    const pricing = {
+        prices: resolveAppLinePrices(items, lineIds, results, apps),
+        adjustments: resolveAppLineAdjustments(items, lineIds, results, incrementMinor, apps),
+    };
+    assertPurchaseOptionPrices(items, pricing);
+    return pricing;
 }
 
 /** The winning app price of each line, by line index (see the rules above). */
 export function resolveAppLinePrices(
-    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOption">>,
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOptions">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     apps?: Pick<CheckoutAppFunctions, "report">,
@@ -171,18 +194,26 @@ export function resolveAppLinePrices(
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} has an invalid app price; it was skipped.`);
                 continue;
             }
-            if (prices.has(item.index)) continue;
             if (item.isGiftCard) continue;
-            const option = item.purchaseOption?.id ?? null;
-            if (option) {
-                // The option is its app's offer: only that app prices it, above every list.
-                if (purchaseOptionAppId(option) !== result.pluginId) {
-                    apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is bought with ${option}, which only its own app prices; it was skipped.`);
+            const options = (item.purchaseOptions ?? []).map((option) => option.id);
+            if (options.length > 0) {
+                // An option is its app's offer: only an app whose option the line carries prices it, above every list.
+                const option = options.find((candidate) => purchaseOptionAppId(candidate) === result.pluginId);
+                if (!option) {
+                    apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is bought with ${options.join(", ")}, which only their own apps price; it was skipped.`);
                     continue;
                 }
+                const taken = prices.get(item.index);
+                if (taken && taken.pluginId !== result.pluginId) {
+                    throw new ValidationError("These purchase options can't be combined on one item. Choose one of them.", {
+                        reason: PURCHASE_OPTIONS_CONFLICT_REASON,
+                    });
+                }
+                if (taken) continue;
                 prices.set(item.index, { amountMinor: answer.unitPriceMinor, pluginId: result.pluginId, purchaseOption: option });
                 continue;
             }
+            if (prices.has(item.index)) continue;
             if (!APP_PRICEABLE_SOURCES.has(item.priceSource)) {
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is priced by a ${item.priceSource} price list, which an app price never replaces; it was skipped.`);
                 continue;
@@ -190,26 +221,40 @@ export function resolveAppLinePrices(
             prices.set(item.index, { amountMinor: answer.unitPriceMinor, pluginId: result.pluginId });
         }
     }
-    assertPurchaseOptionPrices(items, prices);
     return prices;
 }
 
-/** A purchase option is its owner's offer; the one-time price is never a fallback. */
+/**
+ * A purchase option is its owner's offer: every app whose option a line
+ * carries answered it, with a valid price or a kept add-on, and the price
+ * (when one was given) came from one of them. A missing answer is never
+ * read as the one-time price.
+ */
 function assertPurchaseOptionPrices(
-    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "purchaseOption">>,
-    prices: ReadonlyMap<number, AppLinePrice>,
+    items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "purchaseOptions">>,
+    pricing: AppLinePricing,
 ): void {
     for (const item of items) {
-        const option = item.purchaseOption?.id;
-        if (!option) continue;
-        const price = prices.get(item.index);
-        if (!price || price.purchaseOption !== option || price.pluginId !== purchaseOptionAppId(option)
-            || !Number.isSafeInteger(price.amountMinor) || price.amountMinor <= 0) {
-            throw new ValidationError("We can't confirm this purchase option's price right now. Please try again in a few minutes.", {
-                reason: CHECKOUT_APP_UNAVAILABLE_REASON,
-            });
+        const options = (item.purchaseOptions ?? []).map((option) => option.id);
+        if (options.length === 0) continue;
+        const price = pricing.prices.get(item.index);
+        const validPrice = price !== undefined && Number.isSafeInteger(price.amountMinor) && price.amountMinor > 0
+            && price.purchaseOption !== undefined && price.purchaseOption !== null && options.includes(price.purchaseOption)
+            && price.pluginId === purchaseOptionAppId(price.purchaseOption);
+        if (price && !validPrice) throw purchaseOptionUnavailable();
+        const addOns = pricing.adjustments.get(item.index) ?? [];
+        for (const option of options) {
+            const appId = purchaseOptionAppId(option);
+            const answered = (validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId);
+            if (!answered) throw purchaseOptionUnavailable();
         }
     }
+}
+
+function purchaseOptionUnavailable(): ValidationError {
+    return new ValidationError("We can't confirm this purchase option's price right now. Please try again in a few minutes.", {
+        reason: CHECKOUT_APP_UNAVAILABLE_REASON,
+    });
 }
 
 /** Each line's add-ons, by line index (see the rules above). */
@@ -240,7 +285,7 @@ export function resolveAppLineAdjustments(
             }
             const amountMinor = roundToIncrementMinor(answer.amountMinor, incrementMinor);
             if (amountMinor <= 0) continue;
-            list.push(lineAdjustmentProperty(answer.title, amountMinor));
+            list.push(lineAdjustmentProperty(answer.title, amountMinor, result.pluginId));
             adjustments.set(item.index, list);
         }
     }
@@ -265,12 +310,13 @@ export async function resolveCartWithAppLinePrices(
     if (phase === "before_transform") return resolve({ deferSubmittedPriceCheck: true });
     if (!pricer) {
         const result = resolve({});
-        assertPurchaseOptionPrices(result.items, NO_APP_LINE_PRICING.prices);
+        assertPurchaseOptionPrices(result.items, NO_APP_LINE_PRICING);
         return result;
     }
     const preliminary = resolve({ deferSubmittedPriceCheck: true });
-    const { prices, adjustments } = await pricer(preliminary);
-    assertPurchaseOptionPrices(preliminary.items, prices);
+    const pricing = await pricer(preliminary);
+    assertPurchaseOptionPrices(preliminary.items, pricing);
+    const { prices, adjustments } = pricing;
     return resolve({
         ...(prices.size > 0 ? { appPrices: prices } : {}),
         ...(adjustments.size > 0 ? { appAdjustments: adjustments } : {}),

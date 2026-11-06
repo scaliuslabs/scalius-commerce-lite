@@ -485,6 +485,90 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 160
+       },
+       "purchaseOptions": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 160
+        }
+       },
+       "properties": {
+        "maxItems": 60,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "key": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 160
+          },
+          "label": {
+           "type": "string",
+           "maxLength": 4000
+          },
+          "value": {
+           "type": "string",
+           "maxLength": 4000
+          },
+          "displayValue": {
+           "type": "string",
+           "maxLength": 4000
+          },
+          "priceMinor": {
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          },
+          "appId": {
+           "nullable": true,
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          }
+         },
+         "required": [
+          "key",
+          "label",
+          "value",
+          "displayValue",
+          "priceMinor",
+          "appId"
+         ]
+        },
+        "x-scalius-app-owned": "items"
+       },
+       "adjustments": {
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "appId": {
+           "nullable": true,
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "title": {
+           "type": "string",
+           "maxLength": 4000
+          },
+          "amountMinor": {
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          }
+         },
+         "required": [
+          "appId",
+          "title",
+          "amountMinor"
+         ]
+        }
        }
       },
       "required": [
@@ -500,7 +584,106 @@
        "subtotalMinor",
        "discountMinor",
        "taxMinor",
-       "purchaseOption"
+       "purchaseOption",
+       "purchaseOptions",
+       "properties",
+       "adjustments"
+      ]
+     }
+    },
+    "attributes": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string",
+      "maxLength": 500
+     },
+     "x-scalius-app-owned": "keys"
+    },
+    "discountApplications": {
+     "maxItems": 60,
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "source": {
+        "type": "string",
+        "enum": [
+         "store",
+         "app"
+        ]
+       },
+       "discountId": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "appId": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "title": {
+        "type": "string",
+        "maxLength": 4000
+       },
+       "code": {
+        "nullable": true,
+        "type": "string",
+        "maxLength": 64
+       },
+       "method": {
+        "type": "string",
+        "enum": [
+         "automatic",
+         "code"
+        ]
+       },
+       "amountMinor": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       },
+       "shippingAmountMinor": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       },
+       "lines": {
+        "maxItems": 500,
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "orderItemId": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "amountMinor": {
+           "type": "integer",
+           "minimum": -9007199254740991,
+           "maximum": 9007199254740991
+          }
+         },
+         "required": [
+          "orderItemId",
+          "amountMinor"
+         ]
+        }
+       }
+      },
+      "required": [
+       "source",
+       "discountId",
+       "appId",
+       "title",
+       "code",
+       "method",
+       "amountMinor",
+       "shippingAmountMinor",
+       "lines"
       ]
      }
     },
@@ -554,6 +737,8 @@
     "fulfillmentLocationId",
     "revision",
     "lines",
+    "attributes",
+    "discountApplications",
     "createdAt",
     "updatedAt",
     "deletedAt"

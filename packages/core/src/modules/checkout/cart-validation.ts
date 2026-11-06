@@ -18,8 +18,11 @@ import {
     type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import {
+    normalizeLinePurchaseOptions,
     parseStoredCustomizationSchema,
     resolveLineProperties,
+    withAppLineInputs,
+    type AppLineInputs,
     type CanonicalLineProperty,
     type ResolvedLineProperty,
 } from "@scalius/shared/line-properties";
@@ -74,7 +77,10 @@ export type StorefrontCartIssueCode =
     | "properties_invalid"
     /** The store cannot hand this kind of item over yet (e.g. digital before Wave B). */
     | "fulfilment_unavailable"
-    /** The line's purchase option is not offered by any active app (`checkout.purchaseOptions`). */
+    /**
+     * A purchase option of the line is not offered by any active app
+     * (`checkout.purchaseOptions`), or the line names two of one app.
+     */
     | "purchase_option_unavailable";
 
 export type StorefrontCartIssueAction =
@@ -97,11 +103,11 @@ export interface StorefrontCartValidationItem {
     /** Buyer inputs `[{ key, value }]`; resolved against the product's schema. */
     properties?: unknown;
     /**
-     * The purchase option the buyer chose (`<app id>.<key>`, an active app's
-     * `checkout.purchaseOptions`); absent or null: a one-time purchase. Part
-     * of the line's identity.
+     * The purchase options the buyer chose (`<app id>.<key>`, active apps'
+     * `checkout.purchaseOptions`), at most one per app; absent or empty: a
+     * one-time purchase. Part of the line's identity; checked here (ids, one per app).
      */
-    purchaseOption?: string | null;
+    purchaseOptions?: readonly string[] | null;
     /**
      * Set by `cart.transform` (cart-transform.ts): the bundle the line
      * belongs to (an expanded line's components, merged lines) and the
@@ -168,11 +174,12 @@ export interface StorefrontCartValidatedItem {
     /** Identity form for the cart line key and the quote fingerprint. */
     canonicalProperties: CanonicalLineProperty[];
     /**
-     * The line's purchase option and its title (an active app's declaration);
-     * absent: a one-time purchase. Core prices nothing for it: the owning
-     * app's functions do. Frozen on the order line as `_purchase_option`.
+     * The line's purchase options and their titles (active apps'
+     * declarations, at most one per app, sorted by id); absent: a one-time
+     * purchase. Core prices nothing for them: the owning apps' functions do.
+     * Each is frozen on the order line as a `_purchase_option` entry.
      */
-    purchaseOption?: { id: string; title: string };
+    purchaseOptions?: Array<{ id: string; title: string }>;
     fulfillmentKind: FulfillmentKind;
     isGiftCard: boolean;
     productName: string;
@@ -545,6 +552,8 @@ export function resolveStorefrontCartValidationFromRows(
         appAdjustments?: ReadonlyMap<number, ResolvedLineProperty[]>;
         /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none. */
         purchaseOptions?: ReadonlyMap<string, string>;
+        /** The active apps' line inputs (`checkoutLineInputs`): resolved with the product's own inputs. Absent: none. */
+        lineInputs?: readonly AppLineInputs[];
         /**
          * Skip the submitted-price check: the first pass of an app-priced
          * cart, whose final prices are not known yet (never a final answer).
@@ -708,14 +717,20 @@ export function resolveStorefrontCartValidationFromRows(
         }
 
         const variant = requestedVariant;
-        // A purchase option is an app's offer: one no active app declares is refused, never dropped.
-        const purchaseOptionId = typeof item.purchaseOption === "string" && item.purchaseOption ? item.purchaseOption : null;
-        const purchaseOptionTitle = purchaseOptionId ? options.purchaseOptions?.get(purchaseOptionId) : undefined;
-        if (purchaseOptionId && purchaseOptionTitle === undefined) {
+        // A purchase option is an app's offer: one no active app declares is
+        // refused, never dropped, and so are two of one app (never chosen between).
+        const requestedOptions = normalizeLinePurchaseOptions(item.purchaseOptions);
+        const purchaseOptions = requestedOptions.ok
+            ? requestedOptions.options.map((id) => ({ id, title: options.purchaseOptions?.get(id) }))
+            : [];
+        if (!requestedOptions.ok || purchaseOptions.some((option) => option.title === undefined)) {
+            const sameApp = !requestedOptions.ok && requestedOptions.reason === "same_app";
             addIssue(issues, item, index, {
                 code: "purchase_option_unavailable",
                 action: "remove",
-                message: `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} can't be bought this way any more. Remove it and add it again.`,
+                message: sameApp
+                    ? `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} names two ways to buy from one app. Remove it and add it again.`
+                    : `${product.name}${requestedVariantLabel ? ` (${requestedVariantLabel})` : ""} can't be bought this way any more. Remove it and add it again.`,
                 productName: product.name,
                 variantLabel: requestedVariantLabel,
             });
@@ -783,10 +798,13 @@ export function resolveStorefrontCartValidationFromRows(
         }
 
         const storedSchemaRead = parseStoredCustomizationSchema(product.customizationSchema);
-        // A gift card also takes the recipient inputs the product page shows.
-        const schemaRead = storedSchemaRead.ok && isGiftCard
-            ? { ok: true as const, schema: withGiftCardRecipientFields(storedSchemaRead.schema) }
-            : storedSchemaRead;
+        // A gift card also takes the recipient inputs the product page shows;
+        // any other line the active apps' line inputs after the product's own.
+        const schemaRead = !storedSchemaRead.ok
+            ? storedSchemaRead
+            : isGiftCard
+                ? { ok: true as const, schema: withGiftCardRecipientFields(storedSchemaRead.schema) }
+                : { ok: true as const, schema: withAppLineInputs(storedSchemaRead.schema, options.lineInputs ?? []) };
         if (!schemaRead.ok) {
             // A malformed stored schema is a product error, never "no inputs".
             addIssue(issues, item, index, {
@@ -898,7 +916,7 @@ export function resolveStorefrontCartValidationFromRows(
             properties: resolvedProperties.properties,
             ...(adjustments.length > 0 ? { adjustments, adjustmentsMinor } : {}),
             canonicalProperties: resolvedProperties.canonical,
-            ...(purchaseOptionId && purchaseOptionTitle !== undefined ? { purchaseOption: { id: purchaseOptionId, title: purchaseOptionTitle } } : {}),
+            ...(purchaseOptions.length > 0 ? { purchaseOptions: purchaseOptions.map((option) => ({ id: option.id, title: option.title! })) } : {}),
             fulfillmentKind,
             isGiftCard,
             productName: product.name,
@@ -1053,6 +1071,8 @@ export async function validateStorefrontCartItems(
         transformer?: CartTransformer;
         /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none, so a line naming one is refused. */
         purchaseOptions?: ReadonlyMap<string, string>;
+        /** The active apps' line inputs (`checkoutLineInputs`); absent: none, so a line naming one is refused as unknown. */
+        lineInputs?: readonly AppLineInputs[];
     } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
@@ -1083,6 +1103,7 @@ async function validateCartLines(
         beforeTransform?: boolean;
         deferSubmittedPriceCheck?: boolean;
         purchaseOptions?: ReadonlyMap<string, string>;
+        lineInputs?: readonly AppLineInputs[];
     },
 ): Promise<StorefrontCartValidationResult> {
     const productIds = [...new Set(items.map((item) => item.productId))];
@@ -1162,7 +1183,7 @@ export function presentStorefrontCartValidation(
                 price: fromMinor(adjustment.priceMinor, decimalPlaces),
             })),
             propertiesHash: propertiesHashes[position]
-                ?? (canonicalProperties.length === 0 && !item.purchaseOption ? NO_PROPERTIES_HASH : ""),
+                ?? (canonicalProperties.length === 0 && !item.purchaseOptions?.length ? NO_PROPERTIES_HASH : ""),
             fulfillmentType: fulfilment.lineTypes[position] ?? null,
         })),
         subtotal: fromMinor(subtotalMinor, decimalPlaces),

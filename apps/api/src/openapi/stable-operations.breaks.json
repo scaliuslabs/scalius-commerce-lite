@@ -3034,5 +3034,11 @@
   "from": "bf21f576de943a41",
   "change": "gift_cards.create: idempotency is now required.",
   "reason": "Pre-lock money fix (audit item 39): a create without a key took a fresh random request key, so a retry after a lost response issued a second live card. Every operation that moves money or issues value requires its Idempotency-Key, as refunds, charges, captures, voids and recorded payments already do."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "dfdda9e352de2f92",
+  "change": "orders.create input body.items[].purchaseOption: the field is no longer accepted.",
+  "reason": "Pre-release (gap G3, Nov 6 2026 extension audit): an order line carries at most one purchase option of each app, so two apps never overwrite each other. `items[].purchaseOption` becomes `items[].purchaseOptions` (a list of `<app id>.<key>`, one per app; empty or absent for a one-time purchase); a renewal sends `purchaseOptions: [<its option>]`."
  }
 ]

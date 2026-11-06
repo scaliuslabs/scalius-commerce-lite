@@ -35,6 +35,7 @@
 // meets at least one app that runs: a guest or a store without app functions
 // reads nothing more.
 
+import { appVisibleLineProperties } from "@scalius/shared/line-properties";
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
 import {
@@ -119,9 +120,23 @@ function ownAttributes(attributes: Readonly<Record<string, string>>, pluginId: s
  * consented read, which the platform does not offer. Core cart facts stay.
  */
 function withOwnCartAttributes(input: Record<string, unknown>, pluginId: string): Record<string, unknown> {
-  const cart = input.cart as { attributes?: Record<string, string> } | null | undefined;
-  if (!cart?.attributes) return input;
-  return { ...input, cart: { ...cart, attributes: ownAttributes(cart.attributes, pluginId) } };
+  const cart = input.cart as { attributes?: Record<string, string>; lines?: Array<{ properties?: Record<string, string> }> } | null | undefined;
+  if (!cart?.attributes && !cart?.lines) return input;
+  return {
+    ...input,
+    cart: {
+      ...cart,
+      ...(cart.attributes ? { attributes: ownAttributes(cart.attributes, pluginId) } : {}),
+      // Line inputs are the same kind of answer: the merchant's inputs and this
+      // app's own (`checkout.lineInputs`), never another app's.
+      ...(cart.lines ? { lines: cart.lines.map((line) => line.properties ? { ...line, properties: ownLineProperties(line.properties, pluginId) } : line) } : {}),
+    },
+  };
+}
+
+/** A line's properties as one app sees them: unscoped (the merchant's) keys and its own `<app id>.<key>` ones. */
+function ownLineProperties(properties: Readonly<Record<string, string>>, pluginId: string): Record<string, string> {
+  return Object.fromEntries(appVisibleLineProperties(Object.entries(properties).map(([key, value]) => ({ key, value })), pluginId).map(({ key, value }) => [key, value]));
 }
 
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */

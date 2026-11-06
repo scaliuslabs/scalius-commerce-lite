@@ -3123,6 +3123,37 @@ export type OrderResource = {
         discountMinor: number;
         taxMinor: number;
         purchaseOption: string | null;
+        purchaseOptions: Array<string>;
+        properties: Array<{
+            key: string;
+            label: string;
+            value: string;
+            displayValue: string;
+            priceMinor: number;
+            appId: string | null;
+        }>;
+        adjustments: Array<{
+            appId: string | null;
+            title: string;
+            amountMinor: number;
+        }>;
+    }>;
+    attributes: {
+        [key: string]: string;
+    };
+    discountApplications: Array<{
+        source: 'store' | 'app';
+        discountId: string | null;
+        appId: string | null;
+        title: string;
+        code: string | null;
+        method: 'automatic' | 'code';
+        amountMinor: number;
+        shippingAmountMinor: number;
+        lines: Array<{
+            orderItemId: string;
+            amountMinor: number;
+        }>;
     }>;
     createdAt: string;
     updatedAt: string;
@@ -9002,15 +9033,36 @@ export type GetApiV1StorefrontLayoutResponses = {
                 connect: Array<string>;
             }>;
             /**
-             * Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental), the ones checkout accepts. The product page's buy form lists them beside a one-time purchase; the app prices the line at checkout.
+             * Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental, a protection plan), the ones checkout accepts. The product page's buy form lists each app's options as their own choice beside a one-time purchase; a line carries at most one of each app, and the apps price the line at checkout.
              */
             purchaseOptions?: Array<{
                 /**
-                 * `<app id>.<key>`: what a cart, tax-quote or order line sends as its `purchaseOption`.
+                 * `<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app).
                  */
                 id: string;
                 title: string;
                 description: string | null;
+            }>;
+            /**
+             * Buyer inputs the active apps ask for on each line (manifest `checkout.lineInputs`: a gift message, a protection plan), the ones checkout accepts. The buy form draws them after the product's own inputs under `<app id>.<key>`; one with `products` only on products whose app custom field `<app id>.<customField>` is true. The apps price them at checkout.
+             */
+            lineInputs?: Array<{
+                appId: string;
+                inputs: Array<{
+                    key: string;
+                    label: string;
+                    help?: string;
+                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    required?: boolean;
+                    maxLength?: number;
+                    options?: Array<{
+                        value: string;
+                        label: string;
+                    }>;
+                    products?: {
+                        customField: string;
+                    };
+                }>;
             }>;
             appServices: {
                 /**
@@ -13414,6 +13466,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     displayValue: string;
                     price: number;
                     priceMinor: number;
+                    appId?: string;
                 }>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
@@ -21524,6 +21577,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         displayValue: string;
                         price: number;
                         priceMinor: number;
+                        appId?: string;
                     }>;
                     propertiesPrice: number;
                     propertiesPriceMinor: number;
@@ -21753,16 +21807,19 @@ export type PostApiV1OrdersCartValidationData = {
             productName?: string | null;
             variantLabel?: string | null;
             /**
-             * Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             * Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
              */
             properties?: Array<{
+                /**
+                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
+                 */
                 key: string;
                 value: string;
             }>;
             /**
-             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
              */
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         shippingCountryCode?: string | null;
@@ -22430,6 +22487,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     displayValue: string;
                     price: number;
                     priceMinor: number;
+                    appId?: string;
                 }>;
                 adjustments: Array<{
                     key: string;
@@ -22439,14 +22497,15 @@ export type PostApiV1OrdersCartValidationResponses = {
                     displayValue: string;
                     price: number;
                     priceMinor: number;
+                    appId?: string;
                 }>;
                 /**
-                 * The line's purchase option (absent: a one-time purchase). The app that offers it prices it.
+                 * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
                  */
-                purchaseOption?: {
+                purchaseOptions?: Array<{
                     id: string;
                     title: string;
-                };
+                }>;
                 propertiesHash: string;
                 /**
                  * What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered).
@@ -22522,16 +22581,19 @@ export type PostApiV1OrdersTaxQuoteData = {
             productName?: string | null;
             variantLabel?: string | null;
             /**
-             * Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             * Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
              */
             properties?: Array<{
+                /**
+                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
+                 */
                 key: string;
                 value: string;
             }>;
             /**
-             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
              */
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         shippingCountryCode?: string | null;
@@ -23394,6 +23456,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     displayValue: string;
                     price: number;
                     priceMinor: number;
+                    appId?: string;
                 }>;
                 propertiesPriceMinor: number;
                 adjustments: Array<{
@@ -23404,14 +23467,15 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     displayValue: string;
                     price: number;
                     priceMinor: number;
+                    appId?: string;
                 }>;
                 /**
-                 * The line's purchase option (absent: a one-time purchase). The app that offers it prices it.
+                 * The line's purchase options, sorted by id (absent: a one-time purchase). The apps that offer them price them.
                  */
-                purchaseOption?: {
+                purchaseOptions?: Array<{
                     id: string;
                     title: string;
-                };
+                }>;
                 propertiesHash: string;
                 /**
                  * The line's own share of the order's discounts, as the order will keep it; present only where the quoted line is the buyer's own (not one a store app rewrote). A line it pays in full (a free gift) reads zero with its price struck.
@@ -23483,16 +23547,19 @@ export type PostApiV1OrdersData = {
             productName?: string | null;
             variantLabel?: string | null;
             /**
-             * Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
+             * Buyer inputs the line carries: the product's own (engraving text, gift wrap, a fit choice) and the active apps' line inputs under `<app id>.<key>` (a gift message, a protection plan). A ticked checkbox sends "true"; empty optional fields are omitted. Same SKU with different inputs is a different line.
              */
             properties?: Array<{
+                /**
+                 * The product's own input key, or an app's line input as `<app id>.<key>` (manifest `checkout.lineInputs`).
+                 */
                 key: string;
                 value: string;
             }>;
             /**
-             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
              */
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
         }>;
         /**
          * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
@@ -25419,9 +25486,9 @@ export type PostApiV1AdminResourcesOrdersData = {
                 value: string;
             }>;
             /**
-             * An installed app's purchase option for the line (`<app id>.<key>`, e.g. a subscription); absent or null: a one-time purchase. Part of the line's identity: the same SKU with another option is another line. An option no active app offers is refused (`purchase_option_unavailable`).
+             * Installed apps' purchase options for the line (`<app id>.<key>`: a subscription, another app's protection plan), at most one per app; absent or empty: a one-time purchase. Part of the line's identity: the same SKU with other options is another line. An option no active app offers, or two of one app, is refused (`purchase_option_unavailable`).
              */
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
         }>;
         /**
          * The delivery or pickup method; a physical line needs one with an address, or a pickup method.
@@ -58525,7 +58592,7 @@ export type PostApiV1AdminOrdersData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
         }>;
         requestKey?: string;
         shippingMethodId?: string | null;
@@ -59071,7 +59138,7 @@ export type PostApiV1AdminOrdersQuoteData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
         }>;
         discountAmount: number | null;
         shippingCharge: number;
@@ -59202,7 +59269,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
             orderItemId?: string;
         }>;
     };
@@ -59332,7 +59399,7 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
                 value: string;
             }>;
             unitPriceMinor?: number;
-            purchaseOption?: string | null;
+            purchaseOptions?: Array<string>;
             orderItemId?: string;
         }>;
         requestKey?: string;
@@ -60141,6 +60208,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                     displayValue: string;
                     price: number;
                     priceMinor: number;
+                    appId?: string;
                 }>;
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
@@ -60579,6 +60647,7 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
                 displayValue: string;
                 price: number;
                 priceMinor: number;
+                appId?: string;
             }>;
             propertiesPrice: number;
             propertiesPriceMinor: number;
@@ -61137,6 +61206,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                         displayValue: string;
                         price: number;
                         priceMinor: number;
+                        appId?: string;
                     }>;
                 }>;
                 [key: string]: unknown;

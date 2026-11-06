@@ -414,8 +414,8 @@ export interface StorefrontOrderItem {
     variantLabel?: string | null;
     /** Buyer inputs `[{ key, value }]` (line-item properties). */
     properties?: Array<{ key: string; value: string }>;
-    /** An active app's purchase option for the line (`<app id>.<key>`); absent: a one-time purchase. */
-    purchaseOption?: string | null;
+    /** Active apps' purchase options for the line (`<app id>.<key>`, one per app); absent or empty: a one-time purchase. */
+    purchaseOptions?: string[];
 }
 
 export interface CreateStorefrontOrderInput {

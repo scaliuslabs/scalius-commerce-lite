@@ -102,7 +102,7 @@ export interface Contract extends Record<string, unknown> {
   last_order_id: string | null;
 }
 
-interface OrderLine { id: string; productId: string; variantId: string | null; quantity: number; unitPriceMinor: number; purchaseOption: string | null }
+interface OrderLine { id: string; productId: string; variantId: string | null; quantity: number; unitPriceMinor: number; purchaseOptions: string[] }
 interface Order { id: string; currency: string; accountCustomerId: string | null; lines: OrderLine[] }
 interface SavedMethod { id: string; sourceOrderId: string | null; status: string }
 
@@ -257,7 +257,7 @@ export default definePlugin({
 
   functions: {
     "cart.line_prices": ({ cart }) => ({
-      prices: cart.lines.flatMap((line) => line.purchaseOption === SUBSCRIBE_OPTION
+      prices: cart.lines.flatMap((line) => line.purchaseOptions.includes(SUBSCRIBE_OPTION)
         ? [{ lineId: line.lineId, unitPriceMinor: line.unitPriceMinor }]
         : []),
     }),
@@ -273,7 +273,7 @@ export default definePlugin({
       const intervalDays = Number(ctx.settings.interval_days ?? 30) || 30;
       const placedAt = Date.parse(event.occurredAt) || 0;
       for (const line of order.lines) {
-        if (line.purchaseOption !== SUBSCRIBE_OPTION || !line.variantId) continue;
+        if (!line.purchaseOptions.includes(SUBSCRIBE_OPTION) || !line.variantId) continue;
         const id = `${order.id}:${line.id}`;
         if (await contracts(ctx).get(id)) continue;
         await contracts(ctx).put(id, {

@@ -7,23 +7,32 @@ export const PLUGIN_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9
 export const FIRST_PARTY_PLUGIN_VENDOR = "scalius";
 
 /**
- * A purchase option's public id (manifest `checkout.purchaseOptions`):
- * `<plugin id>.<key>`, the checkout-attribute shape (a snake_case key of at
- * most 48 characters after the app id).
+ * A key an app owns on a store resource: `<plugin id>.<key>`, a snake_case
+ * key of at most 48 characters after the app id. Checkout attributes,
+ * purchase options (`checkout.purchaseOptions`) and line inputs
+ * (`checkout.lineInputs`) are named this way, so two apps never share one.
  */
-export const PURCHASE_OPTION_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\.[a-z][a-z0-9_]{0,47}$/;
-export const PURCHASE_OPTION_ID_MAX_LENGTH = 160;
+export const APP_SCOPED_KEY_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?\.[a-z][a-z0-9_]{0,47}$/;
+export const APP_SCOPED_KEY_MAX_LENGTH = 160;
 
-export function purchaseOptionId(pluginId: string, key: string): string {
+export function appScopedKey(pluginId: string, key: string): string {
   return `${pluginId}.${key}`;
 }
 
-export function isPurchaseOptionId(value: unknown): value is string {
-  return typeof value === "string" && value.length <= PURCHASE_OPTION_ID_MAX_LENGTH && PURCHASE_OPTION_ID_PATTERN.test(value);
+export function isAppScopedKey(value: unknown): value is string {
+  return typeof value === "string" && value.length <= APP_SCOPED_KEY_MAX_LENGTH && APP_SCOPED_KEY_PATTERN.test(value);
 }
 
-/** The app that owns a purchase option id (everything before its last dot), or null for a malformed id. */
-export function purchaseOptionAppId(id: string): string | null {
-  if (!isPurchaseOptionId(id)) return null;
-  return id.slice(0, id.lastIndexOf("."));
+/** The app that owns an app-scoped key (everything before its last dot), or null for a malformed key. */
+export function appScopedKeyAppId(value: string): string | null {
+  if (!isAppScopedKey(value)) return null;
+  return value.slice(0, value.lastIndexOf("."));
 }
+
+/** A purchase option's public id (manifest `checkout.purchaseOptions`): an app-scoped key. */
+export const PURCHASE_OPTION_ID_PATTERN = APP_SCOPED_KEY_PATTERN;
+export const PURCHASE_OPTION_ID_MAX_LENGTH = APP_SCOPED_KEY_MAX_LENGTH;
+export const purchaseOptionId = appScopedKey;
+export const isPurchaseOptionId = isAppScopedKey;
+/** The app that owns a purchase option id, or null for a malformed id. */
+export const purchaseOptionAppId = appScopedKeyAppId;

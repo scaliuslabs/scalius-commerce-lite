@@ -11,6 +11,7 @@ import {
   type ProtectedCustomerData,
   type ProtectedPath,
 } from "@scalius/shared/plugins/protected-data";
+import { appOwnedPathsOf, projectAppOwnedData, type AppOwnedPath } from "@scalius/shared/plugins/app-owned-data";
 import { AGENT_COMPONENT_SCHEMAS } from "../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
 
@@ -43,4 +44,32 @@ export function redactOperationResponse<T>(
 ): T {
   const paths = operationProtectedPaths(operation);
   return paths.length === 0 ? body : redactProtectedData(body, paths, granted);
+}
+
+const appOwnedPathsByOperation = new Map<string, readonly AppOwnedPath[]>();
+
+/** The app-owned fields of an operation's response body (`x-scalius-app-owned`). */
+export function operationAppOwnedPaths(operation: Pick<AgentOperationManifestEntry, "operationId" | "outputSchema">): readonly AppOwnedPath[] {
+  let paths = appOwnedPathsByOperation.get(operation.operationId);
+  if (!paths) {
+    paths = appOwnedPathsOf(operation.outputSchema, componentSchema);
+    appOwnedPathsByOperation.set(operation.operationId, paths);
+  }
+  return paths;
+}
+
+/**
+ * The response body as one app may see it: contact fields the grant does not
+ * reveal read as null, and buyer answers given to other apps (their checkout
+ * attributes and line inputs) are left out (COMMERCE-HOOKS H13).
+ */
+export function projectOperationResponse<T>(
+  operation: Pick<AgentOperationManifestEntry, "operationId" | "outputSchema">,
+  body: T,
+  granted: ReadonlySet<ProtectedCustomerData>,
+  appId: string,
+): T {
+  const redacted = redactOperationResponse(operation, body, granted);
+  const paths = operationAppOwnedPaths(operation);
+  return paths.length === 0 ? redacted : projectAppOwnedData(redacted, paths, appId);
 }

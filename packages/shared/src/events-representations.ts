@@ -14,6 +14,7 @@
 import { z } from "zod";
 import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, redactProtectedData, type ProtectedCustomerData, type ProtectedPath } from "./plugins/protected-data";
 import { STABLE_APP_OPERATIONS, type StableAppOperationName } from "./plugins/app-operations";
+import { APP_OWNED_FIELD_KEYWORD, appOwnedPathsOf, projectAppOwnedData, type AppOwnedMode, type AppOwnedPath } from "./plugins/app-owned-data";
 import {
   FULFILLMENT_RECORD_STATUSES,
   FULFILLMENT_STATUSES,
@@ -41,6 +42,14 @@ const currency = z.string().length(3);
 function pii<T extends z.ZodType>(category: ProtectedCustomerData | readonly ProtectedCustomerData[], schema: T): T {
   return schema.meta({ [PROTECTED_FIELD_KEYWORD]: typeof category === "string" ? category : [...category] }) as T;
 }
+
+/** A buyer's answers to apps: an app reads only its own (plugins/app-owned-data.ts). */
+function appOwned<T extends z.ZodType>(mode: AppOwnedMode, schema: T): T {
+  return schema.meta({ [APP_OWNED_FIELD_KEYWORD]: mode }) as T;
+}
+
+/** An app-scoped key: `<app id>.<key>`. */
+const appScopedKey = z.string().min(1).max(160);
 
 /** A postal address: the street and recipient are protected, the region is not. */
 const postalAddressSchema = z.object({
@@ -80,9 +89,65 @@ const orderLineSchema = z.object({
   /**
    * The app purchase option the line was bought with (`<app id>.<key>`, a
    * subscription), frozen at checkout as its `_purchase_option` property;
-   * null for a one-time purchase.
+   * null for a one-time purchase. A line may carry one option of each of
+   * several apps: this is the first by id, and `purchaseOptions` lists all.
    */
   purchaseOption: z.string().min(1).max(160).nullable(),
+  /** Every purchase option the line was bought with, one per app, sorted by id; empty for a one-time purchase. */
+  purchaseOptions: z.array(appScopedKey).max(10),
+  /**
+   * What the buyer entered for the line, frozen at checkout: the product's
+   * own inputs (`appId` null: an engraving, a fit choice) and the apps' line
+   * inputs (`checkout.lineInputs`, `key` `<app id>.<key>`). An app reading
+   * the order sees the product's inputs and its own, never another app's.
+   * A gift card's recipient is not listed (the gift card carries it).
+   */
+  properties: appOwned("items", z.array(z.object({
+    key: appScopedKey,
+    label: text,
+    value: text,
+    /** What the buyer saw: a choice's label, "Yes" for a ticked box. */
+    displayValue: text,
+    /** What the input added to one unit (the product's own surcharge); 0 for an app's input, which the app prices with an add-on. */
+    priceMinor: minor,
+    /** The app that asked for it; null for the product's own input. */
+    appId: id.nullable(),
+  })).max(60)),
+  /**
+   * Apps' add-ons to each unit of the line (`cart.line_prices` adjustments: a
+   * protection plan, gift wrap), already inside `unitPriceMinor`. `appId` is
+   * null for add-ons frozen before apps were named on them.
+   */
+  adjustments: z.array(z.object({
+    appId: id.nullable(),
+    title: text,
+    /** Added to each unit. */
+    amountMinor: minor,
+  })).max(10),
+});
+
+/**
+ * One discount the order used and what it took from which lines (Shopify's
+ * discount applications): a store discount (`discountId`, its code when it
+ * was entered) or an app's (`appId`, from `checkout.discounts`). Line
+ * amounts are integer minor units of the order currency and add up to
+ * `amountMinor`; `shippingAmountMinor` came off delivery.
+ */
+const discountApplicationSchema = z.object({
+  source: z.enum(["store", "app"]),
+  /** The store discount; null for an app's. */
+  discountId: id.nullable(),
+  /** The app that gave it; null for the store's. */
+  appId: id.nullable(),
+  title: text,
+  /** The code it answered to, when one was entered. */
+  code: z.string().max(64).nullable(),
+  method: z.enum(["automatic", "code"]),
+  /** Off the items. */
+  amountMinor: minor,
+  /** Off delivery. */
+  shippingAmountMinor: minor,
+  lines: z.array(z.object({ orderItemId: id, amountMinor: minor })).max(500),
 });
 
 export const orderRepresentationSchema = z.object({
@@ -135,6 +200,14 @@ export const orderRepresentationSchema = z.object({
   /** Advances with every change: the `expectedRevision` an update takes. */
   revision: z.number().int(),
   lines: z.array(orderLineSchema),
+  /**
+   * The buyer's answers to the apps' checkout attributes, by `<app id>.<key>`
+   * (`checkout.attributes`: a delivery note, a gift message). An app reading
+   * the order sees only its own keys; the store's endpoints see all.
+   */
+  attributes: appOwned("keys", z.record(appScopedKey, z.string().max(500))),
+  /** The discounts the order used, store discounts first, then apps' in the order they applied. */
+  discountApplications: z.array(discountApplicationSchema).max(60),
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),
@@ -575,13 +648,31 @@ export function eventDataTruncation(type: EventRepresentationType, resourceId: s
   });
 }
 
-/** A copy of a sealed representation with the protected fields outside `customerData` as null (per subscription). */
+/**
+ * A copy of a sealed representation as one reader may see it (per
+ * subscription): the protected fields outside `customerData` as null, and,
+ * for an app's reader, the app-owned answers narrowed to that app's own.
+ */
 export function projectEventRepresentation<T extends EventRepresentationType>(
   type: T,
   representation: EventRepresentation<T>,
   customerData: ReadonlySet<ProtectedCustomerData>,
+  appId: string | null = null,
 ): EventRepresentation<T> {
-  return redactProtectedData(structuredClone(representation), eventRepresentationProtectedPaths(type), customerData);
+  const projected = redactProtectedData(structuredClone(representation), eventRepresentationProtectedPaths(type), customerData);
+  return projectAppOwnedData(projected, eventRepresentationAppOwnedPaths(type), appId);
+}
+
+const appOwnedPathsByType = new Map<EventRepresentationType, readonly AppOwnedPath[]>();
+
+/** The app-owned fields of a representation (derived once per type from its schema). */
+export function eventRepresentationAppOwnedPaths(type: EventRepresentationType): readonly AppOwnedPath[] {
+  let paths = appOwnedPathsByType.get(type);
+  if (!paths) {
+    paths = appOwnedPathsOf(z.toJSONSchema(EVENT_REPRESENTATION_SCHEMAS[type], { io: "output", unrepresentable: "any" }));
+    appOwnedPathsByType.set(type, paths);
+  }
+  return paths;
 }
 
 const pathsByType = new Map<EventRepresentationType, readonly ProtectedPath[]>();

@@ -35,7 +35,7 @@ import { validateCheckoutAttributes } from "./attributes";
 import type { Database } from "@scalius/database/client";
 import { productVariants } from "@scalius/database/schema";
 import type { FunctionCart, PluginFunctionOutput } from "@scalius/shared/plugins";
-import type { ResolvedLineProperty } from "@scalius/shared/line-properties";
+import { LINE_BUNDLE_PROPERTY_KEY, type ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { and, inArray, isNull } from "drizzle-orm";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { buildStorefrontTaxAllocationLineId } from "../tax";
@@ -58,7 +58,7 @@ import type {
 export const CART_TRANSFORM_MAX_LINES = 99;
 
 /** The order-line property a bundle line carries. */
-export const BUNDLE_LINE_PROPERTY_KEY = "_bundle";
+export const BUNDLE_LINE_PROPERTY_KEY = LINE_BUNDLE_PROPERTY_KEY;
 
 /** The buyer's lines as the apps rewrote them. */
 export interface TransformedCart {
@@ -124,7 +124,7 @@ export function createCartTransformer(
                     unitPriceMinor: item.unitPriceMinor,
                     discountMinor: 0,
                     properties: item.properties,
-                    purchaseOption: item.purchaseOption?.id ?? null,
+                    purchaseOptions: (item.purchaseOptions ?? []).map((option) => option.id),
                 })),
                 facts,
                 destination: context.destination ?? null,
@@ -246,8 +246,8 @@ export function applyCartTransform(
                 quantity: component.perUnit * item.quantity,
                 bundle,
                 sourceIndex,
-                // The bundle is bought the buyer's way: each component keeps the line's purchase option.
-                ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
+                // The bundle is bought the buyer's way: each component keeps the line's purchase options.
+                ...(item.purchaseOptions !== undefined && item.purchaseOptions !== null ? { purchaseOptions: item.purchaseOptions } : {}),
             });
         }
         expansions.push({ sourceIndex, title: expansion.title, components });

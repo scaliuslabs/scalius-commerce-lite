@@ -16,7 +16,7 @@ import {
   PaymentStatus,
 } from "@scalius/database/schema";
 import { isOrderPaymentRateExpired, orderPaymentRateDeadline } from "@scalius/shared/presentment";
-import { readLinePurchaseOption } from "@scalius/shared/line-properties";
+import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
 import { currencyDocument } from "@scalius/core/modules/settings";
 import {
   getPaymentMethodPreferences,
@@ -831,7 +831,7 @@ async function savePaymentMethodRequest(
   if (!customerId || !gatewayHasCapability(gateway, "vault")) return null;
   if (proof.kind === "agent_context" || (proof.kind === "customer_account" && proof.customerId !== customerId)) return null;
   const lines = await db.select({ properties: orderItems.properties }).from(orderItems).where(eq(orderItems.orderId, order.id)).all();
-  return lines.some((line) => readLinePurchaseOption(line.properties) !== null) ? { customerId, usage: "off_session" } : null;
+  return lines.some((line) => readLinePurchaseOptions(line.properties).length > 0) ? { customerId, usage: "off_session" } : null;
 }
 
 /** The order's online gateway id (built-in or app), whatever is installed now. */

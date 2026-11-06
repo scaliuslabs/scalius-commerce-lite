@@ -15,9 +15,12 @@ import {
 } from "@scalius/shared/fulfilment";
 import {
     linePurchaseOptionProperty,
+    normalizeLinePurchaseOptions,
     parseStoredCustomizationSchema,
     resolveLineProperties,
     serializeOrderLineProperties,
+    withAppLineInputs,
+    type AppLineInputs,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor, isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
@@ -307,12 +310,14 @@ async function loadManualOrderDeliveryMethod(
 }
 
 function resolveManualOrderLineProperties(
-    items: ReadonlyArray<AdminOrderItemWithInventory<ManualOrderMoneyItem & { properties?: unknown; orderItemId?: string | null; purchaseOption?: string | null }>>,
+    items: ReadonlyArray<AdminOrderItemWithInventory<ManualOrderMoneyItem & { properties?: unknown; orderItemId?: string | null; purchaseOptions?: readonly string[] | null }>>,
     retainedLines: ReadonlyMap<string, RetainedManualOrderLine> | undefined,
     /** An order in a market's own currency (MARKETS-DESIGN step 6): only its own lines, at their prices. */
     foreignCurrency: string | null = null,
     /** The purchase options the active apps offer, id → title (none without apps: a line naming one is refused). */
     purchaseOptions: ReadonlyMap<string, string> = new Map(),
+    /** The active apps' line inputs, resolved after the product's own (none without apps: a line naming one is refused). */
+    lineInputs: readonly AppLineInputs[] = [],
 ) {
     const issues: AdminOrderSkuIssue[] = [];
     const lines = items.map((item, index) => {
@@ -340,16 +345,25 @@ function resolveManualOrderLineProperties(
                 "This product's buyer inputs are misconfigured. Fix them on the product first.");
             return null;
         }
-        const resolved = resolveLineProperties(schema.schema, item.properties);
+        // A gift card takes no app inputs (money); any other line the active apps' after the product's own.
+        const resolved = resolveLineProperties(item.isGiftCard ? schema.schema : withAppLineInputs(schema.schema, lineInputs), item.properties);
         if (!resolved.ok) {
             addAdminOrderSkuIssue(issues, item, index, resolved.code, resolved.code === "properties_required"
                 ? "Fill in the buyer inputs this product requires."
                 : "Check the buyer inputs for this item.");
             return null;
         }
-        // An app's purchase option (a subscription): frozen after the buyer inputs; the app prices it.
-        const purchaseOptionTitle = item.purchaseOption ? purchaseOptions.get(item.purchaseOption) : undefined;
-        if (item.purchaseOption && purchaseOptionTitle === undefined) {
+        // Apps' purchase options (a subscription, a protection plan; one per app):
+        // frozen after the buyer inputs; the apps price them.
+        const requestedOptions = normalizeLinePurchaseOptions(item.purchaseOptions ?? []);
+        if (!requestedOptions.ok) {
+            addAdminOrderSkuIssue(issues, item, index, "purchase_option_unavailable", requestedOptions.reason === "same_app"
+                ? "An item can carry one purchase option of each app. Keep one of them."
+                : "Check the purchase options of this item.");
+            return null;
+        }
+        const chosenOptions = requestedOptions.options.map((id) => ({ id, title: purchaseOptions.get(id) }));
+        if (chosenOptions.some((option) => option.title === undefined)) {
             addAdminOrderSkuIssue(issues, item, index, "purchase_option_unavailable",
                 "No installed app offers this purchase option any more. Remove it from the item.");
             return null;
@@ -360,7 +374,7 @@ function resolveManualOrderLineProperties(
             propertiesPriceMinor: resolved.propertiesPriceMinor,
             properties: serializeOrderLineProperties([
                 ...resolved.properties,
-                ...(item.purchaseOption && purchaseOptionTitle !== undefined ? [linePurchaseOptionProperty(item.purchaseOption, purchaseOptionTitle)] : []),
+                ...chosenOptions.map((option) => linePurchaseOptionProperty(option.id, option.title!)),
             ]),
         };
     });
@@ -501,7 +515,7 @@ export async function prepareManualOrderQuote(
 
     const lineProperties = resolveManualOrderLineProperties(
         resolvedItems.map((item, index) => {
-            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOption?: string | null } | undefined;
+            const submitted = data.items[index] as { orderItemId?: string | null; unitPriceMinor?: number; purchaseOptions?: readonly string[] | null } | undefined;
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
@@ -511,7 +525,7 @@ export async function prepareManualOrderQuote(
             return {
                 ...item,
                 orderItemId: submitted?.orderItemId ?? null,
-                purchaseOption: submitted?.purchaseOption ?? null,
+                purchaseOptions: submitted?.purchaseOptions ?? null,
                 // A price set by hand replaces the catalogue price (resolvePrice) for this line.
                 catalogUnitPriceMinor: override ?? item.catalogUnitPriceMinor,
                 unitPriceMinor: override ?? item.catalogUnitPriceMinor,
@@ -520,6 +534,7 @@ export async function prepareManualOrderQuote(
         retainedLines,
         currency.code !== store.code ? currency.code : null,
         options.apps?.purchaseOptions,
+        options.apps?.lineInputs,
     );
     const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
         ...item,

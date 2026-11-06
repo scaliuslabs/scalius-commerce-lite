@@ -22,6 +22,7 @@ import {
   stripeDocument,
 } from "../settings";
 import type { CheckoutContactFieldSettings } from "./contact-fields";
+import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { selectSettingsDocuments } from "../../settings-store";
 import { notificationsDocument } from "../notifications";
 import {
@@ -120,6 +121,8 @@ export interface StorefrontCheckoutAuthorityInput {
     transformer?: CartTransformer;
     /** The purchase options the active apps declare (`checkoutPurchaseOptions`), known once the read has answered. */
     purchaseOptions?: () => ReadonlyMap<string, string> | undefined;
+    /** The line inputs the active apps declare (`checkoutLineInputs`), known once the read has answered. */
+    lineInputs?: () => readonly AppLineInputs[] | undefined;
     /**
      * True while `cart.transform` is still to rewrite the lines: the
      * buyer's prices are checked after it (reads.ts), not here.
@@ -451,6 +454,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             priceIncrementMinor: currency.priceIncrementMinor,
                             priceScope,
                             purchaseOptions: input.purchaseOptions?.(),
+                            lineInputs: input.lineInputs?.(),
                             ...pass,
                             deferSubmittedPriceCheck: input.deferSubmittedPriceCheck?.() || pass.deferSubmittedPriceCheck,
                         },

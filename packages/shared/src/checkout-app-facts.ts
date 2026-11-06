@@ -3,6 +3,7 @@
 // the checkout (which computes them) and orders (which persist and show
 // them), so neither core domain depends on the other for them.
 
+import type { AppLineInputs } from "./line-properties";
 
 export type AppDiscountTarget = "order" | "lines" | "shipping";
 
@@ -139,6 +140,8 @@ export interface ManualOrderAppOutcome {
  */
 export interface ManualOrderAppFunctions {
   price(input: ManualOrderAppInput): Promise<ManualOrderAppOutcome>;
-  /** The purchase options the active apps offer, `<app id>.<key>` → title: what a line's `purchaseOption` may name. */
+  /** The purchase options the active apps offer, `<app id>.<key>` → title: what a line's `purchaseOptions` may name. */
   readonly purchaseOptions?: ReadonlyMap<string, string>;
+  /** The active apps' line inputs: what a line's properties may carry beside the product's own. */
+  readonly lineInputs?: readonly AppLineInputs[];
 }

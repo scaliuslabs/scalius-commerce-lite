@@ -374,7 +374,7 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
         ? { properties: item.properties.map((property) => [property.key, property.value]) }
         : {}),
       // Absent for one-time lines, so hashes of carts without purchase options are unchanged.
-      ...(item.purchaseOption ? { purchaseOption: item.purchaseOption } : {}),
+      ...(item.purchaseOptions && item.purchaseOptions.length > 0 ? { purchaseOptions: [...new Set(item.purchaseOptions)].sort() } : {}),
     })),
     discountCodes: [...new Set(input.discountCodes.map((code) => code.trim().toUpperCase()))].sort(),
     shippingCharge: normalizeAmount(input.shippingCharge),

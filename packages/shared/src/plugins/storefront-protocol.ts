@@ -781,8 +781,10 @@ export interface StorefrontProductState {
   quantity: number;
   /** Buyer input answers by key (`buyerInputs`); a checkbox is "true" when ticked. */
   inputs: Record<string, string>;
-  /** The purchase option the buyer chose (`<app id>.<key>`, a subscription); null for a one-time purchase. Absent from older stores. */
+  /** The purchase option the buyer chose (`<app id>.<key>`, a subscription); null for a one-time purchase. With several apps' options chosen, the first by id. Absent from older stores. */
   purchaseOption?: string | null;
+  /** Every purchase option the buyer chose, one per app, sorted by id; empty for a one-time purchase. Absent from older stores. */
+  purchaseOptions?: string[];
   /** The chosen SKU can be bought now (chosen, in stock, and the store sells it); false until one is chosen. Absent from older stores. */
   available?: boolean;
   /** An add or Buy now is in flight; the form takes no other until it ends. Absent from older stores. */
@@ -1248,12 +1250,16 @@ export interface StorefrontIslandContext {
   quickAdd(productUrl: string): Promise<boolean>;
   /**
    * Adds a SKU to the cart and opens the cart: a product without buyer
-   * inputs, one-time or under one of this app's own purchase options
-   * (`<app id>.<key>`), which the app prices at checkout. False when it can't
-   * be added here (sold out, buyer inputs, another app's option): navigate
-   * to its page. Absent from older stores.
+   * inputs of its own, one-time or under one of this app's own purchase
+   * options (`<app id>.<key>`), which the app prices at checkout. `inputs`
+   * are this app's own line inputs by key (manifest `checkout.lineInputs`,
+   * without the app id): the line carries them as `<app id>.<key>` and
+   * checkout checks them like the buy form's. False when it can't be added
+   * here (sold out, the product's own buyer inputs, another app's option or
+   * input, a value its input refuses): navigate to its page. Absent from
+   * older stores.
    */
-  addLine?(line: { variantId: string; quantity?: number; purchaseOption?: string }): Promise<boolean>;
+  addLine?(line: { variantId: string; quantity?: number; purchaseOption?: string; inputs?: Record<string, string> }): Promise<boolean>;
   /** Calls the cart's listener now and on every change; returns the unsubscribe. */
   onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
   /** Calls the app's public routes through the storefront proxy (`/apps/<plugin id>/<path>`). */

@@ -23,7 +23,7 @@ import {
 import { writeAgentAuditEvent } from "../agent-access/audit";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
-import { redactOperationResponse } from "./protected-response";
+import { projectOperationResponse } from "./protected-response";
 import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
 import { appOperationName, resolveAppOperation } from "./app-operations";
 import { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode } from "@scalius/shared/plugins/app-errors";
@@ -220,8 +220,9 @@ export async function callPluginOperation(options: {
       ctx: options.ctx,
     });
     if (result.ok) await recordAppCreatedResources(options.db, options.pluginId, name, result.data);
-    // Buyer contact fields the grant does not reveal read as null (H5).
-    const body = result.ok ? redactOperationResponse(operation, result.data, principal.protectedData) : result.data;
+    // Buyer contact fields the grant does not reveal read as null (H5), and
+    // another app's buyer answers never reach this one (H13).
+    const body = result.ok ? projectOperationResponse(operation, result.data, principal.protectedData, options.pluginId) : result.data;
     return unwrap(result.status, result.ok, body);
   } catch (error) {
     if (error instanceof AgentDispatchError) {

@@ -58,7 +58,8 @@ import {
   type PluginRunPoint,
   type PurchaseOptionDeclaration,
 } from "@scalius/shared/plugins";
-import { purchaseOptionId } from "@scalius/shared/plugins/ids";
+import { APP_SCOPED_KEY_MAX_LENGTH, purchaseOptionId } from "@scalius/shared/plugins/ids";
+import { isLineInputEntry, type AppLineInputs } from "@scalius/shared/line-properties";
 import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
 import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
@@ -99,6 +100,8 @@ export interface CheckoutAppFunctions {
   readonly attributes?: ReadonlyArray<{ appId: string; fields: CheckoutAttribute[] }>;
   /** The purchase options each active app declares (manifest `checkout.purchaseOptions`). */
   readonly purchaseOptions?: ReadonlyArray<{ appId: string; options: ReadonlyArray<PurchaseOptionDeclaration> }>;
+  /** The line inputs each active app declares (manifest `checkout.lineInputs`). */
+  readonly lineInputs?: ReadonlyArray<AppLineInputs>;
   buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
   /** `reads` is the platform's: each app gets its own declared reads. */
   run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;
@@ -139,6 +142,15 @@ export function checkoutPurchaseOptions(apps: Pick<CheckoutAppFunctions, "purcha
     for (const option of app.options) options.set(purchaseOptionId(app.appId, option.key), option.title);
   }
   return options;
+}
+
+/**
+ * The line inputs a cart line may carry beside the product's own: the
+ * declarations of the request's active apps (no read). Empty without apps,
+ * so a line naming one is refused as an unknown input.
+ */
+export function checkoutLineInputs(apps: Pick<CheckoutAppFunctions, "lineInputs"> | undefined): readonly AppLineInputs[] {
+  return apps?.lineInputs ?? [];
 }
 
 export function wantsAppCart(apps: CheckoutAppFunctions | undefined, points: readonly PluginRunPoint[] = CART_POINTS): boolean {
@@ -327,8 +339,17 @@ export interface AppCartLineSource {
   /** The platform's discount on the line (promotions or bundles). */
   discountMinor: number;
   properties: ReadonlyArray<{ key: string; value: string }>;
-  /** The line's purchase option (`<app id>.<key>`), already checked against the active apps' declarations. */
-  purchaseOption?: string | null;
+  /** The line's purchase options (`<app id>.<key>`, one per app), already checked against the active apps' declarations. */
+  purchaseOptions?: readonly string[];
+}
+
+/**
+ * Entries an order line freezes beside its buyer inputs that are not inputs:
+ * add-ons, purchase options (each its own fact of the line) and a gift
+ * card's recipient (contact data, which function inputs never carry).
+ */
+function isFrozenOnlyLineProperty(key: string): boolean {
+  return !isLineInputEntry(key);
 }
 
 /** The app cart (`functionCartSchema`) from the authoritative checkout state. */
@@ -355,8 +376,9 @@ export function buildAppFunctionCart(input: {
     const grossMinor = line.unitPriceMinor * line.quantity;
     const properties: Record<string, string> = {};
     for (const property of line.properties) {
-      const key = property.key.slice(0, 64);
-      if (key && !(key in properties)) properties[key] = property.value.slice(0, 500);
+      // Frozen entries that are not buyer inputs (add-ons, purchase options, gift-card recipients) stay out.
+      const key = property.key;
+      if (key && key.length <= APP_SCOPED_KEY_MAX_LENGTH && !isFrozenOnlyLineProperty(key) && !(key in properties)) properties[key] = property.value.slice(0, 500);
     }
     return {
       lineId: line.lineId,
@@ -375,7 +397,7 @@ export function buildAppFunctionCart(input: {
       requiresShipping: (variant?.physical ?? true) && product?.isGiftCard !== true,
       weightGrams: variant?.weightGrams ?? null,
       shippingProfileId: product?.shippingProfileId ?? DEFAULT_SHIPPING_PROFILE_ID,
-      purchaseOption: line.purchaseOption ?? null,
+      purchaseOptions: [...new Set(line.purchaseOptions ?? [])].sort(),
     };
   });
   const customer = input.facts.customer

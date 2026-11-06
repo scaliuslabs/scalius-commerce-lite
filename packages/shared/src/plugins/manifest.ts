@@ -20,7 +20,7 @@ import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { storefrontComponentsManifestSchema } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
-import { checkoutAttributeSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
+import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
@@ -582,13 +582,22 @@ export const pluginManifestSchema = z.object({
   checkout: z.object({
     attributes: z.array(checkoutAttributeSchema).max(10).refine((fields) => new Set(fields.map((field) => field.key)).size === fields.length, "Attribute keys must be unique.").default([]),
     /**
-     * Ways to buy a line the app offers (`<app id>.<key>` on a cart line's
-     * `purchaseOption`): a subscription, a rental. Buyer checkout requires a
-     * valid owning-app price from `cart.line_prices`; `checkout.discounts` and
+     * Ways to buy a line the app offers (`<app id>.<key>` in a cart line's
+     * `purchaseOptions`): a subscription, a rental, a protection plan. A line
+     * carries at most one option of each app, so apps never overwrite each
+     * other. Buyer checkout requires the owning app's answer for the line from
+     * `cart.line_prices` (a price or an add-on); `checkout.discounts` and
      * `cart.validate` handle discounts and eligibility. A line naming an option
      * no active app declares is refused. Staff orders keep their staff-set prices.
      */
     purchaseOptions: z.array(purchaseOptionDeclarationSchema).max(PURCHASE_OPTIONS_MAX).refine((options) => new Set(options.map((option) => option.key)).size === options.length, "Purchase option keys must be unique.").default([]),
+    /**
+     * Buyer inputs the app asks for on each cart line, under its own keys
+     * `<app id>.<key>` (buyer-ui.ts `lineInputDeclarationSchema`): drawn on the
+     * product's buy form beside the merchant's inputs, part of the line, seen
+     * by the app's functions and frozen on the order line.
+     */
+    lineInputs: z.array(lineInputDeclarationSchema).max(LINE_INPUTS_MAX).refine((inputs) => new Set(inputs.map((input) => input.key)).size === inputs.length, "Line input keys must be unique.").default([]),
   }).strict().optional(),
   providers: pluginProvidersSchema,
 
@@ -667,6 +676,19 @@ export const pluginManifestSchema = z.object({
     && manifest.storefront.extensions.length === 0 && !manifest.providers.some((provider) => provider.kind === "payment")) {
     context.addIssue({ code: "custom", path: ["checkout", "purchaseOptions"], message: "Purchase options need a checkout function (to price or check them) or a payment provider." });
   }
+  if ((manifest.checkout?.lineInputs.length ?? 0) > 0 && manifest.functions.length === 0
+    && manifest.storefront.extensions.length === 0 && !manifest.providers.some((provider) => provider.kind === "payment")) {
+    context.addIssue({ code: "custom", path: ["checkout", "lineInputs"], message: "Line inputs need a checkout function (to price or check them) or a payment provider." });
+  }
+  // A line input shown on some products names the app's own flag: a
+  // storefront-visible boolean product field, which the product page reads.
+  manifest.checkout?.lineInputs.forEach((input, index) => {
+    if (!input.products) return;
+    const field = manifest.customFields.find((candidate) => candidate.key === input.products!.customField && candidate.ownerType === "product");
+    if (!field || field.type !== "boolean" || !field.storefrontVisible) {
+      context.addIssue({ code: "custom", path: ["checkout", "lineInputs", index, "products", "customField"], message: "Name one of the app's product custom fields: a boolean with storefrontVisible true." });
+    }
+  });
   // A provider receives the buyer data its port carries: the app asks for it
   // (in its base scopes or the provider's feature), so consent names it.
   const providerOwners = pluginFeatureOwners(manifest).providers;

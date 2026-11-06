@@ -479,6 +479,92 @@
        ],
        "additionalProperties": false
       }
+     },
+     "lineInputs": {
+      "default": [],
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 60
+        },
+        "help": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 200
+        },
+        "type": {
+         "type": "string",
+         "enum": [
+          "text",
+          "textarea",
+          "select",
+          "checkbox"
+         ]
+        },
+        "required": {
+         "type": "boolean"
+        },
+        "maxLength": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 1000
+        },
+        "options": {
+         "minItems": 1,
+         "maxItems": 20,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "pattern": "^[^\\r\\n]*$"
+           },
+           "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+           }
+          },
+          "required": [
+           "value",
+           "label"
+          ],
+          "additionalProperties": false
+         }
+        },
+        "products": {
+         "type": "object",
+         "properties": {
+          "customField": {
+           "type": "string",
+           "maxLength": 64
+          }
+         },
+         "required": [
+          "customField"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "key",
+        "label",
+        "type"
+       ],
+       "additionalProperties": false
+      }
      }
     },
     "additionalProperties": false

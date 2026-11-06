@@ -6,6 +6,7 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
+import { CUSTOMIZATION_FIELD_TYPES } from "@scalius/shared/line-properties";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
@@ -436,11 +437,26 @@ const layoutDataSchema = z.object({
     description: "Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.",
   }),
   purchaseOptions: z.array(z.object({
-    id: z.string().openapi({ description: "`<app id>.<key>`: what a cart, tax-quote or order line sends as its `purchaseOption`." }),
+    id: z.string().openapi({ description: "`<app id>.<key>`: what a cart, tax-quote or order line sends in its `purchaseOptions` (one per app)." }),
     title: z.string(),
     description: z.string().nullable(),
   })).optional().openapi({
-    description: "Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental), the ones checkout accepts. The product page's buy form lists them beside a one-time purchase; the app prices the line at checkout.",
+    description: "Ways to buy a line the active apps offer (manifest `checkout.purchaseOptions`: a subscription, a rental, a protection plan), the ones checkout accepts. The product page's buy form lists each app's options as their own choice beside a one-time purchase; a line carries at most one of each app, and the apps price the line at checkout.",
+  }),
+  lineInputs: z.array(z.object({
+    appId: z.string(),
+    inputs: z.array(z.object({
+      key: z.string(),
+      label: z.string(),
+      help: z.string().optional(),
+      type: z.enum(CUSTOMIZATION_FIELD_TYPES),
+      required: z.boolean().optional(),
+      maxLength: z.number().int().optional(),
+      options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
+      products: z.object({ customField: z.string() }).optional(),
+    })),
+  })).optional().openapi({
+    description: "Buyer inputs the active apps ask for on each line (manifest `checkout.lineInputs`: a gift message, a protection plan), the ones checkout accepts. The buy form draws them after the product's own inputs under `<app id>.<key>`; one with `products` only on products whose app custom field `<app id>.<customField>` is true. The apps price them at checkout.",
   }),
   appServices: z.object({
     search: z.string().nullable().openapi({ description: "The search app predictive search passes as `provider` to /search; null: built-in search." }),
