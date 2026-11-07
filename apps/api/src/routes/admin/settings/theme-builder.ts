@@ -32,6 +32,7 @@ import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { storefrontSectionListApiSchema } from "../../../schemas/storefront-theme";
 import { boundedThemeStatus, themeDraftReceiptSchema, themeStatusSchema, themeIso } from "./theme-contract";
+import { requestActorId } from "../request-actor";
 
 const app = adminRouter();
 const revisionSchema = z.number().int().nonnegative();
@@ -102,9 +103,9 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   return ok(c, boundedThemeStatus(await restoreThemeRestorePoint(
-    c.get("db"), body.id, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
+    c.get("db"), body.id, body.expectedDraftRevision, body.basePublishedRevision, actor,
     { withoutMissingImages: body.withoutMissingImages === true },
   )));
 });
@@ -329,13 +330,13 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   const result = await draftThemeSections(
     c.get("db"),
     { scope: body.scope, sections: body.sections, afterId: body.afterId ?? null },
     body.expectedDraftRevision,
     body.basePublishedRevision,
-    user?.id ?? null,
+    actor,
   );
   return ok(c, {
     revision: result.revision,

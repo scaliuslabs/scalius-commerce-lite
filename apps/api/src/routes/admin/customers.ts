@@ -54,10 +54,11 @@ import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { drainCustomerErasureAfterResponse } from "../../background/customer-erasure";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
+import { requestActorId, requestStaffUser } from "./request-actor";
 const app = adminRouter();
 
 /** The signed-in staff member, recorded as the author of customer changes. */
-const staffId = (c: { get: (key: "user") => unknown }) => (c.get("user") as { id?: string } | undefined)?.id ?? null;
+const staffId = (c: Parameters<typeof requestActorId>[0]) => requestActorId(c);
 
 // ── List Customers ──
 
@@ -473,9 +474,9 @@ const eraseCustomerRoute = createRoute({
 
 app.openapi(eraseCustomerRoute, async (c) => {
     c.header("Cache-Control", "private, no-store");
-    const actor = c.get("user") as { id?: string; isSuperAdmin?: boolean } | undefined;
+    const actor = requestStaffUser(c);
     // An agent acts for its owner: it may erase only when that owner is a Super Admin. Apps never may.
-    if (!actor?.id || actor.isSuperAdmin !== true || c.get("pluginPrincipal")) {
+    if (!actor?.id || actor.isSuperAdmin !== true) {
         throw new ForbiddenError("Only the store owner can erase a customer's data.");
     }
     const { id } = c.req.valid("param");

@@ -20,6 +20,7 @@ import { projectAbandonedCheckoutAgentSummary } from "@scalius/core/modules/chec
 import { ok, noContent } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError } from "../../utils/api-error";
 import { successEnvelope, messageResponse, noContentResponse, errorResponses } from "../../schemas/responses";
+import { requireStaffId } from "./request-actor";
 const app = adminRouter();
 
 // --- Abandoned Checkouts ---
@@ -301,8 +302,7 @@ const registerFcmTokenRoute = createRoute({
 
 app.openapi(registerFcmTokenRoute, async (c) => {
     const db = c.get("db");
-    const user = c.get("user");
-    if (!user || !user.id) throw new UnauthorizedError("Unauthorized");
+    const user = { id: requireStaffId(c, "Unauthorized") };
 
     const { token, userId, deviceInfo } = c.req.valid("json");
 
@@ -362,8 +362,7 @@ const cleanupFcmTokensRoute = createRoute({
 
 app.openapi(cleanupFcmTokensRoute, async (c) => {
     const db = c.get("db");
-    const user = c.get("user");
-    if (!user || !user.id) throw new UnauthorizedError("Unauthorized");
+    const user = { id: requireStaffId(c, "Unauthorized") };
 
     try {
         const { invalidTokens } = c.req.valid("json");

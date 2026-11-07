@@ -41,6 +41,7 @@ import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import { requestCourierProviders } from "../../plugins/providers/courier";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
+import { requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -176,8 +177,8 @@ const updateStatusRoute = createRoute({
     }
 });
 
-function actorIdOf(c: { get(key: "user"): unknown }): string | null {
-    return (c.get("user") as { id?: string } | undefined)?.id ?? null;
+function actorIdOf(c: Parameters<typeof requestStaffId>[0]): string | null {
+    return requestStaffId(c);
 }
 
 /** Hands the message rows a command committed with its change to the sender (the drain sends any it misses). */
@@ -681,13 +682,13 @@ const unknownShipmentLookupRoute = createRoute({
 app.openapi(unknownShipmentLookupRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
     const data = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const db = c.get("db");
     const result = await lookupUnknownOrderShipment(db, {
         ...data,
         orderId,
         shipmentId,
-        actorId: user?.id ?? null,
+        actorId: actingStaffId,
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
         couriers: requestCourierProviders(c),
     });
@@ -731,13 +732,13 @@ const resolveUnknownShipmentRoute = createRoute({
 app.openapi(resolveUnknownShipmentRoute, async (c) => {
     const { id: orderId, shipmentId } = c.req.valid("param");
     const data = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const db = c.get("db");
     const result = await resolveUnknownOrderShipment(db, {
         ...data,
         orderId,
         shipmentId,
-        actorId: user?.id ?? null,
+        actorId: actingStaffId,
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
         couriers: requestCourierProviders(c),
     });

@@ -65,6 +65,7 @@ import { handOverOrderLines } from "./orders/fulfilments";
 import { bookOrderShipment, createShipmentBodySchema } from "./orders-status";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { autoFulfilAfterResponse } from "../../background/auto-fulfil";
+import { requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -511,8 +512,8 @@ app.openapi(createRoute({
   const orderId = c.req.valid("param").id;
   const body = c.req.valid("json");
   const appPrincipal = c.get("pluginPrincipal");
-  const user = c.get("user") as { id?: string } | undefined;
-  const recordedBy = appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${user?.id ?? "unknown"}`;
+  const actingStaffId = requestStaffId(c);
+  const recordedBy = appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${actingStaffId ?? "unknown"}`;
   const result = await recordOrderPayment(db, {
     orderId,
     amountMinor: body.amountMinor,
@@ -528,7 +529,7 @@ app.openapi(createRoute({
       id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
       orderId,
       kind: "payment_recorded",
-      actorId: user?.id ?? null,
+      actorId: actingStaffId,
       data: {
         amount: fromMinor(body.amountMinor, currency.decimalPlaces),
         via: body.via,

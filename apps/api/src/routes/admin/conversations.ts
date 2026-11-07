@@ -55,13 +55,12 @@ import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { NotFoundError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { notificationSender } from "../../background/notification-sender";
+import { requireStaffId } from "./request-actor";
 
 const app = adminRouter();
 
 function staffActor(c: Context<{ Bindings: Env }>): ConversationActor & { kind: "staff" } {
-  const user = c.get("user") as { id?: string } | undefined;
-  if (!user?.id) throw new UnauthorizedError("Sign in again to use the inbox.");
-  return { kind: "staff", userId: user.id };
+  return { kind: "staff", userId: requireStaffId(c, "Sign in again to use the inbox.") };
 }
 
 function noStore(c: Context) {

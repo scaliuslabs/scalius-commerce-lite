@@ -31,6 +31,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { readAppWebhookAccess } from "../../plugins/webhook-access";
+import { requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -172,7 +173,7 @@ app.openapi(createRoute({
   const owner = await appOwner(c);
   c.set("idempotencySecretResponse", true);
   const result = await createWebhookSubscription(c.get("db"), c.req.valid("json"), {
-    actorId: (c.get("user") as { id?: string } | undefined)?.id ?? null,
+    actorId: requestStaffId(c),
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     owner,
   });

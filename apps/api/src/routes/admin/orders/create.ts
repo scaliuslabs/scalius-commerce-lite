@@ -41,6 +41,7 @@ import { adminOrderResourceMutationErrorResponses } from "./shared";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
+import { requestStaffId } from "../request-actor";
 
 const app = adminRouter();
 
@@ -204,12 +205,12 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         bodyRequestKey,
         "requestKey",
     );
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const result = await confirmManualOrderAmendment(
         c.get("db"),
         c.req.valid("param").id,
         { ...payload, requestKey },
-        user?.id ?? null,
+        actingStaffId,
         { appProviders: requestAppProviders(c) },
     );
 
@@ -273,13 +274,13 @@ app.openapi(createOrderRoute, async (c) => {
  */
 export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: CreateOrderInput) {
     const db = c.get("db");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
     const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
     // Mark as paid: placed as an invoice, then paid in full right after.
     const placed = data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
-    const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, user?.id ?? null, {
+    const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, actingStaffId, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
         // Apps and agents invoice only while the store offers invoices; staff always may.
@@ -307,7 +308,7 @@ async function recordPaidOnPlacement(
     const order = await db.select({ balanceDueMinor: orders.balanceDueMinor }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) return;
     const appPrincipal = c.get("pluginPrincipal");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const keyed = `${requestKey}:paid`;
     const result = await recordOrderPayment(db, {
         orderId,
@@ -316,13 +317,13 @@ async function recordPaidOnPlacement(
         via: paid.via,
         reference: paid.reference ?? null,
         note: null,
-        recordedBy: appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${user?.id ?? "unknown"}`,
+        recordedBy: appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${actingStaffId ?? "unknown"}`,
         requestKey: keyed,
         timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {
             id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
             orderId,
             kind: "payment_recorded",
-            actorId: user?.id ?? null,
+            actorId: actingStaffId,
             data: {
                 amount: fromMinor(order.balanceDueMinor, currency.decimalPlaces),
                 via: paid.via,

@@ -51,6 +51,7 @@ import { nextCursorSchema } from "../../utils/bounded-page";
 import { epochSeconds, resourcePage, resourcePageQuery, updatedOrder } from "../../utils/resource-page";
 import { readCustomerRepresentations } from "../../events/representations";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -230,12 +231,11 @@ app.openapi(createRoute({
 }), async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
   const record = await createCustomerSegment(db, {
     name: body.name,
     description: body.description,
     definition: await storedDefinition(c, body.definition),
-  }, c.get("pluginPrincipal") ? null : user?.id ?? null);
+  }, requestStaffId(c));
   return created(c, { segment: segmentResource(record, await storeCurrency(db)) });
 });
 

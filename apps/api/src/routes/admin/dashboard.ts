@@ -33,6 +33,7 @@ import { successEnvelope } from "../../schemas/responses";
 import { protectedField as pii } from "../../schemas/protected";
 import { timestampSchema } from "../../schemas/timestamps";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
+import { requireStaffId } from "./request-actor";
 
 const BANGLADESH_PACK_ID = "scalius.bangladesh";
 const app = adminRouter();
@@ -298,7 +299,7 @@ async function readSetupSteps(c: Context<{ Bindings: Env }>) {
 app.openapi(setupGuideRoute, async (c) => {
     const [facts, dismissed] = await Promise.all([
         readSetupSteps(c),
-        readSetupGuideDismissed(c.get("db"), c.get("user").id),
+        readSetupGuideDismissed(c.get("db"), requireStaffId(c, "Sign in again.")),
     ]);
     c.header("Cache-Control", "private, no-store");
     return ok(c, { dismissed, ...facts });
@@ -374,7 +375,7 @@ const dismissSetupGuideRoute = createRoute({
 });
 
 app.openapi(dismissSetupGuideRoute, async (c) => {
-    await dismissSetupGuide(c.get("db"), c.get("user").id);
+    await dismissSetupGuide(c.get("db"), requireStaffId(c, "Sign in again."));
     c.header("Cache-Control", "private, no-store");
     return ok(c, { dismissed: true as const });
 });
@@ -392,7 +393,7 @@ const showSetupGuideRoute = createRoute({
 });
 
 app.openapi(showSetupGuideRoute, async (c) => {
-    await showSetupGuide(c.get("db"), c.get("user").id);
+    await showSetupGuide(c.get("db"), requireStaffId(c, "Sign in again."));
     c.header("Cache-Control", "private, no-store");
     return ok(c, { dismissed: false as const });
 });

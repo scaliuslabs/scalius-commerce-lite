@@ -106,6 +106,7 @@ import {
 } from "./shared";
 import { notificationSender } from "../../../background/notification-sender";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
+import { requestStaffId } from "../request-actor";
 
 const app = adminRouter();
 
@@ -322,9 +323,9 @@ const getTimelineRoute = createRoute({
 });
 
 app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const query = c.req.valid("query");
-    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, user?.id ?? null, query.cursor, query.limit);
+    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, actingStaffId, query.cursor, query.limit);
     return ok(c, { ...page, events: page.events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
 }) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
 
@@ -359,12 +360,12 @@ const addCommentRoute = createRoute({
 });
 
 app.openapi(addCommentRoute, (async (c: AdminRouteContext<typeof addCommentRoute>) => {
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const event = await addOrderComment(
         c.get("db"),
         c.req.valid("param").id,
         c.req.valid("json").body,
-        user?.id ?? null,
+        actingStaffId,
         c.req.valid("header")["idempotency-key"]
             ? await scopedRequestKey(c, "dashboard.orders.comment_add", c.req.valid("header")["idempotency-key"])
             : undefined,
@@ -389,9 +390,9 @@ const deleteCommentRoute = createRoute({
 });
 
 app.openapi(deleteCommentRoute, (async (c: AdminRouteContext<typeof deleteCommentRoute>) => {
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const { id, eventId } = c.req.valid("param");
-    await deleteOrderComment(c.get("db"), id, eventId, user?.id ?? null);
+    await deleteOrderComment(c.get("db"), id, eventId, actingStaffId);
     return ok(c, { deleted: true as const });
 }) as unknown as AdminRouteHandler<typeof deleteCommentRoute>);
 
@@ -439,8 +440,8 @@ app.openapi(releaseHoldRoute, async (c) => {
             throw new ForbiddenError("An app can release only the holds it placed.");
         }
     }
-    const user = c.get("user") as { id?: string } | undefined;
-    const hold = await releaseOrderHold(c.get("db"), id, holdId, user?.id ?? null);
+    const actingStaffId = requestStaffId(c);
+    const hold = await releaseOrderHold(c.get("db"), id, holdId, actingStaffId);
     // A settled order's gift cards and downloads go out now, not at the next sweep
     // (a no-op while another hold is open or nothing is owed).
     await autoFulfilAfterResponse(c, c.get("db"), id, "hold-released");
@@ -566,13 +567,13 @@ const updateOrderDetailsRoute = createRoute({
 app.openapi(updateOrderDetailsRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const result = await updateOrderDetails(db, orderId, c.req.valid("json"));
     if (result.changedFields.length > 0) {
         await recordOrderEvent(db, {
             orderId,
             kind: "details_edited",
-            actorId: user?.id ?? null,
+            actorId: actingStaffId,
             data: { fields: result.changedFields },
         });
     }
@@ -611,9 +612,9 @@ const setFulfillmentLocationRoute = createRoute({
 
 app.openapi(setFulfillmentLocationRoute, async (c) => {
     const orderId = c.req.valid("param").id;
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     // The timeline line is written in the same batch as the change.
-    const result = await setOrderFulfillmentLocation(c.get("db"), orderId, c.req.valid("json"), user?.id ?? null);
+    const result = await setOrderFulfillmentLocation(c.get("db"), orderId, c.req.valid("json"), actingStaffId);
     return ok(c, { id: result.id, version: result.version, fulfillmentLocationId: result.fulfillmentLocationId });
 });
 
@@ -639,9 +640,9 @@ app.openapi(restoreOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     await restoreOrder(db, orderId, data.expectedVersion);
-    await recordOrderEvent(db, { orderId, kind: "unarchived", actorId: user?.id ?? null });
+    await recordOrderEvent(db, { orderId, kind: "unarchived", actorId: actingStaffId });
     return noContent(c);
 });
 

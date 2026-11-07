@@ -35,6 +35,7 @@ import {
     conflictResponse,
     errorResponses,
 } from "../../schemas/responses";
+import { requestActorId } from "./request-actor";
 
 const navigationResourceTypeSchema = z.enum([
     "page",
@@ -783,10 +784,9 @@ const publishMenuRoute = createRoute({
 
 app.openapi(publishMenuRoute, async (c) => {
     const { menuId } = c.req.valid("param");
-    const user = c.get("user") as { id?: string } | undefined;
     const result = await publishNavigationMenu(c.get("db"), menuId, {
         ...c.req.valid("json"),
-        publishedBy: user?.id ?? null,
+        publishedBy: requestActorId(c),
     });
 
     return ok(c, result);
@@ -864,10 +864,9 @@ const rollbackMenuRoute = createRoute({
 
 app.openapi(rollbackMenuRoute, async (c) => {
     const { menuId } = c.req.valid("param");
-    const user = c.get("user") as { id?: string } | undefined;
     const result = await rollbackNavigationMenu(c.get("db"), menuId, {
         ...c.req.valid("json"),
-        publishedBy: user?.id ?? null,
+        publishedBy: requestActorId(c),
     });
 
     return ok(c, result);

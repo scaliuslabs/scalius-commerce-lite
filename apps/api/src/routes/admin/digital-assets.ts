@@ -43,6 +43,7 @@ import {
     serviceUnavailableResponse,
     successEnvelope,
 } from "../../schemas/responses";
+import { requestActorId } from "./request-actor";
 
 export const adminDigitalAssetRoutes = adminRouter();
 export const adminProductDigitalAssetRoutes = adminRouter();
@@ -50,8 +51,8 @@ export const adminDigitalEntitlementRoutes = adminRouter();
 
 const TAG = "Admin - Digital goods";
 
-function actorIdOf(c: { get(key: "user"): unknown }): string | undefined {
-    return (c.get("user") as { id?: string } | undefined)?.id ?? undefined;
+function actorIdOf(c: Parameters<typeof requestActorId>[0]): string | undefined {
+    return requestActorId(c) ?? undefined;
 }
 
 const requestKeySchema = z.string().uuid().openapi({

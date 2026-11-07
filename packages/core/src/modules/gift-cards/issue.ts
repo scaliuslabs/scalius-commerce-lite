@@ -211,7 +211,15 @@ export interface ManualGiftCardInput {
     recipient: GiftCardRecipient | null;
     message: string | null;
     note: string | null;
-    actorUserId: string;
+    /** The staff member who acts; null when an app does (`appId`). */
+    actorUserId: string | null;
+    /** The app that acts: recorded as itself (`app:<id>`), never as the admin who approved it. */
+    appId?: string | null;
+}
+
+/** Who a manual issue or adjustment records: an app as itself, staff by their account. */
+export function giftCardWriteActor(input: { actorUserId: string | null; appId?: string | null }): { type: "system" | "admin"; id: string | null } {
+    return input.appId ? { type: "system", id: `app:${input.appId}` } : { type: "admin", id: input.actorUserId };
 }
 
 export interface ManualGiftCardResult {
@@ -241,8 +249,9 @@ export async function issueManualGiftCard(
     const giftCardId = await giftCardIdFromRequestKey("manual", requestKey);
     const existing = await db.select({ id: giftCards.id, codeCiphertext: giftCards.codeCiphertext, issuedByUserId: giftCards.issuedByUserId })
         .from(giftCards).where(eq(giftCards.id, giftCardId)).get();
+    const issuedByUserId = input.appId ? null : input.actorUserId;
     if (existing) {
-        if (existing.issuedByUserId !== input.actorUserId) {
+        if (existing.issuedByUserId !== issuedByUserId) {
             throw new ValidationError("This request was already used. Start a new gift card.");
         }
         return { giftCardId, code: await decryptGiftCardCode(keys, existing.codeCiphertext), created: false };
@@ -257,9 +266,9 @@ export async function issueManualGiftCard(
         recipient: input.recipient,
         message: input.message,
         note: input.note,
-        issuedByUserId: input.actorUserId,
+        issuedByUserId,
         idempotencyKey: `issue:manual:${giftCardId}`,
-        actor: { type: "admin", id: input.actorUserId },
+        actor: giftCardWriteActor(input),
     });
     try {
         await safeBatch(db, [...built.statements, ...extraStatements(giftCardId)] as never);
@@ -267,7 +276,7 @@ export async function issueManualGiftCard(
         // A concurrent retry of the same request won the insert.
         const winner = await db.select({ codeCiphertext: giftCards.codeCiphertext, issuedByUserId: giftCards.issuedByUserId })
             .from(giftCards).where(eq(giftCards.id, giftCardId)).get();
-        if (winner && winner.issuedByUserId === input.actorUserId) {
+        if (winner && winner.issuedByUserId === issuedByUserId) {
             return { giftCardId, code: await decryptGiftCardCode(keys, winner.codeCiphertext), created: false };
         }
         throw error;
