@@ -32,13 +32,16 @@ import { validateCheckoutAttributes } from "./attributes";
 //   their priority).
 // - The price rounds half-up to the market's price increment and is never
 //   zero; buyer-input surcharges are added on top. A price the app answers
-//   in the store's currency (`currency: "store"`) converts at the checkout's
-//   one rate first (`presentShopMinor`), as a product price does.
+//   in the store's currency (`currency: "store"`) converts exactly as a
+//   product price does (`storeAmountMinor`, the catalogue's `fxPriceMinor` at
+//   the checkout's one rate: rate, adjustment, rounding and ending).
 //
 // Add-ons (`adjustments`, pure, `resolveAppLineAdjustments`): added to each
 // unit after the whole precedence, whatever priced the line (sale, segment
 // and list lines take them too). A fixed add-on rounds half-up to the cart's
-// price increment, converting from the store's currency like a price; a
+// price increment; one in the store's currency converts at the checkout's
+// rate with the market's adjustment, but without its rounding step or
+// ending (`storeAmountMinor`: those are the item's price point); a
 // share (`percent`) is taken of the item's unit price as cart validation
 // prices it. Neither ever rounds to nothing (one increment). Every app's
 // add-ons apply, in priority order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per
@@ -51,10 +54,9 @@ import { validateCheckoutAttributes } from "./attributes";
 
 import type { Database } from "@scalius/database/client";
 import { LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOutput } from "@scalius/shared/plugins";
-import type { AppLinePrice, ResolvedPriceSource } from "@scalius/shared/market-pricing";
+import { storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
-import { presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
 
 /** Two apps whose purchase options a line carries both priced it. */
 export const PURCHASE_OPTIONS_CONFLICT_REASON = "purchase_options_conflict";
@@ -174,8 +176,13 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300) } : null,
             })),
         });
-        return resolveAppLinePricing(items, lineIds, results, preliminary.money, apps);
+        return resolveAppLinePricing(items, lineIds, results, storeAmountConversionOf(preliminary), apps);
     };
+}
+
+/** How a validated cart converts an app's store-currency amounts: its money and its market's FX policy. */
+export function storeAmountConversionOf(result: Pick<StorefrontCartValidationResult, "money" | "marketAuthority">): StoreAmountConversion {
+    return { money: result.money, fx: result.marketAuthority?.market?.fx ?? null };
 }
 
 /**
@@ -187,12 +194,12 @@ export function resolveAppLinePricing(
     items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOptions" | "bundle">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
-    money: PresentmentMoney,
+    conversion: StoreAmountConversion,
     apps?: Pick<CheckoutAppFunctions, "report">,
 ): AppLinePricing {
     const pricing = {
-        prices: resolveAppLinePrices(items, lineIds, results, apps, money),
-        adjustments: resolveAppLineAdjustments(items, lineIds, results, money, apps),
+        prices: resolveAppLinePrices(items, lineIds, results, apps, conversion),
+        adjustments: resolveAppLineAdjustments(items, lineIds, results, conversion, apps),
     };
     assertPurchaseOptionPrices(items, pricing);
     return pricing;
@@ -204,8 +211,8 @@ export function resolveAppLinePrices(
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     apps?: Pick<CheckoutAppFunctions, "report">,
-    /** The checkout's money: converts a price the app answered in the store's currency. Absent: every price is in the cart's. */
-    money?: PresentmentMoney,
+    /** How the checkout converts a price the app answered in the store's currency. Absent: every price is in the cart's. */
+    conversion?: StoreAmountConversion,
 ): Map<number, AppLinePrice> {
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
     const prices = new Map<number, AppLinePrice>();
@@ -220,7 +227,7 @@ export function resolveAppLinePrices(
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} has an invalid app price; it was skipped.`);
                 continue;
             }
-            const unitPriceMinor = answer.currency === "store" && money ? presentShopMinor(money, answer.unitPriceMinor) : answer.unitPriceMinor;
+            const unitPriceMinor = answer.currency === "store" && conversion ? storeAmountMinor(answer.unitPriceMinor, conversion, "price") : answer.unitPriceMinor;
             if (item.isGiftCard) continue;
             const options = (item.purchaseOptions ?? []).map((option) => option.id);
             if (options.length > 0) {
@@ -304,9 +311,10 @@ export function resolveAppLineAdjustments(
     items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
-    money: PresentmentMoney,
+    conversion: StoreAmountConversion,
     apps?: Pick<CheckoutAppFunctions, "report">,
 ): Map<number, AppLineAddOn[]> {
+    const increment = conversion.money.incrementMinor;
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
     const adjustments = new Map<number, AppLineAddOn[]>();
     for (const result of results) {
@@ -333,9 +341,9 @@ export function resolveAppLineAdjustments(
                 list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent });
             } else {
                 const amountMinor = answer.currency === "store"
-                    ? presentShopMinor(money, answer.amountMinor)
-                    // A positive add-on never rounds to nothing: one increment, as a converted fee.
-                    : Math.max(money.incrementMinor, roundToIncrementMinor(answer.amountMinor, money.incrementMinor));
+                    ? storeAmountMinor(answer.amountMinor, conversion, "add_on")
+                    // A positive add-on never rounds to nothing: one increment, as a converted one.
+                    : Math.max(increment, roundToIncrementMinor(answer.amountMinor, increment));
                 list.push({ appId: result.pluginId, title: answer.title, amountMinor });
             }
             adjustments.set(item.index, list);

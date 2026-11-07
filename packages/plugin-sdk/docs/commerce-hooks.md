@@ -108,7 +108,7 @@ A `checkout.discounts` answer may carry `commit: [{ as, record }]` (up to four) 
 
 `cart.line_prices` may answer `adjustments`: add-ons to each unit (an engraving, gift wrap, a protection plan). Each is one of:
 
-- `{ lineId, amountMinor, title }`: a fixed amount in the cart's currency, or with `currency: "store"` in the store's (`cart.storeCurrency`), which core converts at the checkout's one locked rate and rounds exactly as it does a product price. A fee from your settings is a store amount: answer it with `currency: "store"` and it is right in every market.
+- `{ lineId, amountMinor, title }`: a fixed amount in the cart's currency, or with `currency: "store"` in the store's (`cart.storeCurrency`). Core converts a store amount with the catalogue's own conversion at the checkout's one locked rate, the market's price adjustment included, then rounds it half-up to the market's increment. It takes neither the market's rounding step nor its ending: those make the item's price point, and an add-on ending again would stack a second charm price and can double a small fee (in a USD market at 0.0082, +10%, ending .99, a ৳50 wrap is $0.45, not $0.99). In the store's own currency it still takes the adjustment and rounds to the increment (৳50.50 at whole taka is ৳51). A fee from your settings is a store amount: answer it with `currency: "store"` and it is right in every market.
 - `{ lineId, percent, title }`: a share (at most two decimals, up to 1,000) of the item's unit price as checkout charges it: after every list, sale and app price (a subscription's), with the buyer-input surcharges, before add-ons and discounts. It is right in every market and on any app's price.
 
 Rules:
@@ -117,7 +117,7 @@ Rules:
 - Every app's add-ons apply, in priority order, at most five per line. Each rounds half-up to the market's price increment; a positive one never rounds to nothing (it takes one increment).
 - A gift card takes none: the answer is skipped and logged. A bundle line (the `bundle` of the function's `lines` input) or a sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price. Skip bundle lines yourself.
 - They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails, and the order line keeps it as `adjustments: [{ appId, title, amountMinor }]`.
-- `prices` take `currency: "store"` too. When two apps price one one-time line, the first by priority wins and both apps' logs say which price was used.
+- `prices` take `currency: "store"` too, and convert exactly as a product price does, rounding step and ending included (৳1,200 is $10.99 in that market, from your app as from the catalogue). When two apps price one one-time line, the first by priority wins and both apps' logs say which price was used.
 
 ### Failure policy and limits
 

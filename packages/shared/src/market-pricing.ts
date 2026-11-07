@@ -196,6 +196,49 @@ export function fxPriceMinor(baseMinor: number, conversion: FxConversion): numbe
   return value;
 }
 
+/** What a checkout converts a store-currency amount with: its one rate and its market's FX policy. */
+export interface StoreAmountConversion {
+  /** The checkout's money (`PresentmentMoney`): its one locked rate, both currencies' places and the market's increment. */
+  money: { rate: string; decimalPlaces: number; shopDecimalPlaces: number; incrementMinor: number };
+  /** The market's FX policy (`PricingMarket.fx`); null when the market prices at base prices. */
+  fx: FxConversion | null;
+}
+
+/**
+ * An amount an app answers in the store's currency (`currency: "store"`),
+ * in the checkout's currency: the catalogue's own conversion
+ * (`fxPriceMinor`) at the checkout's one rate, so it is × rate × (1 +
+ * the market's adjustment) exactly as a product price is.
+ *
+ * - A `price` (an app's price for the line: it is the item's price) rounds
+ *   and ends exactly as a product price: ৳1,200 in a USD market at 0.0082,
+ *   +10%, rounded up to $1 and ending in .99 is $10.99 either way.
+ * - An `add_on` rounds half-up to the market's increment and takes neither
+ *   its rounding step nor its ending. Those make the item's price point; an
+ *   add-on ending again would stack a second charm price on the item and
+ *   can double a small fee (a ৳50 wrap is $0.45 there, never $0.99).
+ *
+ * In the store's own currency (rate 1) the market's adjustment still applies
+ * and the amount rounds to the increment (৳50.50 at whole taka is ৳51).
+ * A positive amount never rounds to nothing (one increment); zero stays zero.
+ */
+export function storeAmountMinor(amountMinor: number, conversion: StoreAmountConversion, kind: "price" | "add_on"): number {
+  const { money, fx } = conversion;
+  const price = kind === "price";
+  return fxPriceMinor(amountMinor, {
+    policy: {
+      // The checkout's rate, never the market row's newer one.
+      rate: money.rate,
+      adjustmentBps: fx?.policy.adjustmentBps ?? 0,
+      roundingMinor: price ? fx?.policy.roundingMinor ?? null : null,
+      endingMinor: price ? fx?.policy.endingMinor ?? null : null,
+    },
+    fromDecimalPlaces: money.shopDecimalPlaces,
+    toDecimalPlaces: money.decimalPlaces,
+    incrementMinor: money.incrementMinor,
+  });
+}
+
 /**
  * The largest base amount whose market price is at most `marketMinor` (−1
  * when none is): `fxPriceMinor` never decreases, so a buyer's "at most"

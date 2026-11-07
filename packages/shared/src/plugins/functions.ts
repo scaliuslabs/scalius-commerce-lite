@@ -370,10 +370,16 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * as part of the unit price.
  *
  * Amounts are in the cart's currency unless the answer says
- * `currency: "store"`: then core converts them at the checkout's one locked
- * rate, exactly as it converts a product price. Every amount is rounded
- * half-up to the market's price increment; a positive one never rounds to
- * nothing (it takes one increment).
+ * `currency: "store"`: then core converts them with the catalogue's own
+ * conversion at the checkout's one locked rate, the market's price
+ * adjustment included (`storeAmountMinor`). A price then rounds and ends
+ * exactly as a product price does (৳1,200 in a USD market at 0.0082, +10%,
+ * ending .99 is $10.99, as the product is). An add-on rounds half-up to the
+ * market's increment without the market's rounding step or ending, which
+ * make the item's price point (a ৳50 wrap there is $0.45, not $0.99). A
+ * cart-currency amount, and a store-currency one in the store's own
+ * currency, rounds half-up to the increment (৳50.50 at whole taka is ৳51).
+ * A positive amount never rounds to nothing (it takes one increment).
  */
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
