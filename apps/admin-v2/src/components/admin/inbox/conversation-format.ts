@@ -1,6 +1,7 @@
 // Pure presentation rules for conversations: titles, list previews, event
 // lines and author names. Shared by the inbox and the order page card.
 import type { InboxMessageKey } from "~/i18n/inbox";
+import { staffActor, type Actor } from "~/lib/actor";
 
 type T = (key: InboxMessageKey, vars?: Record<string, string | number>) => string;
 
@@ -60,15 +61,17 @@ export function eventText(
   return t("event.other");
 }
 
+/** `actorText` words a colleague (`useActorText`): their name, or "Former admin" for a removed account. */
 export function authorName(
   t: T,
   message: { authorType: string; authorUserId: string | null; authorName: string | null },
   currentUserId: string | null,
   customerName: string | null,
+  actorText: (actor: Actor) => string,
 ): string {
   if (message.authorType === "staff") {
     if (currentUserId && message.authorUserId === currentUserId) return t("you");
-    return message.authorName?.trim() || t("staffFallback");
+    return actorText(staffActor(message.authorName));
   }
   if (message.authorType === "customer" || message.authorType === "guest_receipt") {
     return customerName?.trim() || t("unknownCustomer");

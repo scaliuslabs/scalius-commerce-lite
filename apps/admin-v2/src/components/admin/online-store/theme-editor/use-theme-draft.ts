@@ -21,6 +21,7 @@ import { toast } from "~/lib/toast";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
+import { draftSaver, type Actor } from "~/lib/actor";
 import { apiData } from "~/lib/api";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { actionErrorText } from "../action-error";
@@ -92,7 +93,8 @@ export interface SavedDraft {
 }
 
 export interface Conflict {
-  name: string | null;
+  /** Who saved the draft over this editor's, when the server's draft says. */
+  by: Actor | null;
   at: string | null;
 }
 
@@ -159,10 +161,10 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
 
   /** Names who saved over the editor's draft, from the server's draft now. */
   const noteConflict = useCallback(async () => {
-    setConflict({ name: null, at: null });
+    setConflict({ by: null, at: null });
     try {
       const { data } = await refetch();
-      setConflict({ name: data?.draft.updatedByName ?? null, at: data?.draft.updatedAt ?? null });
+      setConflict({ by: data ? draftSaver(data.draft) : null, at: data?.draft.updatedAt ?? null });
     } catch {
       // The banner still offers reload and overwrite.
     }

@@ -7,12 +7,14 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useActorText } from "~/components/admin/shared/ActorName";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { standaloneLinkClassName } from "~/components/ui/link";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { formatDateTime, useMessages } from "~/i18n";
 import { giftCardsMessages, type GiftCardMessageKey } from "~/i18n/gift-cards";
+import { giftCardIssuer, typedActor } from "~/lib/actor";
 import type { GiftCardDetail as GiftCardDetailRecord, GiftCardTransaction } from "~/lib/api-query-options/gift-cards";
 import { AdjustBalanceDialog, EditDetailsDialog, ExpiryDialog, giftCardErrorText } from "./GiftCardActionDialogs";
 import { GiftCardStatusBadge } from "./gift-card-fields";
@@ -37,12 +39,14 @@ function OrderLink({ id, number }: { id: string; number: string | null }) {
   );
 }
 
-/** Where the card came from: an order (bought or store credit) or a staff member. */
-function SourceText({ card }: { card: GiftCardDetailRecord }) {
+/** Where the card came from: an order (bought or store credit), or whoever issued it (a staff member or an app). */
+function SourceText({ card, transactions }: { card: GiftCardDetailRecord; transactions: GiftCardTransaction[] }) {
   const t = useMessages(giftCardsMessages);
   const order = card.sourceOrder;
+  const issuer = card.source === "manual" ? giftCardIssuer(card, transactions.find((transaction) => transaction.kind === "issue")) : null;
+  const actorText = useActorText(issuer);
   if (card.source === "manual") {
-    return <>{card.issuedBy?.name ? t("source_manual", { name: card.issuedBy.name }) : t("source_manualNoName")}</>;
+    return <>{issuer ? t("source_manual", { name: actorText(issuer) }) : t("source_manualNoName")}</>;
   }
   const withOrder = card.source === "refund" ? "source_refund" : "source_purchase";
   if (!order) return <>{t(card.source === "refund" ? "source_refundNoOrder" : "source_purchaseNoOrder")}</>;
@@ -60,15 +64,15 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function actorText(transaction: GiftCardTransaction, t: (key: GiftCardMessageKey, vars?: Record<string, string | number>) => string): string {
-  if (transaction.actorType === "admin") return transaction.actorName ? t("byName", { name: transaction.actorName }) : t("byStaff");
-  if (transaction.actorType === "customer") return t("byCustomer");
-  return t("bySystem");
+/** Who moved the balance: the customer at checkout, else a staff member, an app or the system. */
+function byWhom(transaction: GiftCardTransaction, t: (key: GiftCardMessageKey, vars?: Record<string, string | number>) => string, actorText: (actor: ReturnType<typeof typedActor>) => string): string {
+  return transaction.actorType === "customer" ? t("byCustomer") : t("byName", { name: actorText(typedActor(transaction)) });
 }
 
 /** Newest first: what moved the balance, by whom, on which order. */
 function TransactionsCard({ card, transactions }: { card: GiftCardDetailRecord; transactions: GiftCardTransaction[] }) {
   const t = useMessages(giftCardsMessages);
+  const actorText = useActorText(transactions.map((transaction) => (transaction.actorType === "customer" ? null : typedActor(transaction))));
   return (
     <Card>
       <CardHeader>
@@ -83,7 +87,7 @@ function TransactionsCard({ card, transactions }: { card: GiftCardDetailRecord; 
               <div className="min-w-0 space-y-0.5">
                 <p className="text-body font-medium">{t(`kind_${transaction.kind}`)}</p>
                 <p className="text-body text-muted-foreground">
-                  {when(transaction.createdAt)} · {actorText(transaction, t)}
+                  {when(transaction.createdAt)} · {byWhom(transaction, t, actorText)}
                   {transaction.orderId ? (
                     <> · <OrderLink id={transaction.orderId} number={transaction.orderNumber} /></>
                   ) : null}
@@ -190,7 +194,7 @@ export function GiftCardDetail({ card, transactions }: { card: GiftCardDetailRec
                 <Fact label={t("expires")}>
                   {lastDay ? (card.expired ? t("expiredOn", { date: lastDay }) : t("expiresOn", { date: lastDay })) : t("never")}
                 </Fact>
-                <Fact label={t("source")}><SourceText card={card} /></Fact>
+                <Fact label={t("source")}><SourceText card={card} transactions={transactions} /></Fact>
                 <Fact label={t("created")}>{when(card.createdAt)}</Fact>
               </dl>
             </CardContent>

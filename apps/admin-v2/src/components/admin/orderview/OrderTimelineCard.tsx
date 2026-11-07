@@ -29,6 +29,8 @@ import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
 import { formatSavedMajorAmount } from "~/lib/order-money-format";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
+import { timelineActor } from "~/lib/actor";
+import { useActorText } from "~/components/admin/shared/ActorName";
 import { formatOrderDay, formatOrderTime, formatOrderTimestamp } from "./formatters";
 import type { Order } from "./types";
 import { matchesShortcut } from "../layout/shortcuts";
@@ -91,6 +93,13 @@ function OrderTimeline({ order }: { order: Order }) {
   const saved = resolveSavedOrderMoneySummary(order);
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : fmt(amount));
   const events = query.data?.pages.flatMap((page) => page.events) ?? [];
+  // `actorId` (`app:<id>` for an app) is optional until every API sends it: without it a line names its staff author only.
+  const actors = new Map(events.map((event) => [event.id, timelineActor(event as typeof event & { actorId?: string | null })]));
+  const actorText = useActorText([...actors.values()]);
+  const actorOf = (id: string) => {
+    const actor = actors.get(id);
+    return actor ? actorText(actor) : null;
+  };
   const nextCursor = query.data?.pages.at(-1)?.nextCursor;
   const canAppend = (query.data?.pages.length ?? 0) < 2;
 
@@ -208,7 +217,8 @@ function OrderTimeline({ order }: { order: Order }) {
                 <h3 className="text-body font-medium text-muted-foreground">{group.day}</h3>
                 <ol className="space-y-3 border-s ps-4">
                   {group.events.map((event) => {
-                    const line = describeTimelineEvent(event, t, o, money);
+                    const actor = actorOf(event.id);
+                    const line = describeTimelineEvent({ ...event, actor }, t, o, money);
                     const comment = event.kind === "comment";
                     return (
                       <li key={event.id} data-timeline-event={event.id} tabIndex={-1} className="space-y-0.5 wrap-anywhere rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -217,7 +227,7 @@ function OrderTimeline({ order }: { order: Order }) {
                         <div className="flex flex-wrap items-center gap-x-2">
                           <p className="text-muted-foreground">
                             {/* "Order created by Rina" already names who. */}
-                            {[event.kind === "placed" ? null : event.actorName, group.day ? formatOrderTime(event.createdAt) : formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
+                            {[event.kind === "placed" ? null : actor, group.day ? formatOrderTime(event.createdAt) : formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
                           </p>
                           {comment && event.own ? (
                             <Button type="button" variant="link" size="sm" onClick={() => setDeleting(event.id)}>

@@ -12,6 +12,7 @@ import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 import { formatOrderTimestamp } from "../orderview/formatters";
 import { authorName, eventText } from "./conversation-format";
+import { useStaffActorText } from "~/components/admin/shared/ActorName";
 import { fetchOlderMessages, fetchMessagesAround, type StaffMessage, type StaffThread } from "~/lib/api-query-options/inbox";
 import { ConversationProductCards } from "./ConversationProductCards";
 import { attachmentUrl } from "./inbox-api";
@@ -50,6 +51,8 @@ export function ConversationMessages(props: ConversationMessagesProps) {
 
 function ThreadMessages({ thread, currentUserId, className, restoreFocus, active = true, onReadFrontier, followRequest, finding = false, findRequest, onCloseFind }: ConversationMessagesProps & { restoreFocus: { current: boolean } }) {
   const t = useMessages(inboxMessages);
+  // Only colleagues author here (an app cannot write in the Inbox), so no app names are read.
+  const actorText = useStaffActorText();
   const od = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const [history, setHistory] = useState(() => ({ messages: mergeMessages([], thread.messages).slice(-MAX_RENDERED_MESSAGES), hasMore: thread.hasMore || thread.messages.length > MAX_RENDERED_MESSAGES }));
@@ -336,7 +339,7 @@ function ThreadMessages({ thread, currentUserId, className, restoreFocus, active
           }
           const fromStore = message.authorType === "staff";
           const internal = message.visibility === "internal";
-          const name = authorName(t, message, currentUserId, thread.customerName);
+          const name = authorName(t, message, currentUserId, thread.customerName, actorText);
           return (
             <Fragment key={message.id}>
               {gap ? <li>{olderControl(message.seq)}</li> : null}

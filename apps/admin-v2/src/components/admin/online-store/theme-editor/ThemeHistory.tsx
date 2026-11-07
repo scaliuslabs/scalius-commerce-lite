@@ -20,12 +20,14 @@ import {
   type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { useActorText } from "~/components/admin/shared/ActorName";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorFull } from "~/i18n/theme-editor-panes";
+import { restorePointAuthor, themePublisher } from "~/lib/actor";
 import { apiData, type ApiResult } from "~/lib/api";
 import { themeVersionDocumentQuery, themeVersionsKey } from "./theme-history-queries";
 
@@ -119,6 +121,8 @@ function VersionItem({ version, live, draft, previewing, busy, sectionName, onPr
   const [comparing, setComparing] = useState(false);
   const document = useQuery(themeVersionDocumentQuery(comparing ? version.revision : null));
   const text = useChangeText([draft], sectionName);
+  const publisher = themePublisher(version);
+  const actorText = useActorText(publisher);
   return (
     <li className="space-y-2 border-b border-border px-4 py-4 last:border-b-0" data-theme-version={version.revision}>
       <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +132,7 @@ function VersionItem({ version, live, draft, previewing, busy, sectionName, onPr
       </div>
       <p className="text-body text-muted-foreground">
         {t("versionAuthor", {
-          name: version.publishedByName ?? t("unknownAuthor"),
+          name: actorText(publisher),
           time: formatDateTime(new Date(version.createdAt), { dateStyle: "medium", timeStyle: "short" }),
         })}
       </p>
@@ -154,12 +158,14 @@ function RestorePointItem({ point, draft, busy, sectionName, onRestore }: {
   const t = useMessages(themeEditorFull);
   const [comparing, setComparing] = useState(false);
   const document = useQuery(restorePointDocumentQuery(comparing ? point.id : null));
+  const author = restorePointAuthor(point);
+  const actorText = useActorText(author);
   return (
     <li className="space-y-2 border-b border-border px-4 py-4 last:border-b-0" data-restore-point={point.id}>
       <h3 className="text-heading-sm">{t(point.reason === "discard" ? "restorePointDiscard" : point.reason === "app" ? "restorePointApp" : "restorePointRestore")}</h3>
       <p className="text-body text-muted-foreground">
-        {t("versionAuthor", {
-          name: point.createdByName ?? t("unknownAuthor"),
+        {t("restorePointAuthor", {
+          name: actorText(author),
           time: formatDateTime(new Date(point.createdAt), { dateStyle: "medium", timeStyle: "short" }),
         })}
       </p>

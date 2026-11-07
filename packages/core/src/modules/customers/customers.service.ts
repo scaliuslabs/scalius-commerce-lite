@@ -509,7 +509,7 @@ export async function createCustomer(
             email: data.email,
             phone: storedPhone(data.phone),
             changeType: "created",
-            actor: "staff",
+            actor: historyActor(actorId),
             actorId,
             createdAt: sql`unixepoch()`,
         }),
@@ -638,6 +638,11 @@ export async function updateCustomer(
     ]);
 }
 
+/** Who a dashboard change was made by: an app's call records `app:<plugin id>`, staff their user id. */
+function historyActor(actorId: string | null): "app" | "staff" {
+    return actorId?.startsWith("app:") ? "app" : "staff";
+}
+
 /** A change-log entry with the record's contact as the batch left it, never a value read before the batch. */
 function historyFromLiveRow(
     db: Database,
@@ -657,7 +662,7 @@ function historyFromLiveRow(
         orderId: value(null).as("order_id"),
         relatedCustomerId: value(null).as("related_customer_id"),
         verifiedContact: value(null).as("verified_contact"),
-        actor: value("staff").as("actor"),
+        actor: value(historyActor(actorId)).as("actor"),
         actorId: value(actorId).as("actor_id"),
         createdAt: sql<number>`unixepoch()`.as("created_at"),
     }).from(customers).where(and(eq(customers.id, customerId), condition)));

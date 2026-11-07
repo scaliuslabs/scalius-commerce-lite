@@ -10,6 +10,8 @@ import { FilterControl } from "~/components/admin/data-table/FilterControl";
 import { ListDate } from "~/components/admin/data-table/ListDate";
 import { serverTableFeatures, useTable, type ColumnDef } from "~/components/admin/data-table/table-config";
 import { FilteredEmptyState } from "~/components/admin/states";
+import { useActorText } from "~/components/admin/shared/ActorName";
+import { typedActor } from "~/lib/actor";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { SearchableSelect } from "~/components/ui/searchable-select";
@@ -102,8 +104,10 @@ export function counterChanges(movement: InventoryMovement, severalLocations = f
 function MovementDetails({ movement }: { movement: InventoryMovement }) {
   const t = useMessages(inventoryMessages);
   const { labels, note, document, keys } = describeMovementNote(movement);
+  const actor = typedActor(movement);
+  const actorText = useActorText(actor);
   const parts = [
-    movement.actorType === "system" ? t("automatic") : t("byName", { name: movement.actorName }),
+    t("byName", { name: actorText(actor) }),
     ...labels.map((label) => t(label)),
     ...(document ? [t(document.label, { number: document.number })] : []),
     ...(keys ? [t(keys.label, { count: keys.count })] : []),

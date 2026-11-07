@@ -23,7 +23,6 @@ export const aiAccessMessages = defineMessages({
     lastUsedLabel: "Last used",
     expires: "Expires",
     never: "Never",
-    formerStaff: "Former staff member",
     close: "Close",
 
     preset_read: "View only",
@@ -204,7 +203,6 @@ export const aiAccessMessages = defineMessages({
     lastUsedLabel: "শেষ ব্যবহার",
     expires: "মেয়াদ শেষ",
     never: "কখনো না",
-    formerStaff: "সাবেক স্টাফ",
     close: "বন্ধ করুন",
 
     preset_read: "শুধু দেখা",

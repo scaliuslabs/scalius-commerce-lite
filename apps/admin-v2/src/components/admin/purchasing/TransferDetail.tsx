@@ -5,6 +5,8 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useActorText } from "~/components/admin/shared/ActorName";
+import { typedActor } from "~/lib/actor";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Progress } from "~/components/ui/progress";
@@ -241,6 +243,7 @@ function ActivityCard({ transfer }: { transfer: Transfer }) {
   const locationName = (id: string) =>
     id === transfer.origin.id ? transfer.origin.name : id === transfer.destination.id ? transfer.destination.name : "";
   const activity = [...transfer.activity].reverse();
+  const actorText = useActorText(activity.map(typedActor));
   return (
     <Card>
       <CardHeader>
@@ -260,7 +263,7 @@ function ActivityCard({ transfer }: { transfer: Transfer }) {
                   <span className="tabular-nums text-muted-foreground">{unitsText(units)}</span>
                 </p>
                 <p className="text-body text-muted-foreground">
-                  {t("receiptBy", { date: formatMoment(event.createdAt) ?? "—", name: event.actorName })}
+                  {t("receiptBy", { date: formatMoment(event.createdAt) ?? "—", name: actorText(typedActor(event)) })}
                 </p>
                 <ul className="space-y-0.5">
                   {event.lines.map((entry) => {

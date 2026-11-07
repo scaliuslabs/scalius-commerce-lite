@@ -98,10 +98,14 @@ const customerHistoryEntrySchema = z.object({
     }),
     /** The proven contact behind signed_up / order_linked / order_moved_*. */
     verifiedContact: z.enum(["email", "phone"]).nullable(),
-    /** Who made the change; `name` is the staff member's name when known. */
+    /**
+     * Who made the change; `name` is the staff member's name when known (null
+     * for a removed account), `appId` the app's plugin id for kind `app`.
+     */
     author: z.object({
-        kind: z.enum(["staff", "buyer", "system"]),
+        kind: z.enum(["staff", "app", "buyer", "system"]),
         name: z.string().nullable(),
+        appId: z.string().nullable(),
     }).nullable(),
     /** The order that moved, for order_moved_in / order_moved_out. */
     order: z.object({ id: z.string(), orderNumber: z.number().int().nullable() }).nullable(),
@@ -694,6 +698,21 @@ const getHistoryRoute = createRoute({
     }
 });
 
+/**
+ * Who made a history entry. An app's dashboard call records `app:<plugin id>`
+ * (entries written before the app kind existed say "staff"), so the id decides.
+ */
+function historyAuthor(
+    actor: string | null,
+    actorId: string | null,
+    actorName: string | null,
+): { kind: "staff" | "app" | "buyer" | "system"; name: string | null; appId: string | null } | null {
+    if (!actor) return null;
+    if (actorId?.startsWith("app:")) return { kind: "app", name: null, appId: actorId.slice(4) };
+    if (actor === "buyer" || actor === "system") return { kind: actor, name: null, appId: null };
+    return { kind: "staff", name: actorName ?? null, appId: null };
+}
+
 app.openapi(getHistoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
@@ -751,6 +770,7 @@ app.openapi(getHistoryRoute, async (c) => {
                 relatedCustomerOrigin: sql<string | null>`${relatedCustomer.origin}`.as("related_customer_origin"),
                 verifiedContact: customerHistory.verifiedContact,
                 actor: customerHistory.actor,
+                actorId: customerHistory.actorId,
                 actorName: sql<string | null>`${user.name}`.as("actor_name"),
                 createdAt: sql<number>`CAST(${customerHistory.createdAt} AS INTEGER)`,
             })
@@ -831,10 +851,10 @@ app.openapi(getHistoryRoute, async (c) => {
 
     const enrichedHistory = history.map(({
         orderId, orderNumber, relatedCustomerId, relatedCustomerName, relatedCustomerPhone,
-        relatedCustomerClaimedAt, relatedCustomerOrigin, actor, actorName, ...record
+        relatedCustomerClaimedAt, relatedCustomerOrigin, actor, actorId, actorName, ...record
     }) => ({
         ...record,
-        author: actor ? { kind: actor, name: actorName ?? null } : null,
+        author: historyAuthor(actor, actorId, actorName),
         order: orderId ? { id: orderId, orderNumber: orderNumber ?? null } : null,
         relatedCustomer: relatedCustomerId
             ? {

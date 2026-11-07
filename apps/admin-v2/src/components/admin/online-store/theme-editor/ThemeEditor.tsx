@@ -41,6 +41,7 @@ import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useActorText } from "~/components/admin/shared/ActorName";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { typingIn } from "~/components/admin/layout/shortcuts";
 import { useHasPermission } from "~/contexts/PermissionContext";
@@ -250,6 +251,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
     skins: appSkinsByKey(workspace.apps),
   }), [appSections, workspace.apps]);
   const draft = useThemeDraft({ workspace, refetch, canEdit, apps: draftApps, staffId });
+  const conflictActorText = useActorText(draft.conflict?.by);
   const theme = draft.working;
   const storeShape = workspace.storeShape;
   const resolved = useMemo(() => resolveThemeForStore(theme, storeShape as Parameters<typeof resolveThemeForStore>[1]), [theme, storeShape]);
@@ -915,8 +917,8 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
     id: JSON.stringify(["conflict", draft.conflict]), tone: "warning", content: (
       <Alert variant="warning">
         <AlertDescription className="me-6">
-          {draft.conflict.name
-            ? t("conflictNamed", { name: draft.conflict.name, time: draft.conflict.at ? formatDateTime(new Date(draft.conflict.at), { timeStyle: "short" }) : "" })
+          {draft.conflict.by
+            ? t("conflictNamed", { name: conflictActorText(draft.conflict.by), time: draft.conflict.at ? formatDateTime(new Date(draft.conflict.at), { timeStyle: "short" }) : "" })
             : t("statusConflict")}
           <span className="mt-2 flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" loading={draft.busy} onClick={() => void draft.reload()}>{t("reloadDraft")}</Button>

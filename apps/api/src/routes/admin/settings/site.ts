@@ -415,8 +415,15 @@ const getThemeEditorRoute = createRoute({
         "application/json": {
           schema: successEnvelope(themeStatusSchema.extend({
             published: z.object({ theme: storefrontThemeDocumentApiSchema, revision: revisionSchema }),
-            /** The shared draft, and who saved it last (the editor's conflict notice names them). */
-            draft: themeDraftReceiptSchema.extend({ theme: storefrontThemeDocumentApiSchema, updatedByName: z.string().max(200).nullable() }),
+            /**
+             * The shared draft, and who saved it last (the editor's conflict notice names them):
+             * the staff member's name, or the plugin id of the app that saved it. A staff id is never sent.
+             */
+            draft: themeDraftReceiptSchema.extend({
+              theme: storefrontThemeDocumentApiSchema,
+              updatedByName: z.string().max(200).nullable(),
+              updatedByApp: z.string().max(160).nullable(),
+            }),
             /** What the theme's fit rules read, as the storefront reads it. */
             storeShape: storeShapeApiSchema,
             /** Every image the draft names (brand, hero slides, section images), for the editor's previews. */
@@ -454,10 +461,14 @@ app.openapi(getThemeEditorRoute, async (c) => {
     }),
   ]);
   const { lastPublished } = boundedStatus(themeStatus(workspace));
-  const { updatedBy: _updatedBy, updatedByName, ...draft } = workspace.draft;
+  const { updatedBy, updatedByName, ...draft } = workspace.draft;
   return ok(c, {
     ...workspace,
-    draft: { ...draftReceipt(draft), updatedByName: updatedByName?.slice(0, 200) ?? null },
+    draft: {
+      ...draftReceipt(draft),
+      updatedByName: updatedByName?.slice(0, 200) ?? null,
+      updatedByApp: updatedBy?.startsWith("app:") ? updatedBy.slice(4, 164) : null,
+    },
     lastPublished,
     storeShape,
     media,

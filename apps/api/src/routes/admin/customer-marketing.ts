@@ -528,8 +528,10 @@ const consentEventSchema = z.object({
     state: z.enum(MARKETING_CONSENT_STATES),
     source: z.enum(MARKETING_CONSENT_SOURCES),
     actor: z.enum(MARKETING_CONSENT_ACTORS),
-    /** A staff member's name or a plugin id. */
+    /** A staff member's name (null for a removed account) or, for actor `plugin`, the app's id. */
     actorName: z.string().nullable(),
+    /** The app's plugin id for actor `plugin`; null otherwise. */
+    appId: z.string().nullable(),
     note: z.string().nullable(),
     contact: pii(["email", "phone"], z.string()),
     consentTextVersion: z.string().nullable(),
@@ -560,6 +562,7 @@ async function marketingPayload(db: Database, customerId: string) {
         events: events.map(({ actorId, ...event }) => ({
             ...event,
             actorName: event.actor === "staff" ? (actorId ? names.get(actorId) ?? null : null) : event.actor === "plugin" ? actorId : null,
+            appId: event.actor === "plugin" ? actorId : null,
         })),
         tags,
     };

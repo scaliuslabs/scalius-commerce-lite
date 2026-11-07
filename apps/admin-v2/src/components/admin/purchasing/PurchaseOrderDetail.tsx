@@ -6,6 +6,8 @@ import { toast } from "~/lib/toast";
 import { ChevronDown, Download, Printer, XCircle } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useActorText } from "~/components/admin/shared/ActorName";
+import { typedActor } from "~/lib/actor";
 import { useStoreIdentity } from "~/components/admin/layout/store-identity";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -373,6 +375,7 @@ function ReceiptsCard({ order, showCosts }: { order: PurchaseOrder; showCosts: b
   const { fmt } = useCurrency();
   const lines = new Map(order.lines.map((line) => [line.id, line]));
   const receipts = [...order.receipts].reverse();
+  const actorText = useActorText(receipts.map(typedActor));
   return (
     <Card>
       <CardHeader>
@@ -385,7 +388,7 @@ function ReceiptsCard({ order, showCosts }: { order: PurchaseOrder; showCosts: b
           {receipts.map((receipt) => (
             <li key={receipt.operationKey} className="space-y-1 px-4 py-3">
               <p className="text-body text-muted-foreground">
-                {t("receiptBy", { date: formatMoment(receipt.createdAt) ?? "—", name: receipt.actorName })}
+                {t("receiptBy", { date: formatMoment(receipt.createdAt) ?? "—", name: actorText(typedActor(receipt)) })}
               </p>
               <ul className="space-y-1">
                 {receipt.lines.map((entry) => {

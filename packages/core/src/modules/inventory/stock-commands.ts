@@ -154,6 +154,16 @@ export function commandActorName(createdBy: string | null, staffName: string | n
   return staffName ?? "Former admin";
 }
 
+/** Who made a stock step, as a kind the dashboard words in its own language: `actorName` is the staff name or the app id. */
+export type CommandActorType = "system" | "app" | "admin" | "former_admin";
+
+/** The kind of actor `commandActorName` names: none, an app (`app:<id>`), a staff member, or a removed account. */
+export function commandActorType(createdBy: string | null, staffName: string | null | undefined): CommandActorType {
+  if (!createdBy) return "system";
+  if (createdBy.startsWith("app:")) return "app";
+  return staffName ? "admin" : "former_admin";
+}
+
 export function commandActorUserIdSql(): SQL<string | null> {
   return sql<string | null>`(CASE WHEN ${inventoryCommands.createdBy} LIKE 'scanner:%' THEN substr(${inventoryCommands.createdBy}, 9) ELSE ${inventoryCommands.createdBy} END)`;
 }

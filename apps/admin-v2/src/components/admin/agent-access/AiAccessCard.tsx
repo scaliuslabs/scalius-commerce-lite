@@ -6,6 +6,7 @@ import { toast } from "~/lib/toast";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { ActorName } from "~/components/admin/shared/ActorName";
 import { useSaveBar } from "~/components/admin/shared/SaveBar";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
 import {
@@ -49,6 +50,7 @@ import {
 } from "./api";
 import type { AgentAuditEvent, AgentConnection, AgentRisk } from "./types";
 import { sameFormValue } from "~/lib/form-values";
+import { connectionOwner } from "~/lib/actor";
 
 const ACTIVITY_LIMIT = 10;
 const RISKS: ReadonlySet<string> = new Set<AgentRisk>(["read", "write", "destructive", "financial", "security"]);
@@ -192,11 +194,11 @@ function ConnectionRow({
     },
     onError: () => toast.error(t("disconnectFailed")),
   });
-  const details: Array<[string, string]> = [
+  const details: Array<[string, ReactNode]> = [
     [t("type"), t(`kind_${connection.kind}`)],
     [t("access"), t(`preset_${connection.preset}`)],
     [t("worksWith"), t(`resource_${connection.resource}`)],
-    [t("addedBy"), connection.ownerName ?? t("formerStaff")],
+    [t("addedBy"), <ActorName key="owner" actor={connectionOwner(connection)} />],
     [t("added"), formatDate(connection.createdAt) ?? t("never")],
     [t("lastUsedLabel"), lastUsed ?? t("never")],
     [t("expires"), formatDate(connection.expiresAt) ?? t("never")],
