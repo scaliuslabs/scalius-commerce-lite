@@ -5,6 +5,7 @@ import { resolveStaffOrderSalesChannel } from "../../sales-channels";
 import type { Database } from "@scalius/database/client";
 import {
     customers,
+    orders,
     OrderStatus,
     PaymentMethod,
     FulfillmentStatus,
@@ -22,6 +23,7 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "../../payments";
 import { paymentMethodsDocument, validateCustomerPhoneCountry } from "../../settings";
 import {
+    ADMIN_ORDER_CREATE_REQUEST_MISMATCH,
     buildAdminOrderCreateAttemptCommit,
     buildAdminOrderCreateAttemptGuard,
     buildAdminOrderCreateAttemptIdentity,
@@ -45,6 +47,28 @@ export class ManualOrderTotalChangedError extends AppError {
         super(409, "manual_order_total_changed", "The order total changed. Review the new total, then create the order again.", { totalAmount });
         this.name = "ManualOrderTotalChangedError";
     }
+}
+
+/**
+ * A replay of a committed order whose reviewed `expectedTotal` is not the
+ * order's total: the request already placed that order, at another total, so
+ * it is never answered as a plain success. It is the committed request
+ * mismatch (409 `admin_order_create_request_mismatch`, `state: "committed"`,
+ * the order's id and total), not `manual_order_total_changed`, which tells
+ * the caller to create the order again: that would place a second order.
+ */
+async function assertReplayAtReviewedTotal(db: Database, data: CreateOrderInput, response: { id: string }): Promise<void> {
+    if (data.expectedTotal === undefined) return;
+    const placed = await db.select({ totalMinor: orders.totalAmountMinor, places: orders.currencyDecimalPlaces })
+        .from(orders).where(eq(orders.id, response.id)).get();
+    if (!placed || toMinor(data.expectedTotal, placed.places) === placed.totalMinor) return;
+    throw new AppError(409, ADMIN_ORDER_CREATE_REQUEST_MISMATCH, "This request already placed the order, at another total than the one reviewed. Open it instead of placing it again.", {
+        state: "committed",
+        canRetryWithNewKey: false,
+        orderId: response.id,
+        reason: "total_differs",
+        totalAmount: fromMinor(placed.totalMinor, placed.places),
+    });
 }
 
 /** What this request committed (absent on a replay). */
@@ -131,7 +155,10 @@ export async function createManualOrder(
     const replayed = (response: { id: string }): CreateManualOrderResult => ({ response, committed: null });
     const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
     const existingReplay = await resolveAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
-    if (existingReplay) return replayed(existingReplay.response);
+    if (existingReplay) {
+        await assertReplayAtReviewedTotal(db, data, existingReplay.response);
+        return replayed(existingReplay.response);
+    }
     await validateCustomerPhoneCountry(db, data.customerPhone);
     const paymentMethods = data.paymentMethod === PaymentMethod.NET_TERMS ? await paymentMethodsDocument.read(db) : null;
     if (paymentMethods && options.automated && !(paymentMethods.enabledMethods ?? []).includes(PaymentMethod.NET_TERMS)) {
@@ -144,7 +171,10 @@ export async function createManualOrder(
     // response still replays. Fresh requests validate before claiming, which
     // lets a merchant correct a rejected phone without burning the request key.
     const claim = await claimAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
-    if (claim.status === "replay") return replayed(claim.response);
+    if (claim.status === "replay") {
+        await assertReplayAtReviewedTotal(db, data, claim.response);
+        return replayed(claim.response);
+    }
     if (claim.status === "processing") {
         throw new ServiceUnavailableError(
             "This manual order is still being created. Retry the same form in a moment.",

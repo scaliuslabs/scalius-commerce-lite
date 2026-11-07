@@ -412,7 +412,40 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     ...(input.salesChannelId && input.salesChannelId !== ONLINE_STORE_CHANNEL_ID ? { salesChannelId: input.salesChannelId } : {}),
     discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
     shippingCharge: normalizeAmount(input.shippingCharge),
+    // The structured addresses decide where it ships, how it is taxed and what is
+    // printed: another country, postal code or billing address is another order.
+    ...presentAddress(input),
+    // Who placed it: staff are the default, so naming them is the same request.
+    ...(input.channel && input.channel !== "admin" ? { channel: input.channel } : {}),
   };
+}
+
+/** The structured address fields a request names, trimmed; an absent or empty one is left out, so it hashes as before. */
+function presentAddress(input: CreateOrderInput): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const text = (key: string, value: string | null | undefined, upper = false) => {
+    const trimmed = value?.trim();
+    if (trimmed) out[key] = upper ? trimmed.toUpperCase() : trimmed;
+  };
+  text("shippingCountryCode", input.shippingCountryCode, true);
+  text("shippingAddressLine2", input.shippingAddressLine2);
+  text("shippingDependentLocality", input.shippingDependentLocality);
+  text("shippingLocality", input.shippingLocality);
+  text("shippingAdminArea", input.shippingAdminArea);
+  text("shippingPostalCode", input.shippingPostalCode);
+  text("shippingCompany", input.shippingCompany);
+  if (input.skipAddressValidation) out.skipAddressValidation = true;
+  if (typeof input.billingSameAsShipping === "boolean") out.billingSameAsShipping = input.billingSameAsShipping;
+  text("billingCountryCode", input.billingCountryCode, true);
+  text("billingName", input.billingName);
+  text("billingCompany", input.billingCompany);
+  text("billingAddress", input.billingAddress);
+  text("billingAddressLine2", input.billingAddressLine2);
+  text("billingDependentLocality", input.billingDependentLocality);
+  text("billingLocality", input.billingLocality);
+  text("billingAdminArea", input.billingAdminArea);
+  text("billingPostalCode", input.billingPostalCode);
+  return out;
 }
 
 function normalizeAmount(amount: number): number {

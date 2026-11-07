@@ -77,6 +77,7 @@ export const APP_ERROR_CODES = {
   purchase_order_state_conflict: { status: 409, meaning: "The purchase order's status refuses the write (an ordered one's lines, a received or cancelled one)." },
   inventory_transfer_revision_conflict: { status: 409, meaning: "The stock transfer changed since its revision was read." },
   order_revision_conflict: { status: 409, meaning: "The order changed since its revision was read (a return request names the order's revision)." },
+  admin_order_create_request_mismatch: { status: 409, meaning: "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey)." },
   return_revision_conflict: { status: 409, meaning: "The return changed since its revision was read." },
   return_command_in_progress: { status: 409, meaning: "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key." },
   segment_revision_conflict: { status: 409, meaning: "The customer segment changed since its revision was read." },

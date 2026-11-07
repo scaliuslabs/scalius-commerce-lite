@@ -532,5 +532,11 @@
   "from": "dd1068f7687f4f90",
   "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
   "reason": "The test harness now runs an app under its plan's limits, as the platform does (default Free): the 51st platform call of a run is refused with quota_subrequests and recorded in the new `breaches`, ctx.api.call and ctx.http.fetch past 60 a minute are refused, and running jobs stop at the plan's count; `plan` says which plan it used, and the new optional `plan` and `clock` options choose the plan and move time for the per-minute limits. The result only gains members an app reads; nothing constructs it. An app test that passed while breaking on Free now fails, which is the point: such an app is stopped after five breaches in production. Pass `plan: \"paid\"` for a Paid-only app."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dd1068f7687f4f90",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Sealed codes are only added (APP_ERROR_CODES): orders.create already answered admin_order_create_request_mismatch when its Idempotency-Key belonged to another request (another address, line or payment, or a placed order replayed at another reviewed total); the code is now sealed with its details (state, orderId, canRetryWithNewKey) so an app can open the order it placed instead of placing it again. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new member."
  }
 ]

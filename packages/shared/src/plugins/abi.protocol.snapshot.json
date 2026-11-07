@@ -15421,6 +15421,10 @@
    "status": 409,
    "meaning": "The order changed since its revision was read (a return request names the order's revision)."
   },
+  "admin_order_create_request_mismatch": {
+   "status": 409,
+   "meaning": "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey)."
+  },
   "return_revision_conflict": {
    "status": 409,
    "meaning": "The return changed since its revision was read."
