@@ -343,6 +343,14 @@ function selectedPurchaseOptions(): CartLinePurchaseOption[] | null {
   return chosen.length === 0 ? [] : normalizeCartLinePurchaseOptions(chosen);
 }
 
+/** What the buyer checked, for islands: the line's options, or every checked one when there are more than a line takes. */
+function checkedPurchaseOptions(): CartLinePurchaseOption[] {
+  return selectedPurchaseOptions() ?? purchaseOptionInputs()
+    .filter((entry) => entry.checked && entry.value)
+    .map((input) => ({ id: input.value, title: input.dataset.purchaseOptionTitle || input.value }))
+    .sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+}
+
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
 function hideExpiredOffers() {
   const now = Date.now() / 1000;
@@ -569,7 +577,7 @@ function loadExtras() {
     const summary = cache.summary;
     void import("./island-state").then(({ islandState }) => {
       if (signal.aborted) return;
-      publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, options: selectedPurchaseOptions, stock: getBuyerStockSummary });
+      publishState = islandState({ state, summary, selected: exactVariant, quantity: currentQuantity, options: checkedPurchaseOptions, stock: getBuyerStockSummary });
       // The first state goes out in a frame too, never ahead of what the page shows.
       requestAnimationFrame(publish);
     }, staleAsset);
