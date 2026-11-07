@@ -181,6 +181,8 @@ app.openapi(validateDiscountRoute, async (c) => {
       registrations,
     }),
     currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
+    // A market's preview is in its currency; an app's store amounts are in the shop's.
+    storeCurrency: { code: shopCurrency.code, decimalPlaces: shopCurrency.decimalPlaces },
     lines: lines.map(({ item, index, variantId }) => ({
       lineId: `cart:${index}:${variantId}`,
       productId: item.id,

@@ -361,8 +361,12 @@ export function functionStoreCurrency(money: Pick<PresentmentMoney, "shopCurrenc
 
 export function buildAppFunctionCart(input: {
   currency: { code: string; decimalPlaces: number };
-  /** The store's own currency, when the market sells in another (`PresentmentMoney.shopCurrencyCode`); absent: `currency`. */
-  storeCurrency?: { code: string; decimalPlaces: number };
+  /**
+   * The store's own currency (`functionStoreCurrency(money)`): what a
+   * function's `currency: "store"` amounts are in. Required on every path,
+   * so a cart in a market's currency never claims the store's is the same.
+   */
+  storeCurrency: { code: string; decimalPlaces: number };
   channel: FunctionCart["channel"];
   /** The order's sales channel; absent: the channel's default (`defaultOrderSalesChannelId`), as the order commit derives it. */
   salesChannelId?: string | null;
@@ -416,8 +420,8 @@ export function buildAppFunctionCart(input: {
     currency: input.currency.code.toUpperCase(),
     decimalPlaces: input.currency.decimalPlaces,
     storeCurrency: {
-      code: (input.storeCurrency ?? input.currency).code.toUpperCase(),
-      decimalPlaces: (input.storeCurrency ?? input.currency).decimalPlaces,
+      code: input.storeCurrency.code.toUpperCase(),
+      decimalPlaces: input.storeCurrency.decimalPlaces,
     },
     channel: input.channel,
     salesChannelId: input.salesChannelId || defaultOrderSalesChannelId(input.channel),
