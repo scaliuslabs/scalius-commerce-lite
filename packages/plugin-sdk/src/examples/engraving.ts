@@ -36,15 +36,15 @@ export default definePlugin({
   manifest,
   functions: {
     // The fee is the merchant's, in the store's currency: checkout converts it for any market.
-    // Every engraved line is answered, a bundle line too: checkout refuses an add-on a line
-    // can't take, so the buyer removes the engraving instead of getting it unpaid.
+    // Every engraved line is answered, a free one as 0 and a bundle line too: the order line
+    // records what was sold, and checkout refuses an add-on a line can't take.
     "cart.line_prices": ({ cart }, settings) => {
-      const perLetter = Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces);
+      const perLetter = Math.max(0, Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces) || 0);
       return {
         prices: [],
         adjustments: cart.lines.flatMap((line) => {
           const letters = (line.properties[TEXT] ?? "").replace(/\s/gu, "").length;
-          if (letters === 0 || perLetter <= 0) return [];
+          if (letters === 0) return [];
           return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title: `Engraving, ${letters} letters` }];
         }),
       };
@@ -56,13 +56,12 @@ export default definePlugin({
       const read = await ctx.api.call<{ order: OrderRepresentation }>("orders.get", { path: { id: event.resource.id } });
       if (!read.ok || !read.data) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
       const order = read.data.order;
-      const free = Number(ctx.settings.per_letter ?? 0) <= 0;
       for (const line of order.lines) {
         const text = line.properties.find((property) => property.key === TEXT)?.value;
-        // Engrave only what the order paid for (your add-on is on the line), or what is free.
-        const paid = line.adjustments.some((adjustment) => adjustment.appId === APP_ID);
+        // Engrave only what checkout sold: your add-on is on the line (0 when it was free).
+        const sold = line.adjustments.some((adjustment) => adjustment.appId === APP_ID);
         // Keyed by the order line: a redelivered event writes the same record again.
-        if (text && (paid || free)) await ctx.objects.engravings.put(line.id, { order_id: order.id, text });
+        if (text && sold) await ctx.objects.engravings.put(line.id, { order_id: order.id, text });
       }
     },
   },

@@ -43,7 +43,8 @@ import { validateCheckoutAttributes } from "./attributes";
 // rate with the market's adjustment, but without its rounding step or
 // ending (`storeAmountMinor`: those are the item's price point); a
 // share (`percent`) is taken of the item's unit price as cart validation
-// prices it. Neither ever rounds to nothing (one increment). Every app's
+// prices it. Neither ever rounds to nothing (one increment); a fixed 0 is a free
+// extra, recorded on the line. Every app's
 // add-ons apply, in priority order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per
 // line. A gift card (money) and a line not in the cart take none (skipped and
 // logged); a bundle line, or an add-on past the most a line holds, refuses
@@ -343,7 +344,8 @@ export function resolveAppLineAdjustments(
                 const amountMinor = answer.currency === "store"
                     ? storeAmountMinor(answer.amountMinor, conversion, "add_on")
                     // A positive add-on never rounds to nothing: one increment, as a converted one.
-                    : Math.max(increment, roundToIncrementMinor(answer.amountMinor, increment));
+                    // 0 is a free extra and stays 0, recorded on the line.
+                    : answer.amountMinor === 0 ? 0 : Math.max(increment, roundToIncrementMinor(answer.amountMinor, increment));
                 list.push({ appId: result.pluginId, title: answer.title, amountMinor });
             }
             adjustments.set(item.index, list);

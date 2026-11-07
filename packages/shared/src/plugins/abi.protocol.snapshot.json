@@ -1144,7 +1144,7 @@
           },
           "amountMinor": {
            "type": "integer",
-           "exclusiveMinimum": 0,
+           "minimum": 0,
            "maximum": 1000000000000
           },
           "currency": {

@@ -379,7 +379,10 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * make the item's price point (a ৳50 wrap there is $0.45, not $0.99). A
  * cart-currency amount, and a store-currency one in the store's own
  * currency, rounds half-up to the increment (৳50.50 at whole taka is ৳51).
- * A positive amount never rounds to nothing (it takes one increment).
+ * A positive amount never rounds to nothing (it takes one increment); a
+ * fixed 0 is a free extra, frozen on the order line like any add-on, so an
+ * app decides what to deliver from the order line, never from its current
+ * settings.
  */
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
@@ -390,8 +393,12 @@ export const cartLinePricesOutputSchema = z.object({
   adjustments: z.array(z.union([
     z.object({
       lineId: id,
-      /** Added to each unit of the line. */
-      amountMinor: minor.positive().max(LINE_ADJUSTMENT_MAX_MINOR),
+      /**
+       * Added to each unit of the line. 0 records a free extra on the line
+       * (the buyer sees "Add-on: <title>" with no price), so the order line
+       * says what was sold even when it cost nothing.
+       */
+      amountMinor: minor.nonnegative().max(LINE_ADJUSTMENT_MAX_MINOR),
       currency: amountCurrency,
       /** What the buyer sees on the line ("Engraving, 6 letters"). */
       title: label,
