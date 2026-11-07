@@ -633,7 +633,7 @@ export const orderReturns = sqliteTable("order_returns", {
     notes: text("notes"),
     actorType: text("actor_type", { enum: ["admin", "customer", "guest_receipt", "system"] }).notNull(),
     actorId: text("actor_id"),
-    source: text("source", { enum: ["admin", "support_request", "cod_return_to_sender"] }).notNull().default("admin"),
+    source: text("source", { enum: ["admin", "support_request", "cod_return_to_sender", "app"] }).notNull().default("admin"),
     sourceReferenceId: text("source_reference_id"),
     version: integer("version").notNull().default(1),
     activeOrderKey: text("active_order_key"),

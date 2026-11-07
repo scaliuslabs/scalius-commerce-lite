@@ -53,7 +53,9 @@ export type OrderReturnActor = {
 export type OrderReturnSource =
   | "admin"
   | "support_request"
-  | "cod_return_to_sender";
+  | "cod_return_to_sender"
+  /** An app requested it (`returns.create`); its actor is `app:<id>`. */
+  | "app";
 
 export interface OrderReturnLineView {
   id: string;

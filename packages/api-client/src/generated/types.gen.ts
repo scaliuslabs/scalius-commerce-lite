@@ -3216,7 +3216,8 @@ export type ReturnResource = {
     orderId: string;
     status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
     reason: string;
-    source: 'admin' | 'support_request' | 'cod_return_to_sender';
+    source: 'admin' | 'support_request' | 'cod_return_to_sender' | 'app';
+    appId: string | null;
     revision: number;
     requestedAt: string;
     approvedAt: string | null;
@@ -59834,7 +59835,7 @@ export type GetApiV1AdminOrdersByIdReturnsResponses = {
                 notes: string | null;
                 actorType: string;
                 actorId: string | null;
-                source: 'admin' | 'support_request' | 'cod_return_to_sender';
+                source: 'admin' | 'support_request' | 'cod_return_to_sender' | 'app';
                 sourceReferenceId: string | null;
                 version: number;
                 requestedAt: string | null;
@@ -60023,7 +60024,7 @@ export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponses = {
                 notes: string | null;
                 actorType: string;
                 actorId: string | null;
-                source: 'admin' | 'support_request' | 'cod_return_to_sender';
+                source: 'admin' | 'support_request' | 'cod_return_to_sender' | 'app';
                 sourceReferenceId: string | null;
                 version: number;
                 requestedAt: string | null;

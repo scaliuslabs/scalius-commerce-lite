@@ -16580,8 +16580,15 @@
             "enum": [
               "admin",
               "support_request",
-              "cod_return_to_sender"
+              "cod_return_to_sender",
+              "app"
             ]
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
           },
           "revision": {
             "type": "integer"
@@ -16696,6 +16703,7 @@
           "status",
           "reason",
           "source",
+          "appId",
           "revision",
           "requestedAt",
           "approvedAt",
@@ -210684,7 +210692,8 @@
                                 "enum": [
                                   "admin",
                                   "support_request",
-                                  "cod_return_to_sender"
+                                  "cod_return_to_sender",
+                                  "app"
                                 ]
                               },
                               "sourceReferenceId": {
@@ -211363,7 +211372,8 @@
                               "enum": [
                                 "admin",
                                 "support_request",
-                                "cod_return_to_sender"
+                                "cod_return_to_sender",
+                                "app"
                               ]
                             },
                             "sourceReferenceId": {

@@ -32,8 +32,8 @@ export const REFUND_SETTLEMENTS = ["original", "store_credit"] as const;
 /** A return's state (`ReturnResource.status`). */
 export const RETURN_STATUSES = ["requested", "approved", "receiving", "completed", "rejected", "cancelled"] as const;
 
-/** Who opened a return (`ReturnResource.source`). */
-export const RETURN_SOURCES = ["admin", "support_request", "cod_return_to_sender"] as const;
+/** Who opened a return (`ReturnResource.source`); `app` names the app in `ReturnResource.appId`. */
+export const RETURN_SOURCES = ["admin", "support_request", "cod_return_to_sender", "app"] as const;
 
 /** A shipment's state (`ShipmentResource.status`): a courier's normalized states plus the store's own booking states. */
 export const SHIPMENT_STATUSES = [...COURIER_SHIPMENT_STATUSES, "creating", "processing", "reconcile_required"] as const;

@@ -221,6 +221,8 @@ export const returnRepresentationSchema = z.object({
   status: z.enum(RETURN_STATUSES),
   reason: text,
   source: z.enum(RETURN_SOURCES),
+  /** The app that requested it (`source: "app"`); null for any other source. */
+  appId: id.nullable(),
   /** Advances with every change: the `expectedRevision` a write takes. */
   revision: z.number().int(),
   requestedAt: iso,
