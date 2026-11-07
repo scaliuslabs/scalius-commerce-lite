@@ -18,7 +18,8 @@ import {
     getCustomerSegment,
     listCustomerSegments,
     listCustomerTags,
-    listSegmentMemberIds,
+    scanSegmentMembers,
+    SEGMENT_MEMBER_SCAN_ROWS,
     listStoreCustomerTags,
     parseSegmentDefinition,
     removeTagsFromCustomers,
@@ -476,7 +477,7 @@ const membersRoute = createRoute({
     path: "/segments/{segmentId}/members",
     tags: ["Admin - Customers"],
     summary: "Walk a segment's members",
-    description: "Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way).",
+    description: `Member ids in id order, one page after \`after\` (keyset; plugins and agents walk a whole segment this way). Each page examines at most ${SEGMENT_MEMBER_SCAN_ROWS} customers, so a sparse segment's page may hold fewer ids than the limit, or none, and still carry \`next\`: keep paging with \`after=next\` until \`next\` is null.`,
     request: {
         params: segmentIdParam,
         query: z.object({
@@ -486,7 +487,7 @@ const membersRoute = createRoute({
     },
     responses: {
         200: {
-            description: "A page of member ids",
+            description: "A page of member ids; `next` is null only once every customer was examined",
             content: { "application/json": { schema: successEnvelope(z.object({ customerIds: z.array(z.string()), next: z.string().nullable() })) } },
         },
         ...errorResponses,
@@ -497,8 +498,9 @@ app.openapi(membersRoute, async (c) => {
     const db = c.get("db");
     const segment = await getCustomerSegment(db, c.req.valid("param").segmentId);
     const query = c.req.valid("query");
-    const customerIds = await listSegmentMemberIds(db, segment.definition, { afterId: query.after ?? null, limit: query.limit });
-    return ok(c, { customerIds, next: customerIds.length === query.limit ? customerIds.at(-1)! : null });
+    // A bounded scan: a short (or empty) page still continues from `next`.
+    const page = await scanSegmentMembers(db, segment.definition, { afterId: query.after ?? null, limit: query.limit });
+    return ok(c, { customerIds: page.ids, next: page.resumeAfter });
 });
 
 // ── One customer's marketing consent ─────────────────────────────────────

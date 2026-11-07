@@ -769,8 +769,15 @@
      "enum": [
       "admin",
       "support_request",
-      "cod_return_to_sender"
+      "cod_return_to_sender",
+      "app"
      ]
+    },
+    "appId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
     },
     "revision": {
      "type": "integer",
@@ -901,6 +908,7 @@
     "status",
     "reason",
     "source",
+    "appId",
     "revision",
     "requestedAt",
     "approvedAt",

@@ -15417,6 +15417,22 @@
    "status": 409,
    "meaning": "The stock transfer changed since its revision was read."
   },
+  "order_revision_conflict": {
+   "status": 409,
+   "meaning": "The order changed since its revision was read (a return request names the order's revision)."
+  },
+  "return_revision_conflict": {
+   "status": 409,
+   "meaning": "The return changed since its revision was read."
+  },
+  "return_command_in_progress": {
+   "status": 409,
+   "meaning": "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key."
+  },
+  "segment_revision_conflict": {
+   "status": 409,
+   "meaning": "The customer segment changed since its revision was read."
+  },
   "inventory_transfer_state_conflict": {
    "status": 409,
    "meaning": "The stock transfer's status refuses the write (a shipped one's lines, nothing left in transit)."
@@ -15432,6 +15448,10 @@
   "sku_taken": {
    "status": 409,
    "meaning": "Another SKU has this code or barcode."
+  },
+  "segment_name_taken": {
+   "status": 409,
+   "meaning": "Another customer segment has this name (any case)."
   },
   "media_dependency_conflict": {
    "status": 409,

@@ -142,6 +142,8 @@ Admin routes (`apps/api/src/routes/admin/customers.ts`, `customer-marketing.ts`)
 
 `/{id}/history` pages history and orders by page number, not by cursor.
 
+`/segments/{id}/members` (and the app API's `customer_segments.list_members`) pages by a bounded scan (`scanSegmentMembers`): each page examines at most 2,000 customers, so a sparse segment's page may be short or empty and still carry `next`. Keep paging while `next` is set.
+
 Buyer routes under `/api/v1/customer-auth` (`apps/api/src/routes/customer-auth/`): `POST /send-otp`, `POST /verify-otp`, `GET /me`, `POST /logout`, `PUT /profile`, `POST /phone/send-code`, `POST /phone/verify`, and `GET`, `PUT /marketing`. The other routes in that folder (orders, conversations, downloads, gift cards, reviews, warranties) belong to other domains.
 
 ## Data

@@ -508,5 +508,23 @@
   "from": "70a33ec64e283a49",
   "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Pre-release (Nov 7 review, M1/M2): the function cart gains `storeCurrency` (the store's own currency and decimal places, which an app's settings amounts are in), so an app can answer a fixed amount with `currency: \"store\"` and core converts it at the checkout's locked rate like a product price; and a line's `properties` values reach functions whole (up to 1,000 characters, as the order line freezes them) instead of cut at 500. Every declaration naming the cart or the run schemas gained the required member; an app that builds a cart by hand (a test) adds `storeCurrency`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "70a33ec64e283a49",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Sealed codes are only added (APP_ERROR_CODES): the return and customer segment operations (G2) name each refusal instead of the generic conflict, so an app tells apart a stale order or return revision (order_revision_conflict, return_revision_conflict), another return command running on the order (return_command_in_progress), a stale segment revision (segment_revision_conflict) and a segment name clash (segment_name_taken); a return command key reused for another request answers the existing idempotency_key_reused. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "48d4e8c42a85a0bd",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Merge of the returns and segments fix round onto this branch (m8): the return representation's `source` gains `app` and the return gains a nullable `appId`, so a return an app requested names the app; the declaration of the representation schemas widened with it. A consumer that switches over `source` treats an unknown value as it treats `admin`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "48d4e8c42a85a0bd",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Merge of the returns and segments fix round onto this branch: the same change acknowledged above against the worker's snapshot, against this branch's. Sealed codes are only added (APP_ERROR_CODES): the return and customer segment operations (G2) name each refusal instead of the generic conflict, so an app tells apart a stale order or return revision (order_revision_conflict, return_revision_conflict), another return command running on the order (return_command_in_progress), a stale segment revision (segment_revision_conflict) and a segment name clash (segment_name_taken); a return command key reused for another request answers the existing idempotency_key_reused. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
  }
 ]

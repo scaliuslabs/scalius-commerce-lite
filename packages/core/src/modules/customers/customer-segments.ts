@@ -32,9 +32,14 @@ import {
 } from "@scalius/shared/customer-marketing";
 import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 
 const DAY_SECONDS = 24 * 60 * 60;
+
+/** Named refusals (sealed app error codes): a stale revision and a name clash read differently. */
+export const SEGMENT_REVISION_CONFLICT = "segment_revision_conflict";
+export const SEGMENT_NAME_TAKEN = "segment_name_taken";
+const nameTaken = () => new AppError(409, SEGMENT_NAME_TAKEN, "Another segment has this name.");
 
 export interface SegmentEvaluationContext {
     /** Epoch seconds that relative date filters count back from. */
@@ -137,10 +142,17 @@ export function segmentConditionSql(condition: CustomerSegmentCondition, context
 }
 
 /** The whole definition (live customers only). */
-export function segmentWhereSql(definition: CustomerSegmentDefinition, context: SegmentEvaluationContext = now()): SQL {
+export function segmentWhereSql(
+    definition: CustomerSegmentDefinition,
+    context: SegmentEvaluationContext = now(),
+    options: { seekIds?: boolean } = {},
+): SQL {
     const parts = definition.conditions.map((condition) => segmentConditionSql(condition, context));
     const joined = sql.join(parts, definition.match === "any" ? sql` OR ` : sql` AND `);
-    return sql`(${customers.deletedAt} IS NULL AND (${joined}))`;
+    // `seekIds`: the caller bounds the rows by an id list, so the live filter is written
+    // `+deleted_at` and never leads the plan onto a deleted_at index.
+    const live = options.seekIds ? sql`+${customers.deletedAt} IS NULL` : sql`${customers.deletedAt} IS NULL`;
+    return sql`(${live} AND (${joined}))`;
 }
 
 /** Parses a definition (stored or from a request), with the store's references checked. */
@@ -206,6 +218,43 @@ export async function listSegmentMemberIds(
     return rows.map((row) => row.id);
 }
 
+/** Customers one member page examines at most: a sparse segment never makes a page walk every customer. */
+export const SEGMENT_MEMBER_SCAN_ROWS = 2_000;
+
+/**
+ * One bounded page of a segment's members: the members among the next
+ * `scanRows` customers after `afterId` (in id order), at most `limit` of
+ * them. `resumeAfter` is where the next page continues: the last member
+ * when the page filled, else the last customer examined, or null once every
+ * customer was examined. A page of a sparse segment may hold few members, or
+ * none, and still have a `resumeAfter`.
+ */
+export async function scanSegmentMembers(
+    db: Database,
+    definition: CustomerSegmentDefinition,
+    options: { afterId?: string | null; limit: number; scanRows?: number } & Partial<SegmentEvaluationContext>,
+): Promise<{ ids: string[]; resumeAfter: string | null }> {
+    const limit = Math.min(Math.max(options.limit, 1), 500);
+    const scanRows = Math.min(Math.max(options.scanRows ?? SEGMENT_MEMBER_SCAN_ROWS, limit), SEGMENT_MEMBER_SCAN_ROWS);
+    const context = { ...now(), ...options.nowSeconds === undefined ? {} : { nowSeconds: options.nowSeconds }, ...options.timeZone === undefined ? {} : { timeZone: options.timeZone } };
+    const after = options.afterId ? sql`${customers.id} > ${options.afterId}` : undefined;
+    // The window's last customer: the scan examines no customer past it.
+    const edge = await db.select({ id: customers.id }).from(customers).where(after)
+        .orderBy(asc(customers.id)).limit(1).offset(scanRows - 1).get();
+    // The window itself, read on the primary key: without planner statistics
+    // (D1 keeps none) a bare id range beside `deleted_at IS NULL` walks every
+    // live customer on a deleted_at-led index instead.
+    const windowAfter = options.afterId ? sql`WHERE scan_window.id > ${options.afterId}` : sql``;
+    const window = sql`${customers.id} IN (SELECT scan_window.id FROM customers AS scan_window ${windowAfter} ORDER BY scan_window.id LIMIT ${scanRows})`;
+    const rows = await fromCustomers(db)
+        .where(and(window, segmentWhereSql(definition, context, { seekIds: true })))
+        .orderBy(asc(customers.id))
+        .limit(limit + 1);
+    const ids = rows.slice(0, limit).map((row) => row.id);
+    if (rows.length > limit) return { ids, resumeAfter: ids.at(-1)! };
+    return { ids, resumeAfter: edge?.id ?? null };
+}
+
 /**
  * Which of these segments one customer is in now. One query per segment, in
  * one batch; a segment whose definition no longer parses matches nobody.
@@ -269,6 +318,30 @@ const livePromotionUse = sql<number>`CAST((SELECT count(*) FROM promotion_custom
 
 export const CUSTOMER_SEGMENTS_MAX = 200;
 
+/** The namespace of the merchant's own custom fields (the only one an app reads). */
+const MERCHANT_FIELD_NAMESPACE = "custom";
+
+/**
+ * A segment whose rules name no customer field outside the merchant's own
+ * namespace: the segments an app may see (it reads only `custom` fields, so
+ * a segment on another app's field would tell it who holds which value).
+ * One correlated read of the stored rules; a deleted field names nothing.
+ */
+export function segmentNamesOnlyMerchantFieldsSql(): SQL {
+    return sql`NOT EXISTS (SELECT 1 FROM json_each("customer_segments"."definition", '$.conditions') AS segment_rule
+        JOIN custom_field_definitions AS segment_rule_field ON segment_rule_field.id = json_extract(segment_rule.value, '$.definitionId')
+        WHERE json_extract(segment_rule.value, '$.field') = 'custom_field' AND segment_rule_field.namespace <> ${MERCHANT_FIELD_NAMESPACE})`;
+}
+
+/** The customer fields these rules name that are not the merchant's own (another app's), by id. */
+export async function segmentForeignFieldIds(db: Database, definition: CustomerSegmentDefinition): Promise<string[]> {
+    const fieldIds = [...new Set(definition.conditions.flatMap((condition) => condition.field === "custom_field" ? [condition.definitionId] : []))];
+    if (fieldIds.length === 0) return [];
+    const rows = await db.select({ id: customFieldDefinitions.id }).from(customFieldDefinitions)
+        .where(and(sql`${customFieldDefinitions.id} IN (SELECT value FROM json_each(${JSON.stringify(fieldIds)}))`, ne(customFieldDefinitions.namespace, MERCHANT_FIELD_NAMESPACE)));
+    return rows.map((row) => row.id);
+}
+
 /** Every live segment, most recently changed first (a store keeps at most 200). */
 export async function listCustomerSegments(db: Database): Promise<CustomerSegmentRecord[]> {
     const rows = await db.select({ segment: customerSegments, promotionCount: livePromotionUse })
@@ -326,7 +399,7 @@ async function requireFreeName(db: Database, name: string, exceptId?: string): P
             exceptId ? ne(customerSegments.id, exceptId) : undefined,
         ))
         .get();
-    if (taken) throw new ConflictError("Another segment has this name.");
+    if (taken) throw nameTaken();
 }
 
 export async function createCustomerSegment(
@@ -355,7 +428,7 @@ export async function createCustomerSegment(
             updatedAt: sql`unixepoch()`,
         });
     } catch (error) {
-        if (/UNIQUE/i.test(String((error as Error)?.message ?? error))) throw new ConflictError("Another segment has this name.");
+        if (/UNIQUE/i.test(String((error as Error)?.message ?? error))) throw nameTaken();
         throw error;
     }
     return getCustomerSegment(db, id);
@@ -384,7 +457,7 @@ export async function updateCustomerSegment(
             isNull(customerSegments.deletedAt),
         ))
         .returning({ id: customerSegments.id });
-    if (updated.length === 0) throw new ConflictError("This segment changed since you opened it. Reload it and try again.");
+    if (updated.length === 0) throw new AppError(409, SEGMENT_REVISION_CONFLICT, "This segment changed since you opened it. Reload it and try again.");
     return getCustomerSegment(db, id);
 }
 

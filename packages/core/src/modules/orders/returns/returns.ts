@@ -20,10 +20,10 @@ import {
   orders,
 } from "@scalius/database/schema";
 import {
-  ConflictError,
   NotFoundError,
   ServiceUnavailableError,
   ValidationError,
+  AppError,
 } from "@scalius/core/errors";
 import { applyClaimedInventoryEntryBatchWithImpact } from "../../inventory";
 import { inJsonArray } from "../../../utils/in-json-array";
@@ -46,6 +46,22 @@ export const ORDER_RETURN_STATUSES = [
 ] as const;
 
 export type OrderReturnStatus = typeof ORDER_RETURN_STATUSES[number];
+
+/**
+ * The named refusals of a return command (sealed app error codes), so a
+ * caller tells apart what to do: read the order or the return again, use a
+ * new key, or retry shortly with the same one.
+ */
+export const ORDER_REVISION_CONFLICT = "order_revision_conflict";
+export const RETURN_REVISION_CONFLICT = "return_revision_conflict";
+export const RETURN_COMMAND_IN_PROGRESS = "return_command_in_progress";
+/** The command key (from the caller's Idempotency-Key) was used for a different request. */
+export const RETURN_COMMAND_KEY_REUSED = "idempotency_key_reused";
+
+const orderChanged = (message: string) => new AppError(409, ORDER_REVISION_CONFLICT, message);
+const returnChanged = (message: string) => new AppError(409, RETURN_REVISION_CONFLICT, message);
+const commandRunning = (message: string) => new AppError(409, RETURN_COMMAND_IN_PROGRESS, message);
+const keyReused = () => new AppError(422, RETURN_COMMAND_KEY_REUSED, "Return command key was already used with a different payload.");
 export type OrderReturnActor = {
   type: "admin" | "customer" | "guest_receipt" | "system";
   id?: string | null;
@@ -53,7 +69,9 @@ export type OrderReturnActor = {
 export type OrderReturnSource =
   | "admin"
   | "support_request"
-  | "cod_return_to_sender";
+  | "cod_return_to_sender"
+  /** An app requested it (`returns.create`); its actor is `app:<id>`. */
+  | "app";
 
 export interface OrderReturnLineView {
   id: string;
@@ -222,9 +240,7 @@ function resolveReplay(
 ): OrderReturnCommandResult | null {
   if (!replay) return null;
   if (replay.requestHash !== requestHash) {
-    throw new ConflictError(
-      "Return command key was already used with a different payload.",
-    );
+    throw keyReused();
   }
   if (replay.status !== "committed") {
     throw new ServiceUnavailableError(
@@ -496,7 +512,7 @@ export async function createOrderReturn(
     .get();
   if (!order) throw new NotFoundError("Order not found");
   if (order.version !== input.expectedOrderVersion) {
-    throw new ConflictError("Order changed while the return was being prepared. Reload and try again.");
+    throw orderChanged("Order changed while the return was being prepared. Reload and try again.");
   }
   // A parcel still with the courier comes back with Mark returned; a return
   // is for goods the customer received (R3-ORD-14).
@@ -665,7 +681,7 @@ export async function createOrderReturn(
       [guardedHeaderInsert, ...lineInserts, commandInsert, orderVersionUpdate] as never,
     ) as { id: string }[][];
     if (!results[0]?.length || !results.at(-1)?.length) {
-      throw new ConflictError("Order changed while the return was being created. Reload and try again.");
+      throw orderChanged("Order changed while the return was being created. Reload and try again.");
     }
   } catch (error) {
     if (isConstraintError(error)) {
@@ -674,7 +690,7 @@ export async function createOrderReturn(
         identity.requestHash,
       );
       if (racedReplay) return resultWithOrderStatus(db, racedReplay);
-      throw new ConflictError("Return quantity or command identity conflicted with another request.");
+      throw commandRunning("Return quantity or command identity conflicted with another request.");
     }
     throw error;
   }
@@ -741,7 +757,7 @@ export async function approveOrderReturn(
   if (replay) return resultWithOrderStatus(db, replay);
   const context = await loadReturnCommandContext(db, orderId, returnId);
   if (context.header.version !== input.expectedVersion) {
-    throw new ConflictError("Return changed while approval was being prepared. Reload and try again.");
+    throw returnChanged("Return changed while approval was being prepared. Reload and try again.");
   }
   if (context.header.status !== "requested") {
     throw new ValidationError("Only a requested return can be approved or rejected.");
@@ -838,7 +854,7 @@ export async function approveOrderReturn(
   try {
     const results = await safeBatch(db, [commandGuard, ...lineUpdates, headerUpdate, orderUpdate] as never) as { id: string }[][];
     if (!results[0]?.length || !results.at(-1)?.length) {
-      throw new ConflictError("Return changed while approval was being committed. Reload and try again.");
+      throw returnChanged("Return changed while approval was being committed. Reload and try again.");
     }
   } catch (error) {
     if (isConstraintError(error)) {
@@ -913,7 +929,7 @@ export async function receiveOrderReturn(
     return resolveReplay(existingCommand, identity.requestHash)!;
   }
   if (existingCommand && existingCommand.requestHash !== identity.requestHash) {
-    throw new ConflictError("Return command key was already used with a different payload.");
+    throw keyReused();
   }
   const receiptActor: OrderReturnActor = existingCommand
     ? { type: existingCommand.actorType, id: existingCommand.actorId }
@@ -921,7 +937,7 @@ export async function receiveOrderReturn(
 
   let context = await loadReturnCommandContext(db, orderId, returnId);
   if (context.header.version !== input.expectedVersion) {
-    throw new ConflictError("Return changed while receipt was being prepared. Reload and try again.");
+    throw returnChanged("Return changed while receipt was being prepared. Reload and try again.");
   }
   if (context.header.status !== "approved" && context.header.status !== "receiving") {
     throw new ValidationError("Only an approved or partially received return can receive items.");
@@ -1005,13 +1021,13 @@ export async function receiveOrderReturn(
     try {
       const claimResults = await safeBatch(db, [commandClaim, headerClaim, orderClaim] as never) as { id: string }[][];
       if (!claimResults.every((result) => result?.length)) {
-        throw new ConflictError("Another return or order command won the receipt claim. Reload and try again.");
+        throw commandRunning("Another return or order command won the receipt claim. Reload and try again.");
       }
     } catch (error) {
       if (isConstraintError(error)) {
         const raced = await readCommandReplay(db, orderId, input.commandKey);
         if (!raced || raced.requestHash !== identity.requestHash) {
-          throw new ConflictError("Another return receipt is already in progress for this order.");
+          throw commandRunning("Another return receipt is already in progress for this order.");
         }
       } else {
         throw error;
@@ -1267,7 +1283,7 @@ export async function cancelOrderReturn(
   if (replay) return resultWithOrderStatus(db, replay);
   const context = await loadReturnCommandContext(db, orderId, returnId);
   if (context.header.version !== input.expectedVersion) {
-    throw new ConflictError("Return changed while cancellation was being prepared. Reload and try again.");
+    throw returnChanged("Return changed while cancellation was being prepared. Reload and try again.");
   }
   if (context.header.status !== "requested" && context.header.status !== "approved") {
     throw new ValidationError("Only an unreceived requested or approved return can be cancelled.");
@@ -1333,7 +1349,7 @@ export async function cancelOrderReturn(
   )).returning({ id: orders.id });
   const results = await safeBatch(db, [commandGuard, headerUpdate, orderUpdate] as never) as { id: string }[][];
   if (!results.every((result) => result?.length)) {
-    throw new ConflictError("Return changed while cancellation was being committed. Reload and try again.");
+    throw returnChanged("Return changed while cancellation was being committed. Reload and try again.");
   }
   return resultWithOrderStatus(db, baseResult);
 }
@@ -1348,8 +1364,6 @@ export async function assertNoActiveReturnReceipt(
     .where(and(eq(orderReturns.orderId, orderId), isNotNull(orderReturns.activeOrderKey)))
     .get();
   if (row) {
-    throw new ConflictError(
-      "A return receipt is being reconciled. Retry the order action after it completes.",
-    );
+    throw commandRunning("A return receipt is being reconciled. Retry the order action after it completes.");
   }
 }

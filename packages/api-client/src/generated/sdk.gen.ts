@@ -2512,7 +2512,7 @@ export const getApiV1AdminResourcesDiscounts = <ThrowOnError extends boolean = f
 /**
  * List saved customer segments, least recently updated first
  *
- * The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor.
+ * The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor. An app never sees a segment whose rules name another app's customer field (its get, update and members read not_found).
  */
 export const getApiV1AdminResourcesCustomerSegments = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminResourcesCustomerSegmentsData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesCustomerSegmentsResponses, GetApiV1AdminResourcesCustomerSegmentsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminResourcesCustomerSegmentsResponses, GetApiV1AdminResourcesCustomerSegmentsErrors, ThrowOnError>({ url: '/api/v1/admin/resources/customer-segments', ...options });
 
@@ -2554,7 +2554,7 @@ export const patchApiV1AdminResourcesCustomerSegmentsById = <ThrowOnError extend
 /**
  * List a segment's members
  *
- * The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor to walk the whole segment. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.
+ * The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor until it is null to walk the whole segment. Each page examines at most 2000 customers, so a page of a sparse segment may hold fewer members than the limit, or none, and still carry a nextCursor: only a null nextCursor means the walk is done. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.
  */
 export const getApiV1AdminResourcesCustomerSegmentsByIdMembers = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminResourcesCustomerSegmentsByIdMembersData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses, GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses, GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors, ThrowOnError>({ url: '/api/v1/admin/resources/customer-segments/{id}/members', ...options });
 
@@ -3231,7 +3231,7 @@ export const getApiV1AdminCustomersSegmentsBySegmentIdCount = <ThrowOnError exte
 /**
  * Walk a segment's members
  *
- * Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way).
+ * Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way). Each page examines at most 2000 customers, so a sparse segment's page may hold fewer ids than the limit, or none, and still carry `next`: keep paging with `after=next` until `next` is null.
  */
 export const getApiV1AdminCustomersSegmentsBySegmentIdMembers = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdMembersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments/{segmentId}/members', ...options });
 

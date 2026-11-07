@@ -376,6 +376,9 @@ export async function readReturnRepresentation(db: Database, returnId: string) {
   return (await readReturnRepresentations(db, { id: returnId }))[0] ?? null;
 }
 
+/** An app's actor id on a return it requested (`app:<plugin id>`, routes/admin/orders-returns.ts). */
+const APP_ACTOR_PREFIX = "app:";
+
 function returnFrom(row: typeof orderReturns.$inferSelect, lines: readonly (typeof orderReturnLines.$inferSelect)[]) {
   return sealed("return", {
     id: row.id,
@@ -383,6 +386,7 @@ function returnFrom(row: typeof orderReturns.$inferSelect, lines: readonly (type
     status: row.status,
     reason: row.reason,
     source: row.source,
+    appId: row.source === "app" && row.actorId?.startsWith(APP_ACTOR_PREFIX) ? row.actorId.slice(APP_ACTOR_PREFIX.length) : null,
     revision: row.version,
     requestedAt: isoRequired(row.requestedAt),
     approvedAt: iso(row.approvedAt),

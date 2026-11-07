@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { RETURN_SOURCES } from "@scalius/shared/resource-states";
 import type { Context } from "hono";
 import { adminRouter } from "./admin-router";
 import { nullableIsoTimestampSchema } from "../../schemas/timestamps";
@@ -93,7 +94,7 @@ const orderReturnSchema = z.object({
     notes: z.string().nullable(),
     actorType: z.string(),
     actorId: z.string().nullable(),
-    source: z.enum(["admin", "support_request", "cod_return_to_sender"]),
+    source: z.enum(RETURN_SOURCES),
     sourceReferenceId: z.string().nullable(),
     version: z.number().int(),
     requestedAt: z.coerce.date(),
@@ -257,7 +258,9 @@ async function postReceiptSideEffects(
 
 /** Requests a return of an order's lines (no stock moves) and notes it on the order timeline. */
 export async function runCreateOrderReturn(c: ReturnCommandContext, orderId: string, input: CreateOrderReturnInput) {
-    const result = await createOrderReturn(c.get("db"), orderId, input, actor(c));
+    const acting = actor(c);
+    // An app's return says so (`source: "app"`, its id in the representation's `appId`).
+    const result = await createOrderReturn(c.get("db"), orderId, input, acting, acting.type === "system" ? { source: "app" } : {});
     await recordOrderEvent(c.get("db"), {
         orderId,
         kind: "return_created",
