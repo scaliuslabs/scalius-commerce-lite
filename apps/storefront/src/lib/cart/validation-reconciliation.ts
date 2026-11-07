@@ -136,25 +136,28 @@ function writeCartCurrency(code: string): void {
  * A cart moved to a market in another currency re-prices (MARKETS-DESIGN
  * step 6, Shopify's rule): every line whose price changed only because the
  * currency did takes the server's price at once, without a "price changed"
- * warning. Returns the issues left for the buyer. The currency the cart was
- * last priced in is a per-browser convenience (localStorage); without it the
- * buyer repairs the lines as usual.
+ * warning. Its add-ons were amounts in the old currency, so they go until the
+ * next check prices them in the new one (`revalidate`: the caller checks the
+ * cart again). Returns the issues left for the buyer. The currency the cart
+ * was last priced in is a per-browser convenience (localStorage); without it
+ * the buyer repairs the lines as usual.
  */
 export function repriceCartForCurrency(
   validation: Pick<CartValidationResult, "currencyCode">,
   issues: readonly CartValidationIssue[],
-): CartValidationIssue[] {
+): { issues: CartValidationIssue[]; revalidate: boolean } {
   const code = validation.currencyCode;
-  if (!code) return [...issues];
+  if (!code) return { issues: [...issues], revalidate: false };
   const previous = readCartCurrency();
   writeCartCurrency(code);
-  if (!previous || previous === code) return [...issues];
+  if (!previous || previous === code) return { issues: [...issues], revalidate: false };
   const repriced = issues.filter((issue) =>
     issue.code === "price_changed" && typeof issue.currentPrice === "number" && typeof issue.cartKey === "string" && cartStore.get().items[issue.cartKey]);
-  if (repriced.length === 0) return [...issues];
+  if (repriced.length === 0) return { issues: [...issues], revalidate: false };
   updateCartItemsByKeyAtomically(repriced.map((issue) => ({
     lineKey: issue.cartKey!,
-    updates: { price: issue.currentPrice! },
+    // An add-on of $0.41 is never shown as ৳0.41: it is priced again by the next check.
+    updates: { price: issue.currentPrice!, adjustments: [] },
   })));
-  return issues.filter((issue) => !repriced.includes(issue));
+  return { issues: issues.filter((issue) => !repriced.includes(issue)), revalidate: true };
 }

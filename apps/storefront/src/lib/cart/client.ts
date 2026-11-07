@@ -1149,11 +1149,13 @@ export async function validateCartSnapshot(
     const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     let issues = Array.isArray(rawIssues) ? rawIssues : [];
-    // A cart moved to a market in another currency takes its new prices at once.
+    // A cart moved to a market in another currency takes its new prices at once,
+    // and is checked again so its lines' add-ons come back in that currency.
+    let revalidate = false;
     if (response.ok && json?.success && json.data) {
       isApplyingCartSnapshot = true;
       try {
-        issues = repriceCartForCurrency(json.data, issues);
+        ({ issues, revalidate } = repriceCartForCurrency(json.data, issues));
       } finally {
         isApplyingCartSnapshot = false;
       }
@@ -1204,6 +1206,8 @@ export async function validateCartSnapshot(
     if (!response.ok || !json?.success) {
       return false;
     }
+    // The lines now carry the new currency's prices: this check prices their add-ons.
+    if (revalidate) return validateCartSnapshot({ renderUnchanged: false });
 
     return json.data?.valid !== false && !hasBlockingCartIssues();
   } catch (error) {
