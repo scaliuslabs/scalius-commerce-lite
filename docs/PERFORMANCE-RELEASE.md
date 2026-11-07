@@ -14,6 +14,7 @@ A baseline is one measurement at one date on one build. Measure again before you
 | Template fidelity and page weights | `tolerances` and `budgets` in `scripts/storefront-fidelity/reference-metrics.json` (CLS 0.01 there) | `pnpm fidelity:check` |
 | API calls, D1 round trips and waves per page render | 1 call; per-page limits in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#budgets-and-guardrails) | `render-batch.test.ts`, `storefront-render-budget.test.ts` |
 | Dashboard first-render JavaScript (Brotli) | `BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs` | `pnpm check:admin-perf` |
+| Storefront buyer-page JavaScript (gzip): product page first paint and first add to cart; no zod or generated SDK on the product, home or listing pages | `BUDGET_GZIP_KIB` and `buyerPageProblems` in `apps/storefront/scripts/client-chunk-graph.mjs` | every storefront deploy (`pnpm check:storefront-budgets` on the build it ships) |
 | API Worker size | 90% of 64 MiB uncompressed | `pnpm check:api-bundle` |
 | Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`, also for the checkout shell, whose browser copy stays `private, no-store` | `pnpm release:check` |
 | Every Worker declares `CF_VERSION_METADATA`; the API keeps Workers Cache off | n/a | `pnpm check:env` |

@@ -51,6 +51,7 @@
     "db:studio": "drizzle-kit studio --config packages/database/drizzle.config.ts",
     "check:env": "node scripts/check-worker-env.mjs",
     "check:admin-perf": "node scripts/admin-perf-check.mjs",
+    "check:storefront-budgets": "node apps/storefront/scripts/client-chunk-graph.mjs --check",
     "perf:storefront": "node scripts/storefront-perf.mjs",
     "perf:compare": "node scripts/storefront-compare.mjs",
     "gallery:storefront": "node apps/storefront/scripts/gallery-server.mjs",

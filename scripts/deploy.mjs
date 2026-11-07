@@ -35,7 +35,9 @@
  * Runs in order (full deploy):
  *   1. turbo build       — builds all workspaces, then fails if dist/ carries
  *                          any local env value (check-dist-secrets.mjs) or a
- *                          canary build leaks one (check-build-canaries.mjs)
+ *                          canary build leaks one (check-build-canaries.mjs),
+ *                          or a bundle breaks its budget (the API Worker size,
+ *                          the dashboard routes, the storefront's buyer pages)
  *   2. D1 migration, or read-only external schema compatibility preflight
  *   3. wrangler deploy   — deploys the API Worker (which also serves the
  *                          dashboard SPA from its ASSETS binding) and the
@@ -1290,6 +1292,16 @@ export function getDistSecretCommands(targets, { skipVerified = false } = {}) {
           // regressed unnoticed while this ran only by hand.
           cmd: "node scripts/admin-perf-check.mjs",
           label: "Verify every dashboard route renders within its bundle budget",
+        }]
+      : []),
+    ...(targets.includes("storefront")
+      ? [{
+          // The buyer pages' budgets (no zod or generated SDK, the product
+          // page's gzip ceilings) regressed unnoticed while only a test
+          // checked them, and it skips without a build: checked here on the
+          // build that ships, failing on a broken budget or a missing build.
+          cmd: "node apps/storefront/scripts/client-chunk-graph.mjs --check",
+          label: "Verify the storefront's buyer pages stay within their JavaScript budgets",
         }]
       : []),
   ];

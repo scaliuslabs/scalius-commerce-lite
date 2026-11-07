@@ -10,10 +10,13 @@
 // the dependencies Vite preloads beside them (`__vite__mapDeps`), so a lazy
 // load counts everything the browser fetches for it.
 //
-//   node apps/storefront/scripts/client-chunk-graph.mjs [storefront dir]
+//   node apps/storefront/scripts/client-chunk-graph.mjs [storefront dir] [--check]
 //
 // prints the product page's first-paint JavaScript and what the first add to
-// cart adds (raw and gzip). client-chunk-graph.test.ts holds the budgets.
+// cart adds (raw and gzip). `--check` also holds the buyer pages to their
+// budgets (`buyerPageProblems`) and exits 1 on a problem or without a build:
+// every storefront deploy runs it on the build it ships (scripts/deploy.mjs),
+// and client-chunk-graph.test.ts runs the same checks on a local build.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -262,6 +265,92 @@ export function productPageBudget(graph) {
   return { firstPaint, afterAdd, added, matched };
 }
 
+/**
+ * Gzip KiB ceilings of the product page, measured on 2026-10-21 (57.0 and
+ * 107.9) plus about 3 KiB of headroom for copy and shared-chunk regrouping.
+ * Shrink the output to fit; do not raise them to admit a runtime. Before, the
+ * first add to cart added 150 KiB gzip (zod, the checkout language catalog),
+ * and a card's quick add 25.5 KiB more (the generated SDK and the SSR transport).
+ */
+export const BUDGET_GZIP_KIB = {
+  firstPaint: 60,
+  addedByFirstAddToCart: 111,
+};
+
+const chunkName = (id) => id.split("/").pop();
+
+/** Gzip KiB of `ids`, to one decimal, as the budgets read it. */
+export function gzipKib(graph, ids) {
+  return Math.round((totals(graph, ids).gzip / 1024) * 10) / 10;
+}
+
+/**
+ * Every promise the built buyer pages keep, as the problems found (none when
+ * all hold), each tagged with its check: `walk` (the graph found the page
+ * scripts and the add's lazy loads), `runtimes:<page>` (no zod or generated
+ * SDK on first paint, the first add to cart, sign-in, search or zoom),
+ * `deferred:<page>` (optional validation off first paint, unrelated
+ * catalogues off the first add) and `gzip` (the product page's budgets).
+ * The deploy runs it on the build it ships (`--check`); the test runs it on a
+ * local build.
+ */
+export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
+  const problems = [];
+  const fail = (check, message) => problems.push({ check, message });
+
+  const budget = productPageBudget(graph);
+  if (budget.firstPaint.size <= 10) fail("walk", `the product page's first paint is ${budget.firstPaint.size} files: the walk missed its scripts`);
+  const expected = ADD_TO_CART_LAZY_CHUNKS.filter((name) => name !== "cart").sort();
+  const matched = [...budget.matched].sort();
+  // The cart store is already on the page; the others load on the add.
+  if (matched.join() !== expected.join()) {
+    fail("walk", `the first add to cart starts ${matched.join(", ") || "no lazy load"}, not ${expected.join(", ")}`);
+  }
+  // React's DOM renderer comes with the drawer: the walk followed the drawer's imports.
+  if (![...budget.added].some((id) => graph.chunk(id).code.includes("react-dom"))) {
+    fail("walk", "the first add to cart loads no React DOM renderer: the walk missed the drawer's imports");
+  }
+
+  for (const [page, scripts] of Object.entries(BUYER_PAGE_SCRIPTS)) {
+    const firstPaint = graph.closure(pageEntries(graph, scripts));
+    const { chunks: afterAdd } = graph.withLazy(firstPaint, ADD_TO_CART_LAZY_CHUNKS);
+    for (const found of forbiddenRuntimes(graph, afterAdd)) fail(`runtimes:${page}`, `first paint or the first add to cart downloads ${found}`);
+    const others = [...graph.lazyLoads(afterAdd)].filter(([target]) =>
+      OTHER_ACTION_LAZY_CHUNKS.some((name) => chunkName(target).startsWith(`${name}.`)));
+    if (others.length < 2) fail(`runtimes:${page}`, `only ${others.length} of the sign-in, search and zoom lazy loads were found`);
+    for (const [target, deps] of others) {
+      const action = graph.closure([target, ...deps]);
+      for (const found of forbiddenRuntimes(graph, action)) fail(`runtimes:${page}`, `${chunkName(target)} downloads ${found}`);
+      if (chunkName(target).startsWith("mount-auth-modal.")) {
+        for (const id of action) {
+          if (chunkName(id).startsWith("storefront-copy.")) fail(`runtimes:${page}`, `sign-in downloads the whole storefront catalogue (${chunkName(id)})`);
+        }
+      }
+    }
+    for (const id of firstPaint) {
+      if (chunkName(id).startsWith("new-line.")) fail(`deferred:${page}`, `first paint downloads the app purchase-option validation (${chunkName(id)})`);
+    }
+    for (const id of afterAdd) {
+      if (chunkName(id).startsWith("storefront-copy.")) fail(`deferred:${page}`, `the first add to cart downloads the whole storefront catalogue (${chunkName(id)})`);
+    }
+  }
+
+  const firstPaintKib = gzipKib(graph, budget.firstPaint);
+  const addedKib = gzipKib(graph, budget.added);
+  if (firstPaintKib > budgets.firstPaint) {
+    fail("gzip", `the product page's first paint is ${firstPaintKib} KiB gzip, over its ${budgets.firstPaint} KiB budget`);
+  }
+  if (addedKib > budgets.addedByFirstAddToCart) {
+    fail("gzip", `the first add to cart adds ${addedKib} KiB gzip, over its ${budgets.addedByFirstAddToCart} KiB budget`);
+  }
+  return problems;
+}
+
+/** What `--check` prints when there is no build to check: never a silent pass. */
+export function missingBuildMessage(storefrontDir) {
+  return `No storefront build under ${storefrontDir}/dist, so the buyer-page JavaScript budgets were not checked. Run: pnpm --filter ./apps/storefront build`;
+}
+
 function printTable(graph, title, ids) {
   const list = [...ids].sort((left, right) => graph.chunk(right).raw - graph.chunk(left).raw);
   const sum = totals(graph, list);
@@ -271,10 +360,13 @@ function printTable(graph, title, ids) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const storefrontDir = resolve(process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
+  const cliArgs = process.argv.slice(2);
+  const check = cliArgs.includes("--check");
+  const dirArg = cliArgs.find((arg) => !arg.startsWith("--"));
+  const storefrontDir = resolve(dirArg ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
   const graph = loadClientGraph(storefrontDir);
   if (!graph) {
-    console.error(`No storefront build under ${storefrontDir}/dist. Run: pnpm --filter ./apps/storefront build`);
+    console.error(missingBuildMessage(storefrontDir));
     process.exit(1);
   }
   const { firstPaint, added, afterAdd } = productPageBudget(graph);
@@ -289,5 +381,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const sum = totals(graph, extra);
     const found = forbiddenRuntimes(graph, extra);
     console.log(`Other lazy load ${basename(target)}: +${(sum.raw / 1024).toFixed(1)} KB raw, +${(sum.gzip / 1024).toFixed(1)} KB gzip${found.length ? `; ${found.join(", ")}` : ""}`);
+  }
+  if (check) {
+    const problems = buyerPageProblems(graph);
+    if (problems.length > 0) {
+      console.error(`\n✗ The built buyer pages break ${problems.length} JavaScript budget${problems.length === 1 ? "" : "s"}:`);
+      for (const { check: name, message } of problems) console.error(`  [${name}] ${message}`);
+      process.exit(1);
+    }
+    console.log(`\n✓ Buyer pages within their JavaScript budgets (${BUDGET_GZIP_KIB.firstPaint} KiB first paint, ${BUDGET_GZIP_KIB.addedByFirstAddToCart} KiB added by the first add to cart; no zod or generated SDK)`);
   }
 }
