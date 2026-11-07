@@ -423,7 +423,7 @@ export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugi
 export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentCapability, PaymentCapture, PaymentCaptureInput, PaymentCharge, PaymentChargeInput, PaymentDeleteSavedMethod, PaymentDeleteSavedMethodInput, PaymentEvent, PaymentVoid, PaymentVoidInput, SavedPaymentMethod, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
-export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
+export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export type { FunctionCart } from "@scalius/shared/plugins";
 export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";
 import type { EventRepresentation } from "@scalius/shared/events";
@@ -2564,6 +2564,7 @@ export interface PluginAdminContext {
 }
 export type PluginAdminLocale = "en" | "bn";
 export declare function adminLocale(request: Pick<PluginRouteRequest, "headers">): PluginAdminLocale;
+export declare function adminNumber(value: number, locale: PluginAdminLocale): string;
 export declare function adminContext(request: PluginRouteRequest): PluginAdminContext;
 export declare function wantsPage(request: PluginRouteRequest): boolean;
 export {};

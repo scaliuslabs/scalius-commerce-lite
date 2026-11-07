@@ -116,7 +116,7 @@ export type {
   PluginUiSurface,
   PluginUiTarget,
 } from "@scalius/shared/plugins";
-export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
+export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 /** The cart a checkout function sees (`cart` in every point's input). */
 export type { FunctionCart } from "@scalius/shared/plugins";
 export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";

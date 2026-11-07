@@ -28,6 +28,7 @@ import type {
   PluginUiTone,
 } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "./context";
+import { formatNumber } from "@scalius/shared/locale-format";
 
 type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, { type: T }>;
 type Options<T extends PluginUiNode["type"], Omitted extends string = never> = Omit<NodeOf<T>, "type" | Omitted>;
@@ -134,6 +135,15 @@ export type PluginAdminLocale = "en" | "bn";
 /** The dashboard's language from a request's `Accept-Language` (English unless Bangla leads). */
 export function adminLocale(request: Pick<PluginRouteRequest, "headers">): PluginAdminLocale {
   return /^\s*bn\b/i.test(request.headers["accept-language"] ?? "") ? "bn" : "en";
+}
+
+/**
+ * A number in the dashboard language's digits and grouping (`adminLocale`):
+ * "1,250" in English, "১,২৫০" in Bangla. Admin copy formats numbers with it,
+ * never with `Intl` directly, so every app writes numbers as the dashboard does.
+ */
+export function adminNumber(value: number, locale: PluginAdminLocale): string {
+  return formatNumber(value, locale === "bn" ? "bn-BD" : "en-US");
 }
 
 /** Reads the dashboard's request: GET carries `resource`, `id` and `cursor` in the query; actions send `{ resource, ids, action, values }`. */

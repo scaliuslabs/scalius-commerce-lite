@@ -356,6 +356,7 @@ Admin pages, cards, actions and widgets are drawn by the dashboard from a declar
 - **Pages** (10) appear under a navigation group (`apps`, `orders`, `products`, `customers`, `marketing`, `content`, `analytics`, `settings`), optionally with 2 to 8 tabs, each its own route.
 - **Cards** (20) and **actions** (20) appear on a resource's detail page: `product`, `variant`, `order`, `customer`, `category`, `collection`, `brand`, `page` or `return`. An action may be `bulk` (up to 250 ids) or `destructive`.
 - **Widgets** (5) appear on the dashboard home.
+- **The dashboard's language.** `adminLocale(request)` is `en` or `bn`; write your words for both, and numbers in your text with `adminNumber(value, locale)` ("1,250", "১,২৫০"), never `Intl` directly. Money and date cells of a `ui.table` are formatted by the dashboard.
 - **List columns** add a column (and optional filter) to the orders, products or customers list from an object record or your custom field.
 - Answer pages, cards and widgets with `ui.page(...)` or `ui.view(...)`, and buttons and forms with `ui.result(...)`. The builder covers layout (`stack`, `columns`, `section`, `card`, `divider`), text (`heading`, `text`, `badge`, `banner`), data (`keyValue`, `stat`, `table`, `progress`, `empty`, `image`, `link`), and forms (`form`, `textField`, `textarea`, `numberField`, `select`, `checkbox`, `dateField`, `button`). `adminContext(request)` reads the request, including the dashboard language.
 

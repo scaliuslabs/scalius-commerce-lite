@@ -12,14 +12,14 @@
 // The rules are the app's own records (`ctx.objects.rules`, one per SKU). The
 // costs a purchase order carries need the Sensitive `read_product_costs`
 // scope beside `write_inventory`.
-import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type PluginAdminLocale, type PluginApiResult, type PluginContextOf } from "@scalius/plugin-sdk";
+import { adminContext, adminLocale, adminNumber, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type PluginAdminLocale, type PluginApiResult, type PluginContextOf } from "@scalius/plugin-sdk";
 
 export const APP_ID = "scaliuslabs.restock";
 
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Restock Planner",
-  version: "1.0.2",
+  version: "1.0.3",
   apiVersion: PLUGIN_API_VERSION,
   description: "Set a reorder point and a target for each SKU, see what to reorder now, and draft, send and receive supplier purchase orders from one page.",
   author: { name: "Scalius Labs" },
@@ -308,10 +308,9 @@ type Copy = (typeof COPY)[PluginAdminLocale];
 
 /** A message with its `{name}` values filled in, numbers in the dashboard's digits. */
 function say(locale: PluginAdminLocale, template: string, values: Record<string, string | number> = {}): string {
-  const digits = new Intl.NumberFormat(locale === "bn" ? "bn-BD" : "en-US");
   return template.replace(/\{(\w+)\}/g, (whole, name: string) => {
     const value = values[name];
-    return value === undefined ? whole : typeof value === "number" ? digits.format(value) : value;
+    return value === undefined ? whole : typeof value === "number" ? adminNumber(value, locale) : value;
   });
 }
 
