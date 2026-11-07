@@ -32,6 +32,7 @@ import {
 import { sendOrderNotification, sendOrderNotificationsForStatus } from "../../utils/order-notifications";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
+import { requestAppId, requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -227,10 +228,9 @@ export type ReturnCommandContext = Context<{ Bindings: Env }>;
  * the Super Admin who approved it. An app's timeline line names no staff.
  */
 function actor(c: ReturnCommandContext): { type: "admin" | "system"; id: string | null } {
-    const app = c.get("pluginPrincipal") as { pluginId?: string } | undefined;
-    if (app?.pluginId) return { type: "system", id: `app:${app.pluginId}` };
-    const user = c.get("user") as { id?: string } | undefined;
-    return { type: "admin", id: user?.id ?? null };
+    const app = requestAppId(c);
+    if (app) return { type: "system", id: `app:${app}` };
+    return { type: "admin", id: requestStaffId(c) };
 }
 
 /** The staff member a timeline line names (none for an app). */

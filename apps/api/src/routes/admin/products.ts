@@ -76,6 +76,7 @@ import { relatedObjectsProjection, withRelatedObjects } from "./related-objects"
 import { relatedObjectRecordSchema } from "../../schemas/related-objects";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 import { readProductRepresentations } from "../../events/representations";
+import { requestActorId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -1096,7 +1097,7 @@ app.openapi(updateProductRoute, async (c) => {
     assertCanWriteCosts(c, productWriteSetsCosts(data));
     assertCanWriteStock(c, writeSetsStock(data));
     try {
-        const result = await updateProduct(db, id, data, c.get("user")?.id);
+        const result = await updateProduct(db, id, data, requestActorId(c) ?? undefined);
 
         await refreshRecommendationsAfterWrite(c, db, [id]);
         return ok(c, result);
@@ -1287,9 +1288,8 @@ app.openapi(updateVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     const data = c.req.valid("json");
     assertCanWriteStock(c, writeSetsStock(data));
-    const user = c.get("user");
     try {
-        const result = await updateVariant(db, id, variantId, data, user?.id);
+        const result = await updateVariant(db, id, variantId, data, requestActorId(c) ?? undefined);
         if (!result) throw new NotFoundError("Variant not found");
 
         return ok(c, presentSkuCost(c, result));
@@ -1358,10 +1358,9 @@ const saveOptionMatrixRoute = createRoute({
 app.openapi(saveOptionMatrixRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const user = c.get("user");
     const matrix = c.req.valid("json");
     assertCanWriteStock(c, writeSetsStock(matrix));
-    const result = await saveProductOptionMatrix(db, id, matrix, user?.id);
+    const result = await saveProductOptionMatrix(db, id, matrix, requestActorId(c) ?? undefined);
 
     await refreshRecommendationsAfterWrite(c, db, [id]);
     return ok(c, result);

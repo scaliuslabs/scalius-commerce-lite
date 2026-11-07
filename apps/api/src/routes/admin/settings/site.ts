@@ -103,6 +103,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import { STOREFRONT_COMPONENT_TARGETS, pluginSurfaceKey, storefrontSettingNeeds, type PluginSettingsSchema } from "@scalius/shared/plugins";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
+import { requestActorId } from "../request-actor";
 const app = adminRouter();
 const revisionSchema = z.number().int().nonnegative();
 /** A save answers with the document revision the next save must send back. */
@@ -620,9 +621,9 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   const { revision, basePublishedRevision, updatedAt } = await saveThemeDraft(
-    c.get("db"), body.theme, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
+    c.get("db"), body.theme, body.expectedDraftRevision, body.basePublishedRevision, actor,
   );
   return ok(c, draftReceipt({ revision, basePublishedRevision, updatedAt }));
 });
@@ -653,12 +654,12 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   const edit = body.page === "home"
     ? { page: "home" as const, value: body.value }
     : { page: "landing" as const, slug: body.slug, value: body.value };
   const { revision, basePublishedRevision, updatedAt } = await saveThemePageDraft(
-    c.get("db"), edit, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
+    c.get("db"), edit, body.expectedDraftRevision, body.basePublishedRevision, actor,
   );
   return ok(c, draftReceipt({ revision, basePublishedRevision, updatedAt }));
 });
@@ -699,10 +700,10 @@ app.openapi(createRoute({
   responses: themeStatusResponses,
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   const db = c.get("db");
   return ok(c, boundedStatus(await publishThemeDraft(
-    db, body.expectedPublishedRevision, body.expectedDraftRevision, user?.id ?? null, body.note ?? null, await themePublishApps(db),
+    db, body.expectedPublishedRevision, body.expectedDraftRevision, actor, body.note ?? null, await themePublishApps(db),
   )));
 });
 
@@ -730,9 +731,9 @@ app.openapi(createRoute({
   responses: themeStatusResponses,
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   return ok(c, boundedStatus(await restoreThemeVersion(
-    c.get("db"), body.sourceRevision, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
+    c.get("db"), body.sourceRevision, body.expectedDraftRevision, body.basePublishedRevision, actor,
     { withoutMissingImages: body.withoutMissingImages === true },
   )));
 });
@@ -749,9 +750,9 @@ app.openapi(createRoute({
   responses: themeStatusResponses,
 }), async (c) => {
   const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   return ok(c, boundedStatus(await discardThemeDraft(
-    c.get("db"), body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
+    c.get("db"), body.expectedDraftRevision, body.basePublishedRevision, actor,
   )));
 });
 
@@ -806,7 +807,7 @@ const createThemePreviewRoute = createRoute({
 });
 
 app.openapi(createThemePreviewRoute, async (c) => {
-  const user = c.get("user") as { id?: string } | undefined;
+  const actor = requestActorId(c);
   const body = c.req.valid("json");
   const storefrontOrigin = normalizeStorefrontOrigin(c.env.STOREFRONT_URL);
   if (!storefrontOrigin) {
@@ -817,7 +818,7 @@ app.openapi(createThemePreviewRoute, async (c) => {
   const preview = await createThemePreviewSession(
     c.get("db"),
     body.expectedDraftRevision,
-    user?.id ?? null,
+    actor,
     body.sourceRevision ?? null,
   );
   const continuationUrl = new URL("/theme-preview/continue", storefrontOrigin);

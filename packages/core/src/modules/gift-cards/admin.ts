@@ -13,7 +13,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database
 import { customers, giftCards, giftCardTransactions, orders, user } from "@scalius/database/schema";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
 import type { GiftCardSource, GiftCardStatus, GiftCardTransactionKind } from "./browser";
-import { GIFT_CARD_MAX_AMOUNT_MINOR } from "./issue";
+import { GIFT_CARD_MAX_AMOUNT_MINOR, giftCardWriteActor } from "./issue";
 import { giftCardIdFromRequestKey, giftCardBase64Url } from "./crypto";
 import { buildGiftCardTransactionInsert, isGiftCardIdempotencyConflict, isGiftCardLedgerError } from "./ledger";
 import { maskGiftCardRecipient } from "./mask";
@@ -328,7 +328,10 @@ export async function adjustGiftCardBalance(
         amountMinor: number;
         reason: string;
         requestKey: string;
-        actorUserId: string;
+        /** The staff member who acts; null when an app does (`appId`). */
+        actorUserId: string | null;
+        /** The app that acts: recorded as itself (`app:<id>`), never as the admin who approved it. */
+        appId?: string | null;
         /** The card's `version` the caller read: a card changed since is refused (409) in the same batch, writing nothing. */
         expectedVersion?: number;
         /**
@@ -367,7 +370,7 @@ export async function adjustGiftCardBalance(
             kind: "adjust",
             amountMinor: input.amountMinor,
             idempotencyKey,
-            actor: { type: "admin", id: input.actorUserId },
+            actor: giftCardWriteActor(input),
             reason,
         })] as never);
     } catch (error) {

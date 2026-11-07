@@ -29,6 +29,7 @@ import {
     bulkRequestKeySchema,
 } from "./shared";
 import { notificationSender } from "../../../background/notification-sender";
+import { requestStaffId } from "../request-actor";
 
 const app = adminRouter();
 
@@ -108,13 +109,13 @@ const archiveOrdersRoute = createRoute({
 app.openapi(archiveOrdersRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     requireOneSelection(data.orders, data.matching);
     assertContactSearchAllowed(c, "matching.filter.search", data.matching?.filter.search);
     const archive = async (claims: Array<{ id: string; expectedVersion: number }>) => {
         await archiveOrders(db, claims);
         for (const order of claims) {
-            await recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: user?.id ?? null });
+            await recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: actingStaffId });
         }
     };
     if (!data.matching) {
@@ -187,12 +188,12 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         return responseResult;
     });
 
-    const shipUser = c.get("user") as { id?: string } | undefined;
+    const shipStaffId = requestStaffId(c);
     for (const result of newlyShippedResults) {
         await recordOrderEvent(db, {
             orderId: result.orderId,
             kind: "shipment_created",
-            actorId: shipUser?.id ?? null,
+            actorId: shipStaffId,
             data: { courierName: null, trackingId: result.shipment.data?.trackingId ?? null, final: true },
         });
     }
@@ -262,12 +263,12 @@ const bulkConfirmRoute = createRoute({
 app.openapi(bulkConfirmRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, requestKey } = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const limits = planLimits().bulkOrders;
     const { handled, remaining } = sliceForRequest(orderIds, limits.confirm);
     const all = await bulkConfirmOrders(db, handled, {
         requestKey,
-        actorId: user?.id ?? null,
+        actorId: actingStaffId,
         maxStockRepairs: limits.confirmStockRepairs,
     });
     // Orders over the request's stock-repair share go back with the rest.
@@ -313,7 +314,7 @@ const bulkFulfillRoute = createRoute({
 app.openapi(bulkFulfillRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, courierName, note, requestKey } = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     const { handled, remaining } = sliceForRequest(orderIds, planLimits().bulkOrders.send);
     const results = await bulkFulfillOrders(db, handled, { courierName, note, requestKey });
 
@@ -322,7 +323,7 @@ app.openapi(bulkFulfillRoute, async (c) => {
         await recordOrderEvent(db, {
             orderId: result.orderId,
             kind: "shipment_created",
-            actorId: user?.id ?? null,
+            actorId: actingStaffId,
             requestKey: result.shipment.shipmentId,
             data: {
                 courierName: courierName || null,

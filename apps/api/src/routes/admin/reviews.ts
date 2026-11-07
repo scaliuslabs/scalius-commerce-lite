@@ -34,6 +34,7 @@ import {
 } from "../../schemas/reviews";
 
 import { UnauthorizedError } from "../../utils/api-error";
+import { requireStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -42,9 +43,7 @@ const reviewParam = z.object({ id: z.string().trim().min(1).max(80) });
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
 function staffUserId(c: Context<{ Bindings: Env }>): string {
-  const user = c.get("user") as { id?: string } | undefined;
-  if (!user?.id) throw new UnauthorizedError("Sign in again to moderate reviews.");
-  return user.id;
+  return requireStaffId(c, "Sign in again to moderate reviews.");
 }
 
 function noStore(c: Context) {
