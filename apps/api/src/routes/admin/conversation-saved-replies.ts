@@ -11,6 +11,7 @@ import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import { UnauthorizedError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
+import { requireStaffId } from "./request-actor";
 
 const app = adminRouter();
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -38,9 +39,7 @@ const rowResponse = {
 };
 
 function staffId(c: Context<{ Bindings: Env }>): string {
-  const user = c.get("user") as { id?: string } | undefined;
-  if (!user?.id) throw new UnauthorizedError("Sign in again to use saved replies.");
-  return user.id;
+  return requireStaffId(c, "Sign in again to use saved replies.");
 }
 
 const privateStaffRoute: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {

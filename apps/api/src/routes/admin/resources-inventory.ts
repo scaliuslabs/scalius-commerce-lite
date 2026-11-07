@@ -58,6 +58,7 @@ import { nextCursorSchema } from "../../utils/bounded-page";
 import { created, ok } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { epochSeconds, keysetRowsPage, resourcePage, resourcePageQueryWith, updatedOrder, updatedSeconds } from "../../utils/resource-page";
+import { requestActorId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -98,11 +99,7 @@ const minorCost = (description: string) => z.number().int().min(0).max(MAX_MINOR
  * approved it. It becomes the document's `createdBy`, its stock command's
  * and each ledger movement's `created_by`.
  */
-function actorId(c: Context): string | null {
-  const app = c.get("pluginPrincipal") as { pluginId?: string } | undefined;
-  if (app?.pluginId) return `app:${app.pluginId}`;
-  return (c.get("user") as { id?: string } | undefined)?.id ?? null;
-}
+const actorId = (c: Context): string | null => requestActorId(c);
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
 

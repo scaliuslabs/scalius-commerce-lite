@@ -60,6 +60,7 @@ import { parseStoreDateOnlyBoundary } from "./order-date-filter";
 import { presentSkuCost } from "./cost-access";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
+import { requestActorId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -708,10 +709,9 @@ app.openapi(adjustRoute, async (c) => {
     const { variantId } = c.req.valid("param");
     const payload = c.req.valid("json");
     const operationKey = await inventoryOperationKey(c, "dashboard.inventory.adjust", c.req.valid("header")["idempotency-key"]);
-    const user = c.get("user");
     try {
         const after = variantResourceAfterWrite(db, variantId);
-        const result = await adjustInventory(db, variantId, { ...payload, operationKey }, user?.id, { readAfter: after.readAfter });
+        const result = await adjustInventory(db, variantId, { ...payload, operationKey }, requestActorId(c) ?? undefined, { readAfter: after.readAfter });
 
         return ok(c, { ...result, variant: await after.variant() });
     } catch (error: unknown) {
@@ -892,9 +892,8 @@ app.openapi(stockAdjustRoute, async (c) => {
         c.req.valid("header")["idempotency-key"],
         { bodyKey: bodyOperationKey },
     );
-    const user = c.get("user");
     try {
-        const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id, locationId);
+        const result = await adjustStock(db, variantId, adjustment, operationKey, reason, requestActorId(c) ?? undefined, locationId);
 
         return ok(c, result);
     } catch (error: unknown) {
@@ -943,10 +942,9 @@ app.openapi(stockSetRoute, async (c) => {
     const db = c.get("db");
     const { variantId, newStock, reason, locationId, expectedStockVersion } = c.req.valid("json");
     const operationKey = await inventoryOperationKey(c, "dashboard.inventory.set_stock", c.req.valid("header")["idempotency-key"]);
-    const user = c.get("user");
     try {
         const after = variantResourceAfterWrite(db, variantId);
-        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId, { expectedStockVersion, readAfter: after.readAfter });
+        const result = await setStock(db, variantId, newStock, operationKey, reason, requestActorId(c) ?? undefined, locationId, { expectedStockVersion, readAfter: after.readAfter });
 
         return ok(c, { ...result, variant: await after.variant() });
     } catch (error: unknown) {

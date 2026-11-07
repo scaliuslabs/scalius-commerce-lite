@@ -28,6 +28,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-
 import { hasPermission } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { notificationSender } from "../../background/notification-sender";
+import { requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -83,7 +84,7 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
     const db = c.get("db");
     const { id: orderId, requestId } = c.req.valid("param");
     const body = c.req.valid("json");
-    const user = c.get("user") as { id?: string } | undefined;
+    const actingStaffId = requestStaffId(c);
     let linkedReturnId: string | null = null;
     let targetStatus = body.status;
     // Accepting a cancellation sends the buyer one "Order cancelled" message,
@@ -100,7 +101,7 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
             // Accepting a cancellation request cancels the order: stock goes
             // back and the customer is told. If it can't be cancelled (money
             // was paid, or it already shipped) the request stays open (ORD-08).
-            await cancelOrderForRequest(c, orderId, user?.id ?? null);
+            await cancelOrderForRequest(c, orderId, actingStaffId);
             targetStatus = "completed";
             cancelledForRequest = true;
         }
@@ -121,7 +122,7 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
                     db,
                     orderId,
                     body.returnRequest,
-                    { type: "admin", id: user?.id ?? null },
+                    { type: "admin", id: actingStaffId },
                     { source: "support_request", sourceReferenceId: requestId },
                 );
                 linkedReturnId = createdReturn.returnId;
@@ -131,14 +132,14 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
     const result = await updateAdminOrderSupportRequestStatus(db, orderId, requestId, {
         status: targetStatus,
         note: body.note ?? null,
-        actorId: user?.id ?? null,
+        actorId: actingStaffId,
         returnId: linkedReturnId,
     });
     if (result.statusChanged) {
         await recordOrderEvent(db, {
             orderId,
             kind: "request_resolved",
-            actorId: user?.id ?? null,
+            actorId: actingStaffId,
             body: body.note?.trim() || null,
             data: { type: result.request.type, status: result.newStatus },
         });

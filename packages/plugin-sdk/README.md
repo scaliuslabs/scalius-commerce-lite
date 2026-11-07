@@ -129,6 +129,8 @@ const harness = createPluginTestHarness(plugin, { api });
 ```
  Methods: `event`, `fn`, `route`, `cron`, `lifecycle`, `provider`, `runJob` (start a job and run its steps to the end), `jobStep` (one step of a job the app started). State: `records`, `kv`, `customFields`, `logs`, `sent` (recorded messages), `roles(customerId)`, `jobs()`. `customers` lists the live customer ids (a role grant to any other is refused, as for a deleted customer).
 
+The harness keeps the plan's limits as the platform does, Free unless you pass `plan: "paid"`. Every `ctx` call that reaches the platform counts (records, key/value, custom fields, messages, jobs, `ctx.api.call`, `ctx.http.fetch`): the 51st in one run is refused with `quota_subrequests` and recorded in `breaches`, as production records a breach (five stop the app). `ctx.api.call` past 60 a minute answers `rate_limited`, `ctx.http.fetch` past 60 a minute throws it, and a fourth running job is refused. Pass `clock: () => now` and move `now` to let a minute pass between runs. A test of bulk work asserts `expect(harness.breaches).toEqual([])`; work larger than one run continues in a background job (`ctx.jobs`), each step inside the budget.
+
 ## Build and install
 
 ```sh

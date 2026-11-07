@@ -137,6 +137,8 @@ function cartOf(
 ): FunctionCart {
     return buildAppFunctionCart({
         currency: input.currency,
+        // A staff order is priced in the store's own currency.
+        storeCurrency: input.currency,
         channel: input.channel ?? "admin",
         // The channel the create resolved (staff's pick, else the online store).
         salesChannelId: input.salesChannelId,

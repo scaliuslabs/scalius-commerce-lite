@@ -49,6 +49,7 @@ import { AppError, NotFoundError, ValidationError } from "../../utils/api-error"
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { requestActorId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -121,10 +122,7 @@ function callingApp(c: Context): string | null {
   return typeof principal?.pluginId === "string" ? principal.pluginId : null;
 }
 
-function actorOf(c: Context): string | null {
-  const user = c.get("user" as never) as { id?: string } | undefined;
-  return user?.id ?? null;
-}
+const actorOf = (c: Context): string | null => requestActorId(c);
 
 type ThemeWorkspace = Awaited<ReturnType<typeof getThemeWorkspace>>;
 

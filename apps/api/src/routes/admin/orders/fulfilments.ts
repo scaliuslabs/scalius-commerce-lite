@@ -35,11 +35,12 @@ import { NotFoundError } from "../../../utils/api-error";
 
 const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfillment, "FulfillmentResource");
 import { notificationSender } from "../../../background/notification-sender";
+import { requestStaffId } from "../request-actor";
 
 const app = adminRouter();
 
-function actorIdOf(c: { get(key: "user"): unknown }): string | null {
-    return (c.get("user") as { id?: string } | undefined)?.id ?? null;
+function actorIdOf(c: Parameters<typeof requestStaffId>[0]): string | null {
+    return requestStaffId(c);
 }
 
 const requestKeySchema = z.string().uuid().openapi({

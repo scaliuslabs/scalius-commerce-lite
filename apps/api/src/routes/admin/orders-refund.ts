@@ -36,6 +36,7 @@ import { notificationSender } from "../../background/notification-sender";
 import { afterResponse } from "../../background/after-response";
 import { processTaxDocumentCommandsForOrder } from "@scalius/core/modules/tax";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
+import { requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -365,7 +366,7 @@ app.openapi(refundOrderRoute, async (c) => {
     const data = c.req.valid("json");
     // A refund with no key is refused: its retry would refund again.
     const requestKey = await requiredRequestKey(c, "dashboard.orders.refund", c.req.valid("header")["idempotency-key"], data.requestKey, "requestKey");
-    const actorId = (c.get("user") as { id?: string } | undefined)?.id ?? null;
+    const actorId = requestStaffId(c);
     const { result, notificationCount, sideEffectErrors } = await executeOrderRefund(c, {
         orderId,
         amount: data.amount,

@@ -50,6 +50,7 @@ import { conflictResponse, errorResponses, serviceUnavailableResponse, successEn
 import { protectedField } from "../../schemas/protected";
 import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
+import { requestAppId, requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -144,9 +145,10 @@ async function readGiftCardResource(c: Context, giftCardId: string): Promise<Gif
   };
 }
 
-/** The staff member a write is recorded as (an app's approving Super Admin). */
-function actorId(c: Context): string {
-  const id = (c.get("user") as { id?: string } | undefined)?.id;
+/** The staff member a write is recorded as; null for an app, which the ledger records as itself (`appId`). */
+function actorId(c: Context): string | null {
+  if (requestAppId(c)) return null;
+  const id = requestStaffId(c);
   if (!id) throw new UnauthorizedError("Sign in again to manage gift cards.");
   return id;
 }
@@ -312,6 +314,7 @@ app.openapi(createRoute({
     message: normalizeGiftCardMessage(body.message),
     note: body.note?.trim() || null,
     actorUserId,
+    appId: requestAppId(c),
   }, (id) => {
     if (!notify) return appValue;
     const insert = buildNotificationOutboxInsert(db, {
@@ -375,6 +378,7 @@ app.openapi(createRoute({
     reason: body.reason,
     requestKey: await scopedRequestKey(c, "dashboard.resources.gift_cards.adjust", c.req.valid("header")["idempotency-key"]),
     actorUserId: actorId(c),
+    appId: requestAppId(c),
     expectedVersion: body.expectedRevision,
     ...(limit ? { extraStatements: appValueStatements(c, limit.pluginId, body.amountMinor, limit.limitMinor) } : {}),
   }).catch(appLimitRefusal(c, limit?.pluginId, limit?.limitMinor ?? 0, store.code));

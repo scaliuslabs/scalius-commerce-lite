@@ -18,6 +18,7 @@ import {
   NO_CHECKOUT_APP_FUNCTIONS,
   presentCheckoutRateOptions,
   platformDiscountClasses,
+  functionStoreCurrency,
   previewStorefrontAppDiscounts,
   priceStorefrontCheckout,
   resolveAppPaymentMethods,
@@ -816,6 +817,7 @@ async function quoteAgentStorefrontDiscount(
       decimalPlaces: projection.money.decimalPlaces,
       priceIncrementMinor: projection.money.incrementMinor,
     },
+    storeCurrency: functionStoreCurrency(projection.money),
     lines: lines.map((line) => ({
       lineId: line.id,
       productId: line.productId,

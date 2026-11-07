@@ -20,8 +20,14 @@
 //   units are refunded or returned. Every order, refund and return event
 //   recomputes the order's coverages from what the order says now
 //   (`orders.get`, `refunds.list`, `returns.list`), so events may arrive
-//   late, twice or out of order. A refund and a return of the same units
-//   count once (the larger of the two ends the units).
+//   late, twice or out of order: an `order.paid` that runs before
+//   `order.created` has written anything writes the coverage itself. A
+//   refund and a return of the same units count once (the larger of the
+//   two ends the units).
+// - Offering plans on a page of products writes the app's flag on each.
+//   One run makes at most 50 platform calls on Free, so up to 45 products
+//   are written at once and a larger selection continues in a background
+//   job (`set_eligible`), 45 products a step.
 import {
   adminContext,
   adminLocale,
@@ -47,7 +53,7 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.1.0",
+  version: "1.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
   author: { name: "Scalius Labs" },
@@ -125,6 +131,8 @@ export const manifest = defineManifest({
     public: [],
     webhooks: [],
   },
+  // Offering or stopping plans on more products than one run can write.
+  jobs: [{ name: "set_eligible", title: "Offer or stop protection plans" }],
   admin: {
     pages: [{ id: "coverages", title: "Protection plans", route: "coverages", placement: "orders" }],
     cards: [
@@ -282,14 +290,11 @@ async function listAll<T>(ctx: Context, operation: "refunds.list" | "returns.lis
 
 /**
  * Recomputes the order's coverages from what it says now and writes them,
- * keyed by order line, in batches of 25. `create` is the order's first
- * event; any later event touches only an order that already has coverages.
+ * keyed by order line, in batches of 25. Every event does this, its first
+ * included: an event may run before the order's `order.created` has written
+ * anything, so none relies on a coverage already being there.
  */
-export async function syncCoverages(ctx: Context, orderId: string, create: boolean): Promise<number> {
-  if (!create) {
-    const existing = await ctx.objects.coverages.query({ where: { order_id: orderId }, limit: 1 });
-    if (existing.records.length === 0) return 0;
-  }
+export async function syncCoverages(ctx: Context, orderId: string): Promise<number> {
   const read = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id: orderId } });
   if (!read.ok || !read.data?.order) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
   const order = read.data.order;
@@ -307,8 +312,29 @@ export async function syncCoverages(ctx: Context, orderId: string, create: boole
   return coverages.length;
 }
 
-/** How many flag writes run at once: a bulk action of 250 products finishes well inside the route's budget. */
-const FLAG_WRITES_AT_ONCE = 25;
+/**
+ * Flags one run writes: inside the 50 platform calls of a Free run, with room
+ * for the job's start. A larger selection continues in the `set_eligible` job.
+ */
+export const FLAGS_PER_RUN = 45;
+/** How many flag writes run at once. */
+const FLAG_WRITES_AT_ONCE = 15;
+
+async function writeFlags(ctx: Context, ids: readonly string[], offer: boolean): Promise<void> {
+  for (let start = 0; start < ids.length; start += FLAG_WRITES_AT_ONCE) {
+    await Promise.all(ids.slice(start, start + FLAG_WRITES_AT_ONCE).map((productId) => ctx.customFields.set("product", productId, { eligible: offer })));
+  }
+}
+
+/** The `set_eligible` job's input: the products and whether plans are offered on them. */
+interface FlagJobInput { ids: string[]; offer: boolean }
+
+function flagJobInput(value: unknown): FlagJobInput | null {
+  const input = value as Partial<FlagJobInput> | null;
+  return input && Array.isArray(input.ids) && input.ids.every((id) => typeof id === "string") && typeof input.offer === "boolean"
+    ? { ids: input.ids, offer: input.offer }
+    : null;
+}
 
 const COPY = {
   en: {
@@ -321,6 +347,8 @@ const COPY = {
     title: "Protection plans", description: "Every plan sold, with what it covers and until when.",
     offered: "Buyers can add a protection plan to this product.", notOffered: "This product offers no protection plan.",
     offer: "Offer protection plans", stop: "Stop offering", saved: "Saved for {n} product(s).", select: "Select at least one product.",
+    saving: "Saving for {n} products. It finishes in a few minutes; refresh to see every product.",
+    busy: "Other product updates are still saving. Try again in a few minutes.",
   },
   bn: {
     item: "পণ্য", plan: "প্ল্যান", units: "সংখ্যা", paid: "প্ল্যানের দাম", covered: "কভার মূল্য", ends: "শেষ", order: "অর্ডার", status: "অবস্থা",
@@ -332,6 +360,8 @@ const COPY = {
     title: "প্রোটেকশন প্ল্যান", description: "বিক্রি হওয়া প্রতিটি প্ল্যান, কী কভার করে এবং কতদিন।",
     offered: "ক্রেতারা এই পণ্যে প্রোটেকশন প্ল্যান যোগ করতে পারবেন।", notOffered: "এই পণ্যে কোনো প্রোটেকশন প্ল্যান নেই।",
     offer: "প্রোটেকশন প্ল্যান চালু করুন", stop: "বন্ধ করুন", saved: "{n}টি পণ্যে সংরক্ষিত হয়েছে।", select: "অন্তত একটি পণ্য বেছে নিন।",
+    saving: "{n}টি পণ্যে সংরক্ষণ হচ্ছে। কয়েক মিনিটে শেষ হবে; সব পণ্য দেখতে রিফ্রেশ করুন।",
+    busy: "অন্য পণ্যের পরিবর্তন এখনও সংরক্ষণ হচ্ছে। কয়েক মিনিট পরে আবার চেষ্টা করুন।",
   },
 } satisfies Record<PluginAdminLocale, unknown>;
 
@@ -402,15 +432,27 @@ export default definePlugin({
     }),
   },
 
-  // Each event recomputes the order's coverages from the order as it is now.
+  // Each event recomputes the order's coverages from the order as it is now, in whatever order the events come.
   events: {
-    "order.created": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, true); },
-    "order.paid": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, false); },
-    "order.cancelled": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, false); },
-    "order.refunded": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, false); },
-    "refund.created": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId, false); },
-    "refund.updated": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId, false); },
-    "return.updated": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId, false); },
+    "order.created": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
+    "order.paid": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
+    "order.cancelled": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
+    "order.refunded": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
+    "refund.created": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId); },
+    "refund.updated": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId); },
+    "return.updated": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId); },
+  },
+
+  jobs: {
+    // FLAGS_PER_RUN products a step; a repeated step writes the same flags again.
+    set_eligible: async (ctx: Context, job) => {
+      const input = flagJobInput(job.input);
+      if (!input) return { done: true, message: "Nothing to save." };
+      const next = typeof (job.state as { next?: unknown } | null)?.next === "number" ? (job.state as { next: number }).next : 0;
+      const end = Math.min(input.ids.length, next + FLAGS_PER_RUN);
+      await writeFlags(ctx, input.ids.slice(next, end), input.offer);
+      return { state: { next: end }, progress: { done: end, total: input.ids.length }, done: end >= input.ids.length };
+    },
   },
 
   routes: {
@@ -439,10 +481,18 @@ export default definePlugin({
         const body = (request.body ?? {}) as { offer?: unknown };
         const offer = action === "offer_plans" || (action === null && body.offer === true);
         if (ids.length === 0) return { status: 422, body: ui.result({ toast: { message: copy.select, tone: "critical" } }) };
-        for (let start = 0; start < ids.length; start += FLAG_WRITES_AT_ONCE) {
-          await Promise.all(ids.slice(start, start + FLAG_WRITES_AT_ONCE).map((productId) => ctx.customFields.set("product", productId, { eligible: offer })));
+        if (ids.length <= FLAGS_PER_RUN) {
+          await writeFlags(ctx, ids, offer);
+          return { body: ui.result({ toast: copy.saved.replace("{n}", String(ids.length)), refresh: true }) };
         }
-        return { body: ui.result({ toast: copy.saved.replace("{n}", String(ids.length)), refresh: true }) };
+        // More than one run writes: the job writes them, a step at a time, starting right after this answer.
+        try {
+          await ctx.jobs.start("set_eligible", { input: { ids: [...ids], offer } satisfies FlagJobInput });
+        } catch (error) {
+          if ((error as { code?: unknown }).code !== "jobs_limit") throw error;
+          return { status: 409, body: ui.result({ toast: { message: copy.busy, tone: "critical" } }) };
+        }
+        return { body: ui.result({ toast: copy.saving.replace("{n}", String(ids.length)), refresh: true }) };
       },
       order_coverage: async (request, ctx: Context) => {
         const copy = COPY[adminLocale(request)];

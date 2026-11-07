@@ -20,6 +20,7 @@ import { readOrderRefundRepresentations, readRefundRepresentation } from "../../
 import { executeOrderRefund, refundLinesSchema } from "./orders-refund";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bounded-page";
+import { requestStaffId } from "./request-actor";
 
 /** An order's refunds per page (and by default): an order's refunds are few. */
 const REFUNDS_PAGE_BOUND = 100;
@@ -80,7 +81,6 @@ app.openapi(createRoute({
   const orderId = c.req.valid("param").id;
   const body = c.req.valid("json");
   const appPrincipal = c.get("pluginPrincipal");
-  const user = c.get("user") as { id?: string } | undefined;
   const { result } = await executeOrderRefund(c, {
     orderId,
     amountMinor: body.amountMinor,
@@ -90,7 +90,7 @@ app.openapi(createRoute({
     ...(body.manualSettlementConfirmed !== undefined ? { manualSettlementConfirmed: body.manualSettlementConfirmed } : {}),
     ...(body.lines ? { lines: body.lines } : {}),
     requestKey: await scopedRequestKey(c, "dashboard.resources.refunds.create", c.req.valid("header")["idempotency-key"]),
-    actorUserId: appPrincipal ? null : user?.id ?? null,
+    actorUserId: requestStaffId(c),
   });
   const refund = result.orderRefundId ? await readRefundRepresentation(c.get("db"), result.orderRefundId) : null;
   if (!refund) throw new NotFoundError("Refund not found");

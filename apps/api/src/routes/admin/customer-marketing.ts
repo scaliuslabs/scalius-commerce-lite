@@ -63,6 +63,7 @@ import { matchingResultSchema, matchingSchema, requireOneSelection, type Matchin
 import { appListQuerySchema, planAppList } from "../../plugins/list-columns";
 import { BULK_MATCHING_SLICE, readMatchingCursor } from "@scalius/core/utils/bulk-matching";
 import { notificationSender } from "../../background/notification-sender";
+import { requestActorId } from "./request-actor";
 
 const listFilterQuery = {
     tag: z.string().max(200).optional().openapi({ description: "Customers with this tag" }),
@@ -100,7 +101,7 @@ export async function readCustomerSlice(
 const app = adminRouter();
 
 type Ctx = { get: (key: string) => unknown };
-const staffId = (c: Ctx) => (c.get("user") as { id?: string } | undefined)?.id ?? null;
+const staffId = (c: Ctx) => requestActorId(c);
 const pluginId = (c: Ctx) => (c.get("pluginPrincipal") as { pluginId?: string } | undefined)?.pluginId ?? null;
 
 async function storeDecimals(db: Database): Promise<number> {

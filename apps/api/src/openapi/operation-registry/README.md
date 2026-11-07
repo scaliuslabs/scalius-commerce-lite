@@ -48,7 +48,10 @@ mirror a dashboard screen, an editor section or a summary card.
   becomes the order's, so the app needs no contact scope. Lines may carry a
   `unitPriceMinor` set by hand (recorded on the timeline as `prices_set`),
   addresses use the canonical fields (Bangladesh may add its place ids), and
-  an app's order is `channel: "app"`. The dashboard's own form stays
+  an app's order is `channel: "app"`. Its Idempotency-Key covers every
+  line, address part and payment field: the key sent with another order is
+  409 `admin_order_create_request_mismatch` (`details.state`; a committed
+  one names `details.orderId`). The dashboard's own form stays
   `dashboard.orders.create` (beta). Payment is cash on delivery or an
   invoice paid later (`paymentMethod: "net_terms"`, `paymentTerms: { kind:
   "net", days }`); money received against an invoice is recorded with

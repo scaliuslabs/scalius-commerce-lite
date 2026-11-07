@@ -25,12 +25,13 @@ import { AppError, ValidationError } from "../../utils/api-error";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { importMediaFromUrl } from "./media-url-import";
 import { notificationSender } from "../../background/notification-sender";
+import { requestActorId } from "./request-actor";
 
 /** Largest import request body (the agent manifest declares the same ceiling). */
 export const IMPORT_REQUEST_MAX_BYTES = 1024 * 1024;
 
 type Ctx = { get: (key: string) => unknown; req: { header: (name: string) => string | undefined } };
-const staffId = (c: Ctx) => (c.get("user") as { id?: string } | undefined)?.id ?? null;
+const staffId = (c: Ctx) => requestActorId(c);
 const permissionsOf = (c: Ctx): ReadonlySet<string> => (c.get("adminPermissions") as ReadonlySet<string> | undefined) ?? new Set();
 
 /** The permissions a batch mode needs beyond the route's own check. */

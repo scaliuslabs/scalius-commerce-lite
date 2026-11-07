@@ -20,7 +20,6 @@ import {
 import { listActiveProviderPlugins } from "@scalius/core/modules/plugins";
 import { resolveAppProvider } from "@scalius/core/integrations/provider-port";
 import { COD_LABEL, COD_PAYMENT_METHOD } from "@scalius/core/modules/payments";
-import { hasPermission } from "@scalius/core/auth/rbac/helpers";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import {
   ProviderError,
@@ -64,10 +63,15 @@ function noStore(c: Context) {
   c.header("Cache-Control", "private, no-store");
 }
 
+/**
+ * The caller's own authority for this kind of resource: the request's
+ * permissions (staff's fresh grants, an agent's or an app's grant), never the
+ * account an app or agent call runs as.
+ */
 async function assertMay(c: Context<{ Bindings: Env }>, type: (typeof TRANSLATION_EDITOR_TYPES)[number], action: "view" | "edit"): Promise<void> {
-  const user = c.get("user") as { id?: string } | undefined;
   const permission = TRANSLATION_PERMISSIONS[type][action];
-  if (!user?.id || !await hasPermission(c.get("db"), user.id, permission)) {
+  const permissions = c.get("adminPermissions") as ReadonlySet<string> | undefined;
+  if (!permissions?.has(permission)) {
     throw new ForbiddenError(action === "view" ? "You don't have permission to see this kind of resource." : "You don't have permission to edit this kind of resource.");
   }
 }

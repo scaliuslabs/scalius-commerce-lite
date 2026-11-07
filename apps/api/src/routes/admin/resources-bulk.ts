@@ -39,6 +39,7 @@ import {
   staffBulkRunCondition,
   type BulkRunRow,
 } from "../../bulk-runs/engine";
+import { requestActorId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -90,7 +91,7 @@ async function startRun(c: Context<{ Bindings: Env }>, operationId: string, run:
   const db = c.get("db");
   if (dryRun) return ok(c, { run: await previewBulkRun(db, run) });
   const operationKey = await scopedRequestKey(c, operationId, idempotencyKey);
-  const createdBy = (c.get("user") as { id?: string } | undefined)?.id ?? null;
+  const createdBy = requestActorId(c);
   const { row, created } = await createBulkRun(db, run, { operationKey, createdBy, lease: true });
   const currency = run.kind === "variants.set_prices" ? (await readStoreCurrency(db)).code : null;
   let current: BulkRunRow | undefined = row;

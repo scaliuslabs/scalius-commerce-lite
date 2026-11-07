@@ -41,14 +41,17 @@ import { protectedField as pii } from "../../schemas/protected";
 import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
 import { requiredRequestKey } from "./idempotency-key";
+import { requestAppId, requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
 const isoTimestamp = z.string().openapi({ format: "date-time" });
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
 
-function staffId(c: { get: (key: "user") => unknown }): string {
-  const id = (c.get("user") as { id?: string } | undefined)?.id;
+/** The staff member who issues or adjusts (null for an app, which `requestAppId` names). */
+function staffId(c: Parameters<typeof requestStaffId>[0]): string | null {
+  if (requestAppId(c)) return null;
+  const id = requestStaffId(c);
   if (!id) throw new UnauthorizedError("Sign in again to manage gift cards.");
   return id;
 }
@@ -434,6 +437,7 @@ app.openapi(createRoute({
     message: normalizeGiftCardMessage(body.message),
     note: body.note?.trim() || null,
     actorUserId,
+    appId: requestAppId(c),
   }, (giftCardId) => {
     if (!notify) return [];
     const insert = buildNotificationOutboxInsert(db, giftCardIssuedNotification(giftCardId, "admin-gift-card-issue"));
@@ -492,6 +496,7 @@ app.openapi(createRoute({
     reason: body.reason,
     requestKey,
     actorUserId: staffId(c),
+    appId: requestAppId(c),
   });
   return ok(c, { giftCard: presentSummary(summary) });
 });

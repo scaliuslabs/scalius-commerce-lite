@@ -324,7 +324,8 @@ export async function priceStorefrontCheckout(
     const platformLine = new Map((platform.allocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
     appCart = safeAppCart(() => buildAppFunctionCart({
       currency,
-      ...(cartValidation.money ? { storeCurrency: functionStoreCurrency(cartValidation.money) } : {}),
+      // Without a market's money the cart is in the store's own currency.
+      storeCurrency: cartValidation.money ? functionStoreCurrency(cartValidation.money) : input.currency,
       channel: input.channel,
       segmentIds: cartValidation.pricingSegmentIds,
       lines: cartValidation.items.map((item, position) => ({
@@ -547,7 +548,8 @@ export async function checkStorefrontCartRules(
   });
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
-    ...(cartValidation.money ? { storeCurrency: functionStoreCurrency(cartValidation.money) } : {}),
+    // Without a market's money the cart is in the store's own currency.
+    storeCurrency: cartValidation.money ? functionStoreCurrency(cartValidation.money) : input.currency,
     channel: input.channel,
     segmentIds: cartValidation.pricingSegmentIds,
     lines: cartValidation.items.map((item, position) => ({
@@ -589,6 +591,8 @@ export async function previewStorefrontAppDiscounts(
     /** A validated cart or the preview page's resolved presence. */
     marketContext?: FunctionCart["market"];
     currency: PricingCurrency;
+    /** The store's own currency (`functionStoreCurrency(money)`), which a market's preview is not in. */
+    storeCurrency: { code: string; decimalPlaces: number };
     lines: ReadonlyArray<{ lineId: string; productId: string; variantId: string; unitPriceMinor: number; quantity: number; giftCard?: boolean }>;
     platformAllocation: TaxDiscountAllocationInput | undefined;
     /** The classes the platform's discounts applied in (`platformDiscountClasses`); absent: read from the allocation. */
@@ -613,6 +617,7 @@ export async function previewStorefrontAppDiscounts(
   const platformLines = new Map((input.platformAllocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
+    storeCurrency: input.storeCurrency,
     channel: input.channel ?? "online_store",
     lines: input.lines.map((line) => ({
       lineId: line.lineId,

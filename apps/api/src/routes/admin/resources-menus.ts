@@ -37,6 +37,7 @@ import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, successEnvelope } from "../../schemas/responses";
 import { isoTimestampSchema, nullableIsoTimestampSchema } from "../../schemas/timestamps";
 import { idempotencyKeyHeaderSchema } from "./idempotency";
+import { requestActorId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -194,10 +195,7 @@ async function presentMenu(db: Database, menu: MenuRow): Promise<z.infer<typeof 
   };
 }
 
-function actorOf(c: Context): string | null {
-  const user = c.get("user" as never) as { id?: string } | undefined;
-  return user?.id ?? null;
-}
+const actorOf = (c: Context): string | null => requestActorId(c);
 
 /** Publishes the saved revision when asked; a refusal is the answer's, not the call's (the links stay saved). */
 async function publishIfAsked(c: Context, db: Database, menuId: string, revision: number, publish: boolean) {

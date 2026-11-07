@@ -28,6 +28,7 @@ import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { RateLimitError, ValidationError } from "../../../utils/api-error";
 import { isWithinRateLimit } from "../../../utils/rate-limit";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
+import { requestActorId, requestStaffUser, requireStaffId } from "../request-actor";
 
 const app = adminRouter();
 
@@ -148,7 +149,6 @@ app.openapi(createRoute({
     },
 }), async (c) => {
     const db = c.get("db");
-    const user = c.get("user");
     const input = c.req.valid("json");
 
     const fields = input.channel === "email" ? { subject: input.subject, body: input.body } : { body: input.body };
@@ -165,7 +165,7 @@ app.openapi(createRoute({
         const message = "Enter a Bangladesh mobile number like 01712-345678.";
         throw new ValidationError(message, { issues: [{ path: ["phone"], message }] });
     }
-    if (!(await isWithinRateLimit(c.env, "RL_STRICT", "notification-test-send", user.id))) {
+    if (!(await isWithinRateLimit(c.env, "RL_STRICT", "notification-test-send", requestActorId(c) ?? "anonymous"))) {
         throw new RateLimitError("Too many test messages. Wait a minute and try again.");
     }
 
@@ -173,6 +173,9 @@ app.openapi(createRoute({
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
 
     if (input.channel === "email") {
+        // The test goes to the signed-in staff member's own address: an app has none to send to.
+        requireStaffId(c, "Sign in again to send a test email.");
+        const to = requestStaffUser(c)?.email ?? "";
         const email = sampleOrderEmail({
             event: input.event,
             language: store.language,
@@ -180,7 +183,7 @@ app.openapi(createRoute({
             template: { subject: input.subject, body: input.body },
             origin: c.env.STOREFRONT_URL,
         });
-        const result = await sendEmail({ ...email, to: user.email, fromName: store.name ?? undefined }, {
+        const result = await sendEmail({ ...email, to, fromName: store.name ?? undefined }, {
             db,
             env: c.env as unknown as Record<string, unknown>,
             encryptionKey,
@@ -189,7 +192,7 @@ app.openapi(createRoute({
         if (!result?.success) {
             throw new ValidationError("Couldn't send the test email. Check the email sending setup under Sending.");
         }
-        return ok(c, { sentTo: user.email });
+        return ok(c, { sentTo: to });
     }
 
     const provider = await getActiveSmsProvider(db, encryptionKey, requestAppProviders(c));

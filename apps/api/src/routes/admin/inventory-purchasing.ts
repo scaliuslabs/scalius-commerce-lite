@@ -61,6 +61,7 @@ import { ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, paginationSchema, successEnvelope } from "../../schemas/responses";
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { costsVisible } from "./cost-access";
+import { requestActorId } from "./request-actor";
 
 const TAG = "Admin - Inventory";
 
@@ -315,7 +316,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
     400: errorResponses[400],
     404: errorResponses[404],
   },
-}), async (c) => ok(c, presentOrder(c, await createPurchaseOrder(c.get("db"), c.req.valid("json"), c.get("user")?.id))));
+}), async (c) => ok(c, presentOrder(c, await createPurchaseOrder(c.get("db"), c.req.valid("json"), requestActorId(c)))));
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "get",
@@ -417,7 +418,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
     throw new ForbiddenError("Updating unit costs needs the View product costs permission.");
   }
   const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
-  return ok(c, presentReceipt(c, await receivePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, { ...body, operationKey: key }, c.get("user")?.id)));
+  return ok(c, presentReceipt(c, await receivePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, { ...body, operationKey: key }, requestActorId(c))));
 });
 
 adminPurchaseOrderRoutes.openapi(createRoute({
@@ -584,7 +585,7 @@ adminTransferRoutes.openapi(createRoute({
     400: errorResponses[400],
     404: errorResponses[404],
   },
-}), async (c) => ok(c, await createTransfer(c.get("db"), c.req.valid("json"), c.get("user")?.id)));
+}), async (c) => ok(c, await createTransfer(c.get("db"), c.req.valid("json"), requestActorId(c))));
 
 adminTransferRoutes.openapi(createRoute({
   method: "get",
@@ -629,7 +630,7 @@ adminTransferRoutes.openapi(createRoute({
 }), async (c) => {
   const { operationKey, expectedRevision } = c.req.valid("json");
   const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
-  return ok(c, await shipTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, expectedRevision }, c.get("user")?.id));
+  return ok(c, await shipTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, expectedRevision }, requestActorId(c)));
 });
 
 adminTransferRoutes.openapi(createRoute({
@@ -664,7 +665,7 @@ adminTransferRoutes.openapi(createRoute({
 }), async (c) => {
   const { operationKey, lines } = c.req.valid("json");
   const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
-  return ok(c, await receiveTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, lines }, c.get("user")?.id));
+  return ok(c, await receiveTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, lines }, requestActorId(c)));
 });
 
 adminTransferRoutes.openapi(createRoute({
@@ -684,7 +685,7 @@ adminTransferRoutes.openapi(createRoute({
 }), async (c) => {
   const { operationKey, expectedRevision } = c.req.valid("json");
   const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
-  return ok(c, await cancelTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, expectedRevision }, c.get("user")?.id));
+  return ok(c, await cancelTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, expectedRevision }, requestActorId(c)));
 });
 
 adminTransferRoutes.openapi(createRoute({

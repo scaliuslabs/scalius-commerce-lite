@@ -265,7 +265,7 @@ const feature = (id: keyof typeof FEATURES, parts: Omit<PluginFeatureInput, "id"
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "2.1.2",
+  version: "2.1.3",
   apiVersion: PLUGIN_API_VERSION,
   description: "Everything a store in Bangladesh needs in one app, each service turned on by itself: take payments with bKash, Nagad or SSLCommerz (cards, wallets and internet banking); book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list for addresses and shipping zones.",
   author: { name: "Scalius" },

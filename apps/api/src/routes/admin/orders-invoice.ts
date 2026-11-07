@@ -17,6 +17,7 @@ import {
 } from "../../schemas/responses";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
+import { requestActorId, requestStaffId } from "./request-actor";
 
 const app = adminRouter();
 
@@ -245,7 +246,7 @@ app.openapi(getInvoiceRoute, async (c) => {
 });
 
 app.openapi(issueInvoiceRoute, async (c) => {
-  const user = c.get("user") as { id?: string } | undefined;
+  const actingStaffId = requestStaffId(c);
   const { operationKey: bodyOperationKey, ...payload } = c.req.valid("json");
   const operationKey = resolveCanonicalIdempotencyKey(
     c.req.valid("header")["idempotency-key"],
@@ -256,12 +257,12 @@ app.openapi(issueInvoiceRoute, async (c) => {
     c.get("db"),
     c.req.valid("param").id,
     { ...payload, operationKey },
-    user?.id ?? null,
+    requestActorId(c),
   );
   await recordOrderEvent(c.get("db"), {
     orderId: c.req.valid("param").id,
     kind: "invoice_issued",
-    actorId: user?.id ?? null,
+    actorId: actingStaffId,
     data: { number: document.invoiceNumber },
   });
   return ok(c, document);
