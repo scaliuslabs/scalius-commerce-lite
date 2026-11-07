@@ -18,8 +18,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import type { MiddlewareHandler } from "hono";
 import type { Context } from "hono";
-import { and, eq, gte, isNull, ne, sql, type SQL } from "drizzle-orm";
-import { customFieldDefinitions, customerSegments, priceLists } from "@scalius/database/schema";
+import { eq, gte, isNull, type SQL } from "drizzle-orm";
+import { customerSegments, priceLists } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import {
   createCustomerSegment,
@@ -27,6 +27,8 @@ import {
   getCustomerSegmentsByIds,
   listSegmentMemberIds,
   parseSegmentDefinition,
+  segmentForeignFieldIds,
+  segmentNamesOnlyMerchantFieldsSql,
   updateCustomerSegment,
   type CustomerSegmentRecord,
 } from "@scalius/core/modules/customers";
@@ -41,7 +43,7 @@ import {
 } from "@scalius/shared/customer-marketing";
 import { encodeListCursorOrNull, type ListCursorShape } from "@scalius/shared/pagination";
 import { created, ok } from "../../utils/api-response";
-import { AppError } from "../../utils/api-error";
+import { AppError, NotFoundError } from "../../utils/api-error";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import { nextCursorSchema } from "../../utils/bounded-page";
@@ -106,17 +108,27 @@ async function storedDefinition(c: Context, definition: CustomerSegmentDefinitio
   const db = c.get("db");
   const parsed = await parseSegmentDefinition(db, segmentDefinitionFromApp(definition));
   if (!c.get("pluginPrincipal")) return parsed;
-  const fieldIds = [...new Set(parsed.conditions.flatMap((condition) => condition.field === "custom_field" ? [condition.definitionId] : []))];
-  if (fieldIds.length === 0) return parsed;
-  const foreign = await db.select({ id: customFieldDefinitions.id }).from(customFieldDefinitions)
-    .where(and(sql`${customFieldDefinitions.id} IN (SELECT value FROM json_each(${JSON.stringify(fieldIds)}))`, ne(customFieldDefinitions.namespace, "custom")));
+  const foreign = await segmentForeignFieldIds(db, parsed);
   if (foreign.length > 0) {
     throw new AppError(403, "forbidden", "An app's segment may filter only by the store's own customer fields.", {
       reason: "custom_field_not_visible",
-      definitionIds: foreign.map((row) => row.id),
+      definitionIds: foreign,
     });
   }
   return parsed;
+}
+
+/**
+ * The segment as the caller may see it. An app does not see a segment whose
+ * rules name another app's customer field (it reads only the merchant's
+ * `custom` fields): it is not_found to it, as `list` leaves it out, so the
+ * app learns nothing of that field or who holds it.
+ */
+async function visibleSegment(c: Context, id: string): Promise<CustomerSegmentRecord> {
+  const db = c.get("db");
+  const record = await getCustomerSegment(db, id);
+  if (c.get("pluginPrincipal") && (await segmentForeignFieldIds(db, record.definition)).length > 0) throw new NotFoundError("Segment not found");
+  return record;
 }
 
 /**
@@ -150,7 +162,7 @@ app.openapi(createRoute({
   path: "/customer-segments",
   tags: ["App API - Customers"],
   summary: "List saved customer segments, least recently updated first",
-  description: "The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor.",
+  description: "The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor. An app never sees a segment whose rules name another app's customer field (its get, update and members read not_found).",
   request: { query: z.object(resourcePageQuery) },
   responses: {
     200: { description: "A page of segments", content: { "application/json": { schema: successEnvelope(z.object({ segments: z.array(CustomerSegmentResource), nextCursor: nextCursorSchema })) } } },
@@ -160,6 +172,8 @@ app.openapi(createRoute({
   const query = c.req.valid("query");
   const db = c.get("db");
   const where: SQL[] = [isNull(customerSegments.deletedAt)];
+  // An app never lists a segment on another app's customer field.
+  if (c.get("pluginPrincipal")) where.push(segmentNamesOnlyMerchantFieldsSql());
   if (query.updatedSince) where.push(gte(customerSegments.updatedAt, epochSeconds(query.updatedSince)));
   const order = updatedOrder(customerSegments.updatedAt, customerSegments.id);
   const currency = await storeCurrency(db);
@@ -188,7 +202,7 @@ app.openapi(createRoute({
   },
 }), async (c) => {
   const db = c.get("db");
-  return ok(c, { segment: segmentResource(await getCustomerSegment(db, c.req.valid("param").id), await storeCurrency(db)) });
+  return ok(c, { segment: segmentResource(await visibleSegment(c, c.req.valid("param").id), await storeCurrency(db)) });
 });
 
 const segmentBody = z.object({
@@ -253,7 +267,7 @@ app.openapi(createRoute({
   const db = c.get("db");
   const body = c.req.valid("json");
   const id = c.req.valid("param").id;
-  await assertAppMayRetarget(c, await getCustomerSegment(db, id));
+  await assertAppMayRetarget(c, await visibleSegment(c, id));
   const record = await updateCustomerSegment(db, id, {
     expectedRevision: body.expectedRevision,
     name: body.name,
@@ -292,7 +306,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const db = c.get("db");
   const query = c.req.valid("query");
-  const segment = await getCustomerSegment(db, c.req.valid("param").id);
+  const segment = await visibleSegment(c, c.req.valid("param").id);
   const afterId = query.cursor ? readListCursor(query.cursor, MEMBER_CURSOR).id : null;
   const ids = await listSegmentMemberIds(db, segment.definition, { afterId, limit: query.limit + 1 });
   const more = ids.length > query.limit;

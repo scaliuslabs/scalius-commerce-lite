@@ -2512,7 +2512,7 @@ export const getApiV1AdminResourcesDiscounts = <ThrowOnError extends boolean = f
 /**
  * List saved customer segments, least recently updated first
  *
- * The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor.
+ * The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor. An app never sees a segment whose rules name another app's customer field (its get, update and members read not_found).
  */
 export const getApiV1AdminResourcesCustomerSegments = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminResourcesCustomerSegmentsData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesCustomerSegmentsResponses, GetApiV1AdminResourcesCustomerSegmentsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminResourcesCustomerSegmentsResponses, GetApiV1AdminResourcesCustomerSegmentsErrors, ThrowOnError>({ url: '/api/v1/admin/resources/customer-segments', ...options });
 

@@ -269,6 +269,30 @@ const livePromotionUse = sql<number>`CAST((SELECT count(*) FROM promotion_custom
 
 export const CUSTOMER_SEGMENTS_MAX = 200;
 
+/** The namespace of the merchant's own custom fields (the only one an app reads). */
+const MERCHANT_FIELD_NAMESPACE = "custom";
+
+/**
+ * A segment whose rules name no customer field outside the merchant's own
+ * namespace: the segments an app may see (it reads only `custom` fields, so
+ * a segment on another app's field would tell it who holds which value).
+ * One correlated read of the stored rules; a deleted field names nothing.
+ */
+export function segmentNamesOnlyMerchantFieldsSql(): SQL {
+    return sql`NOT EXISTS (SELECT 1 FROM json_each("customer_segments"."definition", '$.conditions') AS segment_rule
+        JOIN custom_field_definitions AS segment_rule_field ON segment_rule_field.id = json_extract(segment_rule.value, '$.definitionId')
+        WHERE json_extract(segment_rule.value, '$.field') = 'custom_field' AND segment_rule_field.namespace <> ${MERCHANT_FIELD_NAMESPACE})`;
+}
+
+/** The customer fields these rules name that are not the merchant's own (another app's), by id. */
+export async function segmentForeignFieldIds(db: Database, definition: CustomerSegmentDefinition): Promise<string[]> {
+    const fieldIds = [...new Set(definition.conditions.flatMap((condition) => condition.field === "custom_field" ? [condition.definitionId] : []))];
+    if (fieldIds.length === 0) return [];
+    const rows = await db.select({ id: customFieldDefinitions.id }).from(customFieldDefinitions)
+        .where(and(sql`${customFieldDefinitions.id} IN (SELECT value FROM json_each(${JSON.stringify(fieldIds)}))`, ne(customFieldDefinitions.namespace, MERCHANT_FIELD_NAMESPACE)));
+    return rows.map((row) => row.id);
+}
+
 /** Every live segment, most recently changed first (a store keeps at most 200). */
 export async function listCustomerSegments(db: Database): Promise<CustomerSegmentRecord[]> {
     const rows = await db.select({ segment: customerSegments, promotionCount: livePromotionUse })

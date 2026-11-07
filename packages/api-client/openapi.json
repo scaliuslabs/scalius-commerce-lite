@@ -113029,7 +113029,7 @@
           "App API - Customers"
         ],
         "summary": "List saved customer segments, least recently updated first",
-        "description": "The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor.",
+        "description": "The store's saved segments (at most 200) in (updatedAt, id) order, with their rules. Start a sync with updatedSince and follow nextCursor. An app never sees a segment whose rules name another app's customer field (its get, update and members read not_found).",
         "parameters": [
           {
             "schema": {
