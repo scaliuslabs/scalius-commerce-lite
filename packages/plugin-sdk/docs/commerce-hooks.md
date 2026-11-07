@@ -69,10 +69,10 @@ They run in this order: `cart.transform`, then `cart.line_prices`, then `cart.va
 
 Every point gets `cart` (`FunctionCart`):
 
-- Money: `currency`, `decimalPlaces`, `subtotalMinor`, and per line `unitPriceMinor` and `lineTotalMinor` (after the platform's own discounts, before app discounts). All integer minor units.
+- Money: `currency`, `decimalPlaces`, `subtotalMinor`, and per line `unitPriceMinor` and `lineTotalMinor` (after the platform's own discounts, before app discounts), all integer minor units of `currency`, the currency the buyer pays in. `storeCurrency: { code, decimalPlaces }` is the store's own currency, the one your settings' amounts are in; it is `currency` unless the market sells in another.
 - Who and where: `channel` (`online_store`, `admin`, `pos`, `agent`, `app`), `salesChannelId`, `market: { id, country }` (country is null before an address is known), `destination: { country, city, zone }` (region only), `discountCodes`.
 - `customer` (null for guests): `id`, `tags` (at most 50), `segmentIds` (the segments of the market's live segment price lists that price this buyer, at most 50), `orderCount`, `totalSpentMinor`, and `roles`: the roles **your** app gave this customer.
-- `lines` (at most 250): `lineId`, `productId`, `variantId`, `sku`, `title`, `quantity`, `categoryIds`, `collectionIds`, `brandId`, `properties` (buyer inputs: the product's own and **your** line inputs under `<app id>.<key>`, never another app's), `requiresShipping`, `weightGrams` (null when unset) and `purchaseOptions` (the line's options, `<app id>.<key>`, at most one per app, sorted; empty for a one-time purchase).
+- `lines` (at most 250): `lineId`, `productId`, `variantId`, `sku`, `title`, `quantity`, `categoryIds`, `collectionIds`, `brandId`, `properties` (buyer inputs: the product's own and **your** line inputs under `<app id>.<key>`, never another app's, each exactly as the order line freezes it, up to 1,000 characters), `requiresShipping`, `weightGrams` (null when unset) and `purchaseOptions` (the line's options, `<app id>.<key>`, at most one per app, sorted; empty for a one-time purchase).
 - `attributes`: **only your own app's** accepted checkout attributes, keyed `<app id>.<key>`. A function never sees another app's buyer answers. Reading another app's answers is not offered; if it ever is, it will be a declared read the merchant consents to.
 
 Core cart facts (lines, customer, market, destination, codes, channel) are the same for every app.
@@ -106,11 +106,18 @@ A `checkout.discounts` answer may carry `commit: [{ as, record }]` (up to four) 
 
 ### Line add-ons
 
-`cart.line_prices` may answer `adjustments: [{ lineId, amountMinor, title }]`: add-ons to each unit (an engraving, gift wrap).
+`cart.line_prices` may answer `adjustments`: add-ons to each unit (an engraving, gift wrap, a protection plan). Each is one of:
 
-- They apply after the whole price precedence, so sale, segment and price-listed lines take them too.
-- Every app's add-ons apply, in priority order, at most five per line. Each rounds half-up to the market's price increment. Gift cards and bundle lines take none.
-- They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails.
+- `{ lineId, amountMinor, title }`: a fixed amount in the cart's currency, or with `currency: "store"` in the store's (`cart.storeCurrency`), which core converts at the checkout's one locked rate and rounds exactly as it does a product price. A fee from your settings is a store amount: answer it with `currency: "store"` and it is right in every market.
+- `{ lineId, percent, title }`: a share (at most two decimals, up to 1,000) of the item's unit price as checkout charges it: after every list, sale and app price (a subscription's), with the buyer-input surcharges, before add-ons and discounts. It is right in every market and on any app's price.
+
+Rules:
+
+- They apply after the whole price precedence, so sale, segment, app and price-listed lines take them too.
+- Every app's add-ons apply, in priority order, at most five per line. Each rounds half-up to the market's price increment; a positive one never rounds to nothing (it takes one increment).
+- A gift card takes none: the answer is skipped and logged. A bundle line (the `bundle` of the function's `lines` input) or a sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price. Skip bundle lines yourself.
+- They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails, and the order line keeps it as `adjustments: [{ appId, title, amountMinor }]`.
+- `prices` take `currency: "store"` too. When two apps price one one-time line, the first by priority wins and both apps' logs say which price was used.
 
 ### Failure policy and limits
 
@@ -162,25 +169,34 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
   - No request body carries a key.
 - **Revision preconditions.** A write that is not a create takes the revision it was based on (`expectedRevision`, `expectedVersion`, `expectedAggregateRevision` or `expectedStockVersion`). A stale value is 409 and changes nothing. A few writes take none yet; adding one later is additive.
 - **Contact data.** Protected fields read `null` without their scope; filtering by them is refused (`contact_scope_required`).
+- **Named refusals.** A refusal names what happened, so an app can tell a stale read from a lost race from a mistake:
+  - a stale revision: `order_revision_conflict`, `return_revision_conflict`, `segment_revision_conflict`, `supplier_revision_conflict`, `purchase_order_revision_conflict`, `inventory_transfer_revision_conflict` (read again, then retry with the new revision);
+  - a document past that step: `purchase_order_state_conflict`, `inventory_transfer_state_conflict`; more than is still open: `quantity_exceeds_open`; stock already promised: `stock_committed`; a retired SKU: `variant_retired`; a supplier with open purchase orders: `supplier_has_open_purchase_orders`;
+  - another command on the same order still running: `return_command_in_progress` (retry with the same key); a segment name in use: `segment_name_taken`;
+  - costs without their scope: `cost_scope_required` (purchase orders, and a webhook subscription to their topics, need `read_product_costs`).
+- **Checkout refusals.** What your functions answer can refuse a buyer's checkout, with the store's words for the buyer and these reasons for you: `properties_invalid` (an answer your line input refuses, or a key no active app declares), `purchase_option_unavailable` (an option no active app offers, or two of one app on a line), `checkout_app_unavailable` (an option's owning app did not answer its line), `purchase_options_conflict` (two owners priced one line) and `add_on_unavailable` (an add-on the line cannot take).
 
 ### What the stable tier covers
 
+174 operations (`stableContract.operations` in `@scalius/plugin-sdk/testing` lists each with its scopes):
+
 | Area | Operations |
 | --- | --- |
-| Orders | `orders.create`, `get`, `list`, `set_status`, `mark_delivered`, `mark_pickup_ready`; `order_timeline.list` |
+| Orders | `orders.create`, `get`, `list` (`ids` up to 90, `updatedSince`, status filters), `set_status`, `mark_delivered`, `mark_pickup_ready`, `release_hold`; `order_timeline.list` |
 | Payments | `payments.create`, `list`, `charge`, `capture`, `void`; `payment_methods.list`, `delete` |
-| Refunds and returns | `refunds.create`, `list`; `returns.get`, `list` |
+| Refunds and returns | `refunds.create`, `list`; `returns.create`, `approve`, `receive`, `cancel`, `get`, `list` |
 | Fulfilment | `fulfillments.create`, `list`, `void`; `shipments.create`, `get`, `list` |
-| Products | `products.create`, `batch_create`, `get`, `list`, `update`, `trash`, `restore`, `set_publications`, `bulk_set_status`, `bulk_publish`; `variants.get`, `lookup`, `retire`, `bulk_set_prices`, `bulk_set_stock` |
-| Inventory | `inventory.adjust`, `set_stock`; `inventory_locations.list` |
-| Catalogue | `categories.*`, `brands.*`, `collections.*` (including `batch_create` for categories and brands, `collections.update_products`) |
-| Customers | `customers.create`, `get`, `list`, `update`, `set_tags`, `bulk_tag` |
-| Discounts and prices | `discounts.create`, `get`, `update`, `activate`, `pause`, `archive`; `price_lists.*` |
+| Products | `products.create`, `batch_create`, `get`, `list` (`ids`), `update`, `trash`, `restore`, `set_publications`, `bulk_set_status`, `bulk_publish`; `variants.create`, `get`, `update`, `lookup`, `retire`, `restore`, `bulk_set_prices`, `bulk_set_stock` |
+| Inventory | `inventory.adjust`, `set_stock`; `inventory_levels.list`; `inventory_locations.list`; `inventory_transfers.create`, `get`, `list`, `update`, `ship`, `receive`, `cancel` |
+| Purchasing | `suppliers.create`, `get`, `list`, `update`; `purchase_orders.create`, `get`, `list`, `update`, `mark_ordered`, `receive`, `cancel` (they carry costs: `read_product_costs` beside an inventory scope) |
+| Catalogue | `categories.*` and `brands.*` (`create`, `batch_create`, `get`, `list`, `update`, `set_status`, `trash`, `restore`); `collections.*` (`create`, `get`, `list`, `update`, `update_products`, `trash`, `restore`) |
+| Customers | `customers.create`, `get`, `list` (`ids`), `update`, `set_tags`, `bulk_tag`; `customer_segments.create`, `get`, `list`, `update`, `list_members` |
+| Discounts and prices | `discounts.create`, `get`, `list`, `update`, `activate`, `pause`, `archive`; `price_lists.create`, `get`, `list`, `update`, `delete`, `list_prices`, `set_prices` |
 | Gift cards | `gift_cards.create`, `get`, `list`, `update`, `adjust` |
-| Content and media | `pages.create`, `get`, `update`; `media.get`, `list`, `update`, `trash`, `import_url` |
-| Objects and custom fields | `object_types.*`, `objects.get`, `list`, `upsert`, `delete`; `custom_field_definitions.get`, `list`; `custom_fields.get_<owner>_values`, `set_<owner>_values` |
+| Content and media | `pages.create`, `get`, `list`, `update`; `media.get`, `list`, `update`, `trash`, `import_url` |
+| Objects and custom fields | `object_types.create`, `get`, `list`, `update`, `delete`; `objects.get`, `list`, `upsert`, `delete`; `custom_field_definitions.get`, `list`; `custom_fields.get_<owner>_values`, `set_<owner>_values` |
 | Store building | `theme.get`, `apply_template`, `set_section_settings`; `menus.get`, `create`, `update`; `app_content.delete` |
-| Other | `webhook_subscriptions.*`, `bulk_runs.get`, `list`, `sales_channels.list_products`, `languages.list`, `delivery_locations.import` |
+| Other | `webhook_subscriptions.create`, `list`, `update`, `delete`; `bulk_runs.get`, `list`; `sales_channels.list_products`; `languages.list`; `delivery_locations.import` |
 
 `custom_fields.*` operations show an app only the merchant's `custom` namespace; your own fields go through `ctx.customFields`. The order timeline is written only with `ctx.timeline.add`.
 
@@ -245,7 +261,7 @@ An app declares `checkout.purchaseOptions` (up to 10, `{ key, title, description
 - Core prices nothing for it. Answer every line carrying your option in `cart.line_prices`: a price (it wins over every list) or an add-on. Without your answer checkout is refused; if another app whose option the line carries prices it too, checkout refuses (`purchase_options_conflict`), so an option that adds to the price answers with an add-on. An add-on the line cannot take (a bundle line, a gift card, a line already holding five add-ons) refuses it as `purchase_option_unavailable`. `checkout.discounts` and `cart.validate` handle the rest.
 - A method kept for a renewal belongs to the one app owning every option of its order. An add-on that bills nothing later (a protection plan paid once) is a line input, not a purchase option.
 - The product page's buy form lists every active app's options. A Buyer UI button (`ui.cart.addLine`) and an island's `context.addLine` may add a line under one of your own options, never another app's.
-- The app needs a checkout function or a payment provider; a manifest with neither is refused.
+- The app needs a checkout function, a storefront extension or a payment provider (checkout reads the option through one); a manifest with none is refused.
 
 ### Line inputs
 
@@ -257,6 +273,79 @@ An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per lin
 - An app input is never required: a card's quick add, an island or an order form adds a line without the product page, so ask for a missing one in `cart.validate` with an error on the line.
 - Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`. A function that fails is left out (`onError: "skip"`), which sells the input without your add-on: declare `onError: "block"` when an input must never sell unpaid (a protection plan), and read your add-on from the order line (`lines[].adjustments`) before you deliver what it paid for.
 - Your functions see the product's inputs and your own in `line.properties`, never another app's; `orders.get` and your own webhooks show you the same. An island's `context.addLine({ variantId, inputs: { gift_message: "…" } })` sets your own by key.
+
+#### Example: an engraving priced per letter
+
+A complete app: it declares a line input, prices it with a store-currency add-on (right in every market), and reads the buyer's answer back from the order. It is `packages/plugin-sdk/src/examples/engraving.ts`, which the SDK's tests compile and run in the strict harness.
+
+<!-- example:engraving -->
+```ts
+// A complete app that asks the buyer one line input, prices it and reads it back on the order.
+import { defineManifest, definePlugin, PLUGIN_API_VERSION, type OrderRepresentation } from "@scalius/plugin-sdk";
+
+const APP_ID = "acme.engraving";
+const TEXT = `${APP_ID}.text`;
+
+export const manifest = defineManifest({
+  id: APP_ID,
+  name: "Engraving",
+  version: "1.0.0",
+  apiVersion: PLUGIN_API_VERSION,
+  description: "Engrave a name on any item, priced per letter.",
+  author: { name: "Acme" },
+  scopes: ["read_orders"],
+  events: ["order.created"],
+  settings: [{ key: "per_letter", label: "Price per letter (store currency)", type: "number", default: 20 }],
+  functions: [{ point: "cart.line_prices" }],
+  checkout: {
+    // Drawn on the buy form after the product's own inputs, under `acme.engraving.text`.
+    lineInputs: [{ key: "text", label: "Engraving", type: "text", maxLength: 20, help: "Up to 20 letters." }],
+  },
+  objects: {
+    engravings: {
+      name: "Engravings",
+      fields: [
+        { key: "order_id", name: "Order", type: "order_reference", required: true },
+        { key: "text", name: "Text", type: "single_line_text", required: true },
+      ],
+      indexes: ["order_id"],
+    },
+  },
+});
+
+export default definePlugin({
+  manifest,
+  functions: {
+    // The fee is the merchant's, in the store's currency: checkout converts it for any market.
+    "cart.line_prices": ({ cart, lines }, settings) => {
+      const perLetter = Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces);
+      const bundled = new Set(lines.filter((line) => line.bundle).map((line) => line.lineId));
+      return {
+        prices: [],
+        adjustments: cart.lines.flatMap((line) => {
+          const letters = (line.properties[TEXT] ?? "").replace(/\s/gu, "").length;
+          if (letters === 0 || perLetter <= 0 || bundled.has(line.lineId)) return [];
+          return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title: `Engraving, ${letters} letters` }];
+        }),
+      };
+    },
+  },
+  events: {
+    // Read the answer back from the order line: yours and the store's, never another app's.
+    "order.created": async (event, ctx) => {
+      const read = await ctx.api.call<{ order: OrderRepresentation }>("orders.get", { path: { id: event.resource.id } });
+      if (!read.ok || !read.data) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
+      const order = read.data.order;
+      for (const line of order.lines) {
+        const text = line.properties.find((property) => property.key === TEXT)?.value;
+        // Keyed by the order line: a redelivered event writes the same record again.
+        if (text) await ctx.objects.engravings.put(line.id, { order_id: order.id, text });
+      }
+    },
+  },
+});
+```
+<!-- /example:engraving -->
 
 ### Discount classes
 

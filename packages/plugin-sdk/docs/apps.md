@@ -88,7 +88,8 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 | `events` | 40 | Topics, `<resource>.*` or `*`. |
 | `functions` | one per point | `{ point, priority (0 to 1000, default 100), onError, reads }`. |
 | `checkout.attributes` | 10 | Typed buyer inputs (`text`, `multiline`, `number`, `boolean`, `date`, `choice`). All of an order's attributes together are at most 8 KiB. |
-| `checkout.purchaseOptions` | 10 | `{ key, title, description? }`. Needs a checkout function or a payment provider. |
+| `checkout.purchaseOptions` | 10 | `{ key, title, description? }`. Needs a checkout function, a storefront extension or a payment provider. |
+| `checkout.lineInputs` | 10 | `{ key, label, help?, type, maxLength?, options?, products? }`: per-line buyer inputs under `<app id>.<key>`, never required. Needs a checkout function, a storefront extension or a payment provider. |
 | `providers` | 24 in all | Grouped by port. |
 | `routes.admin`, `routes.public`, `routes.webhooks` | 40, 20, 10 | `{ name, methods?, description? }`. |
 | `cron` | 10 | `{ name, schedule }`. |
@@ -121,9 +122,10 @@ Your manifest asks; a Super Admin approves. Every `ctx.api` call, timeline write
 | --- | --- | --- |
 | Access | `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `read_customers`, `write_customers`, `write_marketing`, `read_discounts`, `write_discounts`, `read_content`, `write_content`, `read_objects`, `write_objects`, `read_files`, `write_files`, `read_gift_cards`, `write_gift_cards`, `write_webhooks`, `read_settings`, `write_themes`, `write_navigation`, `write_places` | Each grants a fixed set of store permissions. A `write_*` scope includes its `read_*` scope. |
 | Contact data | `read_customer_names`, `read_customer_emails`, `read_customer_phones`, `read_customer_addresses` | Grant no permission alone. Each reveals one kind of buyer contact data in what your other scopes return. |
+| Cost data | `read_product_costs` | Grants only `products.view_costs` and reaches nothing alone: purchase orders carry their costs, so `purchase_orders.*` and an app's webhook subscription to a purchase order topic (`*` included) need it beside `read_inventory` (reads) or `write_inventory` (writes); without it a subscription is refused with 403 `cost_scope_required`, and deliveries stop once the grant loses it. |
 | Capability | `send_messages_any` | Grants no permission. Lets `ctx.messaging` reach any address. |
 
-The consent screen marks these as **Sensitive**: every contact data scope, `send_messages_any`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_gift_cards`, `write_webhooks`, `write_themes` and `write_navigation`.
+The consent screen marks these as **Sensitive**: every contact data scope, `read_product_costs`, `send_messages_any`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_gift_cards`, `write_webhooks`, `write_themes` and `write_navigation`.
 
 Rules worth knowing:
 
