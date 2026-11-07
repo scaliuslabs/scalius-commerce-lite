@@ -6,7 +6,10 @@
 //   own, under `scaliuslabs.gift-notes.<key>`. Another app's inputs on the same
 //   line (a protection plan, an engraving) never collide with them.
 // - The wrap is priced as an add-on (`cart.line_prices` adjustments): core
-//   prices nothing for an app's input.
+//   prices nothing for an app's input. Pricing blocks on failure, and a
+//   bundle line's wrap is answered too, so checkout refuses it: a wrap never
+//   sells unpaid. The slip wraps a line only when the order line carries
+//   the wrap's add-on (or wrapping is free).
 // - A checkout answer (`checkout.attributes`) says the parcel is a gift, so
 //   the slip leaves prices off.
 // - On `order.created` the app reads the order back (`orders.get`): the
@@ -24,7 +27,7 @@ export const GIFT_RECEIPT_KEY = `${APP_ID}.gift_receipt`;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Gift Notes",
-  version: "1.0.1",
+  version: "1.0.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Buyers add a gift message and gift wrap to any item. Staff get a packing slip for every gift, with the prices left off when the buyer asks.",
   author: { name: "Scalius Labs" },
@@ -41,7 +44,8 @@ export const manifest = defineManifest({
       help: "Added to each wrapped item, in your store's currency; a market that sells in another converts it at checkout. 0 wraps for free.",
     },
   ],
-  functions: [{ point: "cart.line_prices", priority: 200 }],
+  // "block": if pricing fails, checkout stops. The default, "skip", would sell the wrap without its fee.
+  functions: [{ point: "cart.line_prices", priority: 200, onError: "block" }],
   checkout: {
     attributes: [
       { key: "gift_receipt", label: "This is a gift: leave the prices off the packing slip", type: "boolean" },
@@ -100,17 +104,26 @@ export interface SlipLine {
 export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "attributes"> & {
   lines: Array<Pick<OrderRepresentationLine, "id" | "title" | "variantLabel" | "quantity" | "unitPriceMinor"> & {
     properties: Array<Pick<OrderRepresentationLine["properties"][number], "key" | "value" | "appId">>;
+    adjustments: Array<Pick<OrderRepresentationLine["adjustments"][number], "appId" | "amountMinor">>;
   }>;
 };
 
-/** The slip of an order, or null when no line is a gift. */
-export function slipOf(order: OrderRead): { order_id: string; order_number: number | null; lines: SlipLine[]; gift_receipt: boolean; currency: string } | null {
+/**
+ * The slip of an order, or null when no line is a gift. A line is wrapped
+ * only when the buyer asked and the order line carries the wrap's add-on, or
+ * when wrapping is free (`freeWrap`): a wrap the order holds without its fee
+ * is never delivered. `unpaidWraps` lists the lines left unwrapped so.
+ */
+export function slipOf(order: OrderRead, freeWrap = false, unpaidWraps: string[] = []): { order_id: string; order_number: number | null; lines: SlipLine[]; gift_receipt: boolean; currency: string } | null {
   const giftReceipt = order.attributes[GIFT_RECEIPT_KEY] === "true";
   const lines: SlipLine[] = [];
   for (const line of order.lines) {
     const own = new Map(line.properties.filter((property) => property.appId === APP_ID).map((property) => [property.key, property.value]));
     const message = own.get(MESSAGE_KEY) ?? null;
-    const wrap = own.get(WRAP_KEY) === "true";
+    const asked = own.get(WRAP_KEY) === "true";
+    const paid = line.adjustments.some((adjustment) => adjustment.appId === APP_ID && adjustment.amountMinor > 0);
+    const wrap = asked && (paid || freeWrap);
+    if (asked && !wrap) unpaidWraps.push(line.id);
     if (!message && !wrap) continue;
     lines.push({
       orderItemId: line.id,
@@ -165,22 +178,24 @@ function slipView(slip: { lines: SlipLine[]; gift_receipt: boolean }, copy: (typ
 
 /**
  * The wrap fee on each wrapped line, as store-currency minor units for
- * checkout to convert. A bundle line takes no add-on (checkout would refuse
- * it): its wrap rides on nothing, so it is not asked.
+ * checkout to convert. A bundle line is answered too: it takes no add-on,
+ * so checkout refuses it (`add_on_unavailable`) and the buyer removes the
+ * wrap, where skipping it would freeze the wrap without its fee.
  */
 export function wrapFeeAdjustments(
   cart: FunctionCart,
-  lines: ReadonlyArray<{ lineId: string; bundle: unknown }>,
   settings: { wrap_fee?: unknown },
 ): Array<{ lineId: string; amountMinor: number; currency: "store"; title: string }> {
   const fee = Number(settings.wrap_fee ?? 0);
   if (!Number.isFinite(fee) || fee <= 0) return [];
   const amountMinor = Math.round(fee * 10 ** cart.storeCurrency.decimalPlaces);
-  const bundled = new Set(lines.filter((line) => line.bundle).map((line) => line.lineId));
   return cart.lines
-    .filter((line) => line.properties[WRAP_KEY] === "true" && !bundled.has(line.lineId))
+    .filter((line) => line.properties[WRAP_KEY] === "true")
     .map((line) => ({ lineId: line.lineId, amountMinor, currency: "store" as const, title: "Gift wrap" }));
 }
+
+/** Wrapping costs nothing: a wrap the buyer asked for needs no add-on. */
+const freeWrapOf = (settings: { wrap_fee?: unknown }) => !(Number(settings.wrap_fee ?? 0) > 0);
 
 export default definePlugin({
   manifest,
@@ -189,9 +204,9 @@ export default definePlugin({
     // Gift wrap is the app's add-on: each wrapped unit takes the wrap fee. The fee is
     // the merchant's, in the store's currency: checkout converts it for a market that
     // sells in another, at the order's rate, as it does a product price.
-    "cart.line_prices": ({ cart, lines }, settings) => ({
+    "cart.line_prices": ({ cart }, settings) => ({
       prices: [],
-      adjustments: wrapFeeAdjustments(cart, lines, settings),
+      adjustments: wrapFeeAdjustments(cart, settings),
     }),
   },
 
@@ -204,7 +219,10 @@ export default definePlugin({
     "order.created": async (event, ctx) => {
       const read = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id: event.resource.id } });
       if (!read.ok || !read.data?.order) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
-      const slip = slipOf(read.data.order);
+      const unpaid: string[] = [];
+      const slip = slipOf(read.data.order, freeWrapOf(ctx.settings), unpaid);
+      // The merchant sees why a wrap the buyer chose is not on the slip.
+      if (unpaid.length > 0) ctx.log.warn("A gift wrap on the order has no wrap fee on its line; the slip leaves it unwrapped.", { orderId: read.data.order.id, lines: unpaid.length });
       if (!slip) return;
       // Keyed by the order: a redelivered event writes the same slip again.
       await ctx.objects.slips.put(slip.order_id, slip);

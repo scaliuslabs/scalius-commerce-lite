@@ -115,7 +115,7 @@ Rules:
 
 - They apply after the whole price precedence, so sale, segment, app and price-listed lines take them too.
 - Every app's add-ons apply, in priority order, at most five per line. Each rounds half-up to the market's price increment; a positive one never rounds to nothing (it takes one increment).
-- A gift card takes none: the answer is skipped and logged. A bundle line (the `bundle` of the function's `lines` input) or a sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price. Skip bundle lines yourself.
+- A gift card takes none: the answer is skipped and logged. A bundle line (the `bundle` of the function's `lines` input) or a sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price. Answer a bundle line's paid extra anyway, so checkout asks the buyer to remove it; never skip it, which freezes the extra unpaid.
 - They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails, and the order line keeps it as `adjustments: [{ appId, title, amountMinor }]`.
 - `prices` take `currency: "store"` too, and convert exactly as a product price does, rounding step and ending included (৳1,200 is $10.99 in that market, from your app as from the catalogue). When two apps price one one-time line, the first by priority wins and both apps' logs say which price was used.
 
@@ -276,7 +276,13 @@ An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per lin
 
 #### Example: an engraving priced per letter
 
-A complete app: it declares a line input, prices it with a store-currency add-on (right in every market), and reads the buyer's answer back from the order. It is `packages/plugin-sdk/src/examples/engraving.ts`, which the SDK's tests compile and run in the strict harness.
+A complete app: it declares a line input, prices it with a store-currency add-on (right in every market), and reads the buyer's answer back from the order. It is `packages/plugin-sdk/src/examples/engraving.ts`, which the SDK's tests type-check with `tsc` and run in the strict harness.
+
+It never delivers an engraving the buyer did not pay for:
+
+- `onError: "block"`: if its pricing fails, checkout stops with the store's buyer-safe text. The default, `"skip"`, would leave the add-on out while the order line still freezes the engraving the buyer typed.
+- It answers every engraved line, a bundle line too. Checkout refuses an add-on a line can't take (`add_on_unavailable`: "This item can't take one of the extras chosen for it"), so the buyer removes the engraving. Skipping the line instead would freeze the engraving without its fee.
+- It records an engraving only when the order line carries its add-on, or when engraving is free (`per_letter` 0).
 
 <!-- example:engraving -->
 ```ts
@@ -296,7 +302,8 @@ export const manifest = defineManifest({
   scopes: ["read_orders"],
   events: ["order.created"],
   settings: [{ key: "per_letter", label: "Price per letter (store currency)", type: "number", default: 20 }],
-  functions: [{ point: "cart.line_prices" }],
+  // "block": if pricing fails, checkout stops. The default, "skip", would sell the engraving without its fee.
+  functions: [{ point: "cart.line_prices", onError: "block" }],
   checkout: {
     // Drawn on the buy form after the product's own inputs, under `acme.engraving.text`.
     lineInputs: [{ key: "text", label: "Engraving", type: "text", maxLength: 20, help: "Up to 20 letters." }],
@@ -317,14 +324,15 @@ export default definePlugin({
   manifest,
   functions: {
     // The fee is the merchant's, in the store's currency: checkout converts it for any market.
-    "cart.line_prices": ({ cart, lines }, settings) => {
+    // Every engraved line is answered, a bundle line too: checkout refuses an add-on a line
+    // can't take, so the buyer removes the engraving instead of getting it unpaid.
+    "cart.line_prices": ({ cart }, settings) => {
       const perLetter = Math.round(Number(settings.per_letter ?? 0) * 10 ** cart.storeCurrency.decimalPlaces);
-      const bundled = new Set(lines.filter((line) => line.bundle).map((line) => line.lineId));
       return {
         prices: [],
         adjustments: cart.lines.flatMap((line) => {
           const letters = (line.properties[TEXT] ?? "").replace(/\s/gu, "").length;
-          if (letters === 0 || perLetter <= 0 || bundled.has(line.lineId)) return [];
+          if (letters === 0 || perLetter <= 0) return [];
           return [{ lineId: line.lineId, amountMinor: perLetter * letters, currency: "store" as const, title: `Engraving, ${letters} letters` }];
         }),
       };
@@ -336,10 +344,13 @@ export default definePlugin({
       const read = await ctx.api.call<{ order: OrderRepresentation }>("orders.get", { path: { id: event.resource.id } });
       if (!read.ok || !read.data) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
       const order = read.data.order;
+      const free = Number(ctx.settings.per_letter ?? 0) <= 0;
       for (const line of order.lines) {
         const text = line.properties.find((property) => property.key === TEXT)?.value;
+        // Engrave only what the order paid for (your add-on is on the line), or what is free.
+        const paid = line.adjustments.some((adjustment) => adjustment.appId === APP_ID);
         // Keyed by the order line: a redelivered event writes the same record again.
-        if (text) await ctx.objects.engravings.put(line.id, { order_id: order.id, text });
+        if (text && (paid || free)) await ctx.objects.engravings.put(line.id, { order_id: order.id, text });
       }
     },
   },
