@@ -98,6 +98,8 @@ export const purchaseOrders = sqliteTable("purchase_orders", {
     // The app API's sync order (updatedAt, id).
     index("purchase_orders_updated_idx").on(table.updatedAt, table.id),
     index("purchase_orders_status_updated_idx").on(table.status, table.updatedAt, table.id),
+    index("purchase_orders_supplier_updated_idx").on(table.supplierId, table.updatedAt, table.id),
+    index("purchase_orders_destination_updated_idx").on(table.destinationLocationId, table.updatedAt, table.id),
     check("purchase_orders_number_positive", sql`${table.number} >= 1`),
     check(
         "purchase_orders_status_check",

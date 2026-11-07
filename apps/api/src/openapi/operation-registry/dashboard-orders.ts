@@ -145,8 +145,10 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     idempotency: "required",
     revision: "required",
   },
+  // Cancelling a return closes the request (nothing is deleted): a write agents
+  // confirm, as its app alias dashboard.resources.returns.cancel.
   "dashboard.orders.return_cancel": {
-    risk: "destructive",
+    confirmation: "required",
     idempotency: "required",
     revision: "required",
   },

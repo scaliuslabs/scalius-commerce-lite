@@ -273,6 +273,9 @@ export const inventoryTransfers = sqliteTable("inventory_transfers", {
     // The app API's sync order (updatedAt, id).
     index("inventory_transfers_updated_idx").on(table.updatedAt, table.id),
     index("inventory_transfers_status_updated_idx").on(table.status, table.updatedAt, table.id),
+    // A location's transfers (from or to it): one walk of each, merged.
+    index("inventory_transfers_origin_updated_idx").on(table.originLocationId, table.updatedAt, table.id),
+    index("inventory_transfers_destination_updated_idx").on(table.destinationLocationId, table.updatedAt, table.id),
     check("inventory_transfers_number_positive", sql`${table.number} >= 1`),
     check("inventory_transfers_locations_differ", sql`${table.originLocationId} <> ${table.destinationLocationId}`),
     check(

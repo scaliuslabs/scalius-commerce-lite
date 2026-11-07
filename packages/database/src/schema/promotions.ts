@@ -82,6 +82,9 @@ export const promotions = sqliteTable("promotions", {
         table.id,
         table.startsAt,
     ),
+    // The app API's discount sync (updatedAt, id), unfiltered and by status.
+    index("promotions_updated_idx").on(table.updatedAt, table.id),
+    index("promotions_status_updated_idx").on(table.status, table.updatedAt, table.id),
     check("promotions_method_valid", sql`${table.method} IN ('automatic', 'code')`),
     check("promotions_status_valid", sql`${table.status} IN ('draft', 'active', 'paused', 'archived')`),
     check("promotions_conflict_policy_valid", sql`${table.conflictPolicy} = 'best'`),

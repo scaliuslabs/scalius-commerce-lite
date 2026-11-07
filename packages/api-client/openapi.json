@@ -152634,7 +152634,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "none",
           "revision": "required",
@@ -154260,7 +154260,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "required",
           "revision": "required",
@@ -212450,7 +212450,7 @@
           "principals": [
             "admin"
           ],
-          "risk": "destructive",
+          "risk": "write",
           "openWorld": false,
           "idempotency": "required",
           "revision": "required",

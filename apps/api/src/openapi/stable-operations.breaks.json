@@ -3094,5 +3094,11 @@
   "from": "880cef270038b5be",
   "change": "orders.release_hold output data.order.lines[].purchaseOption: the field was removed.",
   "reason": "Pre-release (gap G3 follow-up, Nov 6 2026 server audit): a line carries one purchase option of each of several apps, so a single `purchaseOption` could only name the first by id; an app testing `line.purchaseOption === \"<its option>\"` would silently stop seeing its lines once a buyer added another app's option. The field is removed; `purchaseOptions` (sorted by id) lists every option and an app tests for its own with `includes`."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "64eecdeae2466d48",
+  "change": "behaviour: webhook_subscriptions.create and webhook_subscriptions.update refuse a purchase_order topic (or `*`) without read_product_costs (403 cost_scope_required).",
+  "reason": "Pre-lock security fix (G2 review): a purchase order's representation carries the store's costs (unit, shipping, other and tax), which an app sees only with read_product_costs. An app's own webhook endpoint therefore gets purchase_order topics only while its live grant confers products.view_costs: creating or updating a subscription whose topics reach one (`*`, `purchase_order.*`, `purchase_order.updated`) without it is refused with 403 cost_scope_required (core events webhook-subscriptions.ts), and a delivery to an existing subscription whose grant lacks it is cancelled with app_cost_scope_not_granted before its representation is read (webhook-delivery.ts). The store's own endpoints are unchanged. A behaviour change, so no snapshot diff produces this entry: it records the break for review."
  }
 ]
