@@ -52,7 +52,7 @@ import {
   type PluginJob,
   type PluginJobErrorCode,
 } from "@scalius/shared/plugins/jobs";
-import { planLimits } from "@scalius/shared/plan-limits";
+import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
 import type { AppErrorCode } from "@scalius/shared/plugins/app-errors";
@@ -93,6 +93,18 @@ export {
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;
+  /**
+   * The store's plan, whose per-app limits the harness enforces as the
+   * platform does (`@scalius/shared/plan-limits`): platform calls per run
+   * (every `ctx.*` call, `ctx.api.call` and `ctx.http.fetch` included; 50 on
+   * `free`, 1,000 on `paid`), refused past the limit with `quota_subrequests`
+   * and counted as a breach, and `ctx.api.call` and `ctx.http.fetch` at most
+   * 60 a minute each (`rate_limited`). Default `free`, the default deploy
+   * plan: an app that passes its tests here runs on every store.
+   */
+  plan?: WorkersPlan;
+  /** The harness's clock in milliseconds, for the per-minute limits (default `Date.now`): advance it to let a minute pass. */
+  clock?: () => number;
   /**
    * The app's features that are on (`manifest.features`); by default every
    * declared one. An off feature's providers, routes, jobs, events, settings,
@@ -238,6 +250,43 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       return true;
     }
     return whereFields.length === 0 && (orderField === undefined || orderField === "id");
+  };
+
+  // The plan's per-app limits, enforced on every run as the host's bridge does.
+  const caps = PLAN_LIMITS[options.plan ?? "free"].plugins;
+  const clock = options.clock ?? Date.now;
+  /** Limit breaches the app caused (the platform stops an app after `breachesBeforeStop` in an hour). */
+  const breaches: Array<{ kind: "subrequests"; at: number }> = [];
+  /** `ctx.api.call` and `ctx.http.fetch` share the platform's standard limiter: 60 a minute each, per app. */
+  const RATE_PER_MINUTE = 60;
+  const recent: Record<"api" | "http", number[]> = { api: [], http: [] };
+  const withinRate = (purpose: "api" | "http") => {
+    const now = clock();
+    recent[purpose] = recent[purpose].filter((at) => now - at < 60_000);
+    if (recent[purpose].length >= RATE_PER_MINUTE) return false;
+    recent[purpose].push(now);
+    return true;
+  };
+  /** One run's bridge: every call counts, as the host counts it (apps/api/src/plugins/bridge.ts `guard`). */
+  const metered = (base: PluginRuntimeBridge): PluginRuntimeBridge => {
+    let calls = 0;
+    const counted: Record<string, unknown> = {};
+    for (const [name, method] of Object.entries(base) as Array<[string, unknown]>) {
+      if (typeof method !== "function") { counted[name] = method; continue; }
+      counted[name] = async (...args: unknown[]) => {
+        calls += 1;
+        if (calls > caps.subrequests) {
+          breaches.push({ kind: "subrequests", at: clock() });
+          refuse("quota_subrequests", `More than ${caps.subrequests} platform calls in one run.`);
+        }
+        if (name === "apiCall" && !withinRate("api")) {
+          return { ok: false, status: 429, data: null, error: { code: "rate_limited", message: "Operation rate limit exceeded" } } satisfies PluginApiResult;
+        }
+        if (name === "httpFetch" && !withinRate("http")) refuse("rate_limited", "Too many outbound requests; try again in a minute.");
+        return (method as (...callArgs: unknown[]) => unknown)(...args);
+      };
+    }
+    return counted as unknown as PluginRuntimeBridge;
   };
 
   const permissions = pluginScopePermissions(manifest.scopes);
@@ -567,7 +616,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           return { id: earlier.id, status: earlier.status };
         }
       }
-      const limit = planLimits().plugins.runningJobs;
+      const limit = caps.runningJobs;
       if ([...jobs.values()].filter((job) => job.status === "running").length >= limit) {
         refuse("jobs_limit", `An app runs at most ${limit} jobs at once; wait for one to finish.`);
       }
@@ -612,7 +661,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     invocation: Parameters<typeof invokePluginDefinition>[1],
     runBridge: PluginRuntimeBridge = bridge,
   ): Promise<PluginInvocationResult> => {
-    const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : runBridge);
+    const result = await invokePluginDefinition(module, copy(invocation), copy(seed), invocation.kind === "function" ? null : metered(runBridge));
     logs.push(...result.logs);
     return copy(result);
   };
@@ -808,6 +857,12 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     roles: (customerId: string): PluginCustomerRole[] => rolesOf(customerId),
     /** The jobs the app started (`ctx.jobs.start`), oldest first. */
     jobs: (): PluginJob[] => [...jobs.values()].map(jobView),
+    /** The limit breaches the app's runs caused (a run past the plan's platform calls); the platform stops an app after five in an hour. */
+    get breaches(): ReadonlyArray<{ kind: "subrequests"; at: number }> {
+      return breaches.map((breach) => ({ ...breach }));
+    },
+    /** The plan the harness enforces (`options.plan`, default `free`). */
+    plan: options.plan ?? "free",
     /** Runs one step of a job the app started, as the platform's drain does. */
     jobStep: (id: string) => stepJob(id),
     /**

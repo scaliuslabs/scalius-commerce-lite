@@ -284,6 +284,8 @@ The plan sets each app's ceilings. Your manifest's `limits` apply inside them.
 - Storage is measured once a day. Above the limit, writes that add data fail with `quota_storage`; deletes still work.
 - Checkout functions, provider operations and storefront output are paced by the platform and do not count against runs per minute.
 - `ctx.api.call` allows 60 calls a minute. `ctx.http.fetch` allows 60 requests a minute; a provider operation's calls to its own provider do not count.
+- Every `ctx` call that reaches the platform counts as a platform call: records, key/value, custom fields, messages, jobs, `ctx.api.call` and `ctx.http.fetch`. Work bigger than one run (a bulk action on 250 products, a long import) continues in a background job whose steps each stay inside it.
+- The SDK's test harness keeps these limits (Free unless you pass `plan: "paid"`), so a test fails where the platform would refuse; see the SDK README.
 
 ## Storage
 

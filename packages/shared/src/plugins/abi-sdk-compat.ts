@@ -356,8 +356,16 @@ function compatibleConstantType(before: ts.TypeNode, after: ts.TypeNode, oldSour
       && oldTuple.every((element, index) => print(element, oldSource) === print(newTuple[index]!, newSource));
   }
   if (ts.isTypeLiteralNode(before) && ts.isTypeLiteralNode(after)) {
+    // A kept key keeps its type exactly, up to the order TypeScript printed it in.
+    const header = (node: ts.PropertySignature, source: ts.SourceFile) => print(
+      ts.factory.updatePropertySignature(node, node.modifiers, node.name, node.questionToken, undefined), source,
+    );
+    const same = (member: ts.TypeElement, next: ts.TypeElement) => print(next, newSource) === print(member, oldSource)
+      || (ts.isPropertySignature(member) && ts.isPropertySignature(next) && !!member.type && !!next.type
+        && header(member, oldSource) === header(next, newSource)
+        && canonical(member.type, oldSource) === canonical(next.type, newSource));
     return before.members.every((member) => after.members.some((next) =>
-      memberKey(next, newSource) === memberKey(member, oldSource) && print(next, newSource) === print(member, oldSource)));
+      memberKey(next, newSource) === memberKey(member, oldSource) && same(member, next)));
   }
   return false;
 }

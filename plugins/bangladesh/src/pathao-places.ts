@@ -14,10 +14,14 @@ import { trimTrailingCharacter } from "@scalius/plugin-sdk";
 //   live refresh turns off only what Pathao marks unusable). Progress is in
 //   the app's KV (`pathao-refresh`).
 //
-// A step makes at most STEP_CALLS calls to Pathao: an app's own outbound
-// requests share its 60-a-minute limit. A limit or network failure stops the
-// step and keeps the progress; the job continues it. Logs carry counts and
-// HTTP statuses only.
+// A step makes at most STEP_CALLS platform calls in all: its reads of
+// Pathao (which share the app's 60-a-minute outbound limit), the place
+// imports and the progress it saves, inside the 50 platform calls one run
+// may make on the Free plan, with room for the route or cron that runs it.
+// It stops while it can still import and save what it read, so a step never
+// loses its progress to the limit. A limit or network failure stops the step
+// and keeps the progress; the job continues it. Logs carry counts and HTTP
+// statuses only.
 
 import type { PluginContext } from "@scalius/plugin-sdk";
 import { platformErrorCode, requireText } from "./common";
@@ -246,8 +250,12 @@ export async function buildPathaoPlaceDataset(
 // ── The store's live refresh ────────────────────────────────────────────────
 
 const KV_KEY = "pathao-refresh";
-/** Calls to Pathao per step, the token included: under the app's 60-a-minute outbound limit. */
-export const STEP_CALLS = 45;
+/**
+ * Platform calls per step (Pathao reads with the token, place imports, saves):
+ * within a Free run's 50 with room for the route or cron around it, and
+ * under the app's 60-a-minute outbound limit.
+ */
+export const STEP_CALLS = 44;
 
 export interface PathaoRefreshState {
   phase: "cities" | "zones" | "areas" | "done";
@@ -283,6 +291,9 @@ function pathaoAccount(ctx: PluginContext): PathaoAccount {
     password: requireText(ctx, "pathao_password", "Pathao: password"),
   };
 }
+
+/** The place import calls `entries` takes (one per PLACES_CHUNK). */
+const importCalls = (entries: number) => Math.ceil(entries / PLACES_CHUNK);
 
 async function importEntries(ctx: PluginContext, entries: PlaceEntry[], version: string): Promise<{ created: number; updated: number }> {
   let created = 0;
@@ -323,9 +334,31 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
   const previous = await readPathaoRefresh(ctx);
   if (!pathaoRefreshRunning(previous)) return previous;
   let state: PathaoRefreshState = { ...previous!, error: null };
+  // Every platform call of the step: the state read above, Pathao, imports and saves.
+  let calls = 1;
   const save = async (next: PathaoRefreshState) => {
     state = { ...next, updatedAt: new Date(now()).toISOString() };
+    calls += 1;
     await ctx.kv.set(KV_KEY, state);
+  };
+  const imported = async (entries: PlaceEntry[]) => {
+    calls += importCalls(entries.length);
+    return importEntries(ctx, entries, state.version);
+  };
+  /**
+   * Reads lists one at a time while the step can still afford the next read
+   * and then the import and the save of everything read (a list is assumed to
+   * add at most one import chunk until it is read).
+   */
+  const readWithin = async <T>(ids: readonly number[], read: (id: number) => Promise<T[]>, extraPerId = 0) => {
+    const items: T[] = [];
+    let count = 0;
+    for (const id of ids) {
+      if (calls + 1 + importCalls(items.length + (count + 1) * extraPerId + PLACES_CHUNK) + 1 > STEP_CALLS) break;
+      items.push(...await read(id));
+      count += 1;
+    }
+    return { items, count };
   };
   let account: PathaoAccount;
   try {
@@ -334,7 +367,7 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
     await save({ ...state, error: "Enter Pathao's API address, client ID, client secret, username and password in Settings → Shipping → Couriers first." });
     return state;
   }
-  let calls = 1; // the token
+  calls += 1; // keeps room for the token, which the first read fetches (and counts again)
   const client = pathaoLocationClient(account, (url, init) => {
     calls += 1;
     return ctx.http.fetch(url, { ...init, timeoutMs: 15_000 });
@@ -342,18 +375,19 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
   try {
     if (state.phase === "cities") {
       const entries = pathaoDatasetEntries(await cityList(client));
-      const applied = await importEntries(ctx, entries, state.version);
+      const applied = await imported(entries);
       const cityNames = Object.fromEntries(entries.filter((entry) => entry.active).map((entry) => [entry.externalIds.pathao, entry.name]));
       await save({ ...state, phase: "zones", cityIds: activeIds(entries), cityNames, next: 0, created: state.created + applied.created, updated: state.updated + applied.updated });
     }
-    while (state.phase === "zones" && calls < STEP_CALLS) {
-      const batch = state.cityIds.slice(state.next, state.next + Math.max(1, STEP_CALLS - calls));
-      if (batch.length === 0) {
+    while (state.phase === "zones") {
+      const pending = state.cityIds.slice(state.next);
+      if (pending.length === 0) {
         await save({ ...state, phase: "areas", next: 0 });
         break;
       }
-      const items: PathaoLocationImportItem[] = [];
-      for (const cityId of batch) items.push(...await zoneList(client, cityId));
+      const { items, count } = await readWithin(pending, (cityId) => zoneList(client, cityId), 1); // a city with no thana adds its switched-off entry
+      if (count === 0) break;
+      const batch = pending.slice(0, count);
       const entries = pathaoDatasetEntries(items);
       // A city with no thana is nowhere to deliver (Pathao's test cities): switched off.
       const served = new Set(entries.filter((entry) => entry.active).map((entry) => entry.parent));
@@ -362,7 +396,7 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
         const name = state.cityNames?.[String(cityId)];
         return served.has(key) || !name ? [] : [{ key, level: 1, parent: null, name, externalIds: { pathao: String(cityId) }, active: false }];
       });
-      const applied = await importEntries(ctx, [...empty, ...entries], state.version);
+      const applied = await imported([...empty, ...entries]);
       await save({
         ...state,
         zoneIds: [...state.zoneIds, ...activeIds(entries)],
@@ -371,17 +405,17 @@ export async function continuePathaoRefresh(ctx: PluginContext, now: () => numbe
         updated: state.updated + applied.updated,
       });
     }
-    while (state.phase === "areas" && calls < STEP_CALLS) {
-      const batch = state.zoneIds.slice(state.next, state.next + Math.max(1, STEP_CALLS - calls));
-      if (batch.length === 0) {
+    while (state.phase === "areas") {
+      const pending = state.zoneIds.slice(state.next);
+      if (pending.length === 0) {
         await save({ ...state, phase: "done" });
         ctx.log.info("Pathao places refreshed", { created: state.created, updated: state.updated });
         break;
       }
-      const items: PathaoLocationImportItem[] = [];
-      for (const zoneId of batch) items.push(...await areaList(client, zoneId));
-      const applied = await importEntries(ctx, pathaoDatasetEntries(items), state.version);
-      await save({ ...state, next: state.next + batch.length, created: state.created + applied.created, updated: state.updated + applied.updated });
+      const { items, count } = await readWithin(pending, (zoneId) => areaList(client, zoneId));
+      if (count === 0) break;
+      const applied = await imported(pathaoDatasetEntries(items));
+      await save({ ...state, next: state.next + count, created: state.created + applied.created, updated: state.updated + applied.updated });
     }
   } catch (error) {
     const code = platformErrorCode(error);
