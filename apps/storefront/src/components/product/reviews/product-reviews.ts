@@ -6,17 +6,16 @@
 // never does, and nothing here reaches analytics.
 
 import { checkoutText } from "@/lib/checkout-text";
+import { loadLazyScript } from "@/scripts/lazy-script";
+import type { ReviewCopy } from "./review-format";
 import {
   REVIEW_PAGE_SIZE,
   REVIEW_SORTS,
   productReviewsPageHref,
   productReviewsProxyHref,
-  publicReviewListMarkup,
-  readProductReviews,
-  type ReviewCopy,
   type ReviewListView,
   type ReviewSort,
-} from "./review-format";
+} from "./review-links";
 
 type ScriptCopy = Pick<
   ReviewCopy,
@@ -92,17 +91,21 @@ export function setupProductReviews(): void {
     busy = true;
     root.setAttribute("aria-busy", "true");
     try {
-      const response = await fetch(productReviewsProxyHref(productId, {
-        ...next,
-        cursor: append ? cursor : null,
-        limit: REVIEW_PAGE_SIZE,
-      }), { headers: { Accept: "application/json" } });
+      // The list's reader and markup load with the first read, beside it.
+      const [response, format] = await Promise.all([
+        fetch(productReviewsProxyHref(productId, {
+          ...next,
+          cursor: append ? cursor : null,
+          limit: REVIEW_PAGE_SIZE,
+        }), { headers: { Accept: "application/json" } }),
+        loadLazyScript(() => import("./review-format"), { needed: false }),
+      ]);
       const body = response.ok ? await response.json() as { data?: unknown } : null;
-      const page = readProductReviews(body?.data);
+      const page = format.readProductReviews(body?.data);
       if (!page) throw new Error("unreadable");
       view = next;
       cursor = page.nextCursor;
-      const markup = publicReviewListMarkup(page.items, render);
+      const markup = format.publicReviewListMarkup(page.items, render);
       if (append) list.insertAdjacentHTML("beforeend", markup);
       else list.innerHTML = markup;
       showStatus(!append && page.items.length === 0 && next.rating !== null

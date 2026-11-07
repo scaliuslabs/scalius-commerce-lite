@@ -1,5 +1,10 @@
-import { sha256Hex } from "./hash";
 import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
+import {
+  LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PURCHASE_OPTION_PROPERTY_KEY,
+  type CanonicalLineProperty,
+  type LinePropertyInput,
+} from "./line-identity";
 /**
  * Line-item properties: the buyer inputs a product asks for (engraving text,
  * gift wrap, a fit choice) and what they add to the line price (Wave A §3).
@@ -13,6 +18,20 @@ import { appScopedKey, appScopedKeyAppId, isAppScopedKey } from "./plugins/ids";
  * Properties are buyer content: never put them in URLs, analytics, logs or
  * queue payloads.
  */
+
+export {
+  LINE_PROPERTY_INPUT_LIMITS,
+  LINE_PURCHASE_OPTION_PROPERTY_KEY,
+  LINE_PURCHASE_OPTIONS_MAX,
+  NO_PROPERTIES_HASH,
+  lineCartKey,
+  lineIdentityProperties,
+  linePropertiesHash,
+  normalizeLinePurchaseOptions,
+  type CanonicalLineProperty,
+  type LinePropertyInput,
+  type LinePurchaseOptionsResult,
+} from "./line-identity";
 
 export const CUSTOMIZATION_SCHEMA_VERSION = 1 as const;
 export const CUSTOMIZATION_FIELD_TYPES = ["text", "textarea", "select", "checkbox"] as const;
@@ -34,27 +53,11 @@ export const CUSTOMIZATION_LIMITS = {
   serializedLength: 4_096,
 } as const;
 
-export const LINE_PROPERTY_INPUT_LIMITS = {
-  /** The product's own inputs (at most 10) and the active apps' line inputs, together. */
-  entries: 40,
-  valueLength: 1_000,
-  /**
-   * A line's resolved answers, serialized as the order line stores them. A
-   * text answer is stored twice (value and what the buyer saw), so 40 long
-   * answers would outgrow the stored snapshot (`ORDER_LINE_PROPERTIES_MAX_LENGTH`);
-   * the rest of the snapshot is left for what checkout freezes beside them
-   * (the apps' add-ons, options and a bundle).
-   */
-  serializedLength: 49_152,
-} as const;
-
 /** Serialized snapshot bound; the `order_items.properties` CHECK enforces the same number. */
 export const ORDER_LINE_PROPERTIES_MAX_LENGTH = 65_536;
 
 /** Keys with this prefix carry gift-card recipient details (Wave B) and are reserved. */
 export const RESERVED_PROPERTY_KEY_PREFIX = "_gc_";
-
-export const NO_PROPERTIES_HASH = "none" as const;
 
 interface CustomizationFieldBase {
   key: string;
@@ -357,17 +360,6 @@ export function hasRequiredCustomization(schema: CustomizationSchema | null): bo
 // Buyer values
 // ---------------------------------------------------------------------------
 
-export interface LinePropertyInput {
-  key: string;
-  value: string;
-}
-
-/** The identity form of a line's properties: schema keys, schema order, no empties. */
-export interface CanonicalLineProperty {
-  key: string;
-  value: string;
-}
-
 /**
  * An app's add-on to a line (`cart.line_prices` adjustments), frozen on the
  * order line beside its buyer inputs as "Add-on: <title> (+price)". It is
@@ -391,55 +383,12 @@ export function lineAdjustmentProperty(title: string, amountMinor: number, appId
  * price, never sent back as a property); the cart sends the line's
  * `purchaseOptions`, and they are part of its identity (`lineIdentityProperties`).
  */
-export const LINE_PURCHASE_OPTION_PROPERTY_KEY = "_purchase_option";
 export const LINE_PURCHASE_OPTION_LABEL = "Purchase option";
-/** The most purchase options one line carries (one per app). */
-export const LINE_PURCHASE_OPTIONS_MAX = 5;
 
 export function linePurchaseOptionProperty(id: string, title: string): ResolvedLineProperty {
   const text = title.trim().slice(0, 80);
   const appId = appScopedKeyAppId(id);
   return { key: LINE_PURCHASE_OPTION_PROPERTY_KEY, type: "text", label: LINE_PURCHASE_OPTION_LABEL, value: id, displayValue: text, priceMinor: 0, ...(appId ? { appId } : {}) };
-}
-
-export type LinePurchaseOptionsResult =
-  | { ok: true; options: string[] }
-  | { ok: false; reason: "invalid" | "same_app" | "too_many"; option: string | null };
-
-/**
- * A line's purchase options in their one canonical form: valid ids, at most
- * one per app (two from one app are refused, never chosen between), at most
- * LINE_PURCHASE_OPTIONS_MAX, sorted by id. Absent, null or empty is none.
- */
-export function normalizeLinePurchaseOptions(value: unknown): LinePurchaseOptionsResult {
-  if (value === undefined || value === null) return { ok: true, options: [] };
-  if (!Array.isArray(value)) return { ok: false, reason: "invalid", option: null };
-  const apps = new Set<string>();
-  const options = new Set<string>();
-  for (const entry of value) {
-    if (!isAppScopedKey(entry)) return { ok: false, reason: "invalid", option: typeof entry === "string" ? entry.slice(0, 160) : null };
-    if (options.has(entry)) continue;
-    const appId = appScopedKeyAppId(entry)!;
-    if (apps.has(appId)) return { ok: false, reason: "same_app", option: entry };
-    apps.add(appId);
-    options.add(entry);
-  }
-  if (options.size > LINE_PURCHASE_OPTIONS_MAX) return { ok: false, reason: "too_many", option: null };
-  return { ok: true, options: [...options].sort() };
-}
-
-/**
- * What a cart line's identity hashes (`linePropertiesHash`, `lineCartKey`):
- * its canonical buyer inputs, then one entry per purchase option, sorted by
- * id. A line with one option hashes exactly as it did when a line could have
- * only one; a line with none exactly as one without options.
- */
-export function lineIdentityProperties(
-  canonical: readonly CanonicalLineProperty[],
-  purchaseOptions: readonly string[] | null | undefined,
-): CanonicalLineProperty[] {
-  const options = [...new Set(purchaseOptions ?? [])].filter(Boolean).sort();
-  return [...canonical, ...options.map((value) => ({ key: LINE_PURCHASE_OPTION_PROPERTY_KEY, value }))];
 }
 
 function frozenEntries(properties: string | readonly unknown[] | null | undefined): unknown[] {
@@ -771,21 +720,6 @@ export function resolveLineProperties(
     return invalid(null, "the answers on this line are too long together");
   }
   return { ok: true, canonical, properties, propertiesPriceMinor };
-}
-
-/**
- * `sha256(canonical JSON)`, first 16 hex characters, or "none" without
- * properties. Identical canonical properties always hash the same.
- */
-export async function linePropertiesHash(canonical: readonly CanonicalLineProperty[]): Promise<string> {
-  if (canonical.length === 0) return NO_PROPERTIES_HASH;
-  const payload = JSON.stringify(canonical.map((property) => [property.key, property.value]));
-  return (await sha256Hex(payload)).slice(0, 16);
-}
-
-/** `line:v3:<product>:variant:<variant>:p:<propertiesHash>` — same SKU + same properties = one line. */
-export function lineCartKey(productId: string, variantId: string, propertiesHash: string): string {
-  return `line:v3:${productId}:variant:${variantId}:p:${propertiesHash}`;
 }
 
 /** The `order_items.properties` column value: null without properties. */

@@ -5,7 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { buyerUiBlockSchema, checkoutAttributesSchema, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
-import { LINE_PROPERTY_INPUT_LIMITS, normalizeLinePurchaseOptions } from "@scalius/shared/line-properties";
+import { LINE_PROPERTY_INPUT_LIMITS, normalizeLinePurchaseOptions } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
 import { GIFT_CARD_HANDLE_PATTERN, MAX_GIFT_CARDS_PER_ORDER } from "./gift-cards";

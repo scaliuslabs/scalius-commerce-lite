@@ -11,16 +11,10 @@
 // review shows at once, and the note says other shoppers see it within about
 // 15 minutes (the coalesced public cache refresh). Review text only travels in
 // a POST body.
-import {
-  buyerReviewSummaryMarkup,
-  readProductReviewState,
-  reviewFormMarkup,
-  type BuyerReview,
-  type ProductReviewState,
-  type ReviewFormCopy,
-} from "@/lib/account-reviews";
+import type { BuyerReview, ProductReviewState, ReviewFormCopy } from "@/lib/account-reviews";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { pagePath } from "@/lib/presence-url";
+import { loadLazyScript } from "@/scripts/lazy-script";
 
 type CtaCopy = ReviewFormCopy & {
   reviewsSignInToReviewText: string;
@@ -29,7 +23,19 @@ type CtaCopy = ReviewFormCopy & {
   reviewsWriteCtaText: string;
 };
 
-/** The personal answer, never from a cache. */
+/**
+ * The review form's module (its markup and the buyer's own review): loaded
+ * only for a signed-in buyer who may write or has written a review, never
+ * on the product page's first paint.
+ */
+let reviews: typeof import("@/lib/account-reviews") | null = null;
+
+/**
+ * The personal answer, never from a cache. A line to review or the buyer's
+ * own review is read by the form's module, loaded for it; when that cannot
+ * load, the answer is `unavailable` and the plain link to the account's
+ * Reviews page stays.
+ */
 export async function fetchProductReviewState(productId: string, fetcher: typeof fetch = fetch): Promise<ProductReviewState> {
   try {
     const response = await fetcher(`/api/reviews/${encodeURIComponent(productId)}/mine`, {
@@ -37,7 +43,13 @@ export async function fetchProductReviewState(productId: string, fetcher: typeof
       credentials: "same-origin",
       cache: "no-store",
     });
-    return response.ok ? readProductReviewState(await response.json()) : { state: "unavailable" };
+    if (!response.ok) return { state: "unavailable" };
+    const body: unknown = await response.json();
+    const state = body && typeof body === "object" ? (body as { state?: unknown }).state : null;
+    if (state === "signed_out" || state === "ineligible" || state === "disabled") return { state };
+    if (state !== "eligible" && state !== "reviewed") return { state: "unavailable" };
+    reviews ??= await loadLazyScript(() => import("@/lib/account-reviews"), { needed: false });
+    return reviews.readProductReviewState(body);
   } catch {
     return { state: "unavailable" };
   }
@@ -69,17 +81,17 @@ export function setupReviewCta(): void {
 
   const ownReview = (review: BuyerReview) =>
     `<p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">${escapeHtml(copy.reviewYourReviewText)}</p>`
-    + `<div class="text-sm">${buyerReviewSummaryMarkup(review, copy)}</div>`
+    + `<div class="text-sm">${reviews!.buyerReviewSummaryMarkup(review, copy)}</div>`
     + (review.status === "published" || review.status === "pending"
       ? `<p class="mt-2 text-xs text-muted-foreground">${escapeHtml(review.status === "pending" ? copy.reviewPendingNoticeText : copy.reviewsVisibleSoonText)}</p>`
       : "");
 
   const form = (): string => {
     if (state.state === "eligible") {
-      return reviewFormMarkup({ access: { kind: "account" }, returnTo: pagePath("/account/reviews"), copy, orderItemId: state.orderItemId, idPrefix: "pdp-review" });
+      return reviews!.reviewFormMarkup({ access: { kind: "account" }, returnTo: pagePath("/account/reviews"), copy, orderItemId: state.orderItemId, idPrefix: "pdp-review" });
     }
     if (state.state === "reviewed") {
-      return reviewFormMarkup({ access: { kind: "account" }, returnTo: pagePath("/account/reviews"), copy, orderItemId: state.review.orderItemId, idPrefix: "pdp-review", review: state.review });
+      return reviews!.reviewFormMarkup({ access: { kind: "account" }, returnTo: pagePath("/account/reviews"), copy, orderItemId: state.review.orderItemId, idPrefix: "pdp-review", review: state.review });
     }
     return "";
   };

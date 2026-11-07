@@ -1,6 +1,7 @@
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import { parseQuotedShippingRate, type QuotedShippingRate } from "./quote-facts";
+import { parseCartRuleErrors } from "../cart/rule-errors";
 
 // Every code and action the API answers with (a Record, so a new one fails to
 // compile here): an issue this list does not know would read as an outage.
@@ -178,41 +179,6 @@ export function refusedDeliveryRates(payload: unknown): QuotedShippingRate[] | n
 /** Mirrors the API's checkout-function refusal reasons. */
 export const CART_RULES_REASON = "cart_rules";
 export const PAYMENT_METHOD_UNAVAILABLE_REASON = "payment_method_unavailable";
-
-const MAX_CART_RULE_ERRORS = 50;
-const MAX_CART_RULE_MESSAGE_LENGTH = 300;
-
-/** A store app's buyer-facing text as one line of plain text (control characters become spaces). */
-function ruleText(value: unknown, maxLength: number): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = Array.from(value, (character) => {
-    const code = character.charCodeAt(0);
-    return code <= 31 || code === 127 ? " " : character;
-  }).join("").replace(/\s+/g, " ").trim();
-  return normalized && normalized.length <= maxLength ? normalized : null;
-}
-
-/**
- * Store app rules that block checkout, bounded: an entry without a usable
- * message is dropped, a line reference that is not one becomes the whole cart.
- */
-export function parseCartRuleErrors(value: unknown): CartRuleError[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, MAX_CART_RULE_ERRORS).flatMap((entry): CartRuleError[] => {
-    if (!isRecord(entry)) return [];
-    const message = ruleText(entry.message, MAX_CART_RULE_MESSAGE_LENGTH);
-    if (!message) return [];
-    const index = typeof entry.index === "number" && Number.isSafeInteger(entry.index) && entry.index >= 0
-      ? entry.index
-      : null;
-    return [{
-      code: boundedString(entry.code, 100) ?? "rule",
-      message,
-      index,
-      cartKey: boundedString(entry.cartKey, 256),
-    }];
-  });
-}
 
 /**
  * The rules a refusal names (`details.reason = "cart_rules"`), or null for any

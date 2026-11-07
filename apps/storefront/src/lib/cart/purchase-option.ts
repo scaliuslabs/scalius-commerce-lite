@@ -4,7 +4,7 @@
 // identity (the same SKU one-time and under an option are two lines) and
 // travel in request bodies as the line's `purchaseOptions`; the titles are
 // what the buyer chose, for display. The apps price the line at checkout.
-import { LINE_PURCHASE_OPTIONS_MAX, normalizeLinePurchaseOptions } from "@scalius/shared/line-properties";
+import { LINE_PURCHASE_OPTIONS_MAX, normalizeLinePurchaseOptions } from "@scalius/shared/line-identity";
 import { isPurchaseOptionId, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
 
 export type CartLinePurchaseOption = {

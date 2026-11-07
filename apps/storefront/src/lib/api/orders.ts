@@ -14,7 +14,7 @@ import type {
 } from "@scalius/shared/fulfilment";
 import { unwrapData } from "./unwrap";
 import { getCheckoutErrorMessage } from "@/lib/checkout/error-messages";
-import { parseCartRuleErrors } from "@/lib/checkout/tax-quote-error-contract";
+import { parseCartRuleErrors } from "@/lib/cart/rule-errors";
 
 export class OrderReceiptAccessError extends Error {
   constructor(public readonly status: number) {

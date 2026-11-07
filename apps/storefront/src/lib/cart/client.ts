@@ -70,6 +70,7 @@ import {
   fillCartRuleBanner,
   groupCartRuleErrors,
   mergeCartRuleErrors,
+  parseCartRuleErrors,
   renderCartLineRuleErrors,
 } from "./rule-errors";
 import {
@@ -90,7 +91,6 @@ import {
 import {
   cartRuleRefusal,
   isDeliveryRateUnavailable,
-  parseCartRuleErrors,
   refusedDeliveryRates,
   refusedForItems,
   unavailableDeliveryLocation,

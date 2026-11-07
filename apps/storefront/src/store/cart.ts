@@ -6,7 +6,7 @@ import {
   linePropertiesHash,
   LINE_PROPERTY_INPUT_LIMITS,
   NO_PROPERTIES_HASH,
-} from "@scalius/shared/line-properties";
+} from "@scalius/shared/line-identity";
 import { isFulfillmentKind, type FulfillmentKind } from "@scalius/shared/fulfilment";
 import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";

@@ -7,6 +7,50 @@
 import type { CartRuleError } from "../api/orders";
 import type { CartItem } from "../../store/cart";
 
+const MAX_CART_RULE_ERRORS = 50;
+const MAX_CART_RULE_MESSAGE_LENGTH = 300;
+
+/** Trimmed text of at most `maxLength` characters, else null. */
+function boundedString(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+/** A store app's buyer-facing text as one line of plain text (control characters become spaces). */
+function ruleText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = Array.from(value, (character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127 ? " " : character;
+  }).join("").replace(/\s+/g, " ").trim();
+  return normalized && normalized.length <= maxLength ? normalized : null;
+}
+
+/**
+ * Store app rules that block checkout, bounded: an entry without a usable
+ * message is dropped, a line reference that is not one becomes the whole cart.
+ * Read here, beside the cart's other rule handling, so the cart drawer reads
+ * them without the checkout's refusal contract (tax-quote-error-contract.ts).
+ */
+export function parseCartRuleErrors(value: unknown): CartRuleError[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_CART_RULE_ERRORS).flatMap((entry): CartRuleError[] => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return [];
+    const message = ruleText(entry.message, MAX_CART_RULE_MESSAGE_LENGTH);
+    if (!message) return [];
+    const index = typeof entry.index === "number" && Number.isSafeInteger(entry.index) && entry.index >= 0
+      ? entry.index
+      : null;
+    return [{
+      code: boundedString(entry.code, 100) ?? "rule",
+      message,
+      index,
+      cartKey: boundedString(entry.cartKey, 256),
+    }];
+  });
+}
+
 export interface CartRuleErrorGroups {
   /** Rules about one line, by its cart key. */
   lines: Record<string, CartRuleError[]>;

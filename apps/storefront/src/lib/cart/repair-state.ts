@@ -1,5 +1,5 @@
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
-import { parseCartRuleErrors } from "../checkout/tax-quote-error-contract";
+import { parseCartRuleErrors } from "./rule-errors";
 
 export const CHECKOUT_CART_REPAIR_STORAGE_KEY = "scalius_cart_repair_state";
 const REPAIR_STATE_MAX_AGE_MS = 5 * 60 * 1000;
