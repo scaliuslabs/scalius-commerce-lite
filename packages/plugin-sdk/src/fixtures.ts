@@ -55,9 +55,13 @@ function cartLine(overrides: Partial<FunctionCart["lines"][number]> = {}): Funct
 /** A guest's online-store cart in BDT (two decimal places); override any field, including `lines`. */
 function cart(overrides: Partial<FunctionCart> = {}): FunctionCart {
   const lines = overrides.lines ?? [cartLine()];
+  const currency = overrides.currency ?? "BDT";
+  const decimalPlaces = overrides.decimalPlaces ?? 2;
   return {
-    currency: "BDT",
-    decimalPlaces: 2,
+    currency,
+    decimalPlaces,
+    // The store sells in the cart's currency unless the test says otherwise.
+    storeCurrency: { code: currency, decimalPlaces },
     channel: "online_store",
     salesChannelId: "sc_online_store",
     lines,

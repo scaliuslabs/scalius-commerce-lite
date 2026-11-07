@@ -3,9 +3,9 @@ import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient
 import { BACKUP_MARKET_ID, DEFAULT_SHIPPING_PROFILE_ID, products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
+import { addOnShareMinor, discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
-import { mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
+import { lineAdjustmentProperty, mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { isForeignPresentment, presentShopMinor, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
 import { normalizeMarketCountry } from "@scalius/shared/markets";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
@@ -45,7 +45,7 @@ import { licenceKeyStockSql } from "../inventory";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, type AppLinePrice, type ResolvedPriceSource } from "@scalius/shared/market-pricing";
-import { resolveCartWithAppLinePrices, type AppLinePricer } from "./app-line-prices";
+import { resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import type { CartTransformer, TransformedCart } from "./cart-transform";
 import {
     checkoutListPricesSql,
@@ -548,8 +548,8 @@ export function resolveStorefrontCartValidationFromRows(
         priceScope?: CheckoutPriceScope | null;
         /** `cart.line_prices` answers by line index (app-line-prices.ts). */
         appPrices?: ReadonlyMap<number, AppLinePrice>;
-        /** `cart.line_prices` add-ons by line index, already rounded and bounded. */
-        appAdjustments?: ReadonlyMap<number, ResolvedLineProperty[]>;
+        /** `cart.line_prices` add-ons by line index, bounded; fixed ones already rounded, shares taken here. */
+        appAdjustments?: ReadonlyMap<number, AppLineAddOn[]>;
         /** The purchase options the active apps declare, id → title (`checkoutPurchaseOptions`); absent: none. */
         purchaseOptions?: ReadonlyMap<string, string>;
         /** The active apps' line inputs (`checkoutLineInputs`): resolved with the product's own inputs. Absent: none. */
@@ -864,8 +864,11 @@ export function resolveStorefrontCartValidationFromRows(
             appPrice,
         );
         const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
-        // App add-ons apply after the whole precedence, to whatever priced the line.
-        const adjustments = isGiftCard || item.bundle ? [] : options.appAdjustments?.get(index) ?? [];
+        // App add-ons apply after the whole precedence, to whatever priced the line;
+        // a share is of the item as priced (price and surcharges), before add-ons and discounts.
+        const itemUnitMinor = baseUnitPriceMinor + propertiesPriceMinor;
+        const adjustments = (isGiftCard || item.bundle ? [] : options.appAdjustments?.get(index) ?? []).map((addOn) =>
+            lineAdjustmentProperty(addOn.title, "percent" in addOn ? addOnShareMinor(itemUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor, addOn.appId));
         const adjustmentsMinor = adjustments.reduce((total, adjustment) => total + adjustment.priceMinor, 0);
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor + adjustmentsMinor;
         const submittedPriceMinor = typeof item.price === "number"

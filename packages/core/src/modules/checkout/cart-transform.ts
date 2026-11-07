@@ -42,6 +42,7 @@ import { buildStorefrontTaxAllocationLineId } from "../tax";
 import {
     appCartMarketCountry,
     buildAppFunctionCart,
+    functionStoreCurrency,
     loadAppFunctionCartFacts,
     type CheckoutAppFunctionResult,
     type CheckoutAppFunctions,
@@ -113,6 +114,7 @@ export function createCartTransformer(
         try {
             cart = buildAppFunctionCart({
                 currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces },
+                storeCurrency: functionStoreCurrency(preliminary.money),
                 channel: context.channel,
                 segmentIds: preliminary.pricingSegmentIds,
                 lines: valid.map((item, position) => ({

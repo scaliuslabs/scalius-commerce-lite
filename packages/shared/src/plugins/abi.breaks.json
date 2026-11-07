@@ -490,5 +490,23 @@
   "from": "d11015f433b8b3de",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontProductState: an existing signature changed or gained a required member.",
   "reason": "Pre-release (gap G3 follow-up): `StorefrontProductState.purchaseOption` named only the first option by id once a buy form can carry one option per app, so an island testing it for its own option stopped seeing it beside another app's. Removed; `purchaseOptions` (sorted by id) lists every option the buyer chose."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "70a33ec64e283a49",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (Nov 7 review, M1/M2): the function cart gains `storeCurrency` (the store's own currency and decimal places, which an app's settings amounts are in), so an app can answer a fixed amount with `currency: \"store\"` and core converts it at the checkout's locked rate like a product price; and a line's `properties` values reach functions whole (up to 1,000 characters, as the order line freezes them) instead of cut at 500. Every declaration naming the cart or the run schemas gained the required member; an app that builds a cart by hand (a test) adds `storeCurrency`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "70a33ec64e283a49",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (Nov 7 review, M1/M2): the function cart gains `storeCurrency` (the store's own currency and decimal places, which an app's settings amounts are in), so an app can answer a fixed amount with `currency: \"store\"` and core converts it at the checkout's locked rate like a product price; and a line's `properties` values reach functions whole (up to 1,000 characters, as the order line freezes them) instead of cut at 500. Every declaration naming the cart or the run schemas gained the required member; an app that builds a cart by hand (a test) adds `storeCurrency`, which `fixtures.cart` fills."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "70a33ec64e283a49",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (Nov 7 review, M1/M2): the function cart gains `storeCurrency` (the store's own currency and decimal places, which an app's settings amounts are in), so an app can answer a fixed amount with `currency: \"store\"` and core converts it at the checkout's locked rate like a product price; and a line's `properties` values reach functions whole (up to 1,000 characters, as the order line freezes them) instead of cut at 500. Every declaration naming the cart or the run schemas gained the required member; an app that builds a cart by hand (a test) adds `storeCurrency`, which `fixtures.cart` fills."
  }
 ]

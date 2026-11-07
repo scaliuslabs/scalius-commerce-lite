@@ -22,7 +22,7 @@ import { buyerUiOutputSchema, checkoutAttributesSchema } from "./buyer-ui";
 import { FUNCTION_READ_AS_PATTERN, FUNCTION_READS_MAX, functionReadsSchema } from "./function-reads";
 import { STOREFRONT_UI_SLOTS } from "./storefront-protocol";
 import { APP_SCOPED_KEY_MAX_LENGTH, APP_SCOPED_KEY_PATTERN } from "./ids";
-import { LINE_PURCHASE_OPTIONS_MAX } from "../line-properties";
+import { LINE_PROPERTY_INPUT_LIMITS, LINE_PURCHASE_OPTIONS_MAX } from "../line-properties";
 import type { PluginFunctionPoint } from "./manifest";
 import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
 import { ORDER_CHANNELS } from "../order-channel";
@@ -52,9 +52,10 @@ export const functionCartLineSchema = z.object({
   /**
    * Buyer inputs captured on the line, by key: the merchant's own (engraving
    * text, a gift note) and this app's line inputs (`checkout.lineInputs`)
-   * under `<app id>.<key>`. Another app's line inputs are never shown.
+   * under `<app id>.<key>`, each exactly as the order line will freeze it
+   * (up to 1,000 characters). Another app's line inputs are never shown.
    */
-  properties: z.record(z.string().max(APP_SCOPED_KEY_MAX_LENGTH), z.string().max(500)),
+  properties: z.record(z.string().max(APP_SCOPED_KEY_MAX_LENGTH), z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength)),
   /**
    * The SKU is a physical good (not digital, a service or a gift card),
    * whatever delivery the buyer picks: a pickup line still requires shipping
@@ -85,8 +86,15 @@ export const functionCartLineSchema = z.object({
 export const FUNCTION_CART_CHANNELS = ORDER_CHANNELS;
 
 export const functionCartSchema = z.object({
+  /** The currency the buyer pays in (the market's): every `*Minor` amount here is in it. */
   currency: z.string().length(3),
   decimalPlaces: z.number().int().min(0).max(4),
+  /**
+   * The store's own currency, the one your settings' amounts are in. It is
+   * `currency` unless the market sells in another; answer a fixed amount
+   * with `currency: "store"` and core converts it as it does a product price.
+   */
+  storeCurrency: z.object({ code: z.string().length(3), decimalPlaces: z.number().int().min(0).max(4) }).strict(),
   channel: z.enum(FUNCTION_CART_CHANNELS),
   /**
    * The sales channel the order sells from (`orders.sales_channel_id`,
@@ -326,41 +334,69 @@ export const LINE_ADJUSTMENTS_PER_LINE_MAX = 5;
 /** The largest add-on to one unit, in minor units. */
 export const LINE_ADJUSTMENT_MAX_MINOR = 1_000_000_000_000;
 
+/** Which currency an answered amount is in: `cart` (the default, `cart.currency`) or `store` (`cart.storeCurrency`). */
+export const FUNCTION_AMOUNT_CURRENCIES = ["cart", "store"] as const;
+/** Absent: `cart`. */
+const amountCurrency = z.enum(FUNCTION_AMOUNT_CURRENCIES).optional();
+/** The largest share of a line an add-on takes, in percent. */
+export const LINE_ADJUSTMENT_PERCENT_MAX = 1_000;
+/** A share with at most two decimals (`12.5` is 12.5%). */
+const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT_MAX)
+  .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, "At most two decimals.");
+
 /**
- * `prices`: unit prices in the cart currency's minor units, before
- * buyer-input surcharges (they are added on top), for one-time lines priced
- * at `sale`, `fx` or `base` and for lines bought with the app's own purchase option
- * (above every list). Several apps: the first in priority order that prices
- * a one-time line wins. A sale only lowers that offer. An unnamed one-time
- * line keeps its price. A purchase-option line takes a price only from an
- * app whose option it carries, and each of those apps must answer it with a
- * price or an add-on, else checkout refuses; two of them pricing one line
- * refuse too (`purchase_options_conflict`): one line has one price.
+ * `prices`: unit prices in minor units, before buyer-input surcharges (they
+ * are added on top), for one-time lines priced at `sale`, `fx` or `base` and
+ * for lines bought with the app's own purchase option (above every list).
+ * Several apps: the first in priority order that prices a one-time line wins,
+ * and the merchant sees a notice naming the app whose price was not used. A
+ * sale only lowers that offer. An unnamed one-time line keeps its price. A
+ * purchase-option line takes a price only from an app whose option it
+ * carries, and each of those apps must answer it with a price or an add-on,
+ * else checkout refuses; two of them pricing one line refuse too
+ * (`purchase_options_conflict`): one line has one price.
  *
  * `adjustments`: add-ons to each unit of a line (an engraving's letters, a
- * gift wrap), applied after the whole price precedence, so sale, segment
- * and price-list lines take them too. Every app's add-ons apply, in priority
- * order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line. Not on gift cards or
- * bundle lines. The buyer sees each as a line component ("Add-on: <title>")
- * in the cart, checkout, receipt and emails; tax, discounts, totals and
- * refunds include it as part of the unit price.
+ * gift wrap, a protection plan), applied after the whole price precedence,
+ * so sale, segment, app and price-list lines take them too. An add-on is a
+ * fixed `amountMinor` or a `percent` of the line's unit price as checkout
+ * prices it (after every price, before add-ons and discounts; currency-free,
+ * so one share prices every market). Every app's add-ons apply, in priority
+ * order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line, never on gift cards
+ * or bundle lines: an add-on the line cannot take refuses checkout
+ * (`add_on_unavailable`), so a buyer never gets what it pays for unpaid. The
+ * buyer sees each as a line component ("Add-on: <title>") in the cart,
+ * checkout, receipt and emails; tax, discounts, totals and refunds include it
+ * as part of the unit price.
  *
- * Every amount is in the cart currency (the presentment currency of the
- * market) and is rounded half-up to the market's price increment; one that
- * rounds to nothing is skipped.
+ * Amounts are in the cart's currency unless the answer says
+ * `currency: "store"`: then core converts them at the checkout's one locked
+ * rate, exactly as it converts a product price. Every amount is rounded
+ * half-up to the market's price increment; a positive one never rounds to
+ * nothing (it takes one increment).
  */
 export const cartLinePricesOutputSchema = z.object({
   prices: z.array(z.object({
     lineId: id,
     unitPriceMinor: minor.positive(),
+    currency: amountCurrency,
   }).strict()).max(250).default([]),
-  adjustments: z.array(z.object({
-    lineId: id,
-    /** Added to each unit of the line. */
-    amountMinor: minor.positive().max(LINE_ADJUSTMENT_MAX_MINOR),
-    /** What the buyer sees on the line ("Engraving, 6 letters"). */
-    title: label,
-  }).strict()).max(250).default([]),
+  adjustments: z.array(z.union([
+    z.object({
+      lineId: id,
+      /** Added to each unit of the line. */
+      amountMinor: minor.positive().max(LINE_ADJUSTMENT_MAX_MINOR),
+      currency: amountCurrency,
+      /** What the buyer sees on the line ("Engraving, 6 letters"). */
+      title: label,
+    }).strict(),
+    z.object({
+      lineId: id,
+      /** Added to each unit: this share of the unit price checkout charges for the item. */
+      percent: percentOfUnit,
+      title: label,
+    }).strict(),
+  ])).max(250).default([]),
 }).strict();
 
 // ── Registry ──────────────────────────────────────────────────────────────

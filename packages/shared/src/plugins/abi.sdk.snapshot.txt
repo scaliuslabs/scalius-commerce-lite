@@ -424,6 +424,13 @@ export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEn
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentCapability, PaymentCapture, PaymentCaptureInput, PaymentCharge, PaymentChargeInput, PaymentDeleteSavedMethod, PaymentDeleteSavedMethodInput, PaymentEvent, PaymentVoid, PaymentVoidInput, SavedPaymentMethod, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
+export type { FunctionCart } from "@scalius/shared/plugins";
+export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";
+import type { EventRepresentation } from "@scalius/shared/events";
+export type OrderRepresentation = EventRepresentation<"order">;
+export type OrderRepresentationLine = OrderRepresentation["lines"][number];
+export type RefundRepresentation = EventRepresentation<"refund">;
+export type ReturnRepresentation = EventRepresentation<"return">;
 export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
 export type PluginFunctionHandler<P extends PluginFunctionPoint, Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<P>, settings: Settings) => PluginFunctionAnswer<P> | Promise<PluginFunctionAnswer<P>>;
 export type PluginExtensionHandler<Settings = Readonly<Record<string, PluginSettingValue>>> = (input: PluginFunctionInput<"buyer.ui">, settings: Settings) => PluginFunctionAnswer<"buyer.ui"> | Promise<PluginFunctionAnswer<"buyer.ui">>;
@@ -2565,6 +2572,535 @@ export {};
 export type CustomFieldJson = string | number | boolean | CustomFieldJson[] | { [key: string]: CustomFieldJson; } | null;
 export type CustomFieldWireValue = string | number | boolean | CustomFieldJson[] | { [key: string]: CustomFieldJson; } | null;
 
+// packages/shared/src/events-representations.d.ts
+export declare const EVENT_REPRESENTATION_SCHEMAS: {
+    readonly order: z.ZodObject<{
+        id: z.ZodString;
+        orderNumber: z.ZodNullable<z.ZodNumber>;
+        status: z.ZodEnum<{
+            confirmed: "confirmed";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            delivered: "delivered";
+            returned: "returned";
+            shipped: "shipped";
+            completed: "completed";
+            refunded: "refunded";
+            incomplete: "incomplete";
+        }>;
+        paymentStatus: z.ZodEnum<{
+            failed: "failed";
+            refunded: "refunded";
+            unpaid: "unpaid";
+            partial: "partial";
+            paid: "paid";
+            partially_refunded: "partially_refunded";
+        }>;
+        fulfillmentStatus: z.ZodEnum<{
+            pending: "pending";
+            partial: "partial";
+            complete: "complete";
+        }>;
+        channel: z.ZodEnum<{
+            admin: "admin";
+            online_store: "online_store";
+            pos: "pos";
+            agent: "agent";
+            app: "app";
+        }>;
+        salesChannelId: z.ZodString;
+        marketId: z.ZodNullable<z.ZodString>;
+        currency: z.ZodString;
+        subtotalMinor: z.ZodNumber;
+        shippingMinor: z.ZodNumber;
+        discountMinor: z.ZodNumber;
+        taxMinor: z.ZodNumber;
+        totalMinor: z.ZodNumber;
+        paidMinor: z.ZodNumber;
+        balanceDueMinor: z.ZodNumber;
+        pricesIncludeTax: z.ZodBoolean;
+        paymentMethod: z.ZodNullable<z.ZodString>;
+        paymentTerms: z.ZodNullable<z.ZodObject<{
+            kind: z.ZodLiteral<"net">;
+            days: z.ZodNumber;
+            dueAt: z.ZodString;
+        }, z.core.$strip>>;
+        customerId: z.ZodNullable<z.ZodString>;
+        accountCustomerId: z.ZodNullable<z.ZodString>;
+        contact: z.ZodObject<{
+            name: z.ZodNullable<z.ZodString>;
+            email: z.ZodNullable<z.ZodString>;
+            phone: z.ZodNullable<z.ZodString>;
+        }, z.core.$strip>;
+        requiresShipping: z.ZodBoolean;
+        shippingMethodId: z.ZodNullable<z.ZodString>;
+        shippingAddress: z.ZodNullable<z.ZodObject<{
+            name: z.ZodNullable<z.ZodString>;
+            phone: z.ZodNullable<z.ZodString>;
+            company: z.ZodNullable<z.ZodString>;
+            line1: z.ZodNullable<z.ZodString>;
+            line2: z.ZodNullable<z.ZodString>;
+            dependentLocality: z.ZodNullable<z.ZodString>;
+            locality: z.ZodNullable<z.ZodString>;
+            adminArea: z.ZodNullable<z.ZodString>;
+            postalCode: z.ZodNullable<z.ZodString>;
+            countryCode: z.ZodNullable<z.ZodString>;
+            placeIds: z.ZodObject<{
+                city: z.ZodNullable<z.ZodString>;
+                zone: z.ZodNullable<z.ZodString>;
+                area: z.ZodNullable<z.ZodString>;
+            }, z.core.$strip>;
+        }, z.core.$strip>>;
+        billingAddress: z.ZodNullable<z.ZodObject<{
+            name: z.ZodNullable<z.ZodString>;
+            phone: z.ZodNullable<z.ZodString>;
+            company: z.ZodNullable<z.ZodString>;
+            line1: z.ZodNullable<z.ZodString>;
+            line2: z.ZodNullable<z.ZodString>;
+            dependentLocality: z.ZodNullable<z.ZodString>;
+            locality: z.ZodNullable<z.ZodString>;
+            adminArea: z.ZodNullable<z.ZodString>;
+            postalCode: z.ZodNullable<z.ZodString>;
+            countryCode: z.ZodNullable<z.ZodString>;
+            placeIds: z.ZodObject<{
+                city: z.ZodNullable<z.ZodString>;
+                zone: z.ZodNullable<z.ZodString>;
+                area: z.ZodNullable<z.ZodString>;
+            }, z.core.$strip>;
+        }, z.core.$strip>>;
+        fulfillmentLocationId: z.ZodNullable<z.ZodString>;
+        revision: z.ZodNumber;
+        lines: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            productId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            title: z.ZodNullable<z.ZodString>;
+            variantLabel: z.ZodNullable<z.ZodString>;
+            sku: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+            fulfilledQuantity: z.ZodNumber;
+            unitPriceMinor: z.ZodNumber;
+            subtotalMinor: z.ZodNumber;
+            discountMinor: z.ZodNumber;
+            taxMinor: z.ZodNumber;
+            purchaseOptions: z.ZodArray<z.ZodString>;
+            properties: z.ZodArray<z.ZodObject<{
+                key: z.ZodString;
+                label: z.ZodString;
+                value: z.ZodString;
+                displayValue: z.ZodString;
+                priceMinor: z.ZodNumber;
+                appId: z.ZodNullable<z.ZodString>;
+            }, z.core.$strip>>;
+            adjustments: z.ZodArray<z.ZodObject<{
+                appId: z.ZodNullable<z.ZodString>;
+                title: z.ZodString;
+                amountMinor: z.ZodNumber;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        attributes: z.ZodRecord<z.ZodString, z.ZodString>;
+        discountApplications: z.ZodArray<z.ZodObject<{
+            source: z.ZodEnum<{
+                store: "store";
+                app: "app";
+            }>;
+            discountId: z.ZodNullable<z.ZodString>;
+            appId: z.ZodNullable<z.ZodString>;
+            title: z.ZodString;
+            code: z.ZodNullable<z.ZodString>;
+            method: z.ZodEnum<{
+                code: "code";
+                automatic: "automatic";
+            }>;
+            amountMinor: z.ZodNumber;
+            shippingAmountMinor: z.ZodNumber;
+            lines: z.ZodArray<z.ZodObject<{
+                orderItemId: z.ZodString;
+                amountMinor: z.ZodNumber;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+        deletedAt: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly return: z.ZodObject<{
+        id: z.ZodString;
+        orderId: z.ZodString;
+        status: z.ZodEnum<{
+            cancelled: "cancelled";
+            rejected: "rejected";
+            completed: "completed";
+            requested: "requested";
+            approved: "approved";
+            receiving: "receiving";
+        }>;
+        reason: z.ZodString;
+        source: z.ZodEnum<{
+            admin: "admin";
+            support_request: "support_request";
+            cod_return_to_sender: "cod_return_to_sender";
+        }>;
+        revision: z.ZodNumber;
+        requestedAt: z.ZodString;
+        approvedAt: z.ZodNullable<z.ZodString>;
+        completedAt: z.ZodNullable<z.ZodString>;
+        rejectedAt: z.ZodNullable<z.ZodString>;
+        cancelledAt: z.ZodNullable<z.ZodString>;
+        lines: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            requestedQuantity: z.ZodNumber;
+            approvedQuantity: z.ZodNumber;
+            receivedQuantity: z.ZodNumber;
+            restockQuantity: z.ZodNumber;
+            damagedQuantity: z.ZodNumber;
+            untrackedQuantity: z.ZodNumber;
+            rejectedQuantity: z.ZodNumber;
+        }, z.core.$strip>>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly product: z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        slug: z.ZodString;
+        status: z.ZodEnum<{
+            active: "active";
+            draft: "draft";
+            trashed: "trashed";
+        }>;
+        brandId: z.ZodNullable<z.ZodString>;
+        categoryId: z.ZodNullable<z.ZodString>;
+        revision: z.ZodNumber;
+        isGiftCard: z.ZodBoolean;
+        imageUrl: z.ZodNullable<z.ZodString>;
+        currency: z.ZodString;
+        priceMinor: z.ZodNumber;
+        variants: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            sku: z.ZodString;
+            priceMinor: z.ZodNumber;
+            barcode: z.ZodNullable<z.ZodString>;
+            trackInventory: z.ZodBoolean;
+            fulfillmentKind: z.ZodString;
+            isDefault: z.ZodBoolean;
+            barcodeType: z.ZodNullable<z.ZodString>;
+            weightGrams: z.ZodNullable<z.ZodNumber>;
+            optionValues: z.ZodRecord<z.ZodString, z.ZodString>;
+            mediaId: z.ZodNullable<z.ZodString>;
+        }, z.core.$strip>>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+        deletedAt: z.ZodNullable<z.ZodString>;
+        description: z.ZodNullable<z.ZodString>;
+        condition: z.ZodNullable<z.ZodString>;
+        metaTitle: z.ZodNullable<z.ZodString>;
+        metaDescription: z.ZodNullable<z.ZodString>;
+        salesChannelIds: z.ZodArray<z.ZodString>;
+        media: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            mediaId: z.ZodString;
+            kind: z.ZodString;
+            url: z.ZodString;
+            altText: z.ZodNullable<z.ZodString>;
+            featured: z.ZodBoolean;
+        }, z.core.$strip>>;
+        options: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+            standardMapping: z.ZodString;
+            values: z.ZodArray<z.ZodString>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    readonly variant: z.ZodObject<{
+        id: z.ZodString;
+        productId: z.ZodString;
+        sku: z.ZodString;
+        trackInventory: z.ZodBoolean;
+        onHand: z.ZodNumber;
+        levels: z.ZodArray<z.ZodObject<{
+            locationId: z.ZodString;
+            onHand: z.ZodNumber;
+        }, z.core.$strip>>;
+        stockVersion: z.ZodNumber;
+        updatedAt: z.ZodString;
+        barcode: z.ZodNullable<z.ZodString>;
+        retiredAt: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly customer: z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodNullable<z.ZodString>;
+        email: z.ZodNullable<z.ZodString>;
+        phone: z.ZodNullable<z.ZodString>;
+        hasAccount: z.ZodBoolean;
+        totalOrders: z.ZodNumber;
+        lastOrderAt: z.ZodNullable<z.ZodString>;
+        mergedIntoCustomerId: z.ZodNullable<z.ZodString>;
+        tags: z.ZodArray<z.ZodString>;
+        consents: z.ZodArray<z.ZodObject<{
+            channel: z.ZodString;
+            state: z.ZodString;
+            contact: z.ZodNullable<z.ZodString>;
+            updatedAt: z.ZodString;
+        }, z.core.$strip>>;
+        taxExempt: z.ZodBoolean;
+        taxExemptionId: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+        deletedAt: z.ZodNullable<z.ZodString>;
+        erasedAt: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly purchase_order: z.ZodObject<{
+        id: z.ZodString;
+        number: z.ZodNumber;
+        status: z.ZodString;
+        supplierId: z.ZodNullable<z.ZodString>;
+        destinationLocationId: z.ZodString;
+        reference: z.ZodNullable<z.ZodString>;
+        expectedOn: z.ZodNullable<z.ZodString>;
+        currency: z.ZodString;
+        shippingMinor: z.ZodNumber;
+        otherCostsMinor: z.ZodNumber;
+        taxMinor: z.ZodNumber;
+        revision: z.ZodNumber;
+        lines: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            variantId: z.ZodString;
+            quantity: z.ZodNumber;
+            receivedQuantity: z.ZodNumber;
+            unitCostMinor: z.ZodNumber;
+        }, z.core.$strip>>;
+        orderedAt: z.ZodNullable<z.ZodString>;
+        receivedAt: z.ZodNullable<z.ZodString>;
+        cancelledAt: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly inventory_transfer: z.ZodObject<{
+        id: z.ZodString;
+        number: z.ZodNumber;
+        status: z.ZodString;
+        originLocationId: z.ZodString;
+        destinationLocationId: z.ZodString;
+        reference: z.ZodNullable<z.ZodString>;
+        expectedOn: z.ZodNullable<z.ZodString>;
+        revision: z.ZodNumber;
+        lines: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            variantId: z.ZodString;
+            quantity: z.ZodNumber;
+            receivedQuantity: z.ZodNumber;
+            shippedQuantity: z.ZodNumber;
+            returnedQuantity: z.ZodNumber;
+        }, z.core.$strip>>;
+        shippedAt: z.ZodNullable<z.ZodString>;
+        receivedAt: z.ZodNullable<z.ZodString>;
+        cancelledAt: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly fulfillment: z.ZodObject<{
+        id: z.ZodString;
+        orderId: z.ZodString;
+        kind: z.ZodEnum<{
+            service: "service";
+            gift_card: "gift_card";
+            pickup: "pickup";
+            ship: "ship";
+            digital: "digital";
+        }>;
+        status: z.ZodEnum<{
+            voided: "voided";
+            active: "active";
+        }>;
+        shipmentId: z.ZodNullable<z.ZodString>;
+        locationId: z.ZodNullable<z.ZodString>;
+        currency: z.ZodString;
+        cashCollectedMinor: z.ZodNullable<z.ZodNumber>;
+        lines: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            orderItemId: z.ZodString;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+        createdAt: z.ZodString;
+        voidedAt: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly refund: z.ZodObject<{
+        id: z.ZodString;
+        orderId: z.ZodString;
+        status: z.ZodEnum<{
+            failed: "failed";
+            pending: "pending";
+            refunded: "refunded";
+            partial: "partial";
+        }>;
+        currency: z.ZodString;
+        amountMinor: z.ZodNumber;
+        settlement: z.ZodEnum<{
+            original: "original";
+            store_credit: "store_credit";
+        }>;
+        lines: z.ZodArray<z.ZodObject<{
+            orderItemId: z.ZodString;
+            variantId: z.ZodNullable<z.ZodString>;
+            quantity: z.ZodNumber;
+        }, z.core.$strip>>;
+        paymentIds: z.ZodArray<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly shipment: z.ZodObject<{
+        id: z.ZodString;
+        orderId: z.ZodString;
+        providerId: z.ZodNullable<z.ZodString>;
+        providerType: z.ZodString;
+        status: z.ZodEnum<{
+            failed: "failed";
+            unknown: "unknown";
+            cancelled: "cancelled";
+            processing: "processing";
+            pending: "pending";
+            pickup_assigned: "pickup_assigned";
+            picked_up: "picked_up";
+            pickup_failed: "pickup_failed";
+            in_transit: "in_transit";
+            out_for_delivery: "out_for_delivery";
+            delivered: "delivered";
+            partial_delivered: "partial_delivered";
+            delivery_failed: "delivery_failed";
+            on_hold: "on_hold";
+            returned: "returned";
+            creating: "creating";
+            reconcile_required: "reconcile_required";
+        }>;
+        rawStatus: z.ZodNullable<z.ZodString>;
+        externalId: z.ZodNullable<z.ZodString>;
+        trackingId: z.ZodNullable<z.ZodString>;
+        trackingUrl: z.ZodNullable<z.ZodString>;
+        courierName: z.ZodNullable<z.ZodString>;
+        currency: z.ZodString;
+        amountMinor: z.ZodNullable<z.ZodNumber>;
+        isFinal: z.ZodBoolean;
+        lastCheckedAt: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly payment: z.ZodObject<{
+        id: z.ZodString;
+        orderId: z.ZodString;
+        status: z.ZodEnum<{
+            failed: "failed";
+            confirmed: "confirmed";
+            authorized: "authorized";
+            cancelled: "cancelled";
+            succeeded: "succeeded";
+            pending: "pending";
+            refunded: "refunded";
+        }>;
+        method: z.ZodString;
+        type: z.ZodEnum<{
+            refund: "refund";
+            full: "full";
+            deposit: "deposit";
+            balance: "balance";
+        }>;
+        currency: z.ZodString;
+        amountMinor: z.ZodNumber;
+        settlementCurrency: z.ZodString;
+        settlementAmountMinor: z.ZodNumber;
+        providerRef: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly checkout: z.ZodObject<{
+        id: z.ZodString;
+        checkoutId: z.ZodString;
+        phone: z.ZodNullable<z.ZodString>;
+        abandonedAt: z.ZodNullable<z.ZodString>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly discount: z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        title: z.ZodNullable<z.ZodString>;
+        method: z.ZodString;
+        status: z.ZodString;
+        priority: z.ZodNumber;
+        revision: z.ZodNumber;
+        codeCount: z.ZodNumber;
+        startsAt: z.ZodNullable<z.ZodString>;
+        endsAt: z.ZodNullable<z.ZodString>;
+        maxRedemptions: z.ZodNullable<z.ZodNumber>;
+        redemptions: z.ZodNumber;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+        deletedAt: z.ZodNullable<z.ZodString>;
+    }, z.core.$strip>;
+    readonly review: z.ZodObject<{
+        id: z.ZodString;
+        productId: z.ZodString;
+        variantId: z.ZodNullable<z.ZodString>;
+        orderId: z.ZodNullable<z.ZodString>;
+        customerId: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+        rating: z.ZodNumber;
+        title: z.ZodNullable<z.ZodString>;
+        body: z.ZodNullable<z.ZodString>;
+        authorDisplayName: z.ZodNullable<z.ZodString>;
+        publishedAt: z.ZodNullable<z.ZodString>;
+        repliedAt: z.ZodNullable<z.ZodString>;
+        revision: z.ZodNumber;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly gift_card: z.ZodObject<{
+        id: z.ZodString;
+        last4: z.ZodString;
+        status: z.ZodString;
+        currency: z.ZodString;
+        initialAmountMinor: z.ZodNumber;
+        balanceMinor: z.ZodNumber;
+        source: z.ZodString;
+        sourceOrderId: z.ZodNullable<z.ZodString>;
+        customerId: z.ZodNullable<z.ZodString>;
+        recipient: z.ZodObject<{
+            name: z.ZodNullable<z.ZodString>;
+            email: z.ZodNullable<z.ZodString>;
+            phone: z.ZodNullable<z.ZodString>;
+        }, z.core.$strip>;
+        expiresAt: z.ZodNullable<z.ZodString>;
+        revision: z.ZodNumber;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly gift_card_transaction: z.ZodObject<{
+        id: z.ZodString;
+        giftCardId: z.ZodString;
+        kind: z.ZodString;
+        currency: z.ZodString;
+        amountMinor: z.ZodNumber;
+        balanceAfterMinor: z.ZodNumber;
+        orderId: z.ZodNullable<z.ZodString>;
+        actorType: z.ZodString;
+        createdAt: z.ZodString;
+    }, z.core.$strip>;
+    readonly object: z.ZodObject<{
+        id: z.ZodString;
+        type: z.ZodString;
+        handle: z.ZodNullable<z.ZodString>;
+        status: z.ZodString;
+        revision: z.ZodNumber;
+        data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+        createdAt: z.ZodString;
+        updatedAt: z.ZodString;
+    }, z.core.$strip>;
+};
+export type EventRepresentation<T extends EventRepresentationType = EventRepresentationType> = z.output<(typeof EVENT_REPRESENTATION_SCHEMAS)[T]>;
+export type EventRepresentationType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "refund" | "review" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card" | "gift_card_transaction";
+
 // packages/shared/src/events.d.ts
 export type EventTopic = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased";
 export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "object.*" | "checkout.*" | "order.*" | "product.*" | "customer.*" | "payment.*" | "refund.*" | "review.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card.*" | "gift_card_transaction.*" | "*";
@@ -3105,8 +3641,8 @@ export type FunctionReadRecord = { revision: number; data: Record<string, unknow
 export type FunctionReads = { [x: string]: { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | null; };
 
 // packages/shared/src/plugins/functions.d.ts
-export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | null>; };
-export type FunctionCart = { currency: string; decimalPlaces: number; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; };
+export type BuyerUiInput = { target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile"; language: string; locale: string; currency: string; cart: { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; } | null; attributes: Record<string, string>; order: { orderId: string; status: string; paymentStatus: string; lines: { productId: string; variantId: string; quantity: number; }[]; } | null; customer: { id: string; } | null; reads: Record<string, { revision: number; data: Record<string, unknown>; } | Record<string, { revision: number; data: Record<string, unknown>; }> | null>; };
+export type FunctionCart = { currency: string; decimalPlaces: number; storeCurrency: { code: string; decimalPlaces: number; }; channel: "admin" | "online_store" | "pos" | "agent" | "app"; salesChannelId: string; lines: { lineId: string; productId: string; variantId: string; sku: string | null; title: string; quantity: number; unitPriceMinor: number; lineTotalMinor: number; categoryIds: string[]; collectionIds: string[]; brandId: string | null; properties: Record<string, string>; requiresShipping: boolean; weightGrams: number | null; shippingProfileId: string; purchaseOptions: string[]; }[]; subtotalMinor: number; customer: { id: string; tags: string[]; segmentIds: string[]; orderCount: number; totalSpentMinor: number; roles: { role: string; ref: string | null; }[]; } | null; destination: { country: string; city: string | null; zone: string | null; } | null; discountCodes: string[]; market: { id: string; country: string | null; }; attributes: Record<string, string>; };
 export declare const PLUGIN_EXTENSION_RUN = "buyer.ui";
 declare const PLUGIN_RUN_SCHEMAS: {
     readonly "buyer.ui": {
@@ -3131,6 +3667,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodNullable<z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";
@@ -3218,6 +3758,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";
@@ -3303,6 +3847,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";
@@ -3383,12 +3931,27 @@ declare const PLUGIN_RUN_SCHEMAS: {
             prices: z.ZodDefault<z.ZodArray<z.ZodObject<{
                 lineId: z.ZodString;
                 unitPriceMinor: z.ZodNumber;
+                currency: z.ZodOptional<z.ZodEnum<{
+                    store: "store";
+                    cart: "cart";
+                }>>;
             }, z.core.$strict>>>;
-            adjustments: z.ZodDefault<z.ZodArray<z.ZodObject<{
-                lineId: z.ZodString;
-                amountMinor: z.ZodNumber;
-                title: z.ZodString;
-            }, z.core.$strict>>>;
+            adjustments: z.ZodDefault<z.ZodArray<z.ZodUnion<readonly [
+                z.ZodObject<{
+                    lineId: z.ZodString;
+                    amountMinor: z.ZodNumber;
+                    currency: z.ZodOptional<z.ZodEnum<{
+                        store: "store";
+                        cart: "cart";
+                    }>>;
+                    title: z.ZodString;
+                }, z.core.$strict>,
+                z.ZodObject<{
+                    lineId: z.ZodString;
+                    percent: z.ZodNumber;
+                    title: z.ZodString;
+                }, z.core.$strict>
+            ]>>>;
         }, z.core.$strict>;
     };
     readonly "cart.validate": {
@@ -3396,6 +3959,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";
@@ -3470,6 +4037,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";
@@ -3575,6 +4146,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";
@@ -3674,6 +4249,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
             cart: z.ZodObject<{
                 currency: z.ZodString;
                 decimalPlaces: z.ZodNumber;
+                storeCurrency: z.ZodObject<{
+                    code: z.ZodString;
+                    decimalPlaces: z.ZodNumber;
+                }, z.core.$strict>;
                 channel: z.ZodEnum<{
                     admin: "admin";
                     online_store: "online_store";

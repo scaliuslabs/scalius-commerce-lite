@@ -145,6 +145,28 @@ export function roundToIncrementMinor(amountMinor: number, incrementMinor: numbe
   return Math.floor((amountMinor + incrementMinor / 2) / incrementMinor) * incrementMinor;
 }
 
+/**
+ * A share of an amount (`percent` with at most two decimals: 12.5 is 12.5%),
+ * exact in integers, then half-up to the increment. A positive share of a
+ * positive amount never rounds to nothing: it takes one increment, as a
+ * converted fee does (`presentShopMinor`).
+ */
+export function addOnShareMinor(amountMinor: number, percent: number, incrementMinor: number): number {
+  assertIncrement(incrementMinor);
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) throw new RangeError("The amount must be a non-negative safe integer.");
+  const basisPoints = Math.round(percent * 100);
+  if (!Number.isSafeInteger(basisPoints) || basisPoints < 0 || Math.abs(percent * 100 - basisPoints) > 1e-6) {
+    throw new RangeError("A share has at most two decimals.");
+  }
+  if (amountMinor === 0 || basisPoints === 0) return 0;
+  const top = BigInt(amountMinor) * BigInt(basisPoints);
+  const step = 10_000n * BigInt(incrementMinor);
+  const units = (top * 2n + step) / (step * 2n);
+  const rounded = Number(units === 0n ? 1n : units) * incrementMinor;
+  if (!Number.isSafeInteger(rounded)) throw new RangeError("The share is too large.");
+  return rounded;
+}
+
 /** Down to a multiple of the increment: a fixed amount never grows to fit it. */
 export function floorToIncrementMinor(amountMinor: number, incrementMinor: number): number {
   assertIncrement(incrementMinor);

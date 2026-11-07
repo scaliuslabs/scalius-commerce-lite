@@ -62,6 +62,7 @@ export function testCart(subtotalMinor: number) {
   return {
     currency: "BDT",
     decimalPlaces: 2,
+    storeCurrency: { code: "BDT", decimalPlaces: 2 },
     channel: "online_store" as const,
     salesChannelId: "sc_online_store",
     lines: [{

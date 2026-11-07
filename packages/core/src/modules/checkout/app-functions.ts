@@ -40,6 +40,7 @@
 //    and spends no `commit`, and constrains nothing after it; neither does
 //    a discount that takes nothing (nothing was left to take).
 
+import type { PresentmentMoney } from "@scalius/shared/presentment";
 import { DELIVERY_HIERARCHY_COUNTRY, MARKET_COUNTRY_PATTERN } from "@scalius/shared/markets";
 import type { Database } from "@scalius/database/client";
 import { BACKUP_MARKET_ID, categoryClosure, collections, customerTagLinks, customers, orders, productVariants, products } from "@scalius/database/schema";
@@ -353,8 +354,15 @@ function isFrozenOnlyLineProperty(key: string): boolean {
 }
 
 /** The app cart (`functionCartSchema`) from the authoritative checkout state. */
+/** The store's own currency of a checkout's money: what a function's `currency: "store"` amounts are in. */
+export function functionStoreCurrency(money: Pick<PresentmentMoney, "shopCurrencyCode" | "shopDecimalPlaces">): { code: string; decimalPlaces: number } {
+  return { code: money.shopCurrencyCode, decimalPlaces: money.shopDecimalPlaces };
+}
+
 export function buildAppFunctionCart(input: {
   currency: { code: string; decimalPlaces: number };
+  /** The store's own currency, when the market sells in another (`PresentmentMoney.shopCurrencyCode`); absent: `currency`. */
+  storeCurrency?: { code: string; decimalPlaces: number };
   channel: FunctionCart["channel"];
   /** The order's sales channel; absent: the channel's default (`defaultOrderSalesChannelId`), as the order commit derives it. */
   salesChannelId?: string | null;
@@ -378,7 +386,8 @@ export function buildAppFunctionCart(input: {
     for (const property of line.properties) {
       // Frozen entries that are not buyer inputs (add-ons, purchase options, gift-card recipients) stay out.
       const key = property.key;
-      if (key && key.length <= APP_SCOPED_KEY_MAX_LENGTH && !isFrozenOnlyLineProperty(key) && !(key in properties)) properties[key] = property.value.slice(0, 500);
+      // The value exactly as the order line freezes it: an app prices what the buyer gets.
+      if (key && key.length <= APP_SCOPED_KEY_MAX_LENGTH && !isFrozenOnlyLineProperty(key) && !(key in properties)) properties[key] = property.value;
     }
     return {
       lineId: line.lineId,
@@ -406,6 +415,10 @@ export function buildAppFunctionCart(input: {
   const cart: FunctionCart = {
     currency: input.currency.code.toUpperCase(),
     decimalPlaces: input.currency.decimalPlaces,
+    storeCurrency: {
+      code: (input.storeCurrency ?? input.currency).code.toUpperCase(),
+      decimalPlaces: (input.storeCurrency ?? input.currency).decimalPlaces,
+    },
     channel: input.channel,
     salesChannelId: input.salesChannelId || defaultOrderSalesChannelId(input.channel),
     lines,

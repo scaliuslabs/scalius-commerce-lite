@@ -19,6 +19,26 @@
         "minimum": 0,
         "maximum": 4
        },
+       "storeCurrency": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+         },
+         "decimalPlaces": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+         }
+        },
+        "required": [
+         "code",
+         "decimalPlaces"
+        ],
+        "additionalProperties": false
+       },
        "channel": {
         "type": "string",
         "enum": [
@@ -124,7 +144,7 @@
            },
            "additionalProperties": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 1000
            }
           },
           "requiresShipping": {
@@ -359,6 +379,7 @@
       "required": [
        "currency",
        "decimalPlaces",
+       "storeCurrency",
        "channel",
        "lines",
        "subtotalMinor",
@@ -564,6 +585,26 @@
         "minimum": 0,
         "maximum": 4
        },
+       "storeCurrency": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+         },
+         "decimalPlaces": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+         }
+        },
+        "required": [
+         "code",
+         "decimalPlaces"
+        ],
+        "additionalProperties": false
+       },
        "channel": {
         "type": "string",
         "enum": [
@@ -669,7 +710,7 @@
            },
            "additionalProperties": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 1000
            }
           },
           "requiresShipping": {
@@ -904,6 +945,7 @@
       "required": [
        "currency",
        "decimalPlaces",
+       "storeCurrency",
        "channel",
        "lines",
        "subtotalMinor",
@@ -1070,6 +1112,13 @@
          "type": "integer",
          "exclusiveMinimum": 0,
          "maximum": 9007199254740991
+        },
+        "currency": {
+         "type": "string",
+         "enum": [
+          "cart",
+          "store"
+         ]
         }
        },
        "required": [
@@ -1084,30 +1133,67 @@
       "maxItems": 250,
       "type": "array",
       "items": {
-       "type": "object",
-       "properties": {
-        "lineId": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 128
+       "anyOf": [
+        {
+         "type": "object",
+         "properties": {
+          "lineId": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "amountMinor": {
+           "type": "integer",
+           "exclusiveMinimum": 0,
+           "maximum": 1000000000000
+          },
+          "currency": {
+           "type": "string",
+           "enum": [
+            "cart",
+            "store"
+           ]
+          },
+          "title": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 80
+          }
+         },
+         "required": [
+          "lineId",
+          "amountMinor",
+          "title"
+         ],
+         "additionalProperties": false
         },
-        "amountMinor": {
-         "type": "integer",
-         "exclusiveMinimum": 0,
-         "maximum": 1000000000000
-        },
-        "title": {
-         "type": "string",
-         "minLength": 1,
-         "maxLength": 80
+        {
+         "type": "object",
+         "properties": {
+          "lineId": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 128
+          },
+          "percent": {
+           "type": "number",
+           "exclusiveMinimum": 0,
+           "maximum": 1000
+          },
+          "title": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 80
+          }
+         },
+         "required": [
+          "lineId",
+          "percent",
+          "title"
+         ],
+         "additionalProperties": false
         }
-       },
-       "required": [
-        "lineId",
-        "amountMinor",
-        "title"
-       ],
-       "additionalProperties": false
+       ]
       }
      }
     },
@@ -1135,6 +1221,26 @@
         "type": "integer",
         "minimum": 0,
         "maximum": 4
+       },
+       "storeCurrency": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+         },
+         "decimalPlaces": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+         }
+        },
+        "required": [
+         "code",
+         "decimalPlaces"
+        ],
+        "additionalProperties": false
        },
        "channel": {
         "type": "string",
@@ -1241,7 +1347,7 @@
            },
            "additionalProperties": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 1000
            }
           },
           "requiresShipping": {
@@ -1476,6 +1582,7 @@
       "required": [
        "currency",
        "decimalPlaces",
+       "storeCurrency",
        "channel",
        "lines",
        "subtotalMinor",
@@ -1621,6 +1728,26 @@
         "minimum": 0,
         "maximum": 4
        },
+       "storeCurrency": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+         },
+         "decimalPlaces": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+         }
+        },
+        "required": [
+         "code",
+         "decimalPlaces"
+        ],
+        "additionalProperties": false
+       },
        "channel": {
         "type": "string",
         "enum": [
@@ -1726,7 +1853,7 @@
            },
            "additionalProperties": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 1000
            }
           },
           "requiresShipping": {
@@ -1961,6 +2088,7 @@
       "required": [
        "currency",
        "decimalPlaces",
+       "storeCurrency",
        "channel",
        "lines",
        "subtotalMinor",
@@ -2243,6 +2371,26 @@
         "minimum": 0,
         "maximum": 4
        },
+       "storeCurrency": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+         },
+         "decimalPlaces": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+         }
+        },
+        "required": [
+         "code",
+         "decimalPlaces"
+        ],
+        "additionalProperties": false
+       },
        "channel": {
         "type": "string",
         "enum": [
@@ -2348,7 +2496,7 @@
            },
            "additionalProperties": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 1000
            }
           },
           "requiresShipping": {
@@ -2583,6 +2731,7 @@
       "required": [
        "currency",
        "decimalPlaces",
+       "storeCurrency",
        "channel",
        "lines",
        "subtotalMinor",
@@ -2845,6 +2994,26 @@
         "minimum": 0,
         "maximum": 4
        },
+       "storeCurrency": {
+        "type": "object",
+        "properties": {
+         "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+         },
+         "decimalPlaces": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+         }
+        },
+        "required": [
+         "code",
+         "decimalPlaces"
+        ],
+        "additionalProperties": false
+       },
        "channel": {
         "type": "string",
         "enum": [
@@ -2950,7 +3119,7 @@
            },
            "additionalProperties": {
             "type": "string",
-            "maxLength": 500
+            "maxLength": 1000
            }
           },
           "requiresShipping": {
@@ -3185,6 +3354,7 @@
       "required": [
        "currency",
        "decimalPlaces",
+       "storeCurrency",
        "channel",
        "lines",
        "subtotalMinor",
@@ -3461,6 +3631,26 @@
          "minimum": 0,
          "maximum": 4
         },
+        "storeCurrency": {
+         "type": "object",
+         "properties": {
+          "code": {
+           "type": "string",
+           "minLength": 3,
+           "maxLength": 3
+          },
+          "decimalPlaces": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 4
+          }
+         },
+         "required": [
+          "code",
+          "decimalPlaces"
+         ],
+         "additionalProperties": false
+        },
         "channel": {
          "type": "string",
          "enum": [
@@ -3566,7 +3756,7 @@
             },
             "additionalProperties": {
              "type": "string",
-             "maxLength": 500
+             "maxLength": 1000
             }
            },
            "requiresShipping": {
@@ -3801,6 +3991,7 @@
        "required": [
         "currency",
         "decimalPlaces",
+        "storeCurrency",
         "channel",
         "lines",
         "subtotalMinor",

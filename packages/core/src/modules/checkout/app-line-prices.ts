@@ -27,25 +27,34 @@ import { validateCheckoutAttributes } from "./attributes";
 //   price: the answer is skipped and logged for the merchant. So is a
 //   gift-card line (money) and a line that is not in the cart. Sale lines
 //   accept offers so the resolver can keep the lower sale or app price.
+// - A second app pricing a one-time line is not used; both apps' logs say
+//   which price won, so the merchant sees the overlap (the order of apps is
+//   their priority).
 // - The price rounds half-up to the market's price increment and is never
-//   zero; buyer-input surcharges are added on top.
+//   zero; buyer-input surcharges are added on top. A price the app answers
+//   in the store's currency (`currency: "store"`) converts at the checkout's
+//   one rate first (`presentShopMinor`), as a product price does.
 //
 // Add-ons (`adjustments`, pure, `resolveAppLineAdjustments`): added to each
 // unit after the whole precedence, whatever priced the line (sale, segment
-// and list lines take them too). Every app's add-ons apply, in priority
-// order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per line; each rounds half-up
-// to the cart's price increment (an add-on that rounds to nothing is
-// skipped). A gift card (money), a bundle line and a line not in the cart
-// take none: skipped and logged. They ride the line as `adjustments` (the
-// buyer sees "Add-on: <title>") and are frozen on the order line with its
-// buyer inputs, so receipts, emails, tax, totals and refunds include them.
+// and list lines take them too). A fixed add-on rounds half-up to the cart's
+// price increment, converting from the store's currency like a price; a
+// share (`percent`) is taken of the item's unit price as cart validation
+// prices it. Neither ever rounds to nothing (one increment). Every app's
+// add-ons apply, in priority order, at most LINE_ADJUSTMENTS_PER_LINE_MAX per
+// line. A gift card (money) and a line not in the cart take none (skipped and
+// logged); a bundle line, or an add-on past the most a line holds, refuses
+// checkout (`add_on_unavailable`), so a buyer never receives an extra
+// unpaid. They ride the line as `adjustments` (the buyer sees "Add-on:
+// <title>") and are frozen on the order line with its buyer inputs, so
+// receipts, emails, tax, totals and refunds include them.
 
 import type { Database } from "@scalius/database/client";
 import { LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOutput } from "@scalius/shared/plugins";
 import type { AppLinePrice, ResolvedPriceSource } from "@scalius/shared/market-pricing";
-import { lineAdjustmentProperty, type ResolvedLineProperty } from "@scalius/shared/line-properties";
 import { roundToIncrementMinor } from "@scalius/shared/money";
 import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
+import { presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
 
 /** Two apps whose purchase options a line carries both priced it. */
 export const PURCHASE_OPTIONS_CONFLICT_REASON = "purchase_options_conflict";
@@ -54,6 +63,7 @@ import {
     CHECKOUT_APP_UNAVAILABLE_REASON,
     appCartMarketCountry,
     buildAppFunctionCart,
+    functionStoreCurrency,
     loadAppFunctionCartFacts,
     type CheckoutAppFunctionResult,
     type CheckoutAppFunctions,
@@ -63,19 +73,23 @@ import type {
     StorefrontCartValidationResult,
 } from "./cart-validation";
 
+/** A line could not take an app's add-on (a bundle line, or past the most a line holds). */
+export const ADD_ON_UNAVAILABLE_REASON = "add_on_unavailable";
+
 /**
- * An app's add-on core did not keep: it added nothing once rounded to the
- * price increment (`nothing_to_add`), or the line takes none (a bundle line,
- * a gift card, or one that already holds the most add-ons: `not_taken`).
+ * An app's add-on to each unit of a line as checkout keeps it: a fixed
+ * amount, already in the cart's currency and on its increment, or a share of
+ * the item's unit price, which cart validation takes once that price is
+ * known (`percentOfMinor`).
  */
-export type AddOnSetAside = "nothing_to_add" | "not_taken";
+export type AppLineAddOn =
+    | { appId: string; title: string; amountMinor: number }
+    | { appId: string; title: string; percent: number };
 
 /** The apps' answers for a cart, by line index: unit prices and add-ons. */
 export interface AppLinePricing {
     prices: ReadonlyMap<number, AppLinePrice>;
-    adjustments: ReadonlyMap<number, ResolvedLineProperty[]>;
-    /** Add-ons core set aside, by line index and app: an owner's answer the line could not keep. */
-    setAside?: ReadonlyMap<number, ReadonlyMap<string, AddOnSetAside>>;
+    adjustments: ReadonlyMap<number, AppLineAddOn[]>;
 }
 
 const NO_APP_LINE_PRICING: AppLinePricing = { prices: new Map(), adjustments: new Map() };
@@ -127,6 +141,7 @@ export function createAppLinePricer(
         try {
             cart = buildAppFunctionCart({
                 currency: { code: preliminary.money.currencyCode, decimalPlaces: preliminary.money.decimalPlaces },
+                storeCurrency: functionStoreCurrency(preliminary.money),
                 channel: context.channel,
                 segmentIds: preliminary.pricingSegmentIds,
                 lines: items.map((item, position) => ({
@@ -159,7 +174,7 @@ export function createAppLinePricer(
                 bundle: item.bundle ? { id: item.bundle.id, title: item.bundle.title.slice(0, 300) } : null,
             })),
         });
-        return resolveAppLinePricing(items, lineIds, results, preliminary.money.incrementMinor, apps);
+        return resolveAppLinePricing(items, lineIds, results, preliminary.money, apps);
     };
 }
 
@@ -172,14 +187,12 @@ export function resolveAppLinePricing(
     items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "priceSource" | "purchaseOptions" | "bundle">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
-    incrementMinor: number,
+    money: PresentmentMoney,
     apps?: Pick<CheckoutAppFunctions, "report">,
 ): AppLinePricing {
-    const setAside = new Map<number, Map<string, AddOnSetAside>>();
     const pricing = {
-        prices: resolveAppLinePrices(items, lineIds, results, apps),
-        adjustments: resolveAppLineAdjustments(items, lineIds, results, incrementMinor, apps, setAside),
-        setAside,
+        prices: resolveAppLinePrices(items, lineIds, results, apps, money),
+        adjustments: resolveAppLineAdjustments(items, lineIds, results, money, apps),
     };
     assertPurchaseOptionPrices(items, pricing);
     return pricing;
@@ -191,6 +204,8 @@ export function resolveAppLinePrices(
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
     apps?: Pick<CheckoutAppFunctions, "report">,
+    /** The checkout's money: converts a price the app answered in the store's currency. Absent: every price is in the cart's. */
+    money?: PresentmentMoney,
 ): Map<number, AppLinePrice> {
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
     const prices = new Map<number, AppLinePrice>();
@@ -205,6 +220,7 @@ export function resolveAppLinePrices(
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} has an invalid app price; it was skipped.`);
                 continue;
             }
+            const unitPriceMinor = answer.currency === "store" && money ? presentShopMinor(money, answer.unitPriceMinor) : answer.unitPriceMinor;
             if (item.isGiftCard) continue;
             const options = (item.purchaseOptions ?? []).map((option) => option.id);
             if (options.length > 0) {
@@ -221,15 +237,24 @@ export function resolveAppLinePrices(
                     });
                 }
                 if (taken) continue;
-                prices.set(item.index, { amountMinor: answer.unitPriceMinor, pluginId: result.pluginId, purchaseOption: option });
+                prices.set(item.index, { amountMinor: unitPriceMinor, pluginId: result.pluginId, purchaseOption: option });
                 continue;
             }
-            if (prices.has(item.index)) continue;
+            const winner = prices.get(item.index);
+            if (winner) {
+                // Priority decides; both apps' logs say so, so the merchant sees two apps price one item.
+                if (winner.pluginId !== result.pluginId) {
+                    const notice = `Line ${answer.lineId} was priced by both ${winner.pluginId} and ${result.pluginId}; ${winner.pluginId}'s price was used (it runs first).`;
+                    apps?.report(result.pluginId, "cart.line_prices", notice);
+                    apps?.report(winner.pluginId, "cart.line_prices", notice);
+                }
+                continue;
+            }
             if (!APP_PRICEABLE_SOURCES.has(item.priceSource)) {
                 apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is priced by a ${item.priceSource} price list, which an app price never replaces; it was skipped.`);
                 continue;
             }
-            prices.set(item.index, { amountMinor: answer.unitPriceMinor, pluginId: result.pluginId });
+            prices.set(item.index, { amountMinor: unitPriceMinor, pluginId: result.pluginId });
         }
     }
     return prices;
@@ -256,12 +281,8 @@ function assertPurchaseOptionPrices(
         const addOns = pricing.adjustments.get(item.index) ?? [];
         for (const option of options) {
             const appId = purchaseOptionAppId(option);
-            if ((validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId)) continue;
-            const aside = appId === null ? undefined : pricing.setAside?.get(item.index)?.get(appId);
-            // The owner answered, and its option adds nothing to this line once rounded.
-            if (aside === "nothing_to_add") continue;
-            // The owner answered, but the line cannot take its add-on: waiting never helps.
-            throw aside === "not_taken" ? purchaseOptionNotTaken() : purchaseOptionUnavailable();
+            const answered = (validPrice && price!.pluginId === appId) || addOns.some((addOn) => addOn.appId === appId);
+            if (!answered) throw purchaseOptionUnavailable();
         }
     }
 }
@@ -272,34 +293,22 @@ function purchaseOptionUnavailable(): ValidationError {
     });
 }
 
-/** The line cannot carry what its option adds (a bundle line, a gift card, the most add-ons a line holds). */
-export const PURCHASE_OPTION_UNAVAILABLE_REASON = "purchase_option_unavailable";
-
-function purchaseOptionNotTaken(): ValidationError {
-    return new ValidationError("This purchase option can't be used on this item. Choose another way to buy it.", {
-        reason: PURCHASE_OPTION_UNAVAILABLE_REASON,
+function addOnUnavailable(): ValidationError {
+    return new ValidationError("This item can't take one of the extras chosen for it. Remove the extra to continue.", {
+        reason: ADD_ON_UNAVAILABLE_REASON,
     });
 }
 
-/** Each line's add-ons, by line index (see the rules above). */
+/** Each line's add-ons, by line index (see the rules above). Throws when a line cannot take one. */
 export function resolveAppLineAdjustments(
     items: ReadonlyArray<Pick<StorefrontCartValidatedItem, "index" | "isGiftCard" | "bundle">>,
     lineIds: readonly string[],
     results: ReadonlyArray<Pick<CheckoutAppFunctionResult<"cart.line_prices">, "pluginId" | "output">>,
-    incrementMinor: number,
+    money: PresentmentMoney,
     apps?: Pick<CheckoutAppFunctions, "report">,
-    /** Filled with the add-ons core did not keep, by line index and app. */
-    setAside?: Map<number, Map<string, AddOnSetAside>>,
-): Map<number, ResolvedLineProperty[]> {
+): Map<number, AppLineAddOn[]> {
     const byLineId = new Map(lineIds.map((lineId, position) => [lineId, items[position]!]));
-    const adjustments = new Map<number, ResolvedLineProperty[]>();
-    const putAside = (index: number, appId: string, why: AddOnSetAside) => {
-        if (!setAside) return;
-        const line = setAside.get(index) ?? new Map<string, AddOnSetAside>();
-        // A line that could not take one of the app's add-ons stays so.
-        if (line.get(appId) !== "not_taken") line.set(appId, why);
-        setAside.set(index, line);
-    };
+    const adjustments = new Map<number, AppLineAddOn[]>();
     for (const result of results) {
         for (const answer of (result.output as PluginFunctionOutput<"cart.line_prices">).adjustments ?? []) {
             const item = byLineId.get(answer.lineId);
@@ -307,23 +316,28 @@ export function resolveAppLineAdjustments(
                 apps?.report(result.pluginId, "cart.line_prices", `An add-on names line ${answer.lineId}, which is not in the cart; it was skipped.`);
                 continue;
             }
-            if (item.isGiftCard || item.bundle) {
-                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is ${item.isGiftCard ? "a gift card" : "part of a bundle"}, which takes no add-on; "${answer.title}" was skipped.`);
-                putAside(item.index, result.pluginId, "not_taken");
+            if (item.isGiftCard) {
+                // Money takes no extras; nothing was promised to the buyer on it.
+                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} is a gift card, which takes no add-on; "${answer.title}" was skipped.`);
                 continue;
             }
             const list = adjustments.get(item.index) ?? [];
-            if (list.length >= LINE_ADJUSTMENTS_PER_LINE_MAX) {
-                apps?.report(result.pluginId, "cart.line_prices", `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" was skipped.`);
-                putAside(item.index, result.pluginId, "not_taken");
-                continue;
+            if (item.bundle || list.length >= LINE_ADJUSTMENTS_PER_LINE_MAX) {
+                // Dropping it would freeze the extra the buyer chose without its price.
+                apps?.report(result.pluginId, "cart.line_prices", item.bundle
+                    ? `Line ${answer.lineId} is part of a bundle, which takes no add-on; "${answer.title}" refused checkout.`
+                    : `Line ${answer.lineId} already has ${LINE_ADJUSTMENTS_PER_LINE_MAX} add-ons; "${answer.title}" refused checkout.`);
+                throw addOnUnavailable();
             }
-            const amountMinor = roundToIncrementMinor(answer.amountMinor, incrementMinor);
-            if (amountMinor <= 0) {
-                putAside(item.index, result.pluginId, "nothing_to_add");
-                continue;
+            if ("percent" in answer) {
+                list.push({ appId: result.pluginId, title: answer.title, percent: answer.percent });
+            } else {
+                const amountMinor = answer.currency === "store"
+                    ? presentShopMinor(money, answer.amountMinor)
+                    // A positive add-on never rounds to nothing: one increment, as a converted fee.
+                    : Math.max(money.incrementMinor, roundToIncrementMinor(answer.amountMinor, money.incrementMinor));
+                list.push({ appId: result.pluginId, title: answer.title, amountMinor });
             }
-            list.push(lineAdjustmentProperty(answer.title, amountMinor, result.pluginId));
             adjustments.set(item.index, list);
         }
     }
@@ -338,7 +352,7 @@ export async function resolveCartWithAppLinePrices(
     pricer: AppLinePricer | undefined,
     resolve: (options: {
         appPrices?: ReadonlyMap<number, AppLinePrice>;
-        appAdjustments?: ReadonlyMap<number, ResolvedLineProperty[]>;
+        appAdjustments?: ReadonlyMap<number, AppLineAddOn[]>;
         deferSubmittedPriceCheck?: boolean;
     }) => StorefrontCartValidationResult,
     phase: "before_transform" | "final" = "final",

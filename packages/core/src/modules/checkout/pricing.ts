@@ -36,6 +36,7 @@ import {
   applyAppShippingRateOperations,
   appCartMarketCountry,
   buildAppFunctionCart,
+  functionStoreCurrency,
   CHECKOUT_RULES_FAILED_REASON,
   collectCheckoutRuleErrors,
   combineDiscountAllocations,
@@ -323,6 +324,7 @@ export async function priceStorefrontCheckout(
     const platformLine = new Map((platform.allocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
     appCart = safeAppCart(() => buildAppFunctionCart({
       currency,
+      ...(cartValidation.money ? { storeCurrency: functionStoreCurrency(cartValidation.money) } : {}),
       channel: input.channel,
       segmentIds: cartValidation.pricingSegmentIds,
       lines: cartValidation.items.map((item, position) => ({
@@ -514,7 +516,7 @@ export function assertNoCheckoutRuleErrors(ruleErrors: readonly CheckoutRuleErro
 export async function checkStorefrontCartRules(
   db: Database,
   input: {
-    cartValidation: Pick<StorefrontCartValidationResult, "items" | "pricingSegmentIds" | "marketContext">;
+    cartValidation: Pick<StorefrontCartValidationResult, "items" | "pricingSegmentIds" | "marketContext"> & Partial<Pick<StorefrontCartValidationResult, "money">>;
     /** The chosen delivery, when the cart has one: apps see its region. */
     delivery: (Pick<CheckoutPricingDelivery, "cityName" | "zoneName" | "fulfilment"> & {
       address?: Pick<NonNullable<CheckoutPricingDelivery["address"]>, "countryCode"> | null;
@@ -545,6 +547,7 @@ export async function checkStorefrontCartRules(
   });
   const cart = safeAppCart(() => buildAppFunctionCart({
     currency: input.currency,
+    ...(cartValidation.money ? { storeCurrency: functionStoreCurrency(cartValidation.money) } : {}),
     channel: input.channel,
     segmentIds: cartValidation.pricingSegmentIds,
     lines: cartValidation.items.map((item, position) => ({

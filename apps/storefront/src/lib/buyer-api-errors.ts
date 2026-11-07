@@ -16,7 +16,7 @@ const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   properties_required: "propertiesInvalid", properties_invalid: "propertiesInvalid",
   checkout_app_unavailable: "appUnavailable",
   fulfilment_unavailable: "fulfilmentUnavailable", purchase_option_unavailable: "purchaseOptionUnavailable",
-  purchase_options_conflict: "purchaseOptionsConflict",
+  purchase_options_conflict: "purchaseOptionsConflict", add_on_unavailable: "addOnUnavailable",
   product_unavailable: "notFound", variant_unavailable: "notFound",
   price_changed: "priceChanged", storefront_checkout_quote_conflict: "priceChanged",
   payment_rate_expired: "paymentWindowExpired",
