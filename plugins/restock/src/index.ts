@@ -19,7 +19,7 @@ export const APP_ID = "scaliuslabs.restock";
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Restock Planner",
-  version: "1.0.1",
+  version: "1.0.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Set a reorder point and a target for each SKU, see what to reorder now, and draft, send and receive supplier purchase orders from one page.",
   author: { name: "Scalius Labs" },
@@ -266,7 +266,7 @@ const COPY = {
     sku: "SKU", onHand: "On hand", onOrder: "On order", order: "To order", supplier: "Supplier", at: "Reorder at", upTo: "Up to", cost: "Unit cost",
     none: "Nothing is below its reorder point.", noRules: "No reorder rules yet", noRulesText: "Add a SKU below with its reorder point and target.",
     draft: "Draft purchase orders", number: "Purchase order", status: "Status", units: "Units open", markOrdered: "Mark ordered", receive: "Receive all",
-    noOpen: "No open purchase orders", add: "Add a rule", save: "Save rule", unknownSku: "No SKU has this code.",
+    noOpen: "No open purchase orders", add: "Add a rule", save: "Save rule", ruleSaved: "Rule saved for {sku}.", unknownSku: "No SKU has this code.",
     targetBelow: "The target must be above the reorder point.",
     willDraft_one: "Drafting makes 1 purchase order.", willDraft_other: "Drafting makes {n} purchase orders: one per supplier, at most 100 lines each.",
     drafted_one: "Drafted 1 purchase order.", drafted_other: "Drafted {n} purchase orders.",
@@ -287,7 +287,7 @@ const COPY = {
     sku: "SKU", onHand: "হাতে আছে", onOrder: "অর্ডারে আছে", order: "অর্ডার করতে হবে", supplier: "সরবরাহকারী", at: "রি-অর্ডার পয়েন্ট", upTo: "লক্ষ্য", cost: "একক খরচ",
     none: "কোনো SKU রি-অর্ডার পয়েন্টের নিচে নেই।", noRules: "এখনও কোনো রি-অর্ডার নিয়ম নেই", noRulesText: "নিচে একটি SKU, তার রি-অর্ডার পয়েন্ট ও লক্ষ্য যোগ করুন।",
     draft: "পারচেজ অর্ডারের খসড়া", number: "পারচেজ অর্ডার", status: "অবস্থা", units: "বাকি একক", markOrdered: "অর্ডার করা হয়েছে", receive: "সব গ্রহণ করুন",
-    noOpen: "কোনো খোলা পারচেজ অর্ডার নেই", add: "নিয়ম যোগ করুন", save: "নিয়ম সংরক্ষণ", unknownSku: "এই কোডের কোনো SKU নেই।",
+    noOpen: "কোনো খোলা পারচেজ অর্ডার নেই", add: "নিয়ম যোগ করুন", save: "নিয়ম সংরক্ষণ", ruleSaved: "{sku} এর নিয়ম সংরক্ষিত হয়েছে।", unknownSku: "এই কোডের কোনো SKU নেই।",
     targetBelow: "লক্ষ্য রি-অর্ডার পয়েন্টের চেয়ে বেশি হতে হবে।",
     willDraft_one: "খসড়ায় ১টি পারচেজ অর্ডার হবে।", willDraft_other: "খসড়ায় {n}টি পারচেজ অর্ডার হবে: প্রতি সরবরাহকারীর জন্য, প্রতিটিতে সর্বোচ্চ ১০০টি লাইন।",
     drafted_one: "১টি পারচেজ অর্ডারের খসড়া হয়েছে।", drafted_other: "{n}টি পারচেজ অর্ডারের খসড়া হয়েছে।",
@@ -463,7 +463,7 @@ export default definePlugin({
         if (!variant) return { status: 422, body: ui.result({ errors: { sku: copy.unknownSku } }) };
         const supplierId = typeof values.supplier_id === "string" && values.supplier_id && values.supplier_id !== "none" ? values.supplier_id : null;
         await ctx.objects.rules.put(variant.id, { sku: variant.sku, title: variant.sku, min_on_hand: min, reorder_to: target, unit_cost_minor: Number.isSafeInteger(costMinor) && costMinor >= 0 ? costMinor : 0, supplier_id: supplierId });
-        return { body: ui.result({ toast: copy.save, refresh: true }) };
+        return { body: ui.result({ toast: copy.ruleSaved.replace("{sku}", variant.sku), refresh: true }) };
       },
 
       remove_rule: async (request, ctx: Context) => {
