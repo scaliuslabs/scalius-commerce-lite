@@ -143,6 +143,17 @@ export function addedQuantitySql(entries: ReadonlyArray<{ id: string; quantity: 
  * The admin behind a command: its `created_by`, or the admin a scanner
  * session acts for (`scanner:<adminId>`), so receipts made by scan show who.
  */
+/**
+ * How a stock document's activity names who made a step: the staff member,
+ * an app by its id (`app:<id>`), "Former admin" for a removed account and
+ * "System" for none.
+ */
+export function commandActorName(createdBy: string | null, staffName: string | null | undefined): string {
+  if (!createdBy) return "System";
+  if (createdBy.startsWith("app:")) return createdBy.slice(4);
+  return staffName ?? "Former admin";
+}
+
 export function commandActorUserIdSql(): SQL<string | null> {
   return sql<string | null>`(CASE WHEN ${inventoryCommands.createdBy} LIKE 'scanner:%' THEN substr(${inventoryCommands.createdBy}, 9) ELSE ${inventoryCommands.createdBy} END)`;
 }

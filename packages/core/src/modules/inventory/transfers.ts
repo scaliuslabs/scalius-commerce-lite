@@ -37,7 +37,7 @@ import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../prod
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
-import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, commandActorName, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
 export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
@@ -357,7 +357,7 @@ export async function getTransfer(db: Database, id: string): Promise<TransferDet
         operationKey: row.operationKey,
         kind: row.kind,
         createdAt: row.createdAt,
-        actorName: row.createdBy ? row.actorName ?? "Former admin" : "System",
+        actorName: commandActorName(row.createdBy, row.actorName),
         lines: [],
       };
       activity.push(entry);

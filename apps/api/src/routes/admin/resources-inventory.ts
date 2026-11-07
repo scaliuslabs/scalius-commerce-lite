@@ -92,7 +92,17 @@ const unitCostLimitMinor = (places: number) => Math.min(MAX_MINOR_AMOUNT, UNIT_C
 const COST_BOUND = `At most ${formatNumber(UNIT_COST_MAX, "en")} in major units of the purchase order's currency (${formatNumber(unitCostLimitMinor(2), "en")} minor units for a currency of two decimals); a larger value is refused with validation_error.`;
 const minorCost = (description: string) => z.number().int().min(0).max(MAX_MINOR_AMOUNT).openapi({ description: `${description} ${COST_BOUND}` });
 
-const actorId = (c: Context): string | null => (c.get("user") as { id?: string } | undefined)?.id ?? null;
+/**
+ * Who acts on a stock document: staff by their id; an app as itself
+ * (`app:<id>`, as its return writes record it), never the Super Admin who
+ * approved it. It becomes the document's `createdBy`, its stock command's
+ * and each ledger movement's `created_by`.
+ */
+function actorId(c: Context): string | null {
+  const app = c.get("pluginPrincipal") as { pluginId?: string } | undefined;
+  if (app?.pluginId) return `app:${app.pluginId}`;
+  return (c.get("user") as { id?: string } | undefined)?.id ?? null;
+}
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
 
