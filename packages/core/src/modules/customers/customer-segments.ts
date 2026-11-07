@@ -142,10 +142,17 @@ export function segmentConditionSql(condition: CustomerSegmentCondition, context
 }
 
 /** The whole definition (live customers only). */
-export function segmentWhereSql(definition: CustomerSegmentDefinition, context: SegmentEvaluationContext = now()): SQL {
+export function segmentWhereSql(
+    definition: CustomerSegmentDefinition,
+    context: SegmentEvaluationContext = now(),
+    options: { seekIds?: boolean } = {},
+): SQL {
     const parts = definition.conditions.map((condition) => segmentConditionSql(condition, context));
     const joined = sql.join(parts, definition.match === "any" ? sql` OR ` : sql` AND `);
-    return sql`(${customers.deletedAt} IS NULL AND (${joined}))`;
+    // `seekIds`: the caller bounds the rows by an id list, so the live filter is written
+    // `+deleted_at` and never leads the plan onto a deleted_at index.
+    const live = options.seekIds ? sql`+${customers.deletedAt} IS NULL` : sql`${customers.deletedAt} IS NULL`;
+    return sql`(${live} AND (${joined}))`;
 }
 
 /** Parses a definition (stored or from a request), with the store's references checked. */
@@ -209,6 +216,43 @@ export async function listSegmentMemberIds(
         .orderBy(asc(customers.id))
         .limit(limit);
     return rows.map((row) => row.id);
+}
+
+/** Customers one member page examines at most: a sparse segment never makes a page walk every customer. */
+export const SEGMENT_MEMBER_SCAN_ROWS = 2_000;
+
+/**
+ * One bounded page of a segment's members: the members among the next
+ * `scanRows` customers after `afterId` (in id order), at most `limit` of
+ * them. `resumeAfter` is where the next page continues: the last member
+ * when the page filled, else the last customer examined, or null once every
+ * customer was examined. A page of a sparse segment may hold few members, or
+ * none, and still have a `resumeAfter`.
+ */
+export async function scanSegmentMembers(
+    db: Database,
+    definition: CustomerSegmentDefinition,
+    options: { afterId?: string | null; limit: number; scanRows?: number } & Partial<SegmentEvaluationContext>,
+): Promise<{ ids: string[]; resumeAfter: string | null }> {
+    const limit = Math.min(Math.max(options.limit, 1), 500);
+    const scanRows = Math.min(Math.max(options.scanRows ?? SEGMENT_MEMBER_SCAN_ROWS, limit), SEGMENT_MEMBER_SCAN_ROWS);
+    const context = { ...now(), ...options.nowSeconds === undefined ? {} : { nowSeconds: options.nowSeconds }, ...options.timeZone === undefined ? {} : { timeZone: options.timeZone } };
+    const after = options.afterId ? sql`${customers.id} > ${options.afterId}` : undefined;
+    // The window's last customer: the scan examines no customer past it.
+    const edge = await db.select({ id: customers.id }).from(customers).where(after)
+        .orderBy(asc(customers.id)).limit(1).offset(scanRows - 1).get();
+    // The window itself, read on the primary key: without planner statistics
+    // (D1 keeps none) a bare id range beside `deleted_at IS NULL` walks every
+    // live customer on a deleted_at-led index instead.
+    const windowAfter = options.afterId ? sql`WHERE scan_window.id > ${options.afterId}` : sql``;
+    const window = sql`${customers.id} IN (SELECT scan_window.id FROM customers AS scan_window ${windowAfter} ORDER BY scan_window.id LIMIT ${scanRows})`;
+    const rows = await fromCustomers(db)
+        .where(and(window, segmentWhereSql(definition, context, { seekIds: true })))
+        .orderBy(asc(customers.id))
+        .limit(limit + 1);
+    const ids = rows.slice(0, limit).map((row) => row.id);
+    if (rows.length > limit) return { ids, resumeAfter: ids.at(-1)! };
+    return { ids, resumeAfter: edge?.id ?? null };
 }
 
 /**

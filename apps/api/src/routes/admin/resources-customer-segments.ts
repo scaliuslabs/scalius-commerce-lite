@@ -25,7 +25,8 @@ import {
   createCustomerSegment,
   getCustomerSegment,
   getCustomerSegmentsByIds,
-  listSegmentMemberIds,
+  scanSegmentMembers,
+  SEGMENT_MEMBER_SCAN_ROWS,
   parseSegmentDefinition,
   segmentForeignFieldIds,
   segmentNamesOnlyMerchantFieldsSql,
@@ -290,7 +291,7 @@ app.openapi(createRoute({
   path: "/customer-segments/{id}/members",
   tags: ["App API - Customers"],
   summary: "List a segment's members",
-  description: "The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor to walk the whole segment. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.",
+  description: `The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor until it is null to walk the whole segment. Each page examines at most ${SEGMENT_MEMBER_SCAN_ROWS} customers, so a page of a sparse segment may hold fewer members than the limit, or none, and still carry a nextCursor: only a null nextCursor means the walk is done. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.`,
   request: {
     params: idParam,
     query: z.object({
@@ -308,9 +309,9 @@ app.openapi(createRoute({
   const query = c.req.valid("query");
   const segment = await visibleSegment(c, c.req.valid("param").id);
   const afterId = query.cursor ? readListCursor(query.cursor, MEMBER_CURSOR).id : null;
-  const ids = await listSegmentMemberIds(db, segment.definition, { afterId, limit: query.limit + 1 });
-  const more = ids.length > query.limit;
-  const loaded = await readCustomerRepresentations(db, ids.slice(0, query.limit));
+  // A bounded scan: a sparse segment answers a short (or empty) page that still continues.
+  const scan = await scanSegmentMembers(db, segment.definition, { afterId, limit: query.limit });
+  const loaded = await readCustomerRepresentations(db, scan.ids);
   const kept: typeof loaded = [];
   let bytes = 0;
   const encoder = new TextEncoder();
@@ -320,9 +321,9 @@ app.openapi(createRoute({
     kept.push(customer);
     bytes += size;
   }
-  const last = kept.at(-1);
-  const nextCursor = (more || kept.length < loaded.length) && last
-    ? encodeListCursorOrNull({ sort: MEMBER_CURSOR.sort, direction: "asc", values: [], id: last.id })
+  const resumeAfter = kept.length < loaded.length ? kept.at(-1)!.id : scan.resumeAfter;
+  const nextCursor = resumeAfter
+    ? encodeListCursorOrNull({ sort: MEMBER_CURSOR.sort, direction: "asc", values: [], id: resumeAfter })
     : null;
   return ok(c, { customers: kept, nextCursor });
 });

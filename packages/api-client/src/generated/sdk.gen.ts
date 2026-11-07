@@ -2554,7 +2554,7 @@ export const patchApiV1AdminResourcesCustomerSegmentsById = <ThrowOnError extend
 /**
  * List a segment's members
  *
- * The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor to walk the whole segment. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.
+ * The customers in the segment now, in id order, as webhooks carry them (CustomerResource); follow nextCursor until it is null to walk the whole segment. Each page examines at most 2000 customers, so a page of a sparse segment may hold fewer members than the limit, or none, and still carry a nextCursor: only a null nextCursor means the walk is done. Membership is evaluated live, so a customer who joins or leaves between pages may be missed or seen once. Contact fields read null without the matching read_customer_* scope.
  */
 export const getApiV1AdminResourcesCustomerSegmentsByIdMembers = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminResourcesCustomerSegmentsByIdMembersData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses, GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses, GetApiV1AdminResourcesCustomerSegmentsByIdMembersErrors, ThrowOnError>({ url: '/api/v1/admin/resources/customer-segments/{id}/members', ...options });
 

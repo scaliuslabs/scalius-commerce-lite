@@ -96,7 +96,7 @@ mirror a dashboard screen, an editor section or a summary card.
   `customer_segments.*` (`resources-customer-segments.ts`) carry one
   `CustomerSegmentResource` whose rules spell spend `minMinor`/`maxMinor`
   beside the store `currency` (`customerSegmentDefinitionAppSchema`); members
-  page as `CustomerResource` in id order; an app's rules name only `custom`
+  page as `CustomerResource` in id order, each page a bounded window of customers (`scanSegmentMembers`: a sparse segment's page may be short or empty with a `nextCursor`); an app's rules name only `custom`
   customer fields, and it retargets a segment a live discount or price list
   uses only with `discounts.edit` or `products.edit`. Segment delete is not
   stable: a delete is destructive risk, so it would raise `write_customers`.
