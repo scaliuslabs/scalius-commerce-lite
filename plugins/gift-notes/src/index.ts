@@ -13,7 +13,7 @@
 //   order shows it its own answers (the line inputs and the checkout answer)
 //   and the product's, never another app's, and it writes one slip per gift
 //   order. Delivery is at least once: the slip is keyed by the order.
-import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type PluginAdminLocale, type PluginContextOf } from "@scalius/plugin-sdk";
+import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type FunctionCart, type OrderRepresentation, type OrderRepresentationLine, type PluginAdminLocale, type PluginContextOf } from "@scalius/plugin-sdk";
 
 export const APP_ID = "scaliuslabs.gift-notes";
 /** The keys the app's inputs travel under on a line and an order. */
@@ -24,7 +24,7 @@ export const GIFT_RECEIPT_KEY = `${APP_ID}.gift_receipt`;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Gift Notes",
-  version: "1.0.0",
+  version: "1.0.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Buyers add a gift message and gift wrap to any item. Staff get a packing slip for every gift, with the prices left off when the buyer asks.",
   author: { name: "Scalius Labs" },
@@ -38,7 +38,7 @@ export const manifest = defineManifest({
       label: "Gift wrap price",
       type: "number",
       default: 50,
-      help: "Added to each wrapped item, in the currency the buyer pays in. 0 wraps for free.",
+      help: "Added to each wrapped item, in your store's currency; a market that sells in another converts it at checkout. 0 wraps for free.",
     },
   ],
   functions: [{ point: "cart.line_prices", priority: 200 }],
@@ -97,20 +97,11 @@ export interface SlipLine {
 }
 
 /** The parts of the order representation the app reads (`orders.get`). */
-interface OrderRead {
-  id: string;
-  orderNumber: number | null;
-  currency: string;
-  attributes: Record<string, string>;
-  lines: Array<{
-    id: string;
-    title: string | null;
-    variantLabel: string | null;
-    quantity: number;
-    unitPriceMinor: number;
-    properties: Array<{ key: string; value: string; appId: string | null }>;
+export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "attributes"> & {
+  lines: Array<Pick<OrderRepresentationLine, "id" | "title" | "variantLabel" | "quantity" | "unitPriceMinor"> & {
+    properties: Array<Pick<OrderRepresentationLine["properties"][number], "key" | "value" | "appId">>;
   }>;
-}
+};
 
 /** The slip of an order, or null when no line is a gift. */
 export function slipOf(order: OrderRead): { order_id: string; order_number: number | null; lines: SlipLine[]; gift_receipt: boolean; currency: string } | null {
@@ -172,22 +163,36 @@ function slipView(slip: { lines: SlipLine[]; gift_receipt: boolean }, copy: (typ
   ];
 }
 
+/**
+ * The wrap fee on each wrapped line, as store-currency minor units for
+ * checkout to convert. A bundle line takes no add-on (checkout would refuse
+ * it): its wrap rides on nothing, so it is not asked.
+ */
+export function wrapFeeAdjustments(
+  cart: FunctionCart,
+  lines: ReadonlyArray<{ lineId: string; bundle: unknown }>,
+  settings: { wrap_fee?: unknown },
+): Array<{ lineId: string; amountMinor: number; currency: "store"; title: string }> {
+  const fee = Number(settings.wrap_fee ?? 0);
+  if (!Number.isFinite(fee) || fee <= 0) return [];
+  const amountMinor = Math.round(fee * 10 ** cart.storeCurrency.decimalPlaces);
+  const bundled = new Set(lines.filter((line) => line.bundle).map((line) => line.lineId));
+  return cart.lines
+    .filter((line) => line.properties[WRAP_KEY] === "true" && !bundled.has(line.lineId))
+    .map((line) => ({ lineId: line.lineId, amountMinor, currency: "store" as const, title: "Gift wrap" }));
+}
+
 export default definePlugin({
   manifest,
 
   functions: {
-    // Gift wrap is the app's add-on: each wrapped unit takes the wrap fee, in the cart's currency.
-    "cart.line_prices": ({ cart }, settings) => {
-      const fee = Math.max(0, Number(settings.wrap_fee ?? 0));
-      const amountMinor = Math.round(fee * 10 ** cart.decimalPlaces);
-      if (amountMinor <= 0) return { prices: [], adjustments: [] };
-      return {
-        prices: [],
-        adjustments: cart.lines
-          .filter((line) => line.properties[WRAP_KEY] === "true")
-          .map((line) => ({ lineId: line.lineId, amountMinor, title: "Gift wrap" })),
-      };
-    },
+    // Gift wrap is the app's add-on: each wrapped unit takes the wrap fee. The fee is
+    // the merchant's, in the store's currency: checkout converts it for a market that
+    // sells in another, at the order's rate, as it does a product price.
+    "cart.line_prices": ({ cart, lines }, settings) => ({
+      prices: [],
+      adjustments: wrapFeeAdjustments(cart, lines, settings),
+    }),
   },
 
   extensions: {

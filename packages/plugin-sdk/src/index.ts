@@ -117,6 +117,22 @@ export type {
   PluginUiTarget,
 } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
+/** The cart a checkout function sees (`cart` in every point's input). */
+export type { FunctionCart } from "@scalius/shared/plugins";
+export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";
+import type { EventRepresentation } from "@scalius/shared/events";
+/**
+ * An order as `orders.get`, `orders.list` and order webhooks carry it: money
+ * in integer minor units of `currency`, each line's buyer answers
+ * (`properties`, yours and the store's), add-ons (`adjustments`) and purchase
+ * options, and the discounts it used. Type your reads with it instead of
+ * describing the order by hand: `ctx.api.call<{ order: OrderRepresentation }>("orders.get", ...)`.
+ */
+export type OrderRepresentation = EventRepresentation<"order">;
+/** One line of an `OrderRepresentation`. */
+export type OrderRepresentationLine = OrderRepresentation["lines"][number];
+export type RefundRepresentation = EventRepresentation<"refund">;
+export type ReturnRepresentation = EventRepresentation<"return">;
 
 export type PluginEventHandler<T extends EventTopic = EventTopic, Ctx = PluginContext> = (event: PluginEvent<T>, ctx: Ctx) => Promise<void> | void;
 

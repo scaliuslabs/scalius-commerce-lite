@@ -9,15 +9,34 @@
 //   It shares the line with any other app's input or purchase option: a
 //   subscription priced by another app keeps its price and takes the plan
 //   as an add-on.
-// - `cart.line_prices` prices the plan as an add-on; `cart.validate` refuses
-//   a plan on a product that is not eligible (the flag is read with a
-//   declared read, so a forged plan never sells).
-// - On `order.created` the app reads the order back (`orders.get`): its own
-//   plan answers, its own add-ons (what the buyer paid for each plan) and the
-//   discounts that applied to each line (what the covered item really cost),
-//   and records one coverage per protected line. Delivery is at least once:
-//   a coverage is keyed by its order line.
-import { adminContext, adminLocale, defineManifest, definePlugin, PLUGIN_API_VERSION, ui, type PluginAdminLocale, type PluginContextOf } from "@scalius/plugin-sdk";
+// - `cart.line_prices` prices the plan as a share (`percent`) of the item as
+//   checkout prices it, so it is right in every currency and on any app's
+//   price; `cart.validate` refuses a plan on a product that is not eligible
+//   or that the merchant set no price for (read with a declared read, so a
+//   forged plan never sells). Pricing blocks on failure: a plan never sells
+//   unpaid.
+// - A coverage follows its order: it is pending until the order is paid,
+//   active once paid, and void once the order is cancelled or its protected
+//   units are refunded or returned. Every order, refund and return event
+//   recomputes the order's coverages from what the order says now
+//   (`orders.get`, `refunds.list`, `returns.list`), so events may arrive
+//   late, twice or out of order. A refund and a return of the same units
+//   count once (the larger of the two ends the units).
+import {
+  adminContext,
+  adminLocale,
+  defineManifest,
+  definePlugin,
+  PLUGIN_API_VERSION,
+  ui,
+  type OrderRepresentation,
+  type OrderRepresentationLine,
+  type PluginAdminLocale,
+  type PluginContextOf,
+  type PluginEvent,
+  type RefundRepresentation,
+  type ReturnRepresentation,
+} from "@scalius/plugin-sdk";
 
 export const APP_ID = "scaliuslabs.protection";
 /** The key the plan travels under on a line and an order. */
@@ -28,17 +47,18 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.0.2",
+  version: "1.1.0",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
   author: { name: "Scalius Labs" },
   tagline: "Protection plans on the items you choose",
   categories: ["checkout", "support"],
   scopes: ["read_orders"],
-  events: ["order.created"],
+  // A coverage follows its order's payment, cancellation, refunds and returns.
+  events: ["order.created", "order.paid", "order.cancelled", "order.refunded", "refund.created", "refund.updated", "return.updated"],
   settings: [
-    { key: "one_year_percent", label: "1-year plan price (% of the item)", type: "number", default: 8 },
-    { key: "two_years_percent", label: "2-year plan price (% of the item)", type: "number", default: 12 },
+    { key: "one_year_percent", label: "1-year plan price (% of the item)", type: "number", default: 8, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
+    { key: "two_years_percent", label: "2-year plan price (% of the item)", type: "number", default: 12, help: "A share of what the buyer pays for the item, in any market. 0 stops selling it." },
   ],
   customFields: [
     {
@@ -77,16 +97,22 @@ export const manifest = defineManifest({
         { key: "product_id", name: "Product", type: "single_line_text" },
         { key: "title", name: "Item", type: "single_line_text" },
         { key: "plan", name: "Plan", type: "single_line_text", required: true },
+        /** `pending` until the order is paid, `active` once paid, `void` once cancelled, refunded or returned. */
+        { key: "status", name: "Status", type: "single_line_text" },
+        /** Why a void coverage ended: `cancelled`, `refunded` or `returned`; null otherwise. */
+        { key: "void_reason", name: "Ended because", type: "single_line_text" },
+        { key: "quantity_bought", name: "Units bought", type: "integer" },
+        /** The units still covered: bought less those refunded or returned. */
         { key: "quantity", name: "Units covered", type: "integer" },
         /** What the buyer paid for the plans of the line, in minor units of `currency`. */
         { key: "plan_paid_minor", name: "Plan paid", type: "integer" },
-        /** What one covered unit cost after the order's discounts, in minor units of `currency`. */
+        /** One covered unit: the item's price the plan was a share of (its price and surcharges, without add-ons), in minor units of `currency`. */
         { key: "covered_unit_minor", name: "Covered value per unit", type: "integer" },
         { key: "currency", name: "Currency", type: "single_line_text" },
         { key: "starts_at", name: "Starts", type: "date_time" },
         { key: "ends_at", name: "Ends", type: "date_time" },
       ],
-      indexes: ["order_id", "order_number"],
+      indexes: ["order_id", "order_number", "status"],
     },
   },
   routes: {
@@ -119,34 +145,29 @@ function isPlan(value: unknown): value is PlanId {
   return value === "one_year" || value === "two_years";
 }
 
-/** A plan's price for one unit: its percentage of the unit price, rounded to minor units; 0 when the merchant set none. */
-export function planPriceMinor(plan: PlanId, unitPriceMinor: number, settings: Settings): number {
+/** A plan's price as a share of the item, at most two decimals; 0 when the merchant set none (the plan is not sold). */
+export function planPercent(plan: PlanId, settings: Settings): number {
   const percent = Number(settings[PLANS[plan].setting] ?? 0);
   if (!Number.isFinite(percent) || percent <= 0) return 0;
-  return Math.round((unitPriceMinor * percent) / 100);
+  return Math.min(1_000, Math.round(percent * 100) / 100);
 }
 
 type Flags = Record<string, { data: { eligible?: unknown } }>;
 const eligibleOf = (reads: Record<string, unknown>, productId: string) => (reads.flags as Flags | undefined)?.[productId]?.data.eligible === true;
 
-/** The parts of the order representation the app reads (`orders.get`). */
-interface OrderRead {
-  id: string;
-  orderNumber: number | null;
-  currency: string;
-  createdAt: string;
-  lines: Array<{
-    id: string;
-    productId: string;
-    title: string | null;
-    variantLabel: string | null;
-    quantity: number;
-    unitPriceMinor: number;
-    properties: Array<{ key: string; value: string; appId: string | null }>;
-    adjustments: Array<{ appId: string | null; title: string; amountMinor: number }>;
+/** The parts of the order representation the app reads (`orders.get`), typed from the SDK's. */
+export type OrderRead = Pick<OrderRepresentation, "id" | "orderNumber" | "currency" | "createdAt" | "status" | "paymentStatus"> & {
+  lines: Array<Pick<OrderRepresentationLine, "id" | "productId" | "title" | "variantLabel" | "quantity" | "unitPriceMinor" | "purchaseOptions"> & {
+    properties: Array<Pick<OrderRepresentationLine["properties"][number], "key" | "value" | "appId">>;
+    adjustments: Array<Pick<OrderRepresentationLine["adjustments"][number], "appId" | "title" | "amountMinor">>;
   }>;
-  discountApplications: Array<{ lines: Array<{ orderItemId: string; amountMinor: number }> }>;
-}
+};
+export type RefundRead = Pick<RefundRepresentation, "status" | "lines">;
+export type ReturnRead = Pick<ReturnRepresentation, "status"> & { lines: Array<Pick<ReturnRepresentation["lines"][number], "orderItemId" | "receivedQuantity">> };
+
+export const COVERAGE_STATUSES = ["pending", "active", "void"] as const;
+export type CoverageStatus = (typeof COVERAGE_STATUSES)[number];
+export type VoidReason = "cancelled" | "refunded" | "returned";
 
 export interface Coverage extends Record<string, unknown> {
   order_id: string;
@@ -155,6 +176,9 @@ export interface Coverage extends Record<string, unknown> {
   product_id: string;
   title: string;
   plan: PlanId;
+  status: CoverageStatus;
+  void_reason: VoidReason | null;
+  quantity_bought: number;
   quantity: number;
   plan_paid_minor: number;
   covered_unit_minor: number;
@@ -163,13 +187,33 @@ export interface Coverage extends Record<string, unknown> {
   ends_at: string;
 }
 
-/** One coverage per protected line of the order, from what the order says the buyer chose and paid: no add-on, no coverage. */
-export function coveragesOf(order: OrderRead): Coverage[] {
-  const discountByLine = new Map<string, number>();
-  for (const application of order.discountApplications) {
-    for (const line of application.lines) discountByLine.set(line.orderItemId, (discountByLine.get(line.orderItemId) ?? 0) + line.amountMinor);
+/** The order's payment says the plans were paid for. */
+const PAID_STATUSES: ReadonlySet<string> = new Set(["paid", "partially_refunded"]);
+
+/** Units of each line given back: refunded (any refund that has not failed) and returned (received back). */
+function unitsEnded(refunds: readonly RefundRead[], returns: readonly ReturnRead[]) {
+  const refunded = new Map<string, number>();
+  const returned = new Map<string, number>();
+  for (const refund of refunds) {
+    if (refund.status === "failed") continue;
+    for (const line of refund.lines) refunded.set(line.orderItemId, (refunded.get(line.orderItemId) ?? 0) + Math.max(0, line.quantity));
   }
+  for (const entry of returns) {
+    if (entry.status === "cancelled" || entry.status === "rejected") continue;
+    for (const line of entry.lines) returned.set(line.orderItemId, (returned.get(line.orderItemId) ?? 0) + Math.max(0, line.receivedQuantity));
+  }
+  return { refunded, returned };
+}
+
+/**
+ * One coverage per paid-for plan of the order, as the order stands now: what
+ * the buyer chose and paid (its own answer and add-on: no add-on, no
+ * coverage), the item it covers (the price the plan was a share of), and its
+ * status from the order's payment, cancellation, refunds and returns.
+ */
+export function coveragesOf(order: OrderRead, refunds: readonly RefundRead[] = [], returns: readonly ReturnRead[] = []): Coverage[] {
   const startsAt = new Date(order.createdAt);
+  const ended = unitsEnded(refunds, returns);
   return order.lines.flatMap((line): Coverage[] => {
     const plan = line.properties.find((property) => property.appId === APP_ID && property.key === PLAN_KEY)?.value;
     if (!isPlan(plan) || line.quantity <= 0) return [];
@@ -177,10 +221,18 @@ export function coveragesOf(order: OrderRead): Coverage[] {
     if (planPerUnit <= 0) return [];
     const endsAt = new Date(startsAt);
     endsAt.setUTCFullYear(endsAt.getUTCFullYear() + PLANS[plan].years);
-    // The item's own price: the unit price less every add-on (this plan and any other app's,
-    // a gift wrap is not the item), less its share of the order's discounts.
+    // The item the plan was a share of: the unit price less every add-on (this plan's and any
+    // other app's: a gift wrap is not the item), as checkout priced it.
     const addOnsPerUnit = line.adjustments.reduce((total, adjustment) => total + adjustment.amountMinor, 0);
-    const itemUnit = line.unitPriceMinor - addOnsPerUnit;
+    const refunded = ended.refunded.get(line.id) ?? 0;
+    const returned = ended.returned.get(line.id) ?? 0;
+    // A refund and a return of the same units count once.
+    const covered = Math.max(0, line.quantity - Math.max(refunded, returned));
+    const voidReason: VoidReason | null = order.status === "cancelled" ? "cancelled"
+      : covered === 0 || order.paymentStatus === "refunded" ? (returned > refunded || order.status === "returned" ? "returned" : "refunded")
+        : order.status === "returned" ? "returned"
+          : null;
+    const status: CoverageStatus = voidReason ? "void" : PAID_STATUSES.has(order.paymentStatus) ? "active" : "pending";
     return [{
       order_id: order.id,
       order_number: order.orderNumber,
@@ -188,9 +240,12 @@ export function coveragesOf(order: OrderRead): Coverage[] {
       product_id: line.productId,
       title: [line.title ?? "Item", line.variantLabel].filter(Boolean).join(" · "),
       plan,
-      quantity: line.quantity,
+      status,
+      void_reason: voidReason,
+      quantity_bought: line.quantity,
+      quantity: voidReason ? 0 : covered,
       plan_paid_minor: planPerUnit * line.quantity,
-      covered_unit_minor: Math.max(0, itemUnit - Math.floor((discountByLine.get(line.id) ?? 0) / line.quantity)),
+      covered_unit_minor: Math.max(0, line.unitPriceMinor - addOnsPerUnit),
       currency: order.currency,
       starts_at: startsAt.toISOString(),
       ends_at: endsAt.toISOString(),
@@ -198,10 +253,69 @@ export function coveragesOf(order: OrderRead): Coverage[] {
   });
 }
 
+/** Writes per batch (`ctx.objects.batch` takes at most 25). */
+const BATCH_MAX = 25;
+/** Pages of refunds or returns read for one order (100 a page). */
+const PAGES_MAX = 10;
+
+/** The order an event is about: the order itself, or the order a refund or return belongs to. */
+export function orderIdOf(event: Pick<PluginEvent, "resource" | "facts">): string | null {
+  if (event.resource.type === "order") return event.resource.id;
+  const orderId = event.facts.orderId;
+  return typeof orderId === "string" && orderId.length > 0 ? orderId : null;
+}
+
+async function listAll<T>(ctx: Context, operation: "refunds.list" | "returns.list", key: "refunds" | "returns", orderId: string): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < PAGES_MAX; page += 1) {
+    const query: Record<string, string> = cursor ? { limit: "100", cursor } : { limit: "100" };
+    const read = await ctx.api.call<Record<string, unknown> & { nextCursor: string | null }>(operation, { path: { id: orderId }, query });
+    if (!read.ok || !read.data) throw new Error(`${operation} failed: ${read.error?.code ?? read.status}`);
+    items.push(...((read.data[key] as T[] | undefined) ?? []));
+    const next: string | null = read.data.nextCursor;
+    if (!next) break;
+    cursor = next;
+  }
+  return items;
+}
+
+/**
+ * Recomputes the order's coverages from what it says now and writes them,
+ * keyed by order line, in batches of 25. `create` is the order's first
+ * event; any later event touches only an order that already has coverages.
+ */
+export async function syncCoverages(ctx: Context, orderId: string, create: boolean): Promise<number> {
+  if (!create) {
+    const existing = await ctx.objects.coverages.query({ where: { order_id: orderId }, limit: 1 });
+    if (existing.records.length === 0) return 0;
+  }
+  const read = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id: orderId } });
+  if (!read.ok || !read.data?.order) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
+  const order = read.data.order;
+  if (coveragesOf(order).length === 0) return 0;
+  const [refunds, returns] = await Promise.all([
+    listAll<RefundRead>(ctx, "refunds.list", "refunds", orderId),
+    listAll<ReturnRead>(ctx, "returns.list", "returns", orderId),
+  ]);
+  const coverages = coveragesOf(order, refunds, returns);
+  for (let start = 0; start < coverages.length; start += BATCH_MAX) {
+    await ctx.objects.batch(coverages.slice(start, start + BATCH_MAX).map((coverage) => ({
+      op: "put" as const, object: "coverages", id: `${coverage.order_id}:${coverage.order_item_id}`, record: coverage,
+    })));
+  }
+  return coverages.length;
+}
+
+/** How many flag writes run at once: a bulk action of 250 products finishes well inside the route's budget. */
+const FLAG_WRITES_AT_ONCE = 25;
+
 const COPY = {
   en: {
-    item: "Item", plan: "Plan", units: "Units", paid: "Plan paid", covered: "Covered value", ends: "Ends", order: "Order",
+    item: "Item", plan: "Plan", units: "Units", paid: "Plan paid", covered: "Covered value", ends: "Ends", order: "Order", status: "Status",
     plans: { one_year: "1 year", two_years: "2 years" },
+    statuses: { pending: "Awaiting payment", active: "Active", void: "Void" },
+    reasons: { cancelled: "Void: order cancelled", refunded: "Void: refunded", returned: "Void: returned" },
     none: "No protection plan on this order.",
     emptyTitle: "No plans sold yet", emptyText: "Offer plans on your products (Products → select → Offer protection plans), and buyers can add one to them.",
     title: "Protection plans", description: "Every plan sold, with what it covers and until when.",
@@ -209,8 +323,10 @@ const COPY = {
     offer: "Offer protection plans", stop: "Stop offering", saved: "Saved for {n} product(s).", select: "Select at least one product.",
   },
   bn: {
-    item: "পণ্য", plan: "প্ল্যান", units: "সংখ্যা", paid: "প্ল্যানের দাম", covered: "কভার মূল্য", ends: "শেষ", order: "অর্ডার",
+    item: "পণ্য", plan: "প্ল্যান", units: "সংখ্যা", paid: "প্ল্যানের দাম", covered: "কভার মূল্য", ends: "শেষ", order: "অর্ডার", status: "অবস্থা",
     plans: { one_year: "১ বছর", two_years: "২ বছর" },
+    statuses: { pending: "পেমেন্টের অপেক্ষায়", active: "চালু", void: "বাতিল" },
+    reasons: { cancelled: "বাতিল: অর্ডার বাতিল হয়েছে", refunded: "বাতিল: টাকা ফেরত দেওয়া হয়েছে", returned: "বাতিল: পণ্য ফেরত এসেছে" },
     none: "এই অর্ডারে কোনো প্রোটেকশন প্ল্যান নেই।",
     emptyTitle: "এখনও কোনো প্ল্যান বিক্রি হয়নি", emptyText: "পণ্যে প্ল্যান চালু করুন (পণ্য → বেছে নিন → প্রোটেকশন প্ল্যান চালু করুন), তাহলে ক্রেতারা প্ল্যান যোগ করতে পারবেন।",
     title: "প্রোটেকশন প্ল্যান", description: "বিক্রি হওয়া প্রতিটি প্ল্যান, কী কভার করে এবং কতদিন।",
@@ -219,7 +335,18 @@ const COPY = {
   },
 } satisfies Record<PluginAdminLocale, unknown>;
 
-type CoverageRecord = { id: string; data: { [K in keyof Coverage]?: (K extends "plan" ? string : Coverage[K]) | null } };
+type CoverageRecord = { id: string; data: { [K in keyof Coverage]?: (K extends "plan" | "status" | "void_reason" ? string : Coverage[K]) | null } };
+
+/** What a claim desk needs first: is this coverage live, and if not, why not. */
+function statusCell(status: unknown, reason: unknown, copy: (typeof COPY)[PluginAdminLocale]) {
+  if (status === "active") return { badge: copy.statuses.active, tone: "success" as const };
+  if (status === "void") {
+    const text = reason === "cancelled" || reason === "refunded" || reason === "returned" ? copy.reasons[reason] : copy.statuses.void;
+    return { badge: text, tone: "critical" as const };
+  }
+  // Records from before the lifecycle read as awaiting payment until their next event.
+  return { badge: copy.statuses.pending, tone: "warning" as const };
+}
 
 function coverageTable(records: readonly CoverageRecord[], copy: (typeof COPY)[PluginAdminLocale], withOrder: boolean) {
   return ui.table({
@@ -227,6 +354,7 @@ function coverageTable(records: readonly CoverageRecord[], copy: (typeof COPY)[P
       ...(withOrder ? [{ key: "order", label: copy.order }] : []),
       { key: "item", label: copy.item },
       { key: "plan", label: copy.plan },
+      { key: "status", label: copy.status },
       { key: "units", label: copy.units, align: "end" as const },
       { key: "paid", label: copy.paid, align: "end" as const },
       { key: "covered", label: copy.covered, align: "end" as const },
@@ -238,6 +366,7 @@ function coverageTable(records: readonly CoverageRecord[], copy: (typeof COPY)[P
         ...(withOrder ? { order: { text: data.order_number ? `#${data.order_number}` : String(data.order_id ?? id), to: { kind: "resource" as const, resource: "order" as const, id: String(data.order_id) } } } : {}),
         item: data.title ?? "",
         plan: isPlan(data.plan) ? copy.plans[data.plan] : null,
+        status: statusCell(data.status, data.void_reason, copy),
         units: data.quantity ?? 0,
         paid: { amountMinor: data.plan_paid_minor ?? 0, currency: data.currency ?? "BDT" },
         covered: { amountMinor: data.covered_unit_minor ?? 0, currency: data.currency ?? "BDT" },
@@ -252,36 +381,36 @@ export default definePlugin({
   manifest,
 
   functions: {
-    // The plan is an add-on to each unit, on an eligible product only.
+    // The plan is a share of each unit as checkout prices it (any app's price, any currency), on an eligible product only.
     "cart.line_prices": ({ cart, reads }, settings) => ({
       prices: [],
       adjustments: cart.lines.flatMap((line) => {
         const plan = line.properties[PLAN_KEY];
         if (!isPlan(plan) || !eligibleOf(reads, line.productId)) return [];
-        const amountMinor = planPriceMinor(plan, line.unitPriceMinor, settings);
-        return amountMinor > 0 ? [{ lineId: line.lineId, amountMinor, title: plan === "one_year" ? "1-year protection plan" : "2-year protection plan" }] : [];
+        const percent = planPercent(plan, settings);
+        return percent > 0 ? [{ lineId: line.lineId, percent, title: plan === "one_year" ? "1-year protection plan" : "2-year protection plan" }] : [];
       }),
     }),
     // A plan sells only on a product the merchant marked eligible, at a price the merchant set.
     "cart.validate": ({ cart, reads }, settings) => ({
       errors: cart.lines.flatMap((line) => {
         const plan = line.properties[PLAN_KEY];
-        return isPlan(plan) && (!eligibleOf(reads, line.productId) || planPriceMinor(plan, line.unitPriceMinor, settings) === 0)
+        return isPlan(plan) && (!eligibleOf(reads, line.productId) || planPercent(plan, settings) === 0)
           ? [{ code: "protection_unavailable", message: "A protection plan isn't offered for this item. Remove the plan to continue.", lineId: line.lineId }]
           : [];
       }),
     }),
   },
 
+  // Each event recomputes the order's coverages from the order as it is now.
   events: {
-    "order.created": async (event, ctx) => {
-      const read = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id: event.resource.id } });
-      if (!read.ok || !read.data?.order) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
-      const coverages = coveragesOf(read.data.order);
-      if (coverages.length === 0) return;
-      // Keyed by the order line: a redelivered event writes the same coverages again, in one batch.
-      await ctx.objects.batch(coverages.map((coverage) => ({ op: "put" as const, object: "coverages", id: `${coverage.order_id}:${coverage.order_item_id}`, record: coverage })));
-    },
+    "order.created": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, true); },
+    "order.paid": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, false); },
+    "order.cancelled": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, false); },
+    "order.refunded": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, false); },
+    "refund.created": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId, false); },
+    "refund.updated": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId, false); },
+    "return.updated": async (event, ctx) => { const orderId = orderIdOf(event); if (orderId) await syncCoverages(ctx, orderId, false); },
   },
 
   routes: {
@@ -310,7 +439,9 @@ export default definePlugin({
         const body = (request.body ?? {}) as { offer?: unknown };
         const offer = action === "offer_plans" || (action === null && body.offer === true);
         if (ids.length === 0) return { status: 422, body: ui.result({ toast: { message: copy.select, tone: "critical" } }) };
-        for (const productId of ids) await ctx.customFields.set("product", productId, { eligible: offer });
+        for (let start = 0; start < ids.length; start += FLAG_WRITES_AT_ONCE) {
+          await Promise.all(ids.slice(start, start + FLAG_WRITES_AT_ONCE).map((productId) => ctx.customFields.set("product", productId, { eligible: offer })));
+        }
         return { body: ui.result({ toast: copy.saved.replace("{n}", String(ids.length)), refresh: true }) };
       },
       order_coverage: async (request, ctx: Context) => {
