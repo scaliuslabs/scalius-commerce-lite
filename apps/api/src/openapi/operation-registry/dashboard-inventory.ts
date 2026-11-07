@@ -61,7 +61,9 @@ export const DASHBOARD_INVENTORY_OPERATIONS = {
   "dashboard.purchase_orders.update": { revision: "required" },
   "dashboard.purchase_orders.mark_ordered": { revision: "required" },
   "dashboard.purchase_orders.receive": { idempotency: "required" },
-  "dashboard.purchase_orders.cancel": { risk: "destructive", revision: "required" },
+  // Cancelling closes a document (what was received stays): a write agents
+  // confirm, the same gate on every alias of the command (command-aliases.test.ts).
+  "dashboard.purchase_orders.cancel": { confirmation: "required", revision: "required" },
   "dashboard.purchase_orders.delete": { risk: "destructive", revision: "required" },
   "dashboard.purchase_orders.export": {
     batch: "forbidden",
@@ -81,7 +83,7 @@ export const DASHBOARD_INVENTORY_OPERATIONS = {
   "dashboard.inventory_transfers.update": { revision: "required" },
   "dashboard.inventory_transfers.ship": { idempotency: "required", revision: "required" },
   "dashboard.inventory_transfers.receive": { idempotency: "required" },
-  "dashboard.inventory_transfers.cancel": { risk: "destructive", idempotency: "required", revision: "required" },
+  "dashboard.inventory_transfers.cancel": { confirmation: "required", idempotency: "required", revision: "required" },
   "dashboard.inventory_transfers.delete": { risk: "destructive", revision: "required" },
   // The stable app API's stock documents (routes/admin/resources-inventory.ts):
   // the same inventory services as above, minor units in and out, the sealed
