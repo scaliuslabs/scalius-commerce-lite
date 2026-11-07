@@ -1,14 +1,28 @@
 // What to reorder, worked out by a background job a few calls at a time.
 //
-// The plan reads every rule (up to 1,000: 10 record reads), every open
+// The plan reads every rule (up to 1,000: 10 record reads), the stock of
+// every rule's SKU (90 SKUs a call: 12 or more API calls) and then every open
 // purchase order (up to 500 in each of three statuses, 50 a call: 30 API
-// calls) and the stock of every rule's SKU (90 SKUs a call: 12 or more API
 // calls). That is more than the 50 platform calls one run may make on the Free
 // plan and most of the app's 60 API calls a minute, so no page view reads it.
 // The `check` and `draft` jobs do, in steps of at most STEP_CALLS platform
 // calls each. A step stops before a call it cannot afford, or at the first
 // rate-limited answer, and keeps what it has read; the job's next step (a
 // minute later) continues from there.
+//
+// Reads that span steps must count each unit once, as on hand or as on
+// order, however receipts and status changes fall between them:
+// - A purchase order counts once in the whole check. Its status can change
+//   between steps (draft to ordered, ordered to partially received) and an
+//   update moves it to the end of its list, so it can be read again; the ids
+//   counted so far stay in the job's state (`Scan.counted`).
+// - Stock is read before any purchase order. A receipt moves units from on
+//   order to on hand, and nothing moves them back, so a receipt between the
+//   two reads is counted in neither: the plan orders those units again, which
+//   the merchant sees (on hand reads lower than the shelf) and can trim. Read
+//   the other way round, the same units would count twice and the plan would
+//   silently order too little. The residual error only ever over-orders, by at
+//   most what was received while the check ran.
 //
 // What a check finds is stored (`PLAN_KEY` and its chunks) with when it ran,
 // and the page shows it with that time. A draft checks, stores what it found,
@@ -219,15 +233,31 @@ async function planLines(ctx: Pick<PluginContext, "kv">, plan: PlanSnapshot, cal
 interface Scan {
   ids: string;
   rules: number;
+  /** The next batch of 90 rules whose stock to read, and its cursor: read first. */
+  batch: number;
+  levelCursor: string | null;
+  onHand: number[];
   /** The next status to read (`OPEN_STATUSES`), its cursor and what it has read of it. */
   status: number;
   cursor: string | null;
   read: number;
   onOrder: number[];
-  /** The next batch of 90 rules whose stock to read, and its cursor. */
-  batch: number;
-  levelCursor: string | null;
-  onHand: number[];
+  /** Every purchase order counted in this check, `orderMark`s end to end. */
+  counted: string;
+}
+
+/** Characters of one `orderMark`. */
+const MARK = 12;
+
+/**
+ * A purchase order's id as 12 characters (72 bits of its SHA-256, base64url),
+ * so the 1,500 a check reads at its caps keep 18 KiB of the job's 64 KiB of
+ * state. Two orders that share a mark (about one check in 10^15 at the caps)
+ * count as one: the plan then over-orders, never under-orders.
+ */
+async function orderMark(id: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(id)));
+  return btoa(String.fromCharCode(...digest.subarray(0, (MARK / 4) * 3))).replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 interface PlanState {
@@ -246,7 +276,7 @@ const initialState = (): PlanState => ({ phase: "scan", pass: 1, scan: null, nex
 
 const isPlanState = (value: unknown): value is PlanState => typeof value === "object" && value !== null && ((value as PlanState).phase === "scan" || (value as PlanState).phase === "create");
 
-/** Progress in parts of 100: reading orders, reading stock (and for a draft, creating and checking again). */
+/** Progress in parts of 100: reading stock, reading orders (and for a draft, creating and checking again). */
 function progressOf(state: PlanState, draft: boolean, finished: boolean) {
   const total = draft ? 400 : 200;
   if (finished) return { done: total, total };
@@ -295,32 +325,15 @@ export async function planStep(ctx: PluginContext, job: PluginJobStepInput, draf
     if (!calls.fits(RULE_READS)) return answer();
     const rules = await allRules(ctx, calls);
     const ids = await requestKey("ids", rules.map((rule) => rule.id));
-    // A rule added or removed since the last step: its arrays no longer line up, so read again.
-    const scan: Scan = state.scan && state.scan.ids === ids
+    // A rule added or removed since the last step: its arrays no longer line up, so read again. So
+    // does a scan an earlier version began (no `counted`; it read orders before stock).
+    const scan: Scan = state.scan && state.scan.ids === ids && typeof state.scan.counted === "string"
       ? state.scan
-      : { ids, rules: rules.length, status: rules.length === 0 ? OPEN_STATUSES.length : 0, cursor: null, read: 0, onOrder: rules.map(() => 0), batch: 0, levelCursor: null, onHand: rules.map(() => 0) };
+      : { ids, rules: rules.length, batch: 0, levelCursor: null, onHand: rules.map(() => 0), status: rules.length === 0 ? OPEN_STATUSES.length : 0, cursor: null, read: 0, onOrder: rules.map(() => 0), counted: "" };
     state = { ...state, scan };
     const position = new Map(rules.map((rule, index) => [rule.id, index]));
-    const counted = new Set<string>();
 
-    while (scan.status < OPEN_STATUSES.length) {
-      if (!calls.fits()) return answer();
-      calls.take();
-      const page = await apiRead<{ purchaseOrders: PurchaseOrder[]; nextCursor: string | null }>(ctx, "purchase_orders.list", {
-        query: { status: OPEN_STATUSES[scan.status], limit: ORDER_PAGE, ...(scan.cursor ? { cursor: scan.cursor } : {}) },
-      });
-      // A purchase order changed while this step read moves to the end of its list: count it once.
-      const fresh = page.purchaseOrders.filter((order) => !counted.has(order.id));
-      for (const order of fresh) counted.add(order.id);
-      for (const [variantId, units] of unitsOnOrder(fresh)) {
-        const index = position.get(variantId);
-        if (index !== undefined) scan.onOrder[index]! += units;
-      }
-      scan.read += page.purchaseOrders.length;
-      if (page.nextCursor && scan.read < MAX_OPEN_PER_STATUS) scan.cursor = page.nextCursor;
-      else Object.assign(scan, { status: scan.status + 1, cursor: null, read: 0 });
-    }
-
+    // Stock first: a receipt after this read is then counted at most once, on order (see the top of this file).
     while (scan.batch * LEVEL_BATCH < rules.length) {
       if (!calls.fits()) return answer();
       calls.take();
@@ -333,6 +346,32 @@ export async function planStep(ctx: PluginContext, job: PluginJobStepInput, draf
       }
       if (page.nextCursor) scan.levelCursor = page.nextCursor;
       else Object.assign(scan, { batch: scan.batch + 1, levelCursor: null });
+    }
+
+    const counted = new Set(scan.counted.match(new RegExp(`.{${MARK}}`, "g")) ?? []);
+    while (scan.status < OPEN_STATUSES.length) {
+      if (!calls.fits()) return answer();
+      calls.take();
+      const page = await apiRead<{ purchaseOrders: PurchaseOrder[]; nextCursor: string | null }>(ctx, "purchase_orders.list", {
+        query: { status: OPEN_STATUSES[scan.status], limit: ORDER_PAGE, ...(scan.cursor ? { cursor: scan.cursor } : {}) },
+      });
+      // Read again under a new status, or at the end of its list after an update, in this step or an
+      // earlier one: it counts once, as first read.
+      const fresh: PurchaseOrder[] = [];
+      for (const order of page.purchaseOrders) {
+        const mark = await orderMark(order.id);
+        if (counted.has(mark)) continue;
+        counted.add(mark);
+        scan.counted += mark;
+        fresh.push(order);
+      }
+      for (const [variantId, units] of unitsOnOrder(fresh)) {
+        const index = position.get(variantId);
+        if (index !== undefined) scan.onOrder[index]! += units;
+      }
+      scan.read += page.purchaseOrders.length;
+      if (page.nextCursor && scan.read < MAX_OPEN_PER_STATUS) scan.cursor = page.nextCursor;
+      else Object.assign(scan, { status: scan.status + 1, cursor: null, read: 0 });
     }
 
     const short = shortfall(rules, new Map(rules.map((rule, index) => [rule.id, scan.onHand[index]!])), new Map(rules.map((rule, index) => [rule.id, scan.onOrder[index]!])));
