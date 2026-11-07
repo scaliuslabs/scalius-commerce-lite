@@ -627,7 +627,7 @@ const locationId = (description: string) => z.string().trim().min(1).max(128).op
  */
 async function transfersAtLocation(db: Database, locationId: string, condition: SQL | undefined, limit: number): Promise<{ id: string }[]> {
   const order = updatedOrder(inventoryTransfers.updatedAt, inventoryTransfers.id);
-  const arm = (column: typeof inventoryTransfers.originLocationId) => db.select({ id: inventoryTransfers.id, updatedAt: inventoryTransfers.updatedAt })
+  const arm = (column: typeof inventoryTransfers.originLocationId | typeof inventoryTransfers.destinationLocationId) => db.select({ id: inventoryTransfers.id, updatedAt: inventoryTransfers.updatedAt })
     .from(inventoryTransfers).where(and(eq(column, locationId), condition)).orderBy(...keysetOrderBy(order)).limit(limit);
   const [from, to] = await db.batch([arm(inventoryTransfers.originLocationId), arm(inventoryTransfers.destinationLocationId)]);
   return [...from, ...to]
