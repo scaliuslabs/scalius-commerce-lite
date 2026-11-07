@@ -6,7 +6,7 @@ import {
 import { normalizeSearchQuery } from "./search-query";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { formatList } from "@scalius/shared/locale-words";
-import { FACET_FILTER_KEY_PATTERN, FACET_RANGE_KEY_PATTERN } from "@scalius/shared/catalog-attributes";
+import { FACET_FILTER_KEY_PATTERN, FACET_RANGE_KEY_PATTERN } from "@scalius/shared/catalog-filter-keys";
 import { catalogCopy } from "./catalog-copy";
 import { storefrontLanguage } from "./storefront-language";
 import { pageLanguage } from "./store-time-zone";

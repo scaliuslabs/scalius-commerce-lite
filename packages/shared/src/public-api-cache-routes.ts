@@ -24,7 +24,7 @@
  */
 import type { StorefrontBatchPartCache } from "./cache-frontier";
 import { MARKET_PRESENCE_QUERY_PARAM } from "./markets";
-import { LISTING_FILTER_KEY_PATTERN } from "./catalog-attributes";
+import { LISTING_FILTER_KEY_PATTERN } from "./catalog-filter-keys";
 import { parseBindingResourceSelector } from "./storefront-theme/bindings";
 
 /** How a public read relates to markets: keyed by the page's presence, or the same in every market (with the reason). */
