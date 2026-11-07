@@ -32,9 +32,14 @@ import {
 } from "@scalius/shared/customer-marketing";
 import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 
 const DAY_SECONDS = 24 * 60 * 60;
+
+/** Named refusals (sealed app error codes): a stale revision and a name clash read differently. */
+export const SEGMENT_REVISION_CONFLICT = "segment_revision_conflict";
+export const SEGMENT_NAME_TAKEN = "segment_name_taken";
+const nameTaken = () => new AppError(409, SEGMENT_NAME_TAKEN, "Another segment has this name.");
 
 export interface SegmentEvaluationContext {
     /** Epoch seconds that relative date filters count back from. */
@@ -350,7 +355,7 @@ async function requireFreeName(db: Database, name: string, exceptId?: string): P
             exceptId ? ne(customerSegments.id, exceptId) : undefined,
         ))
         .get();
-    if (taken) throw new ConflictError("Another segment has this name.");
+    if (taken) throw nameTaken();
 }
 
 export async function createCustomerSegment(
@@ -379,7 +384,7 @@ export async function createCustomerSegment(
             updatedAt: sql`unixepoch()`,
         });
     } catch (error) {
-        if (/UNIQUE/i.test(String((error as Error)?.message ?? error))) throw new ConflictError("Another segment has this name.");
+        if (/UNIQUE/i.test(String((error as Error)?.message ?? error))) throw nameTaken();
         throw error;
     }
     return getCustomerSegment(db, id);
@@ -408,7 +413,7 @@ export async function updateCustomerSegment(
             isNull(customerSegments.deletedAt),
         ))
         .returning({ id: customerSegments.id });
-    if (updated.length === 0) throw new ConflictError("This segment changed since you opened it. Reload it and try again.");
+    if (updated.length === 0) throw new AppError(409, SEGMENT_REVISION_CONFLICT, "This segment changed since you opened it. Reload it and try again.");
     return getCustomerSegment(db, id);
 }
 

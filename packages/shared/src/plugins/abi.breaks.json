@@ -490,5 +490,11 @@
   "from": "d11015f433b8b3de",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontProductState: an existing signature changed or gained a required member.",
   "reason": "Pre-release (gap G3 follow-up): `StorefrontProductState.purchaseOption` named only the first option by id once a buy form can carry one option per app, so an island testing it for its own option stopped seeing it beside another app's. Removed; `purchaseOptions` (sorted by id) lists every option the buyer chose."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "70a33ec64e283a49",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Sealed codes are only added (APP_ERROR_CODES): the return and customer segment operations (G2) name each refusal instead of the generic conflict, so an app tells apart a stale order or return revision (order_revision_conflict, return_revision_conflict), another return command running on the order (return_command_in_progress), a stale segment revision (segment_revision_conflict) and a segment name clash (segment_name_taken); a return command key reused for another request answers the existing idempotency_key_reused. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
  }
 ]

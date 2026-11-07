@@ -76,12 +76,17 @@ export const APP_ERROR_CODES = {
   purchase_order_revision_conflict: { status: 409, meaning: "The purchase order changed since its revision was read." },
   purchase_order_state_conflict: { status: 409, meaning: "The purchase order's status refuses the write (an ordered one's lines, a received or cancelled one)." },
   inventory_transfer_revision_conflict: { status: 409, meaning: "The stock transfer changed since its revision was read." },
+  order_revision_conflict: { status: 409, meaning: "The order changed since its revision was read (a return request names the order's revision)." },
+  return_revision_conflict: { status: 409, meaning: "The return changed since its revision was read." },
+  return_command_in_progress: { status: 409, meaning: "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key." },
+  segment_revision_conflict: { status: 409, meaning: "The customer segment changed since its revision was read." },
   inventory_transfer_state_conflict: { status: 409, meaning: "The stock transfer's status refuses the write (a shipped one's lines, nothing left in transit)." },
 
   // ── Domain refusals of stable operations ──
   price_changed: { status: 409, meaning: "A price moved since it was read; read it again." },
   phone_required: { status: 400, meaning: "The order needs the buyer's phone (cash on delivery, invoices, Bangladesh)." },
   sku_taken: { status: 409, meaning: "Another SKU has this code or barcode." },
+  segment_name_taken: { status: 409, meaning: "Another customer segment has this name (any case)." },
   media_dependency_conflict: { status: 409, meaning: "The file is still used where it cannot be removed." },
   inventory_location_shortfall: { status: 409, meaning: "The location holds fewer units than the move takes." },
   quantity_exceeds_open: { status: 409, meaning: "A receipt takes more units than its line still has to come (ordered and not received, or in transit)." },

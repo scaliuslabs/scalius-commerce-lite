@@ -2750,6 +2750,22 @@ export declare const APP_ERROR_CODES: {
         readonly status: 409;
         readonly meaning: "The stock transfer changed since its revision was read.";
     };
+    readonly order_revision_conflict: {
+        readonly status: 409;
+        readonly meaning: "The order changed since its revision was read (a return request names the order's revision).";
+    };
+    readonly return_revision_conflict: {
+        readonly status: 409;
+        readonly meaning: "The return changed since its revision was read.";
+    };
+    readonly return_command_in_progress: {
+        readonly status: 409;
+        readonly meaning: "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key.";
+    };
+    readonly segment_revision_conflict: {
+        readonly status: 409;
+        readonly meaning: "The customer segment changed since its revision was read.";
+    };
     readonly inventory_transfer_state_conflict: {
         readonly status: 409;
         readonly meaning: "The stock transfer's status refuses the write (a shipped one's lines, nothing left in transit).";
@@ -2765,6 +2781,10 @@ export declare const APP_ERROR_CODES: {
     readonly sku_taken: {
         readonly status: 409;
         readonly meaning: "Another SKU has this code or barcode.";
+    };
+    readonly segment_name_taken: {
+        readonly status: 409;
+        readonly meaning: "Another customer segment has this name (any case).";
     };
     readonly media_dependency_conflict: {
         readonly status: 409;
@@ -3063,7 +3083,7 @@ export declare const APP_ERROR_CODES: {
         readonly meaning: "The run made the most platform calls it may.";
     };
 };
-export type AppErrorCode = "not_found" | "validation_error" | "invalid_cursor" | "unauthorized" | "forbidden" | "conflict" | "payload_too_large" | "rate_limited" | "internal_error" | "service_unavailable" | "api_unknown_operation" | "api_operation_not_stable" | "api_operation_forbidden" | "api_invalid_input" | "unknown_body_property" | "installation_inactive" | "contact_scope_required" | "app_principal_required" | "app_scope_required" | "idempotency_key_required" | "idempotency_not_supported" | "idempotency_key_invalid" | "idempotency_key_reused" | "idempotency_in_progress" | "idempotency_outcome_unknown" | "idempotency_secret_not_replayed" | "product_revision_conflict" | "product_state_conflict" | "brand_revision_conflict" | "brand_state_conflict" | "category_revision_conflict" | "category_state_conflict" | "collection_revision_conflict" | "page_revision_conflict" | "page_state_conflict" | "promotion_revision_conflict" | "promotion_state_conflict" | "price_list_revision_conflict" | "navigation_revision_conflict" | "object_revision_conflict" | "supplier_revision_conflict" | "purchase_order_revision_conflict" | "purchase_order_state_conflict" | "inventory_transfer_revision_conflict" | "inventory_transfer_state_conflict" | "price_changed" | "phone_required" | "sku_taken" | "media_dependency_conflict" | "inventory_location_shortfall" | "quantity_exceeds_open" | "stock_committed" | "variant_retired" | "supplier_has_open_purchase_orders" | "cost_scope_required" | "menu_in_trash" | "handle_unresolved" | "section_not_found" | "template_not_owned" | "template_unavailable" | "object_type_taken" | "object_limit" | "payment_declined" | "payment_outcome_unknown" | "payment_in_progress" | "payment_not_possible" | "payment_method_customer_mismatch" | "provider_invalid_response" | "app_gift_card_limit" | "object_undeclared_type" | "object_invalid_id" | "object_invalid" | "object_record_too_large" | "object_response_too_large" | "object_invalid_index_value" | "object_unindexed_query" | "object_invalid_cursor" | "object_unique_violation" | "object_conflict" | "object_invalid_batch" | "object_not_found" | "object_forbidden" | "object_out_of_range" | "kv_invalid_key" | "kv_value_too_large" | "kv_invalid_ttl" | "kv_conflict" | "kv_invalid_revision" | "http_not_allowed" | "http_invalid_request" | "http_too_many_redirects" | "http_timeout" | "http_failed" | "custom_fields_undeclared" | "custom_fields_invalid" | "messaging_not_allowed" | "messaging_recipient_not_allowed" | "messaging_invalid" | "messaging_unavailable" | "timeline_not_allowed" | "timeline_undeclared" | "timeline_invalid" | "timeline_not_found" | "orders_not_allowed" | "orders_invalid" | "orders_not_found" | "orders_hold_not_found" | "orders_conflict" | "customers_not_allowed" | "customers_invalid" | "customers_not_found" | "customer_roles_limit" | "jobs_undeclared" | "jobs_invalid" | "jobs_limit" | "jobs_not_found" | "jobs_key_reused" | "jobs_unavailable" | "customers_unavailable" | "settings_key_unavailable" | "quota_storage" | "quota_subrequests";
+export type AppErrorCode = "not_found" | "validation_error" | "invalid_cursor" | "unauthorized" | "forbidden" | "conflict" | "payload_too_large" | "rate_limited" | "internal_error" | "service_unavailable" | "api_unknown_operation" | "api_operation_not_stable" | "api_operation_forbidden" | "api_invalid_input" | "unknown_body_property" | "installation_inactive" | "contact_scope_required" | "app_principal_required" | "app_scope_required" | "idempotency_key_required" | "idempotency_not_supported" | "idempotency_key_invalid" | "idempotency_key_reused" | "idempotency_in_progress" | "idempotency_outcome_unknown" | "idempotency_secret_not_replayed" | "product_revision_conflict" | "product_state_conflict" | "brand_revision_conflict" | "brand_state_conflict" | "category_revision_conflict" | "category_state_conflict" | "collection_revision_conflict" | "page_revision_conflict" | "page_state_conflict" | "promotion_revision_conflict" | "promotion_state_conflict" | "price_list_revision_conflict" | "navigation_revision_conflict" | "object_revision_conflict" | "supplier_revision_conflict" | "purchase_order_revision_conflict" | "purchase_order_state_conflict" | "inventory_transfer_revision_conflict" | "order_revision_conflict" | "return_revision_conflict" | "return_command_in_progress" | "segment_revision_conflict" | "inventory_transfer_state_conflict" | "price_changed" | "phone_required" | "sku_taken" | "segment_name_taken" | "media_dependency_conflict" | "inventory_location_shortfall" | "quantity_exceeds_open" | "stock_committed" | "variant_retired" | "supplier_has_open_purchase_orders" | "cost_scope_required" | "menu_in_trash" | "handle_unresolved" | "section_not_found" | "template_not_owned" | "template_unavailable" | "object_type_taken" | "object_limit" | "payment_declined" | "payment_outcome_unknown" | "payment_in_progress" | "payment_not_possible" | "payment_method_customer_mismatch" | "provider_invalid_response" | "app_gift_card_limit" | "object_undeclared_type" | "object_invalid_id" | "object_invalid" | "object_record_too_large" | "object_response_too_large" | "object_invalid_index_value" | "object_unindexed_query" | "object_invalid_cursor" | "object_unique_violation" | "object_conflict" | "object_invalid_batch" | "object_not_found" | "object_forbidden" | "object_out_of_range" | "kv_invalid_key" | "kv_value_too_large" | "kv_invalid_ttl" | "kv_conflict" | "kv_invalid_revision" | "http_not_allowed" | "http_invalid_request" | "http_too_many_redirects" | "http_timeout" | "http_failed" | "custom_fields_undeclared" | "custom_fields_invalid" | "messaging_not_allowed" | "messaging_recipient_not_allowed" | "messaging_invalid" | "messaging_unavailable" | "timeline_not_allowed" | "timeline_undeclared" | "timeline_invalid" | "timeline_not_found" | "orders_not_allowed" | "orders_invalid" | "orders_not_found" | "orders_hold_not_found" | "orders_conflict" | "customers_not_allowed" | "customers_invalid" | "customers_not_found" | "customer_roles_limit" | "jobs_undeclared" | "jobs_invalid" | "jobs_limit" | "jobs_not_found" | "jobs_key_reused" | "jobs_unavailable" | "customers_unavailable" | "settings_key_unavailable" | "quota_storage" | "quota_subrequests";
 export interface AppErrorCodeEntry {
     readonly status: number;
     readonly meaning: string;
