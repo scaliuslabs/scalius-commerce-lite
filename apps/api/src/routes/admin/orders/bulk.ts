@@ -30,6 +30,7 @@ import {
 } from "./shared";
 import { notificationSender } from "../../../background/notification-sender";
 import { requestStaffId } from "../request-actor";
+import { principalBodyKey } from "../idempotency-key";
 
 const app = adminRouter();
 
@@ -262,7 +263,8 @@ const bulkConfirmRoute = createRoute({
 
 app.openapi(bulkConfirmRoute, async (c) => {
     const db = c.get("db");
-    const { orderIds, requestKey } = c.req.valid("json");
+    const { orderIds, requestKey: bodyKey } = c.req.valid("json");
+    const requestKey = bodyKey ? await principalBodyKey(c, "dashboard.orders.bulk_confirm", bodyKey) : undefined;
     const actingStaffId = requestStaffId(c);
     const limits = planLimits().bulkOrders;
     const { handled, remaining } = sliceForRequest(orderIds, limits.confirm);
@@ -313,7 +315,8 @@ const bulkFulfillRoute = createRoute({
 
 app.openapi(bulkFulfillRoute, async (c) => {
     const db = c.get("db");
-    const { orderIds, courierName, note, requestKey } = c.req.valid("json");
+    const { orderIds, courierName, note, requestKey: bodyKey } = c.req.valid("json");
+    const requestKey = bodyKey ? await principalBodyKey(c, "dashboard.orders.bulk_fulfill", bodyKey) : undefined;
     const actingStaffId = requestStaffId(c);
     const { handled, remaining } = sliceForRequest(orderIds, planLimits().bulkOrders.send);
     const results = await bulkFulfillOrders(db, handled, { courierName, note, requestKey });

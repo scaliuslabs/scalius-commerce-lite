@@ -97,7 +97,7 @@ import {
     resendTerminalOrderNotificationOutboxById,
     retryFailedOrderNotificationOutboxById,
 } from "@scalius/core/modules/notifications";
-import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
+import { principalIdempotencyKey } from "../idempotency-key";
 import {
     type AdminRouteContext,
     type AdminRouteHandler,
@@ -967,7 +967,9 @@ const resendNotificationRoute = createRoute({
 app.openapi(resendNotificationRoute, (async (c: AdminRouteContext<typeof resendNotificationRoute>) => {
     const { id: orderId, outboxId } = c.req.valid("param");
     const { resendRequestId: bodyResendRequestId } = c.req.valid("json");
-    const resendRequestId = resolveCanonicalIdempotencyKey(
+    const resendRequestId = await principalIdempotencyKey(
+        c,
+        "dashboard.orders.notification_resend",
         c.req.valid("header")["idempotency-key"],
         bodyResendRequestId,
         "resendRequestId",
