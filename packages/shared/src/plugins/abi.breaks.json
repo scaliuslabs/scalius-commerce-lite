@@ -538,5 +538,11 @@
   "from": "dd1068f7687f4f90",
   "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
   "reason": "Sealed codes are only added (APP_ERROR_CODES): orders.create already answered admin_order_create_request_mismatch when its Idempotency-Key belonged to another request (another address, line or payment, or a placed order replayed at another reviewed total); the code is now sealed with its details (state, orderId, canRetryWithNewKey) so an app can open the order it placed instead of placing it again. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "864eb6b74efa529a",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Merge of the orders.create fix round onto this branch: the same change acknowledged above against this branch's earlier snapshot. The merged snapshot kept this branch's AppErrorCode, which lacked admin_order_create_request_mismatch; sealing adds it. Sealed codes are only added (APP_ERROR_CODES): orders.create already answered it when its key belonged to another request, so an app can now branch on it. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new member."
  }
 ]
