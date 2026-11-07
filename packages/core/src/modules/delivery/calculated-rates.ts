@@ -1,7 +1,8 @@
 import type { Database } from "@scalius/database/client";
 import { sha256Hex as sha256 } from "@scalius/shared/hash";
 import { deriveRuntimeSecret } from "@scalius/shared/runtime-secrets";
-import { presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
+import { type PresentmentMoney } from "@scalius/shared/presentment";
+import { storeAmountMinor } from "@scalius/shared/market-pricing";
 import { courierRatesSchema, providerServesCountry, type CourierRatesInput } from "@scalius/shared/plugins/providers";
 import { withCheckoutProviderDeadline } from "@scalius/shared/plugins/provider-deadline";
 import type { WorkerCacheHint } from "@scalius/shared/worker-cache-hint";
@@ -123,7 +124,7 @@ export async function resolveCalculatedDeliveryRates(input: {
       const rates = (await call)?.rates ?? [];
       const chosen = row.rateService ? rates.find((rate) => rate.service === row.rateService)
         : rates.reduce<(typeof rates)[number] | undefined>((best, rate) => !best || rate.amountMinor < best.amountMinor ? rate : best, undefined);
-      const amountMinor = chosen?.amountMinor ?? (row.fallbackFeeMinor == null ? null : presentShopMinor(money, row.fallbackFeeMinor));
+      const amountMinor = chosen?.amountMinor ?? (row.fallbackFeeMinor == null ? null : storeAmountMinor(row.fallbackFeeMinor, { money, fx: null }, "fee"));
       if (amountMinor === null) return null;
       return sign(row, parcelHash, amountMinor, chosen?.service ?? row.rateService ?? null);
     })().then((result) => { settled.set(row.id, result); return result; })));
@@ -131,7 +132,7 @@ export async function resolveCalculatedDeliveryRates(input: {
     if (settled.has(row.id)) return settled.get(row.id)!;
     if (!row.rateSource || row.rateSource === "flat" || row.kind === "pickup") return row;
     if (!key || row.fallbackFeeMinor == null) return null;
-    return sign(row, await parcelHashOf(requestFor(row)), presentShopMinor(money, row.fallbackFeeMinor), row.rateService ?? null);
+    return sign(row, await parcelHashOf(requestFor(row)), storeAmountMinor(row.fallbackFeeMinor, { money, fx: null }, "fee"), row.rateService ?? null);
   })));
   return quoted.filter((row): row is DeliveryRateRow => row !== null);
 }

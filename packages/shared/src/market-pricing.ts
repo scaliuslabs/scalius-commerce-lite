@@ -196,40 +196,53 @@ export function fxPriceMinor(baseMinor: number, conversion: FxConversion): numbe
   return value;
 }
 
-/** What a checkout converts a store-currency amount with: its one rate and its market's FX policy. */
+/** What converts a store-currency amount: the one rate in use and the market's FX policy. */
 export interface StoreAmountConversion {
-  /** The checkout's money (`PresentmentMoney`): its one locked rate, both currencies' places and the market's increment. */
+  /**
+   * The rate in use (`PresentmentMoney`: a checkout's one locked rate, or a
+   * read's market rate; "1" in the store's own currency), both currencies'
+   * places and the market's increment.
+   */
   money: { rate: string; decimalPlaces: number; shopDecimalPlaces: number; incrementMinor: number };
   /** The market's FX policy (`PricingMarket.fx`); null when the market prices at base prices. */
   fx: FxConversion | null;
 }
 
 /**
- * An amount an app answers in the store's currency (`currency: "store"`),
- * in the checkout's currency: the catalogue's own conversion
- * (`fxPriceMinor`) at the checkout's one rate, so it is × rate × (1 +
- * the market's adjustment) exactly as a product price is.
+ * Which policy a store-currency amount converts under (rules/money/store-amounts-convert-once.md):
  *
- * - A `price` (an app's price for the line: it is the item's price) rounds
- *   and ends exactly as a product price: ৳1,200 in a USD market at 0.0082,
- *   +10%, rounded up to $1 and ending in .99 is $10.99 either way.
- * - An `add_on` rounds half-up to the market's increment and takes neither
- *   its rounding step nor its ending. Those make the item's price point; an
- *   add-on ending again would stack a second charm price on the item and
- *   can double a small fee (a ৳50 wrap is $0.45 there, never $0.99).
- *
- * In the store's own currency (rate 1) the market's adjustment still applies
- * and the amount rounds to the increment (৳50.50 at whole taka is ৳51).
- * A positive amount never rounds to nothing (one increment); zero stays zero.
+ * - `price`: an item's price that is not a product's base price: an app's
+ *   price for a line, a fixed bundle tier. Rate, adjustment, rounding step
+ *   and ending, exactly as a product price (`fxPriceMinor`).
+ * - `add_on`: an amount added to an item's price: the store's buyer-input
+ *   surcharges and an app's add-ons. Rate and adjustment, then half-up to the
+ *   increment; never the step or ending, which make the item's price point.
+ * - `fee`: an amount that is not an item's price: delivery fees, delivery and
+ *   promotion thresholds, fixed promotion amounts, money fields. The rate
+ *   alone, half-up to the increment; the store's own currency keeps it as it is.
  */
-export function storeAmountMinor(amountMinor: number, conversion: StoreAmountConversion, kind: "price" | "add_on"): number {
+export type StoreAmountKind = "price" | "add_on" | "fee";
+
+/**
+ * A store-currency amount in the market's currency: the one conversion every
+ * store amount takes (`fxPriceMinor`, at the rate in use, under its kind's
+ * policy). In a USD market at 0.0082, +10%, rounded up to $1 and ending .99:
+ * ৳1,200 as a `price` is $10.99 (as the ৳1,200 product is), ৳50 as an
+ * `add_on` is $0.45 (never the $0.99 a second ending would make it), ৳50 as
+ * a `fee` is $0.41. In the store's own currency a price or add-on still takes
+ * the market's adjustment and rounds to the increment (৳50.50 at whole taka
+ * is ৳51). A positive amount never rounds to nothing (one increment); zero
+ * stays zero.
+ */
+export function storeAmountMinor(amountMinor: number, conversion: StoreAmountConversion, kind: StoreAmountKind): number {
   const { money, fx } = conversion;
+  if (kind === "fee" && money.rate === SAME_CURRENCY_FX_RATE && money.decimalPlaces === money.shopDecimalPlaces) return amountMinor;
   const price = kind === "price";
   return fxPriceMinor(amountMinor, {
     policy: {
-      // The checkout's rate, never the market row's newer one.
+      // The rate in use, never the market row's newer one.
       rate: money.rate,
-      adjustmentBps: fx?.policy.adjustmentBps ?? 0,
+      adjustmentBps: kind === "fee" ? 0 : fx?.policy.adjustmentBps ?? 0,
       roundingMinor: price ? fx?.policy.roundingMinor ?? null : null,
       endingMinor: price ? fx?.policy.endingMinor ?? null : null,
     },
@@ -237,6 +250,16 @@ export function storeAmountMinor(amountMinor: number, conversion: StoreAmountCon
     toDecimalPlaces: money.decimalPlaces,
     incrementMinor: money.incrementMinor,
   });
+}
+
+/** `storeAmountMinor` of an optional amount (an unset threshold stays unset). */
+export function storeAmountMinorOrNull(amountMinor: number | null | undefined, conversion: StoreAmountConversion, kind: StoreAmountKind): number | null {
+  return amountMinor === null || amountMinor === undefined ? null : storeAmountMinor(amountMinor, conversion, kind);
+}
+
+/** The conversion of the store's own currency at a market's increment: identity rate, no FX policy. */
+export function sameCurrencyConversion(decimalPlaces: number, incrementMinor: number, fx: FxConversion | null = null): StoreAmountConversion {
+  return { money: { rate: SAME_CURRENCY_FX_RATE, decimalPlaces, shopDecimalPlaces: decimalPlaces, incrementMinor }, fx };
 }
 
 /**

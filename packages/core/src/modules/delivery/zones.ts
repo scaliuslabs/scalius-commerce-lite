@@ -64,7 +64,8 @@ import {
     type DeliveryRegionRow,
 } from "./zone-match";
 import { addressPlaceCountrySql } from "./places";
-import { isForeignPresentment, presentShopMinor, presentShopMinorOrNull, type PresentmentMoney } from "@scalius/shared/presentment";
+import { isForeignPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
+import { storeAmountMinor, storeAmountMinorOrNull } from "@scalius/shared/market-pricing";
 
 type Statement = BatchItem<"sqlite">;
 
@@ -382,16 +383,16 @@ export function deliveryRateInCurrency<T extends { feeMinor: number; freeOverMin
     if (!money || !isForeignPresentment(money)) return row;
     return {
         ...row,
-        feeMinor: row.rateCurrency === money.currencyCode ? row.feeMinor : presentShopMinor(money, row.feeMinor),
-        freeOverMinor: presentShopMinorOrNull(money, row.freeOverMinor),
+        feeMinor: row.rateCurrency === money.currencyCode ? row.feeMinor : storeAmountMinor(row.feeMinor, { money, fx: null }, "fee"),
+        freeOverMinor: storeAmountMinorOrNull(row.freeOverMinor, { money, fx: null }, "fee"),
         // A profile's fees and order-value bands are shop amounts too; weights are not money.
         ...(row.profileRates ? {
             profileRates: row.profileRates.map((rate) => ({
                 ...rate,
-                feeMinor: presentShopMinor(money, rate.feeMinor),
-                minSubtotalMinor: presentShopMinorOrNull(money, rate.minSubtotalMinor),
-                maxSubtotalMinor: presentShopMinorOrNull(money, rate.maxSubtotalMinor),
-                freeOverMinor: presentShopMinorOrNull(money, rate.freeOverMinor),
+                feeMinor: storeAmountMinor(rate.feeMinor, { money, fx: null }, "fee"),
+                minSubtotalMinor: storeAmountMinorOrNull(rate.minSubtotalMinor, { money, fx: null }, "fee"),
+                maxSubtotalMinor: storeAmountMinorOrNull(rate.maxSubtotalMinor, { money, fx: null }, "fee"),
+                freeOverMinor: storeAmountMinorOrNull(rate.freeOverMinor, { money, fx: null }, "fee"),
             })),
         } : {}),
     };

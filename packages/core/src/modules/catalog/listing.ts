@@ -784,7 +784,7 @@ async function readStorefrontCatalogResults(
     // list prices (only when one is live) ride beside them.
     const [productsList, cardData, categoriesData, facetRows] = await Promise.all([
         priceProductCards(db, market, listedRows),
-        loadCatalogCardData(db, listedRows, decimalPlaces, marketShopAmounts(market), cardFieldsOfTheme(totalCount?.cardFieldsTheme)),
+        loadCatalogCardData(db, listedRows, decimalPlaces, marketShopAmounts(market, "fee"), cardFieldsOfTheme(totalCount?.cardFieldsTheme)),
         categoryIds.length > 0
             ? db
                 .select({

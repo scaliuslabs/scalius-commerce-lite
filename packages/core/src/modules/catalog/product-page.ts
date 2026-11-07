@@ -54,6 +54,7 @@ import {
     marketDecimalPlaces,
     marketListPricesSql,
     marketPriceContextOf,
+    isNeutralMarketPricing,
     marketShopAmountMinor,
     marketShopAmounts,
     priceProductSkus,
@@ -388,7 +389,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
                         ...(market && market.currencyCode !== market.shopCurrencyCode
                             ? { products: offer.products.map((item) => ({ ...item, price: null })) }
                             : {}),
-                        buyAmount: buyAmountMinor === null ? null : fromMinor(marketShopAmountMinor(market, buyAmountMinor), places),
+                        buyAmount: buyAmountMinor === null ? null : fromMinor(marketShopAmountMinor(market, buyAmountMinor, "fee"), places),
                         percentOff: basisPoints / 100,
                     })),
                 };
@@ -477,13 +478,17 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     // The page's market: its SKUs, "from" price and EMI line in its prices
     // (a neutral market and the root keep the rows as read).
     const pageMarket = await pageMarketPromise;
-    const presentShopAmount = marketShopAmounts(pageMarket);
+    // Surcharges and fixed bundle tiers take the market's policy as checkout does
+    // (rules/money/store-amounts-convert-once.md); a neutral market keeps them as read.
+    const priced = pageMarket !== null && !isNeutralMarketPricing(pageMarket);
+    const presentSurcharge = marketShopAmounts(pageMarket, "add_on");
+    const presentTierPrice = marketShopAmounts(pageMarket, "price");
     const foreign = pageMarket !== null && pageMarket.currencyCode !== pageMarket.shopCurrencyCode;
     const decimalPlaces = marketDecimalPlaces(pageMarket, storeDecimalPlacesFromCode(storeCurrencyCode));
     const pageCurrency = pageMarket ? { code: pageMarket.currencyCode, priceIncrementMinor: pageMarket.incrementMinor } : storeCurrency;
     const customization = readStoredCustomization(storedCustomization, decimalPlaces, {
         giftCard: product.isGiftCard === true,
-        ...(foreign ? { presentShopAmount } : {}),
+        ...(priced ? { presentShopAmount: presentSurcharge } : {}),
     });
     const marketPage = priceProductPageInMarket(
         pageMarket,
@@ -586,7 +591,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
             /** Active quantity tiers, priced by checkout exactly as shown. */
             bundles: content.bundles.map((tier) => presentProductBundleTier(
-                foreign && tier.discountType === "fixed_price" ? { ...tier, priceMinor: presentShopAmount(tier.priceMinor) } : tier,
+                priced && tier.discountType === "fixed_price" ? { ...tier, priceMinor: presentTierPrice(tier.priceMinor) } : tier,
                 decimalPlaces,
             )),
             /** Storefront-visible custom fields, in definition order (money as `{ amountMinor, currency }` in the page's currency). */
@@ -635,7 +640,7 @@ function presentWarranty(row: WarrantyRow) {
 /** Money custom fields (shop-currency `{ amountMinor, currency }`) in a foreign market's currency (MARKETS-DESIGN step 6). */
 function customFieldsInMarket<T extends { type: string; value: unknown }>(fields: readonly T[], market: MarketPriceContext): T[] {
     const present = (value: unknown) => isCustomFieldMoney(value) && value.currency === market.shopCurrencyCode
-        ? { amountMinor: marketShopAmountMinor(market, value.amountMinor), currency: market.currencyCode }
+        ? { amountMinor: marketShopAmountMinor(market, value.amountMinor, "fee"), currency: market.currencyCode }
         : value;
     return fields.map((field) => {
         if (field.type === "money") return { ...field, value: present(field.value) };

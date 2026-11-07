@@ -428,8 +428,8 @@ export async function getHomepageData(
     ? extraMediaPlan.resolve(await safeBatch(db, extraMediaPlan.statements), 0)
     : [];
   const cardFields = cardFieldsPlan.resolve(results, statements.length - cardFieldsPlan.statements.length);
-  const resolvedMap = collectionPlan.resolve(results, marketShopAmounts(market), cardFields);
-  const productLists = listPlan.resolve(results, listOffset, marketShopAmounts(market), cardFields);
+  const resolvedMap = collectionPlan.resolve(results, marketShopAmounts(market, "fee"), cardFields);
+  const productLists = listPlan.resolve(results, listOffset, marketShopAmounts(market, "fee"), cardFields);
 
   // The collections sections' collections that have products to show.
   const formattedCollections = sectionCollections.flatMap((col) => {

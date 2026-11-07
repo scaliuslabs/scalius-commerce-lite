@@ -6,7 +6,7 @@ import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { addOnShareMinor, discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { isLineAmountInRange } from "@scalius/shared/order-limits";
 import { lineAdjustmentProperty, mapCustomizationPrices, NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
-import { isForeignPresentment, presentShopMinor, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
+import { isForeignPresentment, shopPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
 import { normalizeMarketCountry } from "@scalius/shared/markets";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
@@ -44,7 +44,7 @@ import { digitalDeliverableSql } from "../digital";
 import { licenceKeyStockSql } from "../inventory";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
-import { resolvePrice, type AppLinePrice, type ResolvedPriceSource } from "@scalius/shared/market-pricing";
+import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
 import { resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import type { CartTransformer, TransformedCart } from "./cart-transform";
 import {
@@ -581,7 +581,10 @@ export function resolveStorefrontCartValidationFromRows(
     const marketContext = options.priceScope ? { id: options.priceScope.market?.id ?? BACKUP_MARKET_ID, country: options.priceScope.country ?? null } : undefined;
     const decimalPlaces = money.decimalPlaces;
     const priceIncrementMinor = money.incrementMinor;
-    const presentShopAmount = (shopMinor: number) => presentShopMinor(money, shopMinor);
+    // Every store amount converts once, under its policy (rules/money/store-amounts-convert-once.md).
+    const conversion: StoreAmountConversion = { money, fx: options.priceScope?.market?.fx ?? null };
+    const storeAmountsConvert = isForeignPresentment(money) || conversion.fx !== null;
+    const presentSurcharge = (shopMinor: number) => storeAmountMinor(shopMinor, conversion, "add_on");
 
     if (items.length === 0) {
         return markTrustedStorefrontCartValidationResult({
@@ -816,9 +819,9 @@ export function resolveStorefrontCartValidationFromRows(
             });
             return;
         }
-        // Surcharges in the cart's currency, converted as the product page shows them.
+        // Surcharges in the cart's currency, under the add-on policy, as the product page shows them.
         const resolvedProperties = resolveLineProperties(
-            isForeignPresentment(money) ? mapCustomizationPrices(schemaRead.schema, presentShopAmount) : schemaRead.schema,
+            storeAmountsConvert ? mapCustomizationPrices(schemaRead.schema, presentSurcharge) : schemaRead.schema,
             item.properties,
         );
         if (!resolvedProperties.ok) {
@@ -940,7 +943,7 @@ export function resolveStorefrontCartValidationFromRows(
     // that ships is in a free-delivery profile (one free line waives only its own share).
     const shipped = validatedItems.filter((line) => line.fulfillmentKind === "physical" && !line.isGiftCard);
     hasFreeDeliveryProduct = shipped.length > 0 && shipped.every((line) => line.freeDelivery === true);
-    const bundles = resolveCartBundleSavings(validatedItems, presentBundleRows(bundleRows, money), priceIncrementMinor);
+    const bundles = resolveCartBundleSavings(validatedItems, presentBundleRows(bundleRows, conversion), priceIncrementMinor);
 
     const pricingSegmentIds = [...(options.priceScope?.segmentIds ?? [])].sort();
     return markTrustedStorefrontCartValidationResult({
@@ -957,14 +960,17 @@ export function resolveStorefrontCartValidationFromRows(
 }
 
 /**
- * Bundle tiers in the cart's currency: a fixed tier price (shop currency) is
- * converted at the market's rate and rounded to its increment, as the
- * product page shows it; percentage tiers need nothing.
+ * Bundle tiers in the cart's currency: a fixed tier price (store currency) is
+ * an item's price, so it takes the product price policy (rate, adjustment,
+ * rounding step and ending), as the product page shows it; percentage tiers
+ * need nothing. A market that prices at base prices in the store's currency
+ * keeps them as they are.
  */
-export function presentBundleRows<T extends ProductBundleRow>(rows: readonly T[], money: PresentmentMoney): T[] {
-    if (!isForeignPresentment(money)) return [...rows];
+export function presentBundleRows<T extends ProductBundleRow>(rows: readonly T[], conversion: StoreAmountConversion): T[] {
+    const identity = conversion.fx === null && conversion.money.rate === "1" && conversion.money.decimalPlaces === conversion.money.shopDecimalPlaces;
+    if (identity) return [...rows];
     return rows.map((row) => row.discountType === "fixed_price" && Number.isSafeInteger(row.priceMinor) && Number(row.priceMinor) > 0
-        ? { ...row, priceMinor: presentShopMinor(money, Number(row.priceMinor)) }
+        ? { ...row, priceMinor: storeAmountMinor(Number(row.priceMinor), conversion, "price") }
         : row);
 }
 
@@ -1048,13 +1054,13 @@ export async function previewStorefrontBundleSavings<TLine extends BundlePricedL
     lines: readonly TLine[],
     /** The cart currency's price increment. */
     priceIncrementMinor: number,
-    /** A cart in a market's own currency: fixed tier prices convert into it. */
-    money?: PresentmentMoney | null,
+    /** The page market's conversion: fixed tier prices take its product price policy. */
+    conversion?: StoreAmountConversion | null,
 ): Promise<{ lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] }> {
     const productIds = [...new Set(lines.map((line) => line.productId))];
     const bundleRows = productIds.length > 0 ? await selectActiveProductBundleRows(db, productIds) : [];
     const rows = (bundleRows ?? []) as ProductBundleRow[];
-    return bundleLineSavings(lines, money ? presentBundleRows(rows, money) : rows, priceIncrementMinor);
+    return bundleLineSavings(lines, conversion ? presentBundleRows(rows, conversion) : rows, priceIncrementMinor);
 }
 
 export async function validateStorefrontCartItems(

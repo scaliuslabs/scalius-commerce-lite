@@ -144,10 +144,10 @@ export async function readAppComponentData(
   ]);
   const media = new Map(mediaPlan.resolve(results, 0).map((asset) => [asset.id, asset]));
   const products = new Map<string, unknown[]>(
-    listPlan.resolve(results, listOffset, marketShopAmounts(market), fields).map((list) => [list.key, list.products]),
+    listPlan.resolve(results, listOffset, marketShopAmounts(market, "fee"), fields).map((list) => [list.key, list.products]),
   );
   const pickedResults = results.slice(pickedOffset, pickedOffset + pickedPlan.statements.length);
-  for (const [key, result] of pickedPlan.resolve(pickedResults, marketShopAmounts(market), fields)) products.set(key, result.products);
+  for (const [key, result] of pickedPlan.resolve(pickedResults, marketShopAmounts(market, "fee"), fields)) products.set(key, result.products);
 
   // Collection sources (their products by each collection's own rules) need
   // the collection's rules first: a second batch, only when a section names one.
@@ -162,7 +162,7 @@ export async function readAppComponentData(
       const collectionFields = planProductCardFields(db, plan.productIdQueries, cardFields);
       const collectionResults = [...await safeBatch(db, [...plan.statements, ...collectionFields.statements] as Parameters<typeof safeBatch>[1])];
       await priceCardRowsInResults(db, market, collectionResults, plan.productRowSlots);
-      for (const [key, result] of plan.resolve(collectionResults, marketShopAmounts(market), collectionFields.resolve(collectionResults, plan.statements.length))) products.set(key, result.products);
+      for (const [key, result] of plan.resolve(collectionResults, marketShopAmounts(market, "fee"), collectionFields.resolve(collectionResults, plan.statements.length))) products.set(key, result.products);
     }
   }
 

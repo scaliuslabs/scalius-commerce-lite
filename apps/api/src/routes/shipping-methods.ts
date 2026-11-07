@@ -3,7 +3,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { listDeliveryRatesForDestination, presenceMarketCurrency } from "@scalius/core/modules/delivery";
 import { applyTranslation, readTranslationChains } from "@scalius/core/modules/translations";
 import { publicMarketPresence, publicTranslation } from "../utils/public-market";
-import { marketPresentment, presentShopMinor } from "@scalius/shared/presentment";
+import { marketPresentment } from "@scalius/shared/presentment";
+import { storeAmountMinor } from "@scalius/shared/market-pricing";
 import { isFxRate } from "@scalius/shared/money-chain";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { fromMinor } from "@scalius/shared/money";
@@ -105,7 +106,7 @@ app.openapi(listShippingMethodsRoute, async (c) => {
       : null
     : undefined;
   const decimalPlaces = money ? money.decimalPlaces : currency.decimalPlaces;
-  const present = (minor: number) => money ? presentShopMinor(money, minor) : minor;
+  const present = (minor: number) => money ? storeAmountMinor(minor, { money, fx: null }, "fee") : minor;
   // A presence's rate names in its language (MARKETS-DESIGN D9); one more statement there, none at the root.
   const translation = publicTranslation(c);
   const chains = await readTranslationChains(db, translation, "shipping_method", rates.map((rate) => rate.id));

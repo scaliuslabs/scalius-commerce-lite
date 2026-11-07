@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { ValidationError } from "@scalius/core/errors";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
-import { readMarketPriceContext } from "@scalius/core/modules/price-lists";
+import { marketStoreConversion, readMarketPriceContext } from "@scalius/core/modules/price-lists";
 import { isMarketSubfolder } from "@scalius/shared/markets";
 import { presentmentPricingCurrency } from "@scalius/shared/presentment";
 import { MAX_MAJOR_AMOUNT } from "@scalius/shared/money";
@@ -161,7 +161,8 @@ app.openapi(validateDiscountRoute, async (c) => {
   });
   // The same rule as the tax quote and the order: promotions or bundles,
   // whichever saves more (checkout/bundle-discounts.ts).
-  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.priceIncrementMinor, money);
+  // Fixed tiers take the page market's product price policy, as its product page shows them.
+  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.priceIncrementMinor, market ? marketStoreConversion(market) : null);
   const interplay = resolveBundlePromotionInterplay(
     cartLines.map((line) => ({
       lineId: line.id,

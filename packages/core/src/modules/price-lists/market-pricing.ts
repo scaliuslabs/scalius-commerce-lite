@@ -31,13 +31,17 @@ import {
     type MarketFxPolicy,
     type PriceListRow,
     type ResolvedPrice,
+    sameCurrencyConversion,
+    storeAmountMinor,
+    type StoreAmountConversion,
+    type StoreAmountKind,
 } from "@scalius/shared/market-pricing";
 import { discountedPriceMinor } from "@scalius/shared/money";
 import { AppError, NotFoundError } from "@scalius/core/errors";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { languageSubfolderServedSql, servedLanguageSql, storePriceIncrementSql } from "../markets";
-import { marketCurrencyIncrementMinor, marketPresentment, presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
+import { marketCurrencyIncrementMinor, marketPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
 import { channelAvailableStockSql, effectivePriceMinorSql, type BuyerPricingMinor } from "../products";
 import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../settings";
 
@@ -496,18 +500,26 @@ export function inMarketCurrency<T extends object>(context: MarketPriceContext, 
     return { ...row, storeCurrencyCode: context.currencyCode };
 }
 
-/**
- * A shop-currency amount a read shows (a delivery fee, a bundle price, a
- * buyer-input surcharge) in the market's currency: converted at its rate and
- * rounded to its increment (Shopify's rule); the shop currency keeps it.
- */
-export function marketShopAmountMinor(context: MarketPriceContext | null | undefined, shopMinor: number): number {
-    return context?.money ? presentShopMinor(context.money, shopMinor) : shopMinor;
+/** How a read's market converts a store amount: its rate (1 in the store's currency) and its FX policy. */
+export function marketStoreConversion(context: MarketPriceContext): StoreAmountConversion {
+    return context.money
+        ? { money: context.money, fx: context.fx }
+        : sameCurrencyConversion(context.decimalPlaces, context.incrementMinor, context.fx);
 }
 
-/** `marketShopAmountMinor` bound to one read's market. */
-export function marketShopAmounts(context: MarketPriceContext | null | undefined): (shopMinor: number) => number {
-    return (shopMinor) => marketShopAmountMinor(context, shopMinor);
+/**
+ * A shop-currency amount a read shows in the market's currency, under its
+ * kind's policy (`storeAmountMinor`): a fixed bundle tier as a `price`, a
+ * buyer-input surcharge as an `add_on`, a delivery fee, a threshold or a
+ * money field as a `fee`. The root keeps it as it is.
+ */
+export function marketShopAmountMinor(context: MarketPriceContext | null | undefined, shopMinor: number, kind: StoreAmountKind): number {
+    return context ? storeAmountMinor(shopMinor, marketStoreConversion(context), kind) : shopMinor;
+}
+
+/** `marketShopAmountMinor` bound to one read's market and one kind. */
+export function marketShopAmounts(context: MarketPriceContext | null | undefined, kind: StoreAmountKind): (shopMinor: number) => number {
+    return (shopMinor) => marketShopAmountMinor(context, shopMinor, kind);
 }
 
 /** The decimal places a read presents its prices in: its market's, else the store currency's. */

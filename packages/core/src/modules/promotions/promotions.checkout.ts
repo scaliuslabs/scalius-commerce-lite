@@ -34,7 +34,8 @@ import {
 import { matchCustomerSegments, promotionCandidateRecord } from "./promotions.service";
 import type { AppliedPromotion, PromotionCheckoutSnapshot, StorefrontDiscountCart } from "./checkout-snapshot";
 import { deps } from "../../cache-deps";
-import { isForeignPresentment, presentShopMinor, type PresentmentMoney } from "@scalius/shared/presentment";
+import { isForeignPresentment, type PresentmentMoney } from "@scalius/shared/presentment";
+import { storeAmountMinor } from "@scalius/shared/market-pricing";
 
 /**
  * A cached read that shows automatic promotions is valid only until the next
@@ -564,7 +565,7 @@ export function candidatesInCurrency<T extends { conditions: ReadonlyArray<{ con
         const record = config as Record<string, unknown>;
         let next: Record<string, unknown> = record;
         if (record.currencyCode === money.shopCurrencyCode && typeof record.amountMinor === "number" && Number.isSafeInteger(record.amountMinor)) {
-            next = { ...next, amountMinor: presentShopMinor(money, record.amountMinor), currencyCode: money.currencyCode };
+            next = { ...next, amountMinor: storeAmountMinor(record.amountMinor, { money, fx: null }, "fee"), currencyCode: money.currencyCode };
         }
         if (record.buy && typeof record.buy === "object") next = { ...next, buy: convert(record.buy) };
         return next;
