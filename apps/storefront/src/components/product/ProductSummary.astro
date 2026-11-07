@@ -1,5 +1,7 @@
 ---
 import { checkoutText } from "@/lib/checkout-text";
+import { LINE_PURCHASE_OPTIONS_MAX } from "@scalius/shared/line-properties";
+import { formatNumber } from "@scalius/shared/locale-format";
 import Icon from "@/components/icons/Icon.astro";
 import ProductDetails from "./ProductDetails.astro";
 import ProductPurchaseOptions from "./ProductPurchaseOptions.astro";
@@ -404,6 +406,7 @@ function optionAriaLabel(
       data-buy-now-text={actionCopy.buyNowText}
       data-unavailable-text={actionCopy.unavailableText}
       data-combination-unavailable-text={catalogWords.combinationUnavailable}
+      data-purchase-options-limit-text={catalogWords.purchaseOptionsLimit(formatNumber(LINE_PURCHASE_OPTIONS_MAX, language))}
       data-choose-option-text={actionCopy.chooseOptionText}
       data-quantity-limit-text={actionCopy.quantityLimitText}
       data-cart-add-failed-text={pageCopy.quickBuyFailedText}

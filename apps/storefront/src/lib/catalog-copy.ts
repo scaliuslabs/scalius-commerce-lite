@@ -189,6 +189,8 @@ export interface CatalogCopy {
     optionSelected: (value: string) => string;
     /** Add to cart with a set of choices no SKU has. */
     combinationUnavailable: string;
+    /** More apps' ways to buy were chosen than one line holds. */
+    purchaseOptionsLimit: (max: string) => string;
     /** The tab list's scroll buttons and its landmark name. */
     previousTabs: string;
     moreTabs: string;
@@ -396,6 +398,7 @@ const EN: CatalogCopy = {
     optionUnavailable: (option, value) => `${option}: ${value}. Not available with the current selection.`,
     optionSelected: (value) => `${value} selected.`,
     combinationUnavailable: "That combination of options isn't available.",
+    purchaseOptionsLimit: (max) => `Choose at most ${max} of these ways to buy this item together.`,
     previousTabs: "Previous tabs",
     moreTabs: "More tabs",
     information: "Product information",
@@ -607,6 +610,7 @@ const BN: CatalogCopy = {
     optionUnavailable: (option, value) => `${option}: ${value}। এই বাছাইয়ের সাথে পাওয়া যাচ্ছে না।`,
     optionSelected: (value) => `${value} বাছাই করা হয়েছে।`,
     combinationUnavailable: "এই অপশনগুলো একসাথে পাওয়া যায় না।",
+    purchaseOptionsLimit: (max) => `এই পণ্যটি কেনার এই উপায়গুলোর মধ্যে একসাথে সর্বোচ্চ ${max}টি বেছে নিন।`,
     previousTabs: "আগের ট্যাব",
     moreTabs: "আরও ট্যাব",
     information: "পণ্যের তথ্য",

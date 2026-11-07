@@ -310,7 +310,7 @@ function prefillEdit(edit: CartLineEdit) {
     else field.value = value;
     prefilled.set(field, answer(field));
   }
-  if (selectedPurchaseOptions().length === 0) selectPurchaseOptions(edit.purchaseOptions ?? []);
+  if (selectedPurchaseOptions()?.length === 0) selectPurchaseOptions(edit.purchaseOptions ?? []);
 }
 
 /**
@@ -331,12 +331,16 @@ function selectPurchaseOptions(ids: readonly string[]) {
   }
 }
 
-/** The chosen apps' options, one per app, sorted by id; empty for a one-time purchase (or a page without options). */
-function selectedPurchaseOptions(): CartLinePurchaseOption[] {
+/**
+ * The chosen apps' options, one per app, sorted by id; empty for a one-time
+ * purchase (or a page without options); null when more apps' options are
+ * chosen than one line holds, which the buyer is told (never bought one-time).
+ */
+function selectedPurchaseOptions(): CartLinePurchaseOption[] | null {
   const chosen = purchaseOptionInputs()
     .filter((entry) => entry.checked && entry.value)
     .map((input) => ({ id: input.value, title: input.dataset.purchaseOptionTitle || input.value }));
-  return normalizeCartLinePurchaseOptions(chosen) ?? [];
+  return chosen.length === 0 ? [] : normalizeCartLinePurchaseOptions(chosen);
 }
 
 /** Offers end on their own schedule: hide one that ended while the page was cached. */
@@ -1171,6 +1175,8 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
   // The apps' options (a subscription, a protection plan) and line inputs are
   // priced by the apps: the line takes the store's price for them.
   const purchaseOptions = selectedPurchaseOptions();
+  // More apps' ways to buy than one line holds: say so at the options, never add it one-time.
+  if (!purchaseOptions) return fail(cache.actions?.dataset.purchaseOptionsLimitText || failureMessage, "input_invalid");
   let price = cartData.data.price;
   let chosenOptions = purchaseOptions;
   if (purchaseOptions.length > 0 || properties.some(({ key }) => isAppScopedKey(key))) {
