@@ -129377,7 +129377,7 @@
           "Admin - Customers"
         ],
         "summary": "Walk a segment's members",
-        "description": "Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way).",
+        "description": "Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way). Each page examines at most 2000 customers, so a sparse segment's page may hold fewer ids than the limit, or none, and still carry `next`: keep paging with `after=next` until `next` is null.",
         "parameters": [
           {
             "schema": {
@@ -129412,7 +129412,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A page of member ids",
+            "description": "A page of member ids; `next` is null only once every customer was examined",
             "content": {
               "application/json": {
                 "schema": {

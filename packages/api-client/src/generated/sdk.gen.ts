@@ -3231,7 +3231,7 @@ export const getApiV1AdminCustomersSegmentsBySegmentIdCount = <ThrowOnError exte
 /**
  * Walk a segment's members
  *
- * Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way).
+ * Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way). Each page examines at most 2000 customers, so a sparse segment's page may hold fewer ids than the limit, or none, and still carry `next`: keep paging with `after=next` until `next` is null.
  */
 export const getApiV1AdminCustomersSegmentsBySegmentIdMembers = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdMembersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments/{segmentId}/members', ...options });
 

@@ -35784,7 +35784,7 @@ export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersError = GetApiV1Admi
 
 export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses = {
     /**
-     * A page of member ids
+     * A page of member ids; `next` is null only once every customer was examined
      */
     200: {
         success: true;
