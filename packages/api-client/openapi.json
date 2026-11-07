@@ -177787,15 +177787,15 @@
                             "theme": {
                               "$ref": "#/components/schemas/StorefrontThemeDocument"
                             },
-                            "updatedBy": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 160
-                            },
                             "updatedByName": {
                               "type": "string",
                               "nullable": true,
                               "maxLength": 200
+                            },
+                            "updatedByApp": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 160
                             }
                           },
                           "required": [
@@ -177803,8 +177803,8 @@
                             "basePublishedRevision",
                             "updatedAt",
                             "theme",
-                            "updatedBy",
-                            "updatedByName"
+                            "updatedByName",
+                            "updatedByApp"
                           ]
                         },
                         "draftDiffersFromLive": {

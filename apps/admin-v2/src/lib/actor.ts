@@ -86,10 +86,14 @@ export function restorePointAuthor(point: { createdBy: string | null; createdByN
   return actorFromId(point.createdBy, point.createdByName);
 }
 
-/** Who saved the shared theme draft last; null when nobody has (the editor then names no one). */
-export function draftSaver(draft: { updatedBy?: string | null; updatedByName?: string | null }): Actor | null {
-  if (draft.updatedBy) return actorFromId(draft.updatedBy, draft.updatedByName);
-  return draft.updatedByName ? staffActor(draft.updatedByName) : null;
+/**
+ * Who saved the shared theme draft last: the app that saved it, else the
+ * staff member by name; null when neither is known (the editor then names no
+ * one; the API never sends a staff id here).
+ */
+export function draftSaver(draft: { updatedByApp?: string | null; updatedByName?: string | null }): Actor | null {
+  if (draft.updatedByApp) return { kind: "app", appId: draft.updatedByApp };
+  return draft.updatedByName?.trim() ? staffActor(draft.updatedByName) : null;
 }
 
 /**

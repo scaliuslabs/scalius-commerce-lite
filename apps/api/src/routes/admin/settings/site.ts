@@ -417,12 +417,12 @@ const getThemeEditorRoute = createRoute({
             published: z.object({ theme: storefrontThemeDocumentApiSchema, revision: revisionSchema }),
             /**
              * The shared draft, and who saved it last (the editor's conflict notice names them):
-             * `updatedBy` is a staff id or an app's `app:<id>`, `updatedByName` the staff member's name.
+             * the staff member's name, or the plugin id of the app that saved it. A staff id is never sent.
              */
             draft: themeDraftReceiptSchema.extend({
               theme: storefrontThemeDocumentApiSchema,
-              updatedBy: z.string().max(160).nullable(),
               updatedByName: z.string().max(200).nullable(),
+              updatedByApp: z.string().max(160).nullable(),
             }),
             /** What the theme's fit rules read, as the storefront reads it. */
             storeShape: storeShapeApiSchema,
@@ -464,7 +464,11 @@ app.openapi(getThemeEditorRoute, async (c) => {
   const { updatedBy, updatedByName, ...draft } = workspace.draft;
   return ok(c, {
     ...workspace,
-    draft: { ...draftReceipt(draft), updatedBy: updatedBy?.slice(0, 160) ?? null, updatedByName: updatedByName?.slice(0, 200) ?? null },
+    draft: {
+      ...draftReceipt(draft),
+      updatedByName: updatedByName?.slice(0, 200) ?? null,
+      updatedByApp: updatedBy?.startsWith("app:") ? updatedBy.slice(4, 164) : null,
+    },
     lastPublished,
     storeShape,
     media,

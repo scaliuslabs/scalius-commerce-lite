@@ -50352,8 +50352,8 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
                 basePublishedRevision: number;
                 updatedAt: string | null;
                 theme: StorefrontThemeDocument;
-                updatedBy: string | null;
                 updatedByName: string | null;
+                updatedByApp: string | null;
             };
             draftDiffersFromLive: boolean;
             lastPublished: {
