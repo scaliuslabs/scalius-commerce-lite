@@ -98,8 +98,15 @@ export function setupProductReviews(): void {
           cursor: append ? cursor : null,
           limit: REVIEW_PAGE_SIZE,
         }), { headers: { Accept: "application/json" } }),
-        loadLazyScript(() => import("./review-format"), { needed: false }),
+        loadLazyScript(() => import("./review-format"), { needed: false }).catch(() => null),
       ]);
+      // They cannot load (a page left open across a deploy, its build files
+      // gone): every control, Show more included, is a link to the reviews
+      // page, which shows what the buyer asked for.
+      if (!format) {
+        window.location.href = fallbackHref;
+        return;
+      }
       const body = response.ok ? await response.json() as { data?: unknown } : null;
       const page = format.readProductReviews(body?.data);
       if (!page) throw new Error("unreadable");

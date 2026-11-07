@@ -10,12 +10,6 @@ import { formatCount, formatStoreDateTime, storeTimeZone } from "@/lib/store-tim
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { ProductReviews, ProductReviewSummary, PublicProductReview } from "@/lib/api/types";
 
-import {
-  REVIEW_SORTS,
-  type ReviewListView,
-  type ReviewSort,
-} from "./review-links";
-
 export {
   DEFAULT_REVIEW_VIEW,
   PRODUCT_PAGE_REVIEWS,

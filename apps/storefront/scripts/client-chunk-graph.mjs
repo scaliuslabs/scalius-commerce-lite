@@ -119,14 +119,27 @@ function readJsonAt(text, start) {
   throw new Error("Unterminated JSON in the server manifest");
 }
 
-/** The built graph, or null when `storefrontDir` has no client build. */
+/** A build the walk cannot measure as it stands; the message says what to do. */
+export class ClientBuildError extends Error {}
+
+/**
+ * The built graph, or null when `storefrontDir` has no client build. A build
+ * with more than one server manifest is refused: one is a leftover of an
+ * earlier build, and measuring it would judge files this build never ships.
+ */
 export function loadClientGraph(storefrontDir) {
   const serverChunks = join(storefrontDir, "dist/server/chunks");
   const clientDir = join(storefrontDir, "dist/client");
   if (!existsSync(serverChunks) || !existsSync(join(clientDir, "_astro"))) return null;
-  const manifestFile = readdirSync(serverChunks).find((file) => file.startsWith("entrypoints_"));
-  if (!manifestFile) return null;
-  const manifest = readFileSync(join(serverChunks, manifestFile), "utf8");
+  const manifests = readdirSync(serverChunks).filter((file) => file.startsWith("entrypoints_")).sort();
+  if (manifests.length === 0) return null;
+  if (manifests.length > 1) {
+    throw new ClientBuildError(
+      `${serverChunks} holds ${manifests.length} server manifests (${manifests.join(", ")}), so the build to measure is unclear: `
+      + "one is left over from an earlier build. Remove apps/storefront/dist and build again: pnpm --filter ./apps/storefront build",
+    );
+  }
+  const manifest = readFileSync(join(serverChunks, manifests[0]), "utf8");
 
   const scripts = new Map();
   for (const match of manifest.matchAll(/"[^"]*\/apps\/storefront\/(src\/[^"?]*\?astro&type=script&index=(\d+)&lang\.ts)":"(_astro\/[^"]+\.js)"/g)) {
@@ -147,6 +160,9 @@ export function loadClientGraph(storefrontDir) {
     const known = chunks.get(id);
     if (known) return known;
     const isInline = id.startsWith("inline:");
+    if (!isInline && !existsSync(join(clientDir, id))) {
+      throw new ClientBuildError(`The build names ${id}, which is not under ${clientDir}: the build is incomplete. Remove apps/storefront/dist and build again.`);
+    }
     const code = isInline ? inlined.get(id.slice(7)) : readFileSync(join(clientDir, id), "utf8");
     const directory = isInline ? "" : posix.dirname(id);
     const resolveImport = (specifier) =>
@@ -176,13 +192,11 @@ export function loadClientGraph(storefrontDir) {
     return info;
   }
 
-  /** The chunk id of a component's or page's script (`index` for a page with several). */
+  /** The chunk id of a component's or page's script (`index` for a page with several), or null when the build has none. */
   function script(source, index = 0) {
     const key = `${source}?astro&type=script&index=${index}&lang.ts`;
     if (inlined.has(key)) return `inline:${key}`;
-    const file = scripts.get(key);
-    if (!file) throw new Error(`No built script for ${key}`);
-    return file;
+    return scripts.get(key) ?? null;
   }
 
   /** `roots` and everything they import statically. */
@@ -227,8 +241,35 @@ export function loadClientGraph(storefrontDir) {
   return { chunk, script, closure, lazyLoads, withLazy };
 }
 
+/**
+ * Astro renders a component's script wherever the component renders, so the
+ * server manifest names every script but not which pages draw it: the pages'
+ * scripts are listed above. An entry the build has no script for is said, with
+ * what to change, and nothing is measured until the list matches the build.
+ */
+export function missingPageScripts(graph) {
+  const missing = [];
+  for (const [page, scripts] of Object.entries(BUYER_PAGE_SCRIPTS)) {
+    for (const entry of scripts) {
+      const [source, index] = Array.isArray(entry) ? entry : [entry, 0];
+      if (graph.script(source, index) !== null) continue;
+      missing.push(
+        `the ${page} page lists ${source}${index ? ` (script ${index})` : ""}, but the build has no script for it. `
+        + "If that component was removed or renamed, or no longer has a <script>, update its entry in BUYER_PAGE_SCRIPTS "
+        + "(apps/storefront/scripts/client-chunk-graph.mjs); a script the list leaves out is not measured.",
+      );
+    }
+  }
+  return missing;
+}
+
 export function pageEntries(graph, scripts) {
-  return scripts.map((entry) => (Array.isArray(entry) ? graph.script(entry[0], entry[1]) : graph.script(entry)));
+  return scripts.map((entry) => {
+    const [source, index] = Array.isArray(entry) ? entry : [entry, 0];
+    const id = graph.script(source, index);
+    if (id === null) throw new ClientBuildError(`The build has no script for ${source}${index ? ` (script ${index})` : ""}: update BUYER_PAGE_SCRIPTS in apps/storefront/scripts/client-chunk-graph.mjs.`);
+    return id;
+  });
 }
 
 export function productPageEntries(graph) {
@@ -286,7 +327,8 @@ export function gzipKib(graph, ids) {
 
 /**
  * Every promise the built buyer pages keep, as the problems found (none when
- * all hold), each tagged with its check: `walk` (the graph found the page
+ * all hold), each tagged with its check: `scripts` (a listed page script the
+ * build does not have; then nothing else is measured), `walk` (the graph found the page
  * scripts and the add's lazy loads), `runtimes:<page>` (no zod or generated
  * SDK on first paint, the first add to cart, sign-in, search or zoom),
  * `deferred:<page>` (optional validation off first paint, unrelated
@@ -297,6 +339,9 @@ export function gzipKib(graph, ids) {
 export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
   const problems = [];
   const fail = (check, message) => problems.push({ check, message });
+
+  const missing = missingPageScripts(graph);
+  if (missing.length > 0) return missing.map((message) => ({ check: "scripts", message }));
 
   const budget = productPageBudget(graph);
   if (budget.firstPaint.size <= 10) fail("walk", `the product page's first paint is ${budget.firstPaint.size} files: the walk missed its scripts`);
@@ -359,16 +404,7 @@ function printTable(graph, title, ids) {
   for (const id of list) console.log(`${kb(graph.chunk(id).raw)} ${kb(graph.chunk(id).gzip)}  ${graph.chunk(id).name}`);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const cliArgs = process.argv.slice(2);
-  const check = cliArgs.includes("--check");
-  const dirArg = cliArgs.find((arg) => !arg.startsWith("--"));
-  const storefrontDir = resolve(dirArg ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
-  const graph = loadClientGraph(storefrontDir);
-  if (!graph) {
-    console.error(missingBuildMessage(storefrontDir));
-    process.exit(1);
-  }
+function report(graph) {
   const { firstPaint, added, afterAdd } = productPageBudget(graph);
   printTable(graph, "Product page, first paint", firstPaint);
   printTable(graph, "Added by the first add to cart", added);
@@ -382,13 +418,37 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const found = forbiddenRuntimes(graph, extra);
     console.log(`Other lazy load ${basename(target)}: +${(sum.raw / 1024).toFixed(1)} KB raw, +${(sum.gzip / 1024).toFixed(1)} KB gzip${found.length ? `; ${found.join(", ")}` : ""}`);
   }
-  if (check) {
-    const problems = buyerPageProblems(graph);
+}
+
+/** The command line; its exit code (1: a broken budget, or a build it cannot measure). */
+function main(cliArgs) {
+  const check = cliArgs.includes("--check");
+  const dirArg = cliArgs.find((arg) => !arg.startsWith("--"));
+  const storefrontDir = resolve(dirArg ?? join(dirname(fileURLToPath(import.meta.url)), ".."));
+  try {
+    const graph = loadClientGraph(storefrontDir);
+    if (!graph) {
+      console.error(missingBuildMessage(storefrontDir));
+      return 1;
+    }
+    const problems = check ? buyerPageProblems(graph) : [];
+    // Without its listed scripts the page cannot be measured: say only what to fix.
+    if (!problems.some(({ check: name }) => name === "scripts")) report(graph);
+    if (!check) return 0;
     if (problems.length > 0) {
       console.error(`\n✗ The built buyer pages break ${problems.length} JavaScript budget${problems.length === 1 ? "" : "s"}:`);
       for (const { check: name, message } of problems) console.error(`  [${name}] ${message}`);
-      process.exit(1);
+      return 1;
     }
     console.log(`\n✓ Buyer pages within their JavaScript budgets (${BUDGET_GZIP_KIB.firstPaint} KiB first paint, ${BUDGET_GZIP_KIB.addedByFirstAddToCart} KiB added by the first add to cart; no zod or generated SDK)`);
+    return 0;
+  } catch (error) {
+    if (!(error instanceof ClientBuildError)) throw error;
+    console.error(`\n✗ The buyer-page JavaScript budgets were not checked: ${error.message}`);
+    return 1;
   }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = main(process.argv.slice(2));
 }
