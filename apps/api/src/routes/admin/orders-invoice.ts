@@ -15,7 +15,7 @@ import {
   serviceUnavailableResponse,
   successEnvelope,
 } from "../../schemas/responses";
-import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
+import { principalIdempotencyKey } from "./idempotency-key";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
 import { requestActorId, requestStaffId } from "./request-actor";
 
@@ -248,7 +248,9 @@ app.openapi(getInvoiceRoute, async (c) => {
 app.openapi(issueInvoiceRoute, async (c) => {
   const actingStaffId = requestStaffId(c);
   const { operationKey: bodyOperationKey, ...payload } = c.req.valid("json");
-  const operationKey = resolveCanonicalIdempotencyKey(
+  const operationKey = await principalIdempotencyKey(
+    c,
+    "dashboard.orders.invoice_issue",
     c.req.valid("header")["idempotency-key"],
     bodyOperationKey,
     "operationKey",

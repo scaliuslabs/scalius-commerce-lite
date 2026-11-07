@@ -57,6 +57,7 @@ import {
   SUPPLIER_STATUSES,
 } from "@scalius/database/schema";
 import { ForbiddenError, ValidationError } from "../../utils/api-error";
+import { principalIdempotencyKey } from "./idempotency-key";
 import { ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, paginationSchema, successEnvelope } from "../../schemas/responses";
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
@@ -81,11 +82,9 @@ const idempotencyHeaders = z.object({
   }),
 });
 
-function operationKeyFrom(header: string | undefined, body: string | undefined): string {
-  if (header && body && header !== body) throw new ValidationError("Idempotency-Key header must match body.operationKey.");
-  const key = header ?? body;
-  if (!key) throw new ValidationError("Idempotency-Key header or body.operationKey is required.");
-  return key;
+/** The stock command's key from the header or the body (they must match), scoped to the caller and operation. */
+function operationKeyFrom(c: Context, operationId: string, header: string | undefined, body: string | undefined): Promise<string> {
+  return principalIdempotencyKey(c, operationId, header, body, "operationKey");
 }
 
 const revisionBody = z.object({
@@ -417,7 +416,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
   if (body.updateCost && !costsVisible(c)) {
     throw new ForbiddenError("Updating unit costs needs the View product costs permission.");
   }
-  const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
+  const key = await operationKeyFrom(c, "dashboard.purchase_orders.receive", c.req.valid("header")["idempotency-key"], operationKey);
   return ok(c, presentReceipt(c, await receivePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, { ...body, operationKey: key }, requestActorId(c))));
 });
 
@@ -629,7 +628,7 @@ adminTransferRoutes.openapi(createRoute({
   },
 }), async (c) => {
   const { operationKey, expectedRevision } = c.req.valid("json");
-  const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
+  const key = await operationKeyFrom(c, "dashboard.inventory_transfers.ship", c.req.valid("header")["idempotency-key"], operationKey);
   return ok(c, await shipTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, expectedRevision }, requestActorId(c)));
 });
 
@@ -664,7 +663,7 @@ adminTransferRoutes.openapi(createRoute({
   },
 }), async (c) => {
   const { operationKey, lines } = c.req.valid("json");
-  const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
+  const key = await operationKeyFrom(c, "dashboard.inventory_transfers.receive", c.req.valid("header")["idempotency-key"], operationKey);
   return ok(c, await receiveTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, lines }, requestActorId(c)));
 });
 
@@ -684,7 +683,7 @@ adminTransferRoutes.openapi(createRoute({
   },
 }), async (c) => {
   const { operationKey, expectedRevision } = c.req.valid("json");
-  const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
+  const key = await operationKeyFrom(c, "dashboard.inventory_transfers.cancel", c.req.valid("header")["idempotency-key"], operationKey);
   return ok(c, await cancelTransfer(c.get("db"), c.req.valid("param").transferId, { operationKey: key, expectedRevision }, requestActorId(c)));
 });
 

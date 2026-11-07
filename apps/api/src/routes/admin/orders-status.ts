@@ -42,6 +42,7 @@ import { requestCourierProviders } from "../../plugins/providers/courier";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 import { notificationSender } from "../../background/notification-sender";
 import { requestStaffId } from "./request-actor";
+import { principalBodyKey } from "./idempotency-key";
 
 const app = adminRouter();
 
@@ -686,6 +687,7 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
     const db = c.get("db");
     const result = await lookupUnknownOrderShipment(db, {
         ...data,
+        operationKey: await principalBodyKey(c, "dashboard.orders.shipment_unknown_lookup", data.operationKey),
         orderId,
         shipmentId,
         actorId: actingStaffId,

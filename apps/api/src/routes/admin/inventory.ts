@@ -74,7 +74,8 @@ const inventoryIdempotencyHeadersSchema = idempotencyKeyHeaderSchema;
  * only the Idempotency-Key header (any 8 to 200 printable characters) and
  * derive the ledger key from it (the caller, the operation and the key), so
  * a retry never moves stock twice. The dashboard scanner's own route (beta)
- * keeps its ledger-shaped key, in the header or the body.
+ * takes a ledger-shaped key in the header or the body, scoped the same way,
+ * so two callers' keys never share a stock command.
  */
 async function inventoryOperationKey(
     c: Context,
@@ -90,7 +91,7 @@ async function inventoryOperationKey(
         if (!key) throw new ValidationError("Idempotency-Key header or body.operationKey is required.");
         const parsed = inventoryOperationKeySchema.safeParse(key);
         if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message ?? "operationKey is not valid.");
-        return parsed.data;
+        return scopedRequestKey(c, operationId, parsed.data);
     }
     if (!headerKey) {
         throw new ValidationError("Send an Idempotency-Key header: a stock change is never repeated by a retry.");

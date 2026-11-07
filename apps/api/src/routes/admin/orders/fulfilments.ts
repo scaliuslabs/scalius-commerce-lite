@@ -36,6 +36,7 @@ import { NotFoundError } from "../../../utils/api-error";
 const FulfillmentResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.fulfillment, "FulfillmentResource");
 import { notificationSender } from "../../../background/notification-sender";
 import { requestStaffId } from "../request-actor";
+import { principalBodyKey } from "../idempotency-key";
 
 const app = adminRouter();
 
@@ -121,7 +122,11 @@ const createFulfilmentRoute = createRoute({
 });
 
 app.openapi(createFulfilmentRoute, async (c) => {
-    const result = await handOverOrderLines(c, c.req.valid("param").id, c.req.valid("json"));
+    const body = c.req.valid("json");
+    const result = await handOverOrderLines(c, c.req.valid("param").id, {
+        ...body,
+        requestKey: await principalBodyKey(c, "dashboard.orders.fulfillment_create", body.requestKey),
+    });
     return created(c, {
         orderId: result.orderId,
         fulfillmentId: result.fulfillmentId,

@@ -44,6 +44,7 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 import { requestActorId } from "./request-actor";
+import { principalBodyKey } from "./idempotency-key";
 
 export const adminDigitalAssetRoutes = adminRouter();
 export const adminProductDigitalAssetRoutes = adminRouter();
@@ -403,7 +404,7 @@ adminDigitalAssetRoutes.openapi(createRoute({
     const result = await importLicenceKeys(c.get("db"), {
         assetId: c.req.valid("param").id,
         keys: body.keys,
-        requestKey: body.requestKey,
+        requestKey: await principalBodyKey(c, "dashboard.digital_assets.licence_keys_import", body.requestKey),
         credentialKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
         adminUserId: actorIdOf(c),
     });
@@ -450,7 +451,7 @@ adminDigitalAssetRoutes.openapi(createRoute({
     const result = await revokeLicenceKeys(c.get("db"), {
         assetId: c.req.valid("param").id,
         keyIds: body.keyIds,
-        requestKey: body.requestKey,
+        requestKey: await principalBodyKey(c, "dashboard.digital_assets.licence_keys_revoke", body.requestKey),
         adminUserId: actorIdOf(c),
     });
 

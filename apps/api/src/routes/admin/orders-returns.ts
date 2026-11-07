@@ -30,7 +30,7 @@ import {
 } from "../../schemas/responses";
 
 import { sendOrderNotification, sendOrderNotificationsForStatus } from "../../utils/order-notifications";
-import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
+import { principalIdempotencyKey } from "./idempotency-key";
 import { notificationSender } from "../../background/notification-sender";
 import { requestAppId, requestStaffId } from "./request-actor";
 
@@ -340,7 +340,9 @@ app.openapi(getRoute, async (c) => {
 });
 app.openapi(createRouteDefinition, async (c) => {
     const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
-    const commandKey = resolveCanonicalIdempotencyKey(
+    const commandKey = await principalIdempotencyKey(
+        c,
+        "dashboard.orders.return_create",
         c.req.valid("header")["idempotency-key"],
         bodyCommandKey,
         "commandKey",
@@ -350,7 +352,9 @@ app.openapi(createRouteDefinition, async (c) => {
 app.openapi(approveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
     const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
-    const commandKey = resolveCanonicalIdempotencyKey(
+    const commandKey = await principalIdempotencyKey(
+        c,
+        "dashboard.orders.return_approve",
         c.req.valid("header")["idempotency-key"],
         bodyCommandKey,
         "commandKey",
@@ -360,7 +364,9 @@ app.openapi(approveRoute, async (c) => {
 app.openapi(receiveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
     const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
-    const commandKey = resolveCanonicalIdempotencyKey(
+    const commandKey = await principalIdempotencyKey(
+        c,
+        "dashboard.orders.return_receive",
         c.req.valid("header")["idempotency-key"],
         bodyCommandKey,
         "commandKey",
@@ -370,7 +376,9 @@ app.openapi(receiveRoute, async (c) => {
 app.openapi(cancelRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
     const { commandKey: bodyCommandKey, ...payload } = c.req.valid("json");
-    const commandKey = resolveCanonicalIdempotencyKey(
+    const commandKey = await principalIdempotencyKey(
+        c,
+        "dashboard.orders.return_cancel",
         c.req.valid("header")["idempotency-key"],
         bodyCommandKey,
         "commandKey",

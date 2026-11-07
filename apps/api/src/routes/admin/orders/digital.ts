@@ -10,6 +10,7 @@ import { AppError } from "@scalius/core/errors";
 import { ok } from "../../../utils/api-response";
 import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 import { notificationSender } from "../../../background/notification-sender";
+import { principalBodyKey } from "../idempotency-key";
 
 const app = adminRouter();
 
@@ -38,7 +39,7 @@ app.openapi(createRoute({
 }), async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const { requestKey } = c.req.valid("json");
+    const requestKey = await principalBodyKey(c, "dashboard.orders.digital_resend", c.req.valid("json").requestKey);
     if (await countOrderDigitalEntitlements(db, orderId) === 0) {
         throw new AppError(409, "nothing_to_resend", "This order has no downloads or keys to send.");
     }
