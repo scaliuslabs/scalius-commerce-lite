@@ -19,7 +19,7 @@ export const APP_ID = "scaliuslabs.restock";
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Restock Planner",
-  version: "1.0.0",
+  version: "1.0.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Set a reorder point and a target for each SKU, see what to reorder now, and draft, send and receive supplier purchase orders from one page.",
   author: { name: "Scalius Labs" },
