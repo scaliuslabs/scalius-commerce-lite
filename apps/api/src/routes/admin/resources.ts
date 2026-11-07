@@ -339,7 +339,7 @@ app.openapi(createRoute({
   path: "/orders",
   tags: ["App API - Orders"],
   summary: "Place an order for a customer",
-  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order.",
+  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order, and the key sent with another order (another line, address or payment) is refused with 409 admin_order_create_request_mismatch, naming in details.orderId the order it already placed.",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: orderCreateBody } } },

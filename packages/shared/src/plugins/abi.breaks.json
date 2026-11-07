@@ -526,5 +526,11 @@
   "from": "48d4e8c42a85a0bd",
   "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
   "reason": "Merge of the returns and segments fix round onto this branch: the same change acknowledged above against the worker's snapshot, against this branch's. Sealed codes are only added (APP_ERROR_CODES): the return and customer segment operations (G2) name each refusal instead of the generic conflict, so an app tells apart a stale order or return revision (order_revision_conflict, return_revision_conflict), another return command running on the order (return_command_in_progress), a stale segment revision (segment_revision_conflict) and a segment name clash (segment_name_taken); a return command key reused for another request answers the existing idempotency_key_reused. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dd1068f7687f4f90",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Sealed codes are only added (APP_ERROR_CODES): orders.create already answered admin_order_create_request_mismatch when its Idempotency-Key belonged to another request (another address, line or payment, or a placed order replayed at another reviewed total); the code is now sealed with its details (state, orderId, canRetryWithNewKey) so an app can open the order it placed instead of placing it again. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new member."
  }
 ]
