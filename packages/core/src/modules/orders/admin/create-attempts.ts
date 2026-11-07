@@ -384,6 +384,10 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     zoneName: input.zoneName ?? null,
     areaName: input.areaName ?? null,
     notes: input.notes ?? null,
+    // Every field that changes what is placed is the request: the same key sent with
+    // another price, option, customer or payment is a different order, refused, never
+    // replayed. A field left out hashes as before, so a retry across a deploy still replays.
+    // `expectedTotal` is a guard, not content: staff resubmit a refused order at the new total.
     items: input.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,
@@ -391,9 +395,19 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
       ...(item.properties && item.properties.length > 0
         ? { properties: item.properties.map((property) => [property.key, property.value]) }
         : {}),
+      ...(item.unitPriceMinor !== undefined ? { unitPriceMinor: item.unitPriceMinor } : {}),
+      ...(item.purchaseOptions && item.purchaseOptions.length > 0 ? { purchaseOptions: [...item.purchaseOptions].sort() } : {}),
     })),
     ...(input.shippingMethodId ? { shippingMethodId: input.shippingMethodId } : {}),
     ...(channelSource ? { channelSource } : {}),
+    ...(input.customerId ? { customerId: input.customerId } : {}),
+    ...(input.attributes && Object.keys(input.attributes).length > 0
+      ? { attributes: Object.entries(input.attributes).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)) }
+      : {}),
+    ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
+    ...(input.paymentTermsDays != null ? { paymentTermsDays: input.paymentTermsDays } : {}),
+    ...(input.paid ? { paid: { via: input.paid.via, reference: input.paid.reference?.trim() || null } } : {}),
+    ...(input.abandonedCheckoutId ? { abandonedCheckoutId: input.abandonedCheckoutId } : {}),
     // The online store is the default: naming it is the same request.
     ...(input.salesChannelId && input.salesChannelId !== ONLINE_STORE_CHANNEL_ID ? { salesChannelId: input.salesChannelId } : {}),
     discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
