@@ -1186,6 +1186,8 @@ export const orderEvents = sqliteTable("order_events", {
     /** JSON facts for the event (amounts in major units, labels are rendered by the dashboard). */
     data: text("data"),
     actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+    /** The app that wrote the line (its comment, its typed entry); null for staff and the system. */
+    actorAppId: text("actor_app_id"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_events_order_created_idx").on(table.orderId, table.createdAt),

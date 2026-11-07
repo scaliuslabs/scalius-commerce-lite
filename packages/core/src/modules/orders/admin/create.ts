@@ -95,9 +95,9 @@ export interface CreateManualOrderResult {
 export async function createOrder(
     db: Database,
     data: CreateOrderInput,
-    actorId: string | null,
+    actor: string,
 ): Promise<{ id: string }> {
-    return (await createManualOrder(db, data, actorId)).response;
+    return (await createManualOrder(db, data, actor)).response;
 }
 
 /**
@@ -135,7 +135,12 @@ async function resolveManualOrderCustomer(db: Database, data: CreateOrderInput):
 export async function createManualOrder(
     db: Database,
     data: CreateOrderInput,
-    actorId: string | null,
+    /**
+     * Who places it: `app:<id>` for an app, the staff member's id otherwise.
+     * It scopes the request key (`buildAdminOrderCreateAttemptIdentity`) and
+     * names the actor of the order's timeline lines.
+     */
+    actor: string,
     /**
      * The apps' checkout functions, injected by the API (checkout's
      * `createManualOrderAppFunctions`), and the request's app providers (an
@@ -153,7 +158,7 @@ export async function createManualOrder(
     } = {},
 ): Promise<CreateManualOrderResult> {
     const replayed = (response: { id: string }): CreateManualOrderResult => ({ response, committed: null });
-    const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
+    const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actor);
     const existingReplay = await resolveAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
     if (existingReplay) {
         await assertReplayAtReviewedTotal(db, data, existingReplay.response);
@@ -330,7 +335,7 @@ export async function createManualOrder(
                             id: pricesSetEventId,
                             orderId,
                             kind: "prices_set",
-                            actorId,
+                            actorId: actor,
                             data: { lines: pricedByHand },
                         }, sql`1`) as unknown as SQLiteBatchItem] : []),
                         buildAdminOrderCreateAttemptCommit(db, attempt, response),

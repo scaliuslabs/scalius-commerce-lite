@@ -9,7 +9,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
-import { giftCards } from "@scalius/database/schema";
+import { giftCards, giftCardTransactions } from "@scalius/database/schema";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { ValidationError } from "../../errors";
 import { GIFT_CARD_LIMITS, type GiftCardSource } from "./browser";
@@ -247,11 +247,19 @@ export async function issueManualGiftCard(
         throw new ValidationError("A request key is required.");
     }
     const giftCardId = await giftCardIdFromRequestKey("manual", requestKey);
-    const existing = await db.select({ id: giftCards.id, codeCiphertext: giftCards.codeCiphertext, issuedByUserId: giftCards.issuedByUserId })
-        .from(giftCards).where(eq(giftCards.id, giftCardId)).get();
+    const actor = giftCardWriteActor(input);
+    // The key belongs to who issued under it: an app (system/app:<id>) or a staff member, never a shared null.
+    if (!actor.id) throw new ValidationError("Sign in again to manage gift cards.");
+    const issueKey = `issue:manual:${giftCardId}`;
+    const readIssued = () => db.select({ codeCiphertext: giftCards.codeCiphertext, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId })
+        .from(giftCards)
+        .leftJoin(giftCardTransactions, eq(giftCardTransactions.idempotencyKey, issueKey))
+        .where(eq(giftCards.id, giftCardId)).get();
+    const issuedHere = (row: { actorType: string | null; actorId: string | null }) => row.actorType === actor.type && row.actorId === actor.id;
+    const existing = await readIssued();
     const issuedByUserId = input.appId ? null : input.actorUserId;
     if (existing) {
-        if (existing.issuedByUserId !== issuedByUserId) {
+        if (!issuedHere(existing)) {
             throw new ValidationError("This request was already used. Start a new gift card.");
         }
         return { giftCardId, code: await decryptGiftCardCode(keys, existing.codeCiphertext), created: false };
@@ -267,16 +275,15 @@ export async function issueManualGiftCard(
         message: input.message,
         note: input.note,
         issuedByUserId,
-        idempotencyKey: `issue:manual:${giftCardId}`,
-        actor: giftCardWriteActor(input),
+        idempotencyKey: issueKey,
+        actor,
     });
     try {
         await safeBatch(db, [...built.statements, ...extraStatements(giftCardId)] as never);
     } catch (error) {
         // A concurrent retry of the same request won the insert.
-        const winner = await db.select({ codeCiphertext: giftCards.codeCiphertext, issuedByUserId: giftCards.issuedByUserId })
-            .from(giftCards).where(eq(giftCards.id, giftCardId)).get();
-        if (winner && winner.issuedByUserId === issuedByUserId) {
+        const winner = await readIssued();
+        if (winner && issuedHere(winner)) {
             return { giftCardId, code: await decryptGiftCardCode(keys, winner.codeCiphertext), created: false };
         }
         throw error;

@@ -6358,6 +6358,10 @@ export type AdminGiftCardTransaction = {
     orderId: string | null;
     orderNumber: string | null;
     actorType: 'system' | 'admin' | 'customer';
+    /**
+     * Who wrote the row: `app:<id>` for an app (actorType system), the staff member's id, the customer's id, or null for the system.
+     */
+    actorId: string | null;
     actorName: string | null;
     reason: string | null;
     createdAt: string;
@@ -62072,6 +62076,10 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
                 } | null;
                 actorName: string | null;
                 /**
+                 * Who wrote the line: `app:<id>` for an app, the staff member's id for staff, null for the system.
+                 */
+                actorId: string | null;
+                /**
                  * The viewer wrote this comment and may delete it.
                  */
                 own: boolean;
@@ -62140,6 +62148,10 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
                 [key: string]: unknown;
             } | null;
             actorName: string | null;
+            /**
+             * Who wrote the line: `app:<id>` for an app, the staff member's id for staff, null for the system.
+             */
+            actorId: string | null;
             /**
              * The viewer wrote this comment and may delete it.
              */

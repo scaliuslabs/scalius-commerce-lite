@@ -54,6 +54,12 @@ export interface OrderTimelineEvent {
     body: string | null;
     data: Record<string, unknown> | null;
     actorName: string | null;
+    /**
+     * Who wrote the line: `app:<id>` for an app's line (its comment, its typed
+     * entry, an order it placed), the staff member's id for staff, null for the
+     * system or a removed account.
+     */
+    actorId: string | null;
     /** The viewer wrote this comment and may delete it. */
     own: boolean;
     createdAt: Date;
@@ -62,6 +68,7 @@ export interface OrderTimelineEvent {
 export interface RecordOrderEventInput {
     orderId: string;
     kind: Exclude<OrderEventKind, "placed">;
+    /** Who acted: a staff member's id, or `app:<id>` for an app (recorded as the app, `eventActorColumns`). */
     actorId?: string | null;
     body?: string | null;
     data?: Record<string, unknown> | null;
@@ -109,6 +116,22 @@ export function knownStaffId(actorId: string | null | undefined) {
         : null;
 }
 
+const APP_ACTOR_PREFIX = "app:";
+
+/**
+ * The actor columns of a line: an app (`app:<id>`) in `actor_app_id`, a staff
+ * account in `actor_id` (which references one), nothing for anyone else.
+ */
+function eventActorColumns(actor: string | null | undefined) {
+    if (actor?.startsWith(APP_ACTOR_PREFIX)) return { actorId: null, actorAppId: actor.slice(APP_ACTOR_PREFIX.length) || null };
+    return { actorId: knownStaffId(actor), actorAppId: null };
+}
+
+/** The actor a line names: `app:<id>` for an app's line, else the staff account. */
+function presentedActorId(row: { actorId: string | null; actorAppId: string | null }): string | null {
+    return row.actorAppId ? `${APP_ACTOR_PREFIX}${row.actorAppId}` : row.actorId;
+}
+
 function parseData(value: string | null): Record<string, unknown> | null {
     if (!value) return null;
     try {
@@ -133,7 +156,7 @@ export async function recordOrderEvent(db: Database, input: RecordOrderEventInpu
             kind: input.kind,
             body: input.body ?? null,
             data: input.data ? JSON.stringify(input.data) : null,
-            actorId: knownStaffId(input.actorId),
+            ...eventActorColumns(input.actorId),
             createdAt: sql`unixepoch()`,
         }).onConflictDoNothing({ target: orderEvents.id });
     } catch (error: unknown) {
@@ -165,21 +188,25 @@ export function buildOrderEventInsert(
     landed: SQL,
 ) {
     const id = input.id;
-    const actor = knownStaffId(input.actorId) ?? sql`NULL`;
-    // Columns by position: id, order_id, kind, body, data, actor_id, created_at.
+    const actor = eventActorColumns(input.actorId);
+    // Columns by position: id, order_id, kind, body, data, actor_id, actor_app_id, created_at.
     return db.insert(orderEvents).select(sql`
         SELECT ${id}, ${input.orderId}, ${input.kind}, ${input.body ?? null},
-               ${input.data ? JSON.stringify(input.data) : null}, ${actor}, unixepoch()
+               ${input.data ? JSON.stringify(input.data) : null}, ${actor.actorId ?? sql`NULL`}, ${actor.actorAppId}, unixepoch()
         WHERE ${landed}
     `).onConflictDoNothing({ target: orderEvents.id });
 }
 
-/** A staff comment ("Customer confirmed by phone at 3pm"). A repeated request key returns the first comment. */
+/**
+ * A staff or app comment ("Customer confirmed by phone at 3pm"). `actor` is
+ * the staff member's id or `app:<id>`: an app's comment names the app, so it
+ * may delete it. A repeated request key returns the first comment.
+ */
 export async function addOrderComment(
     db: Database,
     orderId: string,
     body: string,
-    actorId: string | null,
+    actor: string | null,
     requestKey?: string | null,
 ): Promise<OrderTimelineEvent> {
     const text = body.trim();
@@ -195,11 +222,11 @@ export async function addOrderComment(
         orderId,
         kind: "comment",
         body: text,
-        actorId: knownStaffId(actorId),
+        ...eventActorColumns(actor),
         createdAt: sql`unixepoch()`,
     }).onConflictDoNothing({ target: orderEvents.id });
     // A retry can refer to a comment older than the first timeline page.
-    const [event] = await readTimelineEvents(db, and(eq(orderEvents.orderId, orderId), eq(orderEvents.id, id))!, actorId, 1);
+    const [event] = await readTimelineEvents(db, and(eq(orderEvents.orderId, orderId), eq(orderEvents.id, id))!, actor, 1);
     if (!event) throw new NotFoundError("Comment not found");
     return event;
 }
@@ -260,31 +287,42 @@ export async function addOrderAppEvent(db: Database, input: AddOrderAppEventInpu
             fields: Object.fromEntries(fields),
         }),
         actorId: null,
+        actorAppId: input.pluginId,
         createdAt: sql`unixepoch()`,
     }).onConflictDoNothing({ target: orderEvents.id });
     return id;
 }
 
-/** Staff may delete their own comments; every other line is a record of what happened. */
+/**
+ * Staff and apps may delete their own comments (`actor`: the staff member's id
+ * or `app:<id>`), never another's; every other line is a record of what happened.
+ */
 export async function deleteOrderComment(
     db: Database,
     orderId: string,
     eventId: string,
-    actorId: string | null,
+    actor: string | null,
 ): Promise<void> {
-    const event = await db.select({ kind: orderEvents.kind, actorId: orderEvents.actorId })
+    const event = await db.select({ kind: orderEvents.kind, actorId: orderEvents.actorId, actorAppId: orderEvents.actorAppId })
         .from(orderEvents)
         .where(and(eq(orderEvents.id, eventId), eq(orderEvents.orderId, orderId)))
         .get();
     // Deleting twice (a double click) is fine: the comment is gone either way.
     if (!event) return;
-    if (event.kind !== "comment" || !actorId || event.actorId !== actorId) {
+    if (event.kind !== "comment" || !actor || presentedActorId(event) !== actor) {
         throw new ForbiddenError("You can delete only your own comments.");
     }
     await db.delete(orderEvents).where(and(eq(orderEvents.id, eventId), eq(orderEvents.orderId, orderId)));
 }
 
 export const ORDER_TIMELINE_PAGE_SIZE = 50;
+
+/** An app's typed entry written before `actor_app_id` names its app in `data.pluginId`. */
+function appEventActor(kind: string, data: string | null): string | null {
+    if (kind !== "app_event") return null;
+    const pluginId = parseData(data)?.pluginId;
+    return typeof pluginId === "string" && pluginId ? `${APP_ACTOR_PREFIX}${pluginId}` : null;
+}
 
 export interface OrderTimelinePage {
     events: OrderTimelineEvent[];
@@ -300,6 +338,7 @@ async function readTimelineEvents(db: Database, condition: SQL, viewerId: string
         data: orderEvents.data,
         actorName: user.name,
         actorId: orderEvents.actorId,
+        actorAppId: orderEvents.actorAppId,
         createdAt: orderEvents.createdAt,
     }).from(orderEvents)
         .leftJoin(user, eq(user.id, orderEvents.actorId))
@@ -314,7 +353,8 @@ async function readTimelineEvents(db: Database, condition: SQL, viewerId: string
         body: row.body,
         data: parseData(row.data),
         actorName: row.actorName,
-        own: row.kind === "comment" && Boolean(viewerId) && row.actorId === viewerId,
+        actorId: presentedActorId(row) ?? appEventActor(row.kind, row.data),
+        own: row.kind === "comment" && Boolean(viewerId) && presentedActorId(row) === viewerId,
         createdAt: new Date(Number(row.createdAt) * 1000),
     }));
 }
@@ -330,7 +370,7 @@ async function readTimelinePage(db: Database, orderId: string, viewerId: string 
         conditions.push(keysetCondition({ column: orderEvents.createdAt, id: orderEvents.id, direction: "desc" }, position));
     }
     // A manual order was created by a staff member: the final line names them.
-    const order = await db.select({ createdAt: orders.createdAt, creatorName: user.name }).from(orders)
+    const order = await db.select({ createdAt: orders.createdAt, creatorName: user.name, creatorId: adminOrderCreateAttempts.actorId }).from(orders)
         .leftJoin(adminOrderCreateAttempts, eq(adminOrderCreateAttempts.orderId, orders.id))
         .leftJoin(user, eq(user.id, adminOrderCreateAttempts.actorId))
         .where(eq(orders.id, orderId)).get();
@@ -343,7 +383,7 @@ async function readTimelinePage(db: Database, orderId: string, viewerId: string 
     }) : null;
     if (!nextCursor) events.push({
         id: `placed_${orderId}`, kind: "placed", body: null, data: null,
-        actorName: order.creatorName ?? null, own: false, createdAt: order.createdAt,
+        actorName: order.creatorName ?? null, actorId: order.creatorId ?? null, own: false, createdAt: order.createdAt,
     });
     return { events, nextCursor };
 }

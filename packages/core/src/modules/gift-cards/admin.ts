@@ -57,6 +57,8 @@ export interface StaffGiftCardTransaction {
     orderId: string | null;
     orderNumber: number | null;
     actorType: "system" | "admin" | "customer";
+    /** Who wrote the row: `app:<id>` for an app (actorType `system`), the staff member's id, the customer's id, or null for the system. */
+    actorId: string | null;
     actorName: string | null;
     reason: string | null;
     createdAt: number;
@@ -297,6 +299,7 @@ export async function getGiftCardForStaff(
             orderId: transaction.orderId,
             orderNumber: transaction.orderNumber ?? null,
             actorType: transaction.actorType as StaffGiftCardTransaction["actorType"],
+            actorId: transaction.actorId ?? null,
             actorName: transaction.actorType === "admin" ? transaction.actorName ?? null : null,
             reason: transaction.reason,
             createdAt: transaction.createdAt,
@@ -349,15 +352,28 @@ export async function adjustGiftCardBalance(
     const requestKey = input.requestKey.trim();
     if (requestKey.length < 8 || requestKey.length > 128) throw new ValidationError("A request key is required.");
     const idempotencyKey = `adjust:${(await giftCardIdFromRequestKey("adjust", requestKey)).slice(3)}`;
+    const actor = giftCardWriteActor(input);
+    if (!actor.id) throw new ValidationError("Sign in again to manage gift cards.");
+    const readLanded = () => db.select({ giftCardId: giftCardTransactions.giftCardId, actorType: giftCardTransactions.actorType, actorId: giftCardTransactions.actorId })
+        .from(giftCardTransactions).where(eq(giftCardTransactions.idempotencyKey, idempotencyKey)).get();
+    /**
+     * A retry of an adjustment that already landed moves nothing again; the
+     * key belongs to who adjusted under it and to that card, so another
+     * caller's or another card's adjustment under the same key is refused.
+     */
+    const replayLanded = (landed: { giftCardId: string; actorType: string; actorId: string | null }) => {
+        if (landed.giftCardId !== input.giftCardId || landed.actorType !== actor.type || landed.actorId !== actor.id) {
+            throw new ValidationError("This request was already used. Start a new adjustment.");
+        }
+        return getStaffGiftCardSummary(db, landed.giftCardId);
+    };
     const [card, landedBefore] = await Promise.all([
         db.select({ id: giftCards.id, balanceMinor: giftCards.balanceMinor })
             .from(giftCards).where(eq(giftCards.id, input.giftCardId)).get(),
-        db.select({ id: giftCardTransactions.id }).from(giftCardTransactions)
-            .where(eq(giftCardTransactions.idempotencyKey, idempotencyKey)).get(),
+        readLanded(),
     ]);
     if (!card) throw new NotFoundError("Gift card not found.");
-    // A retry of an adjustment that already landed moves nothing again.
-    if (landedBefore) return getStaffGiftCardSummary(db, card.id);
+    if (landedBefore) return replayLanded(landedBefore);
     if (card.balanceMinor + input.amountMinor < 0) {
         throw new ValidationError("A gift card balance can't go below zero.");
     }
@@ -370,16 +386,19 @@ export async function adjustGiftCardBalance(
             kind: "adjust",
             amountMinor: input.amountMinor,
             idempotencyKey,
-            actor: giftCardWriteActor(input),
+            actor,
             reason,
         })] as never);
     } catch (error) {
-        if (isGiftCardIdempotencyConflict(error)) return getStaffGiftCardSummary(db, card.id);
+        if (isGiftCardIdempotencyConflict(error)) {
+            const landed = await readLanded();
+            if (landed) return replayLanded(landed);
+            throw error;
+        }
         if (isBatchGuardError(error, GIFT_CARD_VERSION_CONFLICT)) {
             // A repeat of an adjustment that already landed (it moved the version) replays it.
-            const landed = await db.select({ id: giftCardTransactions.id }).from(giftCardTransactions)
-                .where(eq(giftCardTransactions.idempotencyKey, idempotencyKey)).get();
-            if (landed) return getStaffGiftCardSummary(db, card.id);
+            const landed = await readLanded();
+            if (landed) return replayLanded(landed);
             throw new ConflictError("This gift card changed since you read it. Read it again and retry with its version.");
         }
         if (isGiftCardLedgerError(error)) throw new ConflictError("The balance changed. Reload the gift card and try again.");

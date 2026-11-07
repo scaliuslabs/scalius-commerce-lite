@@ -59,14 +59,18 @@ type Stored =
   | { state: "processing"; request: string; lease?: string; leaseUntil?: number }
   | { state: "done"; request: string; status: number; contentType: string | null; body: string; secret?: true };
 
-/** Who the key belongs to: one app, one agent grant or one staff member never share keys. */
+/**
+ * Who the key belongs to: one app, one agent grant or one staff member never
+ * share keys. A request with no principal is refused, never given a shared scope.
+ */
 function callerScope(c: Context): string {
   const plugin = c.get("pluginPrincipal");
   if (plugin) return `app:${plugin.pluginId}`;
   const agent = c.get("agentPrincipal");
   if (agent) return `agent:${agent.grantId}`;
   const user = c.get("user") as { id?: string } | undefined;
-  return `user:${user?.id ?? "anonymous"}`;
+  if (!user?.id) refuse(401, "unauthorized", "Sign in again to use an Idempotency-Key.");
+  return `user:${user.id}`;
 }
 
 /**

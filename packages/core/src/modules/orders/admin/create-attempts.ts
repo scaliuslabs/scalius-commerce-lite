@@ -3,7 +3,7 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { adminOrderCreateAttempts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
-import { AppError, ServiceUnavailableError } from "@scalius/core/errors";
+import { AppError, ServiceUnavailableError, UnauthorizedError } from "@scalius/core/errors";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import type { CreateOrderInput } from "../validation";
@@ -51,15 +51,30 @@ export type AdminOrderCreateRequestMismatchDetails =
 
 type AdminOrderCreateAttemptRow = typeof adminOrderCreateAttempts.$inferSelect;
 
+/**
+ * Who a manual-order attempt or amendment key belongs to: `app:<id>` for an
+ * app, the staff member's id otherwise. Never a shared fallback: keys scoped
+ * by one constant would let one caller replay another's order.
+ */
+export function requireAttemptPrincipal(principal: string | null | undefined): string {
+  const scope = principal?.trim();
+  if (!scope) throw new UnauthorizedError("Sign in again to place or change an order.");
+  return scope;
+}
+
+/**
+ * The attempt's identity. Its key is scoped by the principal that places the
+ * order (`requireAttemptPrincipal`): two callers' keys never share an attempt.
+ */
 export async function buildAdminOrderCreateAttemptIdentity(
   input: CreateOrderInput,
-  actorId: string | null,
+  principal: string,
 ): Promise<AdminOrderCreateAttemptIdentity> {
   const requestKey = input.requestKey.trim();
-  const actorScope = actorId ?? "unknown-admin";
+  const actorId = requireAttemptPrincipal(principal);
   return {
     actorId,
-    requestKeyHash: await sha256Hex(`${actorScope}:${requestKey}`),
+    requestKeyHash: await sha256Hex(`${actorId}:${requestKey}`),
     requestHash: await sha256Hex(stableStringify(normalizeAdminOrderCreateRequest(input))),
   };
 }

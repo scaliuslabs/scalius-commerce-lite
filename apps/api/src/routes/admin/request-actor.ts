@@ -31,6 +31,17 @@ export function requestActorId(c: RequestContext): string | null {
 }
 
 /**
+ * The principal a retry key or attempt belongs to, and the actor an app line
+ * names: `app:<id>` for an app, the staff member's id otherwise. A request
+ * with neither is refused, so no two callers ever share a scope.
+ */
+export function requireActorId(c: RequestContext, signInMessage: string): string {
+  const id = requestActorId(c);
+  if (!id) throw new UnauthorizedError(signInMessage);
+  return id;
+}
+
+/**
  * The staff member who acted, for a column that references a staff account
  * (an order's timeline, a released hold, an issued gift card, a webhook's
  * creator): null for an app, which the audit log and the record's own app
