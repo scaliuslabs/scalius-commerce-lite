@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 197,
-  name: "0197_stock_document_sync_indexes",
+  version: 198,
+  name: "0198_order_event_app_actor",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -766,6 +766,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 197,
     name: "0197_stock_document_sync_indexes",
     sourceSha256: "d2c1d833cc2f38d4c99714d83403fd26ef40aac119be2ba0ff837a83fd9a8668",
+  },
+  {
+    version: 198,
+    name: "0198_order_event_app_actor",
+    sourceSha256: "7e197c9e8e4fa96b60436dbe9c4ba6afe995744965e28b0a46d8000a774e4b70",
   },
 ] as const;
 

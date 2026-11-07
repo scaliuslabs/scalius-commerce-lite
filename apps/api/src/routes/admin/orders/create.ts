@@ -41,7 +41,7 @@ import { adminOrderResourceMutationErrorResponses } from "./shared";
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
-import { requestStaffId } from "../request-actor";
+import { requestActorId, requestStaffId, requireActorId } from "../request-actor";
 
 const app = adminRouter();
 
@@ -205,12 +205,11 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         bodyRequestKey,
         "requestKey",
     );
-    const actingStaffId = requestStaffId(c);
     const result = await confirmManualOrderAmendment(
         c.get("db"),
         c.req.valid("param").id,
         { ...payload, requestKey },
-        actingStaffId,
+        requireActorId(c, "Sign in again to change the order."),
         { appProviders: requestAppProviders(c) },
     );
 
@@ -274,13 +273,13 @@ app.openapi(createOrderRoute, async (c) => {
  */
 export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: CreateOrderInput) {
     const db = c.get("db");
-    const actingStaffId = requestStaffId(c);
+    const actor = requireActorId(c, "Sign in again to place the order.");
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
     const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
     // Mark as paid: placed as an invoice, then paid in full right after.
     const placed = data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
-    const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, actingStaffId, {
+    const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, actor, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
         // Apps and agents invoice only while the store offers invoices; staff always may.
@@ -323,7 +322,8 @@ async function recordPaidOnPlacement(
             id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
             orderId,
             kind: "payment_recorded",
-            actorId: actingStaffId,
+            // An app's line names the app (app:<id>), never its approving admin.
+            actorId: requestActorId(c),
             data: {
                 amount: fromMinor(order.balanceDueMinor, currency.decimalPlaces),
                 via: paid.via,

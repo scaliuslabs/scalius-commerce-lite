@@ -57,7 +57,7 @@ import type { TaxQuote, TaxQuoteCustomer } from "../../tax/browser";
 import type { AppProviders } from "../../../integrations/provider-port";
 import { orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "../../tax";
 import { sha256Hex } from "@scalius/shared/hash";
-import { stableStringify } from "./create-attempts";
+import { requireAttemptPrincipal, stableStringify } from "./create-attempts";
 import { type ManualOrderQuote, type PreparedManualOrderQuote, prepareManualOrderQuote } from "./quote";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 import { type SQLiteBatchItem, updateCustomerStatsService } from "./shared";
@@ -357,12 +357,13 @@ export async function confirmManualOrderAmendment(
     db: Database,
     orderId: string,
     data: ConfirmManualOrderAmendmentInput,
-    actorId: string | null,
+    /** Who confirms it: `app:<id>` for an app, the staff member's id otherwise; it scopes the request key. */
+    actor: string,
     /** The request's app providers (an app tax provider). */
     options: { appProviders?: AppProviders } = {},
 ): Promise<ManualOrderAmendmentResult> {
-    const actorScope = actorId ?? "unknown-admin";
-    const keyHash = await sha256Hex(`${actorScope}:${data.requestKey.trim()}`);
+    const actorId = requireAttemptPrincipal(actor);
+    const keyHash = await sha256Hex(`${actorId}:${data.requestKey.trim()}`);
     const requestHash = await sha256Hex(stableStringify(
         normalizeAmendmentRequest(orderId, data),
     ));

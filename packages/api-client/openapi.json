@@ -28477,6 +28477,11 @@
               "customer"
             ]
           },
+          "actorId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Who wrote the row: `app:<id>` for an app (actorType system), the staff member's id, the customer's id, or null for the system."
+          },
           "actorName": {
             "type": "string",
             "nullable": true
@@ -28500,6 +28505,7 @@
           "orderId",
           "orderNumber",
           "actorType",
+          "actorId",
           "actorName",
           "reason",
           "createdAt"
@@ -218566,6 +218572,11 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "actorId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Who wrote the line: `app:<id>` for an app, the staff member's id for staff, null for the system."
+                              },
                               "own": {
                                 "type": "boolean",
                                 "description": "The viewer wrote this comment and may delete it."
@@ -218581,6 +218592,7 @@
                               "body",
                               "data",
                               "actorName",
+                              "actorId",
                               "own",
                               "createdAt"
                             ]
@@ -218771,6 +218783,11 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "actorId": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Who wrote the line: `app:<id>` for an app, the staff member's id for staff, null for the system."
+                        },
                         "own": {
                           "type": "boolean",
                           "description": "The viewer wrote this comment and may delete it."
@@ -218786,6 +218803,7 @@
                         "body",
                         "data",
                         "actorName",
+                        "actorId",
                         "own",
                         "createdAt"
                       ]

@@ -106,7 +106,7 @@ import {
 } from "./shared";
 import { notificationSender } from "../../../background/notification-sender";
 import { autoFulfilAfterResponse } from "../../../background/auto-fulfil";
-import { requestStaffId } from "../request-actor";
+import { requestActorId, requestStaffId } from "../request-actor";
 
 const app = adminRouter();
 
@@ -295,6 +295,7 @@ const timelineEventSchema = z.object({
     body: z.string().nullable(),
     data: z.record(z.string(), z.unknown()).nullable(),
     actorName: z.string().nullable(),
+    actorId: z.string().nullable().openapi({ description: "Who wrote the line: `app:<id>` for an app, the staff member's id for staff, null for the system." }),
     own: z.boolean().openapi({ description: "The viewer wrote this comment and may delete it." }),
     createdAt: isoTimestampSchema,
 });
@@ -323,9 +324,9 @@ const getTimelineRoute = createRoute({
 });
 
 app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
-    const actingStaffId = requestStaffId(c);
+    // `own` marks the viewer's comments: an app's own (app:<id>) or the staff member's.
     const query = c.req.valid("query");
-    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, actingStaffId, query.cursor, query.limit);
+    const page = await listOrderTimelinePage(c.get("db"), c.req.valid("param").id, requestActorId(c), query.cursor, query.limit);
     return ok(c, { ...page, events: page.events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
 }) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
 
@@ -360,12 +361,12 @@ const addCommentRoute = createRoute({
 });
 
 app.openapi(addCommentRoute, (async (c: AdminRouteContext<typeof addCommentRoute>) => {
-    const actingStaffId = requestStaffId(c);
+    // An app's comment names the app (app:<id>), so it can delete its own.
     const event = await addOrderComment(
         c.get("db"),
         c.req.valid("param").id,
         c.req.valid("json").body,
-        actingStaffId,
+        requestActorId(c),
         c.req.valid("header")["idempotency-key"]
             ? await scopedRequestKey(c, "dashboard.orders.comment_add", c.req.valid("header")["idempotency-key"])
             : undefined,
@@ -390,9 +391,8 @@ const deleteCommentRoute = createRoute({
 });
 
 app.openapi(deleteCommentRoute, (async (c: AdminRouteContext<typeof deleteCommentRoute>) => {
-    const actingStaffId = requestStaffId(c);
     const { id, eventId } = c.req.valid("param");
-    await deleteOrderComment(c.get("db"), id, eventId, actingStaffId);
+    await deleteOrderComment(c.get("db"), id, eventId, requestActorId(c));
     return ok(c, { deleted: true as const });
 }) as unknown as AdminRouteHandler<typeof deleteCommentRoute>);
 
