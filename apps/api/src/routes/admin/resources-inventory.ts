@@ -11,6 +11,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gt, gte, or, sql, type SQL } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import {
   INVENTORY_TRANSFER_STATUSES,
   PURCHASE_ORDER_STATUSES,
@@ -608,6 +609,23 @@ const transferLineInput = z.object({
 }).strict();
 const locationId = (description: string) => z.string().trim().min(1).max(128).openapi({ description });
 
+/**
+ * A location's transfers, from or to it, in (updatedAt, id) order: one walk
+ * of the origin index and one of the destination index (an OR of the two
+ * would sort the table), merged. A transfer has two different locations, so
+ * no id is in both.
+ */
+async function transfersAtLocation(db: Database, locationId: string, condition: SQL | undefined, limit: number): Promise<{ id: string }[]> {
+  const order = updatedOrder(inventoryTransfers.updatedAt, inventoryTransfers.id);
+  const arm = (column: typeof inventoryTransfers.originLocationId) => db.select({ id: inventoryTransfers.id, updatedAt: inventoryTransfers.updatedAt })
+    .from(inventoryTransfers).where(and(eq(column, locationId), condition)).orderBy(...keysetOrderBy(order)).limit(limit);
+  const [from, to] = await db.batch([arm(inventoryTransfers.originLocationId), arm(inventoryTransfers.destinationLocationId)]);
+  return [...from, ...to]
+    .sort((left, right) => left.updatedAt.getTime() - right.updatedAt.getTime() || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+    .slice(0, limit)
+    .map((row) => ({ id: row.id }));
+}
+
 app.openapi(createRoute({
   operationId: "dashboard.resources.inventory_transfers.list",
   method: "get",
@@ -631,7 +649,6 @@ app.openapi(createRoute({
   const db = c.get("db");
   const where: SQL[] = [];
   if (query.status) where.push(eq(inventoryTransfers.status, query.status));
-  if (query.locationId) where.push(or(eq(inventoryTransfers.originLocationId, query.locationId), eq(inventoryTransfers.destinationLocationId, query.locationId))!);
   if (query.updatedSince) where.push(gte(sql`${inventoryTransfers.updatedAt}`, epochSeconds(query.updatedSince)));
   const order = updatedOrder(inventoryTransfers.updatedAt, inventoryTransfers.id);
   const page = await resourcePage({
@@ -639,7 +656,9 @@ app.openapi(createRoute({
     cursor: query.cursor,
     limit: query.limit,
     where,
-    ids: (condition, limit) => db.select({ id: inventoryTransfers.id }).from(inventoryTransfers).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
+    ids: (condition, limit) => query.locationId
+      ? transfersAtLocation(db, query.locationId, condition, limit)
+      : db.select({ id: inventoryTransfers.id }).from(inventoryTransfers).where(condition).orderBy(...keysetOrderBy(order)).limit(limit).all(),
     load: (ids) => readInventoryTransferRepresentations(db, ids),
   });
   return ok(c, { transfers: page.items, nextCursor: page.nextCursor });

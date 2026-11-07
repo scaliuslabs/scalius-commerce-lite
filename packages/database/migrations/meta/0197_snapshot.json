@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "45dbbe4f-7970-4362-9b4a-597364af5f65",
+  "id": "d360beb5-8e1b-4c02-80ec-9bbb31390f79",
   "prevId": "3a7883db-302d-4305-a165-6a1bab0b8a1b",
   "tables": {
     "account": {
@@ -18405,6 +18405,24 @@
             "id"
           ],
           "isUnique": false
+        },
+        "inventory_transfers_origin_updated_idx": {
+          "name": "inventory_transfers_origin_updated_idx",
+          "columns": [
+            "origin_location_id",
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        },
+        "inventory_transfers_destination_updated_idx": {
+          "name": "inventory_transfers_destination_updated_idx",
+          "columns": [
+            "destination_location_id",
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -19154,6 +19172,24 @@
           "name": "purchase_orders_status_updated_idx",
           "columns": [
             "status",
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        },
+        "purchase_orders_supplier_updated_idx": {
+          "name": "purchase_orders_supplier_updated_idx",
+          "columns": [
+            "supplier_id",
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        },
+        "purchase_orders_destination_updated_idx": {
+          "name": "purchase_orders_destination_updated_idx",
+          "columns": [
+            "destination_location_id",
             "updated_at",
             "id"
           ],
@@ -21941,6 +21977,23 @@
             "priority",
             "id",
             "starts_at"
+          ],
+          "isUnique": false
+        },
+        "promotions_updated_idx": {
+          "name": "promotions_updated_idx",
+          "columns": [
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        },
+        "promotions_status_updated_idx": {
+          "name": "promotions_status_updated_idx",
+          "columns": [
+            "status",
+            "updated_at",
+            "id"
           ],
           "isUnique": false
         }

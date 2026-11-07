@@ -765,7 +765,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 197,
     name: "0197_stock_document_sync_indexes",
-    sourceSha256: "e35deb554bbc8ec59a049eddf1f4bead3c8df166206b9bf3f5428a4a6198e9dd",
+    sourceSha256: "d2c1d833cc2f38d4c99714d83403fd26ef40aac119be2ba0ff837a83fd9a8668",
   },
 ] as const;
 

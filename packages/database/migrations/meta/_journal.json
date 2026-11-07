@@ -1384,7 +1384,7 @@
     {
       "idx": 197,
       "version": "6",
-      "when": 1793954247298,
+      "when": 1794018849040,
       "tag": "0197_stock_document_sync_indexes",
       "breakpoints": true
     }
