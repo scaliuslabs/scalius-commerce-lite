@@ -1,4 +1,6 @@
 import { InlineError } from "~/components/admin/states/InlineError";
+import { useActorText } from "~/components/admin/shared/ActorName";
+import { consentEventActor } from "~/lib/actor";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -76,11 +78,9 @@ function ChannelStatus({ consent }: { consent: CustomerConsent }) {
 function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
   const t = useMessages(customerMarketingMessages);
   const c = useMessages(customerPageMessages);
-  const actor = event.actor === "staff"
-    ? event.actorName ? t("eventByStaff", { name: event.actorName }) : t("eventByStaffUnknown")
-    : event.actor === "buyer"
-      ? t("eventByBuyer")
-      : event.actor === "plugin" ? t("eventByApp", { name: event.actorName ?? "" }) : t("eventBySystem");
+  const who = consentEventActor(event);
+  const actorText = useActorText(who === "buyer" ? null : who);
+  const actor = who === "buyer" ? t("eventByBuyer") : t("eventBy", { name: actorText(who) });
   return (
     <li className="text-body">
       <p>

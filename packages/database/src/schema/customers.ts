@@ -208,8 +208,11 @@ export const customerHistory = sqliteTable("customer_history", {
     relatedCustomerId: text("related_customer_id"),
     /** The proven contact behind signed_up / order_linked / order_moved_*. */
     verifiedContact: text("verified_contact", { enum: ["email", "phone"] }),
-    /** Who made the change: a staff member (actor_id is their user id), the buyer, or the system. */
-    actor: text("actor", { enum: ["staff", "buyer", "system"] }),
+    /**
+     * Who made the change: a staff member (actor_id is their user id), an app
+     * (actor_id is `app:<plugin id>`), the buyer, or the system.
+     */
+    actor: text("actor", { enum: ["staff", "app", "buyer", "system"] }),
     actorId: text("actor_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()

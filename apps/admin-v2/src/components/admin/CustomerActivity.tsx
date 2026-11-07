@@ -1,4 +1,5 @@
 import { InlineError } from "~/components/admin/states/InlineError";
+import { useActorText } from "~/components/admin/shared/ActorName";
 import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -16,6 +17,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
+import { customerChangeAuthor, type Actor } from "~/lib/actor";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { shownText } from "~/lib/erased-text";
 
@@ -61,14 +63,21 @@ const CHANGE_LABEL: Partial<Record<string, CustomerMessage>> = {
   restored: "changeRestored",
 };
 
+/** Who made a change, unless it was the buyer (their changes are worded apart) or nobody recorded. */
+function changeActor(author: HistoryEntry["author"]): Actor | null {
+  const actor = author ? customerChangeAuthor(author) : null;
+  return actor === "buyer" ? null : actor;
+}
+
 /** A Super Admin erased the customer's personal data: one line with who did it. */
 function ErasedEvent({ entry }: { entry: HistoryEntry }) {
   const t = useMessages(customerPageMessages);
-  const name = entry.author?.kind === "staff" ? entry.author.name : null;
+  const actor = changeActor(entry.author);
+  const actorText = useActorText(actor);
   return (
     <li className="text-body">
       <p>
-        <span className="font-medium">{name ? t("changeErasedBy", { name }) : t("changeErased")}</span>
+        <span className="font-medium">{actor ? t("changeErasedBy", { name: actorText(actor) }) : t("changeErased")}</span>
         <span className="text-muted-foreground"> · {when(entry.createdAt)}</span>
       </p>
     </li>
@@ -133,16 +142,13 @@ function SamePhone({ customer }: { customer: CustomerFacts }) {
   return <p className="text-body text-muted-foreground">{withLinks(t("samePhoneAs"), { names })}</p>;
 }
 
-/** " · by Nasrin", " · by the buyer", " · automatic"; nothing for older entries without an author. */
+/** " · by Nasrin", " · by Gift Notes", " · by the buyer", " · by System"; nothing for older entries without an author. */
 function Author({ author }: { author: HistoryEntry["author"] }) {
   const t = useMessages(customerPageMessages);
+  const actor = changeActor(author);
+  const actorText = useActorText(actor);
   if (!author) return null;
-  const text = author.kind === "buyer"
-    ? t("byBuyer")
-    : author.kind === "system"
-      ? t("automatic")
-      : author.name ? t("byStaff", { name: author.name }) : t("byStaffUnknown");
-  return <> · {text}</>;
+  return <> · {actor ? t("byActor", { name: actorText(actor) }) : t("byBuyer")}</>;
 }
 
 /** One line for a sign-up, or an order linked to, moved into or moved out of this record. */

@@ -21618,6 +21618,15 @@
                 "actorName": {
                   "type": "string"
                 },
+                "actorType": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "admin",
+                    "former_admin",
+                    "app"
+                  ]
+                },
                 "lines": {
                   "type": "array",
                   "items": {
@@ -21667,6 +21676,7 @@
                 "operationKey",
                 "createdAt",
                 "actorName",
+                "actorType",
                 "lines"
               ]
             }
@@ -21928,6 +21938,15 @@
                 "actorName": {
                   "type": "string"
                 },
+                "actorType": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "admin",
+                    "former_admin",
+                    "app"
+                  ]
+                },
                 "lines": {
                   "type": "array",
                   "items": {
@@ -21964,6 +21983,7 @@
                 "kind",
                 "createdAt",
                 "actorName",
+                "actorType",
                 "lines"
               ]
             }
@@ -129748,6 +129768,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "appId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "note": {
                                 "type": "string",
                                 "nullable": true
@@ -129780,6 +129804,7 @@
                               "source",
                               "actor",
                               "actorName",
+                              "appId",
                               "note",
                               "contact",
                               "consentTextVersion",
@@ -130142,6 +130167,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "appId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "note": {
                                 "type": "string",
                                 "nullable": true
@@ -130174,6 +130203,7 @@
                               "source",
                               "actor",
                               "actorName",
+                              "appId",
                               "note",
                               "contact",
                               "consentTextVersion",
@@ -134899,6 +134929,7 @@
                                     "type": "string",
                                     "enum": [
                                       "staff",
+                                      "app",
                                       "buyer",
                                       "system"
                                     ]
@@ -134906,11 +134937,16 @@
                                   "name": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "appId": {
+                                    "type": "string",
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
                                   "kind",
-                                  "name"
+                                  "name",
+                                  "appId"
                                 ]
                               },
                               "order": {
@@ -177751,6 +177787,11 @@
                             "theme": {
                               "$ref": "#/components/schemas/StorefrontThemeDocument"
                             },
+                            "updatedBy": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 160
+                            },
                             "updatedByName": {
                               "type": "string",
                               "nullable": true,
@@ -177762,6 +177803,7 @@
                             "basePublishedRevision",
                             "updatedAt",
                             "theme",
+                            "updatedBy",
                             "updatedByName"
                           ]
                         },

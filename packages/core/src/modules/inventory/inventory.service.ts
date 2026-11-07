@@ -19,7 +19,7 @@ import {
 const availableStockSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;
 import { adjustInventorySchema } from "./inventory.validation";
 import { executeInventoryOperation, type InventoryReadAfter } from "./inventory-operations";
-import { commandActorName } from "./stock-commands";
+import { commandActorName, commandActorType } from "./stock-commands";
 import { locationOnHandSql } from "./locations";
 import { incomingUnitsSql } from "./inventory-insights";
 
@@ -253,13 +253,7 @@ export async function listInventoryMovements(db: Database, params: {
         ...movementLocationCounts(operationPayload, row.locationId),
         // An app's stock write names the app (`app:<id>`), never a removed admin.
         actorName: commandActorName(row.createdBy, actorDisplayName),
-        actorType: !row.createdBy
-            ? "system" as const
-            : row.createdBy.startsWith("app:")
-                ? "app" as const
-                : actorDisplayName
-                    ? "admin" as const
-                    : "former_admin" as const,
+        actorType: commandActorType(row.createdBy, actorDisplayName),
     }));
     const last = pageRows.at(-1);
 

@@ -4431,6 +4431,7 @@ export type PurchaseOrder = {
         operationKey: string;
         createdAt: string | number;
         actorName: string;
+        actorType: 'system' | 'admin' | 'former_admin' | 'app';
         lines: Array<{
             lineId: string;
             variantId: string;
@@ -4512,6 +4513,7 @@ export type InventoryTransfer = {
         kind: 'ship' | 'receive' | 'return';
         createdAt: string | number;
         actorName: string;
+        actorType: 'system' | 'admin' | 'former_admin' | 'app';
         lines: Array<{
             lineId: string;
             variantId: string;
@@ -35863,6 +35865,7 @@ export type GetApiV1AdminCustomersByIdMarketingResponses = {
                 source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
                 actor: 'buyer' | 'staff' | 'plugin' | 'system';
                 actorName: string | null;
+                appId: string | null;
                 note: string | null;
                 contact: string;
                 consentTextVersion: string | null;
@@ -35946,6 +35949,7 @@ export type PutApiV1AdminCustomersByIdMarketingResponses = {
                 source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
                 actor: 'buyer' | 'staff' | 'plugin' | 'system';
                 actorName: string | null;
+                appId: string | null;
                 note: string | null;
                 contact: string;
                 consentTextVersion: string | null;
@@ -37394,8 +37398,9 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 changeType: string;
                 verifiedContact: 'email' | 'phone' | null;
                 author: {
-                    kind: 'staff' | 'buyer' | 'system';
+                    kind: 'staff' | 'app' | 'buyer' | 'system';
                     name: string | null;
+                    appId: string | null;
                 } | null;
                 order: {
                     id: string;
@@ -50347,6 +50352,7 @@ export type GetApiV1AdminSettingsThemeEditorResponses = {
                 basePublishedRevision: number;
                 updatedAt: string | null;
                 theme: StorefrontThemeDocument;
+                updatedBy: string | null;
                 updatedByName: string | null;
             };
             draftDiffersFromLive: boolean;

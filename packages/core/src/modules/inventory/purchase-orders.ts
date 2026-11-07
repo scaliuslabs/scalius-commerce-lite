@@ -41,7 +41,7 @@ import { inventoryOperationKeySchema } from "./inventory.validation";
 import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
-import { addedQuantitySql, commandActorName, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, commandActorName, commandActorType, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type CommandActorType, type StockCommandEdge } from "./stock-commands";
 import { unitCostAmountSchema, unitCostToMinor } from "./unit-costs";
 import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 
@@ -170,6 +170,8 @@ export interface PurchaseOrderReceiptView {
   operationKey: string;
   createdAt: Date;
   actorName: string;
+  /** Which kind of actor `actorName` names (an app's is its id). */
+  actorType: CommandActorType;
   lines: Array<{
     lineId: string;
     variantId: string;
@@ -392,6 +394,7 @@ export async function getPurchaseOrder(db: Database, id: string): Promise<Purcha
         operationKey: row.operationKey,
         createdAt: row.createdAt,
         actorName: commandActorName(row.createdBy, row.actorName),
+        actorType: commandActorType(row.createdBy, row.actorName),
         lines: [],
       };
       receipts.push(receipt);

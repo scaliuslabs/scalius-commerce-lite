@@ -37,7 +37,7 @@ import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../prod
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { blankToNull, dateOnlySchema, optionalTextSchema, parseInventoryInput } from "./validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
-import { addedQuantitySql, commandActorName, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
+import { addedQuantitySql, commandActorName, commandActorType, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type CommandActorType, type StockCommandEdge } from "./stock-commands";
 
 export const INVENTORY_TRANSFER_MAX_LINES = 100;
 export const INVENTORY_TRANSFER_OPEN_STATUSES = ["in_transit", "partially_received"] as const satisfies readonly InventoryTransferStatus[];
@@ -163,6 +163,8 @@ export interface TransferActivityView {
   kind: InventoryTransferMovementKind;
   createdAt: Date;
   actorName: string;
+  /** Which kind of actor `actorName` names (an app's is its id). */
+  actorType: CommandActorType;
   lines: Array<{ lineId: string; variantId: string; sku: string; quantity: number; locationId: string }>;
 }
 
@@ -358,6 +360,7 @@ export async function getTransfer(db: Database, id: string): Promise<TransferDet
         kind: row.kind,
         createdAt: row.createdAt,
         actorName: commandActorName(row.createdBy, row.actorName),
+        actorType: commandActorType(row.createdBy, row.actorName),
         lines: [],
       };
       activity.push(entry);

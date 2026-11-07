@@ -27,11 +27,13 @@ import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useActorText } from "~/components/admin/shared/ActorName";
 import { formatDateTime, getLocale, useMessages } from "~/i18n";
 import { formatList } from "@scalius/shared/locale-words";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorFull } from "~/i18n/theme-editor-panes";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
+import { themePublisher } from "~/lib/actor";
 import { apiData } from "~/lib/api";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { OnlineStorePage, SectionCard, actionErrorText } from "./shared";
@@ -125,6 +127,7 @@ function ThemeOverview({ workspace, refetch }: {
 }) {
   const t = useMessages(onlineStoreMessages);
   const editor = useMessages(themeEditorFull);
+  const actorText = useActorText(workspace.lastPublished ? themePublisher(workspace.lastPublished) : null);
   const queryClient = useQueryClient();
   const openPreview = useOpenThemePreview();
   // Staff who may view settings but not edit them see the theme, preview it and open the editor read-only.
@@ -223,7 +226,7 @@ function ThemeOverview({ workspace, refetch }: {
               {workspace.lastPublished ? (
                 <p className="text-body text-muted-foreground">
                   {editor("lastPublished", {
-                    name: workspace.lastPublished.publishedByName ?? editor("unknownAuthor"),
+                    name: actorText(themePublisher(workspace.lastPublished)),
                     time: formatDateTime(new Date(workspace.lastPublished.createdAt), { dateStyle: "medium", timeStyle: "short" }),
                   })}
                 </p>

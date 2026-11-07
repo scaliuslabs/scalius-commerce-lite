@@ -17,9 +17,13 @@ export interface TimelineLine {
 const text = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
 const count = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 
-/** Words every timeline kind; `money` formats a major-unit amount in the order's currency. */
+/**
+ * Words every timeline kind; `money` formats a major-unit amount in the
+ * order's currency, and `actor` is who wrote the line, already worded
+ * (`timelineActor`, lib/actor.ts), when it names anyone.
+ */
 export function describeTimelineEvent(
-  event: Pick<OrderTimelineEvent, "kind" | "body" | "data"> & { actorName?: string | null },
+  event: Pick<OrderTimelineEvent, "kind" | "body" | "data"> & { actor?: string | null },
   t: DetailT,
   o: OrderT,
   money: (amount: number) => string,
@@ -28,8 +32,8 @@ export function describeTimelineEvent(
   const body = text(event.body);
   switch (event.kind) {
     case "placed": {
-      // A manual order names the staff member who created it; a storefront order has no actor.
-      const actor = text(event.actorName);
+      // A manual order names whoever created it (a staff member or an app); a storefront order has no actor.
+      const actor = text(event.actor);
       return { text: actor ? t("timeline.createdBy", { name: actor }) : t("timeline.placed"), detail: null };
     }
     case "comment":

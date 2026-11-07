@@ -257,7 +257,9 @@ const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
   receipts: z.array(z.object({
     operationKey: z.string(),
     createdAt: timestampSchema,
+    /** The staff member's name, an app's id, "Former admin" or "System": `actorType` says which. */
     actorName: z.string(),
+    actorType: z.enum(["system", "admin", "former_admin", "app"]),
     lines: z.array(z.object({
       lineId: z.string(),
       variantId: z.string(),
@@ -522,7 +524,9 @@ const transferDetailSchema = transferSummarySchema.extend({
     operationKey: z.string(),
     kind: z.enum(INVENTORY_TRANSFER_MOVEMENT_KINDS),
     createdAt: timestampSchema,
+    /** The staff member's name, an app's id, "Former admin" or "System": `actorType` says which. */
     actorName: z.string(),
+    actorType: z.enum(["system", "admin", "former_admin", "app"]),
     lines: z.array(z.object({ lineId: z.string(), variantId: z.string(), sku: z.string(), quantity: z.number().int(), locationId: z.string() })),
   })),
 });
