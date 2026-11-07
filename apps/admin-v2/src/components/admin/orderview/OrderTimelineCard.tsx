@@ -94,7 +94,7 @@ function OrderTimeline({ order }: { order: Order }) {
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : fmt(amount));
   const events = query.data?.pages.flatMap((page) => page.events) ?? [];
   // `actorId` (`app:<id>` for an app) is optional until every API sends it: without it a line names its staff author only.
-  const actors = new Map(events.map((event) => [event.id, timelineActor(event as typeof event & { actorId?: string | null })]));
+  const actors = new Map(events.map((event) => [event.id, timelineActor(event)]));
   const actorText = useActorText([...actors.values()]);
   const actorOf = (id: string) => {
     const actor = actors.get(id);
