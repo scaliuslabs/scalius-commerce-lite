@@ -23,11 +23,15 @@
 //   late, twice or out of order: an `order.paid` that runs before
 //   `order.created` has written anything writes the coverage itself. A
 //   refund and a return of the same units count once (the larger of the
-//   two ends the units).
+//   two ends the units). An order's first read marks whether it has a plan
+//   (`ctx.kv`, 30 days); a later event of an order marked without one reads
+//   nothing, so orders without plans cost one API call each.
 // - Offering plans on a page of products writes the app's flag on each.
 //   One run makes at most 50 platform calls on Free, so up to 45 products
-//   are written at once and a larger selection continues in a background
-//   job (`set_eligible`), 45 products a step.
+//   are written at once and a larger selection waits in a queue a
+//   background job (`set_eligible`) writes, 43 products a step. Each action
+//   takes its products out of every older one in the queue, so the
+//   merchant's last action on a product wins, whatever order steps run in.
 import {
   adminContext,
   adminLocale,
@@ -53,7 +57,7 @@ export type PlanId = keyof typeof PLANS;
 export const manifest = defineManifest({
   id: APP_ID,
   name: "Protection Plans",
-  version: "1.1.1",
+  version: "1.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Sell one- and two-year protection plans on the products you choose, priced as a share of the item, with a coverage record for every plan sold.",
   author: { name: "Scalius Labs" },
@@ -288,17 +292,28 @@ async function listAll<T>(ctx: Context, operation: "refunds.list" | "returns.lis
   return items;
 }
 
+/** What an order's first read found: whether it has a plan. Kept 30 days; a missing mark reads the order again. */
+export const orderMarkKey = (orderId: string) => `order:${orderId}`;
+const ORDER_MARK_TTL_SECONDS = 30 * 24 * 60 * 60;
+type OrderMark = "plan" | "none";
+
 /**
  * Recomputes the order's coverages from what it says now and writes them,
- * keyed by order line, in batches of 25. Every event does this, its first
- * included: an event may run before the order's `order.created` has written
- * anything, so none relies on a coverage already being there.
+ * keyed by order line, in batches of 25. No event relies on a coverage
+ * already being there: an event may run before the order's `order.created`.
+ * `order.created` always reads the order; a later event reads it only when
+ * the order has, or may have, a plan: not when its first read marked it
+ * without one. Orders without plans then cost one API call in all, so a busy
+ * store stays far inside the app's 60 API calls a minute.
  */
-export async function syncCoverages(ctx: Context, orderId: string): Promise<number> {
+export async function syncCoverages(ctx: Context, orderId: string, created = false): Promise<number> {
+  if (!created && await ctx.kv.get<OrderMark>(orderMarkKey(orderId)) === "none") return 0;
   const read = await ctx.api.call<{ order: OrderRead }>("orders.get", { path: { id: orderId } });
   if (!read.ok || !read.data?.order) throw new Error(`orders.get failed: ${read.error?.code ?? read.status}`);
   const order = read.data.order;
-  if (coveragesOf(order).length === 0) return 0;
+  const hasPlan = coveragesOf(order).length > 0;
+  await ctx.kv.set(orderMarkKey(orderId), (hasPlan ? "plan" : "none") satisfies OrderMark, { ttlSeconds: ORDER_MARK_TTL_SECONDS });
+  if (!hasPlan) return 0;
   const [refunds, returns] = await Promise.all([
     listAll<RefundRead>(ctx, "refunds.list", "refunds", orderId),
     listAll<ReturnRead>(ctx, "returns.list", "returns", orderId),
@@ -313,12 +328,18 @@ export async function syncCoverages(ctx: Context, orderId: string): Promise<numb
 }
 
 /**
- * Flags one run writes: inside the 50 platform calls of a Free run, with room
- * for the job's start. A larger selection continues in the `set_eligible` job.
+ * Flags a route writes at once: inside the 50 platform calls of a Free run
+ * with the queue read. A larger selection, or one that touches a product
+ * still queued, goes to the queue the `set_eligible` job writes.
  */
 export const FLAGS_PER_RUN = 45;
+/** Flags one job step writes: with its queue read and up to three saves, inside 50. */
+export const FLAGS_PER_STEP = 43;
+/** Products the queue holds at most (well inside a 64 KiB key-value entry). */
+export const MAX_QUEUED_PRODUCTS = 1_500;
 /** How many flag writes run at once. */
 const FLAG_WRITES_AT_ONCE = 15;
+const QUEUE_KEY = "flag-queue";
 
 async function writeFlags(ctx: Context, ids: readonly string[], offer: boolean): Promise<void> {
   for (let start = 0; start < ids.length; start += FLAG_WRITES_AT_ONCE) {
@@ -326,14 +347,66 @@ async function writeFlags(ctx: Context, ids: readonly string[], offer: boolean):
   }
 }
 
-/** The `set_eligible` job's input: the products and whether plans are offered on them. */
-interface FlagJobInput { ids: string[]; offer: boolean }
+/** One merchant action not yet written: its products and whether it offers plans. */
+export interface FlagIntent { seq: number; ids: string[]; offer: boolean }
+/** Flag changes waiting for the job, oldest first. A product is in at most one intent. */
+export interface FlagQueue { seq: number; intents: FlagIntent[] }
+export const EMPTY_QUEUE: FlagQueue = { seq: 0, intents: [] };
 
-function flagJobInput(value: unknown): FlagJobInput | null {
-  const input = value as Partial<FlagJobInput> | null;
-  return input && Array.isArray(input.ids) && input.ids.every((id) => typeof id === "string") && typeof input.offer === "boolean"
-    ? { ids: input.ids, offer: input.offer }
-    : null;
+function flagQueue(value: unknown): FlagQueue {
+  const queue = value as Partial<FlagQueue> | null;
+  return queue && typeof queue.seq === "number" && Array.isArray(queue.intents) ? { seq: queue.seq, intents: queue.intents } : EMPTY_QUEUE;
+}
+
+/** The queue after a new action: its products leave every older intent, so its intent is the one that stands. */
+export function enqueueFlags(queue: FlagQueue, ids: readonly string[], offer: boolean): FlagQueue {
+  const latest = new Set(ids);
+  const seq = queue.seq + 1;
+  const older = queue.intents
+    .map((intent) => ({ ...intent, ids: intent.ids.filter((id) => !latest.has(id)) }))
+    .filter((intent) => intent.ids.length > 0);
+  return { seq, intents: [...older, { seq, ids: [...latest], offer }] };
+}
+
+/** The writes of the queue's head, oldest intent first, at most `limit` products. */
+export function nextFlagWrites(queue: FlagQueue, limit: number): FlagIntent[] {
+  const writes: FlagIntent[] = [];
+  let left = limit;
+  for (const intent of queue.intents) {
+    if (left === 0) break;
+    const ids = intent.ids.slice(0, left);
+    writes.push({ ...intent, ids });
+    left -= ids.length;
+  }
+  return writes;
+}
+
+/** The queue after `written`: each product leaves the intent it was written for, if it is still in it. */
+export function afterFlagWrites(queue: FlagQueue, written: readonly FlagIntent[]): FlagQueue {
+  const done = new Map(written.map((intent) => [intent.seq, new Set(intent.ids)]));
+  return {
+    seq: queue.seq,
+    intents: queue.intents
+      .map((intent) => ({ ...intent, ids: intent.ids.filter((id) => !done.get(intent.seq)?.has(id)) }))
+      .filter((intent) => intent.ids.length > 0),
+  };
+}
+
+const queuedCount = (queue: FlagQueue) => queue.intents.reduce((sum, intent) => sum + intent.ids.length, 0);
+const isKvConflict = (error: unknown) => (error as { code?: unknown }).code === "kv_conflict";
+
+/** Starts the queue's job when none is running (a running job reads every intent before it finishes). */
+async function ensureFlagJob(ctx: Context, queueWasEmpty: boolean): Promise<void> {
+  if (!queueWasEmpty) {
+    const running = await ctx.jobs.list({ name: "set_eligible", limit: 5 });
+    if (running.some((job) => job.status === "running")) return;
+  }
+  try {
+    await ctx.jobs.start("set_eligible");
+  } catch (error) {
+    // A job still running reads the queue: the change is not lost.
+    if ((error as { code?: unknown }).code !== "jobs_limit") throw error;
+  }
 }
 
 const COPY = {
@@ -434,7 +507,7 @@ export default definePlugin({
 
   // Each event recomputes the order's coverages from the order as it is now, in whatever order the events come.
   events: {
-    "order.created": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
+    "order.created": async (event, ctx) => { await syncCoverages(ctx, event.resource.id, true); },
     "order.paid": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
     "order.cancelled": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
     "order.refunded": async (event, ctx) => { await syncCoverages(ctx, event.resource.id); },
@@ -444,14 +517,27 @@ export default definePlugin({
   },
 
   jobs: {
-    // FLAGS_PER_RUN products a step; a repeated step writes the same flags again.
-    set_eligible: async (ctx: Context, job) => {
-      const input = flagJobInput(job.input);
-      if (!input) return { done: true, message: "Nothing to save." };
-      const next = typeof (job.state as { next?: unknown } | null)?.next === "number" ? (job.state as { next: number }).next : 0;
-      const end = Math.min(input.ids.length, next + FLAGS_PER_RUN);
-      await writeFlags(ctx, input.ids.slice(next, end), input.offer);
-      return { state: { next: end }, progress: { done: end, total: input.ids.length }, done: end >= input.ids.length };
+    // Writes the queue's head, FLAGS_PER_STEP products a step, then takes them out of the queue with a
+    // compare-and-set: an action queued meanwhile has already moved its products to its own intent.
+    // A repeated step reads the queue again and writes the same flags again.
+    set_eligible: async (ctx: Context) => {
+      let current = await ctx.kv.getVersion<FlagQueue>(QUEUE_KEY);
+      const writes = nextFlagWrites(flagQueue(current?.value), FLAGS_PER_STEP);
+      if (writes.length === 0) return { done: true };
+      for (const intent of writes) await writeFlags(ctx, intent.ids, intent.offer);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const next = afterFlagWrites(flagQueue(current?.value), writes);
+        try {
+          await ctx.kv.compareAndSet(QUEUE_KEY, current?.revision ?? null, next);
+          const left = queuedCount(next);
+          return { progress: { done: writes.reduce((sum, intent) => sum + intent.ids.length, 0), total: left + writes.reduce((sum, intent) => sum + intent.ids.length, 0) }, done: left === 0 };
+        } catch (error) {
+          if (!isKvConflict(error)) throw error;
+          current = await ctx.kv.getVersion<FlagQueue>(QUEUE_KEY);
+        }
+      }
+      // Still contended: the step repeats, writing the same flags.
+      throw new Error("The flag queue kept changing; the step runs again.");
     },
   },
 
@@ -481,18 +567,28 @@ export default definePlugin({
         const body = (request.body ?? {}) as { offer?: unknown };
         const offer = action === "offer_plans" || (action === null && body.offer === true);
         if (ids.length === 0) return { status: 422, body: ui.result({ toast: { message: copy.select, tone: "critical" } }) };
-        if (ids.length <= FLAGS_PER_RUN) {
-          await writeFlags(ctx, ids, offer);
-          return { body: ui.result({ toast: copy.saved.replace("{n}", String(ids.length)), refresh: true }) };
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const current = await ctx.kv.getVersion<FlagQueue>(QUEUE_KEY);
+          const queue = flagQueue(current?.value);
+          const queued = new Set(queue.intents.flatMap((intent) => intent.ids));
+          // Nothing queued touches these products: written now, and a later action still wins.
+          if (ids.length <= FLAGS_PER_RUN && !ids.some((id) => queued.has(id))) {
+            await writeFlags(ctx, ids, offer);
+            return { body: ui.result({ toast: copy.saved.replace("{n}", String(ids.length)), refresh: true }) };
+          }
+          const next = enqueueFlags(queue, ids, offer);
+          if (queuedCount(next) > MAX_QUEUED_PRODUCTS) return { status: 409, body: ui.result({ toast: { message: copy.busy, tone: "critical" } }) };
+          try {
+            await ctx.kv.compareAndSet(QUEUE_KEY, current?.revision ?? null, next);
+          } catch (error) {
+            if (isKvConflict(error)) continue;
+            throw error;
+          }
+          // The job writes the queue a step at a time, starting right after this answer.
+          await ensureFlagJob(ctx, queue.intents.length === 0);
+          return { body: ui.result({ toast: copy.saving.replace("{n}", String(ids.length)), refresh: true }) };
         }
-        // More than one run writes: the job writes them, a step at a time, starting right after this answer.
-        try {
-          await ctx.jobs.start("set_eligible", { input: { ids: [...ids], offer } satisfies FlagJobInput });
-        } catch (error) {
-          if ((error as { code?: unknown }).code !== "jobs_limit") throw error;
-          return { status: 409, body: ui.result({ toast: { message: copy.busy, tone: "critical" } }) };
-        }
-        return { body: ui.result({ toast: copy.saving.replace("{n}", String(ids.length)), refresh: true }) };
+        return { status: 409, body: ui.result({ toast: { message: copy.busy, tone: "critical" } }) };
       },
       order_coverage: async (request, ctx: Context) => {
         const copy = COPY[adminLocale(request)];
