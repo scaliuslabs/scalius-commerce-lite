@@ -160,7 +160,7 @@ const inventoryMovementSchema = z.object({
     optionLabel: z.string().nullable(),
     productName: z.string().nullable(),
     actorName: z.string(),
-    actorType: z.enum(["system", "admin", "former_admin"]),
+    actorType: z.enum(["system", "admin", "former_admin", "app"]),
 }).passthrough();
 
 const inventoryMovementPageInfoSchema = z.object({
