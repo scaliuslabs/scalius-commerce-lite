@@ -154754,7 +154754,8 @@
                                 "enum": [
                                   "system",
                                   "admin",
-                                  "former_admin"
+                                  "former_admin",
+                                  "app"
                                 ]
                               }
                             },

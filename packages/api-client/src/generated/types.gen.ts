@@ -43490,7 +43490,7 @@ export type GetApiV1AdminInventoryResponses = {
                 optionLabel: string | null;
                 productName: string | null;
                 actorName: string;
-                actorType: 'system' | 'admin' | 'former_admin';
+                actorType: 'system' | 'admin' | 'former_admin' | 'app';
                 [key: string]: unknown;
             }>;
             alerts?: Array<{
