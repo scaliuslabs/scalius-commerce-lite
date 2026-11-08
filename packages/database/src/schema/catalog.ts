@@ -300,7 +300,7 @@ export const PRODUCT_BUNDLE_DISCOUNT_TYPES = ["percentage", "fixed_price"] as co
 
 /**
  * Quantity tiers ("2 for 10% off", "3 for 900"). Checkout prices them with
- * the shared pricing engine, so every change bumps the checkout authority.
+ * the shared pricing engine, so every change advances the product's checkout fence.
  */
 export const productBundles = sqliteTable("product_bundles", {
     id: text("id").primaryKey(),

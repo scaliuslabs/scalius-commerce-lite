@@ -633,7 +633,7 @@ app.openapi(createOrderRoute, async (c) => {
       createTrustedStorefrontCheckoutPolicySnapshot({
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         partialPaymentAmount: checkoutSettings.partialPaymentAmount,
-        authorityRevision: checkoutAuthority.authorityRevision,
+        authorityFence: checkoutAuthority.authorityFence,
         orderCreatedNotificationEnabled:
           checkoutAuthority.sideEffects.orderCreatedNotification,
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,

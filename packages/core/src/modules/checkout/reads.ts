@@ -30,7 +30,7 @@ import type { StorefrontCartItemIssue, StorefrontCartValidationItem } from "./ca
 import { ValidationError } from "@scalius/core/errors";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
-    assertStorefrontCheckoutAuthorityRevision,
+    assertStorefrontCheckoutFenceUnchanged,
     type StorefrontCheckoutAuthorityInput,
     type StorefrontCheckoutAuthoritySnapshot,
 } from "./authority";
@@ -114,7 +114,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
         { ...options, apps: () => reads.apps, beforePrepare: undefined },
         () => ({ linePricer: () => linePricer }),
     );
-    // The frozen market belongs to the first authority revision. Never accept
+    // The frozen market belongs to the first read's fence. Never accept
     // newer policy/catalog facts while retaining an older market or FX rate.
     if (again.existingAttempt) return again;
     return {
@@ -127,7 +127,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
             } catch (error) {
                 throw transform ? remapTransformedIssues(error, transform, buyerItems) : error;
             }
-            assertStorefrontCheckoutAuthorityRevision(snapshot.authorityRevision, first.authorityRevision);
+            assertStorefrontCheckoutFenceUnchanged(snapshot.authorityFence, first.authorityFence);
             if (!transform) return snapshot;
             const buyerView = presentTransformedCart(snapshot.cartValidation, transform, buyerItems);
             if (!buyerView.valid) {

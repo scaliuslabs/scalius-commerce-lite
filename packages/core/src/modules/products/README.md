@@ -52,7 +52,7 @@ This domain reads and defines. [`product-admin`](../product-admin/README.md) wri
 - Money is integer minor units. `presentCatalogPrice` converts to decimal once, at the edge. A staff read of a SKU row adds `cost`. Buyer reads never carry it.
 - A digital SKU's stock is its licence keys. Every manual stock path refuses to change it (`details.reason = "digital_stock_is_keys"`). A SKU turns digital only with no stock, and a digital SKU with a ready key pool keeps tracking.
 - A gift-card product has only digital, untracked, undiscounted SKUs and no bundles. Every aggregate batch ends with `buildGiftCardProductRulesGuard`.
-- Customization allows at most 10 fields. Bundle tiers need a quantity from 2 to 100. A customization change advances the aggregate revision and fences in-flight checkouts. Triggers on `product_bundles` bump `checkout_authority` on every insert, price-relevant update and delete.
+- Customization allows at most 10 fields. Bundle tiers need a quantity from 2 to 100. A customization change advances the aggregate revision and fences in-flight checkouts. Triggers on `product_bundles` advance the product's checkout fence on every insert, price-relevant update and delete.
 - The EMI line is informational. It shows only when the `emi` document is enabled, the product is `emi_eligible` and a plan applies.
 
 ## Catalogue projections

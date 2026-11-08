@@ -26,7 +26,7 @@ The SQL that buyer reads fold into their own statements is a product fact and li
 - The database holds the rule when both sides run at once (migration 0183): unlinking a live channel's last active location or archiving it aborts with `SALES_CHANNEL_LOCATION_REQUIRED`. `updateSalesChannel` links before it unlinks, so the check sees the final set, and answers a location archived meanwhile with a 409 (`details.reason = "location_archived"`); the archive then names the channels as above.
 - `resolveStaffOrderSalesChannel`: an active channel, else the online store. Staff may sell any product.
 - `listChannelProducts` pages a channel's live published product ids (keyset by id, at most 100): the port a sales-channel app syncs from, with the `product.publication_changed` event.
-- Triggers keep the online store, a channel's kind and app, an order's channel, and refuse to delete a channel with orders. Unpublishing a product and switching a channel off advance the checkout authority fence.
+- Triggers keep the online store, a channel's kind and app, an order's channel, and refuse to delete a channel with orders. Unpublishing a product advances its checkout fence; switching a channel off advances the `markets` fence.
 - DVC: `sales_channels` advances `lm:seo`; publications advance `p:<product>` and `lm:seo` (the online store's also `lm:all` and `srch`); a location link advances `store`; a stock level at a location some channel does not sell advances its SKU's `p:`.
 
 ## Routes

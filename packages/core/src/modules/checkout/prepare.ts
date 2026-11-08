@@ -39,6 +39,7 @@ import { createAppLinePricer } from "./app-line-prices";
 import { bundleLineProperties, createCartTransformer, presentTransformedCart, ruleErrorsOnBuyerLines } from "./cart-transform";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import type { AppProviders } from "../../integrations/provider-port";
+import type { CheckoutFence } from "./authority";
 import {
     PaymentMethod,
     PaymentStatus,
@@ -175,7 +176,8 @@ export interface StorefrontCheckoutPolicySnapshot {
     contactFields?: CheckoutContactFieldSettings;
     /** Settings → Checkout: every order asks for a full billing address (off: Shopify's default). */
     requireFullBillingAddress?: boolean;
-    authorityRevision?: number;
+    /** The authority snapshot's fence (`authority.ts`): the commit refuses when it moved. */
+    authorityFence?: CheckoutFence;
     orderCreatedNotificationEnabled?: boolean;
     metaPurchaseEnabled?: boolean;
     /**
@@ -1103,7 +1105,9 @@ export async function createStorefrontOrder(
     const commitPayload = {
         checkoutToken,
         marketCountry: cartValidation.marketContext?.country,
-        checkoutAuthorityRevision: checkoutPolicySnapshot?.authorityRevision ?? null,
+        checkoutFence: checkoutPolicySnapshot?.authorityFence
+            ? { scopes: checkoutPolicySnapshot.authorityFence.scopes, revision: checkoutPolicySnapshot.authorityFence.revision }
+            : null,
         checkoutSideEffects: {
             orderCreatedNotification:
                 checkoutPolicySnapshot?.orderCreatedNotificationEnabled ?? true,

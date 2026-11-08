@@ -16,7 +16,7 @@ export const AMBIENT_TABLES = [
   "dependency_*", "dvc_*", "background_*", "outbox*", "*_outbox", "admin_audit*", "audit_*", "staff_alert*", "work_*",
   "request_*", "rate_limit*", "*_counts", "analytics_*", "dashboard_*", "derived_*", "*_projection*", "*_rollup*",
   // Trigger-maintained read models: checkout readiness facts and order-based recommendations.
-  "checkout_authority", "recommendation_order_products",
+  "checkout_fences", "recommendation_order_products",
 ];
 
 export const MAX_MEDIAN_TOOL_CALLS = 6;

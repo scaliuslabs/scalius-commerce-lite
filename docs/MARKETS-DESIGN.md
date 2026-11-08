@@ -285,7 +285,7 @@ The migration creates `mkt_backup` (handle `bangladesh`, BD, the root URL in
 the active checkout language, else `en`). It carries the currency document's
 increment to the backup row by the step 1 rule, removes the document field,
 and backfills every order. A change of a market's status, increment or
-countries advances the checkout authority fence.
+countries advances the `markets` checkout fence.
 
 **Price increment** (D1). The backup market row is the one source. The
 `markets` domain owns `readStoreCurrency()`, `backupPriceIncrementSql()` and
@@ -355,8 +355,8 @@ by market.
 **Cost.** A store pays the same D1 calls and statements as before markets:
 the free-plan budgets are unchanged. Every market read is a scalar or a join
 inside a statement that already runs. The layout's store shape row carries
-the matrix (`marketMatrixSql()`, one JSON text). The checkout authority row
-carries the backup increment. `readStoreCurrency()` joins the currency
+the matrix (`marketMatrixSql()`, one JSON text). The checkout authority read's
+store row carries the backup increment. `readStoreCurrency()` joins the currency
 document beside it. The checkout config joins its settings documents to the
 presence market (`readPresenceMarketWithDocuments()`). Each order insert
 computes its market (`orderMarketIdSql()`).
@@ -514,8 +514,8 @@ The live delivery rates without a zone ("Everywhere else", which served only
 Bangladesh) move to the zone `dz_bd` "Bangladesh" (region BD), with the same
 ids. Pickup keeps `zone_id` null; its revision document becomes
 `delivery_pickup`. A trigger refuses a live delivery rate without a zone
-(`SHIPPING_RATE_ZONE_REQUIRED`). Region writes advance the checkout
-authority revision and the `ship` cache dependency. Agent storefront
+(`SHIPPING_RATE_ZONE_REQUIRED`). Region writes advance the `shipping`
+checkout fence and the `ship` cache dependency. Agent storefront
 contexts gain `country_code`, `admin_area` and `postal_code`.
 
 **Checkout.** The rate row statement carries its destination country's
@@ -639,7 +639,7 @@ ledger digest, schema contract 116, Drizzle snapshot):
   `order_item_tax_snapshots`, and `provider_id` and `provider_calculation_id`
   to `order_tax_snapshots`.
 
-Region, rate and market-flag writes advance the checkout authority revision
+Region, rate and market-flag writes advance the `tax` checkout fence
 and the `tax` cache dependency.
 
 **Provider port.** The tax port is `calculate`, then `commit`, `void` or
@@ -827,8 +827,8 @@ sidecar, ledger digest, schema contract 120, Drizzle snapshot):
   `price_adjustment_bps`, `price_rounding_minor` and `price_ending_minor`.
   Every market starts `fixed`; the backup market stays `fixed`.
 
-Writes to an active list, its prices or a market's pricing advance the
-checkout authority revision.
+Writes to an active list or a market's pricing advance the `markets`
+checkout fence, and a list price its product's fence.
 
 **The rule.** `resolvePrice()` in `@scalius/shared/market-pricing` is the
 one precedence, stated once in its module header: a line's purchase-option
@@ -1109,7 +1109,7 @@ rebuild.
   validation, the checkout authority read and the reservation guard use that
   channel: a SKU of a product the channel does not publish is
   `product_unavailable`. Unpublishing a product or switching a channel off
-  advances the checkout authority fence.
+  advances the product's or the `markets` checkout fence.
 - Staff orders take `salesChannelId` (an active channel; the online store by
   default). Staff may sell any product, published or not (Shopify's draft
   orders), from the whole stock.
@@ -1181,7 +1181,7 @@ allowlist) adds to `markets`:
 - `fx_lock_minutes` (5 to 1,440, default 30): the payment-start deadline after placement
   for a wholly unpaid foreign-currency order (`fx_locked_until`). Its amounts and rate never expire.
 
-A change of a market's currency or lock advances the checkout authority
+A change of a market's currency or lock advances the `markets` checkout
 fence. `customer_order_stats` sums what each customer spent in the shop
 currency (an order in another currency adds its paid share of
 `total_shop_minor`).

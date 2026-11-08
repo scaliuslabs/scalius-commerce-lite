@@ -52,20 +52,28 @@ export const settings = sqliteTable(
 );
 
 /**
- * Monotonic fence for every fact that can change checkout economics or buyer
- * eligibility. Coordinated checkout reads it with the authority snapshot and
- * validates the same revision inside the atomic order commit.
+ * Monotonic counters of the facts a checkout prices and decides against, one
+ * row per scope (`product:<id>`, `settings:<document>`, `shipping`, `tax`,
+ * `markets`; scripts/checkout-fence-triggers.ts). Triggers advance a scope's
+ * revision on every change that can move a quote; a checkout reads its scopes
+ * with its facts and its commit batch refuses if their sum moved. A scope that
+ * never changed has no row (revision 0). Rows are never deleted.
  */
-export const checkoutAuthority = sqliteTable("checkout_authority", {
-    id: text("id").primaryKey().default("default"),
+export const checkoutFences = sqliteTable("checkout_fences", {
+    scope: text("scope").primaryKey(),
     revision: integer("revision").notNull().default(1),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
 }, (table) => [
-    check("checkout_authority_singleton", sql`${table.id} = 'default'`),
-    check("checkout_authority_revision_positive", sql`${table.revision} >= 1`),
+    check("checkout_fences_revision_positive", sql`${table.revision} >= 1`),
 ]);
+
+/** The store-wide fence scopes: delivery, tax, and market pricing (markets, price lists, sales channels). */
+export const CHECKOUT_FENCE_STORE_SCOPES = ["shipping", "tax", "markets"] as const;
+export type CheckoutFenceStoreScope = (typeof CHECKOUT_FENCE_STORE_SCOPES)[number];
+
+/** A product's fence: its row, SKUs, options, bundles, publications and list prices. */
+export const CHECKOUT_FENCE_PRODUCT_PREFIX = "product:";
+/** A settings document's fence (`settings.category` of its `key = 'document'` row). */
+export const CHECKOUT_FENCE_SETTINGS_PREFIX = "settings:";
 
 /**
  * The store's public cache generation: one opaque random token included in

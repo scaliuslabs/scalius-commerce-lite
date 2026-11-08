@@ -10,7 +10,8 @@
 // - `segment` lists price members of one customer segment in one market
 //   (any market, the backup included); only signed-in checkout, staff orders
 //   and agents apply them, never a public (cached) read.
-// - Every write of a list or its prices advances the checkout authority fence;
+// - Every write of an active list advances the `markets` checkout fence and of
+//   its prices their products' fences;
 //   the cache dependency triggers are generated from @scalius/shared/cache-deps.
 
 import { sql } from "drizzle-orm";

@@ -2,7 +2,7 @@
 // schema in the decimal HTTP contract, converted once at the edge to the
 // stored minor-unit JSON validated by `@scalius/shared/line-properties`.
 // The column is part of the product aggregate (writes advance the aggregate
-// revision) and of the checkout authority fence (a change fails in-flight
+// revision) and of the product's checkout fence (a change fails its in-flight
 // checkouts).
 import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import {

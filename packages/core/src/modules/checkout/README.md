@@ -10,7 +10,7 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
 |------|---------|---------|
 | `cart-validation.ts` | `validateStorefrontCartItems()`, `presentStorefrontCartValidation()` | Batched buyer-cart freshness: products, SKUs, stock and server prices |
 | `prepare.ts` | `createStorefrontOrder()`, `validateStorefrontDeliveryPreflight()`, `presentStorefrontDeliveryPreflight()` | Server-priced order payload, delivery preflight, checkout-policy snapshots |
-| `authority.ts` | `loadStorefrontCheckoutAuthority()` | One read of everything a checkout is priced and validated against, with its revision |
+| `authority.ts` | `loadStorefrontCheckoutAuthority()` | One read of everything a checkout is priced and validated against, with its fence |
 | `policy.ts` | `assertStorefrontCheckoutPolicy()`, `assertGuestStorefrontCheckoutPolicy()` | Merchant checkout policy (guests, countries, methods) |
 | `flow.ts` | `isCheckoutGatewayUsableForFlow()`, `getCheckoutFlowValidationIssues()` | Which payment methods a checkout mode and advance payment allow |
 | `flow-settings.ts` | `getCheckoutFlowSettingsDocument()`, `saveCheckoutFlowSettingsDocument()` | The `checkout` settings document's revision-guarded admin read and save |
@@ -35,7 +35,7 @@ The abandoned-checkout maintenance sweep sets `abandoned_at` once after 60 minut
 3. **Atomic attempt behavior** -- A new request creates its canonical `orderId`, private `chk_` receipt token, and derived non-bearer `cst_` status token in memory only. It does not acquire a preliminary database lease: an attempt row exists only once its order committed (no processing or failed rows; migration 0149 removed the last legacy ones). A committed same-key/same-payload retry replays the stored response; `chk_` proof never enters status URLs. Same-key/different-payload reuse is rejected as `409`. If two fresh requests race, their final transactions contend on the unique request key: exactly one can commit, and the loser rereads and returns the winner's durable response.
 4. **Order build** -- `createStorefrontOrder()` validates prices server-side from the prevalidated cart snapshot, verifies discounts, checks partial-payment rules, rejects inactive/deleted products, product/variant mismatches, and variantless buyer lines, resolves active city/zone/area names from the database, and builds the order payload using the in-memory attempt identities. Every checkout, including a product-level free-delivery waiver, requires one active selected shipping method; its ID, name, description, configured fee, effective fee, waiver state, and buyer-selected contact phone are bound into the reviewed quote/order facts. Order, receipt, account, admin, invoice, notification, and delivery reads use those order facts rather than mutable customer or shipping settings. A submitted code owned by the typed promotion authority is evaluated there even when inactive/ineligible; only a code absent from typed authority may enter the legacy compatibility path. The same private customer session is forwarded to tax quoting and final submit, so authenticated promotion identity cannot change when the buyer edits the delivery phone. Account ownership is carried only from that authoritative customer session identity; a guest checkout does not acquire account ownership merely because its submitted phone matches an existing profile. Delivery and checkout-policy snapshots carry unforgeable in-memory proof markers, avoiding duplicate reads while plain object forgeries fail closed. Every payment method must take the amount exactly (`PaymentProviders.amountIssue`, MARKETS-DESIGN D2): cash on delivery collects whole taka in BDT, so a paisa amount due is refused before commit (`details.reason = "cash_on_delivery_amount"`), and a gateway's first charge must fit its wire form (`precommitIssue`).
 5. **One authoritative commit** -- `commitStorefrontOrderPayload()` is the checkout's policy around the one order commit, `commitOrder()` (`orders/commit-order.ts`), which staff, app and agent orders use too. It performs read-only customer/inventory preparation, then one atomic database batch commits the checkout attempt and collision guard, inventory CAS plus ledger-v2 edges, customer/order/items/tax/COD facts, durable receipt, promotion/discount effects, and applicable outbox claims. Checkout/manual-order line counts are capped at 99, and multi-row order-item, tax-snapshot, and promotion-allocation inserts are chunked so every statement stays below D1's 100-bound-parameter ceiling without weakening the batch transaction. A new order's reservation generation is transactionally known to be one. An authenticated payload's account is fenced live and claimed by a guard in the batch (no pre-read), while guest checkout creates or reuses only an unclaimed CRM profile and never gains account ownership by phone matching. Promotion/discount limits remain database-enforced. Any guard, stock, trigger, or order failure rolls back the entire attempt/order/inventory transaction, so no compensating reservation release or separate attempt finalization is needed. The buyer receives `201` only after all authoritative facts and the replay response exist. The order row carries its money chain (`orderMoneyChainColumns()` from `@scalius/shared/money-chain`): a same-currency order has `fx_rate` "1", `fx_source` "same_currency" and shop amounts equal to its presentment amounts.
-   Every new commit requires the prepared `checkoutAuthorityRevision` and guards it inside the final batch, including online payments, discounts, agent checkout, and reservation-replay recovery. A changed catalog/delivery/tax/checkout policy rolls back the whole commit and asks the buyer to review again; an already-committed order remains replayable after authority changes.
+   Every new commit requires the prepared `checkoutFence` and guards it inside the final batch, including online payments, discounts, agent checkout, and reservation-replay recovery. The fence is the `checkout_fences` rows of what the checkout priced against (`checkoutFenceScopes()`): its products, its settings documents (not the server analytics destinations) and the store-wide `shipping`, `tax` and `markets` scopes (`packages/database/scripts/checkout-fence-triggers.ts`). A change of one of them rolls back the whole commit and asks the buyer to review again; a staff push token, an analytics setting or another product's edit does not. An already-committed order remains replayable after any change.
 6. **Post-commit work** -- The durable notification/Meta claims and initial COD state are already part of the authoritative commit when applicable. Notification send, Meta dispatch, semantic product-availability cache invalidation run after commit through `executionCtx.waitUntil()` when available. Their failure cannot turn a committed checkout into a false `500`; durable claims or database fallback remain available for retry and repair.
 7. **Recovery and guest support** -- `GET /orders/status/:token` accepts only derived `cst_` status tokens and receipt validation accepts only private `chk_` receipt tokens. Both read the database only (`checkout_attempts` plus the committed `orders` row, and `order_receipts`); there are no KV hints, and raw receipt proof never enters URL paths or cache keys. `GET /orders/receipt/:id` returns buyer-safe receipt facts plus eligible support-request actions and reuses its receipt order projection for support-action eligibility instead of rereading the order. `POST /orders/receipt/:id/support-requests` accepts the private receipt token and creates a cancellation, return, or refund request in the same support-request ledger used by customer accounts. Its support-request `customerId` comes only from `orders.accountOwnerCustomerId`, never from the broader CRM link. It never directly mutates payment, shipment, inventory, COD, or order status.
 
@@ -211,18 +211,18 @@ staff get a push when it opens and the app page lists open circuits.
   before.
 - **Commit budget.** A 99-line commit is one batch of 39 statements, each
   within D1's 100 bound values (`wave-a-checkout.d1.test.ts`).
-- **Market** (MARKETS-DESIGN step 2). The `checkout_authority` row of the
-  authority batch also carries the backup market's price increment (no extra
-  statement). The order insert writes `orders.market_id` itself
+- **Market** (MARKETS-DESIGN step 2). The store row of the authority batch
+  (one row, no table) also carries the backup market's price increment (no
+  extra statement). The order insert writes `orders.market_id` itself
   (`orderMarketIdSql()`): the active market of the shipping country, else
   the backup market. A change of a
-  market's status, increment or countries bumps `checkout_authority` (0112
-  triggers). The checkout config reads the presence's market joined with its
+  market's status, increment or countries advances the `markets`
+  fence (0199 triggers). The checkout config reads the presence's market joined with its
   settings documents, in the statement it already ran.
 
 - **Shipping country** (MARKETS-DESIGN step 3a). The order takes
   `shippingCountryCode` (absent: Bangladesh) and the canonical address
-  fields. The `checkout_authority` row also carries the countries of the
+  fields. The store row also carries the countries of the
   active markets (`sellingCountriesSql()`); another country is refused with
   `details.reason = "shipping_country_unavailable"`. The address follows its
   country's rules (`resolveStorefrontShippingAddress()`), and the phone is
@@ -267,7 +267,7 @@ staff get a push when it opens and the app page lists open circuits.
 - **Reads.** The authority batch carries the cart products' active
   `product_bundles` rows (`selectActiveProductBundleRows`, one `json_each`
   parameter); `validateStorefrontCartItems()` reads them beside the product
-  rows. Every tier write bumps `checkout_authority` (0090 triggers), so a
+  rows. Every tier write advances its product's fence (0199 triggers), so a
   prepared order priced from old tiers fails its commit guard.
 - **Pricing.** `bundleLineSavings()` (via `resolveCartBundleSavings()`) groups the lines of one product
   (any SKU, any buyer inputs) and prices them with `bundleGroupPricing`

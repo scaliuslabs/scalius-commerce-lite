@@ -76,7 +76,7 @@ export const products = sqliteTable(
         /**
          * Buyer inputs asked on the product page (JSON, at most 4 KB). Validated by
          * `@scalius/shared/line-properties`; part of the product aggregate and the
-         * checkout authority fence.
+         * product's checkout fence.
          */
         customizationSchema: text("customization_schema"),
         /** The product's brand (migration 0088); brand pages, facets, feeds and JSON-LD read it. */

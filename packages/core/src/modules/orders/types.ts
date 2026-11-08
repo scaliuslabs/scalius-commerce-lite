@@ -657,8 +657,12 @@ export interface StorefrontOrderCommitPayload {
     checkoutToken: string;
     /** The initial buyer cart's selected market country; null deliberately selects backup. */
     marketCountry?: string | null;
-    /** Read-to-commit fence for catalog, delivery, tax, and checkout policy facts. */
-    checkoutAuthorityRevision: number | null;
+    /**
+     * Read-to-commit fence: the scopes the checkout priced against (its
+     * products, its settings documents, shipping, tax and markets) and their
+     * revisions summed at the read (`checkout/authority.ts`).
+     */
+    checkoutFence: { scopes: readonly string[]; revision: number } | null;
     /** Buyer-independent async work proven deliverable by the checkout authority snapshot. */
     checkoutSideEffects?: {
         orderCreatedNotification: boolean;
