@@ -222,7 +222,7 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string, initial
     ...(values.paymentMethod === "net_terms"
       ? { paymentMethod: "net_terms" as const, ...(values.paymentTermsDays ? { paymentTermsDays: values.paymentTermsDays } : {}) }
       : {}),
-    // Already paid: placed as an invoice and paid in full at once (downloads and gift cards go out).
+    // Already paid: placed as paid by its way of payment (`manual`), never an invoice; downloads and gift cards go out.
     ...(values.paymentMethod === "paid"
       ? { paid: { via: values.paidVia ?? "cash", reference: values.paidReference?.trim() || null } }
       : {}),
@@ -411,9 +411,10 @@ function OrderEditor({
       shippingCharge: Number(quoteShipping) || 0,
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
-      // An invoice need not be a cash amount (cash on delivery collects whole taka).
-      // Paid orders are placed as invoices: priced the same way, and they may hold downloads and gift cards.
-      ...(!isEdit && (quotePaymentMethod === "net_terms" || quotePaymentMethod === "paid") ? { paymentMethod: "net_terms" as const } : {}),
+      // An invoice, or an order already paid (`manual`), need not be a cash amount
+      // (cash on delivery collects whole taka), and may hold downloads and gift cards.
+      ...(!isEdit && quotePaymentMethod === "net_terms" ? { paymentMethod: "net_terms" as const } : {}),
+      ...(!isEdit && quotePaymentMethod === "paid" ? { paymentMethod: "manual" as const } : {}),
       // A new order that ships nothing is taxed in the billing country staff entered.
       ...(!isEdit && !needsAddress && billingDraft && billingEntered(billingDraft, initialBilling) && billingDraft.countryCode
         ? {

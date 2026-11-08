@@ -64,6 +64,7 @@ import {
 } from "./app-functions";
 import { checkoutPaymentMethodName, presentCheckoutRateOptions } from "./pricing";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
 import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForDestination } from "../delivery";
 import { buildStorefrontDiscountAllocation, type TaxDiscountAllocationInput } from "../tax";
 
@@ -243,7 +244,8 @@ export async function applyManualOrderAppFunctions(
                 rates: rateOptions.slice(0, 50).map((rate) => ({ rateId: rate.rateId, name: rate.name.slice(0, 80), amountMinor: rate.amountMinor, kind: rate.kind })),
             })
             : Promise.resolve([]),
-        apps.points.has("checkout.payment_methods")
+        // An order paid as it is placed has no method to choose: the money is in.
+        apps.points.has("checkout.payment_methods") && paymentMethod !== RECORDED_PAYMENT_METHOD
             ? apps.run("checkout.payment_methods", { cart, methods })
             : Promise.resolve([]),
     ]);

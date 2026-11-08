@@ -283,10 +283,9 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     const apps = await manualOrderApps(c.env, ctx, db);
     const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
     if (data.paid && data.pointOfSale) throw new ValidationError("An in-person sale is paid by its tenders: send pointOfSale without paid.");
-    // Mark as paid, or an in-person sale: placed as an invoice, then paid in full right after.
-    const placed = data.pointOfSale
-        ? { ...data, paymentMethod: "net_terms" as const, channel: "pos" as const }
-        : data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
+    // Mark as paid, or an in-person sale: placed with the payment method
+    // `manual` (no invoice, no terms), its payments recorded right after.
+    const placed = data.pointOfSale ? { ...data, channel: "pos" as const } : data;
     const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, actor, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),

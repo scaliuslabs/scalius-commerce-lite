@@ -135,6 +135,23 @@ async function resolveManualOrderCustomer(db: Database, data: CreateOrderInput):
 }
 
 /**
+ * How a staff or app order is paid. One paid as it is placed (marked paid,
+ * an in-person sale) records a real payment of its `via` right after it
+ * commits (`manual`, `RECORDED_PAYMENT_METHOD`), never a pay-later term; so
+ * it takes no invoice method or terms. Otherwise cash on delivery, or an
+ * invoice (`net_terms`).
+ */
+export function manualOrderPaymentMethod(data: Pick<CreateOrderInput, "paid" | "pointOfSale" | "paymentMethod" | "paymentTermsDays">) {
+    if (data.paid || data.pointOfSale) {
+        if (data.paymentMethod === PaymentMethod.NET_TERMS || data.paymentTermsDays !== undefined) {
+            throw new ValidationError("An order paid as it is placed has no invoice or payment terms: send paid (or pointOfSale) without them.");
+        }
+        return PaymentMethod.MANUAL;
+    }
+    return data.paymentMethod === PaymentMethod.NET_TERMS ? PaymentMethod.NET_TERMS : PaymentMethod.COD;
+}
+
+/**
  * `createOrder` with the apps' checkout functions (channel "admin",
  * app-functions.ts): their rules, delivery options, payment method and
  * discounts apply as on the online store, and the order records the app
@@ -173,10 +190,9 @@ export async function createManualOrder(
         return replayed(existingReplay.response);
     }
     await validateCustomerPhoneCountry(db, data.customerPhone);
-    const paymentMethods = data.paymentMethod === PaymentMethod.NET_TERMS ? await paymentMethodsDocument.read(db) : null;
-    // An order paid as it is placed (marked paid, a point-of-sale sale) is an invoice only in form.
-    const paidOnPlacement = Boolean(data.paid || data.pointOfSale);
-    if (paymentMethods && options.automated && !paidOnPlacement && !(paymentMethods.enabledMethods ?? []).includes(PaymentMethod.NET_TERMS)) {
+    const paymentMethod = manualOrderPaymentMethod(data);
+    const paymentMethods = paymentMethod === PaymentMethod.NET_TERMS ? await paymentMethodsDocument.read(db) : null;
+    if (paymentMethods && options.automated && !(paymentMethods.enabledMethods ?? []).includes(PaymentMethod.NET_TERMS)) {
         throw new ValidationError(
             "This store does not offer invoices. Turn on Invoice / net terms in Settings → Payments, or ask staff to place it.",
             { reason: "payment_method_unavailable" },
@@ -221,7 +237,7 @@ export async function createManualOrder(
             deliveryMethodKind,
             deliveryMethod: shippingMethod,
             appDiscounts,
-        } = await prepareManualOrderQuote(db, data, undefined, undefined, {
+        } = await prepareManualOrderQuote(db, { ...data, paymentMethod }, undefined, undefined, {
             apps: options.apps,
             appProviders: options.appProviders,
             // Apps see who places it and the channel it sells from, as the order records them.
@@ -258,7 +274,6 @@ export async function createManualOrder(
             skipValidation: data.skipAddressValidation === true,
         });
         const paymentState = computeOrderPaymentState({ totalAmountMinor: taxQuote.totalMinor, paidAmountMinor: 0 });
-        const paymentMethod = data.paymentMethod === PaymentMethod.NET_TERMS ? PaymentMethod.NET_TERMS : PaymentMethod.COD;
         // A method picked for an order with nothing physical is not used.
         const method = shippingMethod && deliveryMethodKind ? shippingMethod : null;
         const contact = { name: data.customerName, phone: data.customerPhone };
@@ -298,6 +313,7 @@ export async function createManualOrder(
             balanceDueMinor: paymentState.balanceDueMinor,
             // An invoice (net terms): unpaid now, due in the days staff or
             // the app chose, else the store's net days (Settings → Payments).
+            // An order paid as it is placed has no terms.
             paymentTermsDays: paymentMethod === PaymentMethod.NET_TERMS
                 ? data.paymentTermsDays ?? paymentMethods!.netTerms.dueInDays
                 : null,

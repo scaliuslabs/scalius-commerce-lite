@@ -3220,5 +3220,11 @@
   "from": "56c029947a23dd24",
   "change": "gift_cards.update output data.giftCard.transactions: the field was removed.",
   "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "ea00ae56d4977f7b",
+  "change": "behaviour: orders.create with pointOfSale (and dashboard.orders.create with paid) places the order with paymentMethod manual and no paymentTerms, not net_terms; orders.get and orders.list read it so.",
+  "reason": "Pre-release (Nov 9 e2e finding M1): an order paid as it was placed was recorded as an invoice: payment method `net_terms` with 30-day terms and a due date, then paid in full right after. Buyers read \"Pay later by invoice\", analytics filed it under net_terms and an app saw `paymentTerms` on a paid order. It is now placed with payment method `manual` (RECORDED_PAYMENT_METHOD, the method its recorded payments already carried), `paymentTerms: null`, and its money is the recorded payments of their `via` (cash, card_terminal, mobile_wallet, bank_transfer, ...). An app that read `paymentMethod === \"net_terms\"` to find point-of-sale or marked-paid orders reads `manual` (or `channel: \"pos\"`). The field stays free text, so no schema diff produces this entry: it records the break for review. Such an order runs no `checkout.payment_methods` function (the money is already in). Orders placed before the change keep `net_terms`."
  }
 ]

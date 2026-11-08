@@ -168,6 +168,12 @@ const orderChannelSourceInputSchema = z
  */
 /** How a staff or app order is paid: cash on delivery, or an invoice paid later by its due date. */
 export const manualOrderPaymentMethodSchema = z.enum(["cod", "net_terms"]);
+/**
+ * What a manual-order quote prices: also an order paid as it is placed
+ * (`manual`: marked paid, an in-person sale), which, like an invoice, need
+ * not be a cash amount and may hold downloads and gift cards.
+ */
+export const manualOrderQuotePaymentMethodSchema = z.enum(["cod", "net_terms", "manual"]);
 
 /**
  * An in-person sale (a point of sale): the location the goods leave from at
@@ -217,9 +223,10 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     paymentTermsDays: z.number().int().min(1).max(PAYMENT_TERMS_MAX_DAYS).optional(),
     /**
      * Mark as paid: the whole amount was already received (cash at the
-     * counter, a bank transfer, a mobile wallet). The order is placed as an
-     * invoice and the payment is recorded right after, so it is paid and its
-     * downloads and gift cards are handed over.
+     * counter, a bank transfer, a mobile wallet). The order is placed with the
+     * payment method `manual` (no invoice, no terms) and the payment of its
+     * `via` is recorded right after, so it is paid and its downloads and gift
+     * cards are handed over.
      */
     paid: z.object({
         via: z.enum(RECORDED_PAYMENT_VIAS),
@@ -267,8 +274,8 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
 }).extend({
     /** Decides pickup vs delivery (and so whether the address is taxed). */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
-    /** Cash on delivery (the default) must collect the total exactly; an invoice need not. */
-    paymentMethod: manualOrderPaymentMethodSchema.optional(),
+    /** Cash on delivery (the default) must collect the total exactly; an invoice or an order already paid need not. */
+    paymentMethod: manualOrderQuotePaymentMethodSchema.optional(),
     /** The customer the order is for: a tax-exempt customer's order pays no tax. */
     customerId: z.string().trim().min(1).max(128).nullable().optional(),
 });

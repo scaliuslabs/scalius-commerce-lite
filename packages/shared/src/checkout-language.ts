@@ -221,6 +221,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   orderReceiptPaymentStatusUnpaidText: "Unpaid",
   orderReceiptPaymentStatusNoPaymentDueText: "No payment due",
   orderReceiptPaymentMethodCardText: "Card (Stripe)",
+  // An order paid as it was placed: marked paid by staff, or bought in person.
+  orderReceiptPaymentMethodPaidToStoreText: "Paid to the store",
   orderReceiptPaymentMethodSslcommerzText: "Online payment (SSLCommerz)",
   orderReceiptPaymentMethodPayAtPickupText: "Pay at pickup",
   orderReceiptPaymentMethodPayOnServiceText: "Pay on service",
@@ -999,6 +1001,7 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   orderReceiptPaymentStatusUnpaidText: "অপরিশোধিত",
   orderReceiptPaymentStatusNoPaymentDueText: "কোনো পেমেন্ট বাকি নেই",
   orderReceiptPaymentMethodCardText: "কার্ড (Stripe)",
+  orderReceiptPaymentMethodPaidToStoreText: "স্টোরে পরিশোধ করা হয়েছে",
   orderReceiptPaymentMethodSslcommerzText: "অনলাইন পেমেন্ট (SSLCommerz)",
   orderReceiptPaymentMethodPayAtPickupText: "সংগ্রহের সময় পরিশোধ",
   orderReceiptPaymentMethodPayOnServiceText: "সেবার সময় পরিশোধ",

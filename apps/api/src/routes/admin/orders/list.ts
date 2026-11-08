@@ -26,7 +26,7 @@ import {
 } from "@scalius/shared/order-channel";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { storeTimeZoneOf } from "../../../utils/store-time-zone";
-import { isAppPaymentMethod, isPaymentMethodId, paymentMethodLabel, type PaymentProviders } from "@scalius/core/modules/payments";
+import { isAppPaymentMethod, isOrderPaymentMethod, paymentMethodLabel, type PaymentProviders } from "@scalius/core/modules/payments";
 import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     type OrderPaymentRecoveryFilter,
@@ -60,7 +60,7 @@ const orderListViewQuerySchema = z.enum(ORDER_LIST_VIEWS).openapi({
 const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt", "updatedAt"] as const;
 
 /** `cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`. */
-const paymentMethodQuerySchema = z.string().max(160).refine(isPaymentMethodId, "Unknown payment method");
+const paymentMethodQuerySchema = z.string().max(160).refine(isOrderPaymentMethod, "Unknown payment method");
 
 const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.PENDING,

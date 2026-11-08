@@ -127,5 +127,13 @@ export const POINT_OF_SALE_TENDERS_MAX = 5;
  * `order_payments.payment_method` of a payment staff or an app recorded (a
  * bank transfer against an invoice): not a gateway, refunded as a confirmed
  * manual settlement like cash on delivery.
+ *
+ * It is also `orders.payment_method` of an order paid as it was placed:
+ * staff marked it paid (cash, a bank transfer, a wallet) or it was sold in
+ * person (a point of sale). Such an order is never a pay-later invoice: it
+ * has no terms or due date, and its money is the recorded payments of their
+ * `via`, written right after the order commits.
  */
 export const RECORDED_PAYMENT_METHOD = "manual";
+/** The staff-facing name of an order paid as it was placed. */
+export const RECORDED_PAYMENT_LABEL = "Recorded payment";

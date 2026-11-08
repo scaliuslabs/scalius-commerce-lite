@@ -20,9 +20,11 @@ export const ORDER_SORTS = ["createdAt", "relevance", "updatedAt", "totalAmount"
 /** Server-side tabs, in tab order after "All". */
 export const ORDER_VIEWS = ["unfulfilled", "ready_for_pickup", "unpaid", "overdue", "cod_to_collect", "delivery_failed", "returned"] as const;
 export const PAYMENT_STATUSES = ORDER_PAYMENT_STATUSES;
-/** Cash and the built-in gateways; apps' methods are listed from the installed apps. */
-/** The built-in methods; an app's method filters by its `<plugin id>:<provider id>`. */
-export const PAYMENT_METHODS = ["cod", "net_terms", "stripe"] as const;
+/**
+ * The built-in methods, an order its gift cards paid and one paid as it was
+ * placed (`manual`); an app's method filters by its `<plugin id>:<provider id>`.
+ */
+export const PAYMENT_METHODS = ["cod", "net_terms", "manual", "gift_card", "stripe"] as const;
 export const FULFILLMENT_STATUSES = ["pending", "partial", "complete"] as const;
 /** How the order reaches the buyer: shipped to an address, picked up, or nothing physical (a service). */
 export const DELIVERY_METHODS = ["delivery", "pickup", "none"] as const;

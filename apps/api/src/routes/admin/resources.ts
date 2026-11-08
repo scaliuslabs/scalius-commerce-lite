@@ -455,7 +455,8 @@ app.openapi(createRoute({
     salesChannelId: body.salesChannelId ?? null,
     ...(body.attributes ? { attributes: body.attributes } : {}),
     channel: body.pointOfSale ? "pos" : appPrincipal ? "app" : "admin",
-    paymentMethod: body.pointOfSale ? "net_terms" : body.paymentMethod,
+    // An in-person sale is paid by its tenders: the core records its method (`manual`).
+    ...(body.pointOfSale ? {} : { paymentMethod: body.paymentMethod }),
     ...(body.pointOfSale ? { pointOfSale: body.pointOfSale } : {}),
     ...(body.paymentTerms ? { paymentTermsDays: body.paymentTerms.days } : {}),
   });
