@@ -121,8 +121,15 @@ const cartValidationItemSchema = z.object({
   productId: z.string().min(1, "Product is required"),
   variantId: persistedStorefrontVariantIdSchema,
   quantity: z.number().int("Quantity must be a whole number").min(1, "Quantity must be at least 1").max(MAX_LINE_QUANTITY, `Quantity must be at most ${MAX_LINE_QUANTITY}`),
-  /** The unit price the buyer saw: base plus the surcharges of its buyer inputs. */
-  price: z.number().min(0, "Price must be greater than or equal to 0"),
+  /**
+   * The unit price the buyer saw: base plus the surcharges of its buyer inputs.
+   * Absent, the check answers today's price and never says it changed: a line
+   * put back from a stored source (an order, a recovery link) has no price the
+   * buyer is looking at.
+   */
+  price: z.number().min(0, "Price must be greater than or equal to 0").optional().openapi({
+    description: "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.",
+  }),
   productName: z.string().optional().nullable(),
   variantLabel: z.string().optional().nullable(),
   properties: linePropertiesInputSchema,

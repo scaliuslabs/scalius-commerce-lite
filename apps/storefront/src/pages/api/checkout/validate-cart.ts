@@ -22,7 +22,8 @@ function normalizeItem(value: unknown): CartValidationRequestItem | null {
     value.variantId.trim() === "default"
   ) return null;
   if (typeof value.quantity !== "number" || !Number.isInteger(value.quantity)) return null;
-  if (typeof value.price !== "number" || !Number.isFinite(value.price)) return null;
+  // Absent: a line put back from a stored source, quoted at today's price.
+  if (value.price !== undefined && (typeof value.price !== "number" || !Number.isFinite(value.price))) return null;
   // A page from the build before a line carried one option per app sends one
   // `purchaseOption`: refused, never checked (or sold) as a one-time line.
   if (value.purchaseOption !== undefined && value.purchaseOption !== null) return null;
@@ -41,7 +42,7 @@ function normalizeItem(value: unknown): CartValidationRequestItem | null {
     productId: value.productId,
     variantId: value.variantId.trim(),
     quantity: value.quantity,
-    price: value.price,
+    ...(typeof value.price === "number" ? { price: value.price } : {}),
     productName: typeof value.productName === "string" ? value.productName : null,
     variantLabel: typeof value.variantLabel === "string" ? value.variantLabel : null,
     ...(properties ? { properties } : {}),

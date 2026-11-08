@@ -1,11 +1,8 @@
 import { buyerApiErrorText } from "../buyer-api-errors";
 // One line the buyer is adding, checked by the store before it joins the
-// cart. A line bought with apps' purchase options (a subscription), or
-// carrying an app's line inputs (a gift message it charges for), is priced
-// by those apps at checkout, so the product page's price is only the first
-// guess: when the store's only objection is the price, the line is checked
-// once more at the price the store answered, and that is its price.
-import { isAppScopedKey } from "@scalius/shared/plugins/ids";
+// cart. It goes without a price: the store answers today's price (the apps'
+// price for a line bought with their purchase options or carrying their line
+// inputs), and that is the line's price, never a "price changed" refusal.
 import type {
   CartValidationItem,
   CartValidationRequestItem,
@@ -27,20 +24,12 @@ export function isCartLineRefusal(value: unknown): value is CartLineRefusal {
   return typeof value === "object" && value !== null && "refused" in value;
 }
 
-/** The line is priced by apps at checkout: it has their purchase options or line inputs. */
-export function appPricedLine(item: Pick<CartValidationRequestItem, "purchaseOptions" | "properties">): boolean {
-  return (item.purchaseOptions?.length ?? 0) > 0 || (item.properties ?? []).some(({ key }) => isAppScopedKey(key));
-}
-
-export async function validateNewCartLine(
+/** Checks one new line at the store's price (sent without one). */
+export function validateNewCartLine(
   validate: CartLineValidator,
-  item: CartValidationRequestItem,
+  item: Omit<CartValidationRequestItem, "price">,
 ): Promise<CartValidationResult | CartLineRefusal | null> {
-  const first = await validate([item]);
-  if (!first || isCartLineRefusal(first) || first.valid || !appPricedLine(item) || first.issues.length !== 1) return first;
-  const [issue] = first.issues;
-  if (issue?.code !== "price_changed" || typeof issue.currentPrice !== "number") return first;
-  return validate([{ ...item, price: issue.currentPrice }]);
+  return validate([item]);
 }
 
 /**

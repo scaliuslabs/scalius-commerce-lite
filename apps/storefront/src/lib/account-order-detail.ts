@@ -31,7 +31,7 @@ import {
 } from "@/lib/account-format";
 import { accountCopy } from "@/lib/account-copy";
 import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
-import { addOrderToCart } from "@/lib/account-buy-again";
+import { buyAgain as putOrderInCart } from "@/lib/account-buy-again";
 import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { appGatewayName, getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
@@ -550,19 +550,9 @@ async function buyAgain(): Promise<void> {
   if (!currentDetail || !button || button.disabled) return;
   button.disabled = true;
   if (message) message.textContent = "";
-  const result = await addOrderToCart(currentDetail.items);
+  const status = await putOrderInCart({ currencyCode: currentDetail.order.currencyCode ?? null, lines: currentDetail.items });
   button.disabled = false;
-  if (!message) return;
-  const words = accountCopy().orders;
-  message.textContent = !result
-    ? accountOfflineMessage()
-    : "refused" in result
-      ? result.refused
-      : result.added === 0
-      ? words.allGone
-      : result.missing > 0
-        ? words.someGone
-        : "";
+  if (message) message.textContent = status;
 }
 
 // ---------- page ----------

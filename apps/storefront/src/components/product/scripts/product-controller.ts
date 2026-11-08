@@ -1192,7 +1192,6 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
       productId: cartData.data.id,
       variantId: validation.variant.id,
       quantity,
-      price,
       productName: cartData.data.name,
       variantLabel: selectedCartOptions(validation.variant).map((option) => option.label).join(" / ") || null,
       ...(properties.length > 0 ? { properties: properties.map(({ key, value }) => ({ key, value })) } : {}),
