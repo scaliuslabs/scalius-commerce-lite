@@ -86119,7 +86119,8 @@
                         },
                         "price": {
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed."
                         },
                         "productName": {
                           "type": "string",
@@ -86167,8 +86168,7 @@
                       "required": [
                         "productId",
                         "variantId",
-                        "quantity",
-                        "price"
+                        "quantity"
                       ]
                     },
                     "minItems": 1,
