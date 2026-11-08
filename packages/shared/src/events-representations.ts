@@ -30,6 +30,7 @@ import {
   RETURN_STATUSES,
   SHIPMENT_STATUSES,
 } from "./resource-states";
+import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./reviews";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
@@ -507,17 +508,27 @@ export const reviewRepresentationSchema = z.object({
   variantId: id.nullable(),
   orderId: id.nullable(),
   customerId: id.nullable(),
-  status: state,
+  /** `pending` waits for moderation; only `published` is on the product page. */
+  status: z.enum(REVIEW_STATUSES),
   rating: z.number().int().min(1).max(5),
   title: text.nullable(),
-  body: text.nullable(),
-  /** The name the review is shown under (what the buyer chose to publish). */
-  authorDisplayName: text.nullable(),
+  body: z.string().max(REVIEW_LIMITS.bodyLength).nullable(),
+  /** The name the review is shown under (what the buyer chose to publish): a buyer's name, so protected. */
+  authorDisplayName: pii("name", text.nullable()),
   publishedAt: iso.nullable(),
   repliedAt: iso.nullable(),
+  /** Advances with every change: the `expectedRevision` a status change takes. */
   revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,
+  /** The order line reviewed; null for an app's review that names none. */
+  orderItemId: id.nullable(),
+  /** A verified purchase: the review is on a delivered order line (`orderItemId`). */
+  verified: z.boolean(),
+  /** The app that wrote it (an import or a reviews app); null for a buyer's own review. */
+  appId: id.nullable(),
+  /** Why it was rejected (`status: "rejected"`): a content reason, never the rating. */
+  moderationReason: z.enum(REVIEW_REJECTION_REASONS).nullable(),
 });
 
 export const giftCardRepresentationSchema = z.object({
@@ -636,7 +647,7 @@ const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: 
   payment: (_resource, facts) => ({ appOperation: "payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
   checkout: null,
   discount: (resource) => ({ appOperation: "discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
-  review: null,
+  review: (resource) => ({ appOperation: "reviews.get", path: `/api/v1/admin/resources/reviews/${segment(resource)}` }),
   gift_card: (resource) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(resource)}` }),
   gift_card_transaction: (_resource, facts) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(facts.giftCardId)}` }),
   object: (resource, facts) => ({ appOperation: "objects.get", path: `/api/v1/admin/objects/${segment(facts.objectType)}/${segment(resource)}` }),

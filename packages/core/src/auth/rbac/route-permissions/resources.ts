@@ -20,6 +20,8 @@ const general = { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW };
 const shippingMethods = { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW };
 const taxes = { permission: PERMISSIONS.TAXES_VIEW };
 const analytics = { permission: PERMISSIONS.DASHBOARD_ANALYTICS };
+const reviews = { permission: PERMISSIONS.REVIEWS_VIEW };
+const reviewsModerate = { permission: PERMISSIONS.REVIEWS_MODERATE };
 
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
@@ -88,6 +90,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/customer-segments": { GET: customers, POST: customersEdit },
   "/api/v1/admin/resources/customer-segments/*": { GET: customers, PATCH: customersEdit },
   "/api/v1/admin/resources/customer-segments/*/members": { GET: customers },
+  // Reviews read and moderate with the dashboard's review permissions; only an app writes one.
+  "/api/v1/admin/resources/reviews": { GET: reviews, POST: reviewsModerate },
+  "/api/v1/admin/resources/reviews/*": { GET: reviews },
+  "/api/v1/admin/resources/reviews/*/status": { POST: reviewsModerate },
   // Price lists read and write with the catalog, as the dashboard's editor does.
   "/api/v1/admin/resources/price-lists": { GET: products, POST: productsEdit },
   "/api/v1/admin/resources/price-lists/*": { GET: products, PATCH: productsEdit, DELETE: productsEdit },

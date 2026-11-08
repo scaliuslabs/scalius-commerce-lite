@@ -33,8 +33,8 @@ export interface PublicReview {
   body: string | null;
   authorName: string;
   variantLabel: string | null;
-  /** Every review comes from a delivered order line. */
-  verifiedPurchase: true;
+  /** On a delivered order line; an app's import of history names none. */
+  verifiedPurchase: boolean;
   publishedAt: string;
   editedAt: string | null;
   /** The merchant's public reply ("Response from <store>"). */
@@ -172,6 +172,7 @@ export async function readPublishedReviews(
       body: productReviews.body,
       authorName: productReviews.authorDisplayName,
       variantLabel: productReviews.variantLabel,
+      orderItemId: productReviews.orderItemId,
       publishedAt: productReviews.publishedAt,
       editedAt: productReviews.editedAt,
       replyBody: productReviews.replyBody,
@@ -192,7 +193,7 @@ export async function readPublishedReviews(
       body: row.body,
       authorName: row.authorName,
       variantLabel: row.variantLabel,
-      verifiedPurchase: true as const,
+      verifiedPurchase: row.orderItemId !== null,
       publishedAt: isoFromSeconds(row.publishedAt ?? 0)!,
       editedAt: isoFromSeconds(row.editedAt),
       reply: row.replyBody && row.repliedAt !== null ? { body: row.replyBody, repliedAt: isoFromSeconds(row.repliedAt)! } : null,

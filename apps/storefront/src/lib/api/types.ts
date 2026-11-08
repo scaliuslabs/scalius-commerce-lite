@@ -125,7 +125,8 @@ export interface PublicProductReview {
   body: string | null;
   authorName: string;
   variantLabel: string | null;
-  verifiedPurchase: true;
+  /** On a delivered order line ("Verified purchase"); false for a review an app imported without one. */
+  verifiedPurchase: boolean;
   publishedAt: string;
   editedAt: string | null;
   reply: { body: string; repliedAt: string } | null;

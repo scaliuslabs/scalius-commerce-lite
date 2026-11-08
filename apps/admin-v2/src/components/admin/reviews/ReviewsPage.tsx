@@ -306,7 +306,11 @@ function ReviewCell({ review, onOpen }: { review: AdminReview; onOpen: () => voi
       <span className="flex min-w-0 items-center gap-2">
         <ReviewStars rating={review.rating} />
         <span title={review.title ?? undefined} className="min-w-0 truncate font-medium">{review.title ?? review.authorName}</span>
-        <Badge variant="success" className="shrink-0">{t("verified")}</Badge>
+        {review.verified ? (
+          <Badge variant="success" className="shrink-0">{t("verified")}</Badge>
+        ) : (
+          <Badge variant="secondary" className="shrink-0">{t("imported")}</Badge>
+        )}
         {flags ? <CheckFlagChips flags={review.checkFlags} /> : null}
       </span>
       <span title={review.body ?? undefined} className="block truncate text-muted-foreground">

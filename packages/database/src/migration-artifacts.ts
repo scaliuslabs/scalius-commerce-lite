@@ -2,7 +2,14 @@ import {
   getDatabaseProviderCapabilities,
   type DatabaseProvider,
 } from "./provider";
-import { SEARCH_INDEX_TABLE, searchIndexRebuildStatements, searchIndexSqliteMigrationStatements } from "./search-index";
+import {
+  SEARCH_INDEX_TABLE,
+  SEARCH_SOURCES,
+  searchIndexRebuildStatements,
+  searchIndexSqliteMigrationStatements,
+  searchIndexTriggers,
+  type SearchSource,
+} from "./search-index";
 
 export const DRIZZLE_STATEMENT_BREAKPOINT = "--> statement-breakpoint";
 
@@ -103,6 +110,26 @@ export function isSearchIndexMarker(statement: string): boolean {
 }
 
 /**
+ * The statement of a later migration that rebuilt a search source's table
+ * (`SELECT 'search_fts_terms:<source>'`, 0199 for product_reviews): its
+ * search index triggers went with the old table, so a provider without FTS5
+ * reinstalls them (the index rows are keyed by the row id and stay). D1 runs
+ * it as a no-op. Null for any other statement; an unknown source throws.
+ */
+export function searchIndexSourceMarker(statement: string): SearchSource | null {
+  const match = /^SELECT\s+'search_fts_terms:([a-z_]+)'\s*;?\s*$/i.exec(stripLeadingSqlComments(statement).trim());
+  if (!match) return null;
+  const source = match[1]!;
+  if (!Object.hasOwn(SEARCH_SOURCES, source)) throw new Error(`Unknown search index source ${source}.`);
+  return source as SearchSource;
+}
+
+function searchIndexSourceTriggerStatements(source: SearchSource): string[] {
+  const prefix = `${SEARCH_INDEX_TABLE}_${source}_`;
+  return searchIndexTriggers("sqlite").filter((trigger) => trigger.name.startsWith(prefix)).map((trigger) => `${trigger.sql};`);
+}
+
+/**
  * Compile one canonical SQLite migration for a concrete provider capability
  * set. D1 receives the byte-identical migration. Turso MVCC omits only FTS5
  * virtual-table maintenance, which its current engine rejects, and gets the
@@ -123,9 +150,12 @@ export function compileSqliteMigrationForProvider(
 
   const statements = migrationSql.split(DRIZZLE_STATEMENT_BREAKPOINT);
   return statements
-    .flatMap((statement) => !capabilities.fts5 && isSearchIndexMarker(statement)
-      ? searchIndexSqliteMigrationStatements().map((compiled) => `${compiled};`)
-      : [statement])
+    .flatMap((statement) => {
+      if (capabilities.fts5) return [statement];
+      if (isSearchIndexMarker(statement)) return searchIndexSqliteMigrationStatements().map((compiled) => `${compiled};`);
+      const source = searchIndexSourceMarker(statement);
+      return source ? searchIndexSourceTriggerStatements(source) : [statement];
+    })
     .filter(
       (statement) =>
         statement.trim() &&

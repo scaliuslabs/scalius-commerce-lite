@@ -987,10 +987,16 @@ async function discountRepresentation(db: Database, promotionId: string) {
   return (await readDiscountRepresentations(db, [promotionId]))[0] ?? null;
 }
 
-async function reviewRepresentation(db: Database, reviewId: string) {
-  const review = await db.select().from(productReviews).where(eq(productReviews.id, reviewId)).get();
-  if (!review) return null;
-  return sealed("review", {
+/** Reviews one read takes: a page of `reviews.list` (bound as one JSON value). */
+export const REVIEW_REPRESENTATIONS_MAX = 90;
+
+/** These reviews as their webhooks carry them, in the order asked; unknown ids are left out. */
+export async function readReviewRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"review">[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  if (unique.length > REVIEW_REPRESENTATIONS_MAX) throw new RangeError(`Read at most ${REVIEW_REPRESENTATIONS_MAX} reviews at once.`);
+  const rows = await db.select().from(productReviews).where(inJsonArray(productReviews.id, unique)).all();
+  const byId = new Map(rows.map((review) => [review.id, sealed("review", {
     id: review.id,
     productId: review.productId,
     variantId: review.variantId ?? null,
@@ -1006,7 +1012,16 @@ async function reviewRepresentation(db: Database, reviewId: string) {
     revision: review.version,
     createdAt: isoRequired(review.createdAt),
     updatedAt: isoRequired(review.updatedAt),
-  });
+    orderItemId: review.orderItemId ?? null,
+    verified: review.orderItemId !== null,
+    appId: review.appId ?? null,
+    moderationReason: review.moderationReason ?? null,
+  })]));
+  return unique.flatMap((id) => byId.get(id) ?? []);
+}
+
+async function reviewRepresentation(db: Database, reviewId: string) {
+  return (await readReviewRepresentations(db, [reviewId]))[0] ?? null;
 }
 
 async function giftCardRepresentation(db: Database, giftCardId: string) {

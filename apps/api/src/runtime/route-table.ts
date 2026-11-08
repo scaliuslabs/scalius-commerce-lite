@@ -154,6 +154,7 @@ export const ROUTE_TABLE = [
   { mount: "/admin/resources", router: "adminResourceSettingsRoutes", group: "admin-sales" },
   // Digital files and key pools, and a buyer's access to them.
   { mount: "/admin/resources", router: "adminResourceDigitalRoutes", group: "admin-sales" },
+  { mount: "/admin/resources", router: "adminResourceReviewRoutes", group: "admin-sales" },
   { mount: "/admin/categories", router: "adminCategoryRoutes", group: "admin-catalog" },
   { mount: "/admin/brands", router: "adminBrandRoutes", group: "admin-catalog" },
   { mount: "/admin/price-lists", router: "adminPriceListRoutes", group: "admin-catalog" },

@@ -125,7 +125,7 @@ export function readPublicReview(value: unknown): PublicProductReview | null {
     body: text(raw.body),
     authorName: text(raw.authorName) ?? "",
     variantLabel: text(raw.variantLabel),
-    verifiedPurchase: true,
+    verifiedPurchase: raw.verifiedPurchase === true,
     publishedAt,
     editedAt: isoDate(raw.editedAt),
     reply: replyBody && repliedAt ? { body: replyBody, repliedAt } : null,
@@ -214,8 +214,9 @@ function paragraphs(body: string): string {
 
 /**
  * One review as Amazon and Daraz show it: the name, the stars and title on one
- * line, the date with "Edited", the variant bought and "Verified purchase",
- * the text, then the store's reply indented under it.
+ * line, the date with "Edited", the variant bought and "Verified purchase"
+ * (only on a delivered order line), the text, then the store's reply indented
+ * under it.
  */
 export function publicReviewMarkup(review: PublicProductReview, options: ReviewRenderOptions): string {
   const { copy, language, storeName } = options;
@@ -227,7 +228,7 @@ export function publicReviewMarkup(review: PublicProductReview, options: ReviewR
   ].filter(Boolean).join('<span aria-hidden="true"> · </span>');
   const facts = [
     review.variantLabel ? `<span class="review-variant">${escapeHtml(review.variantLabel)}</span>` : "",
-    `<span class="review-verified">${escapeHtml(copy.reviewsVerifiedText)}</span>`,
+    review.verifiedPurchase ? `<span class="review-verified">${escapeHtml(copy.reviewsVerifiedText)}</span>` : "",
   // No bar between them: when the variant wraps on a phone a bar strands at a
   // line edge; the gap and the check mark before "Verified" separate them.
   ].filter(Boolean).join("");

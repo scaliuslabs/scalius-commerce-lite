@@ -1,6 +1,6 @@
 # Reviews
 
-Verified-purchase product reviews: buyers review delivered order lines, staff moderate and reply, and a trigger-maintained projection feeds product ratings. Audience: contributors and coding agents.
+Product reviews: buyers review delivered order lines (verified purchases), apps import and moderate reviews through the stable app API, staff moderate and reply, and a trigger-maintained projection feeds product ratings. Audience: contributors and coding agents.
 
 ## Entries
 
@@ -11,6 +11,7 @@ Main files:
 - `shared.ts`: the fail-closed settings read, the buyer actor, `reviewableLineConditions`.
 - `lines.ts`: `listLineReviewStates` (`extras.review`), reviewable-line counts and lists, one line per product.
 - `buyer.ts`: submit, edit, withdraw, read. `staff.ts`: admin reads, `moderateReviews`, `setReviewReply`, `openReviewThread`, settings.
+- `apps.ts`: `createAppReview` and `setReviewStatus`, behind the stable `reviews.create` and `reviews.set_status` (`apps/api/src/routes/admin/resources-reviews.ts`).
 - `requests.ts`: `sweepReviewRequests`, `reviewRequestSendCheck`.
 
 The public reads (the product page `reviews` field and `GET /api/v1/products/{id}/reviews`) live in `catalog/product-reviews.ts`. They read the same tables, so `catalog` never depends on this domain.
@@ -25,11 +26,11 @@ The public reads (the product page `reviews` field and `GET /api/v1/products/{id
 
 | Table | Role and constraints |
 |-------|----------------------|
-| `product_reviews` | One review. Unique `order_item_id`. Unique `(product_id, reviewer_key)` while `status` is `pending` or `published`. `reviewer_key` is the account owner id, else the order's customer id, else `order:<id>`. Rating 1 to 5, title up to 120, body up to 5,000, reply up to 2,000 characters. `rejected` needs a `moderation_reason`. `edit_count_day` is at most 10. `version` is the CAS token. |
+| `product_reviews` | One review. Unique `order_item_id`. Unique `(product_id, reviewer_key)` while `status` is `pending` or `published`. `reviewer_key` is the account owner id, else the order's customer id, else `order:<id>`; an app's review that names no line uses `review:<id>`. `author_type` is `customer`, `guest_receipt` or `app` (with `app_id`). Only an app's review may name no order line; it is then not a verified purchase. Rating 1 to 5, title up to 120, body up to 5,000, reply up to 2,000 characters. `rejected` needs a `moderation_reason`. `edit_count_day` is at most 10. `version` is the CAS token. |
 | `product_review_stats` | One row per reviewed product: counts per star, `rating_avg_centi`, `rating_rank_milli` (Bayesian rank), `last_published_at`. A trigger projection of published reviews. No code writes it (source policy). |
 | `order_review_requests` | One row per delivered order, recorded by a trigger on `orders.status`. `status` is `scheduled`, `queued` or `skipped`. |
 
-The trigger `product_reviews_line_eligible` refuses a line that was not handed over on a delivered or completed order. The `product_reviews_stats_*` triggers maintain the stats row.
+The trigger `product_reviews_line_eligible` refuses a named line that was not handed over on a delivered or completed order. The `product_reviews_stats_*` triggers maintain the stats row.
 
 ## Rules
 
@@ -41,6 +42,7 @@ The trigger `product_reviews_line_eligible` refuses a line that was not handed o
 - Buyers edit rating, title, text and display name at most 10 times a day. Buyers withdraw pending or published reviews. Staff never write buyer text: they set status, reason, reply and settings only.
 - `moderateReviews` takes at most 90 ids and runs one UPDATE. Repeats are idempotent.
 - Review text never enters logs, URLs, queue payloads or outbox data.
+- An app's review is verified only on a delivered line of the review's customer (`verified: true` otherwise is `review_not_verifiable`). Its id derives from the app's Idempotency-Key, so a repeat writes nothing. It moderates at the review's `version` (`review_revision_conflict`). An import with no order has no review thread (`review_has_no_order`) and writes no staff `review_pending` row.
 - Review requests: the delivered trigger records one row per order. `sweepReviewRequests` runs in the scheduled maintenance (`apps/api/src/scheduled-maintenance.ts`). When `requestDelayDays` has passed, it queues a `review_request` outbox row (dedupe `order:<id>:review_request`). It skips orders with nothing to review, and every due order while reviews or requests are off.
 - The send-time resolver `apps/api/src/notification-content/review-request.ts` rechecks and links `/account/orders/<id>#reviews` or `/track-order`, never a token. Channels come from the `review_request` row of the notifications document.
 

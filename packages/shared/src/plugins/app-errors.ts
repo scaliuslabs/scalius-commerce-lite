@@ -82,6 +82,8 @@ export const APP_ERROR_CODES = {
   return_command_in_progress: { status: 409, meaning: "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key." },
   segment_revision_conflict: { status: 409, meaning: "The customer segment changed since its revision was read." },
   inventory_transfer_state_conflict: { status: 409, meaning: "The stock transfer's status refuses the write (a shipped one's lines, nothing left in transit)." },
+  review_revision_conflict: { status: 409, meaning: "The review changed since its revision was read." },
+  review_state_conflict: { status: 409, meaning: "The review's status cannot move to the one asked (a withdrawn review, a rejected one back to pending)." },
 
   // ── Domain refusals of stable operations ──
   price_changed: { status: 409, meaning: "A price moved since it was read; read it again." },
@@ -118,6 +120,10 @@ export const APP_ERROR_CODES = {
   digital_asset_not_on_line: { status: 422, meaning: "The order line's product and variant do not deliver this digital item." },
   digital_asset_not_ready: { status: 409, meaning: "The digital item is not ready to deliver (its file is still uploading, or it is archived)." },
   digital_keys_exhausted: { status: 409, meaning: "The licence-key pool has too few keys for the line; the store imports more." },
+  reviews_disabled: { status: 403, meaning: "The store is not taking reviews (its reviews setting is off)." },
+  review_exists: { status: 409, meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it." },
+  review_not_eligible: { status: 409, meaning: "The order line was not handed over on a delivered order, or its review window closed." },
+  review_not_verifiable: { status: 422, meaning: "A verified purchase needs a delivered order line of the review's customer; nothing was written." },
 
   // ── ctx refusals (PluginPlatformError.code) ──
   object_undeclared_type: { status: 400, meaning: "The manifest declares no object type of that name." },
