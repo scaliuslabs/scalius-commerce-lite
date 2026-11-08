@@ -544,5 +544,23 @@
   "from": "864eb6b74efa529a",
   "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
   "reason": "Merge of the orders.create fix round onto this branch: the same change acknowledged above against this branch's earlier snapshot. The merged snapshot kept this branch's AppErrorCode, which lacked admin_order_create_request_mismatch; sealing adds it. Sealed codes are only added (APP_ERROR_CODES): orders.create already answered it when its key belonged to another request, so an app can now branch on it. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new member."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "7ec7e9efdc925599",
+  "change": "storefront.STOREFRONT_COMPONENT_LIMITS.pixelBytes: a new limit was added.",
+  "reason": "G6 app pixels (COMMERCE-HOOKS H15): the limit bounds only the new storefront/pixel.js; no existing file or release is affected."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "7ec7e9efdc925599",
+  "change": "storefront.STOREFRONT_FILE_PATH: the constant value changed.",
+  "reason": "G6 app pixels (COMMERCE-HOOKS H15): the pattern only widens to accept pixel.js; every path it accepted before it still accepts."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#InterfaceDeclaration:PluginGrantRequest: an existing signature changed or gained a required member.",
+  "reason": "G6 app pixels (COMMERCE-HOOKS H15): the grant request the platform derives from a manifest gains storefrontPixel, approved like the other flags; apps read it, never build it."
  }
 ]
