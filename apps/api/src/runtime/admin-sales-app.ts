@@ -14,6 +14,8 @@ import { adminResourceGiftCardRoutes } from "../routes/admin/resources-gift-card
 import { adminResourceProductRoutes } from "../routes/admin/resources-products";
 import { adminResourceRefundRoutes } from "../routes/admin/resources-refunds";
 import { adminResourcePaymentMethodRoutes } from "../routes/admin/resources-payment-methods";
+import { adminResourcePayoutRoutes } from "../routes/admin/resources-payouts";
+import { adminResourceConversationRoutes } from "../routes/admin/resources-conversations";
 import { adminResourceWebhookRoutes } from "../routes/admin/resources-webhooks";
 import { adminResourceReturnRoutes } from "../routes/admin/resources-returns";
 import { adminResourceDiscountRoutes } from "../routes/admin/resources-discounts";
@@ -27,6 +29,8 @@ export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
     adminResourceProductRoutes,
     adminResourceRefundRoutes,
     adminResourcePaymentMethodRoutes,
+    adminResourcePayoutRoutes,
+    adminResourceConversationRoutes,
     adminResourceWebhookRoutes,
     adminResourceReturnRoutes,
     adminResourceDiscountRoutes,

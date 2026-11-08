@@ -628,7 +628,7 @@ export const conversationRepresentationSchema = z.object({
   lastMessageAt: iso.nullable(),
   lastMessage: conversationMessageRepresentationSchema.nullable(),
   /** Advances with every change of the thread. */
-  version: z.number().int(),
+  revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,
   closedAt: iso.nullable(),
@@ -653,7 +653,8 @@ export const payoutRepresentationSchema = z.object({
   providerRef: text.nullable(),
   failureCode: state.nullable(),
   failureMessage: text.nullable(),
-  version: z.number().int(),
+  /** Advances with every change of the payout. */
+  revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,
   settledAt: iso.nullable(),

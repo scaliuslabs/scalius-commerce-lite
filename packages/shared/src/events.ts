@@ -511,6 +511,19 @@ export function topicMatchesAnyFilter(topic: EventTopic, filters: readonly strin
 }
 
 /**
+ * The one app an event is addressed to, or null for a store event every
+ * subscriber of its topic receives. A payout is the business of the app that
+ * sent it: `payout.*` reaches only that app (its event handlers and its own
+ * webhook endpoints), never another app or a merchant endpoint.
+ */
+export function eventRecipientApp(topic: EventTopic, facts: unknown): string | null {
+  if (!topic.startsWith("payout.")) return null;
+  const appId = (facts as { appId?: unknown } | null)?.appId;
+  // A payout event without its app reaches no one.
+  return typeof appId === "string" && appId ? appId : "";
+}
+
+/**
  * Sorted, de-duplicated filters with exact topics already covered by a
  * prefix (or by `*`) removed. Returns null when any entry is not a filter.
  */

@@ -168,6 +168,20 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.gift_cards.create": storedValue({ idempotency: "required" }),
   "dashboard.resources.gift_cards.adjust": storedValue({ idempotency: "required", revision: "required" }),
   "dashboard.resources.gift_cards.update": storedValue({ revision: "required" }),
+  // Payouts (routes/admin/resources-payouts.ts): money out of the store
+  // through an app payout provider, apps only (the Sensitive write_payouts).
+  // The payout is committed before the provider call, one per required
+  // Idempotency-Key, and the provider applies it once per payout id.
+  "dashboard.resources.payouts.list": { uncurated: true },
+  "dashboard.resources.payouts.get": { uncurated: true },
+  "dashboard.resources.payouts.create": storedValue({ openWorld: true, idempotency: "required" }),
+  // The inbox (routes/admin/resources-conversations.ts): threads and lines
+  // (read_conversations); a reply or note (write_conversations) under a
+  // required Idempotency-Key, sent on a chat channel through its provider.
+  "dashboard.resources.conversations.list": { uncurated: true },
+  "dashboard.resources.conversations.get": { uncurated: true },
+  "dashboard.resources.conversations.messages_list": { uncurated: true },
+  "dashboard.resources.conversations.messages_create": { openWorld: true, idempotency: "required", batch: "forbidden" },
   // An app's own webhook subscriptions (routes/admin/resources-webhooks.ts):
   // apps only (write_webhooks), within their approved hosts, topics and
   // customer data. Create returns the signing secret to the app once and

@@ -41,7 +41,7 @@ import {
   type PluginEventDeliveryRow,
   type PluginEventDeliveryStatus,
 } from "@scalius/database/schema";
-import { topicMatchesAnyFilter } from "@scalius/shared/events";
+import { eventRecipientApp, topicMatchesAnyFilter } from "@scalius/shared/events";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { and, asc, desc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { EventFanOutTarget, FannedOutDelivery } from "../events";
@@ -95,6 +95,9 @@ export const pluginEventFanOutTarget: EventFanOutTarget = {
       // The approved grant decides, and a plugin first approved after the event never receives it.
       for (const { installation } of subscribers.get(event.id) ?? []) {
         if (installation.grant === null || !topicMatchesAnyFilter(event.topic, installation.grant.events)) continue;
+        // An event addressed to one app (a payout) reaches only that app.
+        const recipient = eventRecipientApp(event.topic, event.facts);
+        if (recipient !== null && recipient !== installation.pluginId) continue;
         rows.push({
           d: newPluginDeliveryId(nowMs + rows.length),
           p: installation.pluginId,

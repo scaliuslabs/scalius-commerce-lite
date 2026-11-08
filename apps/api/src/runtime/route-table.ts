@@ -121,8 +121,11 @@ export const ROUTE_TABLE = [
   { mount: "/", router: "readinessRoutes", group: "probe", exact: ["/readyz"] },
   // Webhooks: no auth middleware (the signature is the auth), bounded bodies.
   { use: "/webhooks/*", middleware: ["webhookBodyLimit"], group: "system" },
-  // Couriers: /webhooks/couriers/{provider}; payment gateways: /webhooks/{provider}, after them.
+  // Couriers: /webhooks/couriers/{provider}; payouts: /webhooks/payouts/{provider};
+  // chat channels: /webhooks/messaging/{provider}; payment gateways: /webhooks/{provider}, after them.
   { mount: "/webhooks/couriers", router: "courierWebhookRoutes", group: "system" },
+  { mount: "/webhooks/payouts", router: "payoutWebhookRoutes", group: "system" },
+  { mount: "/webhooks/messaging", router: "messagingWebhookRoutes", group: "system" },
   { mount: "/webhooks", router: "paymentWebhookRoutes", group: "system" },
   // The dashboard's cache controls carry merchant data and need a dashboard session.
   { use: "/cache/*", middleware: ["privateNoStore", "dashboardOriginGuard", "adminAuth"], group: "system" },
@@ -145,6 +148,8 @@ export const ROUTE_TABLE = [
   { mount: "/admin/resources", router: "adminResourceProductRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceRefundRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourcePaymentMethodRoutes", group: "admin-sales" },
+  { mount: "/admin/resources", router: "adminResourcePayoutRoutes", group: "admin-sales" },
+  { mount: "/admin/resources", router: "adminResourceConversationRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceWebhookRoutes", group: "admin-sales" },
   // An RMA app's return writes, discount syncs and saved customer segments.
   { mount: "/admin/resources", router: "adminResourceReturnRoutes", group: "admin-sales" },

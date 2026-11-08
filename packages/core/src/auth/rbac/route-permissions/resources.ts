@@ -83,6 +83,14 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/gift-cards": { GET: giftCards, POST: giftCardsManage },
   "/api/v1/admin/resources/gift-cards/*": { GET: giftCards, PATCH: giftCardsManage },
   "/api/v1/admin/resources/gift-cards/*/adjust": { POST: giftCardsManage },
+  // Payouts send money out of the store: one sensitive permission reads and
+  // sends (the routes answer an app its own payouts only).
+  "/api/v1/admin/resources/payouts": { GET: { permission: PERMISSIONS.PAYOUTS_MANAGE }, POST: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
+  "/api/v1/admin/resources/payouts/*": { GET: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
+  // The inbox in the app API: reading threads and lines, and replying.
+  "/api/v1/admin/resources/conversations": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
+  "/api/v1/admin/resources/conversations/*": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
+  "/api/v1/admin/resources/conversations/*/messages": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW }, POST: { permission: PERMISSIONS.CONVERSATIONS_REPLY } },
   // An app's own webhook subscriptions (the route refuses any other caller).
   "/api/v1/admin/resources/webhook-subscriptions": { GET: webhooks, POST: webhooksManage },
   "/api/v1/admin/resources/webhook-subscriptions/*": { PATCH: webhooksManage, DELETE: webhooksManage },

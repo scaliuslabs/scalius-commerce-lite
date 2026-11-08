@@ -13,3 +13,4 @@ export * from "./customer-segments";
 export * from "./customer-export";
 export * from "./customer-erasure";
 export * from "./erased-guard";
+export * from "./channel-contacts";

@@ -32,6 +32,7 @@ import {
   WEBHOOK_TEST_TOPIC,
   WEBHOOK_TOPIC_HEADER,
   eventDataTruncation,
+  eventRecipientApp,
   projectEventRepresentation,
   signWebhookPayload,
   topicMatchesAnyFilter,
@@ -50,7 +51,7 @@ import {
   type FannedOutDelivery,
   type OutboxEvent,
 } from "./event-outbox";
-import { COST_BEARING_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
+import { COST_BEARING_EVENT_RESOURCES, INBOX_EVENT_RESOURCES, parseStoredCustomerData, parseStoredTopicFilters, readWebhookSecret, type AppWebhookAccess } from "./webhook-subscriptions";
 import { eventFilterCovered, isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { drainEvent, drainEventsSource, eventAfterSubscriptionStart } from "./event-start-fence";
 import { jsonChunks } from "../../utils/json-chunks";
@@ -265,7 +266,7 @@ export const webhookFanOutTarget: EventFanOutTarget = {
     // it, and an app's only while the app is active (each delivery re-checks
     // its grant).
     const pairs = await db
-      .select({ id: webhookSubscriptions.id, topics: webhookSubscriptions.topics, eventId: drainEvent.id })
+      .select({ id: webhookSubscriptions.id, topics: webhookSubscriptions.topics, pluginId: webhookSubscriptions.pluginId, eventId: drainEvent.id })
       .from(webhookSubscriptions)
       .innerJoin(drainEventsSource(events), eventAfterSubscriptionStart(
         drainEvent, webhookSubscriptions.createdAt, webhookSubscriptions.eventStartExclusions,
@@ -283,6 +284,9 @@ export const webhookFanOutTarget: EventFanOutTarget = {
     const rows = pairs.flatMap((pair) => {
       const event = byId.get(pair.eventId);
       if (!event || !topicMatchesAnyFilter(event.topic, parseStoredTopicFilters(pair.topics))) return [];
+      // An event addressed to one app (a payout) reaches only that app's own endpoints.
+      const recipient = eventRecipientApp(event.topic, event.facts);
+      if (recipient !== null && pair.pluginId !== recipient) return [];
       return [{ i: pair.id, e: event.id, t: event.topic, rt: event.resourceType, r: event.resourceId }];
     }).map((row, index) => ({ ...row, d: newDeliveryId(nowMs + index) }));
     if (rows.length === 0) return [];
@@ -481,6 +485,8 @@ function appDeliveryRefusal(access: AppWebhookAccess | null, url: string, topic:
   if (!eventFilterCovered(topic, access.topics)) return "app_topic_not_granted";
   // A purchase order carries the store's costs: only while the live grant may see them.
   if (!access.productCosts && COST_BEARING_EVENT_RESOURCES.has(resourceType)) return "app_cost_scope_not_granted";
+  // A conversation carries buyers' words: only while the live grant may read the inbox.
+  if (!access.conversations && INBOX_EVENT_RESOURCES.has(resourceType)) return "app_conversation_scope_not_granted";
   let parsed: URL;
   try {
     parsed = new URL(url);

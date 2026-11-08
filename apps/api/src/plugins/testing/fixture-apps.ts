@@ -24,6 +24,9 @@
 // - acme.members: customer roles (ctx.customers.roles, cart.customer.roles)
 //   and a background job with a live progress page (ctx.jobs).
 // - acme.marketplace: a multi-seller split kept from fulfilment and refund line facts.
+// - acme.chat: a WhatsApp and Messenger channel (inbound pushes into the
+//   inbox, staff replies out through `send`) and an acknowledgement posted
+//   through the stable inbox operations.
 // - acme.subscriptions: a purchase option, contracts from order.created, a
 //   renewal cron (orders.create + payments.charge of the saved method) and a
 //   test payment provider that vaults, charges off-session, captures and voids.
@@ -43,6 +46,7 @@ import { manifest as membersManifest } from "./apps/members/src/index";
 import { manifest as builderManifest } from "./apps/builder/src/index";
 import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
 import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
+import { manifest as chatManifest } from "./apps/chat/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -59,6 +63,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.builder": "./apps/api/src/plugins/testing/apps/builder",
   "acme.marketplace": "./apps/api/src/plugins/testing/apps/marketplace",
   "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
+  "acme.chat": "./apps/api/src/plugins/testing/apps/chat",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -80,6 +85,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.builder": { version: builderManifest.version, sha256: "b11d".repeat(16), load: () => import("./apps/builder/src/index") },
   "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("./apps/marketplace/src/index") },
   "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
+  "acme.chat": { version: chatManifest.version, sha256: "c4a7".repeat(16), load: () => import("./apps/chat/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */
