@@ -16,6 +16,7 @@ import {
   type AgentArtifactResult,
 } from "./artifact-delivery";
 
+import { AGENT_GRANT_INACTIVE, AGENT_GRANT_INACTIVE_MESSAGE } from "@scalius/core/errors";
 import { AgentDispatchError, type AgentInputPrimitive, type AgentOperationInput } from "./dispatch-error";
 
 export { AgentDispatchError };
@@ -632,7 +633,7 @@ function agentDispatchAuthority(backend: Awaited<ReturnType<typeof loadAgentAcce
     ),
     surface: (principal) => principal.resource,
     withinRateLimit: (principal, env) => checkAgentRateLimit(env, `grant:${principal.grantId}`),
-    inactive: { code: "grant_inactive", message: "Agent grant is inactive" },
+    inactive: { code: AGENT_GRANT_INACTIVE, message: AGENT_GRANT_INACTIVE_MESSAGE },
     auditActor: (principal) => ({
       grantId: principal.grantId,
       credentialId: principal.credentialId,
