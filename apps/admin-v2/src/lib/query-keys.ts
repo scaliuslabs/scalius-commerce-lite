@@ -325,6 +325,8 @@ export const queryKeys = {
     storefrontProblems: () => ["apps", "storefront-problems"] as const,
     /** Data left by apps that are no longer installed, by app. */
     removedData: () => ["apps", "removed-data"] as const,
+    /** The order apps run in at each checkout function point. */
+    functionOrder: () => ["apps", "function-order"] as const,
     /**
      * One app UI request (a page, card or widget document). Without `route`:
      * every document of one app; without `pluginId`: every app document.

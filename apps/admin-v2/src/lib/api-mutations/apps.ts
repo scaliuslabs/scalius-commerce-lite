@@ -11,10 +11,11 @@ import {
   postApiV1AdminAppsRemovedDataByIdDelete,
   postApiV1AdminAppsRemovedDataByIdHandOver,
   putApiV1AdminAppsByIdSettings,
+  putApiV1AdminAppsFunctionOrder,
 } from "@scalius/api-client/sdk";
 import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
-import type { AppDetail, AppFeature, AppSettingValue, RemovedAppData } from "../api-query-options/apps";
+import type { AppDetail, AppFeature, AppFunctionPointOrder, AppSettingValue, RemovedAppData } from "../api-query-options/apps";
 
 /** Super Admin only. `grantKey` is the one the page showed; a changed request answers 409. */
 export function activateApp(app: Pick<AppDetail, "id" | "revision" | "grantKey">) {
@@ -112,4 +113,14 @@ export function appSettingErrors(error: unknown): Array<{ key: string; message: 
     return entry && typeof entry.key === "string" && typeof entry.message === "string" ? [{ key: entry.key, message: entry.message }] : [];
   });
   return list.length > 0 ? list : null;
+}
+
+/**
+ * Sets the order apps run in at one checkout function point: every app
+ * there once, first to run first; `null` goes back to the apps' own
+ * priorities. A changed set of apps, or another save, answers 409.
+ */
+export async function setAppFunctionOrder(point: AppFunctionPointOrder["point"], appIds: string[] | null) {
+  const { point: saved } = await apiData(putApiV1AdminAppsFunctionOrder({ body: { point, appIds } }));
+  return saved;
 }
