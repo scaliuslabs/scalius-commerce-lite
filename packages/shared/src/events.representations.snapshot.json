@@ -2653,6 +2653,402 @@
     "createdAt",
     "updatedAt"
    ]
+  },
+  "conversation": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "subjectType": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "pending",
+      "closed"
+     ]
+    },
+    "channel": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "orderId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "customerId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "subject": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
+    "contact": {
+     "nullable": true,
+     "type": "object",
+     "properties": {
+      "name": {
+       "nullable": true,
+       "x-scalius-protected": "name",
+       "type": "string",
+       "maxLength": 4000
+      },
+      "address": {
+       "nullable": true,
+       "x-scalius-protected": "phone",
+       "type": "string",
+       "maxLength": 4000
+      },
+      "providerId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      }
+     },
+     "required": [
+      "name",
+      "address",
+      "providerId"
+     ]
+    },
+    "assigneeUserId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "lastSeq": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "lastMessageAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "lastMessage": {
+     "nullable": true,
+     "type": "object",
+     "properties": {
+      "id": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "seq": {
+       "type": "integer",
+       "minimum": -9007199254740991,
+       "maximum": 9007199254740991
+      },
+      "kind": {
+       "type": "string",
+       "enum": [
+        "message",
+        "event"
+       ]
+      },
+      "visibility": {
+       "type": "string",
+       "enum": [
+        "public",
+        "internal"
+       ]
+      },
+      "author": {
+       "type": "string",
+       "enum": [
+        "customer",
+        "staff",
+        "app",
+        "system"
+       ]
+      },
+      "appId": {
+       "nullable": true,
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "body": {
+       "nullable": true,
+       "type": "string",
+       "maxLength": 4000
+      },
+      "eventKind": {
+       "nullable": true,
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "attachments": {
+       "maxItems": 10,
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+         },
+         "mediaType": {
+          "nullable": true,
+          "type": "string",
+          "maxLength": 4000
+         },
+         "name": {
+          "nullable": true,
+          "type": "string",
+          "maxLength": 4000
+         },
+         "sizeBytes": {
+          "nullable": true,
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+         },
+         "ref": {
+          "nullable": true,
+          "type": "string",
+          "maxLength": 4000
+         },
+         "url": {
+          "nullable": true,
+          "type": "string",
+          "maxLength": 4000
+         }
+        },
+        "required": [
+         "kind",
+         "mediaType",
+         "name",
+         "sizeBytes",
+         "ref",
+         "url"
+        ]
+       }
+      },
+      "delivery": {
+       "nullable": true,
+       "type": "object",
+       "properties": {
+        "direction": {
+         "type": "string",
+         "enum": [
+          "inbound",
+          "outbound"
+         ]
+        },
+        "status": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 64
+        },
+        "providerId": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        }
+       },
+       "required": [
+        "direction",
+        "status",
+        "providerId"
+       ]
+      },
+      "createdAt": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 40,
+       "format": "date-time"
+      }
+     },
+     "required": [
+      "id",
+      "seq",
+      "kind",
+      "visibility",
+      "author",
+      "appId",
+      "body",
+      "eventKind",
+      "attachments",
+      "delivery",
+      "createdAt"
+     ]
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "closedAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "subjectType",
+    "status",
+    "channel",
+    "orderId",
+    "customerId",
+    "subject",
+    "contact",
+    "assigneeUserId",
+    "lastSeq",
+    "lastMessageAt",
+    "lastMessage",
+    "revision",
+    "createdAt",
+    "updatedAt",
+    "closedAt"
+   ]
+  },
+  "payout": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "appId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "providerId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "payeeRef": {
+     "type": "string",
+     "maxLength": 4000
+    },
+    "payeeAccountRef": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
+    "amountMinor": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "description": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "pending",
+      "processing",
+      "paid",
+      "failed"
+     ]
+    },
+    "providerRef": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
+    "failureCode": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "failureMessage": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "settledAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "appId",
+    "providerId",
+    "payeeRef",
+    "payeeAccountRef",
+    "amountMinor",
+    "currency",
+    "description",
+    "status",
+    "providerRef",
+    "failureCode",
+    "failureMessage",
+    "revision",
+    "createdAt",
+    "updatedAt",
+    "settledAt"
+   ]
   }
  },
  "truncation": {
@@ -2753,6 +3149,11 @@
    "recipient.phone=phone"
   ],
   "gift_card_transaction": [],
-  "object": []
+  "object": [],
+  "conversation": [
+   "contact.address=phone",
+   "contact.name=name"
+  ],
+  "payout": []
  }
 }

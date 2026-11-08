@@ -9818,6 +9818,359 @@
     ]
    }
   },
+  "conversations.get": {
+   "operationId": "dashboard.resources.conversations.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/conversations/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_conversations",
+    "write_conversations"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "conversation": {
+        "$ref": "#/components/schemas/ConversationResource"
+       }
+      },
+      "required": [
+       "conversation"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "conversations.list": {
+   "operationId": "dashboard.resources.conversations.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/conversations",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_conversations",
+    "write_conversations"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "open",
+        "pending",
+        "closed"
+       ],
+       "description": "Only threads in this status."
+      },
+      "required": false,
+      "description": "Only threads in this status.",
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "whatsapp",
+        "messenger",
+        "instagram",
+        "telegram",
+        "viber"
+       ],
+       "description": "Only this chat channel's threads."
+      },
+      "required": false,
+      "description": "Only this chat channel's threads.",
+      "name": "channel",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "conversations": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ConversationResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "conversations",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "conversations.create_message": {
+   "operationId": "dashboard.resources.conversations.messages_create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/conversations/{id}/messages",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_conversations"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000,
+          "description": "The text. A public reply reaches the buyer by the thread's own way: email for storefront threads, the chat channel for channel threads."
+         },
+         "visibility": {
+          "type": "string",
+          "enum": [
+           "public",
+           "internal"
+          ],
+          "default": "public",
+          "description": "`internal`: a staff note the buyer never sees."
+         }
+        },
+        "required": [
+         "body"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "conversation": {
+        "$ref": "#/components/schemas/ConversationResource"
+       },
+       "message": {
+        "$ref": "#/components/schemas/ConversationMessageResource"
+       }
+      },
+      "required": [
+       "conversation",
+       "message"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "conversations.list_messages": {
+   "operationId": "dashboard.resources.conversations.messages_list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/conversations/{id}/messages",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_conversations",
+    "write_conversations"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 50,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "messages": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ConversationMessageResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "messages",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "customer_segments.create": {
    "operationId": "dashboard.resources.customer_segments.create",
    "method": "POST",
@@ -14136,6 +14489,266 @@
        "currency",
        "payment",
        "replayed"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payouts.create": {
+   "operationId": "dashboard.resources.payouts.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/payouts",
+   "risk": "financial",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_payouts"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "providerId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160,
+          "description": "The payout provider, `<app id>:<provider id>` (an installed, set-up payout app)."
+         },
+         "payeeRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Your own reference for the payee (a seller id)."
+         },
+         "payeeAccountRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The provider's reference for the payee's account (a wallet number, a connected account id); leave it out when the provider looks it up from payeeRef."
+         },
+         "amountMinor": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 9000000000000,
+          "description": "What to send, in minor units of `currency`."
+         },
+         "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "ISO 4217 code of the amount."
+         },
+         "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Shown on the payee's statement where the provider supports it."
+         }
+        },
+        "required": [
+         "providerId",
+         "payeeRef",
+         "amountMinor",
+         "currency"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "payout": {
+        "$ref": "#/components/schemas/PayoutResource"
+       }
+      },
+      "required": [
+       "payout"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payouts.get": {
+   "operationId": "dashboard.resources.payouts.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/payouts/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_payouts"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "payout": {
+        "$ref": "#/components/schemas/PayoutResource"
+       }
+      },
+      "required": [
+       "payout"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "payouts.list": {
+   "operationId": "dashboard.resources.payouts.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/payouts",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "write_payouts"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "pending",
+        "processing",
+        "paid",
+        "failed"
+       ],
+       "description": "Only payouts in this status."
+      },
+      "required": false,
+      "description": "Only payouts in this status.",
+      "name": "status",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "payouts": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/PayoutResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "payouts",
+       "nextCursor"
       ]
      }
     },
@@ -19582,6 +20195,8 @@
             "gift_card.*",
             "gift_card_transaction.*",
             "object.*",
+            "conversation.*",
+            "payout.*",
             "order.created",
             "order.updated",
             "order.paid",
@@ -19620,12 +20235,15 @@
             "object.deleted",
             "customer.redact_requested",
             "customer.data_requested",
-            "customer.erased"
+            "customer.erased",
+            "conversation.message_received",
+            "payout.created",
+            "payout.updated"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 57
+          "maxItems": 62
          },
          "description": {
           "type": "string",
@@ -19920,6 +20538,8 @@
             "gift_card.*",
             "gift_card_transaction.*",
             "object.*",
+            "conversation.*",
+            "payout.*",
             "order.created",
             "order.updated",
             "order.paid",
@@ -19958,12 +20578,15 @@
             "object.deleted",
             "customer.redact_requested",
             "customer.data_requested",
-            "customer.erased"
+            "customer.erased",
+            "conversation.message_received",
+            "payout.created",
+            "payout.updated"
            ],
            "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
           },
           "minItems": 1,
-          "maxItems": 57
+          "maxItems": 62
          },
          "description": {
           "type": "string",
@@ -21791,6 +22414,429 @@
     "createdAt",
     "updatedAt",
     "deletedAt"
+   ]
+  },
+  "ConversationMessageResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "seq": {
+     "type": "integer"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "message",
+      "event"
+     ]
+    },
+    "visibility": {
+     "type": "string",
+     "enum": [
+      "public",
+      "internal"
+     ]
+    },
+    "author": {
+     "type": "string",
+     "enum": [
+      "customer",
+      "staff",
+      "app",
+      "system"
+     ]
+    },
+    "appId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "body": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "eventKind": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "attachments": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "kind": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "mediaType": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
+       "name": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
+       "sizeBytes": {
+        "type": "integer",
+        "nullable": true
+       },
+       "ref": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       },
+       "url": {
+        "type": "string",
+        "nullable": true,
+        "maxLength": 4000
+       }
+      },
+      "required": [
+       "kind",
+       "mediaType",
+       "name",
+       "sizeBytes",
+       "ref",
+       "url"
+      ]
+     },
+     "maxItems": 10
+    },
+    "delivery": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "direction": {
+       "type": "string",
+       "enum": [
+        "inbound",
+        "outbound"
+       ]
+      },
+      "status": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "providerId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      }
+     },
+     "required": [
+      "direction",
+      "status",
+      "providerId"
+     ]
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "seq",
+    "kind",
+    "visibility",
+    "author",
+    "appId",
+    "body",
+    "eventKind",
+    "attachments",
+    "delivery",
+    "createdAt"
+   ]
+  },
+  "ConversationResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "subjectType": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "pending",
+      "closed"
+     ]
+    },
+    "channel": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "orderId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "subject": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "contact": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "name": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000,
+       "x-scalius-protected": "name"
+      },
+      "address": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000,
+       "x-scalius-protected": "phone"
+      },
+      "providerId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      }
+     },
+     "required": [
+      "name",
+      "address",
+      "providerId"
+     ]
+    },
+    "assigneeUserId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "lastSeq": {
+     "type": "integer"
+    },
+    "lastMessageAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "lastMessage": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "id": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "seq": {
+       "type": "integer"
+      },
+      "kind": {
+       "type": "string",
+       "enum": [
+        "message",
+        "event"
+       ]
+      },
+      "visibility": {
+       "type": "string",
+       "enum": [
+        "public",
+        "internal"
+       ]
+      },
+      "author": {
+       "type": "string",
+       "enum": [
+        "customer",
+        "staff",
+        "app",
+        "system"
+       ]
+      },
+      "appId": {
+       "type": "string",
+       "nullable": true,
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "body": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000
+      },
+      "eventKind": {
+       "type": "string",
+       "nullable": true,
+       "minLength": 1,
+       "maxLength": 64
+      },
+      "attachments": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+         },
+         "mediaType": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 4000
+         },
+         "name": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 4000
+         },
+         "sizeBytes": {
+          "type": "integer",
+          "nullable": true
+         },
+         "ref": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 4000
+         },
+         "url": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 4000
+         }
+        },
+        "required": [
+         "kind",
+         "mediaType",
+         "name",
+         "sizeBytes",
+         "ref",
+         "url"
+        ]
+       },
+       "maxItems": 10
+      },
+      "delivery": {
+       "type": "object",
+       "nullable": true,
+       "properties": {
+        "direction": {
+         "type": "string",
+         "enum": [
+          "inbound",
+          "outbound"
+         ]
+        },
+        "status": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 64
+        },
+        "providerId": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 128
+        }
+       },
+       "required": [
+        "direction",
+        "status",
+        "providerId"
+       ]
+      },
+      "createdAt": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 40,
+       "format": "date-time"
+      }
+     },
+     "required": [
+      "id",
+      "seq",
+      "kind",
+      "visibility",
+      "author",
+      "appId",
+      "body",
+      "eventKind",
+      "attachments",
+      "delivery",
+      "createdAt"
+     ]
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "closedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "subjectType",
+    "status",
+    "channel",
+    "orderId",
+    "customerId",
+    "subject",
+    "contact",
+    "assigneeUserId",
+    "lastSeq",
+    "lastMessageAt",
+    "lastMessage",
+    "revision",
+    "createdAt",
+    "updatedAt",
+    "closedAt"
    ]
   },
   "CustomerResource": {
@@ -25298,6 +26344,113 @@
     "providerRef",
     "createdAt",
     "updatedAt"
+   ]
+  },
+  "PayoutResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "appId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "providerId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "payeeRef": {
+     "type": "string",
+     "maxLength": 4000
+    },
+    "payeeAccountRef": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "amountMinor": {
+     "type": "integer"
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "description": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "pending",
+      "processing",
+      "paid",
+      "failed"
+     ]
+    },
+    "providerRef": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "failureCode": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 64
+    },
+    "failureMessage": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "settledAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "appId",
+    "providerId",
+    "payeeRef",
+    "payeeAccountRef",
+    "amountMinor",
+    "currency",
+    "description",
+    "status",
+    "providerRef",
+    "failureCode",
+    "failureMessage",
+    "revision",
+    "createdAt",
+    "updatedAt",
+    "settledAt"
    ]
   },
   "PriceListResource": {

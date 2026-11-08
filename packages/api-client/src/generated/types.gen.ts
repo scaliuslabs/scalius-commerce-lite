@@ -3609,6 +3609,96 @@ export type PaymentMethodResource = {
     updatedAt: string;
 };
 
+export type PayoutResource = {
+    id: string;
+    appId: string;
+    providerId: string;
+    payeeRef: string;
+    payeeAccountRef: string | null;
+    amountMinor: number;
+    currency: string;
+    description: string | null;
+    status: 'pending' | 'processing' | 'paid' | 'failed';
+    providerRef: string | null;
+    failureCode: string | null;
+    failureMessage: string | null;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+    settledAt: string | null;
+};
+
+export type ConversationResource = {
+    id: string;
+    subjectType: string;
+    status: 'open' | 'pending' | 'closed';
+    channel: string | null;
+    orderId: string | null;
+    customerId: string | null;
+    subject: string | null;
+    contact: {
+        name: string | null;
+        address: string | null;
+        providerId: string;
+    } | null;
+    assigneeUserId: string | null;
+    lastSeq: number;
+    lastMessageAt: string | null;
+    lastMessage: {
+        id: string;
+        seq: number;
+        kind: 'message' | 'event';
+        visibility: 'public' | 'internal';
+        author: 'customer' | 'staff' | 'app' | 'system';
+        appId: string | null;
+        body: string | null;
+        eventKind: string | null;
+        attachments: Array<{
+            kind: string;
+            mediaType: string | null;
+            name: string | null;
+            sizeBytes: number | null;
+            ref: string | null;
+            url: string | null;
+        }>;
+        delivery: {
+            direction: 'inbound' | 'outbound';
+            status: string;
+            providerId: string;
+        } | null;
+        createdAt: string;
+    } | null;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+    closedAt: string | null;
+};
+
+export type ConversationMessageResource = {
+    id: string;
+    seq: number;
+    kind: 'message' | 'event';
+    visibility: 'public' | 'internal';
+    author: 'customer' | 'staff' | 'app' | 'system';
+    appId: string | null;
+    body: string | null;
+    eventKind: string | null;
+    attachments: Array<{
+        kind: string;
+        mediaType: string | null;
+        name: string | null;
+        sizeBytes: number | null;
+        ref: string | null;
+        url: string | null;
+    }>;
+    delivery: {
+        direction: 'inbound' | 'outbound';
+        status: string;
+        providerId: string;
+    } | null;
+    createdAt: string;
+};
+
 export type AppWebhookSubscription = {
     id: string;
     url: string;
@@ -5571,7 +5661,7 @@ export type AppProviderEntry = {
      */
     id: string;
     providerId: string;
-    kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+    kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity' | 'payout';
     name: string;
     /**
      * Same-origin address of the provider's own mark, else the app's icon.
@@ -5677,7 +5767,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -5927,7 +6017,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -5979,7 +6069,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_conversations' | 'write_conversations' | 'write_payouts';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -5995,7 +6085,7 @@ export type AppFeature = {
         allowedHosts: Array<string>;
         providers: Array<{
             id: string;
-            kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+            kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity' | 'payout';
             name: string;
             icon: string | null;
         }>;
@@ -29889,6 +29979,501 @@ export type PostApiV1AdminResourcesPaymentsByIdVoidResponses = {
 
 export type PostApiV1AdminResourcesPaymentsByIdVoidResponse = PostApiV1AdminResourcesPaymentsByIdVoidResponses[keyof PostApiV1AdminResourcesPaymentsByIdVoidResponses];
 
+export type GetApiV1AdminResourcesPayoutsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only payouts in this status.
+         */
+        status?: 'pending' | 'processing' | 'paid' | 'failed';
+    };
+    url: '/api/v1/admin/resources/payouts';
+};
+
+export type GetApiV1AdminResourcesPayoutsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPayoutsError = GetApiV1AdminResourcesPayoutsErrors[keyof GetApiV1AdminResourcesPayoutsErrors];
+
+export type GetApiV1AdminResourcesPayoutsResponses = {
+    /**
+     * A page of payouts
+     */
+    200: {
+        success: true;
+        data: {
+            payouts: Array<PayoutResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPayoutsResponse = GetApiV1AdminResourcesPayoutsResponses[keyof GetApiV1AdminResourcesPayoutsResponses];
+
+export type PostApiV1AdminResourcesPayoutsData = {
+    body: {
+        /**
+         * The payout provider, `<app id>:<provider id>` (an installed, set-up payout app).
+         */
+        providerId: string;
+        /**
+         * Your own reference for the payee (a seller id).
+         */
+        payeeRef: string;
+        /**
+         * The provider's reference for the payee's account (a wallet number, a connected account id); leave it out when the provider looks it up from payeeRef.
+         */
+        payeeAccountRef?: string;
+        /**
+         * What to send, in minor units of `currency`.
+         */
+        amountMinor: number;
+        /**
+         * ISO 4217 code of the amount.
+         */
+        currency: string;
+        /**
+         * Shown on the payee's statement where the provider supports it.
+         */
+        description?: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/payouts';
+};
+
+export type PostApiV1AdminResourcesPayoutsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesPayoutsError = PostApiV1AdminResourcesPayoutsErrors[keyof PostApiV1AdminResourcesPayoutsErrors];
+
+export type PostApiV1AdminResourcesPayoutsResponses = {
+    /**
+     * The payout this key already sent
+     */
+    200: {
+        success: true;
+        data: {
+            payout: PayoutResource;
+        };
+    };
+    /**
+     * The payout
+     */
+    201: {
+        success: true;
+        data: {
+            payout: PayoutResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesPayoutsResponse = PostApiV1AdminResourcesPayoutsResponses[keyof PostApiV1AdminResourcesPayoutsResponses];
+
+export type GetApiV1AdminResourcesPayoutsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/payouts/{id}';
+};
+
+export type GetApiV1AdminResourcesPayoutsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesPayoutsByIdError = GetApiV1AdminResourcesPayoutsByIdErrors[keyof GetApiV1AdminResourcesPayoutsByIdErrors];
+
+export type GetApiV1AdminResourcesPayoutsByIdResponses = {
+    /**
+     * The payout
+     */
+    200: {
+        success: true;
+        data: {
+            payout: PayoutResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesPayoutsByIdResponse = GetApiV1AdminResourcesPayoutsByIdResponses[keyof GetApiV1AdminResourcesPayoutsByIdResponses];
+
+export type GetApiV1AdminResourcesConversationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only threads in this status.
+         */
+        status?: 'open' | 'pending' | 'closed';
+        /**
+         * Only this chat channel's threads.
+         */
+        channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram' | 'viber';
+    };
+    url: '/api/v1/admin/resources/conversations';
+};
+
+export type GetApiV1AdminResourcesConversationsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesConversationsError = GetApiV1AdminResourcesConversationsErrors[keyof GetApiV1AdminResourcesConversationsErrors];
+
+export type GetApiV1AdminResourcesConversationsResponses = {
+    /**
+     * A page of threads
+     */
+    200: {
+        success: true;
+        data: {
+            conversations: Array<ConversationResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesConversationsResponse = GetApiV1AdminResourcesConversationsResponses[keyof GetApiV1AdminResourcesConversationsResponses];
+
+export type GetApiV1AdminResourcesConversationsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/conversations/{id}';
+};
+
+export type GetApiV1AdminResourcesConversationsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesConversationsByIdError = GetApiV1AdminResourcesConversationsByIdErrors[keyof GetApiV1AdminResourcesConversationsByIdErrors];
+
+export type GetApiV1AdminResourcesConversationsByIdResponses = {
+    /**
+     * The thread
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: ConversationResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesConversationsByIdResponse = GetApiV1AdminResourcesConversationsByIdResponses[keyof GetApiV1AdminResourcesConversationsByIdResponses];
+
+export type GetApiV1AdminResourcesConversationsByIdMessagesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/resources/conversations/{id}/messages';
+};
+
+export type GetApiV1AdminResourcesConversationsByIdMessagesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesConversationsByIdMessagesError = GetApiV1AdminResourcesConversationsByIdMessagesErrors[keyof GetApiV1AdminResourcesConversationsByIdMessagesErrors];
+
+export type GetApiV1AdminResourcesConversationsByIdMessagesResponses = {
+    /**
+     * A page of lines
+     */
+    200: {
+        success: true;
+        data: {
+            messages: Array<ConversationMessageResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesConversationsByIdMessagesResponse = GetApiV1AdminResourcesConversationsByIdMessagesResponses[keyof GetApiV1AdminResourcesConversationsByIdMessagesResponses];
+
+export type PostApiV1AdminResourcesConversationsByIdMessagesData = {
+    body: {
+        /**
+         * The text. A public reply reaches the buyer by the thread's own way: email for storefront threads, the chat channel for channel threads.
+         */
+        body: string;
+        /**
+         * `internal`: a staff note the buyer never sees.
+         */
+        visibility?: 'public' | 'internal';
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/conversations/{id}/messages';
+};
+
+export type PostApiV1AdminResourcesConversationsByIdMessagesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesConversationsByIdMessagesError = PostApiV1AdminResourcesConversationsByIdMessagesErrors[keyof PostApiV1AdminResourcesConversationsByIdMessagesErrors];
+
+export type PostApiV1AdminResourcesConversationsByIdMessagesResponses = {
+    /**
+     * The line this key already posted
+     */
+    200: {
+        success: true;
+        data: {
+            conversation: ConversationResource;
+            message: ConversationMessageResource;
+        };
+    };
+    /**
+     * The line and the thread after it
+     */
+    201: {
+        success: true;
+        data: {
+            conversation: ConversationResource;
+            message: ConversationMessageResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesConversationsByIdMessagesResponse = PostApiV1AdminResourcesConversationsByIdMessagesResponses[keyof PostApiV1AdminResourcesConversationsByIdMessagesResponses];
+
 export type GetApiV1AdminResourcesWebhookSubscriptionsData = {
     body?: never;
     path?: never;
@@ -29958,7 +30543,7 @@ export type PostApiV1AdminResourcesWebhookSubscriptionsData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -30099,7 +30684,7 @@ export type PatchApiV1AdminResourcesWebhookSubscriptionsByIdData = {
          * HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default.
@@ -58180,7 +58765,7 @@ export type GetApiV1AdminSettingsProvidersData = {
     body?: never;
     path?: never;
     query: {
-        kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity' | 'payout';
     };
     url: '/api/v1/admin/settings/providers';
 };
@@ -58223,7 +58808,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
         data: {
             providers: Array<{
                 id: string;
-                kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity';
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'courier_history' | 'tax' | 'translation' | 'ai' | 'messaging' | 'push' | 'search' | 'address' | 'fx' | 'identity' | 'payout';
                 pluginId: string;
                 appName: string;
                 appIcon: string | null;
@@ -74158,7 +74743,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -74314,7 +74899,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'variant.*' | 'purchase_order.*' | 'inventory_transfer.*' | 'customer.*' | 'fulfillment.*' | 'refund.*' | 'shipment.*' | 'payment.*' | 'checkout.*' | 'discount.*' | 'review.*' | 'gift_card.*' | 'gift_card_transaction.*' | 'object.*' | 'conversation.*' | 'payout.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated'>;
         description?: string | null;
         /**
          * The buyer contact data deliveries include: names, emails, phones, street addresses. The rest read null; none by default.
@@ -74588,8 +75173,8 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased';
-        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'variant.inventory_changed' | 'purchase_order.updated' | 'inventory_transfer.updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed' | 'fulfillment.created' | 'fulfillment.voided' | 'refund.created' | 'refund.updated' | 'shipment.updated' | 'payment.updated' | 'checkout.abandoned' | 'discount.created' | 'discount.updated' | 'discount.deleted' | 'discount.redeemed' | 'review.created' | 'review.updated' | 'gift_card.created' | 'gift_card.updated' | 'gift_card_transaction.created' | 'object.created' | 'object.updated' | 'object.deleted' | 'customer.redact_requested' | 'customer.data_requested' | 'customer.erased' | 'conversation.message_received' | 'payout.created' | 'payout.updated';
+        resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer' | 'fulfillment' | 'refund' | 'shipment' | 'payment' | 'checkout' | 'discount' | 'review' | 'gift_card' | 'gift_card_transaction' | 'object' | 'conversation' | 'payout';
         resourceId?: string;
         /**
          * `nextCursor` of the previous page.
