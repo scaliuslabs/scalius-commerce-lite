@@ -438,9 +438,9 @@ export function parseAdminPerfCheckArgs(rawArgs) {
 const HELP = `Usage:
   node scripts/admin-perf-check.mjs [--report-only]
       Build the dashboard to a temp dir and check per-route Brotli budgets.
-  node scripts/admin-perf-check.mjs --runtime --admin http://localhost:4323
+  node scripts/admin-perf-check.mjs --runtime --admin http://localhost:<admin port>
       [--cpu 4] [--rtt 40] [--mbps 25] [--cdp-port 9396] [--runs 3]
-      [--explorer http://localhost:8787] [--typing-product <productId>]
+      [--explorer http://localhost:<api port>] [--typing-product <productId>]
       [--json <file>] [--report-only]
   node scripts/admin-perf-check.mjs --explain admin/orders/_list/index.tsx
       Also list the files one route downloads before it renders.

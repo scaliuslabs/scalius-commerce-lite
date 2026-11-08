@@ -312,7 +312,7 @@ SCALIUS_WRANGLER_STATE="$STATE" node scripts/deploy.mjs --migrate-only --local
 node scripts/catalog-scale-seed.mjs --state "$STATE" --profile huge
 node scripts/catalog-scale-seed.mjs --state "$STATE" --verify --deep   # optional: invariant checks
 pnpm dev --state "$STATE"                                               # in another terminal
-pnpm dev:admin:create --state "$STATE" --no-start --skip-migrations     # once the stack is up (add --api <origin> for non-default ports)
+pnpm dev:admin:create --state "$STATE" --no-start --skip-migrations     # once the stack is up (its ports come from $STATE)
 node scripts/catalog-scale-seed.mjs --state "$STATE" --staff-roles      # after the admin exists
 ```
 

@@ -138,7 +138,7 @@ pnpm dev
 pnpm dev --api-port 8931 --storefront-port 4531 --admin-port 4532 --state /tmp/slot/state
 ```
 
-`scripts/dev.sh` runs `node scripts/dev-ports.mjs sync-platform` before the API starts. It replaces only unset or loopback Platform origins, so an origin you saved in the dashboard stays. Wrangler's dev registry is machine-wide, so an API on a non-default port runs as `scalius-api-local-<api port>`. The header of `scripts/dev-ports.mjs` lists the other subcommands (`api-worker-name`, `storefront-config`, `verify-binding`).
+`scripts/dev.sh` runs `node scripts/dev-ports.mjs sync-platform` before the API starts. It replaces only unset or loopback Platform origins, so an origin you saved in the dashboard stays, and it records the stack's ports in its state directory. Helpers that attach to a running stack (`dev:admin:*`, the admin and post-sale smokes, `dev:doctor`) take `--state <dir>` (or `SCALIUS_WRANGLER_STATE`) and read the ports from there unless a `SCALIUS_DEV_*_PORT` is set; they never change the running stack's Platform settings. Wrangler's dev registry is machine-wide, so an API on a non-default port runs as `scalius-api-local-<api port>`. The header of `scripts/dev-ports.mjs` lists the other subcommands (`api-worker-name`, `storefront-config`, `verify-binding`).
 
 A relative `--state` is resolved from the repository root. To start one app alone, export the three port variables and an absolute `SCALIUS_WRANGLER_STATE`, run `sync-platform` while the API is stopped, then run `pnpm --dir <app> dev`.
 

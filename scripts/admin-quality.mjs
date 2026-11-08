@@ -10,7 +10,7 @@
  * language, console and network errors, layout shift, load timing,
  * interaction latency, keyboard focus and skeleton shape.
  *
- *   pnpm quality:admin [--base-url http://localhost:4323/admin]
+ *   pnpm quality:admin [--base-url http://localhost:<admin port>/admin]   (default: this stack's dashboard)
  *     [--routes /admin/products*,orders] [--family products,settings]
  *     [--widths 390,768,1024,1440] [--locales en,bn] [--out .quality/admin]
  *     [--concurrency 3] [--no-shots] [--no-surfaces] [--list]
@@ -33,10 +33,11 @@ import { TIMING_INIT } from "./admin-quality/page-facts.mjs";
 import { resolveParams } from "./admin-quality/params.mjs";
 import { buildPlan, fillPath, filterRoutes, pageUrl, paramNames, parseLeafRoutes, parseList } from "./admin-quality/routes.mjs";
 import { CLS_INIT } from "./quality-shared/page-checks.mjs";
+import { devOrigins, readStackPorts } from "./dev-ports.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const DEFAULT_BASE_URL = "http://localhost:4323/admin";
+const DEFAULT_BASE_URL = `${devOrigins(readStackPorts()).dashboardUrl}/admin`;
 const LOCALE_KEY = "scalius.dashboard.locale";
 const JOB_TIMEOUT_MS = 120_000;
 

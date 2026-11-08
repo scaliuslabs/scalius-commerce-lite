@@ -6,14 +6,16 @@
 # 2. Zombie processes: Node/workerd children survive Ctrl+C and SIGTERM.
 #    On SIGINT, SIGTERM or exit, cleanup stops each process this wrapper
 #    started together with every process below it, and nothing else.
-# 3. Ports: --api-port, --storefront-port and --admin-port (default 8787,
-#    4322, 4323) export SCALIUS_DEV_API_PORT, SCALIUS_DEV_STOREFRONT_PORT and
+# 3. Ports: --api-port, --storefront-port and --admin-port (defaults from
+#    scripts/dev-ports.mjs) export SCALIUS_DEV_API_PORT, SCALIUS_DEV_STOREFRONT_PORT and
 #    SCALIUS_DEV_ADMIN_PORT, the one dev-only port source every app reads
 #    (scripts/dev-ports.mjs). --state <dir> exports SCALIUS_WRANGLER_STATE as
 #    an absolute path (a relative one is resolved from the repo root once, so
 #    migrations, the API, the storefront and the seed scripts share one
 #    database). The local Platform settings document is pointed at the same
-#    origins before the API starts. None of this is a Worker var.
+#    origins before the API starts, and the state records these ports, so a
+#    helper given only --state (dev-admin, the smokes) attaches to this stack.
+#    None of this is a Worker var.
 # 4. Fail closed: a service that exits or does not answer before it is ready
 #    stops the whole stack with an error, and so does one that exits later,
 #    so a half-up stack never looks healthy.
@@ -74,9 +76,15 @@ if [ -n "${SCALIUS_WRANGLER_STATE:-}" ]; then
   export SCALIUS_WRANGLER_STATE
 fi
 
-API_PORT="${SCALIUS_DEV_API_PORT:-8787}"
-STOREFRONT_PORT="${SCALIUS_DEV_STOREFRONT_PORT:-4322}"
-ADMIN_PORT="${SCALIUS_DEV_ADMIN_PORT:-4323}"
+# The defaults come from the one port source, never from this file.
+if ! DEFAULT_PORTS="$(node "$ROOT_DIR/scripts/dev-ports.mjs" defaults)"; then
+  echo "Could not read the default dev ports from scripts/dev-ports.mjs." >&2
+  exit 1
+fi
+read -r DEFAULT_API_PORT DEFAULT_STOREFRONT_PORT DEFAULT_ADMIN_PORT <<<"$DEFAULT_PORTS"
+API_PORT="${SCALIUS_DEV_API_PORT:-$DEFAULT_API_PORT}"
+STOREFRONT_PORT="${SCALIUS_DEV_STOREFRONT_PORT:-$DEFAULT_STOREFRONT_PORT}"
+ADMIN_PORT="${SCALIUS_DEV_ADMIN_PORT:-$DEFAULT_ADMIN_PORT}"
 validate_port_setting "API port (--api-port / SCALIUS_DEV_API_PORT)" "$API_PORT"
 validate_port_setting "Storefront port (--storefront-port / SCALIUS_DEV_STOREFRONT_PORT)" "$STOREFRONT_PORT"
 validate_port_setting "Admin port (--admin-port / SCALIUS_DEV_ADMIN_PORT)" "$ADMIN_PORT"

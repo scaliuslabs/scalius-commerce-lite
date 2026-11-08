@@ -581,6 +581,27 @@ export const policies = [
     sample: "WHERE json_extract(seen.value, '$[0]') = ra.id",
   },
   {
+    rule: "local dev tooling takes its ports from scripts/dev-ports.mjs, never a default port it spells out",
+    why: "parallel stacks (agents, worktrees) run on other ports; a script that assumes :8787, :4322 or :4323 reaches another stack's API or rewrites the running stack's Platform origins back to the defaults, and every dashboard sign-in on it then fails as a cross-origin request. Take readDevPorts() (a stack starter) or readStackPorts() (a helper attaching to a running stack) and say `<api port>` in usage text",
+    paths: [
+      "scripts",
+      "package.json",
+      "apps/api/package.json",
+      "apps/admin-v2/package.json",
+      "apps/storefront/package.json",
+      "apps/admin-v2/vite.config.ts",
+      "apps/storefront/astro.config.mjs",
+      "packages/api-client/scripts",
+    ],
+    extensions: [".mjs", ".js", ".ts", ".sh", ".json"],
+    allow: {
+      "scripts/dev-ports.mjs": "the one port source: it defines the defaults",
+      "scripts/check-source-policies.mjs": "states this policy and its sample",
+    },
+    forbid: [/(?<![\w.])(?:8787|4322|4323)(?![\w.])/],
+    sample: 'const apiBaseUrl = process.env.LOCAL_API_BASE_URL || "http://localhost:8787";',
+  },
+  {
     rule: "request-scoped state never lives in known module globals",
     why: "Workers reuse isolates across requests and merchants; cached auth/clients/URLs leak between them",
     paths: [

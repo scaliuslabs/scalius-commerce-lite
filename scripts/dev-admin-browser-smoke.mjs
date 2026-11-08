@@ -24,6 +24,7 @@ import {
   resolvePnpmExecutable,
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
+import { devOrigins, exportDevPorts, readStackPorts } from "./dev-ports.mjs";
 import {
   buildCookieHeader,
   extractSetCookieHeaders,
@@ -35,8 +36,6 @@ const pnpmExecutable = resolvePnpmExecutable();
 const validCommands = new Set(["smoke", "help"]);
 
 const defaults = {
-  apiBaseUrl: "http://localhost:8787",
-  adminBaseUrl: "http://localhost:4323",
   email: "admin@local.scalius.test",
   password: "ScaliusLocal123!",
   name: "Local Admin",
@@ -74,12 +73,19 @@ export function getAdminBrowserSmokeConfig(rawArgs = process.argv.slice(2), env 
     "product-slug",
   ]);
 
+  const wranglerState = resolveLocalStatePath(
+    root,
+    options.state || env.SCALIUS_ADMIN_BROWSER_SMOKE_STATE || defaults.wranglerState,
+  );
+  // The stack on that state: SCALIUS_DEV_*_PORT, else the ports it recorded, else the defaults.
+  const ports = readStackPorts({ env, state: wranglerState });
+  const origins = devOrigins(ports);
   const apiBaseUrl = normalizeBrowserSmokeOrigin(
-    options.api || env.LOCAL_API_BASE_URL || defaults.apiBaseUrl,
+    options.api || env.LOCAL_API_BASE_URL || origins.apiUrl,
     "API URL",
   );
   const adminBaseUrl = normalizeBrowserSmokeOrigin(
-    options.admin || env.LOCAL_ADMIN_BASE_URL || defaults.adminBaseUrl,
+    options.admin || env.LOCAL_ADMIN_BASE_URL || origins.dashboardUrl,
     "admin URL",
   );
   assertSafeLocalMutationUrl(apiBaseUrl, "API URL");
@@ -95,10 +101,8 @@ export function getAdminBrowserSmokeConfig(rawArgs = process.argv.slice(2), env 
     email: options.email || env.LOCAL_ADMIN_EMAIL || defaults.email,
     password,
     name: options.name || env.LOCAL_ADMIN_NAME || defaults.name,
-    wranglerState: resolveLocalStatePath(
-      root,
-      options.state || env.SCALIUS_ADMIN_BROWSER_SMOKE_STATE || defaults.wranglerState,
-    ),
+    wranglerState,
+    ports,
     categorySlug: options["category-slug"] || env.SCALIUS_ADMIN_BROWSER_SMOKE_CATEGORY_SLUG || defaults.categorySlug,
     productSlug: options["product-slug"] || env.SCALIUS_ADMIN_BROWSER_SMOKE_PRODUCT_SLUG || defaults.productSlug,
     browserExecutable: options.browser || env.CHROME_BIN || env.CHROMIUM_BIN || null,
@@ -926,7 +930,7 @@ async function withLocalWorkers(config, work) {
 
   try {
     if (!apiWasRunning) {
-      assertDefaultDevPort(config.apiBaseUrl, 8787, "API");
+      assertStackPort(config.apiBaseUrl, config.ports.api, "API");
       log(`Starting temporary API worker at ${config.apiBaseUrl} with state ${config.wranglerState}...`);
       const child = spawnWorker("api", ["--filter", "@scalius/api", "dev"], config);
       children.push(child);
@@ -935,7 +939,7 @@ async function withLocalWorkers(config, work) {
     }
 
     if (!adminWasRunning) {
-      assertDefaultDevPort(config.adminBaseUrl, 4323, "admin");
+      assertStackPort(config.adminBaseUrl, config.ports.admin, "admin");
       log(`Starting temporary dashboard dev server at ${config.adminBaseUrl}...`);
       const child = spawnWorker("admin", ["--filter", "@scalius/admin-v2", "dev"], config);
       children.push(child);
@@ -988,10 +992,7 @@ function spawnWorker(label, args, config) {
   const child = spawn(pnpmExecutable, args, {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      SCALIUS_WRANGLER_STATE: config.wranglerState,
-    },
+    env: { ...process.env, SCALIUS_WRANGLER_STATE: config.wranglerState, ...portEnv(config.ports) },
   });
   child.__scaliusLabel = label;
   child.__scaliusStatus = null;
@@ -1001,6 +1002,13 @@ function spawnWorker(label, args, config) {
   child.stdout.on("data", (chunk) => process.stderr.write(`[${label}] ${chunk}`));
   child.stderr.on("data", (chunk) => process.stderr.write(`[${label}] ${chunk}`));
   return child;
+}
+
+/** The stack's ports as SCALIUS_DEV_*_PORT variables, so a started worker listens where this smoke looks. */
+function portEnv(ports) {
+  const env = {};
+  exportDevPorts(ports, env);
+  return env;
 }
 
 function getChildStatus(child) {
@@ -1247,7 +1255,7 @@ function unwrapData(body) {
   return body?.data ?? body;
 }
 
-function assertDefaultDevPort(value, port, label) {
+function assertStackPort(value, port, label) {
   const url = new URL(value);
   const actualPort = url.port || (url.protocol === "http:" ? "80" : "443");
   if (url.protocol !== "http:" || actualPort !== String(port)) {
@@ -1279,8 +1287,8 @@ Usage:
   node scripts/dev-admin-browser-smoke.mjs smoke --state /tmp/scalius-admin-browser-smoke-state --reset-admin
 
 Options:
-  --api <url>             Local API origin (default: ${defaults.apiBaseUrl})
-  --admin <url>           Local admin origin (default: ${defaults.adminBaseUrl})
+  --api <url>             Local API origin (default: ${devOrigins(readStackPorts()).apiUrl})
+  --admin <url>           Local admin origin (default: ${devOrigins(readStackPorts()).dashboardUrl})
   --email <email>         Local admin email (default: ${defaults.email})
   --password <value>      Local admin password, 12+ chars (default: ${defaults.password})
   --name <name>           First-admin setup name (default: ${defaults.name})

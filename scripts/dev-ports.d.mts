@@ -16,6 +16,12 @@ export interface DevOrigins {
 export declare const DEFAULT_DEV_PORTS: Readonly<DevPorts>;
 export declare const DEV_PORT_ENV: Readonly<Record<keyof DevPorts, string>>;
 export declare function readDevPorts(env?: Record<string, string | undefined>): DevPorts;
+export declare function exportDevPorts(ports: DevPorts, env?: Record<string, string | undefined>): DevPorts;
+export declare const STACK_PORTS_FILE: string;
+export declare function devStateDir(options?: { env?: Record<string, string | undefined>; state?: string }): string;
+export declare function writeStackPorts(stateDir: string, ports: DevPorts): void;
+export declare function readRecordedStackPorts(stateDir: string): DevPorts | null;
+export declare function readStackPorts(options?: { env?: Record<string, string | undefined>; state?: string }): DevPorts;
 export declare function devOrigins(ports?: DevPorts): DevOrigins;
 export declare function previewProxyOrigin(
   requestOrigin: string | null | undefined,

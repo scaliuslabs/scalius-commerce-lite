@@ -26,7 +26,7 @@ import {
   resolveLocalStatePath,
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
-import { DEV_PORT_ENV, devOrigins, readDevPorts } from "./dev-ports.mjs";
+import { DEFAULT_DEV_PORTS, DEV_PORT_ENV, devOrigins, readStackPorts } from "./dev-ports.mjs";
 import { INSTALLED_SECRETS, processEnvHasSecrets } from "./dev-secrets.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,12 +49,16 @@ export function getDoctorConfig(rawArgs = process.argv.slice(2), env = process.e
   const options = parseOptions(rawArgs);
   assertStringOptions(options, ["api", "admin", "storefront", "state", "profile", "api-port", "storefront-port", "admin-port"]);
   const serviceProfile = normalizeServiceProfile(options.profile);
-  // Same port source as scripts/dev.sh: flags, else SCALIUS_DEV_*_PORT, else defaults.
-  const origins = devOrigins(readDevPorts({
-    ...env,
-    ...(options["api-port"] ? { [DEV_PORT_ENV.api]: options["api-port"] } : {}),
-    ...(options["storefront-port"] ? { [DEV_PORT_ENV.storefront]: options["storefront-port"] } : {}),
-    ...(options["admin-port"] ? { [DEV_PORT_ENV.admin]: options["admin-port"] } : {}),
+  // The stack's ports: flags, else SCALIUS_DEV_*_PORT, else the ports the stack recorded in its
+  // state (--state or SCALIUS_WRANGLER_STATE), else defaults (scripts/dev-ports.mjs readStackPorts).
+  const origins = devOrigins(readStackPorts({
+    env: {
+      ...env,
+      ...(options["api-port"] ? { [DEV_PORT_ENV.api]: options["api-port"] } : {}),
+      ...(options["storefront-port"] ? { [DEV_PORT_ENV.storefront]: options["storefront-port"] } : {}),
+      ...(options["admin-port"] ? { [DEV_PORT_ENV.admin]: options["admin-port"] } : {}),
+    },
+    state: options.state,
   }));
   return {
     help: Boolean(options.help || rawArgs.includes("-h")),
@@ -520,7 +524,7 @@ async function checkServices(checks, config) {
     {
       id: "admin",
       title: "Admin dashboard",
-      // Vite answers on :4323 and proxies /api/auth to the API Worker, so this
+      // Vite answers on the admin port and proxies /api/auth to the API Worker, so this
       // proves the dashboard dev server and its API proxy together.
       url: `${config.adminBaseUrl}/api/auth/dashboard-session`,
       downAction: "Start it with pnpm dev:admin or pnpm dev.",
@@ -704,9 +708,9 @@ Options:
   --strict               Exit non-zero on warnings as well as failures
   --require-running      Treat selected profile services not running as failures
   --profile <name>       Service profile to check: all, api, admin, storefront
-  --api-port <port>      API port (default: SCALIUS_DEV_API_PORT or 8787)
-  --storefront-port <p>  Storefront port (default: SCALIUS_DEV_STOREFRONT_PORT or 4322)
-  --admin-port <port>    Admin port (default: SCALIUS_DEV_ADMIN_PORT or 4323)
+  --api-port <port>      API port (default: SCALIUS_DEV_API_PORT, the stack's recorded port or ${DEFAULT_DEV_PORTS.api})
+  --storefront-port <p>  Storefront port (default: SCALIUS_DEV_STOREFRONT_PORT, recorded or ${DEFAULT_DEV_PORTS.storefront})
+  --admin-port <port>    Admin port (default: SCALIUS_DEV_ADMIN_PORT, recorded or ${DEFAULT_DEV_PORTS.admin})
   --api <url>            API origin (overrides the port; also LOCAL_API_BASE_URL)
   --admin <url>          Admin origin (overrides the port)
   --storefront <url>     Storefront origin (overrides the port)
