@@ -10,3 +10,4 @@ export * from "./ledger";
 export * from "./pickup";
 export * from "./auto-fulfil";
 export * from "./hold-window";
+export * from "./digital-access";

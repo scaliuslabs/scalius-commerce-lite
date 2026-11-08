@@ -60,6 +60,8 @@ Admin permissions are in `packages/core/src/auth/rbac/route-permissions/digital.
 | `GET, POST /api/v1/admin/digital-assets/{id}/licence-keys`, `POST .../licence-keys/revoke` | `products.edit` |
 | `POST /api/v1/admin/digital-entitlements/{id}/reset` and `/revoke`, `POST /api/v1/admin/orders/{id}/digital/resend` | `orders.edit` |
 
+Stable app API (`apps/api/src/routes/admin/resources-digital.ts`): `digital_assets.list` and `.get` (`products.view`) return limits, sizes and pool counts, never a storage key or key; `digital_access.list` (`orders.view`), `.grant` and `.revoke` (`orders.edit`) read and change a line's entitlements. A grant runs `grantDigitalAccess` (`fulfilment/digital-access.ts`): an owed line goes through `autoFulfilOrder`, a revoked access is reinstated, a file added after delivery gets `fileEntitlementRow`, and a key pool added later is refused (`rules/orders/digital-access-granted-through-handover.md`).
+
 Buyer routes:
 
 - Account: `GET /api/v1/customer-auth/downloads`, `POST /api/v1/customer-auth/downloads/{entitlementId}/ticket`, `POST /api/v1/customer-auth/licence-keys/{keyId}/reveal`.

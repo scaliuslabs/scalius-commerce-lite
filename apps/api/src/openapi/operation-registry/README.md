@@ -87,6 +87,16 @@ mirror a dashboard screen, an editor section or a summary card.
   them, and the signing secret is returned once and never replayed for an
   Idempotency-Key repeat. The store's own endpoints stay staff-only
   (`dashboard.webhooks.*`, internal).
+- **Digital goods.** `digital_assets.list`/`.get` (`read_products`) read a
+  product's files and licence-key pools (limits, size, key counts; never a
+  storage key or key value). `digital_access.list` (`read_orders`, by
+  `orderId` and/or `customerId`) reads entitlements with a sealed `status`;
+  `digital_access.grant` and `.revoke` (`write_orders`,
+  `routes/admin/resources-digital.ts`) give and take access on a paid line:
+  an owed line is handed over by automatic fulfilment, so keys and the
+  ledger move exactly as there. One entitlement per line and item makes a
+  repeat grant nothing twice; entitlements have no revision (downloads move
+  them), so revoke sets a target state.
 - **RMA, discount and segment apps.** `returns.create`, `returns.approve`,
   `returns.receive` and `returns.cancel` (`routes/admin/resources-returns.ts`)
   run the dashboard's return commands (`orders-returns.ts` `run*OrderReturn`:

@@ -57,6 +57,8 @@ export const APP_OPERATION_VERBS = [
   "ship",
   "cancel",
   "approve",
+  "grant",
+  "revoke",
 ] as const;
 
 /** A stable name: `<resource>.<verb phrase>`, the phrase starting with a verb from {@link APP_OPERATION_VERBS}. */
@@ -220,6 +222,13 @@ export const STABLE_APP_OPERATIONS = {
   "gift_cards.create": "dashboard.resources.gift_cards.create",
   "gift_cards.update": "dashboard.resources.gift_cards.update",
   "gift_cards.adjust": "dashboard.resources.gift_cards.adjust",
+
+  // ── Digital goods ──
+  "digital_assets.list": "dashboard.resources.digital_assets.list",
+  "digital_assets.get": "dashboard.resources.digital_assets.get",
+  "digital_access.list": "dashboard.resources.digital_access.list",
+  "digital_access.grant": "dashboard.resources.digital_access.grant",
+  "digital_access.revoke": "dashboard.resources.digital_access.revoke",
 
   // ── Custom fields ──
   "custom_field_definitions.list": "dashboard.custom_field_definitions.list",

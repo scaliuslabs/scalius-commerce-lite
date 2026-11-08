@@ -96,6 +96,12 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/gift-cards": { GET: giftCards, POST: giftCardsManage },
   "/api/v1/admin/resources/gift-cards/*": { GET: giftCards, PATCH: giftCardsManage },
   "/api/v1/admin/resources/gift-cards/*/adjust": { POST: giftCardsManage },
+  // Digital files and key pools read with the catalog; a buyer's access is
+  // given and taken away with the order edit the dashboard's reset and revoke need.
+  "/api/v1/admin/resources/digital-assets": { GET: products },
+  "/api/v1/admin/resources/digital-assets/*": { GET: products },
+  "/api/v1/admin/resources/digital-access": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_EDIT } },
+  "/api/v1/admin/resources/digital-access/*/revoke": { POST: { permission: PERMISSIONS.ORDERS_EDIT } },
   // An app's own webhook subscriptions (the route refuses any other caller).
   "/api/v1/admin/resources/webhook-subscriptions": { GET: webhooks, POST: webhooksManage },
   "/api/v1/admin/resources/webhook-subscriptions/*": { PATCH: webhooksManage, DELETE: webhooksManage },

@@ -109,6 +109,15 @@ export const APP_ERROR_CODES = {
   payment_method_customer_mismatch: { status: 422, meaning: "The saved method belongs to another customer than the order's." },
   provider_invalid_response: { status: 503, meaning: "A provider answered something invalid (another order, a malformed answer); treat the outcome as unknown and retry with the same Idempotency-Key." },
   app_gift_card_limit: { status: 403, meaning: "The app reached the merchant's daily gift card value limit." },
+  digital_access_order_unpaid: { status: 409, meaning: "The order is not paid yet: digital goods go out once it is." },
+  digital_access_order_closed: { status: 409, meaning: "The order was cancelled, refunded or returned, so it gives no digital access." },
+  digital_access_order_on_hold: { status: 409, meaning: "The order is on hold for review; digital access waits for the hold's release." },
+  digital_access_awaiting_confirmation: { status: 409, meaning: "The store hands digital goods over only after staff confirm the order." },
+  digital_access_nothing_owed: { status: 409, meaning: "Every unit of the order line was refunded, so it gives no digital access." },
+  digital_access_keys_not_owed: { status: 409, meaning: "Licence keys go out only with a line's delivery; the line was handed over without this key pool." },
+  digital_asset_not_on_line: { status: 422, meaning: "The order line's product and variant do not deliver this digital item." },
+  digital_asset_not_ready: { status: 409, meaning: "The digital item is not ready to deliver (its file is still uploading, or it is archived)." },
+  digital_keys_exhausted: { status: 409, meaning: "The licence-key pool has too few keys for the line; the store imports more." },
 
   // ── ctx refusals (PluginPlatformError.code) ──
   object_undeclared_type: { status: 400, meaning: "The manifest declares no object type of that name." },
