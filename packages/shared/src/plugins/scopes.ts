@@ -234,6 +234,7 @@ export const PLUGIN_SCOPES = {
    * app's). Sensitive: it moves money out of the store.
    */
   write_payouts: { rbac: ["payouts.manage"], staff: "payouts.manage", sensitive: true },
+  /**
    * The staff directory: each staff member's id, name, roles and whether
    * they are active, so an app attributes work (who rang up a sale). Never an
    * email, a phone, sign-in details or what they may do.
