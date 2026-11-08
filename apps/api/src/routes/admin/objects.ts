@@ -13,6 +13,7 @@ import { boundedPage, boundedPageQuery, nextCursorSchema } from "../../utils/bou
 import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, namedSharedSchema, successEnvelope } from "../../schemas/responses";
+import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
 
 const app = adminRouter();
 const TAG = "Admin - Objects";
@@ -42,11 +43,9 @@ const typeSchema = z.object({
   owner: z.enum(["merchant", "app"]), recordCount: z.number().int(), revision: z.number().int(),
   createdAt: isoTimestampSchema, updatedAt: isoTimestampSchema,
 }).openapi("ObjectType");
-const recordSchema = z.object({
-  id: z.string(), typeId: z.string(), handle: z.string().nullable(), status: statusSchema,
-  displayName: z.string(), data: z.record(z.string(), z.unknown()).openapi({ description: "Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency)." }),
-  position: z.number().int(), revision: z.number().int(), createdAt: isoTimestampSchema, updatedAt: isoTimestampSchema,
-}).openapi("ObjectRecord");
+// The sealed representation an `object` webhook delivery carries, so a
+// truncated delivery's fetch hint (objects.get) answers the same shape.
+const recordSchema = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.object, "ObjectRecord");
 const typeParam = z.object({ type: z.string().min(1).max(160) });
 const recordParams = typeParam.extend({ id: z.string().min(1).max(128) });
 const revisionQuery = z.object({ expectedRevision: z.coerce.number().int().min(1) });

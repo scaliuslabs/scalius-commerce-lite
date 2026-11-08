@@ -11711,6 +11711,18 @@
      {
       "schema": {
        "type": "string",
+       "minLength": 1,
+       "maxLength": 11610,
+       "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order."
+      },
+      "required": false,
+      "description": "Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.",
+      "name": "ids",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
        "enum": [
         "draft",
         "active",
@@ -12087,10 +12099,18 @@
       "properties": {
        "giftCard": {
         "$ref": "#/components/schemas/GiftCardResource"
+       },
+       "transactions": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/GiftCardTransactionResource"
+        },
+        "description": "The card's ledger, newest first: its newest 200 entries."
        }
       },
       "required": [
-       "giftCard"
+       "giftCard",
+       "transactions"
       ]
      }
     },
@@ -12212,10 +12232,18 @@
       "properties": {
        "giftCard": {
         "$ref": "#/components/schemas/GiftCardResource"
+       },
+       "transactions": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/GiftCardTransactionResource"
+        },
+        "description": "The card's ledger, newest first: its newest 200 entries."
        }
       },
       "required": [
-       "giftCard"
+       "giftCard",
+       "transactions"
       ]
      }
     },
@@ -12264,10 +12292,18 @@
       "properties": {
        "giftCard": {
         "$ref": "#/components/schemas/GiftCardResource"
+       },
+       "transactions": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/GiftCardTransactionResource"
+        },
+        "description": "The card's ledger, newest first: its newest 200 entries."
        }
       },
       "required": [
-       "giftCard"
+       "giftCard",
+       "transactions"
       ]
      }
     },
@@ -12343,7 +12379,7 @@
        "giftCards": {
         "type": "array",
         "items": {
-         "$ref": "#/components/schemas/GiftCardSummaryResource"
+         "$ref": "#/components/schemas/GiftCardResource"
         }
        },
        "nextCursor": {
@@ -12460,10 +12496,18 @@
       "properties": {
        "giftCard": {
         "$ref": "#/components/schemas/GiftCardResource"
+       },
+       "transactions": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/GiftCardTransactionResource"
+        },
+        "description": "The card's ledger, newest first: its newest 200 entries."
        }
       },
       "required": [
-       "giftCard"
+       "giftCard",
+       "transactions"
       ]
      }
     },
@@ -26432,24 +26476,13 @@
    "type": "object",
    "properties": {
     "id": {
-     "type": "string"
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
     },
     "last4": {
      "type": "string",
-     "description": "The code's last four characters; the code itself never leaves the store."
-    },
-    "currency": {
-     "type": "string",
-     "minLength": 3,
-     "maxLength": 3
-    },
-    "initialAmountMinor": {
-     "type": "integer",
-     "description": "The value it was issued with, in minor units of `currency`."
-    },
-    "balanceMinor": {
-     "type": "integer",
-     "description": "What is left to spend, in minor units of `currency`."
+     "maxLength": 8
     },
     "status": {
      "type": "string",
@@ -26458,13 +26491,16 @@
       "disabled"
      ]
     },
-    "expiresAt": {
+    "currency": {
      "type": "string",
-     "nullable": true,
-     "format": "date-time"
+     "minLength": 3,
+     "maxLength": 3
     },
-    "expired": {
-     "type": "boolean"
+    "initialAmountMinor": {
+     "type": "integer"
+    },
+    "balanceMinor": {
+     "type": "integer"
     },
     "source": {
      "type": "string",
@@ -26473,170 +26509,115 @@
       "manual",
       "refund"
      ]
-    },
-    "customerId": {
-     "type": "string",
-     "nullable": true,
-     "description": "The customer who owns it, if any."
-    },
-    "recipientName": {
-     "type": "string",
-     "nullable": true,
-     "x-scalius-protected": "name"
-    },
-    "revision": {
-     "type": "integer",
-     "minimum": 0,
-     "exclusiveMinimum": true,
-     "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
-    },
-    "createdAt": {
-     "type": "string",
-     "format": "date-time"
-    },
-    "recipientEmail": {
-     "type": "string",
-     "nullable": true,
-     "x-scalius-protected": "email"
-    },
-    "recipientPhone": {
-     "type": "string",
-     "nullable": true,
-     "x-scalius-protected": "phone"
-    },
-    "message": {
-     "type": "string",
-     "nullable": true,
-     "description": "The message the recipient reads with the card."
-    },
-    "note": {
-     "type": "string",
-     "nullable": true,
-     "description": "The store's own note; buyers never see it."
     },
     "sourceOrderId": {
      "type": "string",
      "nullable": true,
-     "description": "The order it was bought or refunded on, if any."
+     "minLength": 1,
+     "maxLength": 128
     },
-    "transactions": {
-     "type": "array",
-     "items": {
-      "$ref": "#/components/schemas/GiftCardTransactionResource"
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "recipient": {
+     "type": "object",
+     "properties": {
+      "name": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000,
+       "x-scalius-protected": "name"
+      },
+      "email": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000,
+       "x-scalius-protected": "email"
+      },
+      "phone": {
+       "type": "string",
+       "nullable": true,
+       "maxLength": 4000,
+       "x-scalius-protected": "phone"
+      }
      },
-     "description": "Its ledger, in minor units of `currency`."
-    }
-   },
-   "required": [
-    "id",
-    "last4",
-    "currency",
-    "initialAmountMinor",
-    "balanceMinor",
-    "status",
-    "expiresAt",
-    "expired",
-    "source",
-    "customerId",
-    "recipientName",
-    "revision",
-    "createdAt",
-    "recipientEmail",
-    "recipientPhone",
-    "message",
-    "note",
-    "sourceOrderId",
-    "transactions"
-   ]
-  },
-  "GiftCardSummaryResource": {
-   "type": "object",
-   "properties": {
-    "id": {
-     "type": "string"
-    },
-    "last4": {
-     "type": "string",
-     "description": "The code's last four characters; the code itself never leaves the store."
-    },
-    "currency": {
-     "type": "string",
-     "minLength": 3,
-     "maxLength": 3
-    },
-    "initialAmountMinor": {
-     "type": "integer",
-     "description": "The value it was issued with, in minor units of `currency`."
-    },
-    "balanceMinor": {
-     "type": "integer",
-     "description": "What is left to spend, in minor units of `currency`."
-    },
-    "status": {
-     "type": "string",
-     "enum": [
-      "active",
-      "disabled"
+     "required": [
+      "name",
+      "email",
+      "phone"
      ]
+    },
+    "message": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "note": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
     },
     "expiresAt": {
      "type": "string",
      "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
      "format": "date-time"
     },
     "expired": {
      "type": "boolean"
     },
-    "source": {
-     "type": "string",
-     "enum": [
-      "purchase",
-      "manual",
-      "refund"
-     ]
-    },
-    "customerId": {
-     "type": "string",
-     "nullable": true,
-     "description": "The customer who owns it, if any."
-    },
-    "recipientName": {
-     "type": "string",
-     "nullable": true,
-     "x-scalius-protected": "name"
-    },
     "revision": {
-     "type": "integer",
-     "minimum": 0,
-     "exclusiveMinimum": true,
-     "description": "Send it as `expectedRevision` to change the card; every balance movement advances it."
+     "type": "integer"
     },
     "createdAt": {
      "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
      "format": "date-time"
     }
    },
    "required": [
     "id",
     "last4",
+    "status",
     "currency",
     "initialAmountMinor",
     "balanceMinor",
-    "status",
+    "source",
+    "sourceOrderId",
+    "customerId",
+    "recipient",
+    "message",
+    "note",
     "expiresAt",
     "expired",
-    "source",
-    "customerId",
-    "recipientName",
     "revision",
-    "createdAt"
+    "createdAt",
+    "updatedAt"
    ]
   },
   "GiftCardTransactionResource": {
    "type": "object",
    "properties": {
     "id": {
-     "type": "string"
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "giftCardId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
     },
     "kind": {
      "type": "string",
@@ -26648,16 +26629,22 @@
       "adjust"
      ]
     },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
     "amountMinor": {
-     "type": "integer",
-     "description": "Signed: positive adds value, negative spends it, in minor units of the card's `currency`."
+     "type": "integer"
     },
     "balanceAfterMinor": {
      "type": "integer"
     },
     "orderId": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
     },
     "actorType": {
      "type": "string",
@@ -26669,16 +26656,21 @@
     },
     "reason": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "maxLength": 4000
     },
     "createdAt": {
      "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
      "format": "date-time"
     }
    },
    "required": [
     "id",
+    "giftCardId",
     "kind",
+    "currency",
     "amountMinor",
     "balanceAfterMinor",
     "orderId",
@@ -27661,14 +27653,19 @@
    "type": "object",
    "properties": {
     "id": {
-     "type": "string"
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
     },
     "typeId": {
-     "type": "string"
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 192
     },
     "handle": {
      "type": "string",
-     "nullable": true
+     "nullable": true,
+     "maxLength": 4000
     },
     "status": {
      "type": "string",
@@ -27679,7 +27676,8 @@
      ]
     },
     "displayName": {
-     "type": "string"
+     "type": "string",
+     "maxLength": 4000
     },
     "data": {
      "type": "object",
@@ -27694,10 +27692,14 @@
     },
     "createdAt": {
      "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
      "format": "date-time"
     },
     "updatedAt": {
      "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
      "format": "date-time"
     }
    },

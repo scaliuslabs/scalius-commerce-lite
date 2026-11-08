@@ -19,6 +19,10 @@ import {
   FULFILLMENT_RECORD_STATUSES,
   FULFILLMENT_STATUSES,
   FULFILLMENT_TYPES,
+  GIFT_CARD_ACTOR_TYPES,
+  GIFT_CARD_SOURCES,
+  GIFT_CARD_STATUSES,
+  GIFT_CARD_TRANSACTION_KINDS,
   ORDER_CHANNELS,
   ORDER_STATUSES,
   PAYMENT_RECORD_STATUSES,
@@ -32,6 +36,7 @@ import {
 } from "./resource-states";
 import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./reviews";
 import { POINT_OF_SALE_TENDER_VIAS } from "./payment-terms";
+import { OBJECT_STATUSES } from "./plugins/objects";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
@@ -593,49 +598,76 @@ export const reviewRepresentationSchema = z.object({
   moderationReason: z.enum(REVIEW_REJECTION_REASONS).nullable(),
 });
 
+/**
+ * A gift card (`gift_cards.get` answers it as `giftCard`). The code itself
+ * never leaves the store; `last4` names it. `expired` is whether `expiresAt`
+ * has passed when the card is read. Its ledger is `gift_card_transaction`.
+ */
 export const giftCardRepresentationSchema = z.object({
   id,
   /** The last four characters; the code itself never leaves the store. */
   last4: z.string().max(8),
-  status: state,
+  status: z.enum(GIFT_CARD_STATUSES),
   currency,
+  /** The value it was issued with, in minor units of `currency`. */
   initialAmountMinor: minor,
+  /** What is left to spend, in minor units of `currency`. */
   balanceMinor: minor,
-  source: state,
+  source: z.enum(GIFT_CARD_SOURCES),
+  /** The order it was bought or refunded on, if any. */
   sourceOrderId: id.nullable(),
+  /** The customer who owns it, if any. */
   customerId: id.nullable(),
   recipient: z.object({
     name: pii("name", text.nullable()),
     email: pii("email", text.nullable()),
     phone: pii("phone", text.nullable()),
   }),
+  /** The message the recipient reads with the card. */
+  message: text.nullable(),
+  /** The store's own note; buyers never see it. */
+  note: text.nullable(),
   expiresAt: iso.nullable(),
+  expired: z.boolean(),
   /** Advances with every change: the `expectedRevision` an update or adjustment takes. */
   revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,
 });
 
+/**
+ * One gift card ledger entry (`gift_cards.get` lists the card's newest in
+ * `transactions`). `amountMinor` is signed: positive adds value, negative
+ * spends it, in minor units of `currency`.
+ */
 export const giftCardTransactionRepresentationSchema = z.object({
   id,
   giftCardId: id,
-  kind: state,
+  kind: z.enum(GIFT_CARD_TRANSACTION_KINDS),
   currency,
   amountMinor: minor,
   balanceAfterMinor: minor,
   orderId: id.nullable(),
-  actorType: state,
+  actorType: z.enum(GIFT_CARD_ACTOR_TYPES),
+  reason: text.nullable(),
   createdAt: iso,
 });
 
+/**
+ * An object record (`objects.get` answers it as `record`): `typeId` is its
+ * type's id (`objects.get` takes it or the type's handle), `data` the record's fields as
+ * the type declares them, in the custom-field wire values (money as
+ * `{ amountMinor, currency }`), and `displayName` its title.
+ */
 export const objectRepresentationSchema = z.object({
   id,
-  type: z.string().min(1).max(192),
+  typeId: z.string().min(1).max(192),
   handle: text.nullable(),
-  status: state,
+  status: z.enum(OBJECT_STATUSES),
+  displayName: text,
+  data: z.record(z.string(), z.unknown()).meta({ description: "Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency)." }),
+  position: z.number().int(),
   revision: z.number().int(),
-  /** The record's fields as its type declares them. */
-  data: z.record(z.string(), z.unknown()),
   createdAt: iso,
   updatedAt: iso,
 });
@@ -765,8 +797,9 @@ export type EventRepresentationInput<T extends EventRepresentationType> =
 /**
  * What a delivery carries in `data` when the whole body would pass 512 KiB:
  * the resource id and where to read it. `data: null` only ever means the
- * resource no longer exists. `fetch` names a stable app API read that
- * returns the same representation: `appOperation` is what an app passes to
+ * resource no longer exists. `fetch` names a stable app API read whose
+ * answer carries the same representation, the resource itself or the list
+ * it is in, by its `id`: `appOperation` is what an app passes to
  * `ctx.api.call`, `operationId`/`method`/`path` what an HTTP or agent caller
  * uses. It is null for a resource no stable operation reads; the receiver
  * keeps the `id`.
@@ -787,8 +820,11 @@ const segment = (value: unknown) => encodeURIComponent(typeof value === "string"
 
 /**
  * Where a receiver reads a resource the delivery could not carry (the admin
- * API, under its API credential): a stable read of the same representation,
- * by its sealed app name. Null where none exists yet.
+ * API, under its API credential): a stable read whose answer carries the
+ * same representation (an order is `order`; a refund is in `refunds`, a
+ * gift card ledger entry in the card's `transactions`), by its sealed app
+ * name. Null where none exists yet. The SDK's contract guard checks each
+ * against the read's response schema.
  */
 const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: Record<string, unknown>) => { appOperation: StableAppOperationName; path: string }) | null> = {
   order: (resource) => ({ appOperation: "orders.get", path: `/api/v1/admin/resources/orders/${segment(resource)}` }),
@@ -803,7 +839,8 @@ const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: 
   shipment: (resource) => ({ appOperation: "shipments.get", path: `/api/v1/admin/resources/shipments/${segment(resource)}` }),
   payment: (_resource, facts) => ({ appOperation: "payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
   checkout: (resource) => ({ appOperation: "abandoned_checkouts.get", path: `/api/v1/admin/resources/abandoned-checkouts/${segment(resource)}` }),
-  discount: (resource) => ({ appOperation: "discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
+  // A delivery carries the summary (codes are bearer values, unbounded): the list read by id answers it; discounts.get adds the rules and codes.
+  discount: (resource) => ({ appOperation: "discounts.list", path: `/api/v1/admin/resources/discounts?ids=${segment(resource)}` }),
   review: (resource) => ({ appOperation: "reviews.get", path: `/api/v1/admin/resources/reviews/${segment(resource)}` }),
   gift_card: (resource) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(resource)}` }),
   gift_card_transaction: (_resource, facts) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(facts.giftCardId)}` }),

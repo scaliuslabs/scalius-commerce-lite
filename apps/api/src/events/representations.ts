@@ -40,8 +40,9 @@ import {
   purchaseOrders,
   refundAttempts,
 } from "@scalius/database/schema";
-import { and, asc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
+import { isGiftCardExpired } from "@scalius/core/modules/gift-cards";
 import { readPayoutRepresentation } from "@scalius/core/modules/payouts";
 import { readConversationRepresentation } from "@scalius/core/modules/conversations";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
@@ -1057,57 +1058,89 @@ async function reviewRepresentation(db: Database, reviewId: string) {
   return (await readReviewRepresentations(db, [reviewId]))[0] ?? null;
 }
 
-async function giftCardRepresentation(db: Database, giftCardId: string) {
-  const card = await db.select().from(giftCards).where(eq(giftCards.id, giftCardId)).get();
-  if (!card) return null;
-  return sealed("gift_card", {
-    id: card.id,
-    last4: card.codeLast4,
-    status: card.status,
-    currency: card.currencyCode,
-    initialAmountMinor: card.initialAmountMinor,
-    balanceMinor: card.balanceMinor,
-    source: card.source,
-    sourceOrderId: card.sourceOrderId ?? null,
-    customerId: card.customerId ?? null,
-    recipient: { name: card.recipientName ?? null, email: card.recipientEmail ?? null, phone: card.recipientPhone ?? null },
-    expiresAt: iso(card.expiresAt),
-    revision: card.version,
-    createdAt: isoRequired(card.createdAt),
-    updatedAt: isoRequired(card.updatedAt),
+/** The newest ledger entries a gift card read lists (`transactions`), newest first. */
+export const GIFT_CARD_TRANSACTIONS_LISTED = 200;
+
+/** Gift cards by id, in the order asked (a missing one is left out); at most a list page (50). */
+export async function readGiftCardRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"gift_card">[]> {
+  if (ids.length === 0) return [];
+  const cards = await db.select().from(giftCards).where(inJsonArray(giftCards.id, ids)).all();
+  const byId = new Map(cards.map((card) => [card.id, card]));
+  return ids.flatMap((id) => {
+    const card = byId.get(id);
+    return card ? [sealed("gift_card", {
+      id: card.id,
+      last4: card.codeLast4,
+      status: card.status,
+      currency: card.currencyCode,
+      initialAmountMinor: card.initialAmountMinor,
+      balanceMinor: card.balanceMinor,
+      source: card.source,
+      sourceOrderId: card.sourceOrderId ?? null,
+      customerId: card.customerId ?? null,
+      recipient: { name: card.recipientName ?? null, email: card.recipientEmail ?? null, phone: card.recipientPhone ?? null },
+      message: card.message ?? null,
+      note: card.note ?? null,
+      expiresAt: iso(card.expiresAt),
+      expired: isGiftCardExpired(card),
+      revision: card.version,
+      createdAt: isoRequired(card.createdAt),
+      updatedAt: isoRequired(card.updatedAt),
+    })] : [];
   });
+}
+
+const giftCardRepresentation = async (db: Database, giftCardId: string) => (await readGiftCardRepresentations(db, [giftCardId]))[0] ?? null;
+
+const giftCardTransactionColumns = {
+  id: giftCardTransactions.id,
+  giftCardId: giftCardTransactions.giftCardId,
+  kind: giftCardTransactions.kind,
+  amountMinor: giftCardTransactions.amountMinor,
+  balanceAfterMinor: giftCardTransactions.balanceAfterMinor,
+  orderId: giftCardTransactions.orderId,
+  actorType: giftCardTransactions.actorType,
+  reason: giftCardTransactions.reason,
+  createdAt: giftCardTransactions.createdAt,
+  currency: giftCards.currencyCode,
+};
+
+/** Ledger entries with their card's currency. */
+const giftCardTransactionRows = (db: Database) => db.select(giftCardTransactionColumns)
+  .from(giftCardTransactions).innerJoin(giftCards, eq(giftCards.id, giftCardTransactions.giftCardId));
+type GiftCardTransactionRow = Awaited<ReturnType<ReturnType<typeof giftCardTransactionRows>["all"]>>[number];
+
+function giftCardTransactionOf(row: GiftCardTransactionRow) {
+  return sealed("gift_card_transaction", { ...row, orderId: row.orderId ?? null, reason: row.reason ?? null, createdAt: isoRequired(row.createdAt) });
 }
 
 async function giftCardTransactionRepresentation(db: Database, transactionId: string, giftCardId: string) {
-  const row = await db.select({
-    id: giftCardTransactions.id,
-    giftCardId: giftCardTransactions.giftCardId,
-    kind: giftCardTransactions.kind,
-    amountMinor: giftCardTransactions.amountMinor,
-    balanceAfterMinor: giftCardTransactions.balanceAfterMinor,
-    orderId: giftCardTransactions.orderId,
-    actorType: giftCardTransactions.actorType,
-    createdAt: giftCardTransactions.createdAt,
-    currency: giftCards.currencyCode,
-  }).from(giftCardTransactions).innerJoin(giftCards, eq(giftCards.id, giftCardTransactions.giftCardId))
+  const row = await giftCardTransactionRows(db)
     .where(and(eq(giftCardTransactions.id, transactionId), eq(giftCardTransactions.giftCardId, giftCardId))).get();
-  if (!row) return null;
-  return sealed("gift_card_transaction", { ...row, orderId: row.orderId ?? null, createdAt: isoRequired(row.createdAt) });
+  return row ? giftCardTransactionOf(row) : null;
 }
 
-async function objectRepresentation(db: Database, objectType: string, objectId: string) {
+/**
+ * What `gift_cards.get` answers: the card's representation (a `gift_card`
+ * delivery's `data`) and its newest ledger entries, each a
+ * `gift_card_transaction` delivery's `data`. Null when there is no such card.
+ */
+export async function readGiftCardRepresentation(db: Database, giftCardId: string) {
+  const [giftCard, rows] = await Promise.all([
+    giftCardRepresentation(db, giftCardId),
+    giftCardTransactionRows(db)
+      .where(eq(giftCardTransactions.giftCardId, giftCardId))
+      .orderBy(desc(giftCardTransactions.createdAt), desc(giftCardTransactions.id))
+      .limit(GIFT_CARD_TRANSACTIONS_LISTED)
+      .all(),
+  ]);
+  return giftCard ? { giftCard, transactions: rows.map(giftCardTransactionOf) } : null;
+}
+
+/** An object record as `objects.get` answers it and an object delivery carries it, or null. */
+export async function readObjectRepresentation(db: Database, objectType: string, objectId: string): Promise<EventRepresentation<"object"> | null> {
   const record = await getObjectEventRepresentation(db, objectType, objectId).catch(() => null);
-  if (!record) return null;
-  return sealed("object", {
-    id: record.id,
-    type: record.typeId,
-    handle: record.handle,
-    status: record.status,
-    revision: record.revision,
-    data: record.data,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-  });
+  return record ? sealed("object", record) : null;
 }
 
 const factString = (event: OutboxEvent, key: string): string | null => {
@@ -1173,7 +1206,7 @@ function representationReader(db: Database, runtime?: CheckoutRecoveryRuntime): 
       }
       case "object": {
         const objectType = factString(event, "objectType");
-        return objectType ? objectRepresentation(db, objectType, event.resourceId) : null;
+        return objectType ? readObjectRepresentation(db, objectType, event.resourceId) : null;
       }
       case "payout":
         return readPayoutRepresentation(db, event.resourceId);
