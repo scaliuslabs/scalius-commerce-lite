@@ -9,4 +9,4 @@ ALTER TABLE `plugin_installations` ADD `function_ranks` text DEFAULT '{}' NOT NU
 --> statement-breakpoint
 ALTER TABLE `plugin_registrations` ADD `circuit_inflight_shared` integer DEFAULT 0 NOT NULL;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_function_order', '42ba9ffdb3c6030b831d840c9d2fd30284ddf84e1c8e467b3c2220754aa6cb59');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (200, '0200_function_order', '42ba9ffdb3c6030b831d840c9d2fd30284ddf84e1c8e467b3c2220754aa6cb59');

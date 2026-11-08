@@ -1,6 +1,6 @@
 // The merchant's order of apps at each checkout function point (Apps →
 // Checkout order). An app's rank at a point lives on its installation
-// (`function_ranks`, migration 0199), read with every registration, so the
+// (`function_ranks`, migration 0200), read with every registration, so the
 // order costs checkout no read and survives updates, which rewrite the
 // registrations. `functionRunOrder` (registry.ts) is the one rule: ranked
 // apps first by rank, then the rest by manifest priority, then app id.
