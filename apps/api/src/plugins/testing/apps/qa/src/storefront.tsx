@@ -3,14 +3,14 @@
 // the page, from the component's declared read (`objects`), which the host
 // reads for that product with the page's template part.
 
-import { defineStorefront, type ProductSlotComponentProps } from "@scalius/plugin-sdk/storefront";
+import { componentFor, defineStorefront } from "@scalius/plugin-sdk/storefront";
 
-function Questions(props: ProductSlotComponentProps<{ heading: string }>) {
+const Questions = componentFor(["product.below"], (props) => {
   const records = props.objects?.["acme.qa.questions"]?.records ?? [];
   if (records.length === 0) return null;
   return (
     <section class="qa" data-product={props.data.product.id}>
-      <h2>{props.settings.heading}</h2>
+      <h2>{String(props.settings.heading ?? "")}</h2>
       <dl>
         {records.map((record) => (
           <div class="qa-item" data-question={record.handle ?? record.id}>
@@ -21,6 +21,6 @@ function Questions(props: ProductSlotComponentProps<{ heading: string }>) {
       </dl>
     </section>
   );
-}
+});
 
 export default defineStorefront({ components: { questions: Questions } });
