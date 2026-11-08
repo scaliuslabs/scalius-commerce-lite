@@ -308,16 +308,16 @@ function planRecordWrites(
   return planned;
 }
 
-/** The operation whose condition failed, from the guard's marker (-1 when the provider hid it). */
-function conflictIndex(error: unknown): number | null {
-  if (!isBatchGuardError(error, CONFLICT_MARKER)) return null;
-  for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
-    const message = current instanceof Error ? current.message : String(current);
-    const match = new RegExp(`${CONFLICT_MARKER}_(\\d+)`, "i").exec(message);
-    if (match) return Number(match[1]);
-    current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
+/**
+ * The operation whose condition failed: each operation's guard raises its own
+ * whole marker (`object_conflict_<index>`), so a guard error is matched against
+ * the batch's markers one by one; null when the error is no guard's.
+ */
+function conflictIndex(error: unknown, operations: number): number | null {
+  for (let index = 0; index < operations; index += 1) {
+    if (isBatchGuardError(error, `${CONFLICT_MARKER}_${index}`)) return index;
   }
-  return -1;
+  return null;
 }
 
 function conflictError(index: number, operations: readonly ObjectOperation[]): ObjectError {
@@ -364,7 +364,7 @@ export async function writeObjectRecords(
   try {
     results = await safeBatch(db, [...planned.guards, ...planned.writes] as never) as unknown[];
   } catch (error) {
-    const index = conflictIndex(error);
+    const index = conflictIndex(error, operations.length);
     if (index !== null) throw conflictError(index, operations);
     const unique = operations.map((operation) => operation.op === "put" ? objects(operation.object) : null)
       .map((declaration) => declaration ? uniqueViolation(error, declaration) : null)
