@@ -219,7 +219,7 @@ The measurable bar for every screen, at any data size: 0 rows or 1,000,000. Each
 - `harness`: `pnpm quality:admin` measures it in a real browser (390, 768, 1024, 1440 px; en and bn; light and dark). The check after `→` is the definition the harness implements. `±1` means one CSS pixel.
 - `review`: a person checks it against this text and the reference.
 
-A `lint` or `harness` check that does not exist yet is work for Wave B and the harness. Until it lands, review the rule. A screen passes the bar when it has zero `harness` failures at every width and language, and zero open P1 or P2 findings in `audit/polish-2026-10/`.
+Where a `lint` or `harness` check does not exist yet (`docs/ADMIN-QUALITY.md`, "Not yet automated"), review the rule by hand. A screen passes the bar when it has zero `harness` failures at every width and language.
 
 Reference: the expanded variant row (product page, Variants): labels above fields, one control height, help under its field, an aligned two-column grid on a quiet inset card, the SKU as a mono subtitle, numbers in fixed-width fields.
 
