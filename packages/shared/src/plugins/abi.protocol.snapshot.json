@@ -4353,48 +4353,7 @@
    ],
    "additionalProperties": false,
    "$defs": {
-    "PluginUiJson": {
-     "anyOf": [
-      {
-       "type": "string",
-       "maxLength": 2000
-      },
-      {
-       "type": "number"
-      },
-      {
-       "type": "boolean"
-      },
-      {
-       "type": "null"
-      },
-      {
-       "maxItems": 100,
-       "type": "array",
-       "items": {
-        "$ref": "#/$defs/PluginUiJson"
-       }
-      },
-      {
-       "type": "object",
-       "propertyNames": {
-        "type": "string",
-        "maxLength": 64
-       },
-       "additionalProperties": {
-        "$ref": "#/$defs/PluginUiJson"
-       }
-      }
-     ]
-    },
     "__schema0": {
-     "maxItems": 100,
-     "type": "array",
-     "items": {
-      "$ref": "#/$defs/PluginUiNode"
-     }
-    },
-    "PluginUiNode": {
      "oneOf": [
       {
        "type": "object",
@@ -4725,7 +4684,11 @@
          }
         },
         "children": {
-         "$ref": "#/$defs/__schema0"
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
         }
        },
        "required": [
@@ -4750,7 +4713,11 @@
          "maxLength": 2000
         },
         "children": {
-         "$ref": "#/$defs/__schema0"
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
         }
        },
        "required": [
@@ -5088,7 +5055,11 @@
          }
         },
         "children": {
-         "$ref": "#/$defs/__schema0"
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
         }
        },
        "required": [
@@ -5120,7 +5091,11 @@
          ]
         },
         "children": {
-         "$ref": "#/$defs/__schema0"
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
         }
        },
        "required": [
@@ -7047,7 +7022,11 @@
          "additionalProperties": false
         },
         "children": {
-         "$ref": "#/$defs/__schema0"
+         "maxItems": 100,
+         "type": "array",
+         "items": {
+          "$ref": "#/$defs/PluginUiNode"
+         }
         }
        },
        "required": [
@@ -7468,6 +7447,43 @@
        "additionalProperties": false
       }
      ]
+    },
+    "PluginUiJson": {
+     "anyOf": [
+      {
+       "type": "string",
+       "maxLength": 2000
+      },
+      {
+       "type": "number"
+      },
+      {
+       "type": "boolean"
+      },
+      {
+       "type": "null"
+      },
+      {
+       "maxItems": 100,
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/PluginUiJson"
+       }
+      },
+      {
+       "type": "object",
+       "propertyNames": {
+        "type": "string",
+        "maxLength": 64
+       },
+       "additionalProperties": {
+        "$ref": "#/$defs/PluginUiJson"
+       }
+      }
+     ]
+    },
+    "PluginUiNode": {
+     "$ref": "#/$defs/__schema0"
     }
    }
   }

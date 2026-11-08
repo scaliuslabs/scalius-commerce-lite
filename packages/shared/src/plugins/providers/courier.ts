@@ -190,14 +190,17 @@ const REPLY_HEADER = z.string().regex(HEADER_NAME).refine(
   "The platform sets this header.",
 );
 type ReplyJson = string | number | boolean | null | ReplyJson[] | { [key: string]: ReplyJson };
-const replyJson: z.ZodType<ReplyJson> = z.lazy(() => z.union([
+// The lazy returns one union built once (a getter that builds a new one per
+// call makes the sealed JSON Schema depend on what resolved it first: ui.ts).
+const replyJsonUnion = z.union([
   z.string().max(500),
   z.number().finite(),
   z.boolean(),
   z.null(),
-  z.array(replyJson).max(20),
-  z.record(z.string().max(64), replyJson),
-]));
+  z.array(z.lazy(() => replyJson)).max(20),
+  z.record(z.string().max(64), z.lazy(() => replyJson)),
+]);
+const replyJson: z.ZodType<ReplyJson> = z.lazy(() => replyJsonUnion);
 
 /**
  * The answer the courier expects (some check the status, a header or the
