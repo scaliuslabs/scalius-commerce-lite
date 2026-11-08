@@ -420,11 +420,12 @@ export async function deleteObjectRecord(
 
 /**
  * An app's write of a record its function read, checked and indexed now so
- * the order commit only has to write it (checkout.discounts `commit`).
+ * the order commit only has to write it (a checkout.discounts or cart.validate `commit`).
  * Throws the storage refusal for a record that is too large or not indexable.
  */
 export function prepareAppObjectCommit(input: {
   pluginId: string;
+  point: AppObjectCommit["point"];
   object: string;
   declaration: ObjectTypeDeclaration;
   id: string;
@@ -439,6 +440,7 @@ export function prepareAppObjectCommit(input: {
   const { data, json } = requireRecord(checked.data);
   return {
     pluginId: input.pluginId,
+    point: input.point,
     object: input.object,
     public: input.declaration.storefront,
     events: input.declaration.events,

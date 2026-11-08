@@ -29,6 +29,7 @@ import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
 import {
   PLUGIN_EXTENSION_RUN,
+  PLUGIN_FUNCTION_POINTS,
   FIRST_PARTY_PLUGIN_VENDOR,
   isPluginScope,
   knownPluginFeatures,
@@ -42,6 +43,7 @@ import {
   pluginManifestWithFeatures,
   pluginSettingDefaults,
   validatePluginSettingValues,
+  type PluginFunctionPoint,
   type PluginGrantRequest,
   type PluginManifest,
   type PluginSettingField,
@@ -105,6 +107,28 @@ export interface PluginInstallation {
   /** Bytes in its storage and key/value data at the last measurement (null: not measured yet). */
   storageBytes: number;
   storageMeasuredAt: number | null;
+  /**
+   * The merchant's place for the app at each function point it was ordered
+   * at, lower first (`functionRunOrder`); a point absent here runs by the
+   * manifest's priority after the ordered apps.
+   */
+  functionRanks: Readonly<Partial<Record<PluginFunctionPoint, number>>>;
+}
+
+/** The stored ranks, keeping only function points with a whole, non-negative rank. */
+export function parseFunctionRanks(value: string | null | undefined): Partial<Record<PluginFunctionPoint, number>> {
+  const parsed = parseJsonObject(value ?? null) ?? {};
+  const ranks: Partial<Record<PluginFunctionPoint, number>> = {};
+  for (const point of PLUGIN_FUNCTION_POINTS) {
+    const rank = parsed[point];
+    if (typeof rank === "number" && Number.isSafeInteger(rank) && rank >= 0) ranks[point] = rank;
+  }
+  return ranks;
+}
+
+/** The ranks as stored: function points in their declared order (the one form, so a guard compares text). */
+export function serializeFunctionRanks(ranks: Readonly<Partial<Record<PluginFunctionPoint, number>>>): string {
+  return JSON.stringify(Object.fromEntries(PLUGIN_FUNCTION_POINTS.flatMap((point) => ranks[point] === undefined ? [] : [[point, ranks[point]]])));
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -271,6 +295,7 @@ export function toPluginInstallation(row: PluginInstallationRow): PluginInstalla
     signerKeyId: row.signerKeyId ?? null,
     storageBytes: row.storageBytes ?? 0,
     storageMeasuredAt: row.storageMeasuredAt ?? null,
+    functionRanks: parseFunctionRanks(row.functionRanks),
   };
 }
 

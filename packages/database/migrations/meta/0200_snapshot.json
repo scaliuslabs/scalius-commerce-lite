@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6b1c6b79-47c2-4b33-9fda-a8c0f4abd709",
-  "prevId": "544b3a49-0456-4cb7-a736-1b03a8c12ff8",
+  "id": "d9126576-6e74-47ef-9b02-e837adf4b8f1",
+  "prevId": "6b1c6b79-47c2-4b33-9fda-a8c0f4abd709",
   "tables": {
     "account": {
       "name": "account",
@@ -31115,6 +31115,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "function_ranks": {
+          "name": "function_ranks",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
         }
       },
       "indexes": {
@@ -31532,6 +31540,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "circuit_inflight_shared": {
+          "name": "circuit_inflight_shared",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         }
       },
       "indexes": {

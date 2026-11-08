@@ -27451,6 +27451,88 @@
           "settings"
         ]
       },
+      "AppFunctionPointOrder": {
+        "type": "object",
+        "properties": {
+          "point": {
+            "type": "string",
+            "enum": [
+              "cart.transform",
+              "cart.line_prices",
+              "cart.validate",
+              "checkout.discounts",
+              "checkout.shipping_rates",
+              "checkout.payment_methods"
+            ]
+          },
+          "composition": {
+            "type": "string",
+            "enum": [
+              "first",
+              "all",
+              "stack",
+              "sequence"
+            ],
+            "description": "How the apps' answers combine here, in this order. first: the first app that decides an item (a line's price, a line's bundle) wins it. all: every app's answer applies (any rule error blocks). stack: discounts in order, each from what the ones before left. sequence: operations in order, a later one over an earlier; a hide always wins."
+          },
+          "ordered": {
+            "type": "boolean",
+            "description": "Whether the merchant set this order (false: the apps' own priorities decide)."
+          },
+          "winner": {
+            "type": "string",
+            "nullable": true,
+            "description": "Where the first app wins (composition first) and more than one app runs: the app whose decision wins when apps overlap. null otherwise."
+          },
+          "apps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "integer",
+                  "description": "The app's own priority for this point (its manifest): the order when the merchant set none."
+                },
+                "rank": {
+                  "type": "integer",
+                  "nullable": true,
+                  "description": "The merchant's place for the app here (0 first); null when the app's priority places it, after the ranked apps."
+                },
+                "runs": {
+                  "type": "boolean",
+                  "description": "Whether the app runs at checkout now (active and approved for this point). An app that does not run keeps its place."
+                },
+                "blocking": {
+                  "type": "boolean",
+                  "description": "Whether checkout refuses orders when this app cannot answer here (approved as blocking)."
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "priority",
+                "rank",
+                "runs",
+                "blocking"
+              ]
+            },
+            "description": "Every installed app implementing the point, in the order checkout runs and merges them."
+          }
+        },
+        "required": [
+          "point",
+          "composition",
+          "ordered",
+          "winner",
+          "apps"
+        ]
+      },
       "AppLogLine": {
         "type": "object",
         "properties": {
@@ -264544,6 +264626,259 @@
         }
       }
     },
+    "/api/v1/admin/apps/function-order": {
+      "get": {
+        "operationId": "dashboard.apps.function_order_get",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "The order apps run in at each checkout function point",
+        "description": "Every checkout function point at least one installed app implements, its apps in the order checkout runs and merges them, and how their answers combine there.",
+        "responses": {
+          "200": {
+            "description": "The checkout order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "points": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AppFunctionPointOrder"
+                          }
+                        }
+                      },
+                      "required": [
+                        "points"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when asked which apps run at checkout, in what order, or which app's price or decision wins when two apps overlap.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.apps.function_order_update",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Set the order apps run in at one checkout function point",
+        "description": "appIds names every installed app implementing the point, once each, first to run first; null resets the point to the apps' own priorities. Apps installed later run after the ordered ones until placed. 409 when the apps at the point changed (reload) or another save won.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "point": {
+                    "type": "string",
+                    "enum": [
+                      "cart.transform",
+                      "cart.line_prices",
+                      "cart.validate",
+                      "checkout.discounts",
+                      "checkout.shipping_rates",
+                      "checkout.payment_methods"
+                    ]
+                  },
+                  "appIds": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$"
+                    },
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "point",
+                  "appIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "point": {
+                          "$ref": "#/components/schemas/AppFunctionPointOrder"
+                        }
+                      },
+                      "required": [
+                        "point"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when the merchant wants one app to run before another at a checkout point (its price or discount to win); sends every app at the point in the new order, or null to go back to the apps' own priorities.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
     "/api/v1/admin/apps/{id}": {
       "get": {
         "operationId": "dashboard.apps.get",
@@ -289452,6 +289787,8 @@
           "dashboard.apps.surfaces",
           "dashboard.apps.storefront_problems_list",
           "dashboard.apps.get",
+          "dashboard.apps.function_order_get",
+          "dashboard.apps.function_order_update",
           "dashboard.apps.features_list",
           "dashboard.apps.feature_disable",
           "dashboard.apps.logs_list",
@@ -294313,6 +294650,22 @@
         },
         {
           "operationId": "dashboard.apps.features_list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.function_order_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.function_order_update",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [

@@ -27,6 +27,7 @@ import { appsQueryOptions, type AppCategory, type AppListing, type AppSummary } 
 import { AppIcon } from "./AppIcon";
 import { appMatches } from "./app-listing";
 import { AppStatusBadge } from "./app-status";
+import { CheckoutOrderCard } from "./CheckoutOrderCard";
 import { RemovedAppDataCard } from "./RemovedAppData";
 import { localizedApp } from "./app-text";
 
@@ -238,6 +239,9 @@ export function AppsList() {
         ) : undefined}
       />
       <Card className="overflow-clip">{body}</Card>
+      <div className="mt-4 empty:hidden">
+        <CheckoutOrderCard />
+      </div>
       <div className="mt-4 empty:hidden">
         <RemovedAppDataCard />
       </div>

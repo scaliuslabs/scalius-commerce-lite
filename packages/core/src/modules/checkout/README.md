@@ -143,6 +143,11 @@ staff get a push when it opens and the app page lists open circuits.
   since pricing fails the whole order with `app_offer_changed` and the store's
   `checkoutAppOfferChangedText`: a balance is never spent twice. Staff orders
   price without a signed-in buyer, so no commit can arise there.
+- **Holds** (`cart.validate` `commit`, COMMERCE-HOOKS H14):
+  `checkoutAppObjectCommits` adds every validate answer's commits (a slot,
+  a seat) to the applied discounts' writes, so a hold is written with every
+  order placed and never on a quote; one record written from both answers of
+  one app refuses checkout. Staff orders write no holds.
 - **Persistence**: no schema change. Line `discount_amount_minor` is the
   platform part plus the app part; each app discount is an immutable
   `app_discount` row in `order_events` (`order-kernel/app-facts.ts`: app id and

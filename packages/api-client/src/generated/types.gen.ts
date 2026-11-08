@@ -6128,6 +6128,45 @@ export type RemovedAppData = {
     settings: boolean;
 };
 
+export type AppFunctionPointOrder = {
+    point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+    /**
+     * How the apps' answers combine here, in this order. first: the first app that decides an item (a line's price, a line's bundle) wins it. all: every app's answer applies (any rule error blocks). stack: discounts in order, each from what the ones before left. sequence: operations in order, a later one over an earlier; a hide always wins.
+     */
+    composition: 'first' | 'all' | 'stack' | 'sequence';
+    /**
+     * Whether the merchant set this order (false: the apps' own priorities decide).
+     */
+    ordered: boolean;
+    /**
+     * Where the first app wins (composition first) and more than one app runs: the app whose decision wins when apps overlap. null otherwise.
+     */
+    winner: string | null;
+    /**
+     * Every installed app implementing the point, in the order checkout runs and merges them.
+     */
+    apps: Array<{
+        id: string;
+        name: string;
+        /**
+         * The app's own priority for this point (its manifest): the order when the merchant set none.
+         */
+        priority: number;
+        /**
+         * The merchant's place for the app here (0 first); null when the app's priority places it, after the ranked apps.
+         */
+        rank: number | null;
+        /**
+         * Whether the app runs at checkout now (active and approved for this point). An app that does not run keeps its place.
+         */
+        runs: boolean;
+        /**
+         * Whether checkout refuses orders when this app cannot answer here (approved as blocking).
+         */
+        blocking: boolean;
+    }>;
+};
+
 export type AppLogLine = {
     id: string;
     level: 'debug' | 'info' | 'warn' | 'error';
@@ -75396,6 +75435,85 @@ export type PostApiV1AdminAppsRemovedDataByIdHandOverResponses = {
 };
 
 export type PostApiV1AdminAppsRemovedDataByIdHandOverResponse = PostApiV1AdminAppsRemovedDataByIdHandOverResponses[keyof PostApiV1AdminAppsRemovedDataByIdHandOverResponses];
+
+export type GetApiV1AdminAppsFunctionOrderData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/function-order';
+};
+
+export type GetApiV1AdminAppsFunctionOrderErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsFunctionOrderError = GetApiV1AdminAppsFunctionOrderErrors[keyof GetApiV1AdminAppsFunctionOrderErrors];
+
+export type GetApiV1AdminAppsFunctionOrderResponses = {
+    /**
+     * The checkout order
+     */
+    200: {
+        success: true;
+        data: {
+            points: Array<AppFunctionPointOrder>;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsFunctionOrderResponse = GetApiV1AdminAppsFunctionOrderResponses[keyof GetApiV1AdminAppsFunctionOrderResponses];
+
+export type PutApiV1AdminAppsFunctionOrderData = {
+    body: {
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+        appIds: Array<string> | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps/function-order';
+};
+
+export type PutApiV1AdminAppsFunctionOrderErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PutApiV1AdminAppsFunctionOrderError = PutApiV1AdminAppsFunctionOrderErrors[keyof PutApiV1AdminAppsFunctionOrderErrors];
+
+export type PutApiV1AdminAppsFunctionOrderResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            point: AppFunctionPointOrder;
+        };
+    };
+};
+
+export type PutApiV1AdminAppsFunctionOrderResponse = PutApiV1AdminAppsFunctionOrderResponses[keyof PutApiV1AdminAppsFunctionOrderResponses];
 
 export type GetApiV1AdminAppsByIdData = {
     body?: never;

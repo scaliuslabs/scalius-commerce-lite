@@ -70,6 +70,14 @@ export const pluginInstallations = sqliteTable("plugin_installations", {
     /** Limit breaches in the current window (one counted a minute); enough of them stop the app. */
     breachCount: integer("breach_count").notNull().default(0),
     lastBreachAt: integer("last_breach_at"),
+    /**
+     * The merchant's place for this app at each checkout function point
+     * (migration 0200): `{ "<point>": <rank> }`, lower first. A point without
+     * a rank keeps the manifest's priority, after the ranked apps. Kept on
+     * the installation (read with every registration) so an update, which
+     * rewrites the registrations, keeps the merchant's order.
+     */
+    functionRanks: text("function_ranks").notNull().default("{}"),
 }, (table) => [
     index("plugin_installations_status_idx").on(table.status, table.pluginId),
     check("plugin_installations_id_shape", pluginIdShape(table.pluginId)),
@@ -137,6 +145,13 @@ export const pluginRegistrations = sqliteTable("plugin_registrations", {
      * instead of running it again.
      */
     circuitInflightAt: integer("circuit_inflight_at"),
+    /**
+     * 1 when the in-flight run above shared the request with other sandboxed
+     * runs (migration 0200): a stale shared mark only makes the app a
+     * suspect, which runs alone next time; a stale mark of a run alone means
+     * that app hung.
+     */
+    circuitInflightShared: integer("circuit_inflight_shared").notNull().default(0),
 }, (table) => [
     primaryKey({ columns: [table.kind, table.name, table.pluginId] }),
     index("plugin_registrations_plugin_idx").on(table.pluginId),

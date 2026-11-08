@@ -4,7 +4,9 @@
 // and the host renders it through the same pipeline (PLUGIN_EXTENSION_SCHEMAS). A function is pure: it receives the input
 // below plus its plugin's settings, does no I/O, and returns an output the
 // platform validates and applies. Inputs carry ids, quantities, money in
-// integer minor units and customer segments — never contact details. A
+// integer minor units and customer segments; contact details only in
+// cart.validate's `contact`, each field null unless the app holds its
+// protected-data scope (protected-data.ts). A
 // function that throws, times out or returns an invalid output is skipped
 // (`fail open`) and the incident is logged for the merchant; no plugin can
 // take checkout down. At points in PLUGIN_BLOCKING_FUNCTION_POINTS an app may
@@ -25,6 +27,7 @@ import { APP_SCOPED_KEY_MAX_LENGTH, APP_SCOPED_KEY_PATTERN } from "./ids";
 import { LINE_PROPERTY_INPUT_LIMITS, LINE_PURCHASE_OPTIONS_MAX } from "../line-properties";
 import type { PluginFunctionPoint } from "./manifest";
 import { PLUGIN_CUSTOMER_ROLE_PATTERN, PLUGIN_CUSTOMER_ROLE_REF_PATTERN, PLUGIN_CUSTOMER_ROLES_MAX } from "./customer-roles";
+import { PROTECTED_FIELD_KEYWORD, protectedPathsOf, type ProtectedCustomerData, type ProtectedPath } from "./protected-data";
 import { ORDER_CHANNELS } from "../order-channel";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
@@ -159,10 +162,56 @@ export type FunctionCart = z.infer<typeof functionCartSchema>;
 
 // ── cart.validate ─────────────────────────────────────────────────────────
 
+/**
+ * New versions of records a function read (`as`: a single-key object read
+ * whose key resolved to an id), committed with the order in its own batch,
+ * each at the revision the function saw; a concurrent change aborts the
+ * order (`app_offer_changed`) instead. A commit naming anything else
+ * invalidates the whole answer.
+ */
+const functionCommitSchema = z.array(z.object({
+  as: z.string().regex(FUNCTION_READ_AS_PATTERN),
+  record: z.record(z.string(), z.unknown()),
+}).strict()).max(FUNCTION_READS_MAX).optional();
+
 export const cartValidateOutputSchema = z.object({
   /** Any error blocks checkout and is shown to the buyer (on its line when `lineId` is set). */
   errors: z.array(z.object({ code, message, lineId: id.optional() }).strict()).max(20),
+  /**
+   * Holds (a delivery slot's taken count, a seat, a per-buyer limit): the
+   * records this answer reserves, committed with the order whenever the
+   * order is placed (every app's, `PLUGIN_FUNCTION_COMPOSITION` "all"), never
+   * when it is not. The last unit raced by two checkouts goes to one: the
+   * other's order is refused and the next quote reads the record as it now
+   * is. A quote or a cart check commits nothing.
+   */
+  commit: functionCommitSchema,
 }).strict();
+
+/** Marks a field as protected customer data (protected-data.ts): null unless the app holds the category's scope. */
+function pii<T extends z.ZodType>(category: ProtectedCustomerData, schema: T): T {
+  return schema.meta({ [PROTECTED_FIELD_KEYWORD]: category }) as T;
+}
+
+/**
+ * The buyer's contact as the order will keep it (cart.validate only), for a
+ * fraud or eligibility check: each field null unless the app holds its
+ * protected-data scope (`read_customer_names`, `_emails`, `_phones`,
+ * `_addresses`). `address` is the street; the region is `cart.destination`.
+ * Null where checkout has no contact yet (the cart page, a quote) and on
+ * staff orders.
+ */
+export const functionContactSchema = z.object({
+  name: pii("name", z.string().max(200).nullable()),
+  email: pii("email", z.string().max(320).nullable()),
+  phone: pii("phone", z.string().max(40).nullable()),
+  address: pii("address", z.object({
+    line1: z.string().max(500).nullable(),
+    line2: z.string().max(500).nullable(),
+    dependentLocality: z.string().max(200).nullable(),
+  }).strict().nullable()),
+}).strict();
+export type FunctionContact = z.infer<typeof functionContactSchema>;
 
 // ── Declared reads ────────────────────────────────────────────────────────
 
@@ -226,10 +275,7 @@ export const checkoutDiscountsOutputSchema = z.object({
    * change aborts the order instead. A read whose key resolved to no id (a
    * guest's `customer` read, an empty attribute or hop) cannot be committed.
    */
-  commit: z.array(z.object({
-    as: z.string().regex(FUNCTION_READ_AS_PATTERN),
-    record: z.record(z.string(), z.unknown()),
-  }).strict()).max(FUNCTION_READS_MAX).optional(),
+  commit: functionCommitSchema,
 }).strict();
 
 // ── checkout.shipping_rates ───────────────────────────────────────────────
@@ -412,6 +458,34 @@ export const cartLinePricesOutputSchema = z.object({
   ])).max(250).default([]),
 }).strict();
 
+// ── Composition ───────────────────────────────────────────────────────────
+
+/**
+ * How the answers of several apps at one point combine. Apps run and merge
+ * in the merchant's order (Apps → Checkout order; with none set, manifest
+ * `priority`, then app id), whatever order their answers arrive in:
+ *
+ * - `first`: the first app that decides an item wins it (a line's bundle at
+ *   cart.transform, a line's price at cart.line_prices); a later app's
+ *   decision for the same item is skipped and logged. Line add-ons are not
+ *   decisions: every app's apply, in order.
+ * - `all`: every app's answer applies: any rule error blocks checkout and
+ *   every app's `commit` holds what it reserved.
+ * - `stack`: in order, each discount from what the ones before it left; a
+ *   discount that does not combine with one already applied is skipped.
+ * - `sequence`: operations apply in order, a later one over an earlier (a
+ *   rename, a price, a reorder); a hide always wins.
+ */
+export const PLUGIN_FUNCTION_COMPOSITION = {
+  "cart.transform": "first",
+  "cart.line_prices": "first",
+  "cart.validate": "all",
+  "checkout.discounts": "stack",
+  "checkout.shipping_rates": "sequence",
+  "checkout.payment_methods": "sequence",
+} as const satisfies Record<PluginFunctionPoint, "first" | "all" | "stack" | "sequence">;
+export type PluginFunctionComposition = (typeof PLUGIN_FUNCTION_COMPOSITION)[PluginFunctionPoint];
+
 // ── Registry ──────────────────────────────────────────────────────────────
 
 export const buyerUiInputSchema = z.object({
@@ -436,7 +510,7 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
     output: cartLinePricesOutputSchema,
   },
   "cart.validate": {
-    input: z.object({ cart: functionCartSchema, reads }).strict(),
+    input: z.object({ cart: functionCartSchema, contact: functionContactSchema.nullable().default(null), reads }).strict(),
     output: cartValidateOutputSchema,
   },
   "checkout.discounts": {
@@ -499,6 +573,18 @@ export type PluginFunctionInputDraft<P extends PluginRunPoint> = z.input<(typeof
 export type PluginFunctionOutput<P extends PluginRunPoint> = z.infer<(typeof PLUGIN_RUN_SCHEMAS)[P]["output"]>;
 /** An answer as a function writes it (defaults may be left out). */
 export type PluginFunctionAnswer<P extends PluginRunPoint> = z.input<(typeof PLUGIN_RUN_SCHEMAS)[P]["output"]>;
+
+let protectedInputPaths: ReadonlyMap<PluginRunPoint, readonly ProtectedPath[]> | null = null;
+
+/**
+ * The protected fields of a run's input (only cart.validate's `contact`
+ * has any), derived once from the schemas' `x-scalius-protected` marks.
+ */
+export function functionInputProtectedPaths(point: PluginRunPoint): readonly ProtectedPath[] {
+  protectedInputPaths ??= new Map((Object.keys(PLUGIN_RUN_SCHEMAS) as PluginRunPoint[])
+    .map((name) => [name, protectedPathsOf(z.toJSONSchema(PLUGIN_RUN_SCHEMAS[name].input as z.ZodType, { io: "input" }))]));
+  return protectedInputPaths.get(point) ?? [];
+}
 
 /** The refusal code of an answer that fails its point's schema; the host skips the app (or blocks, `onError`). */
 export const PLUGIN_FUNCTION_INVALID_OUTPUT = "function_invalid_output";

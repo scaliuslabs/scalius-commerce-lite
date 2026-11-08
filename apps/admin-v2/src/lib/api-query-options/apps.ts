@@ -10,6 +10,7 @@ import {
   getApiV1AdminAppsById,
   getApiV1AdminAppsByIdDeliveries,
   getApiV1AdminAppsByIdLogs,
+  getApiV1AdminAppsFunctionOrder,
   getApiV1AdminAppsRemovedData,
   getApiV1AdminAppsStorefrontProblems,
   getApiV1AdminAppsSurfaces,
@@ -19,6 +20,7 @@ import type {
   AppDetail,
   AppEventDelivery,
   AppFeature,
+  AppFunctionPointOrder,
   AppGrant,
   AppListing,
   AppLogLine,
@@ -30,7 +32,7 @@ import type {
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppGrant, AppListing, AppLogLine, AppSettingField, AppStorefrontProblem, AppSummary, RemovedAppData };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppFeature, AppFunctionPointOrder, AppGrant, AppListing, AppLogLine, AppSettingField, AppStorefrontProblem, AppSummary, RemovedAppData };
 
 /** The categories an app lists itself under (the manifest's enum). */
 export type AppCategory = AppSummary["categories"][number];
@@ -127,4 +129,15 @@ export const removedAppDataQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.apps.removedData(),
     queryFn: async () => (await apiData(getApiV1AdminAppsRemovedData())).apps,
+  });
+
+/**
+ * Each checkout function point with the apps that take part in it, in the
+ * order checkout runs them, how their answers combine and, where the first
+ * app wins, which one does.
+ */
+export const appFunctionOrderQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.apps.functionOrder(),
+    queryFn: async (): Promise<AppFunctionPointOrder[]> => (await apiData(getApiV1AdminAppsFunctionOrder())).points,
   });

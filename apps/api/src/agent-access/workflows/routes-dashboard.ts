@@ -1386,6 +1386,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "dashboard.apps.surfaces",
       "dashboard.apps.storefront_problems_list",
       "dashboard.apps.get",
+      "dashboard.apps.function_order_get",
+      "dashboard.apps.function_order_update",
       "dashboard.apps.features_list",
       "dashboard.apps.feature_disable",
       "dashboard.apps.logs_list",

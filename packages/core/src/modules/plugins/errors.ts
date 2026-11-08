@@ -42,7 +42,9 @@ export type PluginErrorCode =
   | "custom_field_in_theme"
   | "installation_incompatible"
   | "installation_sandbox_required"
-  | "installation_source_conflict";
+  | "installation_source_conflict"
+  | "function_order_mismatch"
+  | "function_order_changed";
 
 const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation_exists": 409,
@@ -103,6 +105,8 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation_incompatible": 409,
   "installation_sandbox_required": 409,
   "installation_source_conflict": 409,
+  "function_order_mismatch": 409,
+  "function_order_changed": 409,
   internal_error: 500,
 };
 

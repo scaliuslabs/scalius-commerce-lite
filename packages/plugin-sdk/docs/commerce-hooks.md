@@ -15,7 +15,7 @@ Contact data is protected in one place and projected everywhere:
 - Operation outputs mark protected fields `x-scalius-protected`. Without the matching `read_customer_*` scope they read `null`. A filter or search by such a field is refused with 403 `contact_scope_required`.
 - Webhook `data` is projected through the endpoint's chosen customer data (none by default).
 - Provider inputs are projected from the app's grant. A port declares the contact data it needs; a manifest that declares the port without those scopes is refused, and the host refuses a port whose stored grant lacks them (`provider_customer_data_not_approved`).
-- Function inputs and event facts never carry contact data.
+- Function inputs and event facts carry no contact data, with one exception: `cart.validate`'s `contact` (below), whose fields are projected from your grant like an operation's output.
 
 ### Event payloads
 
@@ -55,13 +55,14 @@ They run in this order: `cart.transform`, then `cart.line_prices`, then `cart.va
 | --- | --- | --- |
 | `cart.transform` | | `{ operations: [{ op: "expand", lineId, title?, components: [{ variantId, quantity }] } \| { op: "merge", lineIds, title }] }` (50 operations; 20 components) |
 | `cart.line_prices` | `lines: [{ lineId, source, bundle }]` | `{ prices?: [{ lineId, unitPriceMinor }], adjustments?: [{ lineId, amountMinor, title }] }` |
-| `cart.validate` | | `{ errors: [{ code, message, lineId? }] }` (20) |
+| `cart.validate` | `contact` | `{ errors: [{ code, message, lineId? }], commit?: [{ as, record }] }` (20 errors) |
 | `checkout.discounts` | | `{ discounts: [{ title, code?, target, value, maxAmountMinor?, combinesWith? }], commit?: [{ as, record }] }` (10 discounts) |
 | `checkout.shipping_rates` | `rates: [{ rateId, name, amountMinor, kind }]` | `{ operations: [hide \| rename \| price \| reorder] }` |
 | `checkout.payment_methods` | `methods: [{ methodId, name, gated? }]` | `{ operations: [hide \| allow \| rename \| reorder] }` |
 
 - **`cart.transform`.** A bundle's components become real order lines (stock, tax and refunds per SKU); the buyer sees one line at the summed price. Lines with buyer inputs, gift cards and carts above 99 lines are never changed.
-- **`cart.line_prices`.** `prices` set a line's unit price. The one price precedence is: purchase-option price (only the app that declares the option) > override; otherwise a sale only lowers segment > market list > app price > FX > base. A one-time line takes an app price under a sale or when no price list prices it, and the first app by priority wins. `adjustments` are add-ons (below).
+- **`cart.line_prices`.** `prices` set a line's unit price. The one price precedence is: purchase-option price (only the app that declares the option) > override; otherwise a sale only lowers segment > market list > app price > FX > base. A one-time line takes an app price under a sale or when no price list prices it, and the first app in the checkout order wins. `adjustments` are add-ons (below).
+- **`cart.validate`.** Any error blocks checkout and is shown to the buyer (on its line with `lineId`). `commit` holds capacity with the order (Commits, below). `contact` is the buyer's contact as the order keeps it: `{ name, email, phone, address: { line1, line2, dependentLocality } }`, each field `null` unless your grant holds its scope (`read_customer_names`, `read_customer_emails`, `read_customer_phones`, `read_customer_addresses`; the region is `cart.destination`). `contact` itself is `null` on quotes and cart checks (no contact yet) and on staff orders, so a fraud check decides at placement and blocks with an error before the order exists.
 - **`checkout.discounts`.** A discount targets `{ kind: "order" }`, `{ kind: "lines", lineIds }` or `{ kind: "shipping" }`, worth `{ type: "percentage", percent }` or `{ type: "fixed_amount", amountMinor }`. Size it against `cart.lines[].lineTotalMinor`.
 - **`checkout.payment_methods`.** Hide, rename and reorder the methods checkout allows. A method marked `gated: true` is offered to this buyer only if an app answers `{ op: "allow", methodId }` (for an app's own deferred method, only that app). A hide wins over an allow.
 
@@ -102,7 +103,35 @@ A function reads your app's own data through the manifest, never through I/O. Up
 
 ### Commits
 
-A `checkout.discounts` answer may carry `commit: [{ as, record }]` (up to four) for single-key object reads whose key resolved to an id. Each is the next version of a record you read. The platform writes it in the order's own commit batch, guarded at the revision you saw (or "must not exist"), and only when one of your discounts applied. If the record changed meanwhile, the order fails with `app_offer_changed` and the buyer reviews it. A commit naming anything else invalidates the whole answer. So a spent balance can never be spent twice.
+A `checkout.discounts` or `cart.validate` answer may carry `commit: [{ as, record }]` (up to four) for single-key object reads whose key resolved to an id. Each is the next version of a record you read. The platform writes it in the order's own commit batch, guarded at the revision you saw (or "must not exist"). If the record changed meanwhile, the order fails with `app_offer_changed` and the buyer reviews it. So a spent balance is never spent twice and a last place is never sold twice.
+
+- A discount's commit is written only when one of your discounts applied.
+- A `cart.validate` commit is a hold: it is written with every order placed (an order is placed only when no rule error remains) and never on a quote, a cart check or an order that fails. Use it for capacity: a delivery slot the buyer picked (`key: "attribute.slot"`), a seat, a per-buyer limit (`key: "customer"`). Refuse a full slot with an error; answer one more place taken with `commit`. Release a place yourself (an `order.cancelled` handler).
+- A commit the platform cannot take (an undeclared, per-line or empty read, an invalid record) is a failed answer: your `onError` applies. A hold that must never be skipped registers `onError: "block"`.
+- Committing one record from both your hold and your discount is refused (`checkout_app_unavailable`).
+
+```ts
+"cart.validate": ({ cart, reads }) => {
+  const slot = readOne<{ capacity: number; taken: number }>(reads, "slot");
+  if (!slot) return { errors: [{ code: "slot_unknown", message: "Choose a delivery slot." }] };
+  if (slot.data.taken >= slot.data.capacity) return { errors: [{ code: "slot_full", message: "That slot is full." }] };
+  return { errors: [], commit: [{ as: "slot", record: { ...slot.data, taken: slot.data.taken + 1 } }] };
+},
+```
+
+### How apps combine at a point
+
+Several apps at one point run and merge in one order: the merchant's (Apps → Checkout order), else your manifest `priority` (lower first), then app id. An app the merchant has not placed (installed after they ordered the point) runs after the ones they placed. Answers merge in this order whatever order they arrive in. The rule per point (`PLUGIN_FUNCTION_COMPOSITION`):
+
+| Point | Rule | Meaning |
+| --- | --- | --- |
+| `cart.transform` | `first` | A line is in the first operation that names it; a later one is skipped and logged. |
+| `cart.line_prices` | `first` | The first app that prices a one-time line wins it; both apps' logs say which price was used. Add-ons from every app apply. |
+| `cart.validate` | `all` | Every app's errors block; every app's holds commit. |
+| `checkout.discounts` | `stack` | Each discount from what the ones before left; one that does not combine with one already applied is skipped. |
+| `checkout.shipping_rates`, `checkout.payment_methods` | `sequence` | Operations in order, a later rename, price or reorder over an earlier; a hide always wins. |
+
+The dashboard shows the merchant, per point, which apps run, in what order, and which app wins where the first wins. Do not rely on running first: the merchant decides.
 
 ### Line add-ons
 
@@ -117,14 +146,15 @@ Rules:
 - Every app's add-ons apply, in priority order, at most five per line. Each rounds half-up to the market's price increment; a positive one never rounds to nothing (it takes one increment).
 - A gift card takes none: the answer is skipped and logged. A bundle line (the `bundle` of the function's `lines` input) or a sixth add-on refuses checkout (`add_on_unavailable`): checkout never freezes an extra the buyer chose without its price. Answer a bundle line's paid extra anyway, so checkout asks the buyer to remove it; never skip it, which freezes the extra unpaid.
 - They are part of `unitPriceMinor`: quote, tax, discounts, totals and refunds include them. The buyer sees "Add-on: <title> (+price)" in the cart, checkout, receipt and emails, and the order line keeps it as `adjustments: [{ appId, title, amountMinor }]`.
-- `prices` take `currency: "store"` too, and convert exactly as a product price does, rounding step and ending included (৳1,200 is $10.99 in that market, from your app as from the catalogue). When two apps price one one-time line, the first by priority wins and both apps' logs say which price was used.
+- `prices` take `currency: "store"` too, and convert exactly as a product price does, rounding step and ending included (৳1,200 is $10.99 in that market, from your app as from the catalogue). When two apps price one one-time line, the first in the checkout order wins and both apps' logs say which price was used.
 
 ### Failure policy and limits
 
 - A function that throws, times out, answers invalidly (`function_invalid_output`) or exceeds its read bounds is left out: `onError: "skip"` (the default).
 - Only `cart.transform`, `cart.line_prices`, `cart.validate` and `checkout.payment_methods` may declare `onError: "block"`. Checkout then stops with the store's buyer-safe text. The merchant approves it as access of its own ("can pause checkout"): an update that adds `onError: "block"` to a function pauses the app until the store owner approves it.
 - Wall budget: the smaller of `limits.wallMs` and 1.5 s. CPU: the smaller of your manifest `limits.cpuMs` and the plan ceiling (50 ms on the default, up to 200 ms on Paid), with a fixed 50 ms cap for `buyer.ui`.
-- `priority` (0 to 1000, default 100): lower runs first among apps at the same point.
+- `priority` (0 to 1000, default 100): lower runs first among apps at the same point, until the merchant orders the point.
+- Sandboxed (Paid) apps run at once, up to four per checkout, so each added app does not add its wall time. A run that never returns (it held the thread) leaves its in-flight mark: run alone, the next checkout stops the app; run beside other apps, each of them runs alone once more, and only the one that hangs again is stopped.
 
 ### Testing
 

@@ -4051,6 +4051,16 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 }, z.core.$strict>;
                 attributes: z.ZodRecord<z.ZodString, z.ZodString>;
             }, z.core.$strict>;
+            contact: z.ZodDefault<z.ZodNullable<z.ZodObject<{
+                name: z.ZodNullable<z.ZodString>;
+                email: z.ZodNullable<z.ZodString>;
+                phone: z.ZodNullable<z.ZodString>;
+                address: z.ZodNullable<z.ZodObject<{
+                    line1: z.ZodNullable<z.ZodString>;
+                    line2: z.ZodNullable<z.ZodString>;
+                    dependentLocality: z.ZodNullable<z.ZodString>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>>;
             reads: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [
                 z.ZodNullable<z.ZodObject<{
                     revision: z.ZodNumber;
@@ -4068,6 +4078,10 @@ declare const PLUGIN_RUN_SCHEMAS: {
                 message: z.ZodString;
                 lineId: z.ZodOptional<z.ZodString>;
             }, z.core.$strict>>;
+            commit: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                as: z.ZodString;
+                record: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+            }, z.core.$strict>>>;
         }, z.core.$strict>;
     };
     readonly "checkout.discounts": {

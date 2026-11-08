@@ -84,7 +84,7 @@ export interface CheckoutAppFunctionResult<P extends PluginRunPoint> {
   appName: string;
   priority: number;
   output: PluginFunctionOutput<P>;
-  /** checkout.discounts: the writes of read records the answer commits with the order, checked by the platform. */
+  /** checkout.discounts and cart.validate: the writes of read records the answer commits with the order, checked by the platform. */
   commits?: AppObjectCommit[];
 }
 
@@ -480,6 +480,31 @@ export function collectCheckoutRuleErrors(
     }
   }
   return errors;
+}
+
+/** `details.reason` when one app's hold and its discount write the same record (the app's answers disagree). */
+export const APP_COMMITS_CONFLICT_REASON = "app_commits_conflict";
+
+/**
+ * The record writes an order commits for its apps: every cart.validate hold
+ * (an order is placed only when no rule error remains, so each answer's
+ * holds go with it) and the discount writes of apps whose discounts applied.
+ * One app writing one record from both answers is refused: the second write
+ * would silently replace the first. Null when the apps' answers disagree.
+ */
+export function checkoutAppObjectCommits(
+  validations: ReadonlyArray<CheckoutAppFunctionResult<"cart.validate">>,
+  discountCommits: readonly AppObjectCommit[],
+  apps?: Pick<CheckoutAppFunctions, "report">,
+): AppObjectCommit[] | null {
+  const holds = validations.flatMap((result) => result.commits ?? []);
+  const held = new Set(holds.map((commit) => `${commit.pluginId}\u0000${commit.object}\u0000${commit.id}`));
+  const clash = discountCommits.find((commit) => held.has(`${commit.pluginId}\u0000${commit.object}\u0000${commit.id}`));
+  if (clash) {
+    apps?.report(clash.pluginId, "checkout.discounts", `Its discount and its cart.validate hold both commit ${clash.object} record ${clash.id}; checkout was refused. Commit a record from one answer only.`);
+    return null;
+  }
+  return [...holds, ...discountCommits];
 }
 
 // ── checkout.discounts ──────────────────────────────────────────────────────

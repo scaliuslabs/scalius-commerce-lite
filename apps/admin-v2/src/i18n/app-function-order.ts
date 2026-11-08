@@ -1,0 +1,63 @@
+import { defineMessages } from "./index";
+
+/**
+ * Apps → Checkout order: at each checkout function point, which apps run and
+ * in what order, how their answers combine, which app wins where the first
+ * one does, and the merchant's reordering.
+ */
+export const appFunctionOrderMessages = defineMessages({
+  en: {
+    title: "Checkout order",
+    description: "Where more than one app takes part in checkout, this is the order they run in and how their answers combine.",
+    loadFailed: "The checkout order didn't load.",
+    tryAgain: "Try again",
+    composition_first: "The first app that prices a line (or bundles it) wins it; later apps' answers for that line are skipped.",
+    composition_all: "Every app's rules apply; any app can stop checkout.",
+    composition_stack: "Discounts apply in this order, each from what the ones before it left.",
+    composition_sequence: "Changes apply in this order; a later app's rename or price replaces an earlier one, and a hide always wins.",
+    winner: "Wins overlaps",
+    notRunning: "Not running",
+    notRunningHelp: "Installed, but not active at checkout now. It keeps its place.",
+    blocking: "Can pause checkout",
+    blockingHelp: "Checkout refuses orders when this app can't answer.",
+    ownPriority: "Priority {priority}",
+    position: "{position}.",
+    moveUp: "Move {app} up",
+    moveDown: "Move {app} down",
+    save: "Save order",
+    reset: "Use apps' own order",
+    ordered: "You set this order.",
+    byPriority: "Ordered by each app's own priority.",
+    saved: "Order saved",
+    resetDone: "Order reset",
+    changed: "The apps at this step changed, or someone else saved first. The latest order is shown. Check it and try again.",
+    saveFailed: "Couldn't save the order. Nothing changed. Try again.",
+  },
+  bn: {
+    title: "চেকআউটের ক্রম",
+    description: "চেকআউটে একাধিক অ্যাপ কাজ করলে সেগুলো কোন ক্রমে চলে এবং তাদের উত্তর কীভাবে মেলানো হয়, তা এখানে দেখা যায়।",
+    loadFailed: "চেকআউটের ক্রম লোড হয়নি।",
+    tryAgain: "আবার চেষ্টা করুন",
+    composition_first: "যে অ্যাপ আগে কোনো লাইনের দাম ঠিক করে (বা বান্ডেল করে), সেটিই সেই লাইন পায়; ওই লাইনে পরের অ্যাপগুলোর উত্তর বাদ যায়।",
+    composition_all: "সব অ্যাপের নিয়ম প্রযোজ্য হয়; যেকোনো অ্যাপ চেকআউট থামাতে পারে।",
+    composition_stack: "ডিসকাউন্টগুলো এই ক্রমে প্রযোজ্য হয়; প্রতিটি আগেরগুলোর পরে যা বাকি থাকে তার ওপর।",
+    composition_sequence: "পরিবর্তনগুলো এই ক্রমে প্রযোজ্য হয়; পরের অ্যাপের নাম বা দাম আগেরটির জায়গা নেয়, আর লুকানো সবসময় জেতে।",
+    winner: "ওভারল্যাপে জেতে",
+    notRunning: "চলছে না",
+    notRunningHelp: "ইনস্টল করা আছে, কিন্তু এখন চেকআউটে সক্রিয় নয়। এর জায়গা ঠিক থাকে।",
+    blocking: "চেকআউট থামাতে পারে",
+    blockingHelp: "এই অ্যাপ উত্তর দিতে না পারলে চেকআউট অর্ডার নেয় না।",
+    ownPriority: "প্রায়োরিটি {priority}",
+    position: "{position}।",
+    moveUp: "{app} উপরে সরান",
+    moveDown: "{app} নিচে সরান",
+    save: "ক্রম সেভ করুন",
+    reset: "অ্যাপের নিজস্ব ক্রম ব্যবহার করুন",
+    ordered: "এই ক্রম আপনি ঠিক করেছেন।",
+    byPriority: "প্রতিটি অ্যাপের নিজস্ব প্রায়োরিটি অনুযায়ী সাজানো।",
+    saved: "ক্রম সেভ হয়েছে",
+    resetDone: "ক্রম রিসেট হয়েছে",
+    changed: "এই ধাপের অ্যাপ বদলে গেছে, অথবা অন্য কেউ আগে সেভ করেছে। সর্বশেষ ক্রম দেখানো হচ্ছে। দেখে আবার চেষ্টা করুন।",
+    saveFailed: "ক্রম সেভ করা যায়নি। কিছু বদলায়নি। আবার চেষ্টা করুন।",
+  },
+});

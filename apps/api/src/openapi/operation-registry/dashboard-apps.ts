@@ -10,6 +10,14 @@ export const DASHBOARD_APP_OPERATIONS = {
   "dashboard.apps.surfaces": { limits: { response: 65_536 } },
   "dashboard.apps.storefront_problems_list": { limits: { response: 65_536 } },
   "dashboard.apps.get": { limits: { response: 65_536 } },
+  // The order apps run in at checkout function points: reordering changes
+  // which app's price or decision wins at checkout, so it runs alone.
+  "dashboard.apps.function_order_get": { limits: { response: 65_536 } },
+  "dashboard.apps.function_order_update": {
+    risk: "security",
+    batch: "forbidden",
+    limits: { request: 16_384, response: 65_536 },
+  },
   "dashboard.apps.asset_get": {
     exposure: "excluded",
     reason: "Image bytes for the dashboard's app cards and app pages; agents read an app's listing from dashboard.apps.list and dashboard.apps.get.",
