@@ -919,6 +919,15 @@ export const PERMISSION_METADATA: Record<
     category: "Team",
     isSensitive: true,
   },
+  [PERMISSIONS.STAFF_VIEW]: {
+    name: PERMISSIONS.STAFF_VIEW,
+    displayName: "View Staff Directory",
+    description: "See staff names and roles, to attribute work; never emails, sign-in or access",
+    resource: "staff",
+    action: "view",
+    category: "Team",
+    isSensitive: false,
+  },
 
   // Agent Access
   [PERMISSIONS.AGENT_ACCESS_VIEW]: {

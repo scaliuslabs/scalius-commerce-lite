@@ -113,6 +113,9 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.resources.app_content.delete",
   "dashboard.resources.conversations.messages_create",
   "dashboard.resources.customers.bulk_tag",
+  // One entitlement per order line and item, and a revoke sets a target state.
+  "dashboard.resources.digital_access.grant",
+  "dashboard.resources.digital_access.revoke",
   "dashboard.resources.fulfillments.create",
   "dashboard.resources.gift_cards.create",
   "dashboard.resources.orders.create",
@@ -127,6 +130,7 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.resources.purchase_orders.receive",
   "dashboard.resources.inventory_transfers.receive",
   "dashboard.resources.refunds.create",
+  "dashboard.resources.reviews.create",
   "dashboard.resources.variants.bulk_set_prices",
   "dashboard.resources.variants.bulk_set_stock",
   "dashboard.resources.variants.lookup",

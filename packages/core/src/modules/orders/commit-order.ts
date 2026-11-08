@@ -483,6 +483,8 @@ function orderRowStatements(db: Database, plan: OrderPlan, customer: OrderCustom
         fulfillmentStatus: od.fulfillmentStatus,
         inventoryPool: od.inventoryPool,
         inventoryAction: od.inventoryAction,
+        // A point-of-sale sale's counter; every other order binds nothing more (the default location).
+        ...(od.fulfillmentLocationId ? { fulfillmentLocationId: od.fulfillmentLocationId } : {}),
         customerId: customer.id,
         accountOwnerCustomerId: customer.accountOwnerCustomerId,
         // Set once here; the orders trigger keeps it immutable.

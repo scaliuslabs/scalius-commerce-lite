@@ -57,6 +57,8 @@ export const APP_OPERATION_VERBS = [
   "ship",
   "cancel",
   "approve",
+  "grant",
+  "revoke",
 ] as const;
 
 /** A stable name: `<resource>.<verb phrase>`, the phrase starting with a verb from {@link APP_OPERATION_VERBS}. */
@@ -219,6 +221,16 @@ export const STABLE_APP_OPERATIONS = {
   "customer_segments.update": "dashboard.resources.customer_segments.update",
   "customer_segments.list_members": "dashboard.resources.customer_segments.list_members",
 
+  // ── Reviews ──
+  "reviews.list": "dashboard.resources.reviews.list",
+  "reviews.get": "dashboard.resources.reviews.get",
+  "reviews.create": "dashboard.resources.reviews.create",
+  "reviews.set_status": "dashboard.resources.reviews.set_status",
+
+  // ── Staff ──
+  "staff.list": "dashboard.resources.staff.list",
+  "staff.get": "dashboard.resources.staff.get",
+
   // ── Gift cards ──
   "gift_cards.list": "dashboard.resources.gift_cards.list",
   "gift_cards.get": "dashboard.resources.gift_cards.get",
@@ -234,6 +246,12 @@ export const STABLE_APP_OPERATIONS = {
   "payouts.list": "dashboard.resources.payouts.list",
   "payouts.get": "dashboard.resources.payouts.get",
   "payouts.create": "dashboard.resources.payouts.create",
+  // ── Digital goods ──
+  "digital_assets.list": "dashboard.resources.digital_assets.list",
+  "digital_assets.get": "dashboard.resources.digital_assets.get",
+  "digital_access.list": "dashboard.resources.digital_access.list",
+  "digital_access.grant": "dashboard.resources.digital_access.grant",
+  "digital_access.revoke": "dashboard.resources.digital_access.revoke",
 
   // ── Custom fields ──
   "custom_field_definitions.list": "dashboard.custom_field_definitions.list",
@@ -265,6 +283,15 @@ export const STABLE_APP_OPERATIONS = {
   "objects.get": "objects.get",
   "objects.upsert": "objects.upsert",
   "objects.delete": "objects.delete",
+
+  // ── Markets, shipping, tax and analytics ──
+  "markets.list": "dashboard.resources.markets.list",
+  "markets.get": "dashboard.resources.markets.get",
+  "shipping_zones.list": "dashboard.resources.shipping_zones.list",
+  "shipping_zones.get": "dashboard.resources.shipping_zones.get",
+  "tax_regions.list": "dashboard.resources.tax_regions.list",
+  "tax_regions.get": "dashboard.resources.tax_regions.get",
+  "analytics.get_summary": "dashboard.resources.analytics.get_summary",
 
   // ── Store settings and webhooks ──
   "languages.list": "dashboard.languages.list",

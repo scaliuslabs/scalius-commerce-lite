@@ -160,6 +160,12 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_object_records_del: "0203_object_record_dependencies",
   cdep_object_records_upd: "0203_object_record_dependencies",
   cdep_object_records_upd_old: "0203_object_record_dependencies",
+  // App reviews (0204) rebuild product_reviews (an import names no order
+  // line): its triggers go with the old table and are reinstalled unchanged.
+  cdep_product_reviews_ins: "0204_app_reviews",
+  cdep_product_reviews_del: "0204_app_reviews",
+  cdep_product_reviews_upd: "0204_app_reviews",
+  cdep_product_reviews_upd_old: "0204_app_reviews",
 };
 
 /**

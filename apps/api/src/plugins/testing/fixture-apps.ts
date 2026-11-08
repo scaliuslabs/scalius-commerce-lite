@@ -40,6 +40,14 @@
 //   product.below component bound to the page's product.
 // - acme.cart-recovery: checkout.abandoned, a wait, a fresh read of the
 //   checkout and one consent-checked reminder with its recovery link.
+// - acme.reviews: a reviews app on the stable app API: an idempotent import
+//   (verified only on a delivered order line) and moderation under revision.
+// - acme.affiliates: an affiliate app on the stable app API: a code discount
+//   per affiliate, and a commission on the orders that redeemed it
+//   (orders.list by discountCode).
+// - acme.pos: a point of sale on the stable app API: its own sales channel,
+//   cashiers from staff.list, and in-person sales (orders.create with
+//   pointOfSale) paid by tenders and handed over at a shop's counter.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -62,6 +70,9 @@ import { manifest as personaliseManifest } from "./apps/personalise/src/index";
 import { manifest as chatManifest } from "./apps/chat/src/index";
 import { manifest as qaManifest } from "./apps/qa/src/index";
 import { manifest as cartRecoveryManifest } from "./apps/cart-recovery/src/index";
+import { manifest as reviewsManifest } from "./apps/reviews/src/index";
+import { manifest as affiliatesManifest } from "./apps/affiliates/src/index";
+import { manifest as posManifest } from "./apps/pos/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -84,6 +95,9 @@ export const FIXTURE_APP_SOURCES = {
   "acme.chat": "./apps/api/src/plugins/testing/apps/chat",
   "acme.qa": "./apps/api/src/plugins/testing/apps/qa",
   "acme.cart-recovery": "./apps/api/src/plugins/testing/apps/cart-recovery",
+  "acme.reviews": "./apps/api/src/plugins/testing/apps/reviews",
+  "acme.affiliates": "./apps/api/src/plugins/testing/apps/affiliates",
+  "acme.pos": "./apps/api/src/plugins/testing/apps/pos",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -111,6 +125,9 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.chat": { version: chatManifest.version, sha256: "c4a7".repeat(16), load: () => import("./apps/chat/src/index") },
   "acme.qa": { version: qaManifest.version, sha256: "0a0a".repeat(16), load: () => import("./apps/qa/src/index") },
   "acme.cart-recovery": { version: cartRecoveryManifest.version, sha256: "ca27".repeat(16), load: () => import("./apps/cart-recovery/src/index") },
+  "acme.reviews": { version: reviewsManifest.version, sha256: "4e71".repeat(16), load: () => import("./apps/reviews/src/index") },
+  "acme.affiliates": { version: affiliatesManifest.version, sha256: "af11".repeat(16), load: () => import("./apps/affiliates/src/index") },
+  "acme.pos": { version: posManifest.version, sha256: "9050".repeat(16), load: () => import("./apps/pos/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

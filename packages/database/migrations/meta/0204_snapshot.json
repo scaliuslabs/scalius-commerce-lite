@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a39d73df-1314-4ef0-bfa5-5a51dfeeb47d",
-  "prevId": "88f87442-4290-4a2c-bfe7-672b03541b4d",
+  "id": "30c60095-e0dc-4708-bdee-ff00c1eaa8e3",
+  "prevId": "a39d73df-1314-4ef0-bfa5-5a51dfeeb47d",
   "tables": {
     "account": {
       "name": "account",
@@ -27064,14 +27064,14 @@
           "name": "order_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "order_item_id": {
           "name": "order_item_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "reviewer_key": {
@@ -27225,6 +27225,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -27303,6 +27310,14 @@
           ],
           "isUnique": false,
           "where": "\"product_reviews\".\"variant_id\" IS NOT NULL"
+        },
+        "product_reviews_updated_idx": {
+          "name": "product_reviews_updated_idx",
+          "columns": [
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -27394,7 +27409,7 @@
         },
         "product_reviews_author_type_check": {
           "name": "product_reviews_author_type_check",
-          "value": "\"product_reviews\".\"author_type\" IN ('customer', 'guest_receipt')"
+          "value": "\"product_reviews\".\"author_type\" IN ('customer', 'guest_receipt', 'app')"
         },
         "product_reviews_display_name_length": {
           "name": "product_reviews_display_name_length",
@@ -27447,6 +27462,14 @@
         "product_reviews_version_positive": {
           "name": "product_reviews_version_positive",
           "value": "\"product_reviews\".\"version\" >= 1"
+        },
+        "product_reviews_app_shape": {
+          "name": "product_reviews_app_shape",
+          "value": "(\"product_reviews\".\"author_type\" = 'app') = (\"product_reviews\".\"app_id\" IS NOT NULL) AND (\"product_reviews\".\"app_id\" IS NULL OR length(\"product_reviews\".\"app_id\") BETWEEN 1 AND 128)"
+        },
+        "product_reviews_line_shape": {
+          "name": "product_reviews_line_shape",
+          "value": "(\"product_reviews\".\"order_id\" IS NULL) = (\"product_reviews\".\"order_item_id\" IS NULL) AND (\"product_reviews\".\"order_item_id\" IS NOT NULL OR \"product_reviews\".\"author_type\" = 'app')"
         }
       }
     },

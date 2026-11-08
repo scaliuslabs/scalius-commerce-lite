@@ -122,7 +122,7 @@ Your manifest asks; a Super Admin approves. Every `ctx.api` call, timeline write
 
 | Tier | Scopes | Effect |
 | --- | --- | --- |
-| Access | `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `read_customers`, `write_customers`, `write_marketing`, `read_discounts`, `write_discounts`, `read_content`, `write_content`, `read_objects`, `write_objects`, `read_files`, `write_files`, `read_gift_cards`, `write_gift_cards`, `read_conversations`, `write_conversations`, `write_payouts`, `write_webhooks`, `read_settings`, `write_themes`, `write_navigation`, `write_places` | Each grants a fixed set of store permissions. A `write_*` scope includes its `read_*` scope. |
+| Access | `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `read_customers`, `write_customers`, `write_marketing`, `read_discounts`, `write_discounts`, `read_content`, `write_content`, `read_objects`, `write_objects`, `read_files`, `write_files`, `read_gift_cards`, `write_gift_cards`, `read_conversations`, `write_conversations`, `write_payouts`, `write_webhooks`, `read_settings`, `write_themes`, `write_navigation`, `write_places`, `read_staff`, `read_reviews`, `write_reviews`, `read_analytics` | Each grants a fixed set of store permissions. A `write_*` scope includes its `read_*` scope. |
 | Contact data | `read_customer_names`, `read_customer_emails`, `read_customer_phones`, `read_customer_addresses` | Grant no permission alone. Each reveals one kind of buyer contact data in what your other scopes return. |
 | Cost data | `read_product_costs` | Grants only `products.view_costs` and reaches nothing alone: purchase orders carry their costs, so `purchase_orders.*` and an app's webhook subscription to a purchase order topic (`*` included) need it beside `read_inventory` (reads) or `write_inventory` (writes); without it a subscription is refused with 403 `cost_scope_required`, and deliveries stop once the grant loses it. |
 | Capability | `send_messages_any` | Grants no permission. Lets `ctx.messaging` reach any address. |
@@ -138,7 +138,7 @@ Rules worth knowing:
 - `write_conversations` replies in a thread or adds a staff note (`conversations.create_message`, Idempotency-Key required). The line names your app. A reply reaches the buyer by the thread's own way: email for storefront threads, the chat channel for channel threads.
 - `write_payouts` sends money to payees through an installed payout provider (`payouts.create`) and reads the payouts your app sent, never another app's. `payout.*` events reach only the app that sent the payout.
 - `write_themes` changes the shared theme draft, never the live theme. `write_navigation` writes menus. Staff publish the theme and choose where a menu shows.
-- No scope reaches staff, agent access, the store's own webhook endpoints or app management.
+- No scope reaches team management (invitations, roles, sign-in), agent access, the store's own webhook endpoints or app management. `read_staff` reads only the staff directory: names, roles and whether each member is active, never an email, a phone or what they may do.
 - An admin route may name one of the app's scopes as its `scope`. Staff then also need that scope's dashboard permission to use the route.
 
 ### Contact data

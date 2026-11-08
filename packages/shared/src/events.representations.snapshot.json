@@ -679,6 +679,72 @@
       ]
      }
     },
+    "pointOfSale": {
+     "nullable": true,
+     "type": "object",
+     "properties": {
+      "locationId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "staffMemberId": {
+       "nullable": true,
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "tenders": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "via": {
+          "type": "string",
+          "enum": [
+           "cash",
+           "card_terminal",
+           "mobile_wallet",
+           "other"
+          ]
+         },
+         "amountMinor": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+         },
+         "reference": {
+          "nullable": true,
+          "type": "string",
+          "maxLength": 4000
+         }
+        },
+        "required": [
+         "via",
+         "amountMinor",
+         "reference"
+        ]
+       }
+      },
+      "tenderedMinor": {
+       "type": "integer",
+       "minimum": -9007199254740991,
+       "maximum": 9007199254740991
+      },
+      "changeMinor": {
+       "type": "integer",
+       "minimum": -9007199254740991,
+       "maximum": 9007199254740991
+      }
+     },
+     "required": [
+      "locationId",
+      "staffMemberId",
+      "tenders",
+      "tenderedMinor",
+      "changeMinor"
+     ]
+    },
     "createdAt": {
      "type": "string",
      "minLength": 1,
@@ -731,6 +797,7 @@
     "lines",
     "attributes",
     "discountApplications",
+    "pointOfSale",
     "createdAt",
     "updatedAt",
     "deletedAt"
@@ -2520,8 +2587,12 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "pending",
+      "published",
+      "rejected",
+      "withdrawn"
+     ]
     },
     "rating": {
      "type": "integer",
@@ -2536,10 +2607,11 @@
     "body": {
      "nullable": true,
      "type": "string",
-     "maxLength": 4000
+     "maxLength": 5000
     },
     "authorDisplayName": {
      "nullable": true,
+     "x-scalius-protected": "name",
      "type": "string",
      "maxLength": 4000
     },
@@ -2573,6 +2645,32 @@
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "orderItemId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "verified": {
+     "type": "boolean"
+    },
+    "appId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "moderationReason": {
+     "nullable": true,
+     "type": "string",
+     "enum": [
+      "spam",
+      "abusive",
+      "personal_info",
+      "off_topic",
+      "not_about_product"
+     ]
     }
    },
    "required": [
@@ -2590,7 +2688,11 @@
     "repliedAt",
     "revision",
     "createdAt",
-    "updatedAt"
+    "updatedAt",
+    "orderItemId",
+    "verified",
+    "appId",
+    "moderationReason"
    ]
   },
   "gift_card": {
@@ -3321,7 +3423,9 @@
    "phone=phone"
   ],
   "discount": [],
-  "review": [],
+  "review": [
+   "authorDisplayName=name"
+  ],
   "gift_card": [
    "recipient.email=email",
    "recipient.name=name",

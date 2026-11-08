@@ -14,7 +14,7 @@ import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products } from "@scalius/database/schema";
+import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products, promotionCodes, promotionRedemptions } from "@scalius/database/schema";
 import { canViewLocationDetails, listInventoryLocations } from "@scalius/core/modules/inventory";
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
@@ -24,7 +24,7 @@ import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, pointOfSaleInputSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
 import { AppError } from "@scalius/core/errors";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
@@ -121,12 +121,13 @@ export const listIdsQuery = z.string().trim().min(1).max(LIST_IDS_MAX * 129)
   .openapi({ description: `Only these records: up to ${LIST_IDS_MAX} comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.` });
 
 /**
- * The list's trash filter. Beside an `ids` list it is written `+deleted_at`:
- * without planner statistics (D1 keeps none) SQLite would otherwise walk a
- * deleted_at-led index instead of seeking the ids.
+ * The list's trash filter. Beside a filter that names the rows (an `ids`
+ * list, an order's discount code) it is written `+deleted_at`: without
+ * planner statistics (D1 keeps none) SQLite would otherwise walk a
+ * deleted_at-led index instead of seeking the named rows.
  */
-function trashFilter(column: SQLWrapper, trashed: boolean, ids: string | undefined): SQL {
-  if (ids === undefined) return trashed ? isNotNull(column) : isNull(column);
+function trashFilter(column: SQLWrapper, trashed: boolean, namedRows: boolean): SQL {
+  if (!namedRows) return trashed ? isNotNull(column) : isNull(column);
   return trashed ? sql`+${column} IS NOT NULL` : sql`+${column} IS NULL`;
 }
 
@@ -214,7 +215,26 @@ const ordersQuery = z.object({
   overdue: z.enum(["true"]).optional().openapi({
     description: "true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due.",
   }),
+  discountCode: z.string().trim().min(1).max(64).optional().openapi({
+    description: "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used.",
+  }),
 });
+
+/**
+ * Orders that redeemed a discount code: the claim checkout commits with the
+ * order (one immutable `promotion_redemptions` row per code discount), kept
+ * to that code. It is driven from the code's own indexes, never a walk of
+ * orders: the discount holding the code (`promotion_codes_identity_unique`),
+ * its claims (`promotion_redemptions_promotion_idx`), then each order by
+ * primary key, the page sorted from those rows alone (`trashFilter` keeps
+ * the deleted_at-led index out of the plan).
+ */
+function redeemedCodeCondition(code: string): SQL {
+  const normalized = code.trim().toUpperCase();
+  return sql`${orders.id} IN (SELECT ${promotionRedemptions.orderId} FROM ${promotionRedemptions}
+    WHERE ${promotionRedemptions.promotionId} IN (SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${promotionCodes.normalizedCode} = ${normalized})
+      AND ${promotionRedemptions.promotionCode} = ${normalized})`;
+}
 
 app.openapi(createRoute({
   operationId: "dashboard.resources.orders.list",
@@ -222,7 +242,7 @@ app.openapi(createRoute({
   path: "/orders",
   tags: ["App API - Orders"],
   summary: "List orders, least recently updated first",
-  description: "Orders as webhooks carry them (OrderResource), in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor. Contact filters need the matching read_customer_* scope.",
+  description: "Orders as webhooks carry them (OrderResource), in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor. Contact filters need the matching read_customer_* scope; `discountCode` lists the orders that redeemed a code.",
   request: { query: ordersQuery },
   responses: {
     200: { description: "A page of orders", content: { "application/json": { schema: successEnvelope(z.object({ orders: z.array(OrderResource), nextCursor: nextCursorSchema })) } } },
@@ -233,7 +253,7 @@ app.openapi(createRoute({
   if (query.email) assertContactFilterAllowed(c, "email", "email");
   if (query.phone) assertContactFilterAllowed(c, "phone", "phone");
   const db = c.get("db");
-  const where: SQL[] = [trashFilter(orders.deletedAt, query.trashed === "true", query.ids)];
+  const where: SQL[] = [trashFilter(orders.deletedAt, query.trashed === "true", query.ids !== undefined || query.discountCode !== undefined)];
   if (query.updatedSince) where.push(gte(sql`${orders.updatedAt}`, seconds(query.updatedSince)));
   if (query.status) where.push(eq(orders.status, query.status as typeof orders.$inferSelect.status));
   if (query.paymentStatus) where.push(eq(orders.paymentStatus, query.paymentStatus as typeof orders.$inferSelect.paymentStatus));
@@ -245,6 +265,7 @@ app.openapi(createRoute({
   if (query.email) where.push(sql`lower(trim(${orders.customerEmail})) = ${query.email.toLowerCase()}`);
   if (query.phone) where.push(eq(orders.customerPhone, query.phone));
   if (query.overdue === "true") where.push(overdueOrderCondition());
+  if (query.discountCode) where.push(redeemedCodeCondition(query.discountCode));
   const order = UPDATED_ORDER(orders.updatedAt, orders.id);
   const page = await resourcePage({
     order,
@@ -318,13 +339,22 @@ const orderCreateBody = z.object({
   attributes: z.record(z.string().max(120), z.string().max(500)).optional().openapi({ description: "Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped." }),
   notes: optionalText(500),
   channelSource: z.string().trim().max(64).nullable().optional().openapi({ description: "Where it came in; an app's order defaults to the app's id." }),
-  salesChannelId: z.string().trim().min(1).max(160).nullable().optional(),
+  salesChannelId: z.string().trim().min(1).max(160).nullable().optional().openapi({
+    description: "The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest).",
+  }),
+  pointOfSale: pointOfSaleInputSchema.optional().openapi({
+    description: "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`).",
+  }),
 }).strict().refine((value) => Boolean(value.customerId) !== Boolean(value.contact), {
   message: "Send customerId or contact, not both.",
   path: ["customerId"],
 }).refine((value) => !value.paymentTerms || value.paymentMethod === "net_terms", {
   message: "paymentTerms goes with paymentMethod net_terms.",
   path: ["paymentTerms"],
+}).refine((value) => !value.pointOfSale || (value.salesChannelId && !value.paymentTerms && value.paymentMethod !== "net_terms"
+  && value.shippingMinor === 0 && !value.shippingMethodId && !value.shippingAddress), {
+  message: "An in-person sale names its salesChannelId and sends no delivery method, address, charge or payment terms.",
+  path: ["pointOfSale"],
 });
 
 /** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
@@ -340,7 +370,7 @@ app.openapi(createRoute({
   path: "/orders",
   tags: ["App API - Orders"],
   summary: "Place an order for a customer",
-  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order.",
+  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. With `pointOfSale` it is an in-person sale (channel `pos`): paid by its tenders, handed over at the counter and delivered, its stock taken at that location. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order (and finishes a sale a lost response left part-done).",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: orderCreateBody } } },
@@ -355,6 +385,12 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   const db = c.get("db");
   const appPrincipal = c.get("pluginPrincipal");
+  // An app sells in person only from a channel it declared.
+  if (body.pointOfSale && appPrincipal && !body.salesChannelId?.startsWith(`${appPrincipal.pluginId}:`)) {
+    throw new AppError(403, "pos_sales_channel_not_owned", "An app sells in person from its own sales channel (declare it in the manifest's salesChannels).", {
+      salesChannelId: body.salesChannelId ?? null,
+    });
+  }
   const customer = body.customerId
     ? await db.select({ name: customers.name, email: customers.email, phone: customers.phone })
       .from(customers).where(and(eq(customers.id, body.customerId), isNull(customers.deletedAt))).get()
@@ -364,7 +400,9 @@ app.openapi(createRoute({
     ? { name: customer.name, email: customer.email ?? null, phone: (customer.phone as string | null) || null }
     : { name: body.contact!.name, email: body.contact!.email ?? null, phone: body.contact!.phone ?? null };
   if (!contact.phone) {
-    throw new ValidationError(body.paymentMethod === "net_terms"
+    throw new ValidationError(body.pointOfSale
+      ? "An in-person sale needs the buyer's phone (or a customerId)."
+      : body.paymentMethod === "net_terms"
       ? "An invoice order needs the buyer's phone."
       : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
   }
@@ -416,8 +454,9 @@ app.openapi(createRoute({
     channelSource: body.channelSource ?? (appPrincipal ? appPrincipal.pluginId.replace(/[^a-z0-9]+/gu, "_") : null),
     salesChannelId: body.salesChannelId ?? null,
     ...(body.attributes ? { attributes: body.attributes } : {}),
-    channel: appPrincipal ? "app" : "admin",
-    paymentMethod: body.paymentMethod,
+    channel: body.pointOfSale ? "pos" : appPrincipal ? "app" : "admin",
+    paymentMethod: body.pointOfSale ? "net_terms" : body.paymentMethod,
+    ...(body.pointOfSale ? { pointOfSale: body.pointOfSale } : {}),
     ...(body.paymentTerms ? { paymentTermsDays: body.paymentTerms.days } : {}),
   });
   if (!parsed.success) {
@@ -895,9 +934,9 @@ app.openapi(createRoute({
   const query = c.req.valid("query");
   const db = c.get("db");
   const where: SQL[] = [];
-  if (query.status === "trashed") where.push(trashFilter(products.deletedAt, true, query.ids));
+  if (query.status === "trashed") where.push(trashFilter(products.deletedAt, true, query.ids !== undefined));
   else {
-    where.push(trashFilter(products.deletedAt, false, query.ids));
+    where.push(trashFilter(products.deletedAt, false, query.ids !== undefined));
     if (query.status) where.push(eq(products.isActive, query.status === "active"));
   }
   if (query.updatedSince) where.push(gte(sql`${products.updatedAt}`, seconds(query.updatedSince)));
@@ -1026,7 +1065,7 @@ app.openapi(createRoute({
   if (query.email) assertContactFilterAllowed(c, "email", "email");
   if (query.phone) assertContactFilterAllowed(c, "phone", "phone");
   const db = c.get("db");
-  const where: SQL[] = [trashFilter(customers.deletedAt, query.trashed === "true", query.ids)];
+  const where: SQL[] = [trashFilter(customers.deletedAt, query.trashed === "true", query.ids !== undefined)];
   if (query.updatedSince) where.push(gte(sql`${customers.updatedAt}`, seconds(query.updatedSince)));
   if (query.email) where.push(inArray(customers.email, [...new Set([query.email, query.email.toLowerCase()])]));
   if (query.phone) where.push(sql`${customers.phone} = ${query.phone}`);

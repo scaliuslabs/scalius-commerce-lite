@@ -630,6 +630,8 @@ export type OrderFacts = OrderShippingAddressFields & Partial<OrderBillingAddres
     inventoryPool: string;
     /** "reserved": the commit holds the tracked lines' stock (ledger v2). */
     inventoryAction: string;
+    /** Where the order's stock leaves from (a point-of-sale sale's counter); absent: the store default. */
+    fulfillmentLocationId?: string | null;
 };
 
 /** One priced order line (`order_items`), its tax by `taxAllocationLineId`. */

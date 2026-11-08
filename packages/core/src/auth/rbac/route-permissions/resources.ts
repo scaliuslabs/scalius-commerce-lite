@@ -16,6 +16,13 @@ const giftCards = { permission: PERMISSIONS.GIFT_CARDS_VIEW };
 const giftCardsManage = { permission: PERMISSIONS.GIFT_CARDS_MANAGE };
 const webhooks = { permission: PERMISSIONS.WEBHOOKS_VIEW };
 const webhooksManage = { permission: PERMISSIONS.WEBHOOKS_MANAGE };
+const general = { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW };
+const shippingMethods = { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW };
+const taxes = { permission: PERMISSIONS.TAXES_VIEW };
+const analytics = { permission: PERMISSIONS.DASHBOARD_ANALYTICS };
+const reviews = { permission: PERMISSIONS.REVIEWS_VIEW };
+const reviewsModerate = { permission: PERMISSIONS.REVIEWS_MODERATE };
+const staff = { permission: PERMISSIONS.STAFF_VIEW };
 
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
@@ -51,6 +58,15 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // Abandoned checkouts read as the dashboard's list does (orders.view).
   "/api/v1/admin/resources/abandoned-checkouts": { GET: orders },
   "/api/v1/admin/resources/abandoned-checkouts/*": { GET: orders },
+  // Store settings an app reads: each with the permission its settings page reads with (an app: read_settings).
+  "/api/v1/admin/resources/markets": { GET: general },
+  "/api/v1/admin/resources/markets/*": { GET: general },
+  "/api/v1/admin/resources/shipping-zones": { GET: shippingMethods },
+  "/api/v1/admin/resources/shipping-zones/*": { GET: shippingMethods },
+  "/api/v1/admin/resources/tax-regions": { GET: taxes },
+  "/api/v1/admin/resources/tax-regions/*": { GET: taxes },
+  // The sales summary (an app: read_analytics).
+  "/api/v1/admin/resources/analytics/summary": { GET: analytics },
   // Stock screens read locations by name; their addresses need inventory.view
   // or settings.general.view (the handler nulls them otherwise), as on
   // /admin/inventory/locations.
@@ -78,6 +94,14 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/customer-segments": { GET: customers, POST: customersEdit },
   "/api/v1/admin/resources/customer-segments/*": { GET: customers, PATCH: customersEdit },
   "/api/v1/admin/resources/customer-segments/*/members": { GET: customers },
+  // Reviews read and moderate with the dashboard's review permissions; only an app writes one.
+  "/api/v1/admin/resources/reviews": { GET: reviews, POST: reviewsModerate },
+  "/api/v1/admin/resources/reviews/*": { GET: reviews },
+  "/api/v1/admin/resources/reviews/*/status": { POST: reviewsModerate },
+  // The staff directory (names and roles, never sign-in or access): its own
+  // permission outside the team area, so an app may hold it.
+  "/api/v1/admin/resources/staff": { GET: staff },
+  "/api/v1/admin/resources/staff/*": { GET: staff },
   // Price lists read and write with the catalog, as the dashboard's editor does.
   "/api/v1/admin/resources/price-lists": { GET: products, POST: productsEdit },
   "/api/v1/admin/resources/price-lists/*": { GET: products, PATCH: productsEdit, DELETE: productsEdit },
@@ -94,6 +118,12 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/conversations": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
   "/api/v1/admin/resources/conversations/*": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
   "/api/v1/admin/resources/conversations/*/messages": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW }, POST: { permission: PERMISSIONS.CONVERSATIONS_REPLY } },
+  // Digital files and key pools read with the catalog; a buyer's access is
+  // given and taken away with the order edit the dashboard's reset and revoke need.
+  "/api/v1/admin/resources/digital-assets": { GET: products },
+  "/api/v1/admin/resources/digital-assets/*": { GET: products },
+  "/api/v1/admin/resources/digital-access": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_EDIT } },
+  "/api/v1/admin/resources/digital-access/*/revoke": { POST: { permission: PERMISSIONS.ORDERS_EDIT } },
   // An app's own webhook subscriptions (the route refuses any other caller).
   "/api/v1/admin/resources/webhook-subscriptions": { GET: webhooks, POST: webhooksManage },
   "/api/v1/admin/resources/webhook-subscriptions/*": { PATCH: webhooksManage, DELETE: webhooksManage },

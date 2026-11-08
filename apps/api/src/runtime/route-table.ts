@@ -157,6 +157,13 @@ export const ROUTE_TABLE = [
   { mount: "/admin/resources", router: "adminResourceCustomerSegmentRoutes", group: "admin-sales" },
   // A cart-recovery app's abandoned checkouts.
   { mount: "/admin/resources", router: "adminResourceAbandonedCheckoutRoutes", group: "admin-sales" },
+  // Markets, shipping zones, tax regions and the sales summary an app reads (read_settings, read_analytics).
+  { mount: "/admin/resources", router: "adminResourceSettingsRoutes", group: "admin-sales" },
+  // Digital files and key pools, and a buyer's access to them.
+  { mount: "/admin/resources", router: "adminResourceDigitalRoutes", group: "admin-sales" },
+  { mount: "/admin/resources", router: "adminResourceReviewRoutes", group: "admin-sales" },
+  // The staff directory an app reads to attribute work (read_staff).
+  { mount: "/admin/resources", router: "adminResourceStaffRoutes", group: "admin-sales" },
   { mount: "/admin/categories", router: "adminCategoryRoutes", group: "admin-catalog" },
   { mount: "/admin/brands", router: "adminBrandRoutes", group: "admin-catalog" },
   { mount: "/admin/price-lists", router: "adminPriceListRoutes", group: "admin-catalog" },

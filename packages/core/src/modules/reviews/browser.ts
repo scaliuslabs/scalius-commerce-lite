@@ -26,8 +26,8 @@ export type ReviewModerationMode = (typeof REVIEW_MODERATION_MODES)[number];
 export const REVIEW_MODERATION_ACTIONS = ["publish", "reject", "restore"] as const;
 export type ReviewModerationAction = (typeof REVIEW_MODERATION_ACTIONS)[number];
 
-/** `product_reviews.author_type`. */
-export const REVIEW_AUTHOR_TYPES = ["customer", "guest_receipt"] as const;
+/** `product_reviews.author_type`: a buyer (account or receipt), or an app (an import, a reviews app). */
+export const REVIEW_AUTHOR_TYPES = ["customer", "guest_receipt", "app"] as const;
 export type ReviewAuthorType = (typeof REVIEW_AUTHOR_TYPES)[number];
 
 /** Why the automatic check held a review (`product_reviews.check_flags`). Never the text itself. */

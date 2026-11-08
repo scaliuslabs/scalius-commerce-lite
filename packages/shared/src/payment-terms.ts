@@ -113,6 +113,17 @@ export const RECORDED_PAYMENT_VIAS = ["bank_transfer", "cash", "cheque", "card_t
 export type RecordedPaymentVia = (typeof RECORDED_PAYMENT_VIAS)[number];
 
 /**
+ * How a buyer pays at a point of sale (a tender): cash in the till, a card
+ * on the app's terminal, a mobile wallet, or something else. Each tender is
+ * recorded as a payment of that `via`; only cash gives change.
+ */
+export const POINT_OF_SALE_TENDER_VIAS = ["cash", "card_terminal", "mobile_wallet", "other"] as const satisfies readonly RecordedPaymentVia[];
+export type PointOfSaleTenderVia = (typeof POINT_OF_SALE_TENDER_VIAS)[number];
+
+/** Tenders one sale takes (a split between cash and card, a few cards). */
+export const POINT_OF_SALE_TENDERS_MAX = 5;
+
+/**
  * `order_payments.payment_method` of a payment staff or an app recorded (a
  * bank transfer against an invoice): not a gateway, refunded as a confirmed
  * manual settlement like cash on delivery.

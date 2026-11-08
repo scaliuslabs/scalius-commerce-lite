@@ -706,5 +706,53 @@
   "from": "25b00b55d1cc465c",
   "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
   "reason": "Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "W7: the harness's options name the manifest and its scopes, which gained the read_staff, read_reviews, write_reviews and read_analytics scopes; the function itself is unchanged and every existing call still type-checks."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "W7: the order representation gains pointOfSale (an in-person sale's receipt facts, null for every other order); the review representation gains orderItemId, verified, appId and moderationReason, seals status to REVIEW_STATUSES, bounds body at 5,000 characters as the database does, and protects authorDisplayName as a buyer's name (null without read_customer_names). Additive for readers; a test that builds an order or review literal adds the new fields."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "W7: sealed codes are only added (APP_ERROR_CODES): the review, digital access and point-of-sale refusals (review_*, digital_*, pos_*). Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "W7 (G9 and the wider stable tier): PluginScope gains read_staff, read_reviews, write_reviews and read_analytics (read_settings also confers delivery zones and tax regions). Only added: every existing scope keeps its meaning; only an exhaustive switch over PluginScope sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "W7 (G9 and the wider stable tier): PluginScope gains read_staff, read_reviews, write_reviews and read_analytics (read_settings also confers delivery zones and tax regions). Only added: every existing scope keeps its meaning; only an exhaustive switch over PluginScope sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "W7 (G9 and the wider stable tier): PluginScope gains read_staff, read_reviews, write_reviews and read_analytics (read_settings also confers delivery zones and tax regions). Only added: every existing scope keeps its meaning; only an exhaustive switch over PluginScope sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "W7 (G9 and the wider stable tier): PluginScope gains read_staff, read_reviews, write_reviews and read_analytics (read_settings also confers delivery zones and tax regions). Only added: every existing scope keeps its meaning; only an exhaustive switch over PluginScope sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "W7 (G9 and the wider stable tier): PluginScope gains read_staff, read_reviews, write_reviews and read_analytics (read_settings also confers delivery zones and tax regions). Only added: every existing scope keeps its meaning; only an exhaustive switch over PluginScope sees the new members."
  }
 ]

@@ -61,6 +61,7 @@ import { appScopedKeyAppId } from "@scalius/shared/plugins/ids";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 import { resolveOrderAppFacts, type OrderAppFactRow } from "@scalius/core/modules/order-kernel";
 import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
+import { POINT_OF_SALE_TENDER_VIAS } from "@scalius/shared/payment-terms";
 
 /** The most lines a representation lists (an order's, a return's, a purchase order's): a bigger one is truncated as a whole. */
 const MAX_LINES = 500;
@@ -166,6 +167,9 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       appDiscountFactsJson: sql<string>`(SELECT coalesce(json_group_array(json_object(
         'id', ${orderEvents.id}, 'createdAt', ${orderEvents.createdAt}, 'data', ${orderEvents.data})), '[]')
         FROM ${orderEvents} WHERE ${orderEvents.orderId} = ${orderId} AND ${orderEvents.kind} = 'app_discount')`,
+      // An in-person sale's receipt facts (`pos_sale`, written with the order): only a `pos` order has one.
+      pointOfSaleJson: sql<string | null>`(SELECT ${orderEvents.data} FROM ${orderEvents}
+        WHERE ${orderEvents.orderId} = ${orderId} AND ${orderEvents.kind} = 'pos_sale' ORDER BY ${orderEvents.createdAt}, ${orderEvents.id} LIMIT 1)`,
     }).from(orders).where(inArray(orders.id, [...ids])),
     db.select({
       orderId: orderItems.orderId,
@@ -188,10 +192,45 @@ export async function readOrderRepresentations(db: Database, ids: readonly strin
       .orderBy(asc(orderItems.orderId), asc(orderItems.createdAt), asc(orderItems.id)),
   ]);
   const lines = groupBy(lineRows, (line) => line.orderId);
-  return inIdOrder(ids, new Map(rows.map(({ discountAllocationsJson, appDiscountFactsJson, ...order }) => [
+  return inIdOrder(ids, new Map(rows.map(({ discountAllocationsJson, appDiscountFactsJson, pointOfSaleJson, ...order }) => [
     order.id,
-    orderFrom(order, lines.get(order.id) ?? [], orderDiscountApplications(order.id, discountAllocationsJson, appDiscountFactsJson)),
+    orderFrom(order, lines.get(order.id) ?? [], orderDiscountApplications(order.id, discountAllocationsJson, appDiscountFactsJson), pointOfSaleFacts(pointOfSaleJson)),
   ])));
+}
+
+type PointOfSaleFacts = NonNullable<EventRepresentationInput<"order">["pointOfSale"]>;
+const TENDER_VIAS: readonly string[] = POINT_OF_SALE_TENDER_VIAS;
+
+/** A sale's receipt facts as its `pos_sale` fact recorded them; null for any other order (or a malformed fact). */
+function pointOfSaleFacts(json: string | null): PointOfSaleFacts | null {
+  if (!json) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(json);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== "object") return null;
+  const facts = value as Record<string, unknown>;
+  const minor = (input: unknown): input is number => typeof input === "number" && Number.isSafeInteger(input) && input >= 0;
+  if (typeof facts.locationId !== "string" || !minor(facts.tenderedMinor) || !minor(facts.changeMinor) || !Array.isArray(facts.tenders)) return null;
+  const tenders: PointOfSaleFacts["tenders"] = [];
+  for (const tender of facts.tenders as unknown[]) {
+    const row = tender as Record<string, unknown> | null;
+    if (!row || typeof row.via !== "string" || !TENDER_VIAS.includes(row.via) || !minor(row.amountMinor)) return null;
+    tenders.push({
+      via: row.via as PointOfSaleFacts["tenders"][number]["via"],
+      amountMinor: row.amountMinor,
+      reference: typeof row.reference === "string" ? row.reference : null,
+    });
+  }
+  return {
+    locationId: facts.locationId,
+    staffMemberId: typeof facts.staffMemberId === "string" ? facts.staffMemberId : null,
+    tenders,
+    tenderedMinor: facts.tenderedMinor,
+    changeMinor: facts.changeMinor,
+  };
 }
 
 type DiscountApplication = EventRepresentationInput<"order">["discountApplications"][number];
@@ -300,7 +339,12 @@ type OrderLineRow = {
   properties: string | null;
 };
 
-function orderFrom(order: OrderRow, lines: readonly OrderLineRow[], discountApplications: readonly DiscountApplication[]) {
+function orderFrom(
+  order: OrderRow,
+  lines: readonly OrderLineRow[],
+  discountApplications: readonly DiscountApplication[],
+  pointOfSale: PointOfSaleFacts | null = null,
+) {
   return sealed("order", {
     id: order.id,
     orderNumber: order.orderNumber ?? null,
@@ -346,6 +390,7 @@ function orderFrom(order: OrderRow, lines: readonly OrderLineRow[], discountAppl
     }),
     attributes: readCheckoutAttributes(order.attributes),
     discountApplications: [...discountApplications],
+    pointOfSale,
     createdAt: isoRequired(order.createdAt),
     updatedAt: isoRequired(order.updatedAt),
     deletedAt: iso(order.deletedAt),
@@ -975,10 +1020,16 @@ async function discountRepresentation(db: Database, promotionId: string) {
   return (await readDiscountRepresentations(db, [promotionId]))[0] ?? null;
 }
 
-async function reviewRepresentation(db: Database, reviewId: string) {
-  const review = await db.select().from(productReviews).where(eq(productReviews.id, reviewId)).get();
-  if (!review) return null;
-  return sealed("review", {
+/** Reviews one read takes: a page of `reviews.list` (bound as one JSON value). */
+export const REVIEW_REPRESENTATIONS_MAX = 90;
+
+/** These reviews as their webhooks carry them, in the order asked; unknown ids are left out. */
+export async function readReviewRepresentations(db: Database, ids: readonly string[]): Promise<EventRepresentation<"review">[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  if (unique.length > REVIEW_REPRESENTATIONS_MAX) throw new RangeError(`Read at most ${REVIEW_REPRESENTATIONS_MAX} reviews at once.`);
+  const rows = await db.select().from(productReviews).where(inJsonArray(productReviews.id, unique)).all();
+  const byId = new Map(rows.map((review) => [review.id, sealed("review", {
     id: review.id,
     productId: review.productId,
     variantId: review.variantId ?? null,
@@ -994,7 +1045,16 @@ async function reviewRepresentation(db: Database, reviewId: string) {
     revision: review.version,
     createdAt: isoRequired(review.createdAt),
     updatedAt: isoRequired(review.updatedAt),
-  });
+    orderItemId: review.orderItemId ?? null,
+    verified: review.orderItemId !== null,
+    appId: review.appId ?? null,
+    moderationReason: review.moderationReason ?? null,
+  })]));
+  return unique.flatMap((id) => byId.get(id) ?? []);
+}
+
+async function reviewRepresentation(db: Database, reviewId: string) {
+  return (await readReviewRepresentations(db, [reviewId]))[0] ?? null;
 }
 
 async function giftCardRepresentation(db: Database, giftCardId: string) {

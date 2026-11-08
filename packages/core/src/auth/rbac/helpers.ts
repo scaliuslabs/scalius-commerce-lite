@@ -340,13 +340,19 @@ export async function assignRoleToUser(
   assignedBy?: string
 ): Promise<void> {
   const id = crypto.randomUUID();
-  await db.insert(userRoles).values({
-    id,
-    userId,
-    roleId,
-    assignedBy: assignedBy ?? null,
-    createdAt: new Date(),
-  });
+  const assignedAt = new Date();
+  // The person's record changes with their roles (the staff directory's
+  // updatedAt), in the same batch.
+  await db.batch([
+    db.insert(userRoles).values({
+      id,
+      userId,
+      roleId,
+      assignedBy: assignedBy ?? null,
+      createdAt: assignedAt,
+    }),
+    db.update(user).set({ updatedAt: assignedAt }).where(eq(user.id, userId)),
+  ] as const);
 }
 
 /**
@@ -357,9 +363,12 @@ export async function removeRoleFromUser(
   userId: string,
   roleId: string
 ): Promise<void> {
-  await db
-    .delete(userRoles)
-    .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)));
+  await db.batch([
+    db
+      .delete(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId))),
+    db.update(user).set({ updatedAt: new Date() }).where(eq(user.id, userId)),
+  ] as const);
 }
 
 /**

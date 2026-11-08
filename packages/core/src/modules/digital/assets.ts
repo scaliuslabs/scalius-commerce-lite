@@ -4,7 +4,7 @@
 // replacing a file moves `current_r2_key`, so buyers who already own it get
 // the new file, as in Shopify Digital Downloads.
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, D1_ID_CHUNK_SIZE, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
     digitalAssets,
     digitalAssetUploads,
@@ -24,7 +24,7 @@ import {
     sanitizeDownloadFilename,
 } from "@scalius/shared/digital";
 import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
-import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 export type DigitalAssetStatus = "draft" | "ready" | "archived";
@@ -137,8 +137,11 @@ function sessionOf(upload: { id: string; assetId: string }, manifest: UploadMani
     };
 }
 
-/** Assets of one product with their pool counts, oldest first. */
-export async function listProductDigitalAssets(db: Database, productId: string): Promise<DigitalAssetView[]> {
+/**
+ * Asset views with their pool counts, oldest first. The storage key never
+ * leaves this module: a view says only whether a file is uploaded.
+ */
+async function selectAssetViews(db: Database, where: SQL): Promise<DigitalAssetView[]> {
     const rows = await db.select({
         id: digitalAssets.id,
         productId: digitalAssets.productId,
@@ -160,7 +163,7 @@ export async function listProductDigitalAssets(db: Database, productId: string):
         revoked: sql<number>`(SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id" AND k.status = 'revoked')`,
         deliveredCount: sql<number>`(SELECT count(*) FROM ${digitalEntitlements} e WHERE e.asset_id = "digital_assets"."id")`,
     }).from(digitalAssets)
-        .where(eq(digitalAssets.productId, productId))
+        .where(where)
         .orderBy(asc(digitalAssets.sortOrder), asc(digitalAssets.createdAt), asc(digitalAssets.id))
         .all();
     return rows.map(({ currentR2Key, available, assigned, revoked, ...row }) => ({
@@ -169,6 +172,21 @@ export async function listProductDigitalAssets(db: Database, productId: string):
         keys: { available: Number(available), assigned: Number(assigned), revoked: Number(revoked) },
         deliveredCount: Number(row.deliveredCount),
     }));
+}
+
+/** Assets of one product with their pool counts, oldest first. */
+export async function listProductDigitalAssets(db: Database, productId: string): Promise<DigitalAssetView[]> {
+    return selectAssetViews(db, eq(digitalAssets.productId, productId));
+}
+
+/** The assets with these ids, in the order given (missing ids are left out); reads in waves of 90. */
+export async function readDigitalAssetViews(db: Database, ids: readonly string[]): Promise<DigitalAssetView[]> {
+    const byId = new Map<string, DigitalAssetView>();
+    for (let offset = 0; offset < ids.length; offset += D1_ID_CHUNK_SIZE) {
+        const views = await selectAssetViews(db, inArray(digitalAssets.id, [...ids.slice(offset, offset + D1_ID_CHUNK_SIZE)]));
+        for (const view of views) byId.set(view.id, view);
+    }
+    return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
 export async function getDigitalAsset(db: Database, assetId: string): Promise<DigitalAssetView> {

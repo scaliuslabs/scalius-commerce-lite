@@ -1,9 +1,11 @@
-// Product reviews (Wave B §2). Every review is a verified purchase: one per
+// Product reviews (Wave B §2). A buyer's review is a verified purchase: one per
 // order line (`UNIQUE(order_item_id)`), at most one live review per product
-// per buyer, and a BEFORE INSERT trigger refuses any line that was not handed
-// over on a delivered/completed order. `product_review_stats` is a trigger
-// projection of the published reviews; nothing else writes it. Vocabulary and
-// limits live in `@scalius/shared/reviews`.
+// per buyer, and a BEFORE INSERT trigger refuses any named line that was not
+// handed over on a delivered/completed order. An app may also write a review
+// (`author_type = 'app'`, `app_id`; migration 0204): an import of history names
+// no line, and only a review on a line is a verified purchase.
+// `product_review_stats` is a trigger projection of the published reviews;
+// nothing else writes it. Vocabulary and limits live in `@scalius/shared/reviews`.
 
 import { sqliteTable, text, integer, uniqueIndex, index, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
@@ -22,17 +24,22 @@ export const productReviews = sqliteTable("product_reviews", {
         .references(() => products.id, { onDelete: "cascade" }),
     variantId: text("variant_id")
         .references(() => productVariants.id, { onDelete: "set null" }),
+    /** The order and line reviewed: a verified purchase. Null only for an app's review that names no line. */
     orderId: text("order_id")
-        .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
     orderItemId: text("order_item_id")
-        .notNull()
         .references(() => orderItems.id, { onDelete: "cascade" }),
-    /** `coalesce(orders.account_owner_customer_id, orders.customer_id)`: a customer record id, never PII. */
+    /**
+     * `coalesce(orders.account_owner_customer_id, orders.customer_id)` for a
+     * line, else `review:<id>` (an app's import takes no buyer's live review):
+     * a record id, never PII.
+     */
     reviewerKey: text("reviewer_key").notNull(),
     customerId: text("customer_id")
         .references(() => customers.id, { onDelete: "set null" }),
-    authorType: text("author_type", { enum: ["customer", "guest_receipt"] }).notNull(),
+    authorType: text("author_type", { enum: ["customer", "guest_receipt", "app"] }).notNull(),
+    /** The app that wrote it (`author_type = 'app'`): an import or a reviews app. */
+    appId: text("app_id"),
     authorDisplayName: text("author_display_name").notNull(),
     variantLabel: text("variant_label"),
     rating: integer("rating").notNull(),
@@ -69,6 +76,8 @@ export const productReviews = sqliteTable("product_reviews", {
     // ascending columns, which SQLite walks backwards for (created_at, id) DESC.
     index("product_reviews_status_list_idx").on(table.status, table.createdAt, table.id),
     index("product_reviews_created_idx").on(table.createdAt, table.id),
+    // The stable app list walks (updated_at, id) (0204).
+    index("product_reviews_updated_idx").on(table.updatedAt, table.id),
     index("product_reviews_customer_idx")
         .on(table.customerId, sql`${table.createdAt} DESC`)
         .where(sql`${table.customerId} IS NOT NULL`),
@@ -76,7 +85,10 @@ export const productReviews = sqliteTable("product_reviews", {
     // A SKU delete (permanent product delete) sets this foreign key to NULL.
     index("product_reviews_variant_idx").on(table.variantId).where(sql`${table.variantId} IS NOT NULL`),
     check("product_reviews_id_shape", sql`substr(${table.id}, 1, 4) = 'rev_' AND length(${table.id}) BETWEEN 12 AND 68`),
-    check("product_reviews_author_type_check", sql`${table.authorType} IN ('customer', 'guest_receipt')`),
+    check("product_reviews_author_type_check", sql`${table.authorType} IN ('customer', 'guest_receipt', 'app')`),
+    // A buyer reviews a line; only an app's review may name none, and it names the app.
+    check("product_reviews_line_shape", sql`(${table.orderId} IS NULL) = (${table.orderItemId} IS NULL) AND (${table.orderItemId} IS NOT NULL OR ${table.authorType} = 'app')`),
+    check("product_reviews_app_shape", sql`(${table.authorType} = 'app') = (${table.appId} IS NOT NULL) AND (${table.appId} IS NULL OR length(${table.appId}) BETWEEN 1 AND 128)`),
     check("product_reviews_display_name_length", sql`length(trim(${table.authorDisplayName})) BETWEEN 1 AND 60`),
     check("product_reviews_rating_range", sql`${table.rating} BETWEEN 1 AND 5`),
     check("product_reviews_title_length", sql`${table.title} IS NULL OR length(${table.title}) BETWEEN 1 AND 120`),
@@ -90,7 +102,7 @@ export const productReviews = sqliteTable("product_reviews", {
     check("product_reviews_reply_shape", sql`(${table.replyBody} IS NULL) = (${table.repliedAt} IS NULL)`),
     check("product_reviews_edit_count_range", sql`${table.editCountDay} BETWEEN 0 AND 10`),
     check("product_reviews_version_positive", sql`${table.version} >= 1`),
-    // Triggers: product_reviews_line_eligible (R1), product_reviews_stats_row,
+    // Triggers: product_reviews_line_eligible (R1, a named line only), product_reviews_stats_row,
     // product_reviews_stats_{add_insert,sub_update,add_update,sub_delete} (R3),
     // product_reviews_identity_immutable.
 ]);

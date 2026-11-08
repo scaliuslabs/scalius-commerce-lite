@@ -214,6 +214,13 @@ export const PERMISSIONS = {
   TEAM_MANAGE_ROLES: "team.manage_roles",
 
   // =============================================
+  // Staff directory (1 permission): who works here, by name and role, to
+  // attribute work (a point-of-sale sale). Never emails, sign-in or access;
+  // outside the team area, so an app may hold it.
+  // =============================================
+  STAFF_VIEW: "staff.view",
+
+  // =============================================
   // Agent Access (2 permissions) - SUPER ADMIN ONLY
   // =============================================
   AGENT_ACCESS_VIEW: "agent_access.view",

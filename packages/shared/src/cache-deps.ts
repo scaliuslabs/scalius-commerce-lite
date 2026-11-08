@@ -653,8 +653,9 @@ const CACHE_DEP_TABLE_RULES = {
   product_bundles: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_reviews: {
     kinds: ["p"],
-    noise: ["updated_at", "version", "edit_count_day", "edit_day", "check_flags", "moderation_reason", "reply_user_id", "reviewer_key"],
-    note: "Published reviews on the product page and its review pages. A review exists only on a real order line, so no key is shared across products.",
+    // `app_id` (0204) names the app that wrote a review; no page shows it, and it never changes.
+    noise: ["updated_at", "version", "edit_count_day", "edit_day", "check_flags", "moderation_reason", "reply_user_id", "reviewer_key", "app_id"],
+    note: "Published reviews on the product page and its review pages. A review belongs to one product (a buyer's to a real order line, an app's import to its product), so no key is shared across products.",
     rules: everyChange([p("product_id")]),
   },
   product_review_stats: {

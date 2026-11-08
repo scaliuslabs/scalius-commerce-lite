@@ -34,7 +34,7 @@ export const publicReviewSchema = z.object({
   body: z.string().nullable(),
   authorName: z.string(),
   variantLabel: z.string().nullable(),
-  verifiedPurchase: z.literal(true),
+  verifiedPurchase: z.boolean().openapi({ description: "On a delivered order line (\"Verified purchase\"); false for a review an app imported without one." }),
   publishedAt: iso,
   editedAt: iso.nullable(),
   reply: z.object({ body: z.string(), repliedAt: iso }).nullable()
@@ -161,7 +161,10 @@ export const adminReviewSchema = z.object({
   authorType: z.enum(REVIEW_AUTHOR_TYPES),
   variantLabel: z.string().nullable(),
   product: z.object({ id: z.string(), name: z.string(), slug: z.string().nullable(), imageUrl: z.string().nullable() }),
-  order: z.object({ id: z.string(), orderNumber: z.string() }),
+  order: z.object({ id: z.string(), orderNumber: z.string() }).nullable()
+    .openapi({ description: "The reviewed line's order; null for an app's review that names no line (an import)." }),
+  verified: z.boolean().openapi({ description: "A verified purchase: the review is on a delivered order line." }),
+  appId: z.string().nullable().openapi({ description: "The app that wrote it (an import or a reviews app); null for a buyer's own review." }),
   checkFlags: z.array(z.string()).openapi({ description: "Why the automatic check held it: url, email, phone, repeated_characters, block_word." }),
   moderationReason: z.enum(REVIEW_MODERATION_REASONS).nullable(),
   reply: z.object({ body: z.string(), repliedAt: iso, authorName: z.string().nullable() }).nullable(),

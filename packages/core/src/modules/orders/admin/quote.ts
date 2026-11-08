@@ -254,7 +254,7 @@ export interface ManualOrderQuoteOptions {
     /** The request's app providers: an app tax provider is asked through them (none: it fails closed). */
     appProviders?: AppProviders;
     /** Who places the order and the sales channel it sells from, as the create resolved them (apps see both). */
-    channel?: "admin" | "app";
+    channel?: "admin" | "app" | "pos";
     salesChannelId?: string | null;
     /**
      * The buyer as tax sees them (an amendment keeps the exemption the order

@@ -210,11 +210,11 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 
 ### What the stable tier covers
 
-181 operations (`stableContract.operations` in `@scalius/plugin-sdk/testing` lists each with its scopes):
+The stable operations (`stableContract.operations` in `@scalius/plugin-sdk/testing` lists each with its scopes):
 
 | Area | Operations |
 | --- | --- |
-| Orders | `orders.create`, `get`, `list` (`ids` up to 90, `updatedSince`, status filters), `set_status`, `mark_delivered`, `mark_pickup_ready`, `release_hold`; `order_timeline.list`; `order_uploads.list` (your inputs' buyer files, with 5-minute links) |
+| Orders | `orders.create` (an in-person sale with `pointOfSale`), `get`, `list` (`ids` up to 90, `updatedSince`, status filters, `discountCode`), `set_status`, `mark_delivered`, `mark_pickup_ready`, `release_hold`; `order_timeline.list`; `order_uploads.list` (your inputs' buyer files, with 5-minute links) |
 | Payments | `payments.create`, `list`, `charge`, `capture`, `void`; `payment_methods.list`, `delete` |
 | Refunds and returns | `refunds.create`, `list`; `returns.create`, `approve`, `receive`, `cancel`, `get`, `list` |
 | Fulfilment | `fulfillments.create`, `list`, `void`; `shipments.create`, `get`, `list` |
@@ -227,6 +227,10 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 | Gift cards | `gift_cards.create`, `get`, `list`, `update`, `adjust` |
 | Inbox | `conversations.list`, `get`, `list_messages`, `create_message` |
 | Payouts | `payouts.create`, `get`, `list` |
+| Digital goods | `digital_assets.get`, `list`; `digital_access.list`, `grant`, `revoke` |
+| Reviews | `reviews.create`, `get`, `list`, `set_status` |
+| Staff | `staff.get`, `list` |
+| Store settings and sales | `markets.get`, `list`; `shipping_zones.get`, `list`; `tax_regions.get`, `list`; `analytics.get_summary` |
 | Content and media | `pages.create`, `get`, `list`, `update`; `media.get`, `list`, `update`, `trash`, `import_url` |
 | Objects and custom fields | `object_types.create`, `get`, `list`, `update`, `delete`; `objects.get`, `list`, `upsert`, `delete`; `custom_field_definitions.get`, `list`; `custom_fields.get_<owner>_values`, `set_<owner>_values` |
 | Store building | `theme.get`, `apply_template`, `set_section_settings`; `menus.get`, `create`, `update`; `app_content.delete` |
@@ -235,6 +239,18 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 `custom_fields.*` operations show an app only the merchant's `custom` namespace; your own fields go through `ctx.customFields`. The order timeline is written only with `ctx.timeline.add`.
 
 **Apps place orders.** `orders.create` places a confirmed order for a `customerId` with channel `app`, filed under that customer's account; the app needs no contact scope. `paymentMethod` is `cod` (default) or `net_terms` (see [Deferred payment](#4-deferred-payment)).
+
+**Point of sale.** Declare your own sales channel in the manifest (`salesChannels: [{ id: "counter", name: "Shop counter" }]`, channel id `<app id>:counter`); it sells from every active location until the merchant unlinks one. `orders.create` with `salesChannelId` set to that channel, `shippingMinor: 0` and `pointOfSale: { locationId, staffMemberId?, tenders: [{ via, amountMinor, reference? }] }` rings up an in-person sale (channel `pos`): `via` is `cash`, `card_terminal`, `mobile_wallet` or `other` (a card your terminal charged names its transaction in `reference`). The tenders cover the total and only cash gives change. The order is paid (each tender less the change is a payment of its `via`), handed over at that location's counter and delivered, and its stock leaves that location. It answers `{ order }` whose `pointOfSale` is the receipt: the location, the cashier, each tender, `tenderedMinor` and `changeMinor`. Refusals write nothing: `pos_tender_short`, `pos_change_without_cash`, `pos_staff_unknown`, `pos_location_unavailable`, `pos_location_not_on_channel`, `inventory_location_shortfall` (the location lacks the units, whatever the store holds elsewhere) and 403 `pos_sales_channel_not_owned`. Send the till's own sale id as the Idempotency-Key: a retry returns the same order and repeats nothing. A walk-in buyer still needs a contact with a phone, or a `customerId` (a store "Walk-in" customer). The `acme.pos` fixture is a worked example.
+
+**Staff.** `staff.list` and `staff.get` (`read_staff`) read the directory to attribute work: each member's id, name, roles, whether they are the owner and whether they are active. Removed staff stay listed as inactive, so past sales keep a name. Nothing to sign in with ever appears: no email, phone, session or permissions.
+
+**Affiliates and referrals.** `orders.list?discountCode=REF-NADIA` lists the orders that redeemed a code at checkout, matched without regard to case or surrounding spaces, read from the code's indexes and paged like any order list. Read `discountApplications` on each order to confirm the code before paying commission (the `acme.affiliates` fixture).
+
+**Reviews.** `reviews.list` (by product, status or customer; `updatedSince`), `reviews.get`, `reviews.create` and `reviews.set_status`: `read_reviews` reads, `write_reviews` imports and moderates; the reviewer's name needs `read_customer_names`. `reviews.create` requires an Idempotency-Key and takes the review's id from it, so re-running an import writes nothing twice. A review is a verified purchase only when it names a delivered order line (`orderItemId`) of its customer: `verified: true` without one is refused with `review_not_verifiable`, a line not yet delivered with `review_not_eligible`. Imported history names no line, shows without "Verified purchase", keeps its `createdAt`, and never blocks the buyer's own review. `status: "published"` holds only if the store's content check passes; otherwise the review waits as `pending`. `reviews.set_status` publishes, or rejects with a content reason, at `expectedRevision` (`review_revision_conflict` when stale). Truncated `review.*` webhooks point at `reviews.get` (the `acme.reviews` fixture).
+
+**Digital goods.** `digital_assets.list`/`get` (`read_products`) return files and licence-key pools with limits, sizes and key counts, never a link or a key. `digital_access.list` (`read_orders`) lists an order's or a customer's access with a sealed `status`. `digital_access.grant` (`write_orders`, Idempotency-Key required) gives a paid line's buyer an item the line's product delivers: an owed line is delivered exactly as the store would, revoked access comes back, and a repeat grants nothing twice. `digital_access.revoke` stops downloads and key reveals at once; assigned keys are never reissued. Refusals are named codes such as `digital_access_order_unpaid` and `digital_keys_exhausted`.
+
+**Store settings and sales.** `read_settings` reads `markets.list`/`get`, `shipping_zones.list`/`get` and `tax_regions.list`/`get`: amounts in integer minor units beside a `currency`, rates in basis points. Local pickup is the zone `pickup`. A destination takes its most specific zone or region; none matching means no delivery and no tax. `read_analytics` reads `analytics.get_summary({ from, to, granularity? })` over at most 366 store-calendar days with day, week or month buckets: orders, gross sales, discounts, refunds, net sales, shipping, taxes, units and average order value. It carries no sessions or visitors: the store does not record them.
 
 **Apps sync products.** `products.create` makes a product with options and SKUs, with minor-unit prices and stock 0. Quantities move through `variants.bulk_set_stock` or `inventory.*` under `write_inventory`. `products.update` patches under `expectedRevision`.
 

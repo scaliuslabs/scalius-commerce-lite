@@ -95,6 +95,15 @@ export function describeTimelineEvent(
         }),
         detail: text(data.reference) ? t("timeline.paymentReference", { reference: text(data.reference)! }) : null,
       };
+    case "pos_sale": {
+      // An in-person sale: the counter it was handed over at, and the change given back.
+      const location = text(data.locationName);
+      const change = count(data.change);
+      return {
+        text: location ? t("timeline.posSale", { location }) : t("timeline.posSaleUnnamed"),
+        detail: change > 0 ? t("timeline.posChange", { amount: money(change) }) : null,
+      };
+    }
     case "refund_kept":
       return { text: t("timeline.refundKept", { amount: money(count(data.amount)) }), detail: null };
     case "stock_held": {

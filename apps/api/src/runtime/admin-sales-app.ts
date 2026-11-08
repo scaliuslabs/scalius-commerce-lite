@@ -21,6 +21,10 @@ import { adminResourceReturnRoutes } from "../routes/admin/resources-returns";
 import { adminResourceDiscountRoutes } from "../routes/admin/resources-discounts";
 import { adminResourceCustomerSegmentRoutes } from "../routes/admin/resources-customer-segments";
 import { adminResourceAbandonedCheckoutRoutes } from "../routes/admin/resources-abandoned-checkouts";
+import { adminResourceSettingsRoutes } from "../routes/admin/resources-settings";
+import { adminResourceDigitalRoutes } from "../routes/admin/resources-digital";
+import { adminResourceReviewRoutes } from "../routes/admin/resources-reviews";
+import { adminResourceStaffRoutes } from "../routes/admin/resources-staff";
 
 export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
   routers: {
@@ -37,6 +41,10 @@ export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
     adminResourceDiscountRoutes,
     adminResourceCustomerSegmentRoutes,
     adminResourceAbandonedCheckoutRoutes,
+    adminResourceSettingsRoutes,
+    adminResourceDigitalRoutes,
+    adminResourceReviewRoutes,
+    adminResourceStaffRoutes,
     adminCustomerMarketingRoutes,
     adminCustomerRoutes,
     adminDiscountRoutes,

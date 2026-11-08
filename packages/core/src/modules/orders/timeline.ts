@@ -36,6 +36,11 @@ export const ORDER_EVENT_KINDS = [
     "fulfillment_location_changed",
     /** Staff or an app set line prices by hand when placing the order; `data.lines` counts them. */
     "prices_set",
+    /**
+     * An in-person sale's receipt (orders.channel `pos`), written with the
+     * order: `data` is the order's `pointOfSale` facts plus `locationName`.
+     */
+    "pos_sale",
     /** An app's typed entry (packages/plugin-sdk/docs/apps.md, "Order timeline"): `data` names the app and its kind. */
     "app_event",
     /**

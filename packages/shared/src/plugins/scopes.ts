@@ -178,8 +178,11 @@ export const PLUGIN_SCOPES = {
    * Sensitive: store events leave the store.
    */
   write_webhooks: { rbac: ["webhooks.view", "webhooks.manage"], staff: "webhooks.manage", sensitive: true },
-  /** Store settings: business details, web addresses, markets, languages and custom field definitions. */
-  read_settings: { rbac: ["settings.general.view"], staff: "settings.general.view" },
+  /**
+   * Store settings: business details, web addresses, markets, languages,
+   * delivery zones and their rates, tax regions and custom field definitions.
+   */
+  read_settings: { rbac: ["settings.general.view", "settings.shipping_methods.view", "taxes.view"], staff: "settings.general.view" },
   /**
    * Read the theme and change its shared draft: apply the app's own
    * template (its look and homepage) and set section settings, each under
@@ -231,6 +234,17 @@ export const PLUGIN_SCOPES = {
    * app's). Sensitive: it moves money out of the store.
    */
   write_payouts: { rbac: ["payouts.manage"], staff: "payouts.manage", sensitive: true },
+   * The staff directory: each staff member's id, name, roles and whether
+   * they are active, so an app attributes work (who rang up a sale). Never an
+   * email, a phone, sign-in details or what they may do.
+   */
+  read_staff: { rbac: ["staff.view"], staff: "staff.view" },
+  /** Product reviews: ratings, text, photos, replies and moderation state. The reviewer's name needs `read_customer_names`. */
+  read_reviews: { rbac: ["reviews.view"], staff: "reviews.view" },
+  /** Import reviews (a reviews app, a move from another platform) and publish, reject or hide them. */
+  write_reviews: { rbac: ["reviews.view", "reviews.moderate"], staff: "reviews.moderate" },
+  /** Sales numbers over a bounded period: orders, revenue, average order value and, where the store records them, sessions. */
+  read_analytics: { rbac: ["dashboard.analytics"], staff: "dashboard.analytics" },
 } as const satisfies Record<string, PluginScopeDefinition>;
 
 export type PluginScope = keyof typeof PLUGIN_SCOPES;

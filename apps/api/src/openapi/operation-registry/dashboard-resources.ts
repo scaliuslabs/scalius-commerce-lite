@@ -80,6 +80,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // Abandoned checkouts as their webhooks carry them (routes/admin/resources-abandoned-checkouts.ts).
   "dashboard.resources.abandoned_checkouts.list": { uncurated: true },
   "dashboard.resources.abandoned_checkouts.get": { uncurated: true },
+  // Store settings an app reads (routes/admin/resources-settings.ts): markets, shipping zones and tax regions
+  // (read_settings), and a bounded sales summary (read_analytics).
+  "dashboard.resources.markets.list": { uncurated: true },
+  "dashboard.resources.markets.get": { uncurated: true },
+  "dashboard.resources.shipping_zones.list": { uncurated: true },
+  "dashboard.resources.shipping_zones.get": { uncurated: true },
+  "dashboard.resources.tax_regions.list": { uncurated: true },
+  "dashboard.resources.tax_regions.get": { uncurated: true },
+  "dashboard.resources.analytics.get_summary": { uncurated: true },
   // Saved customer segments (routes/admin/resources-customer-segments.ts):
   // spend in minor units; members as customers, contact gated.
   "dashboard.resources.customer_segments.list": { uncurated: true },
@@ -87,6 +96,19 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.customer_segments.create": { batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.update": { revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.list_members": { uncurated: true },
+  // Product reviews (routes/admin/resources-reviews.ts): buyer text, so agents
+  // reach them only through the opt-in review_moderation grant scope, as the
+  // dashboard's review rows. Only an app writes one; its id derives from the
+  // required Idempotency-Key, so a repeat writes nothing twice. Moderation
+  // sets a status under the review's required revision.
+  "dashboard.resources.reviews.list": { grantScope: "review_moderation", uncurated: true },
+  "dashboard.resources.reviews.get": { grantScope: "review_moderation", uncurated: true },
+  "dashboard.resources.reviews.create": { grantScope: "review_moderation", idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.reviews.set_status": { grantScope: "review_moderation", revision: "required", batch: "forbidden", uncurated: true },
+  // The staff directory (routes/admin/resources-staff.ts): names, roles and
+  // whether each is the owner or active; never an email, sign-in or access.
+  "dashboard.resources.staff.list": { uncurated: true },
+  "dashboard.resources.staff.get": { uncurated: true },
   "dashboard.resources.inventory_locations.list": { uncurated: true },
   "dashboard.resources.shipments.create": {
     openWorld: true,
@@ -185,11 +207,20 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.conversations.get": { uncurated: true },
   "dashboard.resources.conversations.messages_list": { uncurated: true },
   "dashboard.resources.conversations.messages_create": { openWorld: true, idempotency: "required", batch: "forbidden" },
+  // Digital goods (routes/admin/resources-digital.ts): files and key pools
+  // without a storage key or key value, and a buyer's access. A grant hands an
+  // owed line over through automatic fulfilment (one entitlement per line and
+  // item, so a repeat grants nothing twice); a revoke takes access away.
+  "dashboard.resources.digital_assets.list": { uncurated: true },
+  "dashboard.resources.digital_assets.get": { uncurated: true },
+  "dashboard.resources.digital_access.list": { uncurated: true },
+  "dashboard.resources.digital_access.grant": { idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.digital_access.revoke": { risk: "destructive", batch: "forbidden", uncurated: true },
   // An app's own webhook subscriptions (routes/admin/resources-webhooks.ts):
   // apps only (write_webhooks), within their approved hosts, topics and
   // customer data. Create returns the signing secret to the app once and
   // never replays it.
-  "dashboard.resources.webhook_subscriptions.list": { limits: { response: 32_768 }, uncurated: true },
+  "dashboard.resources.webhook_subscriptions.list": { uncurated: true },
   "dashboard.resources.webhook_subscriptions.create": {
     batch: "forbidden",
     limits: { request: 16_384, response: 16_384 },

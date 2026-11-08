@@ -68,7 +68,7 @@ const en = {
   scope_write_files: "Manage files",
   scope_write_files_help: "Add files from a web address, rename, move and trash them.",
   scope_read_settings: "View store settings",
-  scope_read_settings_help: "Business details, web addresses, markets, languages and custom field definitions.",
+  scope_read_settings_help: "Business details, web addresses, markets, languages, delivery zones and their rates, tax regions and custom field definitions.",
   scope_write_themes: "Change the theme draft",
   scope_write_themes_help: "Apply the app's own template and change section settings in your theme draft, keeping a restore point. It can't publish: buyers see the change only when you publish the draft.",
   scope_write_navigation: "Manage menus",
@@ -83,6 +83,14 @@ const en = {
   scope_write_conversations_help: "Reply to buyers and add notes. A reply reaches the buyer the way the conversation came in, by email or the chat app, and shows that the app sent it.",
   scope_write_payouts: "Send payouts",
   scope_write_payouts_help: "Send money to payees, such as your marketplace's sellers, through a payout app you installed, and see the payouts this app sent.",
+  scope_read_staff: "View staff names",
+  scope_read_staff_help: "Each staff member's name, roles and whether they are active, to show who did something (who rang up a sale). Never an email, a phone, sign-in details or what they may do.",
+  scope_read_reviews: "View product reviews",
+  scope_read_reviews_help: "Ratings, review text, replies and moderation status. The reviewer's name needs customer names access.",
+  scope_write_reviews: "Import and moderate reviews",
+  scope_write_reviews_help: "Add reviews (an import from another platform, a reviews app) and publish or reject them. A review shows Verified purchase only on a delivered order line.",
+  scope_read_analytics: "View sales numbers",
+  scope_read_analytics_help: "Orders, sales, refunds and average order value over a period of up to a year.",
 } satisfies ScopeCopy;
 
 const bn = {
@@ -145,7 +153,7 @@ const bn = {
   scope_write_files: "ফাইল পরিচালনা",
   scope_write_files_help: "ওয়েব ঠিকানা থেকে ফাইল যোগ করা, নাম বদলানো, সরানো ও ট্র্যাশ করা।",
   scope_read_settings: "স্টোরের সেটিংস দেখা",
-  scope_read_settings_help: "ব্যবসার তথ্য, ওয়েব ঠিকানা, মার্কেট, ভাষা ও কাস্টম ফিল্ডের সংজ্ঞা।",
+  scope_read_settings_help: "ব্যবসার তথ্য, ওয়েব ঠিকানা, মার্কেট, ভাষা, ডেলিভারি জোন ও তার চার্জ, ট্যাক্স অঞ্চল এবং কাস্টম ফিল্ডের সংজ্ঞা।",
   scope_write_themes: "থিমের খসড়া বদলানো",
   scope_write_themes_help: "অ্যাপের নিজের টেমপ্লেট প্রয়োগ এবং আপনার থিমের খসড়ায় সেকশনের সেটিংস বদলানো, একটি রিস্টোর পয়েন্ট রেখে। পাবলিশ করতে পারে না: আপনি খসড়া পাবলিশ করলেই ক্রেতারা পরিবর্তন দেখেন।",
   scope_write_navigation: "মেনু ম্যানেজ করা",
@@ -160,6 +168,14 @@ const bn = {
   scope_write_conversations_help: "ক্রেতাদের উত্তর দেওয়া ও নোট যোগ করা। উত্তর ক্রেতার কাছে সেই পথেই যায় যে পথে কথোপকথন এসেছিল, ইমেইল বা চ্যাট অ্যাপে, এবং দেখায় যে অ্যাপটি পাঠিয়েছে।",
   scope_write_payouts: "পেআউট পাঠানো",
   scope_write_payouts_help: "আপনার ইনস্টল করা পেআউট অ্যাপের মাধ্যমে প্রাপকদের, যেমন আপনার মার্কেটপ্লেসের বিক্রেতাদের, টাকা পাঠানো এবং এই অ্যাপের পাঠানো পেআউট দেখা।",
+  scope_read_staff: "স্টাফদের নাম দেখা",
+  scope_read_staff_help: "প্রত্যেক স্টাফের নাম, রোল এবং তিনি সক্রিয় কি না, যাতে কে কাজটি করেছেন (কে বিক্রিটি করেছেন) দেখানো যায়। কখনো ইমেইল, ফোন, সাইন-ইনের তথ্য বা তিনি কী করতে পারেন তা নয়।",
+  scope_read_reviews: "প্রোডাক্ট রিভিউ দেখা",
+  scope_read_reviews_help: "রেটিং, রিভিউয়ের লেখা, উত্তর ও মডারেশনের অবস্থা। রিভিউদাতার নাম দেখতে কাস্টমারের নামের অনুমতি লাগে।",
+  scope_write_reviews: "রিভিউ ইমপোর্ট ও মডারেট করা",
+  scope_write_reviews_help: "রিভিউ যোগ করা (অন্য প্ল্যাটফর্ম থেকে ইমপোর্ট, রিভিউ অ্যাপ) এবং প্রকাশ বা বাতিল করা। শুধু ডেলিভার হওয়া অর্ডার লাইনের রিভিউতেই ভেরিফায়েড পারচেজ দেখায়।",
+  scope_read_analytics: "বিক্রির হিসাব দেখা",
+  scope_read_analytics_help: "এক বছর পর্যন্ত সময়ের অর্ডার, বিক্রি, রিফান্ড ও গড় অর্ডারের মূল্য।",
 } satisfies ScopeCopy;
 
 export const appScopeMessages = defineMessages({ en, bn });

@@ -1429,6 +1429,13 @@
       "when": 1794200000000,
       "tag": "0203_object_record_dependencies",
       "breakpoints": true
+    },
+    {
+      "idx": 204,
+      "version": "6",
+      "when": 1794162391716,
+      "tag": "0204_app_reviews",
+      "breakpoints": true
     }
   ]
 }

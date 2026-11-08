@@ -37,6 +37,8 @@ const CLOSED_ORDER_STATUSES = [
     OrderStatus.REFUNDED,
     OrderStatus.INCOMPLETE,
 ];
+/** The payment and order states automatic handover needs; a grant of digital access needs the same (`digital-access.ts`). */
+export { SETTLED_PAYMENT_STATUSES as AUTO_HANDOVER_SETTLED_PAYMENT_STATUSES, CLOSED_ORDER_STATUSES as AUTO_HANDOVER_CLOSED_ORDER_STATUSES };
 /**
  * Staff confirmed the order: settling a payment never moves an order past
  * `pending` (an incomplete order becomes `pending`), so `confirmed` or any
