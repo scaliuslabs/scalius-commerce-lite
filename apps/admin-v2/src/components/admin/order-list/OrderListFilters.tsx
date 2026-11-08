@@ -119,7 +119,6 @@ function DiscountCodeFilter({ value, onChange }: { value: string | undefined; on
         maxLength={DISCOUNT_CODE_FILTER_MAX}
         autoComplete="off"
         spellCheck={false}
-        className="font-mono"
         onChange={(event) => setDraft(event.target.value.toUpperCase())}
         onBlur={apply}
         onKeyDown={(event) => {
