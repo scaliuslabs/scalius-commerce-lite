@@ -12,7 +12,7 @@
 // and the batches that could race a concurrent kind or stock change end with
 // one of the guards below, so a stale read never commits.
 import { digitalAssets, digitalLicenceKeys, productVariants } from "@scalius/database/schema";
-import { buildBatchGuard, type Database, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
+import { buildBatchGuard, type Database, D1_ID_CHUNK_SIZE, isBatchGuardError } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
@@ -334,28 +334,20 @@ export function buildNotDigitalSkuGuard(db: Database, variantId: string): BatchI
     )`, DIGITAL_STOCK_IS_KEYS_MARKER);
 }
 
-function errorText(error: unknown, depth = 0): string {
-    if (depth > 5 || error === null || error === undefined) return "";
-    if (typeof error !== "object") return String(error);
-    const candidate = error as { message?: unknown; cause?: unknown };
-    return `${typeof candidate.message === "string" ? candidate.message : ""} ${errorText(candidate.cause, depth + 1)}`;
-}
-
 /**
  * Rethrows a failed digital guard as the rule's validation error. Only an
  * error naming one of the markers is translated (a bare "malformed JSON"
  * could be any guard).
  */
 export function rethrowDigitalStockRuleViolation(error: unknown): void {
-    const text = errorText(error);
-    if (text.includes(DIGITAL_KIND_NEEDS_ZERO_STOCK_MARKER)) {
+    if (isBatchGuardError(error, DIGITAL_KIND_NEEDS_ZERO_STOCK_MARKER)) {
         throw digitalStockError({ field: "fulfillmentKind" }, DIGITAL_KIND_NEEDS_ZERO_STOCK_MESSAGE);
     }
-    if (text.includes(DIGITAL_KEY_POOL_NEEDS_TRACKING_MARKER)) {
+    if (isBatchGuardError(error, DIGITAL_KEY_POOL_NEEDS_TRACKING_MARKER)) {
         throw digitalStockError({ field: "trackInventory" }, DIGITAL_KEY_POOL_NEEDS_TRACKING_MESSAGE);
     }
-    if (text.includes(DIGITAL_KEYS_KEEP_KIND_MARKER)) {
+    if (isBatchGuardError(error, DIGITAL_KEYS_KEEP_KIND_MARKER)) {
         throw digitalStockError({ field: "fulfillmentKind" }, DIGITAL_KEYS_KEEP_KIND_MESSAGE);
     }
-    if (text.includes(DIGITAL_STOCK_IS_KEYS_MARKER)) throw digitalStockError();
+    if (isBatchGuardError(error, DIGITAL_STOCK_IS_KEYS_MARKER)) throw digitalStockError();
 }

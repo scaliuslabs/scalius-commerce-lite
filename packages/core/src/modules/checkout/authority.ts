@@ -140,6 +140,13 @@ function selectCheckoutFenceRows(db: Database, scopes: readonly string[]) {
         .where(sql`${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scopes)}))`);
 }
 
+/** The scopes' fence rows as one JSON array, a column of a row the read already runs. */
+function checkoutFenceRowsJsonSql(scopes: readonly string[]) {
+    return sql<string>`(SELECT COALESCE(json_group_array(json_object('scope', ${checkoutFences.scope}, 'revision', ${checkoutFences.revision})), '[]')
+        FROM ${checkoutFences}
+        WHERE ${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scopes)})))`;
+}
+
 /**
  * The fence a checkout of these products would commit under now: for a
  * caller that builds a commit payload itself (an operator smoke, a test).
@@ -151,6 +158,17 @@ export async function readStorefrontCheckoutFence(
     const scopes = checkoutFenceScopes(productIds);
     const rows = await selectCheckoutFenceRows(db, scopes);
     return { scopes, revision: rows.reduce((total, row) => total + Number(row.revision), 0) };
+}
+
+function parseCheckoutFenceRows(value: unknown): CheckoutFenceRow[] {
+    let rows: unknown;
+    try {
+        rows = typeof value === "string" ? JSON.parse(value) : value;
+    } catch {
+        rows = null;
+    }
+    if (!Array.isArray(rows)) throw new Error("Checkout fence is unavailable.");
+    return rows as CheckoutFenceRow[];
 }
 
 function resolveCheckoutFence(scopes: readonly string[], revisions: ReadonlyMap<string, number>): CheckoutFence {
@@ -257,6 +275,10 @@ interface CheckoutStoreRow {
     backupPriceIncrementMinor: number | null;
     /** The countries the active markets sell to (comma-separated), read in this row. */
     sellingCountries: string | null;
+    /** Whether a staff device is registered for push, FCM or web push (1 or 0); not fenced. */
+    hasStaffPushDevice: number;
+    /** The read scopes' `checkout_fences` rows as a JSON array of `{ scope, revision }`. */
+    fenceRows: string | null;
 }
 
 /**
@@ -389,13 +411,18 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             backupPriceIncrementMinor: backupPriceIncrementSql(),
             // The countries checkout ships to, in the same row.
             sellingCountries: sellingCountriesSql(),
+            // A store with no staff device (FCM or web push) pays no push outbox row.
+            // Not fenced: a device registered mid-checkout misses that one order's push.
+            hasStaffPushDevice: sql<number>`(EXISTS(SELECT 1 FROM admin_fcm_tokens WHERE is_active = 1)
+                OR EXISTS(SELECT 1 FROM push_subscriptions WHERE audience = 'staff'))`,
+            // The fence rows of every checkout of the batch, read with its facts
+            // in this row (no statement of their own).
+            fenceRows: checkoutFenceRowsJsonSql(allFenceScopes),
         })
             .from(sql`(SELECT 1) AS checkout_store_source`),
-        // The fence rows of every checkout of the batch, read with its facts.
-        selectCheckoutFenceRows(db, allFenceScopes),
         ...taxPlan.statements,
     ];
-    const taxStatementsStart = 10;
+    const taxStatementsStart = 9;
 
     return {
         statements,
@@ -501,9 +528,9 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 }
                 throw error;
             }
-            if (!Array.isArray(results[9])) throw new Error("Checkout fence is unavailable.");
+            const fenceRows = parseCheckoutFenceRows(storeRow?.fenceRows);
             const fenceRevisions = new Map<string, number>();
-            for (const row of results[9] as CheckoutFenceRow[]) {
+            for (const row of fenceRows) {
                 const revision = Number(row.revision);
                 if (typeof row.scope !== "string" || !Number.isSafeInteger(revision) || revision < 1) {
                     throw new Error("Checkout fence is unavailable.");
@@ -609,8 +636,9 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                         && orderCreatedChannels.some((channel) =>
                                             channel === "sms" || channel === "whatsapp"
                                         ))
-                                    // Staff push is the channel's; the sender reaches the devices registered then.
-                                    || adminOrderCreatedChannels.includes("push")
+                                    // Staff push needs the channel and a device registered at the read.
+                                    || (adminOrderCreatedChannels.includes("push")
+                                        && Number(storeRow?.hasStaffPushDevice) === 1)
                                     || staffEmailRecipients.length > 0,
                                 ),
                                 metaPurchase: metaPurchaseEnabled,

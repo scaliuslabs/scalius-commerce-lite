@@ -5,7 +5,7 @@
 // contradicting input, and every aggregate batch ends with a guard so no
 // write path (variants, option matrix, pricing section) can break the rule.
 import { products, productVariants } from "@scalius/database/schema";
-import { buildBatchGuard, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -40,19 +40,12 @@ export function buildGiftCardProductRulesGuard(db: Database, productId: string):
         )`, GIFT_CARD_PRODUCT_RULES_MARKER);
 }
 
-function errorText(error: unknown, depth = 0): string {
-    if (depth > 5 || error === null || error === undefined) return "";
-    if (typeof error !== "object") return String(error);
-    const candidate = error as { message?: unknown; cause?: unknown };
-    return `${typeof candidate.message === "string" ? candidate.message : ""} ${errorText(candidate.cause, depth + 1)}`;
-}
-
 /**
  * Rethrows a failed gift-card guard as a validation error. Only an error that
  * names the marker is translated: a bare "malformed JSON" could be any guard.
  */
 export function rethrowGiftCardProductRuleViolation(error: unknown): void {
-    if (errorText(error).includes(GIFT_CARD_PRODUCT_RULES_MARKER)) {
+    if (isBatchGuardError(error, GIFT_CARD_PRODUCT_RULES_MARKER)) {
         throw new ValidationError(GIFT_CARD_PRODUCT_RULES_MESSAGE, { field: "isGiftCard" });
     }
 }
