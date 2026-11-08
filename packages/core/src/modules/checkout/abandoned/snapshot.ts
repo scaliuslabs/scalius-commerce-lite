@@ -229,6 +229,11 @@ function normalizeCheckoutData(value: UnknownRecord): UnknownRecord {
         cityName: cleanText(value.cityName, 160),
         zoneName: cleanText(value.zoneName, 160),
         areaName: cleanText(value.areaName, 160),
+        // The page the buyer shopped on: its currency (the cart's prices are
+        // in it), market presence and language, for a recovery message.
+        currency: typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency) ? value.currency : undefined,
+        presence: typeof value.presence === "string" && /^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$/.test(value.presence) ? value.presence : undefined,
+        language: typeof value.language === "string" && /^[a-z]{2,3}$/.test(value.language) ? value.language : undefined,
         cart: {
             items,
             totalAmount: cleanMoney(cart?.totalAmount)

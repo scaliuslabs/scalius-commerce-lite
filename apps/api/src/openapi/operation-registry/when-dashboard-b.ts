@@ -236,6 +236,8 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.resources.returns.receive": "Use when returned items arrived back: an app records what was received, restocked and damaged, and where the restock goes.",
   "dashboard.resources.returns.cancel": "Use when an app cancels an item return before any of it was received.",
   "dashboard.resources.discounts.list": "Use when an app syncs the store's discounts: their status, schedule and code and redemption counts, changes since a time.",
+  "dashboard.resources.abandoned_checkouts.list": "Use when an app lists checkouts buyers left: their lines, totals, customer, consent and recovery link.",
+  "dashboard.resources.abandoned_checkouts.get": "Use when an app reads one abandoned checkout before a reminder; not found once it became an order.",
   "dashboard.resources.customer_segments.list": "Use when an app lists or syncs the store's saved customer segments and their rules.",
   "dashboard.resources.customer_segments.get": "Use when an app reads one saved customer segment's rules.",
   "dashboard.resources.customer_segments.create": "Use when an app saves a customer segment, such as wholesale buyers or customers who spent over an amount.",

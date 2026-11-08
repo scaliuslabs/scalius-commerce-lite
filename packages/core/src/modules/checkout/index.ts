@@ -19,6 +19,8 @@ export * from "./readiness";
 export * from "./abandoned/snapshot";
 export * from "./abandoned/cleanup";
 export * from "./abandoned/save";
+export * from "./abandoned/recovery";
+export * from "./abandoned/representation";
 export * from "./app-functions";
 export * from "./app-reads";
 export * from "./app-line-prices";

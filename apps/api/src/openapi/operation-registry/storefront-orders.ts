@@ -16,6 +16,12 @@ export const STOREFRONT_ORDER_OPERATIONS = {
     reason:
       "Debounced browser form snapshot telemetry stores arbitrary checkout JSON and optional buyer phone; agent storefront context is the canonical cart and checkout state.",
   },
+  "storefront.abandoned_checkouts_recover.recover": {
+    exposure: "excluded",
+    risk: "read",
+    reason:
+      "A buyer's own recovery link (a signed token in the page URL) read by the storefront's recovery page; an agent restores a cart through the storefront cart operations.",
+  },
   "storefront.cart.add": { revision: "required" },
   "storefront.cart.clear": { revision: "required" },
   "storefront.cart.get": {},

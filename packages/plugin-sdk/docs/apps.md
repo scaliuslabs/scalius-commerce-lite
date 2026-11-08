@@ -413,6 +413,14 @@ SQL triggers write event facts in the same transaction as the change, so a commi
 - The catalogue (`EVENT_TOPICS` in `@scalius/shared/events`) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, and object events. `customer.redact_requested` and `customer.data_requested` are reserved and have no emitter yet.
 - Fulfilment and refund events list the order lines they cover (see [Line facts and refunds](commerce-hooks.md#5-line-facts-and-refunds)).
 
+### Abandoned checkouts
+
+`checkout.abandoned` fires once when a buyer's checkout has been idle an hour. Read it with `abandoned_checkouts.get` (`read_orders`), or page through `abandoned_checkouts.list` (`status`, `updatedSince`, `cursor`).
+
+- A checkout carries its lines (product, variant, title, options, quantity, unit price and line total), subtotal, discount, shipping and total in minor units of its `currency`, the market `presence` and `language` the buyer shopped in, `customerId` (the store's customer for the typed phone, or null) with that customer's `marketingConsents`, and `recoveryUrl`: a signed link, valid for a week after the buyer's last change, that opens the store with the cart filled again. Name, email and phone need the [contact data](#contact-data) scopes. Prices are what the buyer last saw; the cart prices them again.
+- A checkout that became an order is gone: `get` answers 404. Read it again right before you send anything.
+- Remind with `ctx.messaging.email({ customerId, marketing: true, idempotencyKey })` (`read_customers`, `write_marketing`): it goes out only while that customer is subscribed, with the store's unsubscribe footer. The `cart-recovery` test app (`apps/api/src/plugins/testing/apps/cart-recovery`) files a reminder on the event, sends it from a cron after a delay, and never twice.
+
 **Delivery to app handlers.**
 
 - At least once. `event.id` is stable across attempts: use it as your idempotency key.

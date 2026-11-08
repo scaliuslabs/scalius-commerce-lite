@@ -7,7 +7,9 @@ import { getTrustedClientIp } from "../utils/client-ip";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
-import { normalizeAbandonedCheckoutSnapshot, saveAbandonedCheckoutSnapshot } from "@scalius/core/modules/checkout";
+import { normalizeAbandonedCheckoutSnapshot, readAbandonedCheckoutRecovery, saveAbandonedCheckoutSnapshot, verifyCheckoutRecoveryToken } from "@scalius/core/modules/checkout";
+import { NotFoundError } from "../utils/api-error";
+import { successEnvelope } from "../schemas/responses";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -61,6 +63,45 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
   await saveAbandonedCheckoutSnapshot(db, snapshot);
 
   return ok(c, { message: "Abandoned checkout saved." });
+});
+
+// ─── POST /recover (a recovery link's lines) ─────────────────────────────────
+
+const recoverRoute = createRoute({
+  method: "post",
+  path: "/recover",
+  tags: ["Abandoned Checkouts"],
+  summary: "Read the lines a checkout recovery link puts back in the cart",
+  description: "The storefront's /cart/recover/{token} page posts the link's token (cr1.…) here. A valid, unexpired token of a checkout that still exists answers its lines (product, variant, quantity, title, slug) and market presence: no contact, no prices (the cart prices them again). Anything else is not found.",
+  request: { body: { content: { "application/json": { schema: z.object({ token: z.string().min(1).max(200) }).strict() } } } },
+  responses: {
+    200: {
+      description: "The checkout's lines",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        presence: z.string().nullable(),
+        lines: z.array(z.object({
+          productId: z.string(),
+          variantId: z.string().nullable(),
+          quantity: z.number().int(),
+          title: z.string(),
+          slug: z.string().nullable(),
+        })),
+      })) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(recoverRoute, async (c) => {
+  if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "checkout-recovery", getTrustedClientIp(c)))) {
+    throw new RateLimitError("Too many requests. Please try again later.");
+  }
+  const verified = await verifyCheckoutRecoveryToken(c.env, c.req.valid("json").token, Math.floor(Date.now() / 1000));
+  const recovery = verified ? await readAbandonedCheckoutRecovery(c.get("db"), verified.id) : null;
+  // One answer for a bad, expired or spent link: it never says which.
+  if (!recovery || recovery.lines.length === 0) throw new NotFoundError("This link has expired.");
+  c.header("Cache-Control", "private, no-store");
+  return ok(c, recovery);
 });
 
 // ─── POST /cleanup ───────────────────────────────────────────────────────────

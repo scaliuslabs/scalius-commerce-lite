@@ -29,6 +29,8 @@
 //   test payment provider that vaults, charges off-session, captures and voids.
 // - acme.qa: product questions as public Objects, read per product by a
 //   product.below component bound to the page's product.
+// - acme.cart-recovery: checkout.abandoned, a wait, a fresh read of the
+//   checkout and one consent-checked reminder with its recovery link.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -46,6 +48,7 @@ import { manifest as builderManifest } from "./apps/builder/src/index";
 import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
 import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
 import { manifest as qaManifest } from "./apps/qa/src/index";
+import { manifest as cartRecoveryManifest } from "./apps/cart-recovery/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -63,6 +66,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.marketplace": "./apps/api/src/plugins/testing/apps/marketplace",
   "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
   "acme.qa": "./apps/api/src/plugins/testing/apps/qa",
+  "acme.cart-recovery": "./apps/api/src/plugins/testing/apps/cart-recovery",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -85,6 +89,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("./apps/marketplace/src/index") },
   "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
   "acme.qa": { version: qaManifest.version, sha256: "0a0a".repeat(16), load: () => import("./apps/qa/src/index") },
+  "acme.cart-recovery": { version: cartRecoveryManifest.version, sha256: "ca27".repeat(16), load: () => import("./apps/cart-recovery/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

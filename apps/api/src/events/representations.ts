@@ -6,10 +6,10 @@
 // fields its subscription did not opt in to as null. A resource that no
 // longer exists is null.
 
+import { readAbandonedCheckoutRepresentations, type CheckoutRecoveryRuntime } from "@scalius/core/modules/checkout";
 import type { Database } from "@scalius/database/client";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import {
-  abandonedCheckouts,
   customerMarketingConsents,
   customerTagLinks,
   customers,
@@ -963,23 +963,9 @@ export function readOrderRefundRepresentations(db: Database, orderId: string) {
 export async function readRefundRepresentation(db: Database, refundId: string) {
   return (await readRefundRepresentations(db, { id: refundId }))[0] ?? null;
 }
-async function checkoutRepresentation(db: Database, abandonedCheckoutId: string) {
-  const row = await db.select({
-    id: abandonedCheckouts.id,
-    checkoutId: abandonedCheckouts.checkoutId,
-    phone: abandonedCheckouts.customerPhone,
-    abandonedAt: abandonedCheckouts.abandonedAt,
-    createdAt: abandonedCheckouts.createdAt,
-    updatedAt: abandonedCheckouts.updatedAt,
-  }).from(abandonedCheckouts).where(eq(abandonedCheckouts.id, abandonedCheckoutId)).get();
-  if (!row) return null;
-  return sealed("checkout", {
-    ...row,
-    phone: row.phone ?? null,
-    abandonedAt: iso(row.abandonedAt),
-    createdAt: isoRequired(row.createdAt),
-    updatedAt: isoRequired(row.updatedAt),
-  });
+/** The one checkout builder: the batched reader `abandoned_checkouts.list` pages through too. */
+async function checkoutRepresentation(db: Database, abandonedCheckoutId: string, runtime?: CheckoutRecoveryRuntime) {
+  return (await readAbandonedCheckoutRepresentations(db, [abandonedCheckoutId], runtime))[0] ?? null;
 }
 
 /** The one discount builder: the batched reader `discounts.list` pages through too. */
@@ -1072,8 +1058,8 @@ const factString = (event: OutboxEvent, key: string): string | null => {
  * subscription's customer data. One resolver serves one drain: an event's
  * representation is read once for all its endpoints (a failed read is not kept).
  */
-export function createWebhookRepresentationResolver(db: Database): WebhookRepresentationResolver {
-  const read = representationReader(db);
+export function createWebhookRepresentationResolver(db: Database, runtime?: CheckoutRecoveryRuntime): WebhookRepresentationResolver {
+  const read = representationReader(db, runtime);
   const known = new Map<string, Promise<EventRepresentation | null>>();
   return (event: OutboxEvent) => {
     const key = `${event.id} ${event.resourceType} ${event.resourceId}`;
@@ -1086,7 +1072,7 @@ export function createWebhookRepresentationResolver(db: Database): WebhookRepres
   };
 }
 
-function representationReader(db: Database): WebhookRepresentationResolver {
+function representationReader(db: Database, runtime?: CheckoutRecoveryRuntime): WebhookRepresentationResolver {
   return async (event: OutboxEvent): Promise<EventRepresentation | null> => {
     switch (event.resourceType) {
       case "order":
@@ -1112,7 +1098,7 @@ function representationReader(db: Database): WebhookRepresentationResolver {
       case "payment":
         return paymentRepresentation(db, event.resourceId);
       case "checkout":
-        return checkoutRepresentation(db, event.resourceId);
+        return checkoutRepresentation(db, event.resourceId, runtime);
       case "discount":
         return discountRepresentation(db, event.resourceId);
       case "review":

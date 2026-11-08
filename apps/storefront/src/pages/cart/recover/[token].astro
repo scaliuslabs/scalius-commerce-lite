@@ -1,0 +1,60 @@
+---
+// /cart/recover/<token>: an abandoned checkout's recovery link (lib/cart-recovery.ts).
+// Private, never cached, no referrer, no analytics, never indexed: the token
+// is in the URL. The lines go back in the cart through the store's cart
+// check, then the cart opens; a dead link says so and changes nothing.
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData } from "@/lib/api";
+import { cartRecoveryCopy, readCheckoutRecovery } from "@/lib/cart-recovery";
+import { serverPagePath } from "@/lib/server-presence";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { storefrontLanguage } from "@/lib/storefront-copy";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+
+export const prerender = false;
+
+Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+Astro.response.headers.set("Referrer-Policy", "no-referrer");
+const [layoutData, lines] = await Promise.all([getLayoutData(), readCheckoutRecovery(Astro.params.token)]);
+const language = storefrontLanguage(layoutData?.storefrontCopy?.languageCode);
+const copy = cartRecoveryCopy(language);
+if (!lines) Astro.response.status = 404;
+const restore = lines?.map((line) => ({
+  productId: line.productId, variantId: line.variantId, quantity: line.quantity, price: 0,
+  productName: line.title, productSlug: line.slug, variantLabel: null,
+}));
+---
+
+<Layout title={lines ? copy.title : copy.expiredTitle} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar analytics={false}>
+  <meta slot="head" name="referrer" content="no-referrer" />
+  <section class="container mx-auto px-4 py-10 sm:py-14" data-cart-recovery={lines ? "restoring" : "expired"}>
+    <div class="mx-auto w-full max-w-xl text-center">
+      <h1 class="text-2xl font-semibold text-foreground">{lines ? copy.title : copy.expiredTitle}</h1>
+      <p class="mt-2 text-base text-muted-foreground" data-cart-recovery-status>{lines ? copy.restoring : copy.expired}</p>
+      {lines ? <noscript><p class="mt-2 text-sm text-muted-foreground">{copy.noScript}</p></noscript> : null}
+      <a href={serverPagePath("/")} class="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-5 text-sm font-medium text-foreground hover:bg-muted">
+        {copy.shop}
+      </a>
+    </div>
+  </section>
+  {restore ? (
+    <script type="application/json" id="cart-recovery-lines" set:html={serializeJsonForInlineScript({ lines: restore, cart: serverPagePath("/cart"), failed: copy.failed })} />
+  ) : null}
+</Layout>
+
+<script>
+  import { addOrderToCart, type RestorableLine } from "@/lib/account-buy-again";
+
+  const data = document.getElementById("cart-recovery-lines")?.textContent;
+  if (data) {
+    const { lines, cart, failed } = JSON.parse(data) as { lines: RestorableLine[]; cart: string; failed: string };
+    void addOrderToCart(lines).then((result) => {
+      if (result && "added" in result && result.added > 0) {
+        location.replace(cart);
+        return;
+      }
+      const status = document.querySelector("[data-cart-recovery-status]");
+      if (status) status.textContent = failed;
+    });
+  }
+</script>
