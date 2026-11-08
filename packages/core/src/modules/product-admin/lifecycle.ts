@@ -14,7 +14,7 @@ import {
 } from "@scalius/database/schema";
 import { and, sql, eq, inArray, isNull, or } from "drizzle-orm";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     buildProductAggregateRevisionGuard,
     isProductAggregateRevisionConflict,
@@ -208,6 +208,8 @@ async function assertNoPermanentDeleteReferences(
     return variantIds;
 }
 
+const HARD_DELETE_REFERENCES_GUARD = "product_hard_delete_conflict";
+
 function buildPermanentDeleteReferenceGuard(
     db: Database,
     productIds: string[],
@@ -236,7 +238,7 @@ function buildPermanentDeleteReferenceGuard(
                     SELECT CAST(value AS TEXT) FROM json_each(${idSet})
                 )
             )
-        )`, "product_hard_delete_conflict");
+        )`, HARD_DELETE_REFERENCES_GUARD);
 }
 
 function deleteLowStockAlertsForProductBatch(
@@ -290,6 +292,8 @@ export async function permanentlyDeleteProduct(
         orders: "Cannot delete product. It is part of one or more existing orders.",
         inventory:
             "Cannot permanently delete product. One or more SKUs have inventory history; move the product to trash instead.",
+        history:
+            "Cannot permanently delete product. It gained order or inventory history while it was being deleted; move the product to trash instead.",
     };
     const variantIds = await assertNoPermanentDeleteReferences(
         db,
@@ -305,7 +309,10 @@ export async function permanentlyDeleteProduct(
             variantIds,
         ));
     } catch (error) {
+        // History that landed since the check (an order line, a stock movement,
+        // a purchase order line the foreign keys protect) is named by the check.
         await assertNoPermanentDeleteReferences(db, [id], referenceMessages);
+        if (isBatchGuardError(error, HARD_DELETE_REFERENCES_GUARD)) throw new ConflictError(referenceMessages.history);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             id,
