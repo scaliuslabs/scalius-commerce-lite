@@ -9,6 +9,7 @@ import {
   getApiV1AdminOrdersByIdPayments,
   getApiV1AdminOrdersByIdReturns,
   getApiV1AdminOrdersByIdShipments,
+  getApiV1AdminOrdersByIdUploads,
   getApiV1AdminOrdersByIdTimeline,
   getApiV1AdminOrdersCatalogProducts,
   type postApiV1AdminOrdersQuote,
@@ -98,6 +99,17 @@ export const orderNotificationsQueryOptions = (orderId: string) =>
       (await apiData(getApiV1AdminOrdersByIdNotifications({ path: { id: orderId } }))) as {
         notifications: OrderNotificationOutboxDto[];
       },
+    staleTime: 0,
+  });
+
+/** The files buyers gave the order's file inputs, each with a signed link valid for 5 minutes (an order holds at most 50). */
+export type OrderUploadDto = ApiResult<typeof getApiV1AdminOrdersByIdUploads>["uploads"][number];
+
+export const orderUploadsQueryOptions = (orderId: string) =>
+  queryOptions({
+    queryKey: queryKeys.orders.uploads(orderId),
+    queryFn: async () => (await apiData(getApiV1AdminOrdersByIdUploads({ path: { id: orderId } }))).uploads,
+    // The signed links expire: never serve a cached list as fresh.
     staleTime: 0,
   });
 

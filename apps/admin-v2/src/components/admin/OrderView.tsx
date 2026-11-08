@@ -49,6 +49,7 @@ import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { RelatedObjectsCard } from "./objects/RelatedObjectsCard";
 import { OrderAttributesCard } from "./orderview/OrderAttributesCard";
+import { OrderBuyerFilesProvider } from "./orderview/BuyerFiles";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
 
@@ -144,6 +145,7 @@ export function OrderView({ order }: { order: Order }) {
 
   return (
     <ErrorBoundary>
+      <OrderBuyerFilesProvider order={order}>
       <TooltipProvider>
         <Page width="detail" data-presence-root={`order:${order.id}`} className="space-y-4 pb-24 lg:pb-0">
           <PageHeader
@@ -319,6 +321,7 @@ export function OrderView({ order }: { order: Order }) {
         </PhoneActionBar>
         {cancelRequest.dialog}
       </TooltipProvider>
+      </OrderBuyerFilesProvider>
     </ErrorBoundary>
   );
 }
