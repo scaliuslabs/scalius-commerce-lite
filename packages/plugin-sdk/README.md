@@ -120,11 +120,13 @@ harness.records.get("tally")?.get("paid"); // { count: 1 }
 
 `createPluginTestHarness(module, { settings, store, api, fetch })` answers `ctx.api` and `ctx.http` from the callbacks you pass. For `api`, pass `createContractApi({ handlers })`: it checks every `ctx.api.call` against the stable app API this SDK release was sealed with (`stableContract`) in the host's order and returns the platform's refusal as the result, so a test fails where production would. It refuses an unknown operation (`api_unknown_operation`), an operation no granted scope covers (`api_operation_forbidden`; the harness passes the manifest's scopes), a missing or unsupported `idempotencyKey` (`idempotency_key_required`, `idempotency_not_supported`), a body on a GET, an undeclared body field (`unknown_body_property`), missing or extra path parameters, and a path, query or body value that breaks the route's schema (`validation_error`: enums such as a `section`, required fields, the `expectedRevision` precondition). The check covers a JSON Schema subset (types, enums, lengths, patterns, required fields) and ignores `format` and other keywords it does not know: a string declared `format: date-time` passes without a date check, where production rejects it. Test production refinements and format checks against a host. A repeat with the same key replays the first answer without calling your handler; the same key for another request is `idempotency_key_reused`. A handler returns the response's `data` (checked against the response schema, so a test cannot rely on a shape the platform never returns) or a whole `{ ok: false, status, data: null, error }` refusal such as a 409; a valid call without a handler fails the test. `api.calls` lists each call and its result.
 
+Build each answer with `sample(name, overrides)`, never by typing out a whole resource: it takes every field from the same sealed contract, so your test states only the fields it is about and keeps passing when the platform adds a field (a new nullable field is null, a new list empty). `name` is a representation type (`order`, `refund`, `product`, …, typed as its `EventRepresentation`) or any schema in `stableContract.components` (`BrandResource`). Overrides merge into nested objects (`contact`, addresses); a list replaces the sample's and each object in it is completed (`lines: [{ quantity: 2 }]` is one whole line). An override the platform would never return throws with the schema's message.
+
 ```ts
-import { createContractApi, createPluginTestHarness } from "@scalius/plugin-sdk/testing";
+import { createContractApi, createPluginTestHarness, sample } from "@scalius/plugin-sdk/testing";
 
 const api = createContractApi({
-  handlers: { "orders.get": ({ path }) => ({ order: { id: path.id /* …the order resource's other required fields */ } }) },
+  handlers: { "orders.get": ({ path }) => ({ order: sample("order", { id: String(path.id), lines: [{ title: "Pen", quantity: 1 }] }) }) },
 });
 const harness = createPluginTestHarness(plugin, { api });
 ```
