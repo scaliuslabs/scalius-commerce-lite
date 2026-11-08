@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
 // Only through ./dialog, as before: new direct edges split shared chunks out of every route's download.
-import { CloseLabel, ModalInertBackground } from "./dialog";
+import { CloseLabel, ModalInertBackground, useReturnFocus } from "./dialog";
 
 const Sheet = SheetPrimitive.Root;
 
@@ -24,14 +24,12 @@ interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof SheetP
   bar?: keyof typeof BAR_TOP;
 }
 
-/**
- * DESIGN O4: a side panel under the top bar. Compose it as `flex flex-col`
- * with `SheetHeader` (title, description and the close button), a scrolling
- * body (`min-h-0 flex-1 overflow-y-auto`) and an optional `SheetFooter`.
- */
-const SheetContent = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = "right", bar = "app", className, children, ...props }, ref) => (
-    <SheetPrimitive.Portal>
+/** Mounted by Radix for each open; focus goes back to what opened it when it closes (Escape included). */
+const SheetPanel = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.Content>, SheetContentProps>(
+  ({ side = "right", bar = "app", className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  const focus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
+  return (
+    <>
       <SheetPrimitive.Overlay className={cn("fixed inset-x-0 bottom-0 z-50 bg-overlay data-[state=closed]:pointer-events-none data-[state=closed]:invisible", BAR_TOP[bar])} />
       <SheetPrimitive.Content
         ref={ref}
@@ -43,14 +41,31 @@ const SheetContent = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.C
           className,
         )}
         {...props}
+        {...focus}
       >
         <ModalInertBackground />
         {children}
       </SheetPrimitive.Content>
+    </>
+  );
+  },
+);
+SheetPanel.displayName = "SheetPanel";
+
+/**
+ * DESIGN O4: a side panel under the top bar. Compose it as `flex flex-col`
+ * with `SheetHeader` (title, description and the close button), a scrolling
+ * body (`min-h-0 flex-1 overflow-y-auto`) and an optional `SheetFooter`.
+ */
+const SheetContent = React.forwardRef<React.ComponentRef<typeof SheetPrimitive.Content>, SheetContentProps>(
+  ({ side = "right", bar = "app", className, children, ...props }, ref) => (
+    <SheetPrimitive.Portal>
+      <SheetPanel ref={ref} side={side} bar={bar} className={className} {...props}>{children}</SheetPanel>
     </SheetPrimitive.Portal>
   ),
 );
 SheetContent.displayName = SheetPrimitive.Content.displayName;
+
 
 interface SheetHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Disables the close button while a save is in flight. */

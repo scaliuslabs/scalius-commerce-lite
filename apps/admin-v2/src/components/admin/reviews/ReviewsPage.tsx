@@ -33,6 +33,7 @@ import {
 import { RejectReviewsDialog } from "./RejectReviewsDialog";
 import { ReviewSettingsDialog } from "./ReviewSettingsDialog";
 import { ReviewSheet } from "./ReviewSheet";
+import { FOCUS_RETURN_ATTRIBUTE } from "~/components/ui/dialog";
 import { CheckFlagChips, ProductThumb, ReviewStars } from "./review-parts";
 import { REVIEW_TABS, reviewListQuery, reviewTab, type ReviewSearch, type ReviewSearchChange } from "./review-search";
 import {
@@ -301,6 +302,8 @@ function ReviewCell({ review, onOpen }: { review: AdminReview; onOpen: () => voi
     <button
       type="button"
       onClick={onOpen}
+      // The row leaves and comes back as the review is rejected and restored in its sheet: focus finds it again.
+      {...{ [FOCUS_RETURN_ATTRIBUTE]: `review:${review.id}` }}
       className="flex min-h-11 w-full min-w-0 flex-col sm:pointer-fine:min-h-6 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex min-w-0 items-center gap-2">
