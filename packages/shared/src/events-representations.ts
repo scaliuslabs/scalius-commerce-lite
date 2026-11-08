@@ -31,6 +31,7 @@ import {
   SHIPMENT_STATUSES,
 } from "./resource-states";
 import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./reviews";
+import { POINT_OF_SALE_TENDER_VIAS } from "./payment-terms";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
@@ -211,6 +212,24 @@ export const orderRepresentationSchema = z.object({
    * app that discounts), never a page of it.
    */
   discountApplications: z.array(discountApplicationSchema),
+  /**
+   * An in-person sale's receipt facts (`channel: "pos"`): the location the
+   * goods left from, the staff member who rang it up, each tender as paid
+   * and the change given back (`tenderedMinor - changeMinor = totalMinor`).
+   * Null for every other order.
+   */
+  pointOfSale: z.object({
+    locationId: id,
+    staffMemberId: id.nullable(),
+    tenders: z.array(z.object({
+      via: z.enum(POINT_OF_SALE_TENDER_VIAS),
+      /** What the buyer handed over, before change. */
+      amountMinor: minor,
+      reference: text.nullable(),
+    })),
+    tenderedMinor: minor,
+    changeMinor: minor,
+  }).nullable(),
   createdAt: iso,
   updatedAt: iso,
   deletedAt: iso.nullable(),

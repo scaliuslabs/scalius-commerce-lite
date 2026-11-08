@@ -15,6 +15,8 @@ import {
     previewManualOrderAmendmentSchema,
     confirmManualOrderAmendmentObjectSchema,
     refineDeliveryLine,
+    listOrderHolds,
+    planPointOfSaleTenders,
     type CreateOrderInput,
 } from "@scalius/core/modules/orders";
 import { ok, created } from "../../../utils/api-response";
@@ -29,7 +31,8 @@ import {
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { createManualOrderAppFunctions, validateCheckoutAttributes } from "@scalius/core/modules/checkout";
 import type { Database } from "@scalius/database/client";
-import { orders } from "@scalius/database/schema";
+import { orderItems, orders } from "@scalius/database/schema";
+import type { RecordedPaymentVia } from "@scalius/shared/payment-terms";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { fromMinor } from "@scalius/shared/money";
 import { eq } from "drizzle-orm";
@@ -42,6 +45,8 @@ import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions"
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
 import { requestAppProviders } from "../../../plugins/providers/app-providers";
 import { requestActorId, requestStaffId, requireActorId } from "../request-actor";
+import { handOverOrderLines } from "./fulfilments";
+import { ValidationError } from "../../../utils/api-error";
 
 const app = adminRouter();
 
@@ -277,8 +282,11 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
     const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
-    // Mark as paid: placed as an invoice, then paid in full right after.
-    const placed = data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
+    if (data.paid && data.pointOfSale) throw new ValidationError("An in-person sale is paid by its tenders: send pointOfSale without paid.");
+    // Mark as paid, or an in-person sale: placed as an invoice, then paid in full right after.
+    const placed = data.pointOfSale
+        ? { ...data, paymentMethod: "net_terms" as const, channel: "pos" as const }
+        : data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
     const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, actor, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
@@ -287,8 +295,52 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     });
     // A replay records it too: the payment's own key makes a second record a no-op.
     if (data.paid) await recordPaidOnPlacement(c, db, response.id, data.requestKey, data.paid);
+    // A replay completes a sale a lost response left part-done: every step is keyed.
+    if (data.pointOfSale) await completePointOfSale(c, db, response.id, data.requestKey, data.pointOfSale);
     // Apps' risk checks run from the order.created event (ctx.orders), never on this request.
     return { response, committed };
+}
+
+/** Records one payment received as the order was placed, with its timeline line (and an app's review hold) in its batch. */
+async function recordPlacementPayment(
+    c: Context<{ Bindings: Env }>,
+    db: Database,
+    orderId: string,
+    payment: { requestKey: string; amountMinor: number; via: RecordedPaymentVia; reference: string | null },
+) {
+    const appPrincipal = c.get("pluginPrincipal");
+    const actingStaffId = requestStaffId(c);
+    return recordOrderPayment(db, {
+        orderId,
+        amountMinor: payment.amountMinor,
+        via: payment.via,
+        reference: payment.reference,
+        note: null,
+        recordedBy: appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${actingStaffId ?? "unknown"}`,
+        requestKey: payment.requestKey,
+        timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {
+            id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
+            orderId,
+            kind: "payment_recorded",
+            // An app's line names the app (app:<id>), never its approving admin.
+            actorId: requestActorId(c),
+            data: {
+                amount: fromMinor(payment.amountMinor, currency.decimalPlaces),
+                via: payment.via,
+                reference: payment.reference,
+                ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}),
+            },
+        }, landed) }),
+        ...(appPrincipal ? {
+            reviewHold: ({ paymentId, landed }) => buildAppPaymentReviewHoldInsert(db, {
+                orderId,
+                paymentId,
+                pluginId: appPrincipal.pluginId,
+                appName: appPrincipal.pluginName,
+                landed,
+            }),
+        } : {}),
+    });
 }
 
 /**
@@ -306,46 +358,58 @@ async function recordPaidOnPlacement(
 ): Promise<void> {
     const order = await db.select({ balanceDueMinor: orders.balanceDueMinor }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) return;
-    const appPrincipal = c.get("pluginPrincipal");
-    const actingStaffId = requestStaffId(c);
-    const keyed = `${requestKey}:paid`;
-    const result = await recordOrderPayment(db, {
-        orderId,
+    const result = await recordPlacementPayment(c, db, orderId, {
+        requestKey: `${requestKey}:paid`,
         // A replay after the payment landed: the key returns the first record, whatever is due now.
         amountMinor: Math.max(order.balanceDueMinor, 1),
         via: paid.via,
         reference: paid.reference ?? null,
-        note: null,
-        recordedBy: appPrincipal ? `app:${appPrincipal.pluginId}` : `staff:${actingStaffId ?? "unknown"}`,
-        requestKey: keyed,
-        timelineLine: async ({ paymentId, currency, landed }) => ({ statement: buildOrderEventInsert(db, {
-            id: await orderEventIdForRequest(orderId, "payment_recorded", paymentId),
-            orderId,
-            kind: "payment_recorded",
-            // An app's line names the app (app:<id>), never its approving admin.
-            actorId: requestActorId(c),
-            data: {
-                amount: fromMinor(order.balanceDueMinor, currency.decimalPlaces),
-                via: paid.via,
-                reference: paid.reference ?? null,
-                ...(appPrincipal ? { appId: appPrincipal.pluginId } : {}),
-            },
-        }, landed) }),
-        ...(appPrincipal ? {
-            reviewHold: ({ paymentId, landed }) => buildAppPaymentReviewHoldInsert(db, {
-                orderId,
-                paymentId,
-                pluginId: appPrincipal.pluginId,
-                appName: appPrincipal.pluginName,
-                landed,
-            }),
-        } : {}),
     }).catch((error: unknown) => {
         // Already paid (a replay whose first payment used another amount): nothing more to record.
         if (order.balanceDueMinor <= 0) return null;
         throw error;
     });
     if (result && !result.replayed && result.paymentStatus === "paid") await autoFulfilAfterResponse(c, db, orderId, "paid-manual-order");
+}
+
+/**
+ * Completes an in-person sale its create committed: records each tender (less
+ * the change) as a payment of its `via`, keyed by the sale's request key and
+ * the tender's position, then hands every picked-up and performed line over
+ * at the sale's counter, which delivers the order and deducts its stock at
+ * that location (ledger v2). Every step is keyed, so a replay after a lost
+ * response finishes what is left and repeats nothing. An order an app's
+ * payment put on review (gift cards or downloads still owed) waits for staff
+ * before anything is handed over.
+ */
+async function completePointOfSale(
+    c: Context<{ Bindings: Env }>,
+    db: Database,
+    orderId: string,
+    requestKey: string,
+    sale: NonNullable<CreateOrderInput["pointOfSale"]>,
+): Promise<void> {
+    const order = await db.select({ totalAmountMinor: orders.totalAmountMinor }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) return;
+    // The plan the create checked, from the order's committed total.
+    for (const payment of planPointOfSaleTenders(sale, order.totalAmountMinor).payments) {
+        await recordPlacementPayment(c, db, orderId, {
+            requestKey: `${requestKey}:pos:tender:${payment.index}`,
+            amountMinor: payment.amountMinor,
+            via: payment.via,
+            reference: payment.reference,
+        });
+    }
+    const holds = (await listOrderHolds(db, [orderId])).get(orderId) ?? [];
+    if (holds.some((hold) => hold.releasedAt === null)) return;
+    const lines = await db.select({ type: orderItems.fulfillmentType, quantity: orderItems.quantity, fulfilled: orderItems.fulfilledQuantity })
+        .from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+    for (const kind of ["pickup", "service"] as const) {
+        if (!lines.some((line) => line.type === kind && line.fulfilled < line.quantity)) continue;
+        await handOverOrderLines(c, orderId, { requestKey: `${requestKey}:pos:${kind}`, kind });
+    }
+    // Gift cards and downloads of a settled sale go out now.
+    await autoFulfilAfterResponse(c, db, orderId, "pos-sale");
 }
 
 export { app as adminOrderCreateRoutes };

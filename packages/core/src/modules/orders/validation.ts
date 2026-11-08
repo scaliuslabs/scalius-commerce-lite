@@ -13,7 +13,7 @@ import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-sourc
 import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits";
 import { MAX_MINOR_AMOUNT } from "@scalius/shared/money";
-import { RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
+import { POINT_OF_SALE_TENDER_VIAS, POINT_OF_SALE_TENDERS_MAX, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
 import { PAYMENT_TERMS_MAX_DAYS } from "@scalius/shared/payment-terms";
 
 /** The one order line limit (`@scalius/shared/order-limits`). */
@@ -169,6 +169,23 @@ const orderChannelSourceInputSchema = z
 /** How a staff or app order is paid: cash on delivery, or an invoice paid later by its due date. */
 export const manualOrderPaymentMethodSchema = z.enum(["cod", "net_terms"]);
 
+/**
+ * An in-person sale (a point of sale): the location the goods leave from at
+ * the counter, the staff member who rang it up, and how the buyer paid. The
+ * whole total is tendered; only cash may exceed it, and the excess is the
+ * change given back.
+ */
+export const pointOfSaleInputSchema = z.object({
+    locationId: z.string().trim().min(1).max(128),
+    staffMemberId: z.string().trim().min(1).max(128).nullable().optional(),
+    tenders: z.array(z.object({
+        via: z.enum(POINT_OF_SALE_TENDER_VIAS),
+        amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT),
+        reference: z.string().trim().max(120).nullable().optional(),
+    }).strict()).min(1).max(POINT_OF_SALE_TENDERS_MAX),
+}).strict();
+export type PointOfSaleInput = z.infer<typeof pointOfSaleInputSchema>;
+
 export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
     /**
@@ -187,8 +204,13 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     customerId: z.string().trim().min(1).max(128).nullable().optional(),
     /** Validated app checkout attributes (the route checks them against the apps' declarations). */
     attributes: z.record(z.string(), z.string()).optional(),
-    /** Who placed it: staff ("admin", the default) or an app ("app"). */
-    channel: z.enum(["admin", "app"]).optional(),
+    /** Who placed it: staff ("admin", the default), an app ("app"), or a point of sale ("pos", with `pointOfSale`). */
+    channel: z.enum(["admin", "app", "pos"]).optional(),
+    /**
+     * An in-person sale: handed over at the counter of `locationId` and paid
+     * by its tenders as it is placed (orders.channel `pos`).
+     */
+    pointOfSale: pointOfSaleInputSchema.optional(),
     /** Cash on delivery (the default), or an invoice paid later (`net_terms`). */
     paymentMethod: manualOrderPaymentMethodSchema.optional(),
     /** An invoice's terms in days; omitted: the store's net days (Settings → Payments). */

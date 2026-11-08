@@ -11,6 +11,7 @@ export * from "./admin/detail";
 export * from "./admin/refund-kept";
 export * from "./admin/quote";
 export * from "./admin/create";
+export * from "./admin/point-of-sale";
 export * from "./commit-order";
 export * from "./admin/amend";
 export * from "./admin/edit";

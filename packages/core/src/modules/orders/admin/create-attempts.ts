@@ -422,6 +422,12 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
     ...(input.paymentTermsDays != null ? { paymentTermsDays: input.paymentTermsDays } : {}),
     ...(input.paid ? { paid: { via: input.paid.via, reference: input.paid.reference?.trim() || null } } : {}),
+    // A sale's location, staff and tenders are what it records: another set is another sale.
+    ...(input.pointOfSale ? { pointOfSale: {
+      locationId: input.pointOfSale.locationId,
+      staffMemberId: input.pointOfSale.staffMemberId ?? null,
+      tenders: input.pointOfSale.tenders.map((tender) => [tender.via, tender.amountMinor, tender.reference?.trim() || null]),
+    } } : {}),
     ...(input.abandonedCheckoutId ? { abandonedCheckoutId: input.abandonedCheckoutId } : {}),
     // The online store is the default: naming it is the same request.
     ...(input.salesChannelId && input.salesChannelId !== ONLINE_STORE_CHANNEL_ID ? { salesChannelId: input.salesChannelId } : {}),

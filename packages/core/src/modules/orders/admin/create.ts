@@ -40,6 +40,7 @@ import { commitOrder, type OrderCustomer } from "../commit-order";
 import type { OrderFacts, OrderLine } from "../types";
 import type { SQLiteBatchItem } from "./shared";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
+import { assertPointOfSaleStock, planPointOfSaleTenders, resolvePointOfSaleLocation, type PointOfSaleTenderPlan } from "./point-of-sale";
 
 /** The order would total something other than what staff reviewed; `details.totalAmount` is the new total. */
 export class ManualOrderTotalChangedError extends AppError {
@@ -166,7 +167,9 @@ export async function createManualOrder(
     }
     await validateCustomerPhoneCountry(db, data.customerPhone);
     const paymentMethods = data.paymentMethod === PaymentMethod.NET_TERMS ? await paymentMethodsDocument.read(db) : null;
-    if (paymentMethods && options.automated && !(paymentMethods.enabledMethods ?? []).includes(PaymentMethod.NET_TERMS)) {
+    // An order paid as it is placed (marked paid, a point-of-sale sale) is an invoice only in form.
+    const paidOnPlacement = Boolean(data.paid || data.pointOfSale);
+    if (paymentMethods && options.automated && !paidOnPlacement && !(paymentMethods.enabledMethods ?? []).includes(PaymentMethod.NET_TERMS)) {
         throw new ValidationError(
             "This store does not offer invoices. Turn on Invoice / net terms in Settings → Payments, or ask staff to place it.",
             { reason: "payment_method_unavailable" },
@@ -195,6 +198,12 @@ export async function createManualOrder(
     try {
         // An active channel staff picked, else the online store (MARKETS-DESIGN D6).
         const salesChannelId = await resolveStaffOrderSalesChannel(db, data.salesChannelId);
+        // An in-person sale hands its goods over at a counter of its channel.
+        const sale = data.pointOfSale ?? null;
+        if (sale && (data.shippingMethodId || data.shippingAddress?.trim())) {
+            throw new ValidationError("An in-person sale is handed over at the counter: send no delivery method or address.");
+        }
+        const saleLocation = sale ? await resolvePointOfSaleLocation(db, sale, salesChannelId) : null;
         const {
             locationNames: { cityName, zoneName, areaName },
             trackedItems,
@@ -211,9 +220,18 @@ export async function createManualOrder(
             // Apps see who places it and the channel it sells from, as the order records them.
             channel: data.channel ?? "admin",
             salesChannelId,
+            // A sale is handed over at the counter: its physical lines are picked up, nothing ships.
+            ...(sale ? { fixedDeliveryMethodKind: "pickup" as const } : {}),
         });
         if (data.expectedTotal !== undefined && toMinor(data.expectedTotal, taxQuote.decimalPlaces) !== taxQuote.totalMinor) {
             throw new ManualOrderTotalChangedError(fromMinor(taxQuote.totalMinor, taxQuote.decimalPlaces));
+        }
+        // A sale is refused before anything is written when its tenders do
+        // not pay the total or its counter lacks the units.
+        let salePlan: PointOfSaleTenderPlan | null = null;
+        if (sale && saleLocation) {
+            salePlan = planPointOfSaleTenders(sale, taxQuote.totalMinor);
+            await assertPointOfSaleStock(db, saleLocation, trackedItems);
         }
         if (requiresShipping && !data.shippingAddress?.trim()) {
             throw new ValidationError("Enter the delivery address, or choose a pickup method.");
@@ -279,6 +297,7 @@ export async function createManualOrder(
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: InventoryPool.REGULAR,
             inventoryAction: trackedItems.some((item) => item.inventoryTracked) ? "reserved" : "none",
+            ...(saleLocation ? { fulfillmentLocationId: saleLocation.id } : {}),
         };
         const lines: OrderLine[] = trackedItems.map((item, index) => {
             const taxAllocationLineId = allocationLineIds[index]!;
@@ -311,6 +330,8 @@ export async function createManualOrder(
         // Prices set by hand are part of the order's record, in the same batch.
         const pricedByHand = data.items.filter((item) => item.unitPriceMinor !== undefined).length;
         const pricesSetEventId = pricedByHand > 0 ? await orderEventIdForRequest(orderId, "prices_set", data.requestKey) : null;
+        // A sale's receipt facts commit with it.
+        const saleEventId = salePlan ? await orderEventIdForRequest(orderId, "pos_sale", data.requestKey) : null;
 
         const committed = await commitOrder(db, {
             // Staff-created; the source says where it came in (facebook, walk_in, …).
@@ -337,6 +358,14 @@ export async function createManualOrder(
                             kind: "prices_set",
                             actorId: actor,
                             data: { lines: pricedByHand },
+                        }, sql`1`) as unknown as SQLiteBatchItem] : []),
+                        ...(saleEventId && salePlan && saleLocation ? [buildOrderEventInsert(db, {
+                            id: saleEventId,
+                            orderId,
+                            kind: "pos_sale",
+                            actorId: actor,
+                            // The receipt facts (minor units), and for the timeline the counter's name and the change in major units.
+                            data: { ...salePlan.facts, locationName: saleLocation.name, change: fromMinor(salePlan.facts.changeMinor, taxQuote.decimalPlaces) },
                         }, sql`1`) as unknown as SQLiteBatchItem] : []),
                         buildAdminOrderCreateAttemptCommit(db, attempt, response),
                     ],

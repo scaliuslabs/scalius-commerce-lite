@@ -32,6 +32,9 @@
 // - acme.affiliates: an affiliate app on the stable app API: a code discount
 //   per affiliate, and a commission on the orders that redeemed it
 //   (orders.list by discountCode).
+// - acme.pos: a point of sale on the stable app API: its own sales channel,
+//   cashiers from staff.list, and in-person sales (orders.create with
+//   pointOfSale) paid by tenders and handed over at a shop's counter.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -50,6 +53,7 @@ import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
 import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
 import { manifest as reviewsManifest } from "./apps/reviews/src/index";
 import { manifest as affiliatesManifest } from "./apps/affiliates/src/index";
+import { manifest as posManifest } from "./apps/pos/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -68,6 +72,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
   "acme.reviews": "./apps/api/src/plugins/testing/apps/reviews",
   "acme.affiliates": "./apps/api/src/plugins/testing/apps/affiliates",
+  "acme.pos": "./apps/api/src/plugins/testing/apps/pos",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -91,6 +96,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
   "acme.reviews": { version: reviewsManifest.version, sha256: "4e71".repeat(16), load: () => import("./apps/reviews/src/index") },
   "acme.affiliates": { version: affiliatesManifest.version, sha256: "af11".repeat(16), load: () => import("./apps/affiliates/src/index") },
+  "acme.pos": { version: posManifest.version, sha256: "9050".repeat(16), load: () => import("./apps/pos/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

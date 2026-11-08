@@ -24,7 +24,7 @@ import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, pointOfSaleInputSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
 import { AppError } from "@scalius/core/errors";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
@@ -339,13 +339,22 @@ const orderCreateBody = z.object({
   attributes: z.record(z.string().max(120), z.string().max(500)).optional().openapi({ description: "Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped." }),
   notes: optionalText(500),
   channelSource: z.string().trim().max(64).nullable().optional().openapi({ description: "Where it came in; an app's order defaults to the app's id." }),
-  salesChannelId: z.string().trim().min(1).max(160).nullable().optional(),
+  salesChannelId: z.string().trim().min(1).max(160).nullable().optional().openapi({
+    description: "The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest).",
+  }),
+  pointOfSale: pointOfSaleInputSchema.optional().openapi({
+    description: "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`).",
+  }),
 }).strict().refine((value) => Boolean(value.customerId) !== Boolean(value.contact), {
   message: "Send customerId or contact, not both.",
   path: ["customerId"],
 }).refine((value) => !value.paymentTerms || value.paymentMethod === "net_terms", {
   message: "paymentTerms goes with paymentMethod net_terms.",
   path: ["paymentTerms"],
+}).refine((value) => !value.pointOfSale || (value.salesChannelId && !value.paymentTerms && value.paymentMethod !== "net_terms"
+  && value.shippingMinor === 0 && !value.shippingMethodId && !value.shippingAddress), {
+  message: "An in-person sale names its salesChannelId and sends no delivery method, address, charge or payment terms.",
+  path: ["pointOfSale"],
 });
 
 /** A UUID the order-create attempt table takes, derived from the caller's Idempotency-Key (random without one). */
@@ -361,7 +370,7 @@ app.openapi(createRoute({
   path: "/orders",
   tags: ["App API - Orders"],
   summary: "Place an order for a customer",
-  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order.",
+  description: "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. With `pointOfSale` it is an in-person sale (channel `pos`): paid by its tenders, handed over at the counter and delivered, its stock taken at that location. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order (and finishes a sale a lost response left part-done).",
   request: {
     headers: idempotencyKeyHeaderSchema,
     body: { required: true, content: { "application/json": { schema: orderCreateBody } } },
@@ -376,6 +385,12 @@ app.openapi(createRoute({
   const body = c.req.valid("json");
   const db = c.get("db");
   const appPrincipal = c.get("pluginPrincipal");
+  // An app sells in person only from a channel it declared.
+  if (body.pointOfSale && appPrincipal && !body.salesChannelId?.startsWith(`${appPrincipal.pluginId}:`)) {
+    throw new AppError(403, "pos_sales_channel_not_owned", "An app sells in person from its own sales channel (declare it in the manifest's salesChannels).", {
+      salesChannelId: body.salesChannelId ?? null,
+    });
+  }
   const customer = body.customerId
     ? await db.select({ name: customers.name, email: customers.email, phone: customers.phone })
       .from(customers).where(and(eq(customers.id, body.customerId), isNull(customers.deletedAt))).get()
@@ -385,7 +400,9 @@ app.openapi(createRoute({
     ? { name: customer.name, email: customer.email ?? null, phone: (customer.phone as string | null) || null }
     : { name: body.contact!.name, email: body.contact!.email ?? null, phone: body.contact!.phone ?? null };
   if (!contact.phone) {
-    throw new ValidationError(body.paymentMethod === "net_terms"
+    throw new ValidationError(body.pointOfSale
+      ? "An in-person sale needs the buyer's phone (or a customerId)."
+      : body.paymentMethod === "net_terms"
       ? "An invoice order needs the buyer's phone."
       : "A cash-on-delivery order needs the buyer's phone.", { issues: [{ field: body.customerId ? "customerId" : "contact.phone", code: "phone_required" }] });
   }
@@ -437,8 +454,9 @@ app.openapi(createRoute({
     channelSource: body.channelSource ?? (appPrincipal ? appPrincipal.pluginId.replace(/[^a-z0-9]+/gu, "_") : null),
     salesChannelId: body.salesChannelId ?? null,
     ...(body.attributes ? { attributes: body.attributes } : {}),
-    channel: appPrincipal ? "app" : "admin",
-    paymentMethod: body.paymentMethod,
+    channel: body.pointOfSale ? "pos" : appPrincipal ? "app" : "admin",
+    paymentMethod: body.pointOfSale ? "net_terms" : body.paymentMethod,
+    ...(body.pointOfSale ? { pointOfSale: body.pointOfSale } : {}),
     ...(body.paymentTerms ? { paymentTermsDays: body.paymentTerms.days } : {}),
   });
   if (!parsed.success) {

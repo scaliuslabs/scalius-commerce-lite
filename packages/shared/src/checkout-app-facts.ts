@@ -92,8 +92,8 @@ export interface ManualOrderAppDeliveryMethod {
 }
 
 export interface ManualOrderAppInput {
-  /** Who places it: staff (`admin`, the default) or an app (`app`). */
-  channel?: "admin" | "app";
+  /** Who places it: staff (`admin`, the default), an app (`app`), or a point of sale (`pos`). */
+  channel?: "admin" | "app" | "pos";
   /** The sales channel the order sells from (resolved by the create; absent: the online store). */
   salesChannelId?: string | null;
   /** The order's currency at the store's price increment (app amounts round to it). */
