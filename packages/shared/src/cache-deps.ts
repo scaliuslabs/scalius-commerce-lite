@@ -1292,6 +1292,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   gift_cards: PRIVATE,
   gift_card_transactions: PRIVATE,
   payouts: PRIVATE,
+  payout_reversals: PRIVATE,
   warranty_policy_revisions: "Frozen onto order lines at checkout; public reads show the live policy row (warranty_policies), which is registered.",
   order_item_warranties: PRIVATE,
   warranty_claims: PRIVATE,

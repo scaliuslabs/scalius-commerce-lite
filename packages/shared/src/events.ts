@@ -62,6 +62,7 @@ export const EVENT_TOPICS = [
   "conversation.message_received",
   "payout.created",
   "payout.updated",
+  "payout.reversal_updated",
 ] as const;
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
@@ -133,6 +134,7 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "conversation.message_received": "conversation",
   "payout.created": "payout",
   "payout.updated": "payout",
+  "payout.reversal_updated": "payout",
 };
 
 const id = z.string().min(1).max(128);
@@ -443,6 +445,19 @@ export const EVENT_FACT_SCHEMAS = {
   "payout.updated": z.object({
     payoutId: id,
     appId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  /**
+   * A reversal of a paid payout was recorded (`previousStatus` null, status
+   * `pending`) or its status moved (`processing`, `reversed`, `failed`) (0206).
+   * The resource is the payout: its `reversals` list carries the reversal.
+   * Delivered only to the app that sent the payout.
+   */
+  "payout.reversal_updated": z.object({
+    payoutId: id,
+    appId: id,
+    reversalId: id,
     previousStatus: nullableState,
     status: state,
   }),

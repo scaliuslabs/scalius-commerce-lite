@@ -40,7 +40,8 @@ export const conversations = sqliteTable("conversations", {
     closedAt: integer("closed_at"),
     /**
      * The chat channel of a thread a messaging app started (0202): `whatsapp`,
-     * `messenger`, … (`MESSAGING_CHANNELS`); null for every storefront thread.
+     * `messenger`, … (`MESSAGING_CHANNELS`), or an app's own channel
+     * `<app id>:<key>` (0206); null for every storefront thread.
      * A channel thread is a store thread of the contact's customer that the
      * buyer never reads on the storefront: replies go out on the channel.
      */
@@ -245,7 +246,9 @@ export const conversationChannelContacts = sqliteTable("conversation_channel_con
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
 }, (table) => [
     uniqueIndex("conversation_channel_contacts_contact_unique").on(table.channel, table.contactKey),
-    check("conversation_channel_contacts_channel_check", sql`${table.channel} IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber')`),
+    // A built-in channel, or an app's own (0206): `<app id>:<key>`, delivered only by that app's providers.
+    // `smallint`: PostgreSQL's substr takes an integer length, and the profile's instr answers bigint.
+    check("conversation_channel_contacts_channel_check", sql`${table.channel} IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber') OR (instr(${table.channel}, ':') > 1 AND length(${table.channel}) <= 64 AND substr(${table.channel}, 1, CAST(instr(${table.channel}, ':') AS smallint)) = substr(${table.providerId}, 1, CAST(instr(${table.providerId}, ':') AS smallint)))`),
     check("conversation_channel_contacts_key_length", sql`length(${table.contactKey}) BETWEEN 1 AND 128`),
     check("conversation_channel_contacts_name_length", sql`${table.contactName} IS NULL OR length(${table.contactName}) BETWEEN 1 AND 200`),
     check("conversation_channel_contacts_provider_shape", sql`instr(${table.providerId}, ':') > 1 AND length(${table.providerId}) <= 160`),

@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 205,
-  name: "0205_digital_access_permission",
+  version: 206,
+  name: "0206_payout_reversals_custom_channels",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -806,6 +806,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 205,
     name: "0205_digital_access_permission",
     sourceSha256: "12f14d883ebc921c40951c124153868558f2416b256bde5549589db7e8458a89",
+  },
+  {
+    version: 206,
+    name: "0206_payout_reversals_custom_channels",
+    sourceSha256: "62d7be2d72b1bdd668459884a87136939f5c59eb2778581ce08757f380bfd233",
   },
 ] as const;
 
