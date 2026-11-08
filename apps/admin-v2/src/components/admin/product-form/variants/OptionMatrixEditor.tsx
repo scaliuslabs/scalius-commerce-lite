@@ -1010,6 +1010,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
 
 OptionMatrixEditor.displayName = "OptionMatrixEditor";
 
+/** The option types buyers choose by look: their values take a colour or image swatch. */
+const SWATCH_OPTION_TYPES: ReadonlySet<ProductOptionStandardMapping> = new Set(["color", "pattern", "material"]);
+
 // The swatch editor loads only when a merchant opens it (product routes stay within their budget).
 const OptionSwatchPicker = React.lazy(() => import("./OptionSwatchPicker"));
 
@@ -1139,10 +1142,11 @@ function OptionRow({ readOnly, option, index, canMoveUp, canMoveDown, onMove, on
           <div className="flex flex-wrap gap-1">
             {option.values.map((value) => (
               <Badge key={value.id} variant="secondary">
-                <ValueSwatch
+                {/* Swatches are for what buyers pick by look; a size never offers one, unless it already has one to remove. */}
+                {SWATCH_OPTION_TYPES.has(option.standardMapping) || value.swatch ? <ValueSwatch
                   value={value}
                   onChange={(swatch) => onChange({ ...option, values: option.values.map((each) => (each.id === value.id ? { ...each, swatch } : each)) })}
-                />
+                /> : null}
                 {value.value}
                 <Button
                   type="button"
