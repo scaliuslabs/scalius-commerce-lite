@@ -1,3 +1,5 @@
+import { AGENT_GRANT_INACTIVE, AGENT_GRANT_INACTIVE_MESSAGE } from "@scalius/core/errors";
+
 // The dispatcher's input shape and refusal, apart from the dispatcher itself:
 // the confirmation gate and approvals run on every gated admin agent request
 // and must not load the dispatcher (and with it the full operation manifest).
@@ -29,5 +31,5 @@ export class AgentDispatchError extends Error {
  * revoked, expired or narrowed after the call was authorized.
  */
 export function agentConnectionInactive(): AgentDispatchError {
-  return new AgentDispatchError("agent_grant_inactive", "This connection is no longer active", 401);
+  return new AgentDispatchError(AGENT_GRANT_INACTIVE, AGENT_GRANT_INACTIVE_MESSAGE, 401);
 }

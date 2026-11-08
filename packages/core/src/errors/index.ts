@@ -39,6 +39,22 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+/**
+ * The one code for an agent connection that is no longer active: its grant or
+ * credential was revoked, expired or narrowed after its request was
+ * authorized. Every surface (HTTP, the operation dispatcher, MCP, approvals,
+ * handoffs, artifacts) refuses that condition with this code and message.
+ */
+export const AGENT_GRANT_INACTIVE = "grant_inactive";
+export const AGENT_GRANT_INACTIVE_MESSAGE = "This connection is no longer active";
+
+export class AgentGrantInactiveError extends AppError {
+  constructor() {
+    super(401, AGENT_GRANT_INACTIVE, AGENT_GRANT_INACTIVE_MESSAGE);
+    this.name = "AgentGrantInactiveError";
+  }
+}
+
 export class ForbiddenError extends AppError {
   constructor(message = "Forbidden") {
     super(403, "forbidden", message);

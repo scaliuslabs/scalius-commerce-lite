@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
 import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
+import { AgentGrantInactiveError } from "@scalius/core/errors";
 import { ForbiddenError, UnauthorizedError } from "../utils/api-error";
 import { isAgentRiskAllowed } from "../agent-access/types";
 import {
@@ -40,14 +41,15 @@ export const agentPrincipalMiddleware: MiddlewareHandler = async (c, next) => {
         token!,
         c.env.AGENT_TOKEN_PEPPER,
       );
-  if (!principal) throw new UnauthorizedError("Agent credential is invalid, expired, or revoked");
-  if (
-    dispatchPrincipal &&
-    (principal.ownerUserId !== dispatchPrincipal.ownerUserId ||
-      principal.grantKind !== dispatchPrincipal.grantKind)
-  ) {
-    throw new UnauthorizedError("Agent dispatch authority is no longer active");
+  // A dispatch whose grant moved since it was authorized is an inactive connection; a bearer that resolves to nothing never authenticated.
+  if (dispatchPrincipal && (
+    !principal ||
+    principal.ownerUserId !== dispatchPrincipal.ownerUserId ||
+    principal.grantKind !== dispatchPrincipal.grantKind
+  )) {
+    throw new AgentGrantInactiveError();
   }
+  if (!principal) throw new UnauthorizedError("Agent credential is invalid, expired, or revoked");
 
   const startedAt = Date.now();
   const { resolveDirectAgentOperation } = await import("../agent-access/direct-operation");

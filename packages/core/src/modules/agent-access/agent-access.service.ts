@@ -17,7 +17,7 @@ import {
 } from "@scalius/database/schema";
 import { getAllPermissionNames } from "../../auth/rbac/permissions";
 import { isSensitivePermission } from "../../auth/rbac/permission-metadata";
-import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "../../errors";
+import { AgentGrantInactiveError, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
 
 export type AgentResource = "dashboard" | "storefront";
 export type AgentPreset = "read" | "operator" | "full" | "custom";
@@ -220,7 +220,7 @@ export async function createCredentialGrant(
     // The connection creating this one was revoked, expired or narrowed since
     // its request was authorized: refused as its own authentication would be.
     if (isBatchGuardError(error, PARENT_AUTHORITY_INACTIVE)) {
-      throw new UnauthorizedError("Agent dispatch authority is no longer active");
+      throw new AgentGrantInactiveError();
     }
     throw error;
   }

@@ -8,6 +8,7 @@ import {
   agentGrants,
 } from "@scalius/database/schema";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+import { AgentGrantInactiveError } from "@scalius/core/errors";
 import { ConflictError, ForbiddenError, NotFoundError, RateLimitError, UnauthorizedError, ValidationError } from "../utils/api-error";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { getTrustedClientIp, type ClientIpRuntime } from "../utils/client-ip";
@@ -177,7 +178,7 @@ app.openapi(tokenRoute, async (c) => {
       isNull(agentCredentials.revokedAt),
       gt(agentCredentials.expiresAt, now),
     )).get();
-  if (!credential) throw new UnauthorizedError("Paired credential is no longer active");
+  if (!credential) throw new AgentGrantInactiveError();
   const decrypted = await readStoredCredentialStrict(
     device.encryptedDeliveryEnvelope,
     requireEncryptionKey(c.env),

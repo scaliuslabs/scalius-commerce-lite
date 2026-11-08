@@ -7,6 +7,7 @@ import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { AgentDispatchError, type AgentOperationResult } from "../dispatch";
 import { utf8ByteLength } from "../limits";
+import { AGENT_GRANT_INACTIVE } from "@scalius/core/errors";
 
 export const AGENT_ERROR_MAX_BYTES = 600;
 
@@ -143,7 +144,7 @@ export function recoveryFor(input: {
       ...(status === 409 ? { current: null } : {}),
     };
   }
-  if (status === 401 || code === "unauthorized" || code === "grant_inactive") {
+  if (status === 401 || code === AGENT_GRANT_INACTIVE) {
     return { retryable: false, hint: "The connection is inactive or expired. Reconnect (scalius auth login, or the client's OAuth sign-in)." };
   }
   if (status === 403 || code === "operation_forbidden" || code === "wrong_resource") {

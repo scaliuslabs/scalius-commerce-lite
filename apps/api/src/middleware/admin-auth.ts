@@ -9,6 +9,7 @@ import { routedApiPath } from "../utils/routed-path";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { AgentGrantInactiveError } from "@scalius/core/errors";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
@@ -316,7 +317,7 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
             freshPrincipal.ownerUserId !== dispatchPrincipal.ownerUserId ||
             freshPrincipal.grantKind !== dispatchPrincipal.grantKind
         ) {
-            throw new UnauthorizedError("Agent dispatch authority is no longer active");
+            throw new AgentGrantInactiveError();
         }
         agentPrincipal = freshPrincipal;
     }

@@ -15,6 +15,7 @@ import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from 
 import type { AgentPrincipal } from "../agent-access/types";
 import { enforceAgentRateLimit } from "../middleware/agent-request-boundary";
 import { writeAgentAuditEvent } from "../agent-access/audit";
+import { AgentGrantInactiveError } from "@scalius/core/errors";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -90,13 +91,14 @@ async function resolveArtifactPrincipal(c: Context<{ Bindings: Env }>): Promise<
     : bearer && parseAgentCredential(bearer)
       ? await resolveAgentPrincipalFromBearer(c.get("db"), bearer, c.env.AGENT_TOKEN_PEPPER)
       : null;
-  if (!principal) throw new UnauthorizedError("A live agent credential is required");
   if (internal && (
+    !principal ||
     principal.ownerUserId !== internal.ownerUserId ||
     principal.authorityRevision !== internal.authorityRevision
   )) {
-    throw new UnauthorizedError("Agent artifact authority is no longer active");
+    throw new AgentGrantInactiveError();
   }
+  if (!principal) throw new UnauthorizedError("A live agent credential is required");
   return principal;
 }
 

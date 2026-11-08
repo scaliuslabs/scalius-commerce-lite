@@ -10,6 +10,7 @@ import { getDb } from "@scalius/database/client";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
 import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import { loadAgentAccessBackend } from "../backend";
+import { agentConnectionInactive } from "../dispatch-error";
 import {
   AgentDispatchError,
   buildAgentRequiredClientAction,
@@ -223,7 +224,7 @@ async function principalOrThrow(deps: McpServerDependencies): Promise<AgentPrinc
   } catch {
     principal = null;
   }
-  if (!principal) throw new AgentDispatchError("unauthorized", "Agent grant is inactive", 401);
+  if (!principal) throw agentConnectionInactive();
   return principal;
 }
 
