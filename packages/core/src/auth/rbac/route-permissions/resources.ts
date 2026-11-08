@@ -22,6 +22,7 @@ const taxes = { permission: PERMISSIONS.TAXES_VIEW };
 const analytics = { permission: PERMISSIONS.DASHBOARD_ANALYTICS };
 const reviews = { permission: PERMISSIONS.REVIEWS_VIEW };
 const reviewsModerate = { permission: PERMISSIONS.REVIEWS_MODERATE };
+const staff = { permission: PERMISSIONS.STAFF_VIEW };
 
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
@@ -94,6 +95,10 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/reviews": { GET: reviews, POST: reviewsModerate },
   "/api/v1/admin/resources/reviews/*": { GET: reviews },
   "/api/v1/admin/resources/reviews/*/status": { POST: reviewsModerate },
+  // The staff directory (names and roles, never sign-in or access): its own
+  // permission outside the team area, so an app may hold it.
+  "/api/v1/admin/resources/staff": { GET: staff },
+  "/api/v1/admin/resources/staff/*": { GET: staff },
   // Price lists read and write with the catalog, as the dashboard's editor does.
   "/api/v1/admin/resources/price-lists": { GET: products, POST: productsEdit },
   "/api/v1/admin/resources/price-lists/*": { GET: products, PATCH: productsEdit, DELETE: productsEdit },

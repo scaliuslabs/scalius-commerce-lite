@@ -21,6 +21,7 @@ import { adminResourceCustomerSegmentRoutes } from "../routes/admin/resources-cu
 import { adminResourceSettingsRoutes } from "../routes/admin/resources-settings";
 import { adminResourceDigitalRoutes } from "../routes/admin/resources-digital";
 import { adminResourceReviewRoutes } from "../routes/admin/resources-reviews";
+import { adminResourceStaffRoutes } from "../routes/admin/resources-staff";
 
 export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
   routers: {
@@ -37,6 +38,7 @@ export const adminSalesParts: RouteGroupParts<"admin-sales"> = {
     adminResourceSettingsRoutes,
     adminResourceDigitalRoutes,
     adminResourceReviewRoutes,
+    adminResourceStaffRoutes,
     adminCustomerMarketingRoutes,
     adminCustomerRoutes,
     adminDiscountRoutes,

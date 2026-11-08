@@ -222,6 +222,10 @@ export const STABLE_APP_OPERATIONS = {
   "reviews.create": "dashboard.resources.reviews.create",
   "reviews.set_status": "dashboard.resources.reviews.set_status",
 
+  // ── Staff ──
+  "staff.list": "dashboard.resources.staff.list",
+  "staff.get": "dashboard.resources.staff.get",
+
   // ── Gift cards ──
   "gift_cards.list": "dashboard.resources.gift_cards.list",
   "gift_cards.get": "dashboard.resources.gift_cards.get",

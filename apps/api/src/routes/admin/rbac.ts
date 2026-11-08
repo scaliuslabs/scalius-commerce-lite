@@ -406,14 +406,24 @@ app.openapi(updateRoleRoute, async (c) => {
         const permRecords = data.permissions === undefined ? null : await permissionRowsFor(db, data.permissions);
 
         if (data.displayName || data.description !== undefined) {
-            await db
-                .update(roles)
-                .set({
-                    ...(data.displayName && { displayName: data.displayName }),
-                    ...(data.description !== undefined && { description: data.description }),
-                    updatedAt: new Date()
-                })
-                .where(eq(roles.id, roleId));
+            const changedAt = new Date();
+            await db.batch([
+                db
+                    .update(roles)
+                    .set({
+                        ...(data.displayName && { displayName: data.displayName }),
+                        ...(data.description !== undefined && { description: data.description }),
+                        updatedAt: changedAt
+                    })
+                    .where(eq(roles.id, roleId)),
+                // The staff directory shows each holder's roles by display
+                // name: a rename changes their record, so a sync by
+                // updatedSince (staff.list) reads it again.
+                db
+                    .update(user)
+                    .set({ updatedAt: changedAt })
+                    .where(inArray(user.id, db.select({ id: userRoles.userId }).from(userRoles).where(eq(userRoles.roleId, roleId)))),
+            ] as const);
         }
 
         if (permRecords) {

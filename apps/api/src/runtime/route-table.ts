@@ -155,6 +155,8 @@ export const ROUTE_TABLE = [
   // Digital files and key pools, and a buyer's access to them.
   { mount: "/admin/resources", router: "adminResourceDigitalRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceReviewRoutes", group: "admin-sales" },
+  // The staff directory an app reads to attribute work (read_staff).
+  { mount: "/admin/resources", router: "adminResourceStaffRoutes", group: "admin-sales" },
   { mount: "/admin/categories", router: "adminCategoryRoutes", group: "admin-catalog" },
   { mount: "/admin/brands", router: "adminBrandRoutes", group: "admin-catalog" },
   { mount: "/admin/price-lists", router: "adminPriceListRoutes", group: "admin-catalog" },
