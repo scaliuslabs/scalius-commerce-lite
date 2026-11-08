@@ -33,6 +33,8 @@ const paymentDialogCopy = defineMessages({
     "refund.help": "Money goes back to the original payment. Items aren't restocked.",
     "refund.manualHelp": "This was paid by cash or bank transfer, so Scalius can't send it back. Pay the customer back first, then record it.",
     "refund.mixedHelp": "{manual} of this was paid by cash or bank transfer: pay that back to the customer yourself first. The other {other} goes back to the original payment.",
+    // Before an amount is entered: no amount is named, and nothing is said to have gone back.
+    "refund.mixedHelpAny": "Part of this order was paid by cash or bank transfer: that part you pay back to the customer yourself. The rest goes back to the original payment.",
     "refund.amount": "Amount",
     "refund.max": "Up to {amount}",
     "refund.reason": "Reason",
@@ -76,6 +78,7 @@ const paymentDialogCopy = defineMessages({
     "refund.help": "টাকা আগের পেমেন্ট মাধ্যমে ফেরত যাবে। স্টক ফেরত যাবে না।",
     "refund.manualHelp": "এটি ক্যাশ বা ব্যাংক ট্রান্সফারে পরিশোধ হয়েছে, তাই Scalius টাকা ফেরত পাঠাতে পারে না। আগে কাস্টমারকে টাকা দিন, তারপর রেকর্ড করুন।",
     "refund.mixedHelp": "এর মধ্যে {manual} ক্যাশ বা ব্যাংক ট্রান্সফারে পরিশোধ হয়েছে: আগে সেটি নিজে কাস্টমারকে ফেরত দিন। বাকি {other} আগের পেমেন্ট মাধ্যমে ফেরত যাবে।",
+    "refund.mixedHelpAny": "এই অর্ডারের একটি অংশ ক্যাশ বা ব্যাংক ট্রান্সফারে পরিশোধ হয়েছে: সেই অংশ আপনি নিজে কাস্টমারকে ফেরত দেবেন। বাকিটা আগের পেমেন্ট মাধ্যমে ফেরত যাবে।",
     "refund.amount": "পরিমাণ",
     "refund.max": "সর্বোচ্চ {amount}",
     "refund.reason": "কারণ",
