@@ -19,6 +19,10 @@ import {
 export type { StorefrontIslandContext as IslandContext };
 export type { StorefrontSearchSuggestion as SearchSuggestion } from "@scalius/shared/plugins/storefront-protocol";
 export { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
+export type { StorefrontIslandEvents as IslandEvents } from "@scalius/shared/plugins/storefront-protocol";
+export type { BuyerEvent, BuyerEventData, BuyerEventName, PixelEventName } from "@scalius/shared/plugins/buyer-events";
+/** A visitor's variant of an experiment (`context.visitorId()`): the same answer in the island and the app's pixel. */
+export { experimentVariant } from "@scalius/shared/plugins/buyer-events";
 
 export function defineIsland<Props = unknown>(
   mount: (element: HTMLElement, props: Props, context: StorefrontIslandContext) => void | (() => void),

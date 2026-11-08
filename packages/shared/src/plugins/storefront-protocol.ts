@@ -285,6 +285,8 @@ export const STOREFRONT_COMPONENT_LIMITS = {
   islandBytes: 64 * 1024,
   /** All islands together. */
   islandsBytes: 192 * 1024,
+  /** The pixel (`storefront/pixel.js`), inlined into its frame. */
+  pixelBytes: 64 * 1024,
   /** One public file (a font, an image). */
   publicFileBytes: 512 * 1024,
   /** All public files together. */

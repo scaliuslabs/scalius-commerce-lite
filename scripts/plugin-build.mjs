@@ -346,6 +346,9 @@ export function smokeSettings(contract, schema, store = null) {
  *   defaults without throwing and every skin keeping its target's embed rule;
  * - `src/islands/<name>.(ts|tsx|js|jsx)` → `storefront/islands/<name>.js`, one
  *   per declared island, minified for browsers;
+ * - `src/pixel.(ts|js)` → `storefront/pixel.js` when the manifest declares a
+ *   pixel: one minified script whose default export is `definePixel()`
+ *   (built as an IIFE into `__scaliusPixel`, which its frame starts);
  * - `src/storefront.css` → `storefront/styles.css` when the manifest declares
  *   a stylesheet (`url(../public/…)` points at the app's public files);
  * - `public/**` → `storefront/public/**`: fonts and images, checked like
@@ -486,6 +489,35 @@ export async function packStorefront(contract, manifest, source) {
   }
   if (islandBytes > limits.islandsBytes) fail(`the islands are ${islandBytes} bytes together; the limit is ${limits.islandsBytes}.`);
 
+  // The pixel (buyer-events.ts): a classic script its sandboxed frame inlines, never a module of the store's origin.
+  const pixelEntry = firstExisting(join(directory, "src"), "pixel");
+  if (storefront.pixel && !pixelEntry) fail("the manifest declares storefront.pixel: write src/pixel.ts (export default definePixel(…)).");
+  if (!storefront.pixel && pixelEntry) fail("src/pixel exists: declare storefront.pixel in the manifest.");
+  if (pixelEntry) {
+    const build = (format) => esbuild.build({
+      entryPoints: [pixelEntry],
+      plugins: [sdkResolution()],
+      absWorkingDir: root,
+      bundle: true,
+      write: false,
+      format,
+      ...(format === "iife" ? { globalName: "__scaliusPixel" } : {}),
+      platform: "browser",
+      target: ["es2022", "chrome111", "safari16.4", "firefox115"],
+      minify: true,
+      metafile: true,
+      legalComments: "none",
+      charset: "utf8",
+      logLevel: "silent",
+    });
+    const checked = await build("esm");
+    if (!Object.values(checked.metafile.outputs)[0]?.exports?.includes("default")) fail("src/pixel has no default export (export default definePixel(…)).");
+    const code = (await build("iife")).outputFiles[0].text;
+    const bytes = Buffer.byteLength(code);
+    if (bytes > limits.pixelBytes) fail(`pixel.js is ${bytes} bytes; the limit is ${limits.pixelBytes}.`);
+    files.push(storefrontFile(contract, contract.STOREFRONT_PIXEL_FILE, Buffer.from(code)));
+  }
+
   // The stylesheet.
   const cssEntry = join(directory, "src", "storefront.css");
   if (storefront.stylesheet && !existsSync(cssEntry)) fail("the manifest declares a stylesheet: write src/storefront.css.");
@@ -520,7 +552,7 @@ export async function packStorefront(contract, manifest, source) {
     files.push(storefrontFile(contract, contract.storefrontPublicFile(path), bytes));
   }
   if (publicBytes > limits.publicBytes) fail(`public/ is ${publicBytes} bytes; the limit is ${limits.publicBytes}.`);
-  if (files.length > 0 && !needsModule && storefront.islands.length === 0 && !storefront.stylesheet) {
+  if (publicFiles.length > 0 && !needsModule && storefront.islands.length === 0 && !storefront.stylesheet) {
     fail("public/ files are served only with storefront components: declare a component section or product block, a skin, an island or a stylesheet.");
   }
   return files;
@@ -534,7 +566,7 @@ export async function packStorefront(contract, manifest, source) {
  */
 function prebuiltStorefront(contract, directory, manifest, fail) {
   const prebuiltDir = join(directory, "storefront");
-  const hasSources = firstExisting(join(directory, "src"), "storefront") || existsSync(join(directory, "src", "storefront.css")) || existsSync(join(directory, "src", "islands"));
+  const hasSources = firstExisting(join(directory, "src"), "storefront") || firstExisting(join(directory, "src"), "pixel") || existsSync(join(directory, "src", "storefront.css")) || existsSync(join(directory, "src", "islands"));
   if (!existsSync(prebuiltDir) || hasSources) return null;
   const files = listFiles(prebuiltDir).map((path) => {
     if (!contract.STOREFRONT_FILE_PATH.test(path)) fail(`storefront/${path} is not a storefront file.`);
@@ -544,6 +576,7 @@ function prebuiltStorefront(contract, directory, manifest, fail) {
   if (contract.pluginHasStorefrontModule(manifest.storefront) !== has(contract.STOREFRONT_MODULE_FILE)) fail("storefront/storefront.js does not match the manifest's component sections, product blocks and skins.");
   if (manifest.storefront.stylesheet !== has(contract.STOREFRONT_STYLESHEET_FILE)) fail("storefront/styles.css does not match the manifest's stylesheet.");
   for (const island of manifest.storefront.islands) if (!has(contract.storefrontIslandFile(island.name))) fail(`storefront/islands/${island.name}.js is missing.`);
+  if (Boolean(manifest.storefront.pixel) !== has(contract.STOREFRONT_PIXEL_FILE)) fail("storefront/pixel.js does not match the manifest's pixel.");
   for (const file of files) {
     if (file.path.startsWith("public/")) {
       const problem = contract.checkStorefrontPublicFile(file.path.slice("public/".length), file.bytes);
@@ -776,7 +809,7 @@ export function writeStorefrontGenerated(lockfile, packedBundled) {
       if (writeIfChanged(join(dir, "storefront.gen.d.ts"), declaration)) written.push(join(dir, "storefront.gen.d.ts"));
     }
     const fileEntries = files.map((file) => {
-      const text = /^(?:islands\/.*\.js|styles\.css)$/.test(file.path);
+      const text = /^(?:islands\/.*\.js|pixel\.js|styles\.css)$/.test(file.path);
       const body = text ? `text: ${JSON.stringify(Buffer.from(file.bytes).toString("utf8"))}` : `base64: ${JSON.stringify(Buffer.from(file.bytes).toString("base64"))}`;
       return `  ${JSON.stringify(file.path)}: { type: ${JSON.stringify(file.contentType)}, ${body} },`;
     });
