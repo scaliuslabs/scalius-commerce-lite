@@ -3118,5 +3118,107 @@
   "from": "56c029947a23dd24",
   "change": "digital_access.revoke: the write_orders scope no longer covers it.",
   "reason": "Pre-release scope split: giving and taking away a buyer's downloads and licence keys moves to its own write_digital_access scope (orders.manage_digital_access, migration 0205, the permission the dashboard's reset and revoke now need too). Under write_orders, the undoable revoke made every order app, even one that only tags orders, ask the merchant to approve something destructive."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.adjust output data.giftCard.recipientName: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.adjust output data.giftCard.recipientEmail: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.adjust output data.giftCard.recipientPhone: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.adjust output data.giftCard.transactions: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.create output data.giftCard.recipientName: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.create output data.giftCard.recipientEmail: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.create output data.giftCard.recipientPhone: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.create output data.giftCard.transactions: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.get output data.giftCard.recipientName: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.get output data.giftCard.recipientEmail: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.get output data.giftCard.recipientPhone: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.get output data.giftCard.transactions: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.list output data.giftCards[].recipientName: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.update output data.giftCard.recipientName: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.update output data.giftCard.recipientEmail: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.update output data.giftCard.recipientPhone: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "56c029947a23dd24",
+  "change": "gift_cards.update output data.giftCard.transactions: the field was removed.",
+  "reason": "Pre-lock (Nov 9): a truncated gift_card or gift_card_transaction delivery points at gift_cards.get, which answered another shape. Every gift card read and write now answers the sealed `gift_card` representation the webhook carries: the recipient is one protected `recipient` object (name, email, phone), and the ledger moves out of the card to `transactions` beside it (gift_cards.get and the writes), each entry the sealed `gift_card_transaction` representation (with giftCardId and currency). gift_cards.list answers the same card."
  }
 ]

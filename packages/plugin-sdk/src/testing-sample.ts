@@ -16,9 +16,8 @@ import { contractSchemaIssue, stableContract, type ContractSchema, type StableCo
 
 /**
  * The contract schema each representation type is: the `data` of a webhook
- * about that resource, as its stable read returns it. A type whose read
- * answers another shape (`GiftCardResource`, `ObjectRecord`) is not here; take
- * that schema by name.
+ * about that resource, as the stable read its truncation hint names answers
+ * it. A new representation type fails to compile until it is named here.
  */
 export const SAMPLE_REPRESENTATION_SCHEMAS = {
   order: "OrderResource",
@@ -37,7 +36,10 @@ export const SAMPLE_REPRESENTATION_SCHEMAS = {
   review: "ReviewResource",
   conversation: "ConversationResource",
   payout: "PayoutResource",
-} as const satisfies Partial<Record<EventRepresentationType, string>>;
+  gift_card: "GiftCardResource",
+  gift_card_transaction: "GiftCardTransactionResource",
+  object: "ObjectRecord",
+} as const satisfies Record<EventRepresentationType, string>;
 
 /** A representation type `sample` builds and types as its `EventRepresentation`. */
 export type SampleRepresentationType = keyof typeof SAMPLE_REPRESENTATION_SCHEMAS;

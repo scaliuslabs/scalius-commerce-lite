@@ -132,7 +132,7 @@ function trashFilter(column: SQLWrapper, trashed: boolean, namedRows: boolean): 
 }
 
 /** The `ids` filter as one condition on the list's id column (the query schema already refused a bad list). */
-function idsCondition(column: Parameters<typeof inJsonArray>[0], value: string | undefined): SQL | null {
+export function idsCondition(column: Parameters<typeof inJsonArray>[0], value: string | undefined): SQL | null {
   const ids = value === undefined ? null : parseListIds(value);
   return ids ? inJsonArray(column, ids) : null;
 }

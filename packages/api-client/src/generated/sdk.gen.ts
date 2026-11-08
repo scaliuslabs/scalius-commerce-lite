@@ -2611,7 +2611,7 @@ export const postApiV1AdminResourcesReturnsByIdCancel = <ThrowOnError extends bo
 /**
  * List discounts, least recently updated first
  *
- * Code and automatic discounts as webhooks carry them (DiscountSummary: status, schedule, code and redemption counts, revision), archived ones included, in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor; read a discount's rules and codes with discounts.get.
+ * Code and automatic discounts as webhooks carry them (DiscountSummary: status, schedule, code and redemption counts, revision), archived ones included, in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor, or read named discounts with ids; read a discount's rules and codes with discounts.get.
  */
 export const getApiV1AdminResourcesDiscounts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminResourcesDiscountsData, ThrowOnError>): RequestResult<GetApiV1AdminResourcesDiscountsResponses, GetApiV1AdminResourcesDiscountsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminResourcesDiscountsResponses, GetApiV1AdminResourcesDiscountsErrors, ThrowOnError>({ url: '/api/v1/admin/resources/discounts', ...options });
 

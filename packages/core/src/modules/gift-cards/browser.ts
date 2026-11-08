@@ -2,16 +2,13 @@
 // index). Safe to import from the dashboard and from any domain.
 // B4 fills the gift-cards domain; these names are the contract it keeps.
 
-/** `gift_cards.status`. Expiry is a separate fact (`expires_at`), not a status. */
-export const GIFT_CARD_STATUSES = ["active", "disabled"] as const;
+// The sealed state lists (`gift_cards.status`, `.source`, `gift_card_transactions.kind`),
+// as the gift card representations carry them.
+import { GIFT_CARD_SOURCES, GIFT_CARD_STATUSES, GIFT_CARD_TRANSACTION_KINDS } from "@scalius/shared/resource-states";
+
+export { GIFT_CARD_SOURCES, GIFT_CARD_STATUSES, GIFT_CARD_TRANSACTION_KINDS };
 export type GiftCardStatus = (typeof GIFT_CARD_STATUSES)[number];
-
-/** `gift_cards.source`: sold as a product, issued by staff, or refunded as store credit. */
-export const GIFT_CARD_SOURCES = ["purchase", "manual", "refund"] as const;
 export type GiftCardSource = (typeof GIFT_CARD_SOURCES)[number];
-
-/** `gift_card_transactions.kind`; the ledger is append-only and the balance is its projection. */
-export const GIFT_CARD_TRANSACTION_KINDS = ["issue", "redeem", "release", "refund", "adjust"] as const;
 export type GiftCardTransactionKind = (typeof GIFT_CARD_TRANSACTION_KINDS)[number];
 
 /** Limits from Wave B design §4 and §11.3. */

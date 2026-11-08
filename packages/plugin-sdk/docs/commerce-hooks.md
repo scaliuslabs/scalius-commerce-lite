@@ -20,7 +20,7 @@ Contact data is protected in one place and projected everywhere:
 ### Event payloads
 
 - An event's `facts` carry ids, states and quantities. Never contact data, credentials or money.
-- A webhook delivery adds `data`: the resource's sealed representation (`EVENT_REPRESENTATION_SCHEMAS` in `@scalius/shared/events`) for one of 17 resource types: order, return, product, variant, customer, purchase order, inventory transfer, fulfillment, refund, shipment, payment, checkout, discount, review, gift card, gift card transaction and object.
+- A webhook delivery adds `data`: the resource's sealed representation (`EVENT_REPRESENTATION_SCHEMAS` in `@scalius/shared/events`) for one of 19 resource types: order, return, product, variant, customer, purchase order, inventory transfer, fulfillment, refund, shipment, payment, checkout, discount, review, gift card, gift card transaction, object, conversation and payout.
 - A representation has ids, states, ISO 8601 times, money as integer minor units beside its currency, lines by id and quantity (at most 500 listed) and discount codes as a count.
 - Representations only grow within `EVENTS_API_VERSION` (`2026-10`): a field may be added, never removed, retyped, made nullable or stripped of its protection. Published schemas never close an object, so tolerate fields you do not know.
 - App event handlers get facts only. Read the resource with `ctx.api` (`orders.get` returns the same representation).
@@ -199,7 +199,7 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
   - The same key for a different request is 422 `idempotency_key_reused`. One still running is 409 `idempotency_in_progress`.
   - If the first answer was lost, a repeat after two minutes never acts twice: a keyed write answers its first result, a revision-guarded write refuses as stale, and a create with no key of its own answers 409 `idempotency_outcome_unknown` (read to check, and create with a new key only if it is missing).
   - No request body carries a key.
-- **Revision preconditions.** A write that is not a create takes the revision it was based on (`expectedRevision`, `expectedVersion`, `expectedAggregateRevision` or `expectedStockVersion`). A stale value is 409 and changes nothing. A few writes take none yet; adding one later is additive.
+- **Revision preconditions.** A write that is not a create takes the revision it was based on (`expectedRevision`, or `expectedStockVersion` for a SKU's stock). A stale value is 409 and changes nothing. A few writes take none yet; adding one later is additive.
 - **Contact data.** Protected fields read `null` without their scope; filtering by them is refused (`contact_scope_required`).
 - **Named refusals.** A refusal names what happened, so an app can tell a stale read from a lost race from a mistake:
   - a stale revision: `order_revision_conflict`, `return_revision_conflict`, `segment_revision_conflict`, `supplier_revision_conflict`, `purchase_order_revision_conflict`, `inventory_transfer_revision_conflict` (read again, then retry with the new revision);
@@ -254,7 +254,7 @@ The stable operations (`stableContract.operations` in `@scalius/plugin-sdk/testi
 
 **Apps sync products.** `products.create` makes a product with options and SKUs, with minor-unit prices and stock 0. Quantities move through `variants.bulk_set_stock` or `inventory.*` under `write_inventory`. `products.update` patches under `expectedRevision`.
 
-**Gift cards** (`read_gift_cards`, Sensitive `write_gift_cards`) issue, adjust and update under `expectedVersion`. The code never reaches the app; the store delivers it to the owning customer. What one app issues and tops up a day stays within the merchant's limit (403 `app_gift_card_limit`).
+**Gift cards** (`read_gift_cards`, Sensitive `write_gift_cards`) issue, adjust and update under `expectedRevision`. Each answers `{ giftCard, transactions }`: the card as a `gift_card` webhook carries it and its newest 200 ledger entries, each as a `gift_card_transaction` webhook carries it; `gift_cards.list` lists the same cards. The code never reaches the app; the store delivers it to the owning customer. What one app issues and tops up a day stays within the merchant's limit (403 `app_gift_card_limit`).
 
 **The inbox** (Sensitive `read_conversations`, `write_conversations`). Threads are order, store and chat-channel threads (`channel`: whatsapp, messenger, …), synced by `updatedAt`. `conversations.create_message` posts a public reply (the thread then waits on the buyer) or an internal note; the line names your app. A public reply in a chat thread is refused (422 `conversation_channel_unavailable`) while its messaging app is not ready. Handle `conversation.message_received` (facts: `conversationId`, `messageId`, `seq`, `channel`) to react to buyers.
 

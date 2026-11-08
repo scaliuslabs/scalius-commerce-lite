@@ -2709,8 +2709,10 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "active",
+      "disabled"
+     ]
     },
     "currency": {
      "type": "string",
@@ -2729,8 +2731,11 @@
     },
     "source": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "purchase",
+      "manual",
+      "refund"
+     ]
     },
     "sourceOrderId": {
      "nullable": true,
@@ -2772,12 +2777,25 @@
       "phone"
      ]
     },
+    "message": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
+    "note": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
+    },
     "expiresAt": {
      "nullable": true,
      "type": "string",
      "minLength": 1,
      "maxLength": 40,
      "format": "date-time"
+    },
+    "expired": {
+     "type": "boolean"
     },
     "revision": {
      "type": "integer",
@@ -2808,7 +2826,10 @@
     "sourceOrderId",
     "customerId",
     "recipient",
+    "message",
+    "note",
     "expiresAt",
+    "expired",
     "revision",
     "createdAt",
     "updatedAt"
@@ -2829,8 +2850,13 @@
     },
     "kind": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "issue",
+      "redeem",
+      "release",
+      "refund",
+      "adjust"
+     ]
     },
     "currency": {
      "type": "string",
@@ -2855,8 +2881,16 @@
     },
     "actorType": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "system",
+      "admin",
+      "customer"
+     ]
+    },
+    "reason": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 4000
     },
     "createdAt": {
      "type": "string",
@@ -2874,6 +2908,7 @@
     "balanceAfterMinor",
     "orderId",
     "actorType",
+    "reason",
     "createdAt"
    ]
   },
@@ -2885,7 +2920,7 @@
      "minLength": 1,
      "maxLength": 128
     },
-    "type": {
+    "typeId": {
      "type": "string",
      "minLength": 1,
      "maxLength": 192
@@ -2897,17 +2932,30 @@
     },
     "status": {
      "type": "string",
-     "minLength": 1,
-     "maxLength": 64
+     "enum": [
+      "active",
+      "draft",
+      "published"
+     ]
+    },
+    "displayName": {
+     "type": "string",
+     "maxLength": 4000
+    },
+    "data": {
+     "type": "object",
+     "additionalProperties": {},
+     "description": "Field values by key, typed as the custom-field HTTP contract: money as { amountMinor, currency } (integer minor units of the store currency)."
+    },
+    "position": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
     },
     "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
      "maximum": 9007199254740991
-    },
-    "data": {
-     "type": "object",
-     "additionalProperties": {}
     },
     "createdAt": {
      "type": "string",
@@ -2924,11 +2972,13 @@
    },
    "required": [
     "id",
-    "type",
+    "typeId",
     "handle",
     "status",
-    "revision",
+    "displayName",
     "data",
+    "position",
+    "revision",
     "createdAt",
     "updatedAt"
    ]

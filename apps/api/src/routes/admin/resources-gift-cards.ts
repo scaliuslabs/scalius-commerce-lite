@@ -23,7 +23,6 @@ import {
   adjustGiftCardBalance,
   appGiftCardLimitError,
   buildAppGiftCardValueStatements,
-  getGiftCardForStaff,
   getStaffGiftCardSummary,
   giftCardExpiryFromMonths,
   isAppGiftCardLimitError,
@@ -33,7 +32,6 @@ import {
   parseGiftCardRecipientStrict,
   readAppGiftCardValueToday,
   updateGiftCardForStaff,
-  type StaffGiftCardSummary,
 } from "@scalius/core/modules/gift-cards";
 import { buildNotificationOutboxInsert } from "@scalius/core/modules/notifications";
 import { priceIncrementForCurrency, readGiftCardSettings } from "@scalius/core/modules/settings";
@@ -44,10 +42,11 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 import { isIncrementMultipleMinor, MAX_MINOR_AMOUNT, priceIncrementMessage } from "@scalius/shared/money";
 import { created, ok } from "../../utils/api-response";
-import { ForbiddenError, ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
+import { ForbiddenError, NotFoundError, ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
-import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
-import { protectedField } from "../../schemas/protected";
+import { conflictResponse, errorResponses, namedSharedSchema, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
+import { GIFT_CARD_TRANSACTIONS_LISTED, readGiftCardRepresentation, readGiftCardRepresentations } from "../../events/representations";
 import { notificationSender } from "../../background/notification-sender";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
 import { requestAppId, requestStaffId } from "./request-actor";
@@ -59,90 +58,18 @@ app.use("*", async (c, next) => {
   c.header("Cache-Control", "private, no-store");
 });
 
-const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
-const isoTimestamp = z.string().openapi({ format: "date-time" });
+// A card (listed, read or written) and its ledger entries are the sealed
+// representations a `gift_card` and a `gift_card_transaction` webhook
+// delivery carry, so a truncated delivery's fetch hint (gift_cards.get)
+// answers the same shapes.
+const GiftCardTransactionResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.gift_card_transaction, "GiftCardTransactionResource");
+const GiftCardResource = namedSharedSchema(EVENT_REPRESENTATION_SCHEMAS.gift_card, "GiftCardResource");
 
-const giftCardSummaryShape = {
-  id: z.string(),
-  last4: z.string().openapi({ description: "The code's last four characters; the code itself never leaves the store." }),
-  currency: z.string().length(3),
-  initialAmountMinor: z.number().int().openapi({ description: "The value it was issued with, in minor units of `currency`." }),
-  balanceMinor: z.number().int().openapi({ description: "What is left to spend, in minor units of `currency`." }),
-  status: z.enum(["active", "disabled"]),
-  expiresAt: isoTimestamp.nullable(),
-  expired: z.boolean(),
-  source: z.enum(["purchase", "manual", "refund"]),
-  customerId: z.string().nullable().openapi({ description: "The customer who owns it, if any." }),
-  recipientName: protectedField("name", z.string().nullable()),
-  revision: z.number().int().positive().openapi({ description: "Send it as `expectedRevision` to change the card; every balance movement advances it." }),
-  createdAt: isoTimestamp,
-};
-
-const GiftCardSummaryResource = z.object(giftCardSummaryShape).openapi("GiftCardSummaryResource");
-
-const GiftCardTransactionResource = z.object({
-  id: z.string(),
-  kind: z.enum(["issue", "redeem", "release", "refund", "adjust"]),
-  amountMinor: z.number().int().openapi({ description: "Signed: positive adds value, negative spends it, in minor units of the card's `currency`." }),
-  balanceAfterMinor: z.number().int(),
-  orderId: z.string().nullable(),
-  actorType: z.enum(["system", "admin", "customer"]),
-  reason: z.string().nullable(),
-  createdAt: isoTimestamp,
-}).openapi("GiftCardTransactionResource");
-
-// One flat object (not an extension), so `currency` sits beside every amount.
-const GiftCardResource = z.object({
-  ...giftCardSummaryShape,
-  recipientEmail: protectedField("email", z.string().nullable()),
-  recipientPhone: protectedField("phone", z.string().nullable()),
-  message: z.string().nullable().openapi({ description: "The message the recipient reads with the card." }),
-  note: z.string().nullable().openapi({ description: "The store's own note; buyers never see it." }),
-  sourceOrderId: z.string().nullable().openapi({ description: "The order it was bought or refunded on, if any." }),
-  transactions: z.array(GiftCardTransactionResource).openapi({ description: "Its ledger, in minor units of `currency`." }),
-}).openapi("GiftCardResource");
-
-type GiftCardSummaryResourceValue = z.infer<typeof GiftCardSummaryResource>;
-type GiftCardResourceValue = z.infer<typeof GiftCardResource>;
-
-function summaryResource(card: StaffGiftCardSummary): GiftCardSummaryResourceValue {
-  return {
-    id: card.id,
-    last4: card.last4,
-    currency: card.currencyCode,
-    initialAmountMinor: card.initialAmountMinor,
-    balanceMinor: card.balanceMinor,
-    status: card.status,
-    expiresAt: card.expiresAt === null ? null : iso(card.expiresAt),
-    expired: card.expired,
-    source: card.source,
-    customerId: card.customer?.id ?? null,
-    recipientName: card.recipientName,
-    revision: card.version,
-    createdAt: iso(card.createdAt),
-  };
-}
-
-async function readGiftCardResource(c: Context, giftCardId: string): Promise<GiftCardResourceValue> {
-  const { giftCard, transactions } = await getGiftCardForStaff(c.get("db"), giftCardId);
-  return {
-    ...summaryResource(giftCard),
-    recipientEmail: giftCard.recipientEmail,
-    recipientPhone: giftCard.recipientPhone,
-    message: giftCard.message,
-    note: giftCard.note,
-    sourceOrderId: giftCard.sourceOrder?.id ?? null,
-    transactions: transactions.map((transaction) => ({
-      id: transaction.id,
-      kind: transaction.kind,
-      amountMinor: transaction.amountMinor,
-      balanceAfterMinor: transaction.balanceAfterMinor,
-      orderId: transaction.orderId,
-      actorType: transaction.actorType,
-      reason: transaction.reason,
-      createdAt: iso(transaction.createdAt),
-    })),
-  };
+/** The card and its newest ledger entries ({@link GIFT_CARD_TRANSACTIONS_LISTED}), newest first. */
+async function readGiftCardResource(c: Context, giftCardId: string) {
+  const read = await readGiftCardRepresentation(c.get("db"), giftCardId);
+  if (!read) throw new NotFoundError("Gift card not found.");
+  return read;
 }
 
 /** The staff member a write is recorded as; null for an app, which the ledger records as itself (`appId`). */
@@ -196,7 +123,10 @@ const valueKeyHeaders = z.object({
   }),
 });
 const expectedRevision = z.number().int().positive().openapi({ description: "The card's `revision` you read; a card changed since is refused with 409." });
-const giftCardEnvelope = successEnvelope(z.object({ giftCard: GiftCardResource }));
+const giftCardEnvelope = successEnvelope(z.object({
+  giftCard: GiftCardResource,
+  transactions: z.array(GiftCardTransactionResource).openapi({ description: `The card's ledger, newest first: its newest ${GIFT_CARD_TRANSACTIONS_LISTED} entries.` }),
+}));
 const writeResponses = { ...errorResponses, 409: conflictResponse };
 
 app.openapi(createRoute({
@@ -217,7 +147,7 @@ app.openapi(createRoute({
     200: {
       description: "A page of gift cards",
       content: { "application/json": { schema: successEnvelope(z.object({
-        giftCards: z.array(GiftCardSummaryResource),
+        giftCards: z.array(GiftCardResource),
         nextCursor: z.string().nullable().openapi({ description: "Pass it as `cursor` for the next page; null on the last page." }),
       })) } },
     },
@@ -226,7 +156,7 @@ app.openapi(createRoute({
 }), async (c) => {
   const query = c.req.valid("query");
   const page = await listGiftCardsForStaff(c.get("db"), { status: query.status, cursor: query.cursor, limit: query.limit });
-  return ok(c, { giftCards: page.items.map(summaryResource), nextCursor: page.nextCursor });
+  return ok(c, { giftCards: await readGiftCardRepresentations(c.get("db"), page.items.map((card) => card.id)), nextCursor: page.nextCursor });
 });
 
 app.openapi(createRoute({
@@ -240,7 +170,7 @@ app.openapi(createRoute({
     200: { description: "The gift card", content: { "application/json": { schema: giftCardEnvelope } } },
     ...errorResponses,
   },
-}), async (c) => ok(c, { giftCard: await readGiftCardResource(c, c.req.valid("param").id) }));
+}), async (c) => ok(c, await readGiftCardResource(c, c.req.valid("param").id)));
 
 const recipientInput = z.object({
   name: z.string().trim().max(120).nullable().optional(),
@@ -329,7 +259,7 @@ app.openapi(createRoute({
     return [...appValue, insert.statement as unknown as BatchItem<"sqlite">];
   }).catch(appLimitRefusal(c, appPrincipal?.pluginId, settings.value.appDailyLimitMinor, currency.code));
   if (result.created && outboxId) await notificationSender(c)([outboxId]);
-  return created(c, { giftCard: await readGiftCardResource(c, result.giftCardId) });
+  return created(c, await readGiftCardResource(c, result.giftCardId));
 });
 
 app.openapi(createRoute({
@@ -382,7 +312,7 @@ app.openapi(createRoute({
     expectedVersion: body.expectedRevision,
     ...(limit ? { extraStatements: appValueStatements(c, limit.pluginId, body.amountMinor, limit.limitMinor) } : {}),
   }).catch(appLimitRefusal(c, limit?.pluginId, limit?.limitMinor ?? 0, store.code));
-  return ok(c, { giftCard: await readGiftCardResource(c, id) });
+  return ok(c, await readGiftCardResource(c, id));
 });
 
 app.openapi(createRoute({
@@ -422,7 +352,7 @@ app.openapi(createRoute({
     // An app never moves a card with a balance to another owner (who could reveal its code).
     ownerFixedWhileFunded: Boolean(c.get("pluginPrincipal")),
   });
-  return ok(c, { giftCard: await readGiftCardResource(c, id) });
+  return ok(c, await readGiftCardResource(c, id));
 });
 
 export { app as adminResourceGiftCardRoutes };

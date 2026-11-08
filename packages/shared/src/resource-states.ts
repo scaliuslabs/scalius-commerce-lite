@@ -37,3 +37,15 @@ export const RETURN_SOURCES = ["admin", "support_request", "cod_return_to_sender
 
 /** A shipment's state (`ShipmentResource.status`): a courier's normalized states plus the store's own booking states. */
 export const SHIPMENT_STATUSES = [...COURIER_SHIPMENT_STATUSES, "creating", "processing", "reconcile_required"] as const;
+
+/** A gift card's state (`GiftCardResource.status`). Expiry is its own fact (`expiresAt`, `expired`), not a state. */
+export const GIFT_CARD_STATUSES = ["active", "disabled"] as const;
+
+/** How a gift card came to be (`GiftCardResource.source`): sold as a product, issued by staff, or refunded as store credit. */
+export const GIFT_CARD_SOURCES = ["purchase", "manual", "refund"] as const;
+
+/** A gift card ledger entry's kind (`GiftCardTransactionResource.kind`); the ledger is append-only and the balance is its projection. */
+export const GIFT_CARD_TRANSACTION_KINDS = ["issue", "redeem", "release", "refund", "adjust"] as const;
+
+/** Who wrote a gift card ledger entry (`GiftCardTransactionResource.actorType`). */
+export const GIFT_CARD_ACTOR_TYPES = ["system", "admin", "customer"] as const;
