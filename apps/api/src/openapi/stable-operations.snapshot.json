@@ -9094,6 +9094,166 @@
     ]
    }
   },
+  "abandoned_checkouts.get": {
+   "operationId": "dashboard.resources.abandoned_checkouts.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/abandoned-checkouts/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "abandonedCheckout": {
+        "$ref": "#/components/schemas/AbandonedCheckout"
+       }
+      },
+      "required": [
+       "abandonedCheckout"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "abandoned_checkouts.list": {
+   "operationId": "dashboard.resources.abandoned_checkouts.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/abandoned-checkouts",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "open",
+        "abandoned"
+       ],
+       "description": "Only checkouts in this state; omitted, both."
+      },
+      "required": false,
+      "description": "Only checkouts in this state; omitted, both.",
+      "name": "status",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "abandonedCheckouts": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/AbandonedCheckout"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "abandonedCheckouts",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "app_content.delete": {
    "operationId": "dashboard.resources.app_content.delete",
    "method": "POST",
@@ -21025,6 +21185,217 @@
   }
  },
  "components": {
+  "AbandonedCheckout": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "checkoutId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "abandoned"
+     ]
+    },
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "name": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000,
+     "x-scalius-protected": "name"
+    },
+    "email": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000,
+     "x-scalius-protected": "email"
+    },
+    "phone": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000,
+     "x-scalius-protected": "phone"
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "presence": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 64
+    },
+    "language": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 16
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "productId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "type": "string",
+        "nullable": true,
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "title": {
+        "type": "string",
+        "maxLength": 4000
+       },
+       "options": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "name": {
+           "type": "string",
+           "maxLength": 100
+          },
+          "value": {
+           "type": "string",
+           "maxLength": 200
+          }
+         },
+         "required": [
+          "name",
+          "value"
+         ]
+        }
+       },
+       "quantity": {
+        "type": "integer"
+       },
+       "unitPriceMinor": {
+        "type": "integer"
+       },
+       "totalMinor": {
+        "type": "integer"
+       }
+      },
+      "required": [
+       "productId",
+       "variantId",
+       "title",
+       "options",
+       "quantity",
+       "unitPriceMinor",
+       "totalMinor"
+      ]
+     }
+    },
+    "subtotalMinor": {
+     "type": "integer"
+    },
+    "discountMinor": {
+     "type": "integer"
+    },
+    "shippingMinor": {
+     "type": "integer",
+     "nullable": true
+    },
+    "totalMinor": {
+     "type": "integer"
+    },
+    "marketingConsents": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "channel": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "state": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       }
+      },
+      "required": [
+       "channel",
+       "state"
+      ]
+     }
+    },
+    "recoveryUrl": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 2048
+    },
+    "recoveryExpiresAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "abandonedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "checkoutId",
+    "status",
+    "customerId",
+    "name",
+    "email",
+    "phone",
+    "currency",
+    "presence",
+    "language",
+    "lines",
+    "subtotalMinor",
+    "discountMinor",
+    "shippingMinor",
+    "totalMinor",
+    "marketingConsents",
+    "recoveryUrl",
+    "recoveryExpiresAt",
+    "abandonedAt",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "AdminCustomFieldDefinition": {
    "type": "object",
    "properties": {

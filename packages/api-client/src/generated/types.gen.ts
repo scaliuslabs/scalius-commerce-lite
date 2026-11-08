@@ -393,6 +393,29 @@ export type StorefrontHomepageSections = {
         };
     }>;
     /**
+     * The product template's part only: the product page's app components that declare object reads, each with its records for the product shown (`objects` in its props).
+     */
+    components?: Array<{
+        /**
+         * The product page's app block (`blocks.product.apps[].id`).
+         */
+        instanceId: string;
+        objects: {
+            [key: string]: {
+                records: Array<{
+                    id: string;
+                    handle: string | null;
+                    data: {
+                        [key: string]: unknown;
+                    };
+                }>;
+                fields: {
+                    [key: string]: string;
+                };
+            };
+        };
+    }>;
+    /**
      * The Objects sections' content types (only those with storefront access) and their published entries, by definition id.
      */
     objects?: Array<{
@@ -3758,6 +3781,44 @@ export type CustomerSegmentRules = {
         op: 'equals' | 'is_set' | 'is_not_set';
         value?: string;
     }>;
+};
+
+export type AbandonedCheckout = {
+    id: string;
+    checkoutId: string;
+    status: 'open' | 'abandoned';
+    customerId: string | null;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    currency: string;
+    presence: string | null;
+    language: string | null;
+    lines: Array<{
+        productId: string;
+        variantId: string | null;
+        title: string;
+        options: Array<{
+            name: string;
+            value: string;
+        }>;
+        quantity: number;
+        unitPriceMinor: number;
+        totalMinor: number;
+    }>;
+    subtotalMinor: number;
+    discountMinor: number;
+    shippingMinor: number | null;
+    totalMinor: number;
+    marketingConsents: Array<{
+        channel: string;
+        state: string;
+    }>;
+    recoveryUrl: string | null;
+    recoveryExpiresAt: string | null;
+    abandonedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type CategoryResource = {
@@ -9220,6 +9281,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                         [key: string]: unknown;
                     }>;
                 };
+                /**
+                 * Section types whose object reads bind the page's resource: their page template part is read per resource.
+                 */
+                resourceSections?: Array<string>;
                 skins: Array<{
                     id: string;
                     /**
@@ -9239,6 +9304,10 @@ export type GetApiV1StorefrontLayoutResponses = {
                     settings: Array<{
                         [key: string]: unknown;
                     }>;
+                    /**
+                     * It declares public object reads: placed on the product page, its records come with the product template's part.
+                     */
+                    reads?: true;
                 }>;
                 islands: Array<string>;
                 stylesheet: boolean;
@@ -17389,6 +17458,65 @@ export type PostApiV1AbandonedCheckoutsResponses = {
 };
 
 export type PostApiV1AbandonedCheckoutsResponse = PostApiV1AbandonedCheckoutsResponses[keyof PostApiV1AbandonedCheckoutsResponses];
+
+export type PostApiV1AbandonedCheckoutsRecoverData = {
+    body?: {
+        token: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/abandoned-checkouts/recover';
+};
+
+export type PostApiV1AbandonedCheckoutsRecoverErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AbandonedCheckoutsRecoverError = PostApiV1AbandonedCheckoutsRecoverErrors[keyof PostApiV1AbandonedCheckoutsRecoverErrors];
+
+export type PostApiV1AbandonedCheckoutsRecoverResponses = {
+    /**
+     * The checkout's lines
+     */
+    200: {
+        success: true;
+        data: {
+            presence: string | null;
+            lines: Array<{
+                productId: string;
+                variantId: string | null;
+                quantity: number;
+                title: string;
+                slug: string | null;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AbandonedCheckoutsRecoverResponse = PostApiV1AbandonedCheckoutsRecoverResponses[keyof PostApiV1AbandonedCheckoutsRecoverResponses];
 
 export type PostApiV1AbandonedCheckoutsCleanupData = {
     body?: {
@@ -30793,6 +30921,125 @@ export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses = {
 };
 
 export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponse = GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses[keyof GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses];
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only checkouts in this state; omitted, both.
+         */
+        status?: 'open' | 'abandoned';
+    };
+    url: '/api/v1/admin/resources/abandoned-checkouts';
+};
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsError = GetApiV1AdminResourcesAbandonedCheckoutsErrors[keyof GetApiV1AdminResourcesAbandonedCheckoutsErrors];
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsResponses = {
+    /**
+     * A page of abandoned checkouts
+     */
+    200: {
+        success: true;
+        data: {
+            abandonedCheckouts: Array<AbandonedCheckout>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsResponse = GetApiV1AdminResourcesAbandonedCheckoutsResponses[keyof GetApiV1AdminResourcesAbandonedCheckoutsResponses];
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/abandoned-checkouts/{id}';
+};
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsByIdError = GetApiV1AdminResourcesAbandonedCheckoutsByIdErrors[keyof GetApiV1AdminResourcesAbandonedCheckoutsByIdErrors];
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsByIdResponses = {
+    /**
+     * The checkout
+     */
+    200: {
+        success: true;
+        data: {
+            abandonedCheckout: AbandonedCheckout;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesAbandonedCheckoutsByIdResponse = GetApiV1AdminResourcesAbandonedCheckoutsByIdResponses[keyof GetApiV1AdminResourcesAbandonedCheckoutsByIdResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;

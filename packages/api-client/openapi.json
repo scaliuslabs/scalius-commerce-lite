@@ -1352,6 +1352,67 @@
             "maxItems": 24,
             "description": "The app sections to show, by section id, each a component section's data. An app section missing here renders nothing."
           },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "instanceId": {
+                  "type": "string",
+                  "description": "The product page's app block (`blocks.product.apps[].id`)."
+                },
+                "objects": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "records": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "handle": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "data": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "handle",
+                            "data"
+                          ]
+                        },
+                        "maxItems": 24
+                      },
+                      "fields": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "records",
+                      "fields"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "instanceId",
+                "objects"
+              ]
+            },
+            "maxItems": 10,
+            "description": "The product template's part only: the product page's app components that declare object reads, each with its records for the product shown (`objects` in its props)."
+          },
           "objects": {
             "type": "array",
             "items": {
@@ -18932,6 +18993,217 @@
           "conditions"
         ],
         "additionalProperties": false
+      },
+      "AbandonedCheckout": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "checkoutId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "abandoned"
+            ]
+          },
+          "customerId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "name"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "email"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "phone"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "presence": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64
+          },
+          "language": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 16
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "variantId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 4000
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ]
+                  }
+                },
+                "quantity": {
+                  "type": "integer"
+                },
+                "unitPriceMinor": {
+                  "type": "integer"
+                },
+                "totalMinor": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "productId",
+                "variantId",
+                "title",
+                "options",
+                "quantity",
+                "unitPriceMinor",
+                "totalMinor"
+              ]
+            }
+          },
+          "subtotalMinor": {
+            "type": "integer"
+          },
+          "discountMinor": {
+            "type": "integer"
+          },
+          "shippingMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "totalMinor": {
+            "type": "integer"
+          },
+          "marketingConsents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "state": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "channel",
+                "state"
+              ]
+            }
+          },
+          "recoveryUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2048
+          },
+          "recoveryExpiresAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "abandonedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "checkoutId",
+          "status",
+          "customerId",
+          "name",
+          "email",
+          "phone",
+          "currency",
+          "presence",
+          "language",
+          "lines",
+          "subtotalMinor",
+          "discountMinor",
+          "shippingMinor",
+          "totalMinor",
+          "marketingConsents",
+          "recoveryUrl",
+          "recoveryExpiresAt",
+          "abandonedAt",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "CategoryResource": {
         "type": "object",
@@ -37860,6 +38132,13 @@
                                   }
                                 }
                               },
+                              "resourceSections": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Section types whose object reads bind the page's resource: their page template part is read per resource."
+                              },
                               "skins": {
                                 "type": "array",
                                 "items": {
@@ -37918,6 +38197,13 @@
                                         "type": "object",
                                         "additionalProperties": {}
                                       }
+                                    },
+                                    "reads": {
+                                      "type": "boolean",
+                                      "enum": [
+                                        true
+                                      ],
+                                      "description": "It declares public object reads: placed on the product page, its records come with the product template's part."
                                     }
                                   },
                                   "required": [
@@ -66362,6 +66648,191 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Debounced browser form snapshot telemetry stores arbitrary checkout JSON and optional buyer phone; agent storefront context is the canonical cart and checkout state.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/abandoned-checkouts/recover": {
+      "post": {
+        "tags": [
+          "Abandoned Checkouts"
+        ],
+        "summary": "Read the lines a checkout recovery link puts back in the cart",
+        "description": "The storefront's /cart/recover/{token} page posts the link's token (cr1.…) here. A valid, unexpired token of a checkout that still exists answers its lines (product, variant, quantity, title, slug) and market presence: no contact, no prices (the cart prices them again). Anything else is not found.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "token"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The checkout's lines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "presence": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "productId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "quantity": {
+                                "type": "integer"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "slug": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "productId",
+                              "variantId",
+                              "quantity",
+                              "title",
+                              "slug"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "presence",
+                        "lines"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "storefront.abandoned_checkouts_recover.recover",
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "A buyer's own recovery link (a signed token in the page URL) read by the storefront's recovery page; an agent restores a cart through the storefront cart operations.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -113958,6 +114429,344 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "customers.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/abandoned-checkouts": {
+      "get": {
+        "operationId": "dashboard.resources.abandoned_checkouts.list",
+        "tags": [
+          "App API - Abandoned checkouts"
+        ],
+        "summary": "List abandoned checkouts, least recently updated first",
+        "description": "Checkouts buyers left, as the checkout.abandoned webhook carries them (AbandonedCheckout: lines and totals in minor units, currency, market presence and language, the matching customer and their marketing consent, a signed recovery link), in (updatedAt, id) order. Filter by status (abandoned: idle an hour; open: still being filled in), start a sync with updatedSince and follow nextCursor. A checkout that became an order or aged out is not listed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "abandoned"
+              ],
+              "description": "Only checkouts in this state; omitted, both."
+            },
+            "required": false,
+            "description": "Only checkouts in this state; omitted, both.",
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of abandoned checkouts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "abandonedCheckouts": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AbandonedCheckout"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "abandonedCheckouts",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app lists checkouts buyers left: their lines, totals, customer, consent and recovery link.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/abandoned-checkouts/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.abandoned_checkouts.get",
+        "tags": [
+          "App API - Abandoned checkouts"
+        ],
+        "summary": "Get one abandoned checkout",
+        "description": "One checkout as the checkout.abandoned webhook carries it. Not found once it became an order (recovered) or aged out: read it right before a reminder, and send nothing then.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The checkout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "abandonedCheckout": {
+                          "$ref": "#/components/schemas/AbandonedCheckout"
+                        }
+                      },
+                      "required": [
+                        "abandonedCheckout"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one abandoned checkout before a reminder; not found once it became an order.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
         }
       }
     },
@@ -297970,6 +298779,22 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.sales-analytics"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.abandoned_checkouts.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.abandoned_checkouts.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.abandoned_checkouts.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.abandoned_checkouts.list"
           ]
         },
         {

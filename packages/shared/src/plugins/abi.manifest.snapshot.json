@@ -5183,6 +5183,25 @@
                 "setting"
                ],
                "additionalProperties": false
+              },
+              {
+               "type": "object",
+               "properties": {
+                "resource": {
+                 "type": "string",
+                 "enum": [
+                  "product",
+                  "collection",
+                  "category",
+                  "brand",
+                  "page"
+                 ]
+                }
+               },
+               "required": [
+                "resource"
+               ],
+               "additionalProperties": false
               }
              ]
             }
@@ -6575,6 +6594,88 @@
             "additionalProperties": false
            }
           ]
+         }
+        },
+        "reads": {
+         "default": [],
+         "maxItems": 2,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "object": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 150,
+            "pattern": "^[a-z][a-z0-9_.-]*$"
+           },
+           "where": {
+            "type": "object",
+            "propertyNames": {
+             "type": "string",
+             "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "additionalProperties": {
+             "anyOf": [
+              {
+               "type": "string",
+               "maxLength": 128
+              },
+              {
+               "type": "number"
+              },
+              {
+               "type": "boolean"
+              },
+              {
+               "type": "null"
+              },
+              {
+               "type": "object",
+               "properties": {
+                "setting": {
+                 "type": "string",
+                 "pattern": "^[a-z][a-z0-9_]{0,47}$"
+                }
+               },
+               "required": [
+                "setting"
+               ],
+               "additionalProperties": false
+              },
+              {
+               "type": "object",
+               "properties": {
+                "resource": {
+                 "type": "string",
+                 "enum": [
+                  "product",
+                  "collection",
+                  "category",
+                  "brand",
+                  "page"
+                 ]
+                }
+               },
+               "required": [
+                "resource"
+               ],
+               "additionalProperties": false
+              }
+             ]
+            }
+           },
+           "limit": {
+            "default": 24,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+           }
+          },
+          "required": [
+           "object"
+          ],
+          "additionalProperties": false
          }
         }
        },
