@@ -8,7 +8,10 @@
 // `add` creates `.claude/worktrees/<name>` on branch `wt/<name>` from the
 // local `mono-repo` (never origin, which lags behind), installs from the pnpm
 // store with no network (`pnpm install --offline --frozen-lockfile`), and
-// defines the generated-file merge driver. Nothing else is needed to test:
+// defines the generated-file merge driver, and generates the worktree's own
+// local development secrets (`scripts/dev-setup.mjs --env-only`: fresh
+// values, never copied from another checkout), so `pnpm dev --api-port <n>
+// ... --state <dir>` starts an isolated stack there. Nothing else is needed to test:
 // the Turborepo cache is shared across worktrees by Turborepo itself, the
 // migrated SQLite images live in the user cache, and the TypeScript build
 // info is per worktree under node_modules/.cache. No dev server starts.
@@ -68,6 +71,15 @@ const freeBytes = (path) => {
   const stats = statfsSync(path);
   return stats.bavail * stats.bsize;
 };
+/**
+ * Creates the checkout's local development env files with the project's own
+ * setup path. It generates new secrets in that checkout and reads no other
+ * checkout's files; its output names files, never values.
+ */
+export function provisionLocalEnv(path) {
+  run(process.execPath, [join(path, "scripts/dev-setup.mjs"), "--env-only"], { cwd: path });
+}
+
 const gib = (bytes) => `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
 
 function add(name, flags) {
@@ -85,12 +97,14 @@ function add(name, flags) {
   const install = spawnSync(resolvePnpmExecutable(), ["install", "--offline", "--frozen-lockfile", "--reporter=silent"], { cwd: path, stdio: "inherit" });
   if (install.status !== 0) throw new Error(`pnpm install --offline failed in ${path} (exit ${install.status}); the store lacks a package: run pnpm install once in ${main}.`);
   run(process.execPath, [join(path, "scripts/regen-after-merge.mjs"), "--install"], { cwd: path });
+  provisionLocalEnv(path);
   const done = Date.now();
   const used = Math.max(0, before - freeBytes(main));
   console.log([
     `Worktree ${path}`,
     `  branch ${branch} from ${base} at ${git(["rev-parse", "--short", base]).stdout.trim()}`,
     `  checkout ${((checkout - started) / 1000).toFixed(1)}s, install ${((done - checkout) / 1000).toFixed(1)}s, disk ${gib(used)} (free ${gib(freeBytes(main))})`,
+    "  local dev env generated; run a stack with: pnpm dev --api-port <n> --storefront-port <n> --admin-port <n> --state <dir>",
     `  remove with: pnpm worktree remove ${name}`,
   ].join("\n"));
 }
