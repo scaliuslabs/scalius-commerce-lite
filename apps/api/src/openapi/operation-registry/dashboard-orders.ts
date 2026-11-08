@@ -191,6 +191,8 @@ export const DASHBOARD_ORDER_OPERATIONS = {
   },
   "dashboard.orders.shipments": {},
   "dashboard.orders.timeline": {},
+  // Short-lived signed links to a buyer's files (5 minutes), for staff, their agents and the owning app.
+  "dashboard.orders.uploads": {},
   "dashboard.orders.support_request_update": {
     openWorld: true,
     revision: "optional",

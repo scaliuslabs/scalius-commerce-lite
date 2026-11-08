@@ -79,6 +79,7 @@ export const STABLE_APP_OPERATIONS = {
   "orders.mark_pickup_ready": "dashboard.orders.pickup_ready",
   "orders.release_hold": "dashboard.resources.orders.release_hold",
   "order_timeline.list": "dashboard.orders.timeline",
+  "order_uploads.list": "dashboard.orders.uploads",
   "returns.list": "dashboard.resources.returns.list",
   "returns.get": "dashboard.resources.returns.get",
   "returns.create": "dashboard.resources.returns.create",

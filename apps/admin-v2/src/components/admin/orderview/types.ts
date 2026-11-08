@@ -4,7 +4,7 @@ import type {
 import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
 import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/browser";
 import type { DeliveryMethodKind, FulfillmentRecordStatus, FulfillmentType } from "@scalius/shared/fulfilment";
-import type { CustomizationFieldType } from "@scalius/shared/line-properties";
+import type { LineInputFieldType } from "@scalius/shared/line-properties";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import type { RelatedObjectRecord } from "@scalius/shared/plugins/objects";
 
@@ -50,7 +50,7 @@ export interface OrderLineExtras {
 
 export interface OrderLineProperty {
   key: string;
-  type: CustomizationFieldType;
+  type: LineInputFieldType;
   label: string;
   value: string;
   displayValue: string;

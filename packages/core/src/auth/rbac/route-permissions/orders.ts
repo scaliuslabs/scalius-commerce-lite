@@ -67,6 +67,9 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },
+  "/api/v1/admin/orders/*/uploads": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
   "/api/v1/admin/orders/*/timeline/*": {
     DELETE: { permission: PERMISSIONS.ORDERS_EDIT },
   },

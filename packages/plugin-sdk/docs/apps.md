@@ -89,9 +89,9 @@ Every name in the manifest follows one rule, and a refusal names the rule (`Use 
 | `allowedHosts` | 20 | Hosts `ctx.http` may reach: exact, or `*.example.com`. `host:port` names one non-default port. No IP literals, no localhost. Empty means no network. |
 | `events` | 40 | Topics, `<resource>.*` or `*`. |
 | `functions` | one per point | `{ point, priority (0 to 1000, default 100), onError, reads }`. |
-| `checkout.attributes` | 10 | Typed buyer inputs (`text`, `multiline`, `number`, `boolean`, `date`, `choice`). All of an order's attributes together are at most 8 KiB. |
+| `checkout.attributes` | 10 | Typed buyer inputs (`text`, `multiline`, `number`, `boolean`, `date`, `choice`, `file`). All of an order's attributes together are at most 8 KiB. A `file` takes `accept?`, `maxBytes?`, `maxFiles?` ([buyer uploads](commerce-hooks.md#buyer-uploads)). |
 | `checkout.purchaseOptions` | 10 | `{ key, title, description? }`. Needs a checkout function, a storefront extension or a payment provider. |
-| `checkout.lineInputs` | 10 | `{ key, label, help?, type, maxLength?, options?, products? }`: per-line buyer inputs under `<app id>.<key>`, never required. Needs a checkout function, a storefront extension or a payment provider. |
+| `checkout.lineInputs` | 10 | `{ key, label, help?, type, maxLength?, options?, accept?, maxBytes?, maxFiles?, products? }`: per-line buyer inputs under `<app id>.<key>` (`file` takes [buyer uploads](commerce-hooks.md#buyer-uploads)), never required. Needs a checkout function, a storefront extension or a payment provider. |
 | `providers` | 24 in all | Grouped by port. |
 | `routes.admin`, `routes.public`, `routes.webhooks` | 40, 20, 10 | `{ name, methods?, description? }`. |
 | `cron` | 10 | `{ name, schedule }`. |

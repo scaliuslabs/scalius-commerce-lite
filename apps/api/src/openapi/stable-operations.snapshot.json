@@ -8764,6 +8764,93 @@
     ]
    }
   },
+  "order_uploads.list": {
+   "operationId": "dashboard.orders.uploads",
+   "method": "GET",
+   "path": "/api/v1/admin/orders/{id}/uploads",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 64,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 50
+      },
+      "required": false,
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "uploads": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/OrderBuyerUpload"
+        },
+        "x-scalius-app-owned": "items"
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true
+       }
+      },
+      "required": [
+       "uploads",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "variants.retire": {
    "operationId": "dashboard.product_variants.retire",
    "method": "DELETE",
@@ -24271,6 +24358,75 @@
     "revision",
     "createdAt",
     "updatedAt"
+   ]
+  },
+  "OrderBuyerUpload": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "appId": {
+     "type": "string",
+     "description": "The app whose input took the file; only it (and store readers) see it."
+    },
+    "key": {
+     "type": "string",
+     "description": "The input, `<app id>.<key>`: a line input's key on the line's `properties`, or a checkout attribute's key."
+    },
+    "target": {
+     "type": "string",
+     "enum": [
+      "line",
+      "attribute"
+     ]
+    },
+    "orderItemId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The order line of a line input; null for an attribute."
+    },
+    "filename": {
+     "type": "string"
+    },
+    "mediaType": {
+     "type": "string",
+     "enum": [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf"
+     ]
+    },
+    "sizeBytes": {
+     "type": "integer"
+    },
+    "url": {
+     "type": "string",
+     "format": "uri",
+     "description": "A signed link that streams the file until `urlExpiresAt` (5 minutes). A bearer link: never log or share it."
+    },
+    "urlExpiresAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "attachedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "appId",
+    "key",
+    "target",
+    "orderItemId",
+    "filename",
+    "mediaType",
+    "sizeBytes",
+    "url",
+    "urlExpiresAt",
+    "attachedAt"
    ]
   },
   "OrderResource": {

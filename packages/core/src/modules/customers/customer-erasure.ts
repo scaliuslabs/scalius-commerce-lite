@@ -28,7 +28,9 @@
 // - reviews on those orders: the display name becomes the fallback name;
 // - conversations of the customer and of those orders: the buyer's message
 //   bodies become ERASED_TEXT (their search terms are deleted) and a store
-//   thread's subject is cleared.
+//   thread's subject is cleared;
+// - files the buyer uploaded for those orders (buyer uploads, migration
+//   0201): their rows are deleted and their objects become delete tasks.
 //
 // Outside the database (migration 0186, `customer_erasure_tasks`): the batch
 // also records one task a buyer image to delete from storage and one a saved
@@ -78,6 +80,7 @@ import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { ERASED_TEXT, ERASURE_BLOCKING_ORDER_STATUSES } from "@scalius/shared/customer-erasure";
 import { REVIEW_FALLBACK_DISPLAY_NAME } from "@scalius/shared/reviews";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { buyerUploadErasureStatements } from "../buyer-uploads";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -273,6 +276,8 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     // The work outside the database, before the rows it reads go.
     enqueueDetachTasks(db, subjectId, scope),
     enqueueFileTasks(db, subjectId, scope),
+    // The files they uploaded for their orders: tasks first, then the rows.
+    ...buyerUploadErasureStatements(db, subjectId, (column) => orderIdSet(column)),
     // First: it matches the contacts the statements below clear.
     db.delete(abandonedCheckouts).where(abandonedCheckoutsOfBuyer(scope)),
     // Erased first: the address-book delete below then announces no update.

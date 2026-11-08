@@ -66,7 +66,8 @@ export interface CustomizationOptionView {
 export interface CustomizationFieldView {
     key: string;
     label: string;
-    type: CustomizationField["type"];
+    /** A product's own input (a stored schema never holds an app's `file` input). */
+    type: MerchantCustomizationField["type"];
     required: boolean;
     help: string | null;
     /** text/textarea only; null otherwise. */
@@ -82,7 +83,9 @@ export interface CustomizationView {
     fields: CustomizationFieldView[];
 }
 
-function presentField(field: CustomizationField, decimalPlaces: number): CustomizationFieldView {
+type MerchantCustomizationField = Exclude<CustomizationField, { type: "file" }>;
+
+function presentField(field: MerchantCustomizationField, decimalPlaces: number): CustomizationFieldView {
     const priceMinor = field.type === "select" ? 0 : field.priceMinor;
     return {
         key: field.key,
@@ -109,7 +112,11 @@ export function presentCustomizationSchema(
     decimalPlaces: number,
 ): CustomizationView | null {
     if (!schema) return null;
-    return { fields: schema.fields.map((field) => presentField(field, decimalPlaces)) };
+    return {
+        fields: schema.fields
+            .filter((field): field is MerchantCustomizationField => field.type !== "file")
+            .map((field) => presentField(field, decimalPlaces)),
+    };
 }
 
 export interface StoredCustomizationRead {

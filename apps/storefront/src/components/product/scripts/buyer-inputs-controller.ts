@@ -1,6 +1,7 @@
 import type { LinePropertyInput } from "@scalius/shared/line-properties";
 import type { ProductCustomizationField } from "@/lib/api/types";
 import { BUYER_INPUT_FIELD_PREFIX } from "../lib/buy-form";
+import { loadBuyerUploads } from "@/lib/buyer-uploads/load";
 import {
   buyerInputsSurchargeMinor,
   counterText,
@@ -97,6 +98,12 @@ export function initBuyerInputs(form: HTMLFormElement, onChange: () => void): Bu
     element.addEventListener("change", onEdit);
     updateCounter(field.key);
   }
+  // An app's file input: its upload control (loaded only when the form has one) shows the answer the page filled.
+  void loadBuyerUploads(form);
+
+  /** The control the buyer reaches for a field: a file input's picker, else the field itself. */
+  const focusable = (key: string): HTMLElement | null =>
+    container(key)?.querySelector<HTMLInputElement>("input[type=file][data-buyer-upload-input]") ?? control(key);
 
   return {
     form,
@@ -104,10 +111,17 @@ export function initBuyerInputs(form: HTMLFormElement, onChange: () => void): Bu
     surchargeMinor: () => buyerInputsSurchargeMinor(schema, values()),
     validate() {
       for (const field of schema.fields) showError(field.key, "");
-      const result = validateBuyerInputs(schema, values(), copy);
+      let result = validateBuyerInputs(schema, values(), copy);
+      // A file still uploading: the line waits for it (the picker carries the control's words).
+      const sending = result.ok ? form.querySelector<HTMLElement>("[data-buyer-input] [data-buyer-upload][data-buyer-upload-busy]") : null;
+      const sendingKey = sending?.closest<HTMLElement>("[data-buyer-input]")?.dataset.buyerInput;
+      if (sending && sendingKey) {
+        const picker = sending.querySelector<HTMLInputElement>("input[type=file]");
+        result = { ok: false, errors: [{ key: sendingKey, message: picker?.validationMessage ?? "" }] };
+      }
       if (!result.ok) {
         for (const error of result.errors) showError(error.key, error.message);
-        const first = control(result.errors[0]!.key);
+        const first = focusable(result.errors[0]!.key);
         if (first) {
           container(result.errors[0]!.key)?.scrollIntoView({ behavior: "smooth", block: "center" });
           first.focus({ preventScroll: true });

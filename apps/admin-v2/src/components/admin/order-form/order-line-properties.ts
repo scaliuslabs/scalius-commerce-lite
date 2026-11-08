@@ -13,7 +13,8 @@ export interface CustomizationView {
   fields: Array<{
     key: string;
     label: string;
-    type: CustomizationField["type"];
+    /** A product's own input: a stored schema never holds an app's `file` input. */
+    type: Exclude<CustomizationField["type"], "file">;
     required: boolean;
     help: string | null;
     maxLength: number | null;

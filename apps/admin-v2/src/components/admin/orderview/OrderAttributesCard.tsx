@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { BuyerFiles } from "./BuyerFiles";
+import { answerUploadIds } from "./buyer-files";
 
 export function OrderAttributesCard({ attributes }: { attributes?: Record<string, string> }) {
   const t = useMessages(orderDetailMessages);
@@ -26,7 +28,9 @@ export function OrderAttributesCard({ attributes }: { attributes?: Record<string
                 {entries.map(([key, value]) => (
                   <div key={key} className="space-y-0.5">
                     <dt className="text-muted-foreground wrap-anywhere">{key}</dt>
-                    <dd className="whitespace-pre-wrap wrap-anywhere">{value}</dd>
+                    <dd className="whitespace-pre-wrap wrap-anywhere">
+                      {answerUploadIds(value) ? <BuyerFiles value={value} /> : value}
+                    </dd>
                   </div>
                 ))}
               </dl>

@@ -1,0 +1,49 @@
+---
+// A buyer's file upload (an app's `file` line input on the buy form, or a
+// `file` checkout question): the answer field under its form name, the file
+// picker, what it takes, and the list control.ts draws. Its script loads the
+// behaviour only on pages that draw one (lib/buyer-uploads/load.ts). The
+// field's own <label for={id}> is the caller's.
+import { buyerUploadCopy } from "@/lib/buyer-upload-copy";
+import { BUYER_UPLOAD_CLASSES, buyerUploadParts } from "@/lib/buyer-uploads/markup";
+import type { BuyerUploadField } from "@/lib/buyer-uploads/model";
+import { pageLanguage } from "@/lib/store-time-zone";
+
+interface Props {
+  field: BuyerUploadField;
+  id: string;
+  name: string;
+  value?: string;
+  readonly?: boolean;
+  describedBy?: string[];
+}
+
+const { field, id, name, value = "", readonly = false, describedBy = [] } = Astro.props;
+const language = pageLanguage();
+const parts = buyerUploadParts({ field, id, name, value, readonly, describedBy, copy: buyerUploadCopy(language), language });
+---
+
+<div class={BUYER_UPLOAD_CLASSES.root} {...parts.root}>
+  <input {...parts.answer} />
+  {readonly ? (
+    <input class="hidden" {...parts.input} />
+  ) : (
+    <>
+      <label class={BUYER_UPLOAD_CLASSES.pick} data-buyer-upload-pick>
+        <input class={BUYER_UPLOAD_CLASSES.input} {...parts.input} />
+        <span data-buyer-upload-pick-label>{parts.pickLabel}</span>
+      </label>
+      <p id={parts.hintId} class={BUYER_UPLOAD_CLASSES.hint}>{parts.hint}</p>
+    </>
+  )}
+  <ul class={BUYER_UPLOAD_CLASSES.list} data-buyer-upload-list hidden></ul>
+  <p class="sr-only" data-buyer-upload-status role="status" aria-live="polite"></p>
+</div>
+
+<script>
+  import { loadBuyerUploads } from "@/lib/buyer-uploads/load";
+
+  const enhance = () => void loadBuyerUploads(document);
+  enhance();
+  document.addEventListener("astro:page-load", enhance);
+</script>

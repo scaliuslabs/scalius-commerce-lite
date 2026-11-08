@@ -1,6 +1,16 @@
 import { AppError } from "@scalius/core/errors";
 import { checkoutAttributesSchema, type CheckoutAttribute } from "@scalius/shared/plugins/buyer-ui";
+import { parseBuyerUploadValue } from "@scalius/shared/buyer-uploads";
 import type { CheckoutAppFunctions } from "./app-functions";
+
+/**
+ * The keys (`<app id>.<key>`) of the declared `file` attributes: their
+ * answers name buyer uploads, which the order commit attaches.
+ */
+export function checkoutFileAttributeKeys(apps: Pick<CheckoutAppFunctions, "attributes"> | undefined): string[] {
+  return (apps?.attributes ?? []).flatMap(({ appId, fields }) =>
+    fields.filter((field) => field.type === "file").map((field) => `${appId}.${field.key}`));
+}
 
 /** Unknown keys disappear before any app sees them or an order stores them. */
 export function validateCheckoutAttributes(
@@ -30,6 +40,8 @@ function refuse(key?: string): never {
 }
 function fits(field: CheckoutAttribute, value: string): boolean {
   if (typeof value !== "string" || value.length > (field.maxLength ?? 500)) return false;
+  // Upload ids of this attribute's files; the commit checks each was uploaded for it.
+  if (field.type === "file") return parseBuyerUploadValue(value, field.maxFiles ?? 1) !== null;
   if (field.type === "boolean") return value === "true" || value === "false";
   if (field.type === "choice") return Boolean(field.choices?.some((choice) => choice.value === value));
   if (field.type === "date") return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;

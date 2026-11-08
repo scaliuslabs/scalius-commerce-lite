@@ -1,4 +1,4 @@
-import { validateCheckoutAttributes } from "./attributes";
+import { checkoutFileAttributeKeys, validateCheckoutAttributes } from "./attributes";
 // src/modules/checkout/prepare.ts
 // Storefront order creation — validates and prepares orders for the commit.
 
@@ -1132,6 +1132,7 @@ export async function createStorefrontOrder(
             ...orderBillingAddressColumns(billing, { name: data.customerName, phone: data.customerPhone }),
             notes: data.notes,
             attributes: JSON.stringify(attributes),
+            attributeUploadKeys: checkoutFileAttributeKeys(appOptions?.apps),
             shippingMethodId: shippingMethod?.id ?? null,
             shippingMethodName: shippingMethod?.name ?? null,
             shippingMethodDescription: shippingMethod?.description ?? null,

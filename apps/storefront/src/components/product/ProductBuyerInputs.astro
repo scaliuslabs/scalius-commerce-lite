@@ -7,9 +7,13 @@ import type { ProductCustomizationField } from "@/lib/api";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { counterText, surchargeText, type BuyerInputCopy } from "./lib/buyer-inputs";
 import { BUYER_INPUT_FIELD_PREFIX } from "./lib/buy-form";
+import BuyerUploadField from "../apps/BuyerUploadField.astro";
+import { buyerUploadField } from "@/lib/buyer-uploads/model";
 
 interface Props {
   formId: string;
+  /** The product the line is for: an app's file input binds its uploads to it. */
+  productId: string;
   slug: string;
   fields: ProductCustomizationField[];
   copy: BuyerInputCopy;
@@ -19,7 +23,7 @@ interface Props {
   formatMoney: (amount: number) => string;
 }
 
-const { formId, slug, fields, copy, variantId, currencyPlaces, formatMoney } = Astro.props;
+const { formId, productId, slug, fields, copy, variantId, currencyPlaces, formatMoney } = Astro.props;
 
 const schemaJson = serializeJsonForInlineScript(fields);
 const copyJson = serializeJsonForInlineScript(copy);
@@ -88,7 +92,14 @@ const describedBy = (field: ProductCustomizationField) =>
           </label>
           {surcharge && <span class={pillClass}>{surcharge}</span>}
         </div>
-        {field.type === "select" ? (
+        {field.type === "file" ? (
+          <BuyerUploadField
+            field={buyerUploadField({ field: field.key, target: "line", productId, accept: field.accept, maxBytes: field.maxBytes, maxFiles: field.maxFiles, required: field.required })!}
+            id={id(field.key, "")}
+            name={name}
+            describedBy={[field.help ? id(field.key, "help") : null, id(field.key, "error")].filter((value): value is string => Boolean(value))}
+          />
+        ) : field.type === "select" ? (
           <select
             id={id(field.key, "")}
             name={name}

@@ -341,7 +341,7 @@ const formInputs = {
   slug: product.slug,
   variantId: initialSelectedVariant?.id ?? "",
   inputs: hasBuyerInputs
-    ? { fields: buyerInputFields, copy: buyerInputCopy, currencyPlaces: moneyPlaces(currencyDecimalPlaces, currencyCode), formatMoney: formatPrice }
+    ? { productId: product.id, fields: buyerInputFields, copy: buyerInputCopy, currencyPlaces: moneyPlaces(currencyDecimalPlaces, currencyCode), formatMoney: formatPrice }
     : null,
 };
 const stockProps = { available: stockAvailable, tone: buyerStockSummary.tone, text: stockLabel(buyerStockSummary.text), fulfilmentBadge };

@@ -38,11 +38,36 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
   return node;
 }
 
+/**
+ * A `file` question: its label and help now, the upload control (with its
+ * behaviour, a chunk of its own) once it loads. Each new answer is saved like
+ * any other and refreshes the surface.
+ */
+function uploadFieldNode(attribute: CheckoutAttribute, name: string, value: string, id: string, readonly: boolean, options: BuyerUiOptions): HTMLElement {
+  const wrapper = element("div", "space-y-1");
+  const label = element("label", "block text-sm font-medium text-foreground", attribute.label);
+  label.htmlFor = id;
+  const slot = element("div");
+  slot.dataset.buyerUploadSlot = "";
+  wrapper.append(label, slot);
+  const describedBy: string[] = [];
+  if (attribute.help) {
+    const help = element("p", "text-sm text-muted-foreground", attribute.help);
+    help.id = `${id}-help`; describedBy.push(help.id); wrapper.append(help);
+  }
+  void import("@/lib/buyer-uploads/attribute").then(({ mountBuyerUploadAttribute }) => mountBuyerUploadAttribute(wrapper, {
+    attribute, name, id, value, readonly, describedBy,
+    onAnswer: (answer) => { if (writeBuyerAttribute(name, answer)) void options.onChange?.(); },
+  }), () => undefined);
+  return wrapper;
+}
+
 function fieldNode(attribute: CheckoutAttribute, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement {
   const name = `${block.appId}.${attribute.key}`;
   const checkout = isCheckoutSlot(block.target);
   // A cart surface shows the buyer's current answer; an order page the one it kept.
   const value = (isCartSlot(block.target) ? readBuyerAttributes()[name] : undefined) ?? block.values[attribute.key] ?? "";
+  if (attribute.type === "file") return uploadFieldNode(attribute, name, value, `buyer-${block.target}-${name}`, !checkout, options);
   const model = buyerFieldModel(attribute, name, value);
   const wrapper = element("div", "space-y-1");
   const label = element("label", "block text-sm font-medium text-foreground", attribute.label);

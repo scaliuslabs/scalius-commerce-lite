@@ -5,18 +5,45 @@ import { z } from "zod";
 import { STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { pluginUiDocumentSchema, pluginUiTreeSchema, type PluginUiNode } from "./ui";
 import { pluginKeySchema } from "./manifest-patterns";
-import { CUSTOMIZATION_FIELD_TYPES, CUSTOMIZATION_LIMITS } from "../line-properties";
+import { CUSTOMIZATION_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
+import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
 const key = pluginKeySchema();
 const label = z.string().trim().min(1).max(120);
+
+/**
+ * What a `file` input (a line input or a checkout attribute) takes: the
+ * accepted types (default every one of `BUYER_UPLOAD_TYPES`), the largest
+ * file and the most files of one answer (default 1). The deployment's plan
+ * bounds both again (`buyerUploadBounds`); the platform takes the lower value.
+ */
+const fileDeclaration = {
+  accept: z.array(z.enum(BUYER_UPLOAD_TYPES)).min(1).max(BUYER_UPLOAD_TYPES.length).optional(),
+  maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
+  maxFiles: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxFiles).optional(),
+};
+type FileDeclarationIssue = { type: string; accept?: readonly string[]; maxBytes?: number; maxFiles?: number };
+function refineFileDeclaration(field: FileDeclarationIssue, ctx: z.RefinementCtx): void {
+  if (field.type === "file") {
+    if (field.accept && new Set(field.accept).size !== field.accept.length) ctx.addIssue({ code: "custom", path: ["accept"], message: "Accepted types must be unique." });
+    return;
+  }
+  for (const name of ["accept", "maxBytes", "maxFiles"] as const) {
+    if (field[name] !== undefined) ctx.addIssue({ code: "custom", path: [name], message: `Only a file input has ${name}.` });
+  }
+}
+
+export const CHECKOUT_ATTRIBUTE_TYPES = ["text", "multiline", "number", "boolean", "date", "choice", "file"] as const;
 export const checkoutAttributeSchema = z.object({
   key, label, help: z.string().max(500).optional(),
-  type: z.enum(["text", "multiline", "number", "boolean", "date", "choice"]),
+  type: z.enum(CHECKOUT_ATTRIBUTE_TYPES),
   required: z.boolean().optional(), maxLength: z.number().int().min(1).max(500).optional(),
   min: z.number().finite().optional(), max: z.number().finite().optional(),
   choices: z.array(z.object({ value: z.string().min(1).max(500), label }).strict()).min(1).max(50).optional(),
+  ...fileDeclaration,
 }).strict().superRefine((field, ctx) => {
+  refineFileDeclaration(field, ctx);
   if (field.type === "choice" && !field.choices?.length) ctx.addIssue({ code: "custom", message: "A choice needs options." });
   if (field.choices && new Set(field.choices.map((choice) => choice.value)).size !== field.choices.length) ctx.addIssue({ code: "custom", message: "Choice values must be unique." });
   if (field.min !== undefined && field.max !== undefined && field.min > field.max) ctx.addIssue({ code: "custom", message: "Minimum exceeds maximum." });
@@ -45,7 +72,8 @@ const lineInputLabel = z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.labelLe
  * A buyer input the app asks for on each cart line (manifest
  * `checkout.lineInputs`): a gift message, a protection plan, an engraving
  * an app prices. It is the product's own buyer-input vocabulary (text,
- * textarea, select, checkbox) under the app's key `<app id>.<key>`, so it is
+ * textarea, select, checkbox), or a `file` the buyer uploads (a photo to
+ * print; its answer is the upload ids), under the app's key `<app id>.<key>`, so it is
  * drawn by the buy form beside the merchant's inputs, edited from the cart,
  * part of the line's identity, seen by the app's functions and frozen on the
  * order line. Core prices nothing for it: the app adds to the line with
@@ -60,15 +88,17 @@ export const lineInputDeclarationSchema = z.object({
   key,
   label: lineInputLabel,
   help: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.helpLength).optional(),
-  type: z.enum(CUSTOMIZATION_FIELD_TYPES),
+  type: z.enum(LINE_INPUT_FIELD_TYPES),
   /** text up to 200 characters, textarea up to 1,000 (the default). */
   maxLength: z.number().int().min(1).max(CUSTOMIZATION_LIMITS.textareaMaxLength).optional(),
   options: z.array(z.object({
     value: z.string().trim().min(1).max(CUSTOMIZATION_LIMITS.optionValueLength).regex(/^[^\r\n]*$/u),
     label: lineInputLabel,
   }).strict()).min(1).max(CUSTOMIZATION_LIMITS.selectOptions).optional(),
+  ...fileDeclaration,
   products: z.object({ customField: z.string().max(64) }).strict().optional(),
 }).strict().superRefine((field, ctx) => {
+  refineFileDeclaration(field, ctx);
   if (field.type === "select" ? !field.options?.length : field.options !== undefined) ctx.addIssue({ code: "custom", path: ["options"], message: field.type === "select" ? "A select needs options." : "Only a select has options." });
   if (field.options && new Set(field.options.map((option) => option.value)).size !== field.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option values must be unique." });
   if (field.maxLength !== undefined && field.type !== "text" && field.type !== "textarea") ctx.addIssue({ code: "custom", path: ["maxLength"], message: "Only text inputs have a maximum length." });

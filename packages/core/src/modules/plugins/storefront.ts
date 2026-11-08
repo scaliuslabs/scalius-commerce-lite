@@ -12,6 +12,7 @@ import { deps } from "../../cache-deps";
 import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins";
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
+import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -83,7 +84,8 @@ export function activePluginLineInputs(installations: Iterable<PluginInstallatio
   for (const { pluginId, manifest } of sorted) {
     const readByCheckout = manifest.functions.length > 0 || manifest.storefront.extensions.length > 0
       || manifest.providers.some((provider) => provider.kind === "payment");
-    const inputs = manifest.checkout?.lineInputs ?? [];
+    // A file input carries the plan's bounds, so the buy form draws what checkout enforces.
+    const inputs = (manifest.checkout?.lineInputs ?? []).map((input) => withBuyerUploadBounds(input));
     if (readByCheckout && inputs.length > 0) apps.push({ appId: pluginId, inputs });
   }
   return apps;

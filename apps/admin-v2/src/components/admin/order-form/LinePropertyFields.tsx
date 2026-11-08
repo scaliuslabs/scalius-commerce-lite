@@ -66,6 +66,8 @@ export function LinePropertyFields({ schema, values, onChange, errors, surcharge
         const label = `${field.label}${field.required ? "" : ` ${t("optional")}`}`;
         const help = field.help ? <p id={`${id}-help`} className="text-body text-muted-foreground">{field.help}</p> : null;
         const message = invalid ? <p id={`${id}-error`} className="text-body text-destructive">{fieldError!.message}</p> : null;
+        // An app's file input takes the buyer's own uploads: staff cannot answer it here.
+        if (field.type === "file") return null;
         if (field.type === "checkbox") {
           return (
             <div key={field.key} className="space-y-1">

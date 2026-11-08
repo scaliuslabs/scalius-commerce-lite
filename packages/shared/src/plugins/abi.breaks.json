@@ -550,5 +550,29 @@
   "from": "25b00b55d1cc465c",
   "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "cart.validate grows (COMMERCE-HOOKS H14): its answer may carry `commit` (optional holds, the shape checkout.discounts already answers) and its input carries `contact` (null by default, so an input written without it still parses; its fields are protected and read null without their scopes). The parsed input type gains a required `contact` member, so code that builds a cart.validate input as the parsed type (rather than the draft, `PluginFunctionInputDraft`, which the harness takes) must add `contact: null`. Every existing answer stays valid."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "G5 buyer uploads (COMMERCE-HOOKS H17): line inputs and checkout attributes gain the `file` type with optional accept, maxBytes and maxFiles. Every manifest valid before is still valid; the declaration type only widens, which the declaration fingerprint reads as a changed signature."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "G5 buyer uploads (COMMERCE-HOOKS H17): line inputs and checkout attributes gain the `file` type with optional accept, maxBytes and maxFiles. Every manifest valid before is still valid; the declaration type only widens, which the declaration fingerprint reads as a changed signature."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "G5 buyer uploads (COMMERCE-HOOKS H17): line inputs and checkout attributes gain the `file` type with optional accept, maxBytes and maxFiles. Every manifest valid before is still valid; the declaration type only widens, which the declaration fingerprint reads as a changed signature."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "c7c8fb5e11d1be84",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontBuyerInput: an existing signature changed or gained a required member.",
+  "reason": "G5 buyer uploads (COMMERCE-HOOKS H17): a product page's buyer inputs may include an app's `file` input, so StorefrontBuyerInput.type gains \"file\". An extension that switches on the type treats an unknown one as it already must."
  }
 ]

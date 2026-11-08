@@ -23,6 +23,14 @@ import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import { BUILT_IN_SALES_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
+import {
+    assertBuyerUploadClaims,
+    attributeBuyerUploadClaims,
+    buyerUploadAttachStatements,
+    lineBuyerUploadClaims,
+    type BuyerUploadClaim,
+} from "../buyer-uploads";
+import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 import { linkedOrderHistory, type VerifiedContact } from "../customers";
 import {
     isInventoryReservationConflictError,
@@ -143,6 +151,10 @@ export async function commitOrder(
     channel: OrderCommitChannel,
 ): Promise<OrderCommitResult> {
     let variantStates = channel.variantStates;
+    // The buyer's files the order names: checked once (one read, only when
+    // there are any), attached in the batch behind a guard.
+    const uploadClaims = orderUploadClaims(plan);
+    await assertBuyerUploadClaims(db, uploadClaims);
     let customerRaceRetried = false;
     let customerRetiredRetried = false;
     let inventoryConflicts = 0;
@@ -165,6 +177,7 @@ export async function commitOrder(
             ...before,
             ...reservation.statements,
             ...orderRowStatements(db, plan, prelude.customer),
+            ...buyerUploadAttachStatements(db, plan.order.id, uploadClaims),
             ...abandonedCheckoutStatements(db, plan),
             ...(prelude.after ?? []),
         ];
@@ -182,6 +195,9 @@ export async function commitOrder(
                     availabilityTransitionVariantIds: [],
                 };
             }
+            // An upload another order took, or the sweep removed, since the
+            // check: the check names it (a guard's text alone is not specific on D1).
+            if (uploadClaims.length > 0) await assertBuyerUploadClaims(db, uploadClaims);
             // The channel's guards first: their markers are specific, the
             // inventory classifier treats any "conflict" text as retryable.
             const mapped = await channel.mapError?.(error);
@@ -226,6 +242,17 @@ export async function commitOrder(
             ),
         };
     }
+}
+
+/** The `file` answers of the order's lines and of its file checkout attributes. */
+function orderUploadClaims(plan: OrderPlan): BuyerUploadClaim[] {
+    const attributeKeys = plan.order.attributeUploadKeys ?? [];
+    return [
+        ...lineBuyerUploadClaims(plan.lines),
+        ...(attributeKeys.length > 0
+            ? attributeBuyerUploadClaims(readCheckoutAttributes(plan.order.attributes), new Set(attributeKeys))
+            : []),
+    ];
 }
 
 /**

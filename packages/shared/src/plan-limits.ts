@@ -147,6 +147,22 @@ export interface PlanLimits {
   /** Orders one per-row bulk order action handles per request (see `BulkOrderLimits`). */
   readonly bulkOrders: BulkOrderLimits;
   /**
+   * Buyer uploads (`file` line inputs and checkout attributes,
+   * `@scalius/shared/buyer-uploads`): an app declares its own size and count
+   * within these and the platform takes the lower value. The API Worker reads
+   * each file whole (128 MB of memory), so Free keeps files small.
+   */
+  readonly uploads: {
+    /** Largest file one upload takes. */
+    readonly maxBytes: number;
+    /** Most files one input's answer names. */
+    readonly maxFiles: number;
+    /** Unattached uploads one visitor (by IP) may hold at once; the sweep frees them. */
+    readonly stagedPerVisitor: number;
+    /** Unattached uploads one sweep run deletes (each a guarded row delete and an R2 delete). */
+    readonly sweepPerRun: number;
+  };
+  /**
    * Items one batch create (`products.batch_create`, `categories.batch_create`,
    * `brands.batch_create`; routes/admin/resources-batch.ts) accepts. Each item
    * costs a few D1 queries of the invocation, so the Free bound keeps one call
@@ -245,6 +261,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000, bulkPerRowSlice: 8, facetLiveProducts: 300, feedProductsPerRequest: 1_000 }),
     bulkOrders: Object.freeze({ confirm: 30, confirmStockRepairs: 1, send: 1, ship: 1 }),
+    uploads: Object.freeze({ maxBytes: 5 * 1024 * 1024, maxFiles: 3, stagedPerVisitor: 20, sweepPerRun: 10 }),
     batchCreates: Object.freeze({ products: 4, categories: 12, brands: 19 }),
     plugins: Object.freeze({
       cpuMs: 50,
@@ -294,6 +311,7 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
     }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000, bulkPerRowSlice: 90, facetLiveProducts: 5_000, feedProductsPerRequest: 5_000 }),
     bulkOrders: Object.freeze({ confirm: 90, confirmStockRepairs: 20, send: 30, ship: 20 }),
+    uploads: Object.freeze({ maxBytes: 20 * 1024 * 1024, maxFiles: 10, stagedPerVisitor: 60, sweepPerRun: 50 }),
     batchCreates: Object.freeze({ products: 20, categories: 50, brands: 50 }),
     plugins: Object.freeze({
       cpuMs: 200,

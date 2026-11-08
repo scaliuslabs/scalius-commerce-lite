@@ -6,7 +6,8 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
-import { CUSTOMIZATION_FIELD_TYPES } from "@scalius/shared/line-properties";
+import { LINE_INPUT_FIELD_TYPES } from "@scalius/shared/line-properties";
+import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
@@ -450,9 +451,12 @@ const layoutDataSchema = z.object({
       key: z.string(),
       label: z.string(),
       help: z.string().optional(),
-      type: z.enum(CUSTOMIZATION_FIELD_TYPES),
+      type: z.enum(LINE_INPUT_FIELD_TYPES),
       maxLength: z.number().int().optional(),
       options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
+      accept: z.array(z.enum(BUYER_UPLOAD_TYPES)).optional().openapi({ description: "`file`: the types it takes." }),
+      maxBytes: z.number().int().optional().openapi({ description: "`file`: the largest file, already bounded by the deployment's plan." }),
+      maxFiles: z.number().int().optional().openapi({ description: "`file`: the most files of one answer, already bounded by the plan." }),
       products: z.object({ customField: z.string() }).optional(),
     })),
   })).optional().openapi({

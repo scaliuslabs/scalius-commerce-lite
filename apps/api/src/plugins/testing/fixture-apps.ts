@@ -31,6 +31,8 @@
 //   a place in it with the order (a commit), so the last place goes to one order.
 // - acme.fraud-screen: cart.validate reads the buyer's phone and email (its
 //   contact scopes) and blocks flagged ones.
+// - acme.personalise: a `file` line input (buyer uploads) and a printing fee
+//   by cart.line_prices; reads its own files back with order_uploads.list.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -49,6 +51,7 @@ import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
 import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
 import { manifest as deliverySlotsManifest } from "./apps/delivery-slots/src/index";
 import { manifest as fraudScreenManifest } from "./apps/fraud-screen/src/index";
+import { manifest as personaliseManifest } from "./apps/personalise/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -67,6 +70,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
   "acme.delivery-slots": "./apps/api/src/plugins/testing/apps/delivery-slots",
   "acme.fraud-screen": "./apps/api/src/plugins/testing/apps/fraud-screen",
+  "acme.personalise": "./apps/api/src/plugins/testing/apps/personalise",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -90,6 +94,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
   "acme.delivery-slots": { version: deliverySlotsManifest.version, sha256: "d51a".repeat(16), load: () => import("./apps/delivery-slots/src/index") },
   "acme.fraud-screen": { version: fraudScreenManifest.version, sha256: "f7a0".repeat(16), load: () => import("./apps/fraud-screen/src/index") },
+  "acme.personalise": { version: personaliseManifest.version, sha256: "f070".repeat(16), load: () => import("./apps/personalise/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

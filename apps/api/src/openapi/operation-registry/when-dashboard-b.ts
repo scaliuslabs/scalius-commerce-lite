@@ -121,6 +121,7 @@ export const DASHBOARD_WHEN_B: Readonly<Record<string, string>> = {
   "dashboard.orders.shipments": "Use when listing an order's courier shipments and tracking.",
   "dashboard.orders.support_request_update": "Use when answering a buyer's cancel, return or refund request on an order.",
   "dashboard.orders.timeline": "Use when reading an order's history of events and notes.",
+  "dashboard.orders.uploads": "Use when reading the files a buyer uploaded for an order (photos to print, documents) and getting short-lived download links.",
   "dashboard.orders.update_details": "Use when correcting the customer or delivery address of an unshipped order.",
   "dashboard.orders.update_status": "Use when changing an order's status: confirm, cancel (puts reserved stock back), mark returned or refunded.",
   "dashboard.payments.methods_get": "Use when reading the payment methods: cash on delivery (COD), bKash, SSLCommerz, Stripe... and their countries.",

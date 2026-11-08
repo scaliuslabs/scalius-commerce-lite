@@ -1,18 +1,27 @@
 ---
 import type { CheckoutAttribute } from "@scalius/shared/plugins/buyer-ui";
 import { buyerFieldModel } from "@/lib/buyer-ui/field";
+import { buyerUploadField } from "@/lib/buyer-uploads/model";
+import BuyerUploadField from "./BuyerUploadField.astro";
 
 interface Props {
   attribute: CheckoutAttribute;
   name?: string; id?: string; value?: string; placeholder?: string;
+  /** A `file` question: the input as the API knows it, `<app id>.<key>`. */
+  fieldKey?: string;
   class?: string; labelClass?: string; controlClass?: string; rows?: number;
 }
-const { attribute, name, id = name ?? attribute.key, value = "", placeholder, class: className, labelClass, controlClass, rows = 2 } = Astro.props;
+const { attribute, name, id = name ?? attribute.key, value = "", placeholder, class: className, labelClass, controlClass, rows = 2, fieldKey } = Astro.props;
 const field = buyerFieldModel(attribute, name, value);
+const upload = attribute.type === "file" && fieldKey
+  ? buyerUploadField({ field: fieldKey, target: "attribute", accept: attribute.accept, maxBytes: attribute.maxBytes, maxFiles: attribute.maxFiles, required: attribute.required === true })
+  : null;
 ---
 <div class={className}>
   <label for={id} class={labelClass}>{attribute.label}</label>
-  {field.tag === "textarea" ? (
+  {upload ? (
+    <BuyerUploadField field={upload} id={id} name={name ?? attribute.key} value={value} describedBy={attribute.help ? [`${id}-help`] : []} />
+  ) : field.tag === "textarea" ? (
     <textarea {...field.attributes} id={id} rows={rows} placeholder={placeholder} class={controlClass} aria-describedby={attribute.help ? `${id}-help` : undefined}>{value}</textarea>
   ) : field.tag === "select" ? (
     <select {...field.attributes} id={id} class={controlClass} aria-describedby={attribute.help ? `${id}-help` : undefined}>
