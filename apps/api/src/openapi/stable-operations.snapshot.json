@@ -8594,6 +8594,7 @@
             "invoice_issued",
             "fulfillment_location_changed",
             "prices_set",
+            "pos_sale",
             "app_event",
             "stock_held"
            ]
@@ -9085,6 +9086,84 @@
       },
       "required": [
        "product"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "analytics.get_summary": {
+   "operationId": "dashboard.resources.analytics.get_summary",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/analytics/summary",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_analytics"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "The start of the period (ISO 8601)."
+      },
+      "required": true,
+      "description": "The start of the period (ISO 8601).",
+      "name": "from",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "The end of the period, exclusive (ISO 8601); at most 366 days after `from`."
+      },
+      "required": true,
+      "description": "The end of the period, exclusive (ISO 8601); at most 366 days after `from`.",
+      "name": "to",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "day",
+        "week",
+        "month"
+       ],
+       "description": "Bucket size. Day needs a period of 92 days or less; omitted: day up to 92 days, week up to a year."
+      },
+      "required": false,
+      "description": "Bucket size. Day needs a period of 92 days or less; omitted: day up to 92 days, week up to a year.",
+      "name": "granularity",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "summary": {
+        "$ref": "#/components/schemas/AnalyticsSummary"
+       }
+      },
+      "required": [
+       "summary"
       ]
      }
     },
@@ -10537,6 +10616,440 @@
       },
       "required": [
        "customers",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "digital_access.grant": {
+   "operationId": "dashboard.resources.digital_access.grant",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/digital-access",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "orderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+         },
+         "orderItemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The order line that bought the item."
+         },
+         "assetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The digital item (digital_assets.list) the line's product delivers."
+         }
+        },
+        "required": [
+         "orderId",
+         "orderItemId",
+         "assetId"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "entitlement": {
+        "$ref": "#/components/schemas/DigitalAccessResource"
+       },
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "issued",
+         "reinstated",
+         "unchanged"
+        ],
+        "description": "`issued`: new access. `reinstated`: revoked access given back. `unchanged`: the buyer already had it."
+       }
+      },
+      "required": [
+       "entitlement",
+       "outcome"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "digital_access.list": {
+   "operationId": "dashboard.resources.digital_access.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/digital-access",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_orders",
+    "write_orders",
+    "write_payments",
+    "write_payment_methods",
+    "write_refunds",
+    "write_fulfillments"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80,
+       "description": "Only this order's access."
+      },
+      "required": false,
+      "description": "Only this order's access.",
+      "name": "orderId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80,
+       "description": "Only access given by this customer's orders."
+      },
+      "required": false,
+      "description": "Only access given by this customer's orders.",
+      "name": "customerId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "entitlements": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/DigitalAccessResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "entitlements",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "digital_access.revoke": {
+   "operationId": "dashboard.resources.digital_access.revoke",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/digital-access/{id}/revoke",
+   "risk": "destructive",
+   "idempotency": "supported",
+   "revision": "none",
+   "scopes": [
+    "write_orders"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "entitlement": {
+        "$ref": "#/components/schemas/DigitalAccessResource"
+       },
+       "outcome": {
+        "type": "string",
+        "enum": [
+         "revoked",
+         "unchanged"
+        ],
+        "description": "`unchanged`: it was already revoked."
+       }
+      },
+      "required": [
+       "entitlement",
+       "outcome"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "digital_assets.get": {
+   "operationId": "dashboard.resources.digital_assets.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/digital-assets/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "digitalAsset": {
+        "$ref": "#/components/schemas/DigitalAssetResource"
+       }
+      },
+      "required": [
+       "digitalAsset"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "digital_assets.list": {
+   "operationId": "dashboard.resources.digital_assets.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/digital-assets",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_products",
+    "write_products"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80,
+       "description": "Only this product's files and pools."
+      },
+      "required": false,
+      "description": "Only this product's files and pools.",
+      "name": "productId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "digitalAssets": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/DigitalAssetResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "digitalAssets",
        "nextCursor"
       ]
      }
@@ -12261,6 +12774,131 @@
     ]
    }
   },
+  "markets.get": {
+   "operationId": "dashboard.resources.markets.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/markets/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 180
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "market": {
+        "$ref": "#/components/schemas/MarketResource"
+       }
+      },
+      "required": [
+       "market"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "markets.list": {
+   "operationId": "dashboard.resources.markets.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/markets",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 50,
+       "description": "At most this many items (default and maximum 50)."
+      },
+      "required": false,
+      "description": "At most this many items (default and maximum 50).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "markets": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/MarketResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "markets",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "menus.create": {
    "operationId": "dashboard.resources.menus.create",
    "method": "POST",
@@ -12931,7 +13569,64 @@
           "type": "string",
           "nullable": true,
           "minLength": 1,
-          "maxLength": 160
+          "maxLength": 160,
+          "description": "The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest)."
+         },
+         "pointOfSale": {
+          "type": "object",
+          "properties": {
+           "locationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+           },
+           "staffMemberId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+           },
+           "tenders": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "properties": {
+              "via": {
+               "type": "string",
+               "enum": [
+                "cash",
+                "card_terminal",
+                "mobile_wallet",
+                "other"
+               ]
+              },
+              "amountMinor": {
+               "type": "integer",
+               "minimum": 1,
+               "maximum": 9000000000000
+              },
+              "reference": {
+               "type": "string",
+               "nullable": true,
+               "maxLength": 120
+              }
+             },
+             "required": [
+              "via",
+              "amountMinor"
+             ],
+             "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 5
+           }
+          },
+          "required": [
+           "locationId",
+           "tenders"
+          ],
+          "additionalProperties": false,
+          "description": "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`)."
          }
         },
         "required": [
@@ -13189,6 +13884,18 @@
       "required": false,
       "description": "true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due.",
       "name": "overdue",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 64,
+       "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used."
+      },
+      "required": false,
+      "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used.",
+      "name": "discountCode",
       "in": "query"
      }
     ]
@@ -17808,6 +18515,424 @@
     ]
    }
   },
+  "reviews.create": {
+   "operationId": "dashboard.resources.reviews.create",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/reviews",
+   "risk": "write",
+   "idempotency": "required",
+   "revision": "none",
+   "scopes": [
+    "write_reviews"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "productId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+         },
+         "variantId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The variant reviewed (one of the product's); a line's own variant when `orderItemId` is set."
+         },
+         "orderItemId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The delivered order line reviewed: the review is then a verified purchase of the line's customer."
+         },
+         "customerId": {
+          "type": "string",
+          "nullable": true,
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The customer who wrote it; with `orderItemId`, the line's order must be theirs."
+         },
+         "rating": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+         },
+         "title": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 240,
+          "description": "At most 120 characters."
+         },
+         "body": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 10000,
+          "description": "At most 5000 characters."
+         },
+         "authorDisplayName": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 120,
+          "description": "The name it is shown under (at most 60 characters); defaults to the customer's (\"First L.\"). Required with no customer."
+         },
+         "status": {
+          "type": "string",
+          "enum": [
+           "pending",
+           "published"
+          ],
+          "default": "pending",
+          "description": "`published` puts it on the product page (unless the content check holds it); `pending` sends it to moderation."
+         },
+         "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When it was written, for imported history (a past time); omitted, now."
+         },
+         "verified": {
+          "type": "boolean",
+          "description": "Claims a verified purchase: accepted only with an `orderItemId` that proves it."
+         }
+        },
+        "required": [
+         "productId",
+         "rating"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "review": {
+        "$ref": "#/components/schemas/ReviewResource"
+       }
+      },
+      "required": [
+       "review"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "reviews.get": {
+   "operationId": "dashboard.resources.reviews.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/reviews/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_reviews",
+    "write_reviews"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "review": {
+        "$ref": "#/components/schemas/ReviewResource"
+       }
+      },
+      "required": [
+       "review"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "reviews.list": {
+   "operationId": "dashboard.resources.reviews.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/reviews",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_reviews",
+    "write_reviews"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "Only this product's reviews."
+      },
+      "required": false,
+      "description": "Only this product's reviews.",
+      "name": "productId",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "pending",
+        "published",
+        "rejected",
+        "withdrawn"
+       ],
+       "description": "Only reviews in this status (`pending` is the moderation queue); omitted, every status."
+      },
+      "required": false,
+      "description": "Only reviews in this status (`pending` is the moderation queue); omitted, every status.",
+      "name": "status",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128,
+       "description": "Only this customer's reviews."
+      },
+      "required": false,
+      "description": "Only this customer's reviews.",
+      "name": "customerId",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "reviews": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ReviewResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "reviews",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "reviews.set_status": {
+   "operationId": "dashboard.resources.reviews.set_status",
+   "method": "POST",
+   "path": "/api/v1/admin/resources/reviews/{id}/status",
+   "risk": "write",
+   "idempotency": "supported",
+   "revision": "required",
+   "scopes": [
+    "write_reviews"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 80
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "pattern": "^[\\x20-\\x7E]{8,200}$",
+       "minLength": 8,
+       "maxLength": 200
+      },
+      "required": false,
+      "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+      "name": "idempotency-key",
+      "in": "header"
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "status": {
+          "type": "string",
+          "enum": [
+           "published",
+           "rejected"
+          ]
+         },
+         "reason": {
+          "type": "string",
+          "enum": [
+           "spam",
+           "abusive",
+           "personal_info",
+           "off_topic",
+           "not_about_product"
+          ],
+          "description": "Required to reject: why (spam, abusive, personal_info, off_topic, not_about_product)."
+         },
+         "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The review's `revision` you read."
+         }
+        },
+        "required": [
+         "status",
+         "expectedRevision"
+        ],
+        "additionalProperties": false
+       }
+      }
+     }
+    }
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "review": {
+        "$ref": "#/components/schemas/ReviewResource"
+       }
+      },
+      "required": [
+       "review"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
   "shipments.create": {
    "operationId": "dashboard.resources.shipments.create",
    "method": "POST",
@@ -18053,6 +19178,281 @@
       },
       "required": [
        "shipments",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "shipping_zones.get": {
+   "operationId": "dashboard.resources.shipping_zones.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/shipping-zones/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 180
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "shippingZone": {
+        "$ref": "#/components/schemas/ShippingZoneResource"
+       }
+      },
+      "required": [
+       "shippingZone"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "shipping_zones.list": {
+   "operationId": "dashboard.resources.shipping_zones.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/shipping-zones",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many zones (default 20, maximum 50)."
+      },
+      "required": false,
+      "description": "At most this many zones (default 20, maximum 50).",
+      "name": "limit",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "shippingZones": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/ShippingZoneResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "shippingZones",
+       "nextCursor"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "staff.get": {
+   "operationId": "dashboard.resources.staff.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/staff/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_staff"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 100
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "staffMember": {
+        "$ref": "#/components/schemas/StaffMemberResource"
+       }
+      },
+      "required": [
+       "staffMember"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "staff.list": {
+   "operationId": "dashboard.resources.staff.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/staff",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_staff"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 50,
+       "default": 20,
+       "description": "At most this many records; a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "format": "date-time",
+       "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+      },
+      "required": false,
+      "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+      "name": "updatedSince",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "enum": [
+        "true",
+        "false"
+       ],
+       "description": "`true`: only staff who can work now; `false`: only suspended and removed ones. Omitted: everyone."
+      },
+      "required": false,
+      "description": "`true`: only staff who can work now; `false`: only suspended and removed ones. Omitted: everyone.",
+      "name": "active",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "staffMembers": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/StaffMemberResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "staffMembers",
        "nextCursor"
       ]
      }
@@ -18411,6 +19811,143 @@
       },
       "required": [
        "supplier"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "tax_regions.get": {
+   "operationId": "dashboard.resources.tax_regions.get",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/tax-regions/{id}",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 180
+      },
+      "required": true,
+      "name": "id",
+      "in": "path"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "taxRegion": {
+        "$ref": "#/components/schemas/TaxRegionResource"
+       }
+      },
+      "required": [
+       "taxRegion"
+      ]
+     }
+    },
+    "required": [
+     "success",
+     "data"
+    ]
+   }
+  },
+  "tax_regions.list": {
+   "operationId": "dashboard.resources.tax_regions.list",
+   "method": "GET",
+   "path": "/api/v1/admin/resources/tax-regions",
+   "risk": "read",
+   "idempotency": "none",
+   "revision": "none",
+   "scopes": [
+    "read_settings"
+   ],
+   "input": {
+    "parameters": [
+     {
+      "schema": {
+       "type": "string",
+       "maxLength": 1024,
+       "description": "The `nextCursor` of the page before; leave it out for the first page."
+      },
+      "required": false,
+      "description": "The `nextCursor` of the page before; leave it out for the first page.",
+      "name": "cursor",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 100,
+       "default": 50,
+       "description": "At most this many regions (default 50, maximum 100); a page may hold fewer to stay within the response budget."
+      },
+      "required": false,
+      "description": "At most this many regions (default 50, maximum 100); a page may hold fewer to stay within the response budget.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "schema": {
+       "type": "string",
+       "minLength": 2,
+       "maxLength": 2,
+       "description": "Only this country's regions (ISO 3166-1 alpha-2)."
+      },
+      "required": false,
+      "description": "Only this country's regions (ISO 3166-1 alpha-2).",
+      "name": "countryCode",
+      "in": "query"
+     }
+    ]
+   },
+   "output": {
+    "type": "object",
+    "properties": {
+     "success": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "data": {
+      "type": "object",
+      "properties": {
+       "taxRegions": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/TaxRegionResource"
+        }
+       },
+       "nextCursor": {
+        "type": "string",
+        "nullable": true,
+        "description": "Pass it as `cursor` for the next page; null on the last page."
+       }
+      },
+      "required": [
+       "taxRegions",
+       "nextCursor"
       ]
      }
     },
@@ -21169,6 +22706,141 @@
     "updatedAt"
    ]
   },
+  "AnalyticsFigures": {
+   "type": "object",
+   "properties": {
+    "orders": {
+     "type": "integer",
+     "description": "Sales orders placed in the period, not counting cancelled or incomplete ones."
+    },
+    "grossSalesMinor": {
+     "type": "integer",
+     "description": "Merchandise at list price before discounts."
+    },
+    "discountsMinor": {
+     "type": "integer"
+    },
+    "refundsMinor": {
+     "type": "integer",
+     "description": "Merchandise returned or refunded on these orders, counted against the order's placement date."
+    },
+    "netSalesMinor": {
+     "type": "integer",
+     "description": "Gross sales minus discounts minus refunds."
+    },
+    "shippingMinor": {
+     "type": "integer"
+    },
+    "taxesMinor": {
+     "type": "integer"
+    },
+    "totalSalesMinor": {
+     "type": "integer",
+     "description": "Net sales plus shipping plus taxes."
+    },
+    "itemsSold": {
+     "type": "integer",
+     "description": "Units sold, net of returns."
+    },
+    "averageOrderValueMinor": {
+     "type": "integer",
+     "description": "(Gross sales minus discounts) divided by orders, rounded to the minor unit; 0 without orders."
+    }
+   },
+   "required": [
+    "orders",
+    "grossSalesMinor",
+    "discountsMinor",
+    "refundsMinor",
+    "netSalesMinor",
+    "shippingMinor",
+    "taxesMinor",
+    "totalSalesMinor",
+    "itemsSold",
+    "averageOrderValueMinor"
+   ]
+  },
+  "AnalyticsSummary": {
+   "type": "object",
+   "properties": {
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3,
+     "description": "The store currency: every `*Minor` amount is in it."
+    },
+    "timeZone": {
+     "type": "string",
+     "description": "The store's IANA time zone: days, weeks and months are calendar ones in it."
+    },
+    "from": {
+     "type": "string",
+     "format": "date-time",
+     "description": "The first instant covered: the start of the store day that holds the requested `from`."
+    },
+    "to": {
+     "type": "string",
+     "format": "date-time",
+     "description": "The end of the period, exclusive: the start of the store day after the one holding the requested `to` (less a millisecond)."
+    },
+    "granularity": {
+     "type": "string",
+     "enum": [
+      "day",
+      "week",
+      "month"
+     ]
+    },
+    "totals": {
+     "$ref": "#/components/schemas/AnalyticsFigures"
+    },
+    "otherCurrencyOrders": {
+     "type": "integer",
+     "description": "Orders placed in a currency other than the store's: counted here, summed nowhere."
+    },
+    "buckets": {
+     "type": "array",
+     "items": {
+      "allOf": [
+       {
+        "$ref": "#/components/schemas/AnalyticsFigures"
+       },
+       {
+        "type": "object",
+        "properties": {
+         "from": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The bucket's first instant, clipped to the period."
+         },
+         "to": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The bucket's end, exclusive."
+         }
+        },
+        "required": [
+         "from",
+         "to"
+        ]
+       }
+      ]
+     },
+     "maxItems": 92,
+     "description": "One entry per day, week (store country's first weekday) or month of the period, zero-filled, in time order."
+    }
+   },
+   "required": [
+    "currency",
+    "timeZone",
+    "from",
+    "to",
+    "granularity",
+    "totals",
+    "otherCurrencyOrders",
+    "buckets"
+   ]
+  },
   "AppWebhookSubscription": {
    "type": "object",
    "properties": {
@@ -22568,6 +24240,228 @@
    ],
    "additionalProperties": false
   },
+  "DigitalAccessResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "orderId": {
+     "type": "string"
+    },
+    "orderItemId": {
+     "type": "string"
+    },
+    "assetId": {
+     "type": "string"
+    },
+    "productId": {
+     "type": "string"
+    },
+    "variantId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The order line's SKU."
+    },
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "description": "The order's customer, if any."
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "file",
+      "licence_keys"
+     ]
+    },
+    "name": {
+     "type": "string",
+     "description": "The digital item's name."
+    },
+    "quantity": {
+     "type": "integer",
+     "description": "Licence keys assigned to the line; 1 for a file."
+    },
+    "downloadCount": {
+     "type": "integer",
+     "description": "Downloads used (files)."
+    },
+    "downloadLimit": {
+     "type": "integer",
+     "nullable": true,
+     "description": "Downloads allowed, or null for unlimited; keys have none."
+    },
+    "expiresAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time",
+     "description": "When file access ends, or null for never."
+    },
+    "revokedAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time",
+     "description": "When the store removed the access, or null."
+    },
+    "lastDownloadAt": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "active",
+      "exhausted",
+      "expired",
+      "ended",
+      "revoked"
+     ],
+     "description": "`active`; `exhausted`: every download used; `expired`: its access days ran out; `ended`: the order was cancelled, refunded or returned; `revoked`: the store removed it."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "orderId",
+    "orderItemId",
+    "assetId",
+    "productId",
+    "variantId",
+    "customerId",
+    "kind",
+    "name",
+    "quantity",
+    "downloadCount",
+    "downloadLimit",
+    "expiresAt",
+    "revokedAt",
+    "lastDownloadAt",
+    "status",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "DigitalAssetResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "productId": {
+     "type": "string"
+    },
+    "variantId": {
+     "type": "string",
+     "nullable": true,
+     "description": "Null: a file every digital variant of the product delivers. A licence-key pool always names its variant."
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "file",
+      "licence_keys"
+     ],
+     "description": "`file`: a download. `licence_keys`: a pool of keys, which is its variant's stock."
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "draft",
+      "ready",
+      "archived"
+     ],
+     "description": "`draft` until its file is uploaded; only `ready` items are delivered; `archived` ones go to no new order."
+    },
+    "name": {
+     "type": "string",
+     "description": "What the buyer sees it as."
+    },
+    "filename": {
+     "type": "string",
+     "nullable": true,
+     "description": "The file's download name; null for a key pool."
+    },
+    "contentType": {
+     "type": "string",
+     "nullable": true,
+     "description": "The file's media type; null for a key pool."
+    },
+    "sizeBytes": {
+     "type": "integer",
+     "nullable": true,
+     "description": "The uploaded file's size; null before upload and for a key pool."
+    },
+    "downloadLimit": {
+     "type": "integer",
+     "nullable": true,
+     "description": "Downloads each buyer gets (1 to 100), or null for unlimited. Delivery snapshots it."
+    },
+    "accessDays": {
+     "type": "integer",
+     "nullable": true,
+     "description": "Days of access after delivery (1 to 3650), or null for forever. Delivery snapshots it."
+    },
+    "licenceKeys": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "available": {
+       "type": "integer",
+       "description": "Keys not assigned yet (the variant's stock)."
+      },
+      "assigned": {
+       "type": "integer",
+       "description": "Keys handed over to buyers."
+      }
+     },
+     "required": [
+      "available",
+      "assigned"
+     ],
+     "description": "A key pool's counts; null for a file. Key values never leave the store."
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "Advances when the item's settings or file change."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "productId",
+    "variantId",
+    "kind",
+    "status",
+    "name",
+    "filename",
+    "contentType",
+    "sizeBytes",
+    "downloadLimit",
+    "accessDays",
+    "licenceKeys",
+    "revision",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "DiscountResource": {
    "type": "object",
    "properties": {
@@ -23597,6 +25491,178 @@
     "shippedAt",
     "receivedAt",
     "cancelledAt",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "MarketResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "handle": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "draft",
+      "active"
+     ],
+     "description": "Only an active market resolves for buyers."
+    },
+    "isBackup": {
+     "type": "boolean",
+     "description": "The backup market catches every buyer no other market matches, sells in the shop currency and holds the root URL."
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "countries": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+     },
+     "maxItems": 250,
+     "description": "ISO 3166-1 alpha-2 codes, sorted. A country belongs to one market."
+    },
+    "presence": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "value": {
+       "type": "string",
+       "maxLength": 5,
+       "description": "The URL subfolder (`en-in`), or `''` for the root URL, which only the backup market holds."
+      },
+      "locale": {
+       "type": "string",
+       "minLength": 2,
+       "maxLength": 2,
+       "description": "The language of the presence's pages (ISO 639-1)."
+      }
+     },
+     "required": [
+      "value",
+      "locale"
+     ],
+     "description": "Its web presence; null when it has none."
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3,
+     "description": "The currency it sells in: its own, else the shop currency."
+    },
+    "shopCurrency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3,
+     "description": "The store currency: the books' currency, which every other amount in the API is in."
+    },
+    "ownCurrency": {
+     "type": "boolean",
+     "description": "True when it sells in its own currency, priced from the shop prices at its exchange rate unless a price list fixes them."
+    },
+    "priceMode": {
+     "type": "string",
+     "enum": [
+      "fixed",
+      "fx"
+     ],
+     "description": "`fixed`: product prices and its fixed price lists. `fx`: product prices converted at `fxRate`, adjusted, rounded up and ending as set."
+    },
+    "fxRate": {
+     "type": "string",
+     "nullable": true,
+     "description": "Units of `currency` per unit of `shopCurrency` (an exact decimal); null: none yet. A market in the shop currency converts at 1."
+    },
+    "fxRateAsOf": {
+     "type": "string",
+     "nullable": true,
+     "format": "date-time",
+     "description": "When the rate was last set."
+    },
+    "fxRateSource": {
+     "type": "string",
+     "description": "Who sets the rate: `manual` or an exchange rate app's provider (`<app id>:<provider id>`)."
+    },
+    "fxLockMinutes": {
+     "type": "integer",
+     "description": "Minutes after placement an unpaid foreign-currency order may start a new payment session; placed amounts never change."
+    },
+    "priceAdjustmentBps": {
+     "type": "integer",
+     "description": "Raises (positive) or lowers (negative) FX-derived prices, in basis points."
+    },
+    "priceRoundingMinor": {
+     "type": "integer",
+     "nullable": true,
+     "description": "FX-derived prices round up to this step, in minor units of `currency`; null: the price increment."
+    },
+    "priceEndingMinor": {
+     "type": "integer",
+     "nullable": true,
+     "description": "What a rounded price ends in within its step, in minor units of `currency`; null for none."
+    },
+    "priceIncrementMinor": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true,
+     "description": "The step its prices move in, in minor units of `currency`."
+    },
+    "priceIncrementInherited": {
+     "type": "boolean"
+    },
+    "pricesIncludeTax": {
+     "type": "boolean",
+     "description": "Whether its prices include tax: checkout shows tax as included when true and adds it on top when false."
+    },
+    "hasOrders": {
+     "type": "boolean",
+     "description": "A market that took orders is never deleted."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "handle",
+    "name",
+    "status",
+    "isBackup",
+    "revision",
+    "countries",
+    "presence",
+    "currency",
+    "shopCurrency",
+    "ownCurrency",
+    "priceMode",
+    "fxRate",
+    "fxRateAsOf",
+    "fxRateSource",
+    "fxLockMinutes",
+    "priceAdjustmentBps",
+    "priceRoundingMinor",
+    "priceEndingMinor",
+    "priceIncrementMinor",
+    "priceIncrementInherited",
+    "pricesIncludeTax",
+    "hasOrders",
     "createdAt",
     "updatedAt"
    ]
@@ -24909,6 +26975,66 @@
       ]
      }
     },
+    "pointOfSale": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "locationId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "staffMemberId": {
+       "type": "string",
+       "nullable": true,
+       "minLength": 1,
+       "maxLength": 128
+      },
+      "tenders": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "properties": {
+         "via": {
+          "type": "string",
+          "enum": [
+           "cash",
+           "card_terminal",
+           "mobile_wallet",
+           "other"
+          ]
+         },
+         "amountMinor": {
+          "type": "integer"
+         },
+         "reference": {
+          "type": "string",
+          "nullable": true,
+          "maxLength": 4000
+         }
+        },
+        "required": [
+         "via",
+         "amountMinor",
+         "reference"
+        ]
+       }
+      },
+      "tenderedMinor": {
+       "type": "integer"
+      },
+      "changeMinor": {
+       "type": "integer"
+      }
+     },
+     "required": [
+      "locationId",
+      "staffMemberId",
+      "tenders",
+      "tenderedMinor",
+      "changeMinor"
+     ]
+    },
     "createdAt": {
      "type": "string",
      "minLength": 1,
@@ -24961,6 +27087,7 @@
     "lines",
     "attributes",
     "discountApplications",
+    "pointOfSale",
     "createdAt",
     "updatedAt",
     "deletedAt"
@@ -26157,6 +28284,146 @@
     "updatedAt"
    ]
   },
+  "ReviewResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "productId": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "variantId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "orderId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "customerId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "pending",
+      "published",
+      "rejected",
+      "withdrawn"
+     ]
+    },
+    "rating": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 5
+    },
+    "title": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000
+    },
+    "body": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 5000
+    },
+    "authorDisplayName": {
+     "type": "string",
+     "nullable": true,
+     "maxLength": 4000,
+     "x-scalius-protected": "name"
+    },
+    "publishedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "repliedAt": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "revision": {
+     "type": "integer"
+    },
+    "createdAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
+    },
+    "orderItemId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "verified": {
+     "type": "boolean"
+    },
+    "appId": {
+     "type": "string",
+     "nullable": true,
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "moderationReason": {
+     "type": "string",
+     "nullable": true,
+     "enum": [
+      "spam",
+      "abusive",
+      "personal_info",
+      "off_topic",
+      "not_about_product",
+      null
+     ]
+    }
+   },
+   "required": [
+    "id",
+    "productId",
+    "variantId",
+    "orderId",
+    "customerId",
+    "status",
+    "rating",
+    "title",
+    "body",
+    "authorDisplayName",
+    "publishedAt",
+    "repliedAt",
+    "revision",
+    "createdAt",
+    "updatedAt",
+    "orderItemId",
+    "verified",
+    "appId",
+    "moderationReason"
+   ]
+  },
   "ShipmentResource": {
    "type": "object",
    "properties": {
@@ -26279,6 +28546,303 @@
     "updatedAt"
    ]
   },
+  "ShippingRate": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "delivery",
+      "pickup"
+     ]
+    },
+    "name": {
+     "type": "string",
+     "description": "What the buyer sees."
+    },
+    "feeMinor": {
+     "type": "integer",
+     "description": "The charge, in minor units of the zone's `currency` (converted at the order's locked market rate in another currency)."
+    },
+    "freeOverMinor": {
+     "type": "integer",
+     "nullable": true,
+     "description": "The order value from which the charge is waived, in minor units; null: never waived."
+    },
+    "rateSource": {
+     "type": "string",
+     "description": "`flat` (the fee above) or a courier app's rate provider (`<app id>:<provider id>`), which quotes at checkout and falls back to `fallbackFeeMinor`."
+    },
+    "rateService": {
+     "type": "string",
+     "nullable": true,
+     "description": "The courier service a provider quotes."
+    },
+    "fallbackFeeMinor": {
+     "type": "integer",
+     "nullable": true
+    },
+    "description": {
+     "type": "string",
+     "nullable": true
+    },
+    "pickupAddress": {
+     "type": "string",
+     "nullable": true,
+     "description": "Where a buyer collects the order (kind `pickup`)."
+    },
+    "pickupHours": {
+     "type": "string",
+     "nullable": true
+    },
+    "isActive": {
+     "type": "boolean",
+     "description": "Only an active rate is offered at checkout."
+    },
+    "profileRates": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "profileId": {
+        "type": "string",
+        "description": "The shipping profile whose items these rates price."
+       },
+       "feeMinor": {
+        "type": "integer"
+       },
+       "minWeightGrams": {
+        "type": "integer",
+        "nullable": true
+       },
+       "maxWeightGrams": {
+        "type": "integer",
+        "nullable": true
+       },
+       "minSubtotalMinor": {
+        "type": "integer",
+        "nullable": true
+       },
+       "maxSubtotalMinor": {
+        "type": "integer",
+        "nullable": true
+       },
+       "freeOverMinor": {
+        "type": "integer",
+        "nullable": true
+       }
+      },
+      "required": [
+       "profileId",
+       "feeMinor",
+       "minWeightGrams",
+       "maxWeightGrams",
+       "minSubtotalMinor",
+       "maxSubtotalMinor",
+       "freeOverMinor"
+      ]
+     },
+     "description": "The profile-specific rates behind this option: a profile's items pay the cheapest one whose weight and value bounds hold; items of a profile without one pay `feeMinor`."
+    }
+   },
+   "required": [
+    "id",
+    "kind",
+    "name",
+    "feeMinor",
+    "freeOverMinor",
+    "rateSource",
+    "rateService",
+    "fallbackFeeMinor",
+    "description",
+    "pickupAddress",
+    "pickupHours",
+    "isActive",
+    "profileRates"
+   ]
+  },
+  "ShippingZoneResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "The zone's id; the store's local pickup points are the one zone with id `pickup`."
+    },
+    "name": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "delivery",
+      "pickup"
+     ]
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "Advances on every edit of the zone; local pickup is 0 until the merchant first saves it."
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3,
+     "description": "The store currency: every `*Minor` amount of the zone is in it."
+    },
+    "regions": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "countryCode": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 2
+       },
+       "scope": {
+        "type": "string",
+        "enum": [
+         "country",
+         "admin_area",
+         "postal_prefix"
+        ]
+       },
+       "adminArea": {
+        "type": "string",
+        "nullable": true,
+        "description": "An admin area of the country's address rules (state, province, division)."
+       },
+       "postalPrefix": {
+        "type": "string",
+        "nullable": true,
+        "description": "Postal codes that start with these letters and digits, spaces and dashes ignored."
+       }
+      },
+      "required": [
+       "countryCode",
+       "scope",
+       "adminArea",
+       "postalPrefix"
+      ]
+     },
+     "description": "Where the zone delivers. A region belongs to one zone."
+    },
+    "places": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "type": {
+        "type": "string",
+        "enum": [
+         "city",
+         "zone",
+         "area"
+        ]
+       },
+       "parentName": {
+        "type": "string",
+        "nullable": true
+       }
+      },
+      "required": [
+       "id",
+       "name",
+       "type",
+       "parentName"
+      ]
+     },
+     "description": "Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone."
+    },
+    "rates": {
+     "type": "array",
+     "items": {
+      "$ref": "#/components/schemas/ShippingRate"
+     }
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "kind",
+    "revision",
+    "currency",
+    "regions",
+    "places",
+    "rates"
+   ]
+  },
+  "StaffMemberResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string",
+     "description": "The name the dashboard shows for them (on the order timeline, beside stock movements)."
+    },
+    "isOwner": {
+     "type": "boolean",
+     "description": "The store owner: they hold every permission and cannot be removed."
+    },
+    "active": {
+     "type": "boolean",
+     "description": "False while they are suspended, and for good once removed from staff; a removed member keeps their name for history."
+    },
+    "roles": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string",
+        "description": "The role's key, such as `manager` or `sales_rep`; a custom role's own."
+       },
+       "displayName": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "id",
+       "name",
+       "displayName"
+      ]
+     },
+     "description": "Their roles, by display name. The owner needs none; a removed member has none."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time",
+     "description": "When the record last changed, a role assigned or removed included."
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "isOwner",
+    "active",
+    "roles",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
   "StoreLanguage": {
    "type": "object",
    "properties": {
@@ -26371,6 +28935,175 @@
     "notes",
     "status",
     "revision",
+    "createdAt",
+    "updatedAt"
+   ]
+  },
+  "TaxRegionResource": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "countryCode": {
+     "type": "string",
+     "minLength": 2,
+     "maxLength": 2
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "country",
+      "admin_area",
+      "postal_prefix",
+      "place"
+     ],
+     "description": "`country` is the registration: where the store collects tax. The others are regions of a registered country; the most specific region with rates of a line's class applies, and broader regions add only through `combinable` rates."
+    },
+    "adminArea": {
+     "type": "string",
+     "nullable": true
+    },
+    "postalPrefix": {
+     "type": "string",
+     "nullable": true
+    },
+    "place": {
+     "type": "object",
+     "nullable": true,
+     "properties": {
+      "id": {
+       "type": "string"
+      },
+      "type": {
+       "type": "string",
+       "enum": [
+        "city",
+        "zone",
+        "area"
+       ]
+      },
+      "name": {
+       "type": "string",
+       "nullable": true
+      }
+     },
+     "required": [
+      "id",
+      "type",
+      "name"
+     ],
+     "description": "A Bangladesh delivery place (kind `place`)."
+    },
+    "providerId": {
+     "type": "string",
+     "nullable": true,
+     "description": "A country's tax provider (`<app id>:<provider id>`); null uses the store-wide one, `system` being the rates below."
+    },
+    "revision": {
+     "type": "integer",
+     "minimum": 0,
+     "exclusiveMinimum": true
+    },
+    "taxEnabled": {
+     "type": "boolean",
+     "description": "Whether the store collects tax at all."
+    },
+    "taxShipping": {
+     "type": "boolean",
+     "description": "Whether delivery charges are taxed."
+    },
+    "rates": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       },
+       "taxClass": {
+        "type": "object",
+        "properties": {
+         "id": {
+          "type": "string"
+         },
+         "name": {
+          "type": "string"
+         },
+         "isExempt": {
+          "type": "boolean",
+          "description": "Products of an exempt class pay no tax."
+         }
+        },
+        "required": [
+         "id",
+         "name",
+         "isExempt"
+        ],
+        "description": "The tax class the rate applies to."
+       },
+       "rateBps": {
+        "type": "integer",
+        "description": "The rate in basis points: 1500 is 15.00%."
+       },
+       "priority": {
+        "type": "integer",
+        "description": "Lower first; a compound rate applies on top of the tax before it."
+       },
+       "isCompound": {
+        "type": "boolean"
+       },
+       "combinable": {
+        "type": "boolean",
+        "description": "Applies together with the broader regions' rates of its class instead of replacing them."
+       },
+       "isActive": {
+        "type": "boolean"
+       },
+       "revision": {
+        "type": "integer",
+        "minimum": 0,
+        "exclusiveMinimum": true
+       }
+      },
+      "required": [
+       "id",
+       "name",
+       "taxClass",
+       "rateBps",
+       "priority",
+       "isCompound",
+       "combinable",
+       "isActive",
+       "revision"
+      ]
+     },
+     "description": "Whether prices include the tax is each market's `pricesIncludeTax`, not the region's."
+    },
+    "createdAt": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "updatedAt": {
+     "type": "string",
+     "format": "date-time"
+    }
+   },
+   "required": [
+    "id",
+    "countryCode",
+    "kind",
+    "adminArea",
+    "postalPrefix",
+    "place",
+    "providerId",
+    "revision",
+    "taxEnabled",
+    "taxShipping",
+    "rates",
     "createdAt",
     "updatedAt"
    ]

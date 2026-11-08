@@ -15406,9 +15406,7 @@
           },
           "verifiedPurchase": {
             "type": "boolean",
-            "enum": [
-              true
-            ]
+            "description": "On a delivered order line (\"Verified purchase\"); false for a review an app imported without one."
           },
           "publishedAt": {
             "type": "string",
@@ -16176,6 +16174,66 @@
               ]
             }
           },
+          "pointOfSale": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "locationId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "staffMemberId": {
+                "type": "string",
+                "nullable": true,
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "tenders": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "via": {
+                      "type": "string",
+                      "enum": [
+                        "cash",
+                        "card_terminal",
+                        "mobile_wallet",
+                        "other"
+                      ]
+                    },
+                    "amountMinor": {
+                      "type": "integer"
+                    },
+                    "reference": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 4000
+                    }
+                  },
+                  "required": [
+                    "via",
+                    "amountMinor",
+                    "reference"
+                  ]
+                }
+              },
+              "tenderedMinor": {
+                "type": "integer"
+              },
+              "changeMinor": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "locationId",
+              "staffMemberId",
+              "tenders",
+              "tenderedMinor",
+              "changeMinor"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "minLength": 1,
@@ -16228,6 +16286,7 @@
           "lines",
           "attributes",
           "discountApplications",
+          "pointOfSale",
           "createdAt",
           "updatedAt",
           "deletedAt"
@@ -18932,6 +18991,1141 @@
           "conditions"
         ],
         "additionalProperties": false
+      },
+      "MarketResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active"
+            ],
+            "description": "Only an active market resolves for buyers."
+          },
+          "isBackup": {
+            "type": "boolean",
+            "description": "The backup market catches every buyer no other market matches, sells in the shop currency and holds the root URL."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2
+            },
+            "maxItems": 250,
+            "description": "ISO 3166-1 alpha-2 codes, sorted. A country belongs to one market."
+          },
+          "presence": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "value": {
+                "type": "string",
+                "maxLength": 5,
+                "description": "The URL subfolder (`en-in`), or `''` for the root URL, which only the backup market holds."
+              },
+              "locale": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2,
+                "description": "The language of the presence's pages (ISO 639-1)."
+              }
+            },
+            "required": [
+              "value",
+              "locale"
+            ],
+            "description": "Its web presence; null when it has none."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "The currency it sells in: its own, else the shop currency."
+          },
+          "shopCurrency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "The store currency: the books' currency, which every other amount in the API is in."
+          },
+          "ownCurrency": {
+            "type": "boolean",
+            "description": "True when it sells in its own currency, priced from the shop prices at its exchange rate unless a price list fixes them."
+          },
+          "priceMode": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "fx"
+            ],
+            "description": "`fixed`: product prices and its fixed price lists. `fx`: product prices converted at `fxRate`, adjusted, rounded up and ending as set."
+          },
+          "fxRate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Units of `currency` per unit of `shopCurrency` (an exact decimal); null: none yet. A market in the shop currency converts at 1."
+          },
+          "fxRateAsOf": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the rate was last set."
+          },
+          "fxRateSource": {
+            "type": "string",
+            "description": "Who sets the rate: `manual` or an exchange rate app's provider (`<app id>:<provider id>`)."
+          },
+          "fxLockMinutes": {
+            "type": "integer",
+            "description": "Minutes after placement an unpaid foreign-currency order may start a new payment session; placed amounts never change."
+          },
+          "priceAdjustmentBps": {
+            "type": "integer",
+            "description": "Raises (positive) or lowers (negative) FX-derived prices, in basis points."
+          },
+          "priceRoundingMinor": {
+            "type": "integer",
+            "nullable": true,
+            "description": "FX-derived prices round up to this step, in minor units of `currency`; null: the price increment."
+          },
+          "priceEndingMinor": {
+            "type": "integer",
+            "nullable": true,
+            "description": "What a rounded price ends in within its step, in minor units of `currency`; null for none."
+          },
+          "priceIncrementMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "The step its prices move in, in minor units of `currency`."
+          },
+          "priceIncrementInherited": {
+            "type": "boolean"
+          },
+          "pricesIncludeTax": {
+            "type": "boolean",
+            "description": "Whether its prices include tax: checkout shows tax as included when true and adds it on top when false."
+          },
+          "hasOrders": {
+            "type": "boolean",
+            "description": "A market that took orders is never deleted."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "name",
+          "status",
+          "isBackup",
+          "revision",
+          "countries",
+          "presence",
+          "currency",
+          "shopCurrency",
+          "ownCurrency",
+          "priceMode",
+          "fxRate",
+          "fxRateAsOf",
+          "fxRateSource",
+          "fxLockMinutes",
+          "priceAdjustmentBps",
+          "priceRoundingMinor",
+          "priceEndingMinor",
+          "priceIncrementMinor",
+          "priceIncrementInherited",
+          "pricesIncludeTax",
+          "hasOrders",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ShippingZoneResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The zone's id; the store's local pickup points are the one zone with id `pickup`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "delivery",
+              "pickup"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Advances on every edit of the zone; local pickup is 0 until the merchant first saves it."
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "The store currency: every `*Minor` amount of the zone is in it."
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "countryCode": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 2
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "country",
+                    "admin_area",
+                    "postal_prefix"
+                  ]
+                },
+                "adminArea": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "An admin area of the country's address rules (state, province, division)."
+                },
+                "postalPrefix": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Postal codes that start with these letters and digits, spaces and dashes ignored."
+                }
+              },
+              "required": [
+                "countryCode",
+                "scope",
+                "adminArea",
+                "postalPrefix"
+              ]
+            },
+            "description": "Where the zone delivers. A region belongs to one zone."
+          },
+          "places": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "city",
+                    "zone",
+                    "area"
+                  ]
+                },
+                "parentName": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "parentName"
+              ]
+            },
+            "description": "Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone."
+          },
+          "rates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShippingRate"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "revision",
+          "currency",
+          "regions",
+          "places",
+          "rates"
+        ]
+      },
+      "ShippingRate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "delivery",
+              "pickup"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "What the buyer sees."
+          },
+          "feeMinor": {
+            "type": "integer",
+            "description": "The charge, in minor units of the zone's `currency` (converted at the order's locked market rate in another currency)."
+          },
+          "freeOverMinor": {
+            "type": "integer",
+            "nullable": true,
+            "description": "The order value from which the charge is waived, in minor units; null: never waived."
+          },
+          "rateSource": {
+            "type": "string",
+            "description": "`flat` (the fee above) or a courier app's rate provider (`<app id>:<provider id>`), which quotes at checkout and falls back to `fallbackFeeMinor`."
+          },
+          "rateService": {
+            "type": "string",
+            "nullable": true,
+            "description": "The courier service a provider quotes."
+          },
+          "fallbackFeeMinor": {
+            "type": "integer",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "pickupAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Where a buyer collects the order (kind `pickup`)."
+          },
+          "pickupHours": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Only an active rate is offered at checkout."
+          },
+          "profileRates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "profileId": {
+                  "type": "string",
+                  "description": "The shipping profile whose items these rates price."
+                },
+                "feeMinor": {
+                  "type": "integer"
+                },
+                "minWeightGrams": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "maxWeightGrams": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "minSubtotalMinor": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "maxSubtotalMinor": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "freeOverMinor": {
+                  "type": "integer",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "profileId",
+                "feeMinor",
+                "minWeightGrams",
+                "maxWeightGrams",
+                "minSubtotalMinor",
+                "maxSubtotalMinor",
+                "freeOverMinor"
+              ]
+            },
+            "description": "The profile-specific rates behind this option: a profile's items pay the cheapest one whose weight and value bounds hold; items of a profile without one pay `feeMinor`."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "feeMinor",
+          "freeOverMinor",
+          "rateSource",
+          "rateService",
+          "fallbackFeeMinor",
+          "description",
+          "pickupAddress",
+          "pickupHours",
+          "isActive",
+          "profileRates"
+        ]
+      },
+      "TaxRegionResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "country",
+              "admin_area",
+              "postal_prefix",
+              "place"
+            ],
+            "description": "`country` is the registration: where the store collects tax. The others are regions of a registered country; the most specific region with rates of a line's class applies, and broader regions add only through `combinable` rates."
+          },
+          "adminArea": {
+            "type": "string",
+            "nullable": true
+          },
+          "postalPrefix": {
+            "type": "string",
+            "nullable": true
+          },
+          "place": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "city",
+                  "zone",
+                  "area"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "name"
+            ],
+            "description": "A Bangladesh delivery place (kind `place`)."
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "A country's tax provider (`<app id>:<provider id>`); null uses the store-wide one, `system` being the rates below."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "taxEnabled": {
+            "type": "boolean",
+            "description": "Whether the store collects tax at all."
+          },
+          "taxShipping": {
+            "type": "boolean",
+            "description": "Whether delivery charges are taxed."
+          },
+          "rates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "taxClass": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "isExempt": {
+                      "type": "boolean",
+                      "description": "Products of an exempt class pay no tax."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "isExempt"
+                  ],
+                  "description": "The tax class the rate applies to."
+                },
+                "rateBps": {
+                  "type": "integer",
+                  "description": "The rate in basis points: 1500 is 15.00%."
+                },
+                "priority": {
+                  "type": "integer",
+                  "description": "Lower first; a compound rate applies on top of the tax before it."
+                },
+                "isCompound": {
+                  "type": "boolean"
+                },
+                "combinable": {
+                  "type": "boolean",
+                  "description": "Applies together with the broader regions' rates of its class instead of replacing them."
+                },
+                "isActive": {
+                  "type": "boolean"
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "exclusiveMinimum": true
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "taxClass",
+                "rateBps",
+                "priority",
+                "isCompound",
+                "combinable",
+                "isActive",
+                "revision"
+              ]
+            },
+            "description": "Whether prices include the tax is each market's `pricesIncludeTax`, not the region's."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "countryCode",
+          "kind",
+          "adminArea",
+          "postalPrefix",
+          "place",
+          "providerId",
+          "revision",
+          "taxEnabled",
+          "taxShipping",
+          "rates",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AnalyticsSummary": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "description": "The store currency: every `*Minor` amount is in it."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "The store's IANA time zone: days, weeks and months are calendar ones in it."
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The first instant covered: the start of the store day that holds the requested `from`."
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The end of the period, exclusive: the start of the store day after the one holding the requested `to` (less a millisecond)."
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AnalyticsFigures"
+          },
+          "otherCurrencyOrders": {
+            "type": "integer",
+            "description": "Orders placed in a currency other than the store's: counted here, summed nowhere."
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/AnalyticsFigures"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "The bucket's first instant, clipped to the period."
+                    },
+                    "to": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "The bucket's end, exclusive."
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to"
+                  ]
+                }
+              ]
+            },
+            "maxItems": 92,
+            "description": "One entry per day, week (store country's first weekday) or month of the period, zero-filled, in time order."
+          }
+        },
+        "required": [
+          "currency",
+          "timeZone",
+          "from",
+          "to",
+          "granularity",
+          "totals",
+          "otherCurrencyOrders",
+          "buckets"
+        ]
+      },
+      "AnalyticsFigures": {
+        "type": "object",
+        "properties": {
+          "orders": {
+            "type": "integer",
+            "description": "Sales orders placed in the period, not counting cancelled or incomplete ones."
+          },
+          "grossSalesMinor": {
+            "type": "integer",
+            "description": "Merchandise at list price before discounts."
+          },
+          "discountsMinor": {
+            "type": "integer"
+          },
+          "refundsMinor": {
+            "type": "integer",
+            "description": "Merchandise returned or refunded on these orders, counted against the order's placement date."
+          },
+          "netSalesMinor": {
+            "type": "integer",
+            "description": "Gross sales minus discounts minus refunds."
+          },
+          "shippingMinor": {
+            "type": "integer"
+          },
+          "taxesMinor": {
+            "type": "integer"
+          },
+          "totalSalesMinor": {
+            "type": "integer",
+            "description": "Net sales plus shipping plus taxes."
+          },
+          "itemsSold": {
+            "type": "integer",
+            "description": "Units sold, net of returns."
+          },
+          "averageOrderValueMinor": {
+            "type": "integer",
+            "description": "(Gross sales minus discounts) divided by orders, rounded to the minor unit; 0 without orders."
+          }
+        },
+        "required": [
+          "orders",
+          "grossSalesMinor",
+          "discountsMinor",
+          "refundsMinor",
+          "netSalesMinor",
+          "shippingMinor",
+          "taxesMinor",
+          "totalSalesMinor",
+          "itemsSold",
+          "averageOrderValueMinor"
+        ]
+      },
+      "DigitalAssetResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "variantId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null: a file every digital variant of the product delivers. A licence-key pool always names its variant."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "licence_keys"
+            ],
+            "description": "`file`: a download. `licence_keys`: a pool of keys, which is its variant's stock."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ready",
+              "archived"
+            ],
+            "description": "`draft` until its file is uploaded; only `ready` items are delivered; `archived` ones go to no new order."
+          },
+          "name": {
+            "type": "string",
+            "description": "What the buyer sees it as."
+          },
+          "filename": {
+            "type": "string",
+            "nullable": true,
+            "description": "The file's download name; null for a key pool."
+          },
+          "contentType": {
+            "type": "string",
+            "nullable": true,
+            "description": "The file's media type; null for a key pool."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "nullable": true,
+            "description": "The uploaded file's size; null before upload and for a key pool."
+          },
+          "downloadLimit": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Downloads each buyer gets (1 to 100), or null for unlimited. Delivery snapshots it."
+          },
+          "accessDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Days of access after delivery (1 to 3650), or null for forever. Delivery snapshots it."
+          },
+          "licenceKeys": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "available": {
+                "type": "integer",
+                "description": "Keys not assigned yet (the variant's stock)."
+              },
+              "assigned": {
+                "type": "integer",
+                "description": "Keys handed over to buyers."
+              }
+            },
+            "required": [
+              "available",
+              "assigned"
+            ],
+            "description": "A key pool's counts; null for a file. Key values never leave the store."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "Advances when the item's settings or file change."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "variantId",
+          "kind",
+          "status",
+          "name",
+          "filename",
+          "contentType",
+          "sizeBytes",
+          "downloadLimit",
+          "accessDays",
+          "licenceKeys",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DigitalAccessResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "orderItemId": {
+            "type": "string"
+          },
+          "assetId": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "variantId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The order line's SKU."
+          },
+          "customerId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The order's customer, if any."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "licence_keys"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The digital item's name."
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "Licence keys assigned to the line; 1 for a file."
+          },
+          "downloadCount": {
+            "type": "integer",
+            "description": "Downloads used (files)."
+          },
+          "downloadLimit": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Downloads allowed, or null for unlimited; keys have none."
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When file access ends, or null for never."
+          },
+          "revokedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the store removed the access, or null."
+          },
+          "lastDownloadAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "exhausted",
+              "expired",
+              "ended",
+              "revoked"
+            ],
+            "description": "`active`; `exhausted`: every download used; `expired`: its access days ran out; `ended`: the order was cancelled, refunded or returned; `revoked`: the store removed it."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "orderId",
+          "orderItemId",
+          "assetId",
+          "productId",
+          "variantId",
+          "customerId",
+          "kind",
+          "name",
+          "quantity",
+          "downloadCount",
+          "downloadLimit",
+          "expiresAt",
+          "revokedAt",
+          "lastDownloadAt",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ReviewResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "productId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "variantId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "customerId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "published",
+              "rejected",
+              "withdrawn"
+            ]
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000
+          },
+          "body": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "authorDisplayName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 4000,
+            "x-scalius-protected": "name"
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "repliedAt": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "format": "date-time"
+          },
+          "orderItemId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "moderationReason": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "spam",
+              "abusive",
+              "personal_info",
+              "off_topic",
+              "not_about_product",
+              null
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "variantId",
+          "orderId",
+          "customerId",
+          "status",
+          "rating",
+          "title",
+          "body",
+          "authorDisplayName",
+          "publishedAt",
+          "repliedAt",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "orderItemId",
+          "verified",
+          "appId",
+          "moderationReason"
+        ]
+      },
+      "StaffMemberResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name the dashboard shows for them (on the order timeline, beside stock movements)."
+          },
+          "isOwner": {
+            "type": "boolean",
+            "description": "The store owner: they hold every permission and cannot be removed."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "False while they are suspended, and for good once removed from staff; a removed member keeps their name for history."
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The role's key, such as `manager` or `sales_rep`; a custom role's own."
+                },
+                "displayName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "displayName"
+              ]
+            },
+            "description": "Their roles, by display name. The owner needs none; a removed member has none."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the record last changed, a role assigned or removed included."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isOwner",
+          "active",
+          "roles",
+          "createdAt",
+          "updatedAt"
+        ]
       },
       "CategoryResource": {
         "type": "object",
@@ -25994,7 +27188,11 @@
                         "write_themes",
                         "write_navigation",
                         "write_places",
-                        "read_product_costs"
+                        "read_product_costs",
+                        "read_staff",
+                        "read_reviews",
+                        "write_reviews",
+                        "read_analytics"
                       ]
                     },
                     "risk": {
@@ -26953,7 +28151,11 @@
                 "write_themes",
                 "write_navigation",
                 "write_places",
-                "read_product_costs"
+                "read_product_costs",
+                "read_staff",
+                "read_reviews",
+                "write_reviews",
+                "read_analytics"
               ]
             },
             "description": "Access scopes: store data and actions the app may read or change."
@@ -27122,7 +28324,11 @@
                         "write_themes",
                         "write_navigation",
                         "write_places",
-                        "read_product_costs"
+                        "read_product_costs",
+                        "read_staff",
+                        "read_reviews",
+                        "write_reviews",
+                        "read_analytics"
                       ]
                     },
                     "risk": {
@@ -27764,7 +28970,8 @@
             "type": "string",
             "enum": [
               "customer",
-              "guest_receipt"
+              "guest_receipt",
+              "app"
             ]
           },
           "variantLabel": {
@@ -27798,6 +29005,7 @@
           },
           "order": {
             "type": "object",
+            "nullable": true,
             "properties": {
               "id": {
                 "type": "string"
@@ -27809,7 +29017,17 @@
             "required": [
               "id",
               "orderNumber"
-            ]
+            ],
+            "description": "The reviewed line's order; null for an app's review that names no line (an import)."
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "A verified purchase: the review is on a delivered order line."
+          },
+          "appId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The app that wrote it (an import or a reviews app); null for a buyer's own review."
           },
           "checkFlags": {
             "type": "array",
@@ -27891,6 +29109,8 @@
           "variantLabel",
           "product",
           "order",
+          "verified",
+          "appId",
           "checkFlags",
           "moderationReason",
           "reply",
@@ -98814,7 +100034,7 @@
           "App API - Orders"
         ],
         "summary": "List orders, least recently updated first",
-        "description": "Orders as webhooks carry them (OrderResource), in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor. Contact filters need the matching read_customer_* scope.",
+        "description": "Orders as webhooks carry them (OrderResource), in (updatedAt, id) order. Start a sync with updatedSince and follow nextCursor. Contact filters need the matching read_customer_* scope; `discountCode` lists the orders that redeemed a code.",
         "parameters": [
           {
             "schema": {
@@ -98962,6 +100182,18 @@
             "description": "true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due.",
             "name": "overdue",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used."
+            },
+            "required": false,
+            "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used.",
+            "name": "discountCode",
+            "in": "query"
           }
         ],
         "responses": {
@@ -99108,7 +100340,7 @@
           "App API - Orders"
         ],
         "summary": "Place an order for a customer",
-        "description": "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order.",
+        "description": "Places a confirmed order the way staff do, with the store's apps' checkout functions applied: stock is reserved, tax and app discounts are priced, and the order is attributed to the app (channel `app`) or to staff. With `pointOfSale` it is an in-person sale (channel `pos`): paid by its tenders, handed over at the counter and delivered, its stock taken at that location. Amounts are minor units of the store currency. Send an Idempotency-Key: a repeat returns the first order (and finishes a sale a lost response left part-done).",
         "parameters": [
           {
             "schema": {
@@ -99467,7 +100699,64 @@
                     "type": "string",
                     "nullable": true,
                     "minLength": 1,
-                    "maxLength": 160
+                    "maxLength": 160,
+                    "description": "The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest)."
+                  },
+                  "pointOfSale": {
+                    "type": "object",
+                    "properties": {
+                      "locationId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "staffMemberId": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "tenders": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "via": {
+                              "type": "string",
+                              "enum": [
+                                "cash",
+                                "card_terminal",
+                                "mobile_wallet",
+                                "other"
+                              ]
+                            },
+                            "amountMinor": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9000000000000
+                            },
+                            "reference": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120
+                            }
+                          },
+                          "required": [
+                            "via",
+                            "amountMinor"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1,
+                        "maxItems": 5
+                      }
+                    },
+                    "required": [
+                      "locationId",
+                      "tenders"
+                    ],
+                    "additionalProperties": false,
+                    "description": "An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`)."
                   }
                 },
                 "required": [
@@ -111384,7 +112673,7 @@
           "revision": "none",
           "batch": "parallel",
           "transport": "json",
-          "maximumResponseBytes": 32768,
+          "maximumResponseBytes": 65536,
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
@@ -113958,6 +115247,3283 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "customers.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/markets": {
+      "get": {
+        "operationId": "dashboard.resources.markets.list",
+        "tags": [
+          "App API - Markets"
+        ],
+        "summary": "List the store's markets, the backup market first",
+        "description": "Each market with its countries, selling currency, price adjustment and rounding facts, web presence and locale, and status. A buyer belongs to the active market of their country, else the backup market. At most 50 markets; the default page holds them all.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50,
+              "description": "At most this many items (default and maximum 50)."
+            },
+            "required": false,
+            "description": "At most this many items (default and maximum 50).",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Markets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "markets": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MarketResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "markets",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app needs the store's markets: their countries, selling currency, exchange rate and price rounding, web presence and language, and status.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/markets/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.markets.get",
+        "tags": [
+          "App API - Markets"
+        ],
+        "summary": "Get one market",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The market",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "market": {
+                          "$ref": "#/components/schemas/MarketResource"
+                        }
+                      },
+                      "required": [
+                        "market"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one market's countries, currency, price adjustment and rounding, and web presence.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/shipping-zones": {
+      "get": {
+        "operationId": "dashboard.resources.shipping_zones.list",
+        "tags": [
+          "App API - Shipping"
+        ],
+        "summary": "List delivery zones with their rates, and local pickup",
+        "description": "Each delivery zone with the countries, admin areas, postal prefixes and Bangladesh places it serves and its rates (minor units of the store currency, free-over threshold, courier rate source and profile rates), then one last zone of kind `pickup` for the store's pickup points. A destination takes its most specific zone: a Bangladesh place (area, then thana, then city) beats a postal prefix (the longest wins), which beats an admin area, which beats the whole country; none matching means no delivery. Zones list by name; a page may hold fewer zones than `limit` to stay within the response budget.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many zones (default 20, maximum 50)."
+            },
+            "required": false,
+            "description": "At most this many zones (default 20, maximum 50).",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipping zones",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "shippingZones": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ShippingZoneResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "shippingZones",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app quotes or checks delivery: the zones, their countries, regions and places, rates, free-delivery threshold and pickup points.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.shipping_methods.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/shipping-zones/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.shipping_zones.get",
+        "tags": [
+          "App API - Shipping"
+        ],
+        "summary": "Get one shipping zone, or local pickup",
+        "description": "A delivery zone by id, or the store's pickup points as zone `pickup`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The shipping zone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "shippingZone": {
+                          "$ref": "#/components/schemas/ShippingZoneResource"
+                        }
+                      },
+                      "required": [
+                        "shippingZone"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one delivery zone or the local pickup points with their regions, places and rates.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.shipping_methods.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/tax-regions": {
+      "get": {
+        "operationId": "dashboard.resources.tax_regions.list",
+        "tags": [
+          "App API - Tax"
+        ],
+        "summary": "List where the store collects tax, with each region's rates",
+        "description": "Each tax region (a registered country, then its admin areas, postal prefixes and Bangladesh places) with its rates in basis points, the tax class each applies to and whether it is compound or combinable. Regions match like shipping zones, most specific first; no region means no tax. Listed by country, then country before admin area, postal prefix and place.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "description": "At most this many regions (default 50, maximum 100); a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many regions (default 50, maximum 100); a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2,
+              "description": "Only this country's regions (ISO 3166-1 alpha-2)."
+            },
+            "required": false,
+            "description": "Only this country's regions (ISO 3166-1 alpha-2).",
+            "name": "countryCode",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "taxRegions": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/TaxRegionResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "taxRegions",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app needs where the store collects tax and each region's rates, tax classes and compound or combinable rules.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/tax-regions/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.tax_regions.get",
+        "tags": [
+          "App API - Tax"
+        ],
+        "summary": "Get one tax region with its rates",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The tax region",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "taxRegion": {
+                          "$ref": "#/components/schemas/TaxRegionResource"
+                        }
+                      },
+                      "required": [
+                        "taxRegion"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one tax region with its rates and the tax class each applies to.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/analytics/summary": {
+      "get": {
+        "operationId": "dashboard.resources.analytics.get_summary",
+        "tags": [
+          "App API - Analytics"
+        ],
+        "summary": "Sales summary for a period",
+        "description": "Orders, gross sales, discounts, refunds, net sales, shipping, taxes, total sales and average order value for a period of at most 366 days, in minor units of the store currency, with day, week or month buckets (day up to 92 days). The same figures as the dashboard's analytics overview, read in one query. The period is whole store-calendar days: `from` starts at the day holding it and `to` (exclusive) ends the day holding the instant before it; the answer names the exact instants covered. The store records no storefront sessions or visitors, so the summary carries none.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "The start of the period (ISO 8601)."
+            },
+            "required": true,
+            "description": "The start of the period (ISO 8601).",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "The end of the period, exclusive (ISO 8601); at most 366 days after `from`."
+            },
+            "required": true,
+            "description": "The end of the period, exclusive (ISO 8601); at most 366 days after `from`.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "description": "Bucket size. Day needs a period of 92 days or less; omitted: day up to 92 days, week up to a year."
+            },
+            "required": false,
+            "description": "Bucket size. Day needs a period of 92 days or less; omitted: day up to 92 days, week up to a year.",
+            "name": "granularity",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "$ref": "#/components/schemas/AnalyticsSummary"
+                        }
+                      },
+                      "required": [
+                        "summary"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app or report needs sales for a period: orders, gross and net sales, refunds, shipping, taxes and average order value by day, week or month.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.analytics"
+        }
+      }
+    },
+    "/api/v1/admin/resources/digital-assets": {
+      "get": {
+        "operationId": "dashboard.resources.digital_assets.list",
+        "tags": [
+          "App API - Digital goods"
+        ],
+        "summary": "List digital files and licence-key pools, least recently updated first",
+        "description": "Every product's downloadable files and licence-key pools (archived ones too), in (updatedAt, id) order: narrow to one product with productId, start a sync with updatedSince and follow nextCursor. A pool answers its key counts; no storage key, link or key value is ever returned.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Only this product's files and pools."
+            },
+            "required": false,
+            "description": "Only this product's files and pools.",
+            "name": "productId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of digital items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "digitalAssets": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/DigitalAssetResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "digitalAssets",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app lists the downloadable files and licence-key pools products deliver, with download limits and key counts.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/digital-assets/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.digital_assets.get",
+        "tags": [
+          "App API - Digital goods"
+        ],
+        "summary": "Get a digital file or licence-key pool",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The digital item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "digitalAsset": {
+                          "$ref": "#/components/schemas/DigitalAssetResource"
+                        }
+                      },
+                      "required": [
+                        "digitalAsset"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one downloadable file or licence-key pool: its limits, size and how many keys are left.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/digital-access": {
+      "get": {
+        "operationId": "dashboard.resources.digital_access.list",
+        "tags": [
+          "App API - Digital goods"
+        ],
+        "summary": "List what an order or a customer's orders give access to",
+        "description": "One entitlement per order line and digital item (a file, or the line's licence keys, which are never returned), with its downloads, expiry and status, in (updatedAt, id) order. Name an orderId, a customerId (the order's customer) or both; follow nextCursor.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Only this order's access."
+            },
+            "required": false,
+            "description": "Only this order's access.",
+            "name": "orderId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Only access given by this customer's orders."
+            },
+            "required": false,
+            "description": "Only access given by this customer's orders.",
+            "name": "customerId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of access records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entitlements": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/DigitalAccessResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "entitlements",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app checks what downloads and licence keys an order or a customer has, with downloads used and whether access is active.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.resources.digital_access.grant",
+        "tags": [
+          "App API - Digital goods"
+        ],
+        "summary": "Give a buyer access to a digital item on their order line",
+        "description": "For a paid order's line whose product delivers the item: a line still owed is handed over as the store's automatic delivery would (with the delivery message, and any other automatic line the order owes), a revoked access is given back, and a file added after delivery is issued. `outcome` says which; a repeat grants nothing twice. Refusals: digital_access_order_unpaid, digital_access_order_closed, digital_access_order_on_hold, digital_access_awaiting_confirmation, digital_asset_not_on_line, digital_asset_not_ready, digital_keys_exhausted, digital_access_keys_not_owed, digital_access_nothing_owed. Send an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "orderItemId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "The order line that bought the item."
+                  },
+                  "assetId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "The digital item (digital_assets.list) the line's product delivers."
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "orderItemId",
+                  "assetId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The buyer's access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entitlement": {
+                          "$ref": "#/components/schemas/DigitalAccessResource"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "issued",
+                            "reinstated",
+                            "unchanged"
+                          ],
+                          "description": "`issued`: new access. `reinstated`: revoked access given back. `unchanged`: the buyer already had it."
+                        }
+                      },
+                      "required": [
+                        "entitlement",
+                        "outcome"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app gives a paying buyer their download or licence keys for an order line, or gives back access that was revoked.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.edit"
+        }
+      }
+    },
+    "/api/v1/admin/resources/digital-access/{id}/revoke": {
+      "post": {
+        "operationId": "dashboard.resources.digital_access.revoke",
+        "tags": [
+          "App API - Digital goods"
+        ],
+        "summary": "Take a buyer's access to a digital item away",
+        "description": "Downloads and licence-key reveals stop at once; assigned keys stay assigned (a key is never handed out again). Revoking revoked access changes nothing (`outcome: unchanged`); digital_access.grant gives it back. Send an Idempotency-Key.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The buyer's access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entitlement": {
+                          "$ref": "#/components/schemas/DigitalAccessResource"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "revoked",
+                            "unchanged"
+                          ],
+                          "description": "`unchanged`: it was already revoked."
+                        }
+                      },
+                      "required": [
+                        "entitlement",
+                        "outcome"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app takes away a buyer's access to a download or licence keys (a chargeback, abuse, a mistaken delivery).",
+          "dryRun": "none",
+          "confirmation": "required"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.edit"
+        }
+      }
+    },
+    "/api/v1/admin/resources/reviews": {
+      "get": {
+        "operationId": "dashboard.resources.reviews.list",
+        "tags": [
+          "App API - Reviews"
+        ],
+        "summary": "List product reviews, least recently updated first",
+        "description": "Reviews as webhooks carry them (ReviewResource: status, rating, text, the order line when it is a verified purchase, the app that wrote it, revision), every status, in (updatedAt, id) order. Filter by product, status or customer; start a sync with updatedSince and follow nextCursor. The reviewer's name reads null without read_customer_names.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Only this product's reviews."
+            },
+            "required": false,
+            "description": "Only this product's reviews.",
+            "name": "productId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "published",
+                "rejected",
+                "withdrawn"
+              ],
+              "description": "Only reviews in this status (`pending` is the moderation queue); omitted, every status."
+            },
+            "required": false,
+            "description": "Only reviews in this status (`pending` is the moderation queue); omitted, every status.",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Only this customer's reviews."
+            },
+            "required": false,
+            "description": "Only this customer's reviews.",
+            "name": "customerId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of reviews",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reviews": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ReviewResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "reviews",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app lists or syncs product reviews, such as the ones waiting for moderation or one product's reviews.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "grantScope": "review_moderation"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "reviews.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.resources.reviews.create",
+        "tags": [
+          "App API - Reviews"
+        ],
+        "summary": "Write a product review (an import or a reviews app)",
+        "description": "Writes a review of a product as the calling app (only an app writes reviews: 403 `app_principal_required` otherwise). Name the delivered order line it reviews (`orderItemId`) to make it a verified purchase of that line's customer; `verified: true` without one, or on another customer's line, is refused with 422 `review_not_verifiable`. An import of history names no line (and may name a `customerId`), is shown without \"Verified purchase\" and never takes a buyer's one live review of the product. `status: \"published\"` puts it on the product page unless the store's content check holds it (links, emails, phone numbers, blocked words): it then waits as `pending`. A line's buyer has one live review per product (409 `review_exists`). The Idempotency-Key is required: the review's id derives from it, so a repeat answers the same review and writes nothing twice; the key reused for another review is refused (422 `idempotency_key_reused`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "productId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "variantId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "The variant reviewed (one of the product's); a line's own variant when `orderItemId` is set."
+                  },
+                  "orderItemId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "The delivered order line reviewed: the review is then a verified purchase of the line's customer."
+                  },
+                  "customerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "The customer who wrote it; with `orderItemId`, the line's order must be theirs."
+                  },
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "title": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 240,
+                    "description": "At most 120 characters."
+                  },
+                  "body": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 10000,
+                    "description": "At most 5000 characters."
+                  },
+                  "authorDisplayName": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "The name it is shown under (at most 60 characters); defaults to the customer's (\"First L.\"). Required with no customer."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "published"
+                    ],
+                    "default": "pending",
+                    "description": "`published` puts it on the product page (unless the content check holds it); `pending` sends it to moderation."
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When it was written, for imported history (a past time); omitted, now."
+                  },
+                  "verified": {
+                    "type": "boolean",
+                    "description": "Claims a verified purchase: accepted only with an `orderItemId` that proves it."
+                  }
+                },
+                "required": [
+                  "productId",
+                  "rating"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "review": {
+                          "$ref": "#/components/schemas/ReviewResource"
+                        }
+                      },
+                      "required": [
+                        "review"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app imports a product review from another platform or a reviews service, verified only on a delivered order line.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "grantScope": "review_moderation"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "reviews.moderate"
+        }
+      }
+    },
+    "/api/v1/admin/resources/reviews/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.reviews.get",
+        "tags": [
+          "App API - Reviews"
+        ],
+        "summary": "Get a product review",
+        "description": "One review as its webhooks carry it, with the revision to moderate it at. The reviewer's name reads null without read_customer_names.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "review": {
+                          "$ref": "#/components/schemas/ReviewResource"
+                        }
+                      },
+                      "required": [
+                        "review"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app reads one product review with its status and the revision to moderate it at.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "grantScope": "review_moderation"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "reviews.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/reviews/{id}/status": {
+      "post": {
+        "operationId": "dashboard.resources.reviews.set_status",
+        "tags": [
+          "App API - Reviews"
+        ],
+        "summary": "Publish or reject a product review",
+        "description": "Moderates one review under the revision read: `published` puts a pending review on the product page or restores a rejected one; `rejected` takes it down (or keeps it off) with a content reason, never the rating. A review changed since is refused with 409 `review_revision_conflict` and nothing changes; a buyer's withdrawn review cannot be moderated (409 `review_state_conflict`). Asking for the status it has changes nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7E]{8,200}$",
+              "minLength": 8,
+              "maxLength": 200
+            },
+            "required": false,
+            "description": "Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "published",
+                      "rejected"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "spam",
+                      "abusive",
+                      "personal_info",
+                      "off_topic",
+                      "not_about_product"
+                    ],
+                    "description": "Required to reject: why (spam, abusive, personal_info, off_topic, not_about_product)."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The review's `revision` you read."
+                  }
+                },
+                "required": [
+                  "status",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "review": {
+                          "$ref": "#/components/schemas/ReviewResource"
+                        }
+                      },
+                      "required": [
+                        "review"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "supported",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app publishes or rejects a product review after moderating it.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "grantScope": "review_moderation"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "reviews.moderate"
+        }
+      }
+    },
+    "/api/v1/admin/resources/staff": {
+      "get": {
+        "operationId": "dashboard.resources.staff.list",
+        "tags": [
+          "App API - Staff"
+        ],
+        "summary": "List staff members, least recently updated first",
+        "description": "The staff directory (StaffMemberResource: name, roles, whether they are the owner and active), in (updatedAt, id) order, removed members included as inactive so past work keeps its name. Filter by `active`; start a sync with updatedSince and follow nextCursor. Never an email, a phone, sign-in facts or permissions.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 1024,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "description": "At most this many records; a page may hold fewer to stay within the response budget."
+            },
+            "required": false,
+            "description": "At most this many records; a page may hold fewer to stay within the response budget.",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync."
+            },
+            "required": false,
+            "description": "Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.",
+            "name": "updatedSince",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "`true`: only staff who can work now; `false`: only suspended and removed ones. Omitted: everyone."
+            },
+            "required": false,
+            "description": "`true`: only staff who can work now; `false`: only suspended and removed ones. Omitted: everyone.",
+            "name": "active",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of staff members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "staffMembers": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/StaffMemberResource"
+                          }
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Pass it as `cursor` for the next page; null on the last page."
+                        }
+                      },
+                      "required": [
+                        "staffMembers",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app lists the store's staff by name and role, such as the cashiers a point-of-sale sale can be rung up by.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "staff.view"
+        }
+      }
+    },
+    "/api/v1/admin/resources/staff/{id}": {
+      "get": {
+        "operationId": "dashboard.resources.staff.get",
+        "tags": [
+          "App API - Staff"
+        ],
+        "summary": "Get a staff member",
+        "description": "One staff member by id (an order timeline's or a stock movement's staff id), removed ones included: name, roles, whether they are the owner and active.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The staff member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "staffMember": {
+                          "$ref": "#/components/schemas/StaffMemberResource"
+                        }
+                      },
+                      "required": [
+                        "staffMember"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app looks up one staff member by id, such as who placed or packed an order, removed staff included.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "staff.view"
         }
       }
     },
@@ -177389,6 +181955,7 @@
             "settings.shipping_methods.edit",
             "settings.shipping_methods.view",
             "settings.theme.edit",
+            "staff.view",
             "taxes.manage",
             "taxes.view",
             "team.manage",
@@ -180712,6 +185279,7 @@
             "settings.shipping_methods.edit",
             "settings.shipping_methods.view",
             "settings.theme.edit",
+            "staff.view",
             "taxes.manage",
             "taxes.view",
             "team.manage",
@@ -181824,6 +186392,7 @@
             "settings.shipping_methods.edit",
             "settings.shipping_methods.view",
             "settings.theme.edit",
+            "staff.view",
             "taxes.manage",
             "taxes.view",
             "team.manage",
@@ -189265,6 +193834,7 @@
             "settings.shipping_methods.edit",
             "settings.shipping_methods.view",
             "settings.theme.edit",
+            "staff.view",
             "taxes.manage",
             "taxes.view",
             "team.manage",
@@ -214530,6 +219100,61 @@
                       "type": "string"
                     }
                   },
+                  "pointOfSale": {
+                    "type": "object",
+                    "properties": {
+                      "locationId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "staffMemberId": {
+                        "type": "string",
+                        "nullable": true,
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "tenders": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "via": {
+                              "type": "string",
+                              "enum": [
+                                "cash",
+                                "card_terminal",
+                                "mobile_wallet",
+                                "other"
+                              ]
+                            },
+                            "amountMinor": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9000000000000
+                            },
+                            "reference": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120
+                            }
+                          },
+                          "required": [
+                            "via",
+                            "amountMinor"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1,
+                        "maxItems": 5
+                      }
+                    },
+                    "required": [
+                      "locationId",
+                      "tenders"
+                    ],
+                    "additionalProperties": false
+                  },
                   "paymentMethod": {
                     "type": "string",
                     "enum": [
@@ -218597,6 +223222,7 @@
                                   "invoice_issued",
                                   "fulfillment_location_changed",
                                   "prices_set",
+                                  "pos_sale",
                                   "app_event",
                                   "stock_held"
                                 ]
@@ -218808,6 +223434,7 @@
                             "invoice_issued",
                             "fulfillment_location_changed",
                             "prices_set",
+                            "pos_sale",
                             "app_event",
                             "stock_held"
                           ]
@@ -262589,6 +267216,7 @@
             "settings.shipping_methods.edit",
             "settings.shipping_methods.view",
             "settings.theme.edit",
+            "staff.view",
             "taxes.manage",
             "taxes.view",
             "team.manage",
@@ -297973,6 +302601,14 @@
           ]
         },
         {
+          "operationId": "dashboard.resources.analytics.get_summary",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.analytics.get_summary"
+          ]
+        },
+        {
           "operationId": "dashboard.resources.app_content.delete",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -298100,6 +302736,46 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.customers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.digital_access.grant",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.digital_access.grant"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.digital_access.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.digital_access.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.digital_access.revoke",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.digital_access.revoke"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.digital_assets.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.digital_assets.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.digital_assets.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.digital_assets.list"
           ]
         },
         {
@@ -298236,6 +302912,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.inventory_transfers.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.markets.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.markets.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.markets.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.markets.list"
           ]
         },
         {
@@ -298591,6 +303283,38 @@
           ]
         },
         {
+          "operationId": "dashboard.resources.reviews.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.reviews.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.reviews.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.reviews.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.reviews.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.reviews.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.reviews.set_status",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.reviews.set_status"
+          ]
+        },
+        {
           "operationId": "dashboard.resources.shipments.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -298612,6 +303336,38 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.shipments.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.shipping_zones.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.shipping_zones.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.shipping_zones.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.shipping_zones.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.staff.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.staff.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.staff.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.staff.list"
           ]
         },
         {
@@ -298644,6 +303400,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.resources.suppliers.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.tax_regions.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.tax_regions.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.resources.tax_regions.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.resources.tax_regions.list"
           ]
         },
         {

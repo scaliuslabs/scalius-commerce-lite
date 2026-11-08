@@ -3009,7 +3009,10 @@ export type PublicReview = {
     body: string | null;
     authorName: string;
     variantLabel: string | null;
-    verifiedPurchase: true;
+    /**
+     * On a delivered order line ("Verified purchase"); false for a review an app imported without one.
+     */
+    verifiedPurchase: boolean;
     publishedAt: string;
     editedAt: string | null;
     /**
@@ -3154,6 +3157,17 @@ export type OrderResource = {
             amountMinor: number;
         }>;
     }>;
+    pointOfSale: {
+        locationId: string;
+        staffMemberId: string | null;
+        tenders: Array<{
+            via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+            amountMinor: number;
+            reference: string | null;
+        }>;
+        tenderedMinor: number;
+        changeMinor: number;
+    } | null;
     createdAt: string;
     updatedAt: string;
     deletedAt: string | null;
@@ -3758,6 +3772,491 @@ export type CustomerSegmentRules = {
         op: 'equals' | 'is_set' | 'is_not_set';
         value?: string;
     }>;
+};
+
+export type MarketResource = {
+    id: string;
+    handle: string;
+    name: string;
+    /**
+     * Only an active market resolves for buyers.
+     */
+    status: 'draft' | 'active';
+    /**
+     * The backup market catches every buyer no other market matches, sells in the shop currency and holds the root URL.
+     */
+    isBackup: boolean;
+    revision: number;
+    /**
+     * ISO 3166-1 alpha-2 codes, sorted. A country belongs to one market.
+     */
+    countries: Array<string>;
+    /**
+     * Its web presence; null when it has none.
+     */
+    presence: {
+        /**
+         * The URL subfolder (`en-in`), or `''` for the root URL, which only the backup market holds.
+         */
+        value: string;
+        /**
+         * The language of the presence's pages (ISO 639-1).
+         */
+        locale: string;
+    } | null;
+    /**
+     * The currency it sells in: its own, else the shop currency.
+     */
+    currency: string;
+    /**
+     * The store currency: the books' currency, which every other amount in the API is in.
+     */
+    shopCurrency: string;
+    /**
+     * True when it sells in its own currency, priced from the shop prices at its exchange rate unless a price list fixes them.
+     */
+    ownCurrency: boolean;
+    /**
+     * `fixed`: product prices and its fixed price lists. `fx`: product prices converted at `fxRate`, adjusted, rounded up and ending as set.
+     */
+    priceMode: 'fixed' | 'fx';
+    /**
+     * Units of `currency` per unit of `shopCurrency` (an exact decimal); null: none yet. A market in the shop currency converts at 1.
+     */
+    fxRate: string | null;
+    /**
+     * When the rate was last set.
+     */
+    fxRateAsOf: string | null;
+    /**
+     * Who sets the rate: `manual` or an exchange rate app's provider (`<app id>:<provider id>`).
+     */
+    fxRateSource: string;
+    /**
+     * Minutes after placement an unpaid foreign-currency order may start a new payment session; placed amounts never change.
+     */
+    fxLockMinutes: number;
+    /**
+     * Raises (positive) or lowers (negative) FX-derived prices, in basis points.
+     */
+    priceAdjustmentBps: number;
+    /**
+     * FX-derived prices round up to this step, in minor units of `currency`; null: the price increment.
+     */
+    priceRoundingMinor: number | null;
+    /**
+     * What a rounded price ends in within its step, in minor units of `currency`; null for none.
+     */
+    priceEndingMinor: number | null;
+    /**
+     * The step its prices move in, in minor units of `currency`.
+     */
+    priceIncrementMinor: number;
+    priceIncrementInherited: boolean;
+    /**
+     * Whether its prices include tax: checkout shows tax as included when true and adds it on top when false.
+     */
+    pricesIncludeTax: boolean;
+    /**
+     * A market that took orders is never deleted.
+     */
+    hasOrders: boolean;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ShippingZoneResource = {
+    /**
+     * The zone's id; the store's local pickup points are the one zone with id `pickup`.
+     */
+    id: string;
+    name: string;
+    kind: 'delivery' | 'pickup';
+    /**
+     * Advances on every edit of the zone; local pickup is 0 until the merchant first saves it.
+     */
+    revision: number;
+    /**
+     * The store currency: every `*Minor` amount of the zone is in it.
+     */
+    currency: string;
+    /**
+     * Where the zone delivers. A region belongs to one zone.
+     */
+    regions: Array<{
+        countryCode: string;
+        scope: 'country' | 'admin_area' | 'postal_prefix';
+        /**
+         * An admin area of the country's address rules (state, province, division).
+         */
+        adminArea: string | null;
+        /**
+         * Postal codes that start with these letters and digits, spaces and dashes ignored.
+         */
+        postalPrefix: string | null;
+    }>;
+    /**
+     * Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone.
+     */
+    places: Array<{
+        id: string;
+        name: string;
+        type: 'city' | 'zone' | 'area';
+        parentName: string | null;
+    }>;
+    rates: Array<ShippingRate>;
+};
+
+export type ShippingRate = {
+    id: string;
+    kind: 'delivery' | 'pickup';
+    /**
+     * What the buyer sees.
+     */
+    name: string;
+    /**
+     * The charge, in minor units of the zone's `currency` (converted at the order's locked market rate in another currency).
+     */
+    feeMinor: number;
+    /**
+     * The order value from which the charge is waived, in minor units; null: never waived.
+     */
+    freeOverMinor: number | null;
+    /**
+     * `flat` (the fee above) or a courier app's rate provider (`<app id>:<provider id>`), which quotes at checkout and falls back to `fallbackFeeMinor`.
+     */
+    rateSource: string;
+    /**
+     * The courier service a provider quotes.
+     */
+    rateService: string | null;
+    fallbackFeeMinor: number | null;
+    description: string | null;
+    /**
+     * Where a buyer collects the order (kind `pickup`).
+     */
+    pickupAddress: string | null;
+    pickupHours: string | null;
+    /**
+     * Only an active rate is offered at checkout.
+     */
+    isActive: boolean;
+    /**
+     * The profile-specific rates behind this option: a profile's items pay the cheapest one whose weight and value bounds hold; items of a profile without one pay `feeMinor`.
+     */
+    profileRates: Array<{
+        /**
+         * The shipping profile whose items these rates price.
+         */
+        profileId: string;
+        feeMinor: number;
+        minWeightGrams: number | null;
+        maxWeightGrams: number | null;
+        minSubtotalMinor: number | null;
+        maxSubtotalMinor: number | null;
+        freeOverMinor: number | null;
+    }>;
+};
+
+export type TaxRegionResource = {
+    id: string;
+    countryCode: string;
+    /**
+     * `country` is the registration: where the store collects tax. The others are regions of a registered country; the most specific region with rates of a line's class applies, and broader regions add only through `combinable` rates.
+     */
+    kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+    adminArea: string | null;
+    postalPrefix: string | null;
+    /**
+     * A Bangladesh delivery place (kind `place`).
+     */
+    place: {
+        id: string;
+        type: 'city' | 'zone' | 'area';
+        name: string | null;
+    } | null;
+    /**
+     * A country's tax provider (`<app id>:<provider id>`); null uses the store-wide one, `system` being the rates below.
+     */
+    providerId: string | null;
+    revision: number;
+    /**
+     * Whether the store collects tax at all.
+     */
+    taxEnabled: boolean;
+    /**
+     * Whether delivery charges are taxed.
+     */
+    taxShipping: boolean;
+    /**
+     * Whether prices include the tax is each market's `pricesIncludeTax`, not the region's.
+     */
+    rates: Array<{
+        id: string;
+        name: string;
+        /**
+         * The tax class the rate applies to.
+         */
+        taxClass: {
+            id: string;
+            name: string;
+            /**
+             * Products of an exempt class pay no tax.
+             */
+            isExempt: boolean;
+        };
+        /**
+         * The rate in basis points: 1500 is 15.00%.
+         */
+        rateBps: number;
+        /**
+         * Lower first; a compound rate applies on top of the tax before it.
+         */
+        priority: number;
+        isCompound: boolean;
+        /**
+         * Applies together with the broader regions' rates of its class instead of replacing them.
+         */
+        combinable: boolean;
+        isActive: boolean;
+        revision: number;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type AnalyticsSummary = {
+    /**
+     * The store currency: every `*Minor` amount is in it.
+     */
+    currency: string;
+    /**
+     * The store's IANA time zone: days, weeks and months are calendar ones in it.
+     */
+    timeZone: string;
+    /**
+     * The first instant covered: the start of the store day that holds the requested `from`.
+     */
+    from: string;
+    /**
+     * The end of the period, exclusive: the start of the store day after the one holding the requested `to` (less a millisecond).
+     */
+    to: string;
+    granularity: 'day' | 'week' | 'month';
+    totals: AnalyticsFigures;
+    /**
+     * Orders placed in a currency other than the store's: counted here, summed nowhere.
+     */
+    otherCurrencyOrders: number;
+    /**
+     * One entry per day, week (store country's first weekday) or month of the period, zero-filled, in time order.
+     */
+    buckets: Array<AnalyticsFigures & {
+        /**
+         * The bucket's first instant, clipped to the period.
+         */
+        from: string;
+        /**
+         * The bucket's end, exclusive.
+         */
+        to: string;
+    }>;
+};
+
+export type AnalyticsFigures = {
+    /**
+     * Sales orders placed in the period, not counting cancelled or incomplete ones.
+     */
+    orders: number;
+    /**
+     * Merchandise at list price before discounts.
+     */
+    grossSalesMinor: number;
+    discountsMinor: number;
+    /**
+     * Merchandise returned or refunded on these orders, counted against the order's placement date.
+     */
+    refundsMinor: number;
+    /**
+     * Gross sales minus discounts minus refunds.
+     */
+    netSalesMinor: number;
+    shippingMinor: number;
+    taxesMinor: number;
+    /**
+     * Net sales plus shipping plus taxes.
+     */
+    totalSalesMinor: number;
+    /**
+     * Units sold, net of returns.
+     */
+    itemsSold: number;
+    /**
+     * (Gross sales minus discounts) divided by orders, rounded to the minor unit; 0 without orders.
+     */
+    averageOrderValueMinor: number;
+};
+
+export type DigitalAssetResource = {
+    id: string;
+    productId: string;
+    /**
+     * Null: a file every digital variant of the product delivers. A licence-key pool always names its variant.
+     */
+    variantId: string | null;
+    /**
+     * `file`: a download. `licence_keys`: a pool of keys, which is its variant's stock.
+     */
+    kind: 'file' | 'licence_keys';
+    /**
+     * `draft` until its file is uploaded; only `ready` items are delivered; `archived` ones go to no new order.
+     */
+    status: 'draft' | 'ready' | 'archived';
+    /**
+     * What the buyer sees it as.
+     */
+    name: string;
+    /**
+     * The file's download name; null for a key pool.
+     */
+    filename: string | null;
+    /**
+     * The file's media type; null for a key pool.
+     */
+    contentType: string | null;
+    /**
+     * The uploaded file's size; null before upload and for a key pool.
+     */
+    sizeBytes: number | null;
+    /**
+     * Downloads each buyer gets (1 to 100), or null for unlimited. Delivery snapshots it.
+     */
+    downloadLimit: number | null;
+    /**
+     * Days of access after delivery (1 to 3650), or null for forever. Delivery snapshots it.
+     */
+    accessDays: number | null;
+    /**
+     * A key pool's counts; null for a file. Key values never leave the store.
+     */
+    licenceKeys: {
+        /**
+         * Keys not assigned yet (the variant's stock).
+         */
+        available: number;
+        /**
+         * Keys handed over to buyers.
+         */
+        assigned: number;
+    } | null;
+    /**
+     * Advances when the item's settings or file change.
+     */
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type DigitalAccessResource = {
+    id: string;
+    orderId: string;
+    orderItemId: string;
+    assetId: string;
+    productId: string;
+    /**
+     * The order line's SKU.
+     */
+    variantId: string | null;
+    /**
+     * The order's customer, if any.
+     */
+    customerId: string | null;
+    kind: 'file' | 'licence_keys';
+    /**
+     * The digital item's name.
+     */
+    name: string;
+    /**
+     * Licence keys assigned to the line; 1 for a file.
+     */
+    quantity: number;
+    /**
+     * Downloads used (files).
+     */
+    downloadCount: number;
+    /**
+     * Downloads allowed, or null for unlimited; keys have none.
+     */
+    downloadLimit: number | null;
+    /**
+     * When file access ends, or null for never.
+     */
+    expiresAt: string | null;
+    /**
+     * When the store removed the access, or null.
+     */
+    revokedAt: string | null;
+    lastDownloadAt: string | null;
+    /**
+     * `active`; `exhausted`: every download used; `expired`: its access days ran out; `ended`: the order was cancelled, refunded or returned; `revoked`: the store removed it.
+     */
+    status: 'active' | 'exhausted' | 'expired' | 'ended' | 'revoked';
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ReviewResource = {
+    id: string;
+    productId: string;
+    variantId: string | null;
+    orderId: string | null;
+    customerId: string | null;
+    status: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    rating: number;
+    title: string | null;
+    body: string | null;
+    authorDisplayName: string | null;
+    publishedAt: string | null;
+    repliedAt: string | null;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+    orderItemId: string | null;
+    verified: boolean;
+    appId: string | null;
+    moderationReason: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product' | null;
+};
+
+export type StaffMemberResource = {
+    id: string;
+    /**
+     * The name the dashboard shows for them (on the order timeline, beside stock movements).
+     */
+    name: string;
+    /**
+     * The store owner: they hold every permission and cannot be removed.
+     */
+    isOwner: boolean;
+    /**
+     * False while they are suspended, and for good once removed from staff; a removed member keeps their name for history.
+     */
+    active: boolean;
+    /**
+     * Their roles, by display name. The owner needs none; a removed member has none.
+     */
+    roles: Array<{
+        id: string;
+        /**
+         * The role's key, such as `manager` or `sales_rep`; a custom role's own.
+         */
+        name: string;
+        displayName: string;
+    }>;
+    createdAt: string;
+    /**
+     * When the record last changed, a role assigned or removed included.
+     */
+    updatedAt: string;
 };
 
 export type CategoryResource = {
@@ -5677,7 +6176,7 @@ export type AppDetail = AppSummary & {
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
-        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs';
+        name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics';
         /**
          * The highest risk among the operations the scope lets this app call.
          */
@@ -5927,7 +6426,7 @@ export type AppGrant = {
     /**
      * Access scopes: store data and actions the app may read or change.
      */
-    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs'>;
+    scopes: Array<'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics'>;
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
@@ -5979,7 +6478,7 @@ export type AppFeature = {
          * Store access this feature adds, for its consent dialog.
          */
         scopes: Array<{
-            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs';
+            name: 'read_products' | 'write_products' | 'read_inventory' | 'write_inventory' | 'read_orders' | 'write_orders' | 'write_payments' | 'write_payment_methods' | 'write_refunds' | 'write_fulfillments' | 'read_customers' | 'write_customers' | 'write_marketing' | 'send_messages_any' | 'read_customer_names' | 'read_customer_emails' | 'read_customer_phones' | 'read_customer_addresses' | 'read_discounts' | 'write_discounts' | 'read_content' | 'write_content' | 'read_objects' | 'write_objects' | 'read_files' | 'write_files' | 'read_gift_cards' | 'write_gift_cards' | 'write_webhooks' | 'read_settings' | 'write_themes' | 'write_navigation' | 'write_places' | 'read_product_costs' | 'read_staff' | 'read_reviews' | 'write_reviews' | 'read_analytics';
             /**
              * The highest risk among the operations the scope lets this app call.
              */
@@ -6190,7 +6689,7 @@ export type AdminReview = {
     title: string | null;
     body: string | null;
     authorName: string;
-    authorType: 'customer' | 'guest_receipt';
+    authorType: 'customer' | 'guest_receipt' | 'app';
     variantLabel: string | null;
     product: {
         id: string;
@@ -6198,10 +6697,21 @@ export type AdminReview = {
         slug: string | null;
         imageUrl: string | null;
     };
+    /**
+     * The reviewed line's order; null for an app's review that names no line (an import).
+     */
     order: {
         id: string;
         orderNumber: string;
-    };
+    } | null;
+    /**
+     * A verified purchase: the review is on a delivered order line.
+     */
+    verified: boolean;
+    /**
+     * The app that wrote it (an import or a reviews app); null for a buyer's own review.
+     */
+    appId: string | null;
     /**
      * Why the automatic check held it: url, email, phone, repeated_characters, block_word.
      */
@@ -25624,6 +26134,10 @@ export type GetApiV1AdminResourcesOrdersData = {
          * true lists only overdue invoices: deferred (net terms) orders whose `paymentTerms.dueAt` has passed with money still due.
          */
         overdue?: 'true';
+        /**
+         * Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used.
+         */
+        discountCode?: string;
     };
     url: '/api/v1/admin/resources/orders';
 };
@@ -25795,7 +26309,22 @@ export type PostApiV1AdminResourcesOrdersData = {
          * Where it came in; an app's order defaults to the app's id.
          */
         channelSource?: string | null;
+        /**
+         * The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest).
+         */
         salesChannelId?: string | null;
+        /**
+         * An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`).
+         */
+        pointOfSale?: {
+            locationId: string;
+            staffMemberId?: string | null;
+            tenders: Array<{
+                via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+                amountMinor: number;
+                reference?: string | null;
+            }>;
+        };
     };
     headers?: {
         /**
@@ -30793,6 +31322,1181 @@ export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses = {
 };
 
 export type GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponse = GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses[keyof GetApiV1AdminResourcesCustomerSegmentsByIdMembersResponses];
+
+export type GetApiV1AdminResourcesMarketsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many items (default and maximum 50).
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/resources/markets';
+};
+
+export type GetApiV1AdminResourcesMarketsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesMarketsError = GetApiV1AdminResourcesMarketsErrors[keyof GetApiV1AdminResourcesMarketsErrors];
+
+export type GetApiV1AdminResourcesMarketsResponses = {
+    /**
+     * Markets
+     */
+    200: {
+        success: true;
+        data: {
+            markets: Array<MarketResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesMarketsResponse = GetApiV1AdminResourcesMarketsResponses[keyof GetApiV1AdminResourcesMarketsResponses];
+
+export type GetApiV1AdminResourcesMarketsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/markets/{id}';
+};
+
+export type GetApiV1AdminResourcesMarketsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesMarketsByIdError = GetApiV1AdminResourcesMarketsByIdErrors[keyof GetApiV1AdminResourcesMarketsByIdErrors];
+
+export type GetApiV1AdminResourcesMarketsByIdResponses = {
+    /**
+     * The market
+     */
+    200: {
+        success: true;
+        data: {
+            market: MarketResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesMarketsByIdResponse = GetApiV1AdminResourcesMarketsByIdResponses[keyof GetApiV1AdminResourcesMarketsByIdResponses];
+
+export type GetApiV1AdminResourcesShippingZonesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many zones (default 20, maximum 50).
+         */
+        limit?: number;
+    };
+    url: '/api/v1/admin/resources/shipping-zones';
+};
+
+export type GetApiV1AdminResourcesShippingZonesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesShippingZonesError = GetApiV1AdminResourcesShippingZonesErrors[keyof GetApiV1AdminResourcesShippingZonesErrors];
+
+export type GetApiV1AdminResourcesShippingZonesResponses = {
+    /**
+     * Shipping zones
+     */
+    200: {
+        success: true;
+        data: {
+            shippingZones: Array<ShippingZoneResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesShippingZonesResponse = GetApiV1AdminResourcesShippingZonesResponses[keyof GetApiV1AdminResourcesShippingZonesResponses];
+
+export type GetApiV1AdminResourcesShippingZonesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/shipping-zones/{id}';
+};
+
+export type GetApiV1AdminResourcesShippingZonesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesShippingZonesByIdError = GetApiV1AdminResourcesShippingZonesByIdErrors[keyof GetApiV1AdminResourcesShippingZonesByIdErrors];
+
+export type GetApiV1AdminResourcesShippingZonesByIdResponses = {
+    /**
+     * The shipping zone
+     */
+    200: {
+        success: true;
+        data: {
+            shippingZone: ShippingZoneResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesShippingZonesByIdResponse = GetApiV1AdminResourcesShippingZonesByIdResponses[keyof GetApiV1AdminResourcesShippingZonesByIdResponses];
+
+export type GetApiV1AdminResourcesTaxRegionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many regions (default 50, maximum 100); a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only this country's regions (ISO 3166-1 alpha-2).
+         */
+        countryCode?: string;
+    };
+    url: '/api/v1/admin/resources/tax-regions';
+};
+
+export type GetApiV1AdminResourcesTaxRegionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesTaxRegionsError = GetApiV1AdminResourcesTaxRegionsErrors[keyof GetApiV1AdminResourcesTaxRegionsErrors];
+
+export type GetApiV1AdminResourcesTaxRegionsResponses = {
+    /**
+     * Tax regions
+     */
+    200: {
+        success: true;
+        data: {
+            taxRegions: Array<TaxRegionResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesTaxRegionsResponse = GetApiV1AdminResourcesTaxRegionsResponses[keyof GetApiV1AdminResourcesTaxRegionsResponses];
+
+export type GetApiV1AdminResourcesTaxRegionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/tax-regions/{id}';
+};
+
+export type GetApiV1AdminResourcesTaxRegionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesTaxRegionsByIdError = GetApiV1AdminResourcesTaxRegionsByIdErrors[keyof GetApiV1AdminResourcesTaxRegionsByIdErrors];
+
+export type GetApiV1AdminResourcesTaxRegionsByIdResponses = {
+    /**
+     * The tax region
+     */
+    200: {
+        success: true;
+        data: {
+            taxRegion: TaxRegionResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesTaxRegionsByIdResponse = GetApiV1AdminResourcesTaxRegionsByIdResponses[keyof GetApiV1AdminResourcesTaxRegionsByIdResponses];
+
+export type GetApiV1AdminResourcesAnalyticsSummaryData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The start of the period (ISO 8601).
+         */
+        from: string;
+        /**
+         * The end of the period, exclusive (ISO 8601); at most 366 days after `from`.
+         */
+        to: string;
+        /**
+         * Bucket size. Day needs a period of 92 days or less; omitted: day up to 92 days, week up to a year.
+         */
+        granularity?: 'day' | 'week' | 'month';
+    };
+    url: '/api/v1/admin/resources/analytics/summary';
+};
+
+export type GetApiV1AdminResourcesAnalyticsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesAnalyticsSummaryError = GetApiV1AdminResourcesAnalyticsSummaryErrors[keyof GetApiV1AdminResourcesAnalyticsSummaryErrors];
+
+export type GetApiV1AdminResourcesAnalyticsSummaryResponses = {
+    /**
+     * Sales summary
+     */
+    200: {
+        success: true;
+        data: {
+            summary: AnalyticsSummary;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesAnalyticsSummaryResponse = GetApiV1AdminResourcesAnalyticsSummaryResponses[keyof GetApiV1AdminResourcesAnalyticsSummaryResponses];
+
+export type GetApiV1AdminResourcesDigitalAssetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only this product's files and pools.
+         */
+        productId?: string;
+    };
+    url: '/api/v1/admin/resources/digital-assets';
+};
+
+export type GetApiV1AdminResourcesDigitalAssetsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesDigitalAssetsError = GetApiV1AdminResourcesDigitalAssetsErrors[keyof GetApiV1AdminResourcesDigitalAssetsErrors];
+
+export type GetApiV1AdminResourcesDigitalAssetsResponses = {
+    /**
+     * A page of digital items
+     */
+    200: {
+        success: true;
+        data: {
+            digitalAssets: Array<DigitalAssetResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesDigitalAssetsResponse = GetApiV1AdminResourcesDigitalAssetsResponses[keyof GetApiV1AdminResourcesDigitalAssetsResponses];
+
+export type GetApiV1AdminResourcesDigitalAssetsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/digital-assets/{id}';
+};
+
+export type GetApiV1AdminResourcesDigitalAssetsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesDigitalAssetsByIdError = GetApiV1AdminResourcesDigitalAssetsByIdErrors[keyof GetApiV1AdminResourcesDigitalAssetsByIdErrors];
+
+export type GetApiV1AdminResourcesDigitalAssetsByIdResponses = {
+    /**
+     * The digital item
+     */
+    200: {
+        success: true;
+        data: {
+            digitalAsset: DigitalAssetResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesDigitalAssetsByIdResponse = GetApiV1AdminResourcesDigitalAssetsByIdResponses[keyof GetApiV1AdminResourcesDigitalAssetsByIdResponses];
+
+export type GetApiV1AdminResourcesDigitalAccessData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only this order's access.
+         */
+        orderId?: string;
+        /**
+         * Only access given by this customer's orders.
+         */
+        customerId?: string;
+    };
+    url: '/api/v1/admin/resources/digital-access';
+};
+
+export type GetApiV1AdminResourcesDigitalAccessErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesDigitalAccessError = GetApiV1AdminResourcesDigitalAccessErrors[keyof GetApiV1AdminResourcesDigitalAccessErrors];
+
+export type GetApiV1AdminResourcesDigitalAccessResponses = {
+    /**
+     * A page of access records
+     */
+    200: {
+        success: true;
+        data: {
+            entitlements: Array<DigitalAccessResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesDigitalAccessResponse = GetApiV1AdminResourcesDigitalAccessResponses[keyof GetApiV1AdminResourcesDigitalAccessResponses];
+
+export type PostApiV1AdminResourcesDigitalAccessData = {
+    body: {
+        orderId: string;
+        /**
+         * The order line that bought the item.
+         */
+        orderItemId: string;
+        /**
+         * The digital item (digital_assets.list) the line's product delivers.
+         */
+        assetId: string;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/digital-access';
+};
+
+export type PostApiV1AdminResourcesDigitalAccessErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesDigitalAccessError = PostApiV1AdminResourcesDigitalAccessErrors[keyof PostApiV1AdminResourcesDigitalAccessErrors];
+
+export type PostApiV1AdminResourcesDigitalAccessResponses = {
+    /**
+     * The buyer's access
+     */
+    200: {
+        success: true;
+        data: {
+            entitlement: DigitalAccessResource;
+            /**
+             * `issued`: new access. `reinstated`: revoked access given back. `unchanged`: the buyer already had it.
+             */
+            outcome: 'issued' | 'reinstated' | 'unchanged';
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesDigitalAccessResponse = PostApiV1AdminResourcesDigitalAccessResponses[keyof PostApiV1AdminResourcesDigitalAccessResponses];
+
+export type PostApiV1AdminResourcesDigitalAccessByIdRevokeData = {
+    body?: never;
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/digital-access/{id}/revoke';
+};
+
+export type PostApiV1AdminResourcesDigitalAccessByIdRevokeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesDigitalAccessByIdRevokeError = PostApiV1AdminResourcesDigitalAccessByIdRevokeErrors[keyof PostApiV1AdminResourcesDigitalAccessByIdRevokeErrors];
+
+export type PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses = {
+    /**
+     * The buyer's access
+     */
+    200: {
+        success: true;
+        data: {
+            entitlement: DigitalAccessResource;
+            /**
+             * `unchanged`: it was already revoked.
+             */
+            outcome: 'revoked' | 'unchanged';
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesDigitalAccessByIdRevokeResponse = PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses[keyof PostApiV1AdminResourcesDigitalAccessByIdRevokeResponses];
+
+export type GetApiV1AdminResourcesReviewsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * Only this product's reviews.
+         */
+        productId?: string;
+        /**
+         * Only reviews in this status (`pending` is the moderation queue); omitted, every status.
+         */
+        status?: 'pending' | 'published' | 'rejected' | 'withdrawn';
+        /**
+         * Only this customer's reviews.
+         */
+        customerId?: string;
+    };
+    url: '/api/v1/admin/resources/reviews';
+};
+
+export type GetApiV1AdminResourcesReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesReviewsError = GetApiV1AdminResourcesReviewsErrors[keyof GetApiV1AdminResourcesReviewsErrors];
+
+export type GetApiV1AdminResourcesReviewsResponses = {
+    /**
+     * A page of reviews
+     */
+    200: {
+        success: true;
+        data: {
+            reviews: Array<ReviewResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesReviewsResponse = GetApiV1AdminResourcesReviewsResponses[keyof GetApiV1AdminResourcesReviewsResponses];
+
+export type PostApiV1AdminResourcesReviewsData = {
+    body: {
+        productId: string;
+        /**
+         * The variant reviewed (one of the product's); a line's own variant when `orderItemId` is set.
+         */
+        variantId?: string | null;
+        /**
+         * The delivered order line reviewed: the review is then a verified purchase of the line's customer.
+         */
+        orderItemId?: string | null;
+        /**
+         * The customer who wrote it; with `orderItemId`, the line's order must be theirs.
+         */
+        customerId?: string | null;
+        rating: number;
+        /**
+         * At most 120 characters.
+         */
+        title?: string | null;
+        /**
+         * At most 5000 characters.
+         */
+        body?: string | null;
+        /**
+         * The name it is shown under (at most 60 characters); defaults to the customer's ("First L."). Required with no customer.
+         */
+        authorDisplayName?: string | null;
+        /**
+         * `published` puts it on the product page (unless the content check holds it); `pending` sends it to moderation.
+         */
+        status?: 'pending' | 'published';
+        /**
+         * When it was written, for imported history (a past time); omitted, now.
+         */
+        createdAt?: string;
+        /**
+         * Claims a verified purchase: accepted only with an `orderItemId` that proves it.
+         */
+        verified?: boolean;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/resources/reviews';
+};
+
+export type PostApiV1AdminResourcesReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesReviewsError = PostApiV1AdminResourcesReviewsErrors[keyof PostApiV1AdminResourcesReviewsErrors];
+
+export type PostApiV1AdminResourcesReviewsResponses = {
+    /**
+     * The review
+     */
+    201: {
+        success: true;
+        data: {
+            review: ReviewResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesReviewsResponse = PostApiV1AdminResourcesReviewsResponses[keyof PostApiV1AdminResourcesReviewsResponses];
+
+export type GetApiV1AdminResourcesReviewsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/reviews/{id}';
+};
+
+export type GetApiV1AdminResourcesReviewsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesReviewsByIdError = GetApiV1AdminResourcesReviewsByIdErrors[keyof GetApiV1AdminResourcesReviewsByIdErrors];
+
+export type GetApiV1AdminResourcesReviewsByIdResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: {
+            review: ReviewResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesReviewsByIdResponse = GetApiV1AdminResourcesReviewsByIdResponses[keyof GetApiV1AdminResourcesReviewsByIdResponses];
+
+export type PostApiV1AdminResourcesReviewsByIdStatusData = {
+    body: {
+        status: 'published' | 'rejected';
+        /**
+         * Required to reject: why (spam, abusive, personal_info, off_topic, not_about_product).
+         */
+        reason?: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product';
+        /**
+         * The review's `revision` you read.
+         */
+        expectedRevision: number;
+    };
+    headers?: {
+        /**
+         * Retry key (8 to 200 printable characters): repeating the request with it within 24 hours returns the first response (Idempotent-Replayed: true) instead of acting twice.
+         */
+        'idempotency-key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/reviews/{id}/status';
+};
+
+export type PostApiV1AdminResourcesReviewsByIdStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminResourcesReviewsByIdStatusError = PostApiV1AdminResourcesReviewsByIdStatusErrors[keyof PostApiV1AdminResourcesReviewsByIdStatusErrors];
+
+export type PostApiV1AdminResourcesReviewsByIdStatusResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: {
+            review: ReviewResource;
+        };
+    };
+};
+
+export type PostApiV1AdminResourcesReviewsByIdStatusResponse = PostApiV1AdminResourcesReviewsByIdStatusResponses[keyof PostApiV1AdminResourcesReviewsByIdStatusResponses];
+
+export type GetApiV1AdminResourcesStaffData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        /**
+         * At most this many records; a page may hold fewer to stay within the response budget.
+         */
+        limit?: number;
+        /**
+         * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
+         */
+        updatedSince?: string;
+        /**
+         * `true`: only staff who can work now; `false`: only suspended and removed ones. Omitted: everyone.
+         */
+        active?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/resources/staff';
+};
+
+export type GetApiV1AdminResourcesStaffErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesStaffError = GetApiV1AdminResourcesStaffErrors[keyof GetApiV1AdminResourcesStaffErrors];
+
+export type GetApiV1AdminResourcesStaffResponses = {
+    /**
+     * A page of staff members
+     */
+    200: {
+        success: true;
+        data: {
+            staffMembers: Array<StaffMemberResource>;
+            /**
+             * Pass it as `cursor` for the next page; null on the last page.
+             */
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesStaffResponse = GetApiV1AdminResourcesStaffResponses[keyof GetApiV1AdminResourcesStaffResponses];
+
+export type GetApiV1AdminResourcesStaffByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/resources/staff/{id}';
+};
+
+export type GetApiV1AdminResourcesStaffByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminResourcesStaffByIdError = GetApiV1AdminResourcesStaffByIdErrors[keyof GetApiV1AdminResourcesStaffByIdErrors];
+
+export type GetApiV1AdminResourcesStaffByIdResponses = {
+    /**
+     * The staff member
+     */
+    200: {
+        success: true;
+        data: {
+            staffMember: StaffMemberResource;
+        };
+    };
+};
+
+export type GetApiV1AdminResourcesStaffByIdResponse = GetApiV1AdminResourcesStaffByIdResponses[keyof GetApiV1AdminResourcesStaffByIdResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -60911,6 +62615,15 @@ export type PostApiV1AdminOrdersData = {
         attributes?: {
             [key: string]: string;
         };
+        pointOfSale?: {
+            locationId: string;
+            staffMemberId?: string | null;
+            tenders: Array<{
+                via: 'cash' | 'card_terminal' | 'mobile_wallet' | 'other';
+                amountMinor: number;
+                reference?: string | null;
+            }>;
+        };
         paymentMethod?: 'cod' | 'net_terms';
         paymentTermsDays?: number;
         paid?: {
@@ -62075,7 +63788,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event' | 'stock_held';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -62148,7 +63861,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'app_event' | 'stock_held';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'payment_recorded' | 'refund_recorded' | 'refund_kept' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued' | 'fulfillment_location_changed' | 'prices_set' | 'pos_sale' | 'app_event' | 'stock_held';
             body: string | null;
             data: {
                 [key: string]: unknown;
