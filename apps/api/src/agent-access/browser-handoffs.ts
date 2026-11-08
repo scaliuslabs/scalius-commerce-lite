@@ -1,19 +1,21 @@
 import { nanoid } from "nanoid";
 import { and, asc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { agentBrowserHandoffs } from "@scalius/database/schema";
 import {
   decryptCredentials,
   encodeEncryptedCredential,
   encryptCredentials,
 } from "@scalius/core/utils/credential-encryption";
+import { agentConnectionInactive } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
 const HANDOFF_TTL_MS = 5 * 60 * 1000;
 const MAX_ACTION_BYTES = 4_096;
 const CLEANUP_PAGE_SIZE = 2_000;
 const DELETE_CHUNK_SIZE = 90;
+const HANDOFF_AUTHORITY_INACTIVE = "AGENT_BROWSER_HANDOFF_AUTHORITY_INACTIVE";
 /** Rows whose operation id starts with this are dashboard approvals (`approvals.ts`), never continuations. */
 export const APPROVAL_OPERATION_PREFIX = "approval:";
 const notApproval = sql`substr(${agentBrowserHandoffs.operationId}, 1, ${APPROVAL_OPERATION_PREFIX.length}) <> ${APPROVAL_OPERATION_PREFIX}`;
@@ -137,23 +139,28 @@ export async function createAgentBrowserHandoff(
     requireEncryptionKey(env),
   ));
   const handoffId = `abh_${nanoid(20)}`;
-  await safeBatch(db, [
-    buildBatchGuard(db, grantAuthorityGuard(principal), "AGENT_BROWSER_HANDOFF_AUTHORITY_INACTIVE"),
-    db.insert(agentBrowserHandoffs).values({
-      id: handoffId,
-      grantId: principal.grantId,
-      credentialId: principal.credentialId,
-      ownerUserId: principal.ownerUserId,
-      resource: principal.resource,
-      operationId,
-      authorityRevision: principal.authorityRevision,
-      encryptedAction,
-      status: "active",
-      expiresAt,
-      createdAt: now,
-      updatedAt: now,
-    }),
-  ]);
+  try {
+    await safeBatch(db, [
+      buildBatchGuard(db, grantAuthorityGuard(principal), HANDOFF_AUTHORITY_INACTIVE),
+      db.insert(agentBrowserHandoffs).values({
+        id: handoffId,
+        grantId: principal.grantId,
+        credentialId: principal.credentialId,
+        ownerUserId: principal.ownerUserId,
+        resource: principal.resource,
+        operationId,
+        authorityRevision: principal.authorityRevision,
+        encryptedAction,
+        status: "active",
+        expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+  } catch (error) {
+    if (isBatchGuardError(error, HANDOFF_AUTHORITY_INACTIVE)) throw agentConnectionInactive();
+    throw error;
+  }
   return {
     handoffId,
     url: `${dashboardOrigin(env)}/admin/settings/agent-access/continue/${handoffId}`,

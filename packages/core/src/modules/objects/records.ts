@@ -509,10 +509,11 @@ export function appObjectCommitStatements(db: Database, commits: readonly AppObj
 
 /** An app record commit lost its race (its record changed) or broke the object's unique index. */
 export function isAppObjectCommitConflict(error: unknown): boolean {
+  if (isBatchGuardError(error, APP_OBJECT_COMMIT_CONFLICT)) return true;
+  // A unique index of the object (`u1`, `u2`) another record took meanwhile.
   for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
     const message = current instanceof Error ? current.message : String(current);
-    // The batch guard spells its marker upper-case in SQL (buildBatchGuard).
-    if (message.includes(APP_OBJECT_COMMIT_CONFLICT.toUpperCase()) || /object_records[._]u[12]/i.test(message)) return true;
+    if (/object_records[._]u[12]/i.test(message)) return true;
     current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
   }
   return false;

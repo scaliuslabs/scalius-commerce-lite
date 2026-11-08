@@ -12,6 +12,7 @@ import {
   sealAgentArtifact,
   sha256Hex,
 } from "./artifacts";
+import { AgentDispatchError } from "./dispatch-error";
 import type { AgentPrincipal } from "./types";
 
 const ARTIFACT_ID_PATTERN = /^aah_[A-Za-z0-9_-]{20}$/;
@@ -242,7 +243,8 @@ async function stageAgentArtifactInternal(
       // An unreferenced object contains only generated artifact bytes and is
       // unreachable. Bucket lifecycle cleanup remains a secondary safety net.
     }
-    if (error instanceof AgentArtifactDeliveryError) throw error;
+    // A connection revoked while its call ran is refused as inactive, not as a storage fault.
+    if (error instanceof AgentArtifactDeliveryError || error instanceof AgentDispatchError) throw error;
     throw new AgentArtifactDeliveryError(
       "artifact_handle_failed",
       "Artifact handle creation is temporarily unavailable",
@@ -260,7 +262,7 @@ export async function stageAgentArtifact(
   try {
     return await stageAgentArtifactInternal(operation, response, principal, env);
   } catch (error) {
-    if (error instanceof AgentArtifactDeliveryError) throw error;
+    if (error instanceof AgentArtifactDeliveryError || error instanceof AgentDispatchError) throw error;
     throw new AgentArtifactDeliveryError(
       "artifact_staging_failed",
       "Artifact staging is temporarily unavailable",

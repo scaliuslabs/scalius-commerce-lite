@@ -25,6 +25,7 @@ import { applyOrderStatusChange, listOrderHolds, noOpenOrderHoldCondition } from
 import { awaitingAppHoldDecision } from "./hold-window";
 import { type AutoFulfilMode, checkoutDocument } from "../settings";
 import { noActiveRefundAttemptForOrderIdCondition } from "../order-kernel";
+import { DIGITAL_KEYS_EXHAUSTED } from "../digital";
 import { ConflictError } from "../../errors";
 import { qualifiedColumn } from "../../utils/qualified-column";
 
@@ -286,6 +287,16 @@ export async function autoFulfilOrder(
             }
             if (isBatchGuardError(error, ELIGIBILITY_CHANGED)) {
                 throw new ConflictError("The order or its delivery settings changed before handover. Please retry.");
+            }
+            // A licence-key pool ran out between the plan and the batch: these
+            // lines stay owed, as a pool short at plan time leaves them.
+            if (isBatchGuardError(error, DIGITAL_KEYS_EXHAUSTED)) {
+                firstFailure ??= new AutoFulfilLinesOwedError(
+                    type,
+                    deliveredLines.map((line) => line.orderItemId),
+                    `${DIGITAL_KEYS_EXHAUSTED}: licence keys ran out before ${deliveredLines.length} digital line(s) were handed over`,
+                );
+                continue;
             }
             const message = error instanceof Error ? error.message : "";
             // Another run already handed these units over.

@@ -28,6 +28,7 @@ import {
     attributeBuyerUploadClaims,
     buyerUploadAttachStatements,
     lineBuyerUploadClaims,
+    refuseRacedBuyerUploads,
     type BuyerUploadClaim,
 } from "./buyer-upload-claims";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
@@ -195,9 +196,8 @@ export async function commitOrder(
                     availabilityTransitionVariantIds: [],
                 };
             }
-            // An upload another order took, or the sweep removed, since the
-            // check: the check names it (a guard's text alone is not specific on D1).
-            if (uploadClaims.length > 0) await assertBuyerUploadClaims(db, uploadClaims);
+            // An upload another order took, or the sweep removed, since the check.
+            await refuseRacedBuyerUploads(db, error, uploadClaims);
             // The channel's guards first: their markers are specific, the
             // inventory classifier treats any "conflict" text as retryable.
             const mapped = await channel.mapError?.(error);

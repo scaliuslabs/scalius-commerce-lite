@@ -7,7 +7,7 @@ import {
   encryptCredentials,
   readStoredCredentialStrict,
 } from "@scalius/core/utils/credential-encryption";
-import { buildBatchGuard, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { hmacAgentOpaqueValue } from "./pat";
 import { resolveAgentPrincipalFromGrant } from "./principal";
 import type {
@@ -164,6 +164,9 @@ export async function completeAgentAuthorization(
   };
 }
 
+const COMPLETION_NOT_CLAIMABLE = "OAUTH_COMPLETION_NOT_CLAIMABLE";
+const COMPLETION_UNAVAILABLE = "OAuth authorization completion is unavailable";
+
 export async function claimAgentAuthorizationCompletion(
   requestId: string,
   env: Env,
@@ -179,14 +182,14 @@ export async function claimAgentAuthorizationCompletion(
     .where(eq(agentAuthorizationRequests.id, requestId))
     .get();
   if (!state || state.expiresAt <= now) {
-    throw new Error("OAuth authorization completion is unavailable");
+    throw new Error(COMPLETION_UNAVAILABLE);
   }
   const decision = state.status === "approved" || state.status === "completing"
     ? "approved"
     : state.status === "denying"
       ? "denied"
       : null;
-  if (!decision) throw new Error("OAuth authorization completion is unavailable");
+  if (!decision) throw new Error(COMPLETION_UNAVAILABLE);
   const claimToken = randomClaimToken();
   const claimHash = await hmacAgentOpaqueValue(
     "oauth-completion-claim",
@@ -231,21 +234,27 @@ export async function claimAgentAuthorizationCompletion(
             OR completion_claim_expires_at <= unixepoch()
           )
         )`,
-    "OAUTH_COMPLETION_NOT_CLAIMABLE",
+    COMPLETION_NOT_CLAIMABLE,
   );
-  await safeBatch(db, [
-    guard,
-    db.update(agentAuthorizationRequests).set({
-      status: decision === "approved" ? "completing" : "denying",
-      completionClaimHash: claimHash,
-      completionClaimExpiresAt: claimExpiresAt,
-      updatedAt: now,
-    }).where(and(
-      eq(agentAuthorizationRequests.id, requestId),
-      gt(agentAuthorizationRequests.expiresAt, now),
-      claimable,
-    )),
-  ]);
+  try {
+    await safeBatch(db, [
+      guard,
+      db.update(agentAuthorizationRequests).set({
+        status: decision === "approved" ? "completing" : "denying",
+        completionClaimHash: claimHash,
+        completionClaimExpiresAt: claimExpiresAt,
+        updatedAt: now,
+      }).where(and(
+        eq(agentAuthorizationRequests.id, requestId),
+        gt(agentAuthorizationRequests.expiresAt, now),
+        claimable,
+      )),
+    ]);
+  } catch (error) {
+    // Another completion holds the claim, or the request expired or moved on, since the read above.
+    if (isBatchGuardError(error, COMPLETION_NOT_CLAIMABLE)) throw new Error(COMPLETION_UNAVAILABLE);
+    throw error;
+  }
   try {
     if (decision === "approved") {
       return {

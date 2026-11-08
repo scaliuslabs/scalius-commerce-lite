@@ -12,7 +12,7 @@
 // refused, never attached twice. The quote fingerprint covers the answers
 // (they are line properties and attributes), so a swapped id after review
 // sends the buyer back to review.
-import { buildBatchGuard, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
 import { buyerUploads } from "@scalius/database/schema";
 import { BUYER_UPLOADS_PER_ORDER_MAX, parseBuyerUploadValue } from "@scalius/shared/buyer-uploads";
 import { readOrderLineProperties } from "@scalius/shared/line-properties";
@@ -130,4 +130,18 @@ export function buyerUploadAttachStatements(db: Database, orderId: string, claim
     )) as unknown as SQLiteBatchItem);
     writes.push(buildBatchGuard(db, sql`(SELECT count(*) FROM ${buyerUploads} WHERE ${buyerUploads.orderId} = ${orderId}) = ${total}`, BUYER_UPLOAD_UNAVAILABLE_GUARD));
     return writes;
+}
+
+/**
+ * The commit's reading of its failed batch: when the attach guard failed (an
+ * upload another order took, or the sweep removed, since the check), refuses
+ * as the check does (409 `upload_unavailable`), naming the input the check
+ * finds, else the one input the order names. Any other failure is left to
+ * the caller.
+ */
+export async function refuseRacedBuyerUploads(db: Database, error: unknown, claims: readonly BuyerUploadClaim[]): Promise<void> {
+    if (!isBatchGuardError(error, BUYER_UPLOAD_UNAVAILABLE_GUARD)) return;
+    await assertBuyerUploadClaims(db, claims);
+    const keys = new Set(claims.map((claim) => claim.fieldKey));
+    unavailable(keys.size === 1 ? [...keys][0]! : null);
 }

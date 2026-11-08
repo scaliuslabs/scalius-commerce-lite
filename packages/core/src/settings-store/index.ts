@@ -31,7 +31,7 @@ import type { ZodType } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { settings as settingsTable } from "@scalius/database/schema";
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { AppError, ValidationError } from "@scalius/core/errors";
 import {
   encodeEncryptedCredential,
@@ -425,10 +425,11 @@ export async function writeSettingsDocuments(
     }
 
     // Tell a moved revision apart from any other failure (e.g. a media guard).
+    // A failed revision guard is a conflict whatever the re-read finds.
     const rows = await selectSettingsDocuments(db, prepared.map((write) => ({ key: write.key })));
     const current = (key: string) => rows.find((row) => row.category === key)?.revision ?? 0;
     const moved = prepared.find((write) => current(write.key) !== write.baseRevision);
-    if (!moved && failure) throw failure;
+    if (!moved && failure && !isBatchGuardError(failure, REVISION_GUARD_MARKER)) throw failure;
     const conflicted = moved ?? prepared[0]!;
     if (!retryable || attempt >= WRITE_ATTEMPTS) {
       throw new SettingsRevisionConflictError(

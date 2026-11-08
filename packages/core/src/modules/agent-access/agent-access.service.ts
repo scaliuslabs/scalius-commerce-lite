@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
   agentArtifactHandles,
   agentAuditEvents,
@@ -17,7 +17,7 @@ import {
 } from "@scalius/database/schema";
 import { getAllPermissionNames } from "../../auth/rbac/permissions";
 import { isSensitivePermission } from "../../auth/rbac/permission-metadata";
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors";
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "../../errors";
 
 export type AgentResource = "dashboard" | "storefront";
 export type AgentPreset = "read" | "operator" | "full" | "custom";
@@ -129,6 +129,11 @@ export function resolveGrantSelection(
   };
 }
 
+const PARENT_AUTHORITY_INACTIVE = "agent_parent_authority_inactive";
+const AUTHORIZATION_NOT_PENDING = "agent_authorization_not_pending";
+const CREDENTIAL_NOT_ACTIVE = "agent_credential_not_active";
+const DEVICE_NOT_PENDING = "agent_device_not_pending";
+
 export async function createCredentialGrant(
   db: Database,
   input: {
@@ -202,14 +207,23 @@ export async function createCredentialGrant(
                 AND parent_grant.status = 'active'
                 AND parent_grant.expires_at > unixepoch()
             )`,
-        "agent_parent_authority_inactive",
+        PARENT_AUTHORITY_INACTIVE,
       )
     : null;
-  await safeBatch(db, [
-    ...(parentGuard ? [parentGuard] : []),
-    grantInsert,
-    credentialInsert,
-  ]);
+  try {
+    await safeBatch(db, [
+      ...(parentGuard ? [parentGuard] : []),
+      grantInsert,
+      credentialInsert,
+    ]);
+  } catch (error) {
+    // The connection creating this one was revoked, expired or narrowed since
+    // its request was authorized: refused as its own authentication would be.
+    if (isBatchGuardError(error, PARENT_AUTHORITY_INACTIVE)) {
+      throw new UnauthorizedError("Agent dispatch authority is no longer active");
+    }
+    throw error;
+  }
   return { grantId, credentialId: input.issued.credentialId, expiresAt: input.selection.expiresAt };
 }
 
@@ -586,38 +600,44 @@ export async function approveAuthorizationRequest(
   const guard = buildBatchGuard(
     db,
     sql`EXISTS (SELECT 1 FROM agent_authorization_requests WHERE id = ${input.requestId} AND status = 'pending' AND expires_at > unixepoch())`,
-    "agent_authorization_not_pending",
+    AUTHORIZATION_NOT_PENDING,
   );
-  await safeBatch(db, [
-    guard,
-    db.insert(agentGrants).values({
-      id: grantId,
-      kind: "oauth",
-      ownerUserId: input.actorUserId,
-      resource: request.resource,
-      label: input.selection.label,
-      oauthClientId: request.clientId,
-      oauthClientName: request.clientName,
-      oauthRedirectUrisJson: JSON.stringify([request.redirectUri]),
-      preset: input.selection.preset,
-      permissionsJson: JSON.stringify(input.selection.permissions),
-      riskCeiling: input.selection.riskCeiling,
-      status: "active",
-      expiresAt: input.selection.expiresAt,
-      createdAt: now,
-      updatedAt: now,
-    }),
-    db.update(agentAuthorizationRequests).set({
-      status: "approved",
-      decidedByUserId: input.actorUserId,
-      decidedAt: now,
-      grantId,
-      updatedAt: now,
-    }).where(and(
-      eq(agentAuthorizationRequests.id, input.requestId),
-      eq(agentAuthorizationRequests.status, "pending"),
-    )),
-  ]);
+  // A request decided or expired since the read above is refused as that read refuses it.
+  try {
+    await safeBatch(db, [
+      guard,
+      db.insert(agentGrants).values({
+        id: grantId,
+        kind: "oauth",
+        ownerUserId: input.actorUserId,
+        resource: request.resource,
+        label: input.selection.label,
+        oauthClientId: request.clientId,
+        oauthClientName: request.clientName,
+        oauthRedirectUrisJson: JSON.stringify([request.redirectUri]),
+        preset: input.selection.preset,
+        permissionsJson: JSON.stringify(input.selection.permissions),
+        riskCeiling: input.selection.riskCeiling,
+        status: "active",
+        expiresAt: input.selection.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      db.update(agentAuthorizationRequests).set({
+        status: "approved",
+        decidedByUserId: input.actorUserId,
+        decidedAt: now,
+        grantId,
+        updatedAt: now,
+      }).where(and(
+        eq(agentAuthorizationRequests.id, input.requestId),
+        eq(agentAuthorizationRequests.status, "pending"),
+      )),
+    ]);
+  } catch (error) {
+    if (isBatchGuardError(error, AUTHORIZATION_NOT_PENDING)) throw new NotFoundError("Pending authorization request not found");
+    throw error;
+  }
   return { status: "approved" as const, grantId };
 }
 
@@ -740,24 +760,30 @@ export async function rotateAgentCredential(
   const guard = buildBatchGuard(
     db,
     sql`EXISTS (SELECT 1 FROM agent_credentials WHERE id = ${input.credentialId} AND revoked_at IS NULL AND expires_at > unixepoch())`,
-    "agent_credential_not_active",
+    CREDENTIAL_NOT_ACTIVE,
   );
-  await safeBatch(db, [
-    guard,
-    db.update(agentCredentials).set({ revokedAt: now, rotatedAt: now, updatedAt: now })
-      .where(and(eq(agentCredentials.id, input.credentialId), isNull(agentCredentials.revokedAt))),
-    db.insert(agentCredentials).values({
-      id: input.newCredentialId,
-      grantId: current.grantId,
-      kind: current.kind,
-      tokenHash: input.tokenHash,
-      tokenHint: input.tokenHint,
-      expiresAt: input.expiresAt,
-      rotatedFromId: current.id,
-      createdAt: now,
-      updatedAt: now,
-    }),
-  ]);
+  // A credential rotated, revoked or expired since the read above is refused as that read refuses it.
+  try {
+    await safeBatch(db, [
+      guard,
+      db.update(agentCredentials).set({ revokedAt: now, rotatedAt: now, updatedAt: now })
+        .where(and(eq(agentCredentials.id, input.credentialId), isNull(agentCredentials.revokedAt))),
+      db.insert(agentCredentials).values({
+        id: input.newCredentialId,
+        grantId: current.grantId,
+        kind: current.kind,
+        tokenHash: input.tokenHash,
+        tokenHint: input.tokenHint,
+        expiresAt: input.expiresAt,
+        rotatedFromId: current.id,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ]);
+  } catch (error) {
+    if (isBatchGuardError(error, CREDENTIAL_NOT_ACTIVE)) throw new NotFoundError("Active credential not found");
+    throw error;
+  }
   return { grantId: current.grantId, credentialId: input.newCredentialId };
 }
 
@@ -807,49 +833,55 @@ export async function approveDeviceAuthorization(
   const guard = buildBatchGuard(
     db,
     sql`EXISTS (SELECT 1 FROM agent_device_authorizations WHERE id = ${input.deviceId} AND status = 'pending' AND expires_at > unixepoch())`,
-    "agent_device_not_pending",
+    DEVICE_NOT_PENDING,
   );
-  await safeBatch(db, [
-    guard,
-    db.insert(agentGrants).values({
-      id: grantId,
-      kind: "cli",
-      ownerUserId: input.actorUserId,
-      resource: input.selection.resource,
-      label: input.selection.label,
-      preset: input.selection.preset,
-      permissionsJson: JSON.stringify(input.selection.permissions),
-      riskCeiling: input.selection.riskCeiling,
-      status: "active",
-      expiresAt: input.selection.expiresAt,
-      createdAt: now,
-      updatedAt: now,
-    }),
-    db.insert(agentCredentials).values({
-      id: input.credentialId,
-      grantId,
-      kind: "cli",
-      tokenHash: input.tokenHash,
-      tokenHint: input.tokenHint,
-      expiresAt: input.selection.expiresAt,
-      createdAt: now,
-      updatedAt: now,
-    }),
-    db.update(agentDeviceAuthorizations).set({
-      requestedPreset: input.selection.preset,
-      requestedPermissionsJson: JSON.stringify(input.selection.permissions),
-      status: "approved",
-      approvedByUserId: input.actorUserId,
-      decidedAt: now,
-      grantId,
-      credentialId: input.credentialId,
-      encryptedDeliveryEnvelope: input.encryptedDeliveryEnvelope,
-      updatedAt: now,
-    }).where(and(
-      eq(agentDeviceAuthorizations.id, input.deviceId),
-      eq(agentDeviceAuthorizations.status, "pending"),
-    )),
-  ]);
+  // A device authorization decided or expired since the read above is refused as that read refuses it.
+  try {
+    await safeBatch(db, [
+      guard,
+      db.insert(agentGrants).values({
+        id: grantId,
+        kind: "cli",
+        ownerUserId: input.actorUserId,
+        resource: input.selection.resource,
+        label: input.selection.label,
+        preset: input.selection.preset,
+        permissionsJson: JSON.stringify(input.selection.permissions),
+        riskCeiling: input.selection.riskCeiling,
+        status: "active",
+        expiresAt: input.selection.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      db.insert(agentCredentials).values({
+        id: input.credentialId,
+        grantId,
+        kind: "cli",
+        tokenHash: input.tokenHash,
+        tokenHint: input.tokenHint,
+        expiresAt: input.selection.expiresAt,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      db.update(agentDeviceAuthorizations).set({
+        requestedPreset: input.selection.preset,
+        requestedPermissionsJson: JSON.stringify(input.selection.permissions),
+        status: "approved",
+        approvedByUserId: input.actorUserId,
+        decidedAt: now,
+        grantId,
+        credentialId: input.credentialId,
+        encryptedDeliveryEnvelope: input.encryptedDeliveryEnvelope,
+        updatedAt: now,
+      }).where(and(
+        eq(agentDeviceAuthorizations.id, input.deviceId),
+        eq(agentDeviceAuthorizations.status, "pending"),
+      )),
+    ]);
+  } catch (error) {
+    if (isBatchGuardError(error, DEVICE_NOT_PENDING)) throw new NotFoundError("Pending device authorization not found");
+    throw error;
+  }
   return { status: "approved" as const, grantId, credentialId: input.credentialId };
 }
 

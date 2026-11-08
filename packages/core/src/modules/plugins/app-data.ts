@@ -178,6 +178,23 @@ export async function assertAppDataDeletable(db: Database, pluginId: string): Pr
 }
 
 /**
+ * A delete batch's reading of its own failure: its card-field guard failed (a
+ * theme saved since `assertAppDataDeletable` shows one of the app's product
+ * fields on cards). Refused as that check refuses (`custom_field_in_theme`,
+ * 409), naming the field it now finds; a theme changed back since still
+ * refuses this attempt, and a retry deletes. Any other failure is the caller's.
+ */
+export async function refuseAppDataDeleteInTheme(db: Database, pluginId: string, error: unknown): Promise<void> {
+  if (!isBatchGuardError(error, CARD_FIELD_GUARD)) return;
+  await assertAppDataDeletable(db, pluginId);
+  throw new PluginError(
+    "custom_field_in_theme",
+    "Your theme showed one of this app's product fields on product cards while its data was being deleted. Try again.",
+    { usedIn: "theme.blocks.card.fields" },
+  );
+}
+
+/**
  * Every statement that permanently deletes what the app owns, for one batch.
  * Records go with their object types and custom-field values with their
  * definitions (cascades, so their cache-dependency triggers fire). The first
@@ -417,7 +434,7 @@ export async function deleteRemovedAppData(db: Database, pluginId: string, expec
       throw installedAgain();
     }
     // A theme saved meanwhile that shows one of the app's fields on cards.
-    await assertAppDataDeletable(db, pluginId);
+    await refuseAppDataDeleteInTheme(db, pluginId, error);
     if (isBatchGuardError(error, RETAINED_GUARD)) throw changed((await readRetainedApp(db, pluginId))?.app?.revision ?? 0);
     throw error;
   }
