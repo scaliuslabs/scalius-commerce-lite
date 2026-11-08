@@ -38,4 +38,4 @@ Rules an AI agent must follow in an app or theme:
 - `@scalius/plugin-sdk/storefront/testing`: `renderSection`, `renderSkin`, `renderHeader`, `renderFooter`, `renderProductCard`, `fixtureStore`, `FIXTURE_STORES`.
 - `@scalius/plugin-sdk/island`: `defineIsland`, `experimentVariant`; islands get `context.events.on/publish` and `context.visitorId()`.
 - `@scalius/plugin-sdk/pixel`: `definePixel` (`src/pixel.ts`, declared by `storefront.pixel: { consent, events?, settings? }`): hears buyer events (`BUYER_EVENT_NAMES`) on every page in a sandboxed frame after consent, reaches only `storefront.connect` hosts.
-- `@scalius/plugin-sdk/testing`: `createPluginTestHarness`, `fixtures`.
+- `@scalius/plugin-sdk/testing`: `createPluginTestHarness`, `fixtures`, `createContractApi` (answers `ctx.api` as the sealed contract does) and `sample` (a contract-valid answer): `createContractApi({ handlers: { "orders.get": () => ({ order: sample("order", { id: "ord_1", lines: [{ quantity: 2 }] }) }) } })`. Never type out a whole resource: a field the platform adds would break the test.

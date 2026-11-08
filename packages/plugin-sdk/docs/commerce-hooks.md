@@ -264,7 +264,7 @@ The stable operations (`stableContract.operations` in `@scalius/plugin-sdk/testi
 
 ### Testing against the contract
 
-`createContractApi({ handlers })` answers `ctx.api.call` in tests from the stable operations sealed with your SDK release. It refuses what production refuses: an unknown operation, an ungranted scope, a missing or unsupported `idempotencyKey`, an undeclared body field, and a value or response that breaks the operation's schema. The checker covers a JSON Schema subset (types, enums, lengths, patterns, required fields) and ignores `format` and other keywords it does not know, so it is weaker than the production routes: a malformed date-time that production rejects can pass here. Test production refinements and format checks against a host. A repeat with the same key replays the first answer.
+`createContractApi({ handlers })` answers `ctx.api.call` in tests from the stable operations sealed with your SDK release. It refuses what production refuses: an unknown operation, an ungranted scope, a missing or unsupported `idempotencyKey`, an undeclared body field, and a value or response that breaks the operation's schema. The checker covers a JSON Schema subset (types, enums, lengths, patterns, required fields) and ignores `format` and other keywords it does not know, so it is weaker than the production routes: a malformed date-time that production rejects can pass here. Test production refinements and format checks against a host. A repeat with the same key replays the first answer. Build a handler's answer with `sample("order", { id: "ord_1", lines: [{ quantity: 2 }] })`: every field you leave out comes from the same contract, so a field the platform adds never breaks your test.
 
 ## 4. Deferred payment
 

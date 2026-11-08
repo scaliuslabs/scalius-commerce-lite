@@ -346,6 +346,7 @@ This folder is a Scalius app${theme ? " (a theme)" : ""}. It runs inside many me
 8. **Both languages and logical CSS.** Every word through \`t(context, { en, bn })\`; numbers, money and dates through the SDK's \`formatNumber\`, \`formatMoney\`, \`formatDate\`; CSS sides as \`margin-inline\`, \`padding-inline-start\`, \`inset-inline-start\`, \`text-align: start\`.
 9. **Money is integer minor units** (\`amountMinor\`) beside an ISO \`currency\`; never floats.
 10. **No secrets or buyer data** in code, logs, URLs or test fixtures.
+11. **Answer \`ctx.api\` in tests from the contract.** Use \`createContractApi({ handlers })\` and build each answer with \`sample("order", { …only the fields the test is about })\` from \`@scalius/plugin-sdk/testing\`. Never type out a whole resource: the next field the platform adds would break it.
 
 ## Before you pack
 

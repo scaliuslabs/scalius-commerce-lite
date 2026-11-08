@@ -461,6 +461,18 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 
 A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message } }`.
 
+## Testing
+
+`@scalius/plugin-sdk/testing` runs your handlers in the platform's own runtime over an in-memory bridge (`createPluginTestHarness`), with typed inputs from `fixtures`. Answer `ctx.api.call` with `createContractApi({ handlers })`, which refuses what production refuses and checks each answer against the stable contract sealed with your SDK release. Build those answers with `sample`, which takes every field you do not set from the same contract:
+
+```ts
+const api = createContractApi({
+  handlers: { "orders.get": () => ({ order: sample("order", { id: "ord_1", lines: [{ title: "Pen", quantity: 1 }] }) }) },
+});
+```
+
+A new field the platform adds then needs no change to your tests: a nullable field is null and a list empty. Overrides merge into nested objects; a list replaces the sample's, each object in it completed. An override the platform would never return throws with the schema's message. `sample` takes a representation type (`order`, `refund`, `product`, …) or any schema of `stableContract.components` by name (`BrandResource`). See the [README](../README.md) for the harness in full.
+
 ## Versioning
 
 - `apiVersion` names the plugin API version an app was built for. `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions a store runs.
