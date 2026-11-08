@@ -115,7 +115,13 @@ export const CACHE_DEP_KINDS = [
    * default locale, and which languages are published.
    */
   "tr",
-  /** `obj:<typeId>`: one public object type and its published records. */
+  /**
+   * `obj:<typeId>`: one public object type and its published records;
+   * `obj:<typeId>:type`: the type's own row alone (fields, name, indexes,
+   * storefront flag), which no record write advances;
+   * `obj:<typeId>:<hex>`: the published records with an index slot led by
+   * the string whose one-component tuple encoding is `<hex>`.
+   */
   "obj",
   /** `rd`: URL redirects (any change); read only on the storefront's 404 path. */
   "rd",
@@ -211,6 +217,14 @@ export const cacheDep = {
   translationLocales: () => "tr:locales",
   /** One public object type and its published records. */
   objects: (typeId: string) => `obj:${typeId}`,
+  /** One public object type's own row (fields, name, indexes, storefront flag): record writes never advance it. */
+  objectType: (typeId: string) => `obj:${typeId}:type`,
+  /**
+   * The published records of one public type with an index slot led by the
+   * string whose one-component tuple encoding is `leadHex`
+   * (`encodeIndexTuple([value])`, packages/core/src/modules/objects/index-encoding.ts).
+   */
+  objectRecordsLedBy: (typeId: string, leadHex: string) => `obj:${typeId}:${leadHex}`,
   /** URL redirects: which old address leads where. */
   redirects: () => "rd",
   table: (table: string) => `t:${table}`,
@@ -256,8 +270,18 @@ export type CacheDepImage = "new" | "old";
 export type CacheDepKeyTemplate =
   /** A constant key. */
   | { readonly dep: string }
-  /** `prefix || R.col1 [|| ':' || R.col2 ...]`. */
-  | { readonly prefix: string; readonly columns: readonly string[] }
+  /** `prefix || R.col1 [|| ':' || R.col2 ...] [|| suffix]`. */
+  | { readonly prefix: string; readonly columns: readonly string[]; readonly suffix?: string }
+  /**
+   * `prefix || R.<column> || ':' || <lead>` for each slot in `indexLeads`,
+   * `<lead>` being the first component of the slot's order-preserving index
+   * tuple (`packages/core/src/modules/objects/index-encoding.ts`) when it is
+   * a string: the hex from its tag `05` through its first `0001`, its
+   * terminator (a string's own bytes never hold `00 01`: a NUL is escaped as
+   * `00 ff`). A NULL slot, or one led by a number, boolean or null, derives
+   * no key.
+   */
+  | { readonly prefix: string; readonly column: string; readonly indexLeads: readonly string[] }
   /** `prefix || (SELECT <select> FROM <table> WHERE <key> = R.<column>)`: a parent id one lookup away. */
   | {
       readonly prefix: string;
@@ -360,6 +384,7 @@ function everyChange(keys: readonly CacheDepKeyTemplate[]): CacheDepRule[] {
 function templateColumns(template: CacheDepKeyTemplate): string[] {
   if ("dep" in template) return [];
   if ("columns" in template) return [...template.columns];
+  if ("indexLeads" in template) return [template.column, ...template.indexLeads];
   if ("lookup" in template) return [template.lookup.column];
   if ("rows" in template) return [...template.rows.matchAll(/\bR\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((match) => match[1]!);
   return "row" in template.from ? ["category_id", "brand_id"] : [template.from.product];
@@ -904,14 +929,23 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Objects: private writes have no cache cost. -------------------------------
   object_types: {
     kinds: ["obj"],
-    noise: ["revision", "created_at", "updated_at", "admin", "events", "indexes_json", "unique_json"],
-    rules: everyChange([{ prefix: "obj:", columns: ["id"] }]).map((rule) => ({ ...rule, where: { equals: { storefront: 1 } } })),
+    // The indexes are visible: a filtered read (`where`) finds its slot by them.
+    noise: ["revision", "created_at", "updated_at", "admin", "events", "unique_json"],
+    note: "A public type advances its type-wide `obj:<id>` and its own `obj:<id>:type`, which a filtered reader declares instead of the type-wide key.",
+    rules: everyChange([{ prefix: "obj:", columns: ["id"] }, { prefix: "obj:", columns: ["id"], suffix: ":type" }])
+      .map((rule) => ({ ...rule, where: { equals: { storefront: 1 } } })),
   },
   object_records: {
     kinds: ["obj"],
+    // k1..k4 are noise to `changed`: they move only with data_json, or in a
+    // reindex, which also changes the type's (visible) indexes. As key
+    // columns a change of theirs still fires the old-image companion.
     noise: ["revision", "created_at", "updated_at", "ev", "k1", "k2", "k3", "k4", "u1", "u2"],
-    note: "Only public rows advance the type's dependency, including a row leaving publication.",
-    rules: everyChange([{ prefix: "obj:", columns: ["type_id"] }]).map((rule) => ({ ...rule, where: { equals: { pub: 1 } } })),
+    note: "Only public rows advance their keys, including a row leaving publication: the type's `obj:<type_id>`, and `obj:<type_id>:<lead>` for each index slot led by a string, which a read filtered by that string (a product's reviews) declares.",
+    rules: everyChange([
+      { prefix: "obj:", columns: ["type_id"] },
+      { prefix: "obj:", column: "type_id", indexLeads: ["k1", "k2", "k3", "k4"] },
+    ]).map((rule) => ({ ...rule, where: { equals: { pub: 1 } } })),
   },
 
   // --- Markets (docs/MARKETS-DESIGN.md D4) -----------------------------------------

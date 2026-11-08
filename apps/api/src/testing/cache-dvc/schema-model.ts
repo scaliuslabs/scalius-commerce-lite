@@ -186,6 +186,7 @@ export function registryColumnsMissingFromSchema(model: SchemaModel): string[] {
       if (equals) for (const column of Object.keys(equals)) named.add(column);
       for (const key of rule.keys) {
         if ("columns" in key) for (const column of key.columns) named.add(column);
+        if ("indexLeads" in key) for (const column of [key.column, ...key.indexLeads]) named.add(column);
         if ("lookup" in key) named.add(key.lookup.column);
         if ("from" in key && "product" in key.from) named.add(key.from.product);
       }
