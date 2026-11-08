@@ -3,6 +3,7 @@ import { Calendar as CalendarIcon } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
@@ -23,7 +24,9 @@ import {
 import { orderListMessages } from "~/i18n/order-list";
 import {
   DELIVERY_METHODS,
+  DISCOUNT_CODE_FILTER_MAX,
   FULFILLMENT_STATUSES,
+  normalizeDiscountCodeFilter,
   PAYMENT_METHODS,
   PAYMENT_RECOVERY_STATES,
   PAYMENT_STATUSES,
@@ -88,6 +91,45 @@ function PaymentMethodFilter({ value, onChange }: { value: string | undefined; o
       onChange={onChange}
       options={methods.map((method) => ({ value: method, label: paymentMethodLabel(to, method, appNames) }))}
     />
+  );
+}
+
+/**
+ * Orders that used a discount code (the discount page's "Used N times" opens
+ * the list with it). Applied on Enter or when the field loses focus, so a
+ * code being typed sends no request per keystroke.
+ */
+function DiscountCodeFilter({ value, onChange }: { value: string | undefined; onChange: (value: string | undefined) => void }) {
+  const t = useMessages(orderListMessages);
+  const [draft, setDraft] = useState(value ?? "");
+  const [applied, setApplied] = useState(value);
+  // A link or Clear filters changed the URL: show what is applied now.
+  if (applied !== value) {
+    setApplied(value);
+    setDraft(value ?? "");
+  }
+  const apply = () => {
+    const next = normalizeDiscountCodeFilter(draft);
+    if (next !== value) onChange(next);
+  };
+  return (
+    <Field id="order-filter-discount-code" label={t("discountCode")} help={t("discountCodeHelp")}>
+      <Input
+        value={draft}
+        maxLength={DISCOUNT_CODE_FILTER_MAX}
+        autoComplete="off"
+        spellCheck={false}
+        className="font-mono"
+        onChange={(event) => setDraft(event.target.value.toUpperCase())}
+        onBlur={apply}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            apply();
+          }
+        }}
+      />
+    </Field>
   );
 }
 
@@ -171,6 +213,7 @@ export function OrderListFilters({ search, onChange, appFilterable }: {
         onChange={(value) => filter({ channel: value as OrderListSearch["channel"] })}
         options={SALES_CHANNELS.map((channel) => ({ value: channel, label: orderChannelLabel(to, channel) }))}
       />
+      <DiscountCodeFilter value={search.discountCode} onChange={(discountCode) => filter({ discountCode })} />
       <FilterSelect
         label={t("onlinePayment")}
         value={search.paymentRecovery}

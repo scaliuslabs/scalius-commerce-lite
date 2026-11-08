@@ -61,6 +61,10 @@ const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt
 
 /** `cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`. */
 const paymentMethodQuerySchema = z.string().max(160).refine(isOrderPaymentMethod, "Unknown payment method");
+/** Orders that redeemed a discount code (the app API's `orders.list?discountCode=`, one core query). */
+const discountCodeQuerySchema = z.string().trim().min(1).max(64).openapi({
+    description: "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored).",
+});
 
 const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.PENDING,
@@ -103,6 +107,7 @@ export const orderMatchingSchema = matchingSchema(z.object({
     deliveryMethod: deliveryMethodQuerySchema.optional(),
     channel: channelQuerySchema.optional(),
     channelSource: channelSourceQuerySchema.optional(),
+    discountCode: discountCodeQuerySchema.optional(),
     paymentRecovery: paymentRecoveryQuerySchema.optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -125,6 +130,7 @@ export async function orderMatchingFilter(db: Database, env: Env, filter: OrderM
         deliveryMethod: filter.deliveryMethod,
         channel: filter.channel,
         channelSource: filter.channelSource,
+        discountCode: filter.discountCode,
         paymentRecovery: filter.paymentRecovery,
         startDate: parseStoreDateOnlyBoundary(filter.startDate, "start", storeTimeZoneOf(env)),
         endDate: parseStoreDateOnlyBoundary(filter.endDate, "end", storeTimeZoneOf(env)),
@@ -271,6 +277,7 @@ const listOrdersRoute = createRoute({
             deliveryMethod: deliveryMethodQuerySchema.optional(),
             channel: channelQuerySchema.optional(),
             channelSource: channelSourceQuerySchema.optional(),
+            discountCode: discountCodeQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
             archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
             sort: z.enum(ORDER_LIST_SORTS).optional().openapi({
@@ -321,6 +328,7 @@ app.openapi(listOrdersRoute, async (c) => {
         deliveryMethod: query.deliveryMethod,
         channel: query.channel,
         channelSource: query.channelSource,
+        discountCode: query.discountCode,
         paymentRecovery: query.paymentRecovery,
         showArchived: query.archived === "true",
         sort: effectiveSort,
@@ -358,6 +366,7 @@ const exportOrdersRoute = createRoute({
             deliveryMethod: deliveryMethodQuerySchema.optional(),
             channel: channelQuerySchema.optional(),
             channelSource: channelSourceQuerySchema.optional(),
+            discountCode: discountCodeQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional(),
             archived: z.enum(["true", "false"]).optional(),
             sort: z.enum(ORDER_LIST_SORTS).optional(),
@@ -416,6 +425,7 @@ app.openapi(exportOrdersRoute, async (c) => {
             deliveryMethod: query.deliveryMethod,
             channel: query.channel,
             channelSource: query.channelSource,
+            discountCode: query.discountCode,
             paymentRecovery: query.paymentRecovery,
             showArchived: query.archived === "true",
             sort: effectiveSort,

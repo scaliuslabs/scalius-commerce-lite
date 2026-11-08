@@ -9,6 +9,8 @@ import {
     paymentSessionAttempts,
     codTracking,
     CodStatus,
+    promotionCodes,
+    promotionRedemptions,
     OrderStatus,
     PaymentMethod,
     PaymentStatus,
@@ -179,6 +181,28 @@ function ordersAmong(db: Database, orderIds: SQL): SQL {
     return sql`orders.rowid IN (${namedOrderRowids(orderIds)})`;
 }
 
+/**
+ * The orders that redeemed a discount code (case and surrounding spaces
+ * ignored): the claim checkout commits with the order, one immutable
+ * `promotion_redemptions` row per code discount, kept to that code. Driven
+ * from the code's own indexes (the discount holding it,
+ * `promotion_codes_identity_unique`, then its claims,
+ * `promotion_redemptions_promotion_idx`), never a walk of orders. The one
+ * query the dashboard list and the app API's `orders.list?discountCode=`
+ * share.
+ */
+export function redeemedCodeOrderIds(code: string): SQL {
+    const normalized = code.trim().toUpperCase();
+    return sql`SELECT ${promotionRedemptions.orderId} AS order_id FROM ${promotionRedemptions}
+        WHERE ${promotionRedemptions.promotionId} IN (SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${promotionCodes.normalizedCode} = ${normalized})
+          AND ${promotionRedemptions.promotionCode} = ${normalized}`;
+}
+
+/** `redeemedCodeOrderIds` as a condition on `orders.id`. */
+export function redeemedCodeCondition(code: string): SQL {
+    return sql`${orders.id} IN (${redeemedCodeOrderIds(code)})`;
+}
+
 // Cash on delivery still out (`cod_tracking_status_idx`): couriers' work in flight.
 // (Overdue invoices read `orders_payment_due_idx`, migration 0163, payment-terms-columns.ts.)
 function codTrackingOrderIds(statuses: readonly string[]): SQL {
@@ -320,6 +344,8 @@ export interface OrderListFilter {
     deliveryMethod?: OrderDeliveryMethodFilter;
     channel?: OrderChannel;
     channelSource?: string;
+    /** Orders that redeemed this discount code (`redeemedCodeOrderIds`). */
+    discountCode?: string;
     showArchived?: boolean;
     startDate?: Date;
     endDate?: Date;
@@ -338,7 +364,7 @@ export interface OrderListFilter {
  */
 export async function orderListLeads(
     db: Database,
-    filter: Pick<OrderListFilter, "search" | "openRequest" | "ids" | "view">,
+    filter: Pick<OrderListFilter, "search" | "openRequest" | "ids" | "view" | "discountCode">,
 ): Promise<boolean> {
     if (filter.ids || getDatabaseProviderForClient(db) === "postgres") return false;
     const sets: SQL[] = [];
@@ -348,6 +374,8 @@ export async function orderListLeads(
     if (filter.openRequest) sets.push(openRequestOrderIds());
     if (filter.view === "cod_to_collect") sets.push(codTrackingOrderIds(COD_TO_COLLECT_STATUSES));
     if (filter.view === "delivery_failed") sets.push(codTrackingOrderIds(COD_FAILED_STATUSES));
+    const code = filter.discountCode?.trim();
+    if (code) sets.push(redeemedCodeOrderIds(code));
     return anySetIsSmall(db, sets);
 }
 
@@ -370,6 +398,7 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
         deliveryMethod,
         channel,
         channelSource,
+        discountCode,
         showArchived = false,
         startDate,
         endDate,
@@ -433,6 +462,10 @@ export function orderListConditions(db: Database, filter: OrderListFilter): { co
 
     if (channelSource) {
         whereConditions.push(sql`${orders.channelSource} = ${channelSource}`);
+    }
+
+    if (discountCode?.trim()) {
+        whereConditions.push(ordersAmong(db, redeemedCodeOrderIds(discountCode)));
     }
 
     if (paymentRecovery) {
@@ -502,6 +535,8 @@ export async function listOrders(db: Database, options: {
     channel?: OrderChannel;
     /** A stored source slug (`facebook`, `walk_in`, …). */
     channelSource?: string;
+    /** Orders that redeemed this discount code. */
+    discountCode?: string;
     openRequest?: boolean;
     /** Exactly these orders (an export of a page or a selection). */
     ids?: string[];
@@ -533,6 +568,7 @@ export async function listOrders(db: Database, options: {
         deliveryMethod,
         channel,
         channelSource,
+        discountCode,
         page: rawPage = 1,
         limit: rawLimit = 10,
         after,
@@ -559,11 +595,12 @@ export async function listOrders(db: Database, options: {
         deliveryMethod,
         channel,
         channelSource,
+        discountCode,
         showArchived,
         startDate,
         endDate,
         appCondition: options.appCondition,
-        leadWithMatches: await orderListLeads(db, { search, openRequest, ids, view }),
+        leadWithMatches: await orderListLeads(db, { search, openRequest, ids, view, discountCode }),
     });
 
     const whereClause = whereConditions.length > 0

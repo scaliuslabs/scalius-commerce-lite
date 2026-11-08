@@ -14,7 +14,7 @@ import { MAX_LINE_QUANTITY, MAX_ORDER_LINES } from "@scalius/shared/order-limits
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import type { Context, MiddlewareHandler } from "hono";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products, promotionCodes, promotionRedemptions } from "@scalius/database/schema";
+import { customerTagLinks, customers, INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES, orders, productVariants, products } from "@scalius/database/schema";
 import { canViewLocationDetails, listInventoryLocations } from "@scalius/core/modules/inventory";
 import { isoTimestampSchema } from "../../schemas/timestamps";
 import { EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
@@ -24,7 +24,7 @@ import { fromMinor, MAX_MINOR_AMOUNT } from "@scalius/shared/money";
 import { keysetCondition, keysetOrderBy, readListCursor, type KeysetOrder } from "@scalius/core/utils/keyset";
 import { inJsonArray } from "@scalius/core/utils/in-json-array";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, pointOfSaleInputSchema, orderEventIdForRequest, overdueOrderCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
+import { buildAppPaymentReviewHoldInsert, buildOrderEventInsert, createOrderSchema, manualOrderPaymentMethodSchema, pointOfSaleInputSchema, orderEventIdForRequest, overdueOrderCondition, redeemedCodeCondition, releaseAppOrderHold } from "@scalius/core/modules/orders";
 import { AppError } from "@scalius/core/errors";
 import { recordOrderPayment } from "@scalius/core/modules/payments";
 import { paymentTermsSchema, RECORDED_PAYMENT_VIAS } from "@scalius/shared/payment-terms";
@@ -219,22 +219,6 @@ const ordersQuery = z.object({
     description: "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored): an affiliate's or a campaign's orders. A code matches the orders of the discount that holds it now; each order's `discountApplications` names the codes it used.",
   }),
 });
-
-/**
- * Orders that redeemed a discount code: the claim checkout commits with the
- * order (one immutable `promotion_redemptions` row per code discount), kept
- * to that code. It is driven from the code's own indexes, never a walk of
- * orders: the discount holding the code (`promotion_codes_identity_unique`),
- * its claims (`promotion_redemptions_promotion_idx`), then each order by
- * primary key, the page sorted from those rows alone (`trashFilter` keeps
- * the deleted_at-led index out of the plan).
- */
-function redeemedCodeCondition(code: string): SQL {
-  const normalized = code.trim().toUpperCase();
-  return sql`${orders.id} IN (SELECT ${promotionRedemptions.orderId} FROM ${promotionRedemptions}
-    WHERE ${promotionRedemptions.promotionId} IN (SELECT ${promotionCodes.promotionId} FROM ${promotionCodes} WHERE ${promotionCodes.normalizedCode} = ${normalized})
-      AND ${promotionRedemptions.promotionCode} = ${normalized})`;
-}
 
 app.openapi(createRoute({
   operationId: "dashboard.resources.orders.list",

@@ -51,12 +51,24 @@ export type OrderListSearch = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   fulfillmentStatus?: (typeof FULFILLMENT_STATUSES)[number];
   deliveryMethod?: (typeof DELIVERY_METHODS)[number];
   channel?: OrderChannel;
+  /** Orders that redeemed this discount code (the discount page's "Used N times" links here). */
+  discountCode?: string;
   paymentRecovery?: (typeof PAYMENT_RECOVERY_STATES)[number];
   startDate?: string;
   endDate?: string;
   /** An app column and its exact value: `<app id>/<column id>:<value>`. */
   appFilter?: string;
 };
+
+/** The longest discount code the list filters by (the API's limit). */
+export const DISCOUNT_CODE_FILTER_MAX = 64;
+
+/** A discount code as the list filters by it: trimmed and upper-cased (codes match case-insensitively). */
+export function normalizeDiscountCodeFilter(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const code = value.trim().toUpperCase();
+  return code && code.length <= DISCOUNT_CODE_FILTER_MAX ? code : undefined;
+}
 
 const baseSearchValidator = createListSearchValidator(ORDER_SORTS, { sort: "createdAt", list: "orders" });
 
@@ -84,6 +96,7 @@ export function validateOrderSearch(search: SearchValidatorInput<OrderListSearch
     fulfillmentStatus: normalizeOptionalEnumSearchParam(search.fulfillmentStatus, FULFILLMENT_STATUSES),
     deliveryMethod: normalizeOptionalEnumSearchParam(search.deliveryMethod, DELIVERY_METHODS),
     channel: normalizeOptionalEnumSearchParam(search.channel, SALES_CHANNELS),
+    discountCode: normalizeDiscountCodeFilter(search.discountCode),
     paymentRecovery: normalizeOptionalEnumSearchParam(search.paymentRecovery, PAYMENT_RECOVERY_STATES),
     startDate: normalizeDateSearchParam(search.startDate),
     endDate: normalizeDateSearchParam(search.endDate),
@@ -103,6 +116,7 @@ export function orderFilterQuery(search: OrderListSearch, term: string): Omit<Or
     fulfillmentStatus: search.fulfillmentStatus,
     deliveryMethod: search.deliveryMethod,
     channel: search.channel,
+    discountCode: search.discountCode,
     paymentRecovery: search.paymentRecovery,
     sort: search.sort,
     order: search.order,
@@ -130,6 +144,7 @@ export const CLEARED_ORDER_FILTERS: Partial<OrderListSearch> = {
   fulfillmentStatus: undefined,
   deliveryMethod: undefined,
   channel: undefined,
+  discountCode: undefined,
   paymentRecovery: undefined,
   startDate: undefined,
   endDate: undefined,
@@ -167,6 +182,7 @@ export function countOrderFilters(search: OrderListSearch): number {
     search.fulfillmentStatus,
     search.deliveryMethod,
     search.channel,
+    search.discountCode,
     search.paymentRecovery,
     search.startDate || search.endDate,
     search.appFilter,
