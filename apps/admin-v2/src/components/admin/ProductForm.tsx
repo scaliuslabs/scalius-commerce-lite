@@ -57,7 +57,6 @@ import { ShippingCard } from "./product-form/ShippingCard";
 import { CollapsibleCard } from "./product-form/CollapsibleCard";
 import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
 import { StatusCard } from "./product-form/StatusCard";
-import { OnlinePaymentNote } from "./product-form/OnlinePaymentNote";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { WarrantyCard } from "./product-form/WarrantyCard";
@@ -667,15 +666,12 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
 }) {
   const { defaultValues: saved } = useFormState({ control: form.control });
   return (
-    <>
-      <StatusCard
-        form={form}
-        readOnly={readOnly}
-        // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
-        storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
-      />
-      <OnlinePaymentNote form={form} />
-    </>
+    <StatusCard
+      form={form}
+      readOnly={readOnly}
+      // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
+      storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
+    />
   );
 }
 

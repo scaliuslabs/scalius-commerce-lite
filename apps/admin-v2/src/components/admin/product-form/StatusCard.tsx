@@ -10,6 +10,7 @@ import { useMessages } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
 import { Field, ReadOnlyValue } from "~/components/ui/field";
+import { OnlinePaymentNote, useProductAvailability } from "./OnlinePaymentNote";
 
 const CONDITION_LABELS: Record<ProductCondition, ProductMessageKey> = {
   new: "conditionNew",
@@ -26,6 +27,9 @@ interface StatusCardProps {
 
 export const StatusCard = memo(function StatusCard({ form, storefrontUrl, readOnly = false }: StatusCardProps) {
   const t = useMessages(productMessages);
+  // One answer to "can buyers get it?": the help line, or the warning that replaces it.
+  const availability = useProductAvailability(form);
+  const help = availability === "draft" ? t("statusDraftHelp") : availability === "buyable" ? t("statusActiveHelp") : undefined;
 
   return (
     <Card>
@@ -37,9 +41,9 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl, readOn
           control={form.control}
           name="isActive"
           render={({ field }) => readOnly ? (
-            <ReadOnlyValue label={t("status")} value={t(field.value ? "statusActive" : "statusDraft")} help={t(field.value ? "statusActiveHelp" : "statusDraftHelp")} />
+            <ReadOnlyValue label={t("status")} value={t(field.value ? "statusActive" : "statusDraft")} help={help} />
           ) : (
-            <Field help={t(field.value ? "statusActiveHelp" : "statusDraftHelp")}>
+            <Field help={help}>
               <SearchableSelect
                 value={field.value ? "active" : "draft"}
                 onValueChange={(value) => field.onChange(value === "active")}
@@ -52,6 +56,7 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl, readOn
             </Field>
           )}
         />
+        {availability === "needsOnlinePayment" ? <OnlinePaymentNote /> : null}
 
         <FormField
           control={form.control}
