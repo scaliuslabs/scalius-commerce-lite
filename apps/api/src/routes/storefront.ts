@@ -427,7 +427,7 @@ const layoutDataSchema = z.object({
     release: z.string().openapi({ description: "The release's bundle SHA-256: names its storefront files (/_x/<plugin id>/<release>/) and its isolate." }),
     sections: z.array(z.string()),
     sectionSettings: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
-    resourceSections: z.array(z.string()).optional().openapi({ description: "Section types whose object reads bind the page's resource: their page template part is read per resource." }),
+    resourceSections: z.array(z.string()).optional().openapi({ description: "Sections whose reads bind the page's resource." }),
     skins: z.array(z.object({
       id: z.string(),
       target: z.string().openapi({ description: "The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>." }),
@@ -437,7 +437,7 @@ const layoutDataSchema = z.object({
       type: z.string(),
       targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)).openapi({ description: "Where it renders: component slots (storefront-protocol.ts) or page (the app's proxy pages)." }),
       settings: z.array(z.record(z.string(), z.unknown())),
-      reads: z.literal(true).optional().openapi({ description: "It declares public object reads: placed on the product page, its records come with the product template's part." }),
+      reads: z.literal(true).optional().openapi({ description: "It declares object reads (product template part)." }),
     })),
     islands: z.array(z.string()),
     stylesheet: z.boolean(),

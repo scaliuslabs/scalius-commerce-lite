@@ -99,6 +99,7 @@ export async function readAbandonedCheckoutRepresentations(
   // profile first, else the account (`ABANDONED-CHECKOUTS-CUSTOMERS.md`).
   const byPhone = new Map<string, { id: string; claimed: boolean; consents: Array<{ channel: string; state: string }> }>();
   for (const person of people) {
+    if (!person.phone) continue;
     const claimed = Boolean(Number(person.claimed));
     let entry = byPhone.get(person.phone);
     if (!entry || (entry.claimed && !claimed)) {
