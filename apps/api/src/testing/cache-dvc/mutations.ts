@@ -133,6 +133,8 @@ export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([
   // Identity: a trigger refuses every update (product_reviews_identity_immutable);
   // a review with another key is a new row, which inserts cover.
   "product_reviews.reviewer_key",
+  // The app that wrote a review (0199): identity too, set only by an app review's insert.
+  "product_reviews.app_id",
 ]);
 
 function writableByGenerator(table: string): boolean {
@@ -144,6 +146,8 @@ export const MACHINERY_TABLES: ReadonlySet<string> = new Set(["cache_clock", "ca
 
 export class RowMutator {
   private counter = 0;
+  /** Review inserts so far: they alternate between a buyer's line review and an app's import. */
+  private reviewInserts = 0;
   private idPool: Map<string, string[]> | null = null;
   /**
    * Each table's rows as seeded: the clone source of an insert into a table
@@ -367,7 +371,12 @@ export class RowMutator {
     return this.reinsert(table, rows);
   }
 
-  /** Reviews require a matching fulfilled line; earlier parent mutations may have removed every eligible one. */
+  /**
+   * Reviews require a matching fulfilled line; earlier parent mutations may
+   * have removed every eligible one. Every other insert is an app's import
+   * instead (`author_type = 'app'`, `app_id`, no line), the other shape a
+   * published review takes onto a product page.
+   */
   // Parent mutations can leave no eligible line; independent FK clones cannot
   // satisfy the review trigger's delivered-order/fulfilled-line relationship.
   private insertReview(): Mutation | null {
@@ -377,6 +386,19 @@ export class RowMutator {
     const orderId = `o_${suffix}`;
     const lineId = `oi_${suffix}`;
     const id = `rev_generated_${this.counter}`;
+    if (++this.reviewInserts % 2 === 0) {
+      try {
+        this.run(`INSERT INTO product_reviews (id, product_id, reviewer_key, author_type, app_id, author_display_name, rating, status, published_at)
+          VALUES (?, ?, ?, 'app', 'acme.reviews', 'Imported buyer', 4, 'published', unixepoch())`, [id, product.id, `review:${id}`]);
+        const mutation: Mutation = { kind: "insert", table: "product_reviews", columns: [], description: `INSERT INTO product_reviews ${id} imported by an app` };
+        this.coverage.record(mutation);
+        this.idPool = null;
+        return mutation;
+      } catch (error) {
+        this.coverage.refused("product_reviews", errorText(error));
+        return null;
+      }
+    }
     this.sqlite.exec("SAVEPOINT dvc_review");
     try {
       this.run(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
