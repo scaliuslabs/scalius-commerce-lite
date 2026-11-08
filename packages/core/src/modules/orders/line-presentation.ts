@@ -3,8 +3,8 @@
 // Shared by the receipt, the account order, the dashboard detail, invoices,
 // emails and the CSV export so every surface reads the snapshot the same way.
 import {
-    CUSTOMIZATION_FIELD_TYPES,
-    type CustomizationFieldType,
+    LINE_INPUT_FIELD_TYPES,
+    type LineInputFieldType,
     type ResolvedLineProperty,
 } from "@scalius/shared/line-properties";
 import { isFulfillmentType, type DeliveryMethodKind, type FulfillmentType } from "@scalius/shared/fulfilment";
@@ -36,11 +36,11 @@ export function parseOrderLineProperties(stored: string | null | undefined): Res
             typeof key !== "string"
             || typeof label !== "string"
             || typeof value !== "string"
-            || !(CUSTOMIZATION_FIELD_TYPES as readonly string[]).includes(type as string)
+            || !(LINE_INPUT_FIELD_TYPES as readonly string[]).includes(type as string)
         ) continue;
         properties.push({
             key,
-            type: type as CustomizationFieldType,
+            type: type as LineInputFieldType,
             label,
             value,
             displayValue: typeof displayValue === "string" ? displayValue : value,

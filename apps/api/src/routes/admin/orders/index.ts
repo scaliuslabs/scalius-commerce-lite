@@ -16,6 +16,7 @@ import { adminOrderDigitalRoutes } from "./digital";
 import { adminOrderFulfilmentRoutes } from "./fulfilments";
 import { adminOrderListRoutes } from "./list";
 import { adminOrderWarrantyClaimRoutes } from "./warranty-claims";
+import { adminOrderUploadRoutes } from "./uploads";
 import { adminRouter } from "../admin-router";
 
 const app = adminRouter();
@@ -32,5 +33,6 @@ app.route("/", adminOrderDetailRoutes);
 app.route("/", adminOrderFulfilmentRoutes);
 app.route("/", adminOrderDigitalRoutes);
 app.route("/", adminOrderWarrantyClaimRoutes);
+app.route("/", adminOrderUploadRoutes);
 
 export { app as adminOrdersRoutes };

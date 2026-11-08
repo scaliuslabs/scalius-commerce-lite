@@ -10,6 +10,7 @@ import {
 } from "@scalius/shared/fulfilment";
 import {
   CUSTOMIZATION_FIELD_TYPES,
+  LINE_INPUT_FIELD_TYPES,
   LINE_PROPERTY_INPUT_LIMITS,
   LINE_PURCHASE_OPTIONS_MAX,
 } from "@scalius/shared/line-properties";
@@ -61,10 +62,10 @@ export const linePurchaseOptionsSchema = z.array(z.object({
 /** A resolved buyer input as priced and frozen on the order line. */
 export const orderLinePropertySchema = z.object({
   key: z.string(),
-  type: z.enum(CUSTOMIZATION_FIELD_TYPES),
+  type: z.enum(LINE_INPUT_FIELD_TYPES).openapi({ description: "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)." }),
   label: z.string(),
   value: z.string(),
-  /** What to print after the label: the choice label for selects, "Yes" for ticked boxes. */
+  /** What to print after the label: the choice label for selects, "Yes" for ticked boxes, "2 files" for uploads. */
   displayValue: z.string(),
   /** Surcharge this input adds to one unit, in major units. */
   price: z.number(),

@@ -13,6 +13,7 @@ import { checkoutStatusRoutes } from "./status";
 import { receiptSupportRequestRoutes } from "./support-requests";
 import { taxQuoteRoutes } from "./tax-quote";
 import { receiptWarrantyRoutes } from "./warranties";
+import { buyerUploadRoutes } from "./uploads";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -27,5 +28,6 @@ app.route("/", orderConversationRoutes);
 app.route("/", receiptReviewRoutes);
 app.route("/", receiptDownloadRoutes);
 app.route("/", receiptWarrantyRoutes);
+app.route("/", buyerUploadRoutes);
 
 export { app as orderRoutes };

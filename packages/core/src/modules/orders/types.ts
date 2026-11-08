@@ -581,6 +581,12 @@ export type OrderFacts = OrderShippingAddressFields & Partial<OrderBillingAddres
     customerWhatsapp?: string | null;
     notes: string | null;
     attributes?: string;
+    /**
+     * The keys (`<app id>.<key>`) of the declared `file` checkout attributes:
+     * their answers name buyer uploads the commit attaches. Line inputs need
+     * none (their frozen type says `file`).
+     */
+    attributeUploadKeys?: readonly string[];
     /** Null when nothing physical was bought (no delivery method). */
     shippingMethodId: string | null;
     shippingMethodName: string | null;

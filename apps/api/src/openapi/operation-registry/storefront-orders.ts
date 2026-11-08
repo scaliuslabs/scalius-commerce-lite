@@ -230,4 +230,19 @@ export const STOREFRONT_ORDER_OPERATIONS = {
   "storefront.payment.status": { exposure: "continuation" },
   "storefront.receipt.get": {},
   "storefront.shipping_methods.list": { limits: { request: 16_384, response: 32_768 } },
+  // Buyer uploads (COMMERCE-HOOKS H17): the buyer's own files, from the browser only.
+  "storefront.orders_uploads.create": {
+    exposure: "excluded",
+    sensitive: true,
+    reason: "A buyer's file for an app's file input, sent from the buyer's browser; agents never upload or read buyer files.",
+  },
+  "storefront.orders_uploads.delete": {
+    exposure: "excluded",
+    reason: "The uploading browser takes back its own file before ordering.",
+  },
+  "storefront.orders_uploads.get": {
+    exposure: "excluded",
+    sensitive: true,
+    reason: "Streams an ordered buyer file from a short-lived signed link handed to staff or the owning app.",
+  },
 } satisfies Record<string, OperationRegistryEntry>;

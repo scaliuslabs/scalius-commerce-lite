@@ -25,6 +25,7 @@ import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
 import { createSandboxRunQueue, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
+import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
 
 export interface CheckoutAppFunctionsOptions {
   env: Env;
@@ -58,7 +59,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
     .filter((app) => app.options.length > 0);
   // Line inputs (manifest `checkout.lineInputs`): what a cart line may carry
   // beside the product's own inputs, read from the same apps; core prices nothing for them.
-  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: installation.manifest.checkout?.lineInputs ?? [] }])).values()]
+  const lineInputs = [...new Map(active.filter(({ installation }) => installation.grant).map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, inputs: (installation.manifest.checkout?.lineInputs ?? []).map((input) => withBuyerUploadBounds(input)) }])).values()]
     .filter((app) => app.inputs.length > 0);
   const registrations = active
     // The approved grant decides: an app runs only at the points (and UI slots) it was approved for.
@@ -66,7 +67,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
       ? (registration.installation.grant?.extensions ?? []).length > 0
       : (PLUGIN_FUNCTION_POINTS as readonly string[]).includes(registration.name)
         && registration.installation.grant?.functions.includes(registration.name as PluginFunctionPoint));
-  const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: installation.manifest.checkout?.attributes ?? [] }]));
+  const attributeApps = new Map(registrations.map(({ installation }) => [installation.pluginId, { appId: installation.pluginId, fields: (installation.manifest.checkout?.attributes ?? []).map((field) => withBuyerUploadBounds(field)) }]));
   const attributes = [...attributeApps.values()];
   const points = new Set(registrations.map((registration) => registration.name as PluginRunPoint));
   if (points.size === 0) return { points, attributes, purchaseOptions, lineInputs, buyerUi: async () => [], run: async () => [], report: () => undefined };
@@ -119,7 +120,7 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
           const installation = registrations.find((entry) => entry.installation.pluginId === result.pluginId)!.installation;
           const prefix = `${result.pluginId}.`;
           const values = Object.fromEntries(Object.entries(input.attributes ?? {}).filter(([key]) => key.startsWith(prefix)).map(([key, value]) => [key.slice(prefix.length), value]));
-          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui.root, attributes: installation.manifest.checkout?.attributes ?? [], values });
+          blocks.push({ appId: result.pluginId, releaseId: installation.bundleSha256, target, ui: result.output.ui.root, attributes: attributeApps.get(result.pluginId)?.fields ?? [], values });
         }
       }
       try { return await prepareBuyerUiBlocks(options.db, blocks.slice(0, 12), registrations, options.env.CDN_DOMAIN_URL); } catch { return []; }

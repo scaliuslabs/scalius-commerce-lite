@@ -5,6 +5,14 @@ import {
   type CanonicalLineProperty,
   type LinePropertyInput,
 } from "./line-identity";
+import {
+  BUYER_UPLOAD_DECLARATION_LIMITS,
+  BUYER_UPLOAD_TYPES,
+  buyerUploadDisplayValue,
+  formatBuyerUploadValue,
+  parseBuyerUploadValue,
+  type BuyerUploadType,
+} from "./buyer-uploads";
 /**
  * Line-item properties: the buyer inputs a product asks for (engraving text,
  * gift wrap, a fit choice) and what they add to the line price (Wave A §3).
@@ -36,6 +44,12 @@ export {
 export const CUSTOMIZATION_SCHEMA_VERSION = 1 as const;
 export const CUSTOMIZATION_FIELD_TYPES = ["text", "textarea", "select", "checkbox"] as const;
 export type CustomizationFieldType = (typeof CUSTOMIZATION_FIELD_TYPES)[number];
+/**
+ * What a line input may be: the product's own types, and `file` (an app's
+ * line input only: buyer uploads, `@scalius/shared/buyer-uploads`).
+ */
+export const LINE_INPUT_FIELD_TYPES = [...CUSTOMIZATION_FIELD_TYPES, "file"] as const;
+export type LineInputFieldType = (typeof LINE_INPUT_FIELD_TYPES)[number];
 
 export const CUSTOMIZATION_LIMITS = {
   fields: 10,
@@ -96,10 +110,24 @@ export interface CustomizationSelectField extends CustomizationFieldBase {
   options: CustomizationSelectOption[];
 }
 
+/**
+ * An app's `file` line input: the answer is the ids of the buyer's uploads
+ * (`bup_...`, joined by commas), at most `maxFiles`. Never in a stored product
+ * schema; priced at nothing like every app input.
+ */
+export interface CustomizationFileField extends CustomizationFieldBase {
+  type: "file";
+  accept: readonly BuyerUploadType[];
+  maxBytes: number;
+  maxFiles: number;
+  priceMinor: 0;
+}
+
 export type CustomizationField =
   | CustomizationTextField
   | CustomizationCheckboxField
-  | CustomizationSelectField;
+  | CustomizationSelectField
+  | CustomizationFileField;
 
 export interface CustomizationSchema {
   version: typeof CUSTOMIZATION_SCHEMA_VERSION;
@@ -431,11 +459,11 @@ export function readOrderLineProperties(properties: string | readonly unknown[] 
       !isRecord(entry) || typeof entry.key !== "string" || typeof entry.label !== "string"
       || typeof entry.value !== "string" || typeof entry.displayValue !== "string"
       || typeof entry.priceMinor !== "number" || !Number.isSafeInteger(entry.priceMinor)
-      || !(CUSTOMIZATION_FIELD_TYPES as readonly unknown[]).includes(entry.type)
+      || !(LINE_INPUT_FIELD_TYPES as readonly unknown[]).includes(entry.type)
     ) continue;
     resolved.push({
       key: entry.key,
-      type: entry.type as CustomizationFieldType,
+      type: entry.type as LineInputFieldType,
       label: entry.label,
       value: entry.value,
       displayValue: entry.displayValue,
@@ -455,9 +483,13 @@ export interface AppLineInputDeclaration {
   key: string;
   label: string;
   help?: string;
-  type: CustomizationFieldType;
+  type: LineInputFieldType;
   maxLength?: number;
   options?: ReadonlyArray<{ value: string; label: string }>;
+  /** `file`: the types, size and count it takes (`withBuyerUploadBounds` applies the plan's bounds). */
+  accept?: readonly BuyerUploadType[];
+  maxBytes?: number;
+  maxFiles?: number;
   products?: { customField: string };
 }
 
@@ -493,6 +525,15 @@ export function withAppLineInputs(
         fields.push({ ...base, type: "select", options: (input.options ?? []).map((option) => ({ value: option.value, label: option.label, priceMinor: 0 })) });
       } else if (input.type === "checkbox") {
         fields.push({ ...base, type: "checkbox", priceMinor: 0 });
+      } else if (input.type === "file") {
+        fields.push({
+          ...base,
+          type: "file",
+          accept: input.accept?.length ? [...input.accept] : [...BUYER_UPLOAD_TYPES],
+          maxBytes: Math.min(input.maxBytes ?? BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes, BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes),
+          maxFiles: Math.min(input.maxFiles ?? 1, BUYER_UPLOAD_DECLARATION_LIMITS.maxFiles),
+          priceMinor: 0,
+        });
       } else {
         const limit = input.type === "text" ? CUSTOMIZATION_LIMITS.textMaxLength : CUSTOMIZATION_LIMITS.textareaMaxLength;
         fields.push({ ...base, type: input.type, maxLength: Math.min(input.maxLength ?? limit, limit), priceMinor: 0 });
@@ -518,10 +559,10 @@ export function appVisibleLineProperties<T extends { key: string }>(properties: 
 /** The frozen `order_items.properties` entry. */
 export interface ResolvedLineProperty {
   key: string;
-  type: CustomizationFieldType;
+  type: LineInputFieldType;
   label: string;
   value: string;
-  /** What to print after the label: the option label for selects, "Yes" for ticked boxes. */
+  /** What to print after the label: the option label for selects, "Yes" for ticked boxes, "2 files" for uploads. */
   displayValue: string;
   priceMinor: number;
   /** The app the entry belongs to: its line input, add-on or purchase option. Absent for the merchant's inputs. */
@@ -553,6 +594,10 @@ function fieldValue(field: CustomizationField, raw: string): string | null {
   const value = normalizePropertyText(raw);
   if (!value) return null;
   if (field.type === "checkbox") return value === CHECKBOX_TICKED ? value : null;
+  if (field.type === "file") {
+    const ids = parseBuyerUploadValue(value, field.maxFiles);
+    return ids ? formatBuyerUploadValue(ids) : value;
+  }
   return value;
 }
 
@@ -615,6 +660,10 @@ function fieldValueProblem(
       return value === CHECKBOX_TICKED ? null : { kind: "invalid", reason: "a ticked box sends \"true\"" };
     case "select":
       return field.options.some((option) => option.value === value) ? null : { kind: "invalid", reason: "not one of the choices" };
+    case "file":
+      return parseBuyerUploadValue(value, field.maxFiles)
+        ? null
+        : { kind: "invalid", reason: `upload ids, at most ${field.maxFiles}` };
   }
 }
 
@@ -693,7 +742,7 @@ export function resolveLineProperties(
     if (!value) continue;
     const problem = fieldValueProblem(field, value);
     if (problem) return invalid(entry.key, problem.reason);
-    values.set(entry.key, value);
+    values.set(entry.key, fieldValue(field, value)!);
   }
 
   const canonical: CanonicalLineProperty[] = [];
@@ -710,8 +759,14 @@ export function resolveLineProperties(
     const option = field.type === "select"
       ? field.options.find((choice) => choice.value === value)!
       : null;
-    const priceMinor = option ? option.priceMinor : (field as CustomizationTextField | CustomizationCheckboxField).priceMinor;
-    const displayValue = option ? option.label : field.type === "checkbox" ? CHECKBOX_DISPLAY : value;
+    const priceMinor = option ? option.priceMinor : (field as Exclude<CustomizationField, CustomizationSelectField>).priceMinor;
+    const displayValue = option
+      ? option.label
+      : field.type === "checkbox"
+        ? CHECKBOX_DISPLAY
+        : field.type === "file"
+          ? buyerUploadDisplayValue(parseBuyerUploadValue(value, field.maxFiles)!.length)
+          : value;
     canonical.push({ key: field.key, value });
     properties.push({ key: field.key, type: field.type, label: field.label, value, displayValue, priceMinor, ...(field.appId ? { appId: field.appId } : {}) });
     propertiesPriceMinor += priceMinor;
@@ -749,6 +804,8 @@ export function mapCustomizationPrices(
     ...schema,
     fields: schema.fields.map((field): CustomizationField => field.type === "select"
       ? { ...field, options: field.options.map((option) => ({ ...option, priceMinor: price(option.priceMinor) })) }
-      : { ...field, priceMinor: price(field.priceMinor) }),
+      : field.type === "file"
+        ? field
+        : { ...field, priceMinor: price(field.priceMinor) }),
   };
 }

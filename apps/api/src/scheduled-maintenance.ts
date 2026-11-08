@@ -19,6 +19,7 @@ import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/mod
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment, sweepExpiredShipmentClaims } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
+import { sweepBuyerUploads } from "@scalius/core/modules/buyer-uploads";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integrations/meta/capi-settings";
 import { planTrackingSweep } from "@scalius/core/integrations/tracking/deliveries";
@@ -347,7 +348,9 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Conversation images uploaded but never attached within an hour.
+    // Conversation images uploaded but never attached within an hour, then
+    // buyer uploads no order took within 72 hours and order retention's
+    // (one indexed probe each when idle, reading no row).
     name: "conversation_attachment_sweep",
     async run({ db, env, timed }) {
       const cursor = await readMaintenanceCursor(db, "orphan-attachments");
@@ -359,6 +362,10 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         console.log(
           `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
         );
+      }
+      const uploads = await timed("buyer_upload_sweep", () => sweepBuyerUploads(db, env.BUCKET));
+      if (uploads.orphans > 0 || uploads.retained > 0) {
+        console.log(`[scheduled] Buyer upload sweep: orphans=${uploads.orphans}, retained=${uploads.retained}`);
       }
     },
   },
