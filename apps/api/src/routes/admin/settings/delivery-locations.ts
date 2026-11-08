@@ -3,6 +3,7 @@ import { adminRouter } from "../admin-router";
 import { places } from "@scalius/database/schema";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { containsText, startsWithText } from "@scalius/core/utils/text-match";
+import { rankPlaces } from "@scalius/shared/place-search";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
     countPlaceDescendants,
@@ -199,6 +200,9 @@ function formatPlace(place: PlaceRow) {
     };
 }
 
+/** More places than any one parent holds (Bangladesh's largest: 367 areas under one thana). */
+const PLACE_SEARCH_SCOPE_LIMIT = 2_000;
+
 const listRoute = createRoute({
     method: "get",
     path: "/",
@@ -241,41 +245,52 @@ app.openapi(listRoute, async (c) => {
         if (query.id) conditions.push(eq(places.id, query.id));
         if (query.isActive) conditions.push(eq(places.isActive, query.isActive === "true"));
         const term = search?.trim().toLocaleLowerCase() ?? "";
-        if (term) {
+        // One parent's children, or a country's top level, are a bounded
+        // list: a search reads it all and ranks it with the shared place
+        // matcher (Bangla typing finds English names, old spellings new ones).
+        // An unscoped search over every thana or area matches the text as typed.
+        const rankedSearch = Boolean(term) && (Boolean(query.parentId) || query.level === 1);
+        if (term && !rankedSearch) {
             // lower() folds ASCII case; Bangla has no case, so it matches as typed.
             conditions.push(containsText(places.name, term));
         }
 
         const parent = alias(places, "parent_location");
         const grandparent = alias(places, "grandparent_location");
-        const rows = await db
+        const selected = db
             .select({ location: places, parentName: parent.name, grandparentName: grandparent.name })
             .from(places)
             .leftJoin(parent, eq(parent.id, places.parentId))
             .leftJoin(grandparent, eq(grandparent.id, parent.parentId))
             .where(and(...conditions))
             .orderBy(
-                ...(term
+                ...(term && !rankedSearch
                     ? [sql`CASE WHEN ${startsWithText(sql`lower(${places.name})`, term)} THEN 0 ELSE 1 END`]
                     : []),
                 asc(places.sortOrder),
                 asc(places.name),
                 asc(places.id),
+            );
+        const ranked = rankedSearch
+            ? rankPlaces(
+                (await selected.limit(PLACE_SEARCH_SCOPE_LIMIT)).map((row) => ({ ...row, name: row.location.name })),
+                term,
             )
-            .limit(limit)
-            .offset(offset);
+            : null;
+        const rows = ranked ? ranked.slice(offset, offset + limit) : await selected.limit(limit).offset(offset);
         const locations = rows.map((row) => row.location);
         const pathOf = new Map(rows.map((row) => [
             row.location.id,
             [row.parentName, row.grandparentName].filter((name): name is string => Boolean(name)),
         ]));
 
-        const countResult = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(places)
-            .where(and(...conditions))
-            .get();
-        const totalCount = countResult?.count || 0;
+        const totalCount = ranked
+            ? ranked.length
+            : (await db
+                .select({ count: sql<number>`count(*)` })
+                .from(places)
+                .where(and(...conditions))
+                .get())?.count || 0;
         // Places with levels under them; a country's top of four levels counts three down.
         const parents = locations.filter((location) => location.level < placeLevels(location.countryCode).length);
         const depth = parents.some((location) => placeLevels(location.countryCode).length - location.level >= 3) ? 3 : 2;

@@ -7,7 +7,7 @@
  * inputs in sync.
  */
 import { enhanceLocationCombobox, type LocationCombobox } from "./location-combobox";
-import { placeDisplayName } from "./location-search";
+import { placeDisplayName } from "@scalius/shared/place-search";
 
 export interface LocationOption {
   id: string;
