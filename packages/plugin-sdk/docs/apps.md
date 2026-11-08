@@ -58,6 +58,8 @@ The platform refuses a handler the manifest does not declare, and a declared ite
 
 A declared purchase option can appear in the storefront, but buyer checkout accepts it only when its owning app answers the line through `cart.line_prices`, with a positive safe-integer unit price or an add-on. A payment provider or a discount alone does not supply that price. Staff orders keep the prices staff set.
 
+Several apps at one checkout function point run in the merchant's order (Apps → Checkout order), else by manifest `priority`; how their answers combine there is fixed per point ([Commerce hooks](commerce-hooks.md#how-apps-combine-at-a-point)).
+
 **Which seam to use.** A decision inside a request is a function. A provider of a capability is a port. A reaction after a write commits is an event handler.
 
 ## Names
@@ -143,7 +145,7 @@ Buyer contact data is protected field by field. `address` means the street: addr
 - Without a contact scope, the matching fields of an operation's output read `null`. They are marked `x-scalius-protected` in the contract.
 - Filtering or searching by a contact field without its scope is refused with 403 `contact_scope_required`.
 - A provider port declares the contact data it carries. A courier needs names, phones and addresses. SMS, courier history and messaging need phones. Email needs emails. Address needs addresses. A payment provider receives in `buyer` only the fields its scopes reveal. A manifest that declares a provider without its required scopes is refused.
-- Checkout function inputs and event facts never carry contact data.
+- Checkout function inputs and event facts carry no contact data, except `cart.validate`'s `contact`, whose fields read `null` without their scopes, as above ([Commerce hooks](commerce-hooks.md#points)).
 
 ### Consent and approvals
 
