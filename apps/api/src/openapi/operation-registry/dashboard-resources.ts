@@ -168,6 +168,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.gift_cards.create": storedValue({ idempotency: "required" }),
   "dashboard.resources.gift_cards.adjust": storedValue({ idempotency: "required", revision: "required" }),
   "dashboard.resources.gift_cards.update": storedValue({ revision: "required" }),
+  // Digital goods (routes/admin/resources-digital.ts): files and key pools
+  // without a storage key or key value, and a buyer's access. A grant hands an
+  // owed line over through automatic fulfilment (one entitlement per line and
+  // item, so a repeat grants nothing twice); a revoke takes access away.
+  "dashboard.resources.digital_assets.list": { uncurated: true },
+  "dashboard.resources.digital_assets.get": { uncurated: true },
+  "dashboard.resources.digital_access.list": { uncurated: true },
+  "dashboard.resources.digital_access.grant": { idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.digital_access.revoke": { risk: "destructive", batch: "forbidden", uncurated: true },
   // An app's own webhook subscriptions (routes/admin/resources-webhooks.ts):
   // apps only (write_webhooks), within their approved hosts, topics and
   // customer data. Create returns the signing secret to the app once and

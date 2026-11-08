@@ -14,6 +14,7 @@ export {
     getDigitalAsset,
     getDigitalAssetUpload,
     listProductDigitalAssets,
+    readDigitalAssetViews,
     startDigitalAssetUpload,
     updateDigitalAsset,
     uploadDigitalAssetPart,
@@ -43,11 +44,15 @@ export type {
 } from "./downloads";
 export {
     countOrderDigitalEntitlements,
+    findLineDigitalEntitlement,
+    insertDigitalEntitlementStatement,
+    readDigitalAccessViews,
+    reinstateDigitalEntitlementStatement,
     resetDigitalEntitlement,
     resolveDigitalDeliveryContent,
     revokeDigitalEntitlement,
 } from "./entitlements";
-export type { DigitalDeliveryContent } from "./entitlements";
-export { DIGITAL_KEYS_EXHAUSTED, planDigitalDelivery } from "./fulfiller";
+export type { DigitalAccessView, DigitalDeliveryContent } from "./entitlements";
+export { DIGITAL_KEYS_EXHAUSTED, fileEntitlementRow, planDigitalDelivery } from "./fulfiller";
 export type { DigitalDeliveryLine, DigitalDeliveryPlan, DigitalShortPool } from "./fulfiller";
 export { LICENCE_KEYS_UNAVAILABLE } from "./secrets";

@@ -88,6 +88,29 @@ async function readReadyAssets(db: Database, productIds: readonly string[]): Pro
     return assets;
 }
 
+/**
+ * The entitlement one ready file gives one delivered line: the asset's
+ * download limit and access days, snapshotted at `now`. The delivery plan
+ * writes it, and so does a grant of a file added after the line's delivery.
+ */
+export function fileEntitlementRow(
+    asset: { id: string; downloadLimit: number | null; accessDays: number | null },
+    line: { orderId: string; orderItemId: string; fulfillmentId: string | null },
+    now: number,
+): typeof digitalEntitlements.$inferInsert {
+    return {
+        id: `dge_${nanoid(16)}`,
+        orderId: line.orderId,
+        orderItemId: line.orderItemId,
+        assetId: asset.id,
+        fulfillmentId: line.fulfillmentId,
+        kind: "file",
+        quantity: 1,
+        downloadLimit: asset.downloadLimit,
+        expiresAt: asset.accessDays === null ? null : now + asset.accessDays * 86_400,
+    };
+}
+
 /** The statements that deliver these digital lines (see the file comment). */
 export async function planDigitalDelivery(
     db: Database,
@@ -129,17 +152,7 @@ export async function planDigitalDelivery(
         }
         deliveredLineIds.push(line.orderItemId);
         for (const asset of files) {
-            fileRows.push({
-                id: `dge_${nanoid(16)}`,
-                orderId: context.orderId,
-                orderItemId: line.orderItemId,
-                assetId: asset.id,
-                fulfillmentId: context.fulfillmentId,
-                kind: "file",
-                quantity: 1,
-                downloadLimit: asset.downloadLimit,
-                expiresAt: asset.accessDays === null ? null : now + asset.accessDays * 86_400,
-            });
+            fileRows.push(fileEntitlementRow(asset, { orderId: context.orderId, orderItemId: line.orderItemId, fulfillmentId: context.fulfillmentId }, now));
         }
         if (pool) {
             keyEntitlements += 1;

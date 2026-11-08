@@ -112,6 +112,9 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.orders.pickup_ready",
   "dashboard.resources.app_content.delete",
   "dashboard.resources.customers.bulk_tag",
+  // One entitlement per order line and item, and a revoke sets a target state.
+  "dashboard.resources.digital_access.grant",
+  "dashboard.resources.digital_access.revoke",
   "dashboard.resources.fulfillments.create",
   "dashboard.resources.gift_cards.create",
   "dashboard.resources.orders.create",

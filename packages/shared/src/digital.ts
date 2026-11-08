@@ -16,6 +16,38 @@ export const DIGITAL_UPLOAD_STATUSES = ["uploading", "complete", "aborted"] as c
 export const LICENCE_KEY_STATUSES = ["available", "assigned", "revoked"] as const;
 export type LicenceKeyStatus = (typeof LICENCE_KEY_STATUSES)[number];
 
+/**
+ * Where one buyer's access to one delivered asset stands (an entitlement,
+ * `DigitalAccessResource.status` in the stable app API; sealed: a new state
+ * is an additive change). `revoked`: the store removed it. `ended`: the order
+ * was cancelled, refunded or returned. `expired`: its access days ran out.
+ * `exhausted`: a file whose downloads are all used. Otherwise `active`.
+ */
+export const DIGITAL_ACCESS_STATUSES = ["active", "exhausted", "expired", "ended", "revoked"] as const;
+export type DigitalAccessStatus = (typeof DIGITAL_ACCESS_STATUSES)[number];
+
+/** Order statuses that end access to what the order delivered. */
+export const DIGITAL_ACCESS_ENDED_ORDER_STATUSES = ["cancelled", "refunded", "returned"] as const;
+
+/** One entitlement's {@link DigitalAccessStatus}; the first that applies, in the order listed there from the end. */
+export function digitalAccessStatus(
+  entitlement: {
+    kind: DigitalAssetKind;
+    revokedAt: number | null;
+    expiresAt: number | null;
+    downloadCount: number;
+    downloadLimit: number | null;
+    orderStatus: string;
+  },
+  nowSeconds: number,
+): DigitalAccessStatus {
+  if (entitlement.revokedAt !== null) return "revoked";
+  if ((DIGITAL_ACCESS_ENDED_ORDER_STATUSES as readonly string[]).includes(entitlement.orderStatus)) return "ended";
+  if (entitlement.expiresAt !== null && entitlement.expiresAt <= nowSeconds) return "expired";
+  if (entitlement.kind === "file" && entitlement.downloadLimit !== null && entitlement.downloadCount >= entitlement.downloadLimit) return "exhausted";
+  return "active";
+}
+
 /** Downloads per entitlement: default 5; 1–100, or `null` for unlimited. */
 export const DIGITAL_DOWNLOAD_LIMIT_DEFAULT = 5;
 export const DIGITAL_DOWNLOAD_LIMIT_MIN = 1;

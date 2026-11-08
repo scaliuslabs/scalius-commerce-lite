@@ -16,7 +16,7 @@ import {
     orderItems,
     orders,
 } from "@scalius/database/schema";
-import { DIGITAL_DOWNLOAD_TICKET_TTL_SECONDS } from "@scalius/shared/digital";
+import { DIGITAL_ACCESS_ENDED_ORDER_STATUSES, DIGITAL_DOWNLOAD_TICKET_TTL_SECONDS } from "@scalius/shared/digital";
 import { AppError, NotFoundError } from "@scalius/core/errors";
 import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import { licenceKeyCrypto, signDownloadTicket, verifyDownloadTicketSignature } from "./secrets";
@@ -34,7 +34,7 @@ const LIST_LIMIT = 100;
  * A cancelled, refunded or returned order ends access to what it delivered:
  * downloads and key reveals stop, and the lists show the access as ended.
  */
-export const DIGITAL_ACCESS_ENDED_ORDER_STATUSES = ["cancelled", "refunded", "returned"] as const;
+export { DIGITAL_ACCESS_ENDED_ORDER_STATUSES };
 const accessEndedSql = sql<number>`${sql.raw(`"orders"."status"`)} IN ('cancelled', 'refunded', 'returned')`;
 function accessCondition(access: DigitalBuyerAccess): SQL {
     return access.kind === "customer"
