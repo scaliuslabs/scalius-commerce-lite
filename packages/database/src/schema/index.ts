@@ -33,6 +33,7 @@ export * from "./tax";
 export * from "./agent-access";
 export * from "./reviews";
 export * from "./digital";
+export * from "./buyer-uploads";
 export * from "./gift-cards";
 export * from "./warranty";
 export * from "./events";

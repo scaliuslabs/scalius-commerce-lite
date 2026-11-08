@@ -1,5 +1,6 @@
 // Customer erasure's work outside the database (migration 0186): one row a
-// buyer image to delete from storage (`delete_file`, `ref` = its R2 key) and
+// buyer file to delete from storage (`delete_file`, `ref` = its R2 key: a
+// conversation image, or since migration 0201 a buyer upload) and
 // one a saved payment method to detach at its provider
 // (`detach_payment_method`, `ref` = the provider's method reference). The
 // erasure batch writes them with the scrub it guards, so a refused erasure
@@ -18,7 +19,7 @@ export type CustomerErasureTaskKind = (typeof CUSTOMER_ERASURE_TASK_KINDS)[numbe
 
 // Columns in the table's order: the erasure batch fills it with INSERT … SELECT, which names none.
 export const customerErasureTasks = sqliteTable("customer_erasure_tasks", {
-    /** `file:<attachment id>` or `method:<saved method id>`: a repeat enqueue is a no-op. */
+    /** `file:<attachment id>`, `upload:<buyer upload id>` or `method:<saved method id>`: a repeat enqueue is a no-op. */
     id: text("id").primaryKey(),
     /** The erased customer (no foreign key: the work outlives any later change to the record). */
     customerId: text("customer_id").notNull(),
@@ -37,7 +38,7 @@ export const customerErasureTasks = sqliteTable("customer_erasure_tasks", {
     check("customer_erasure_tasks_kind_check", sql`${table.kind} IN ('delete_file', 'detach_payment_method')`),
     check(
         "customer_erasure_tasks_shape",
-        sql`(${table.kind} = 'delete_file' AND ${table.providerId} IS NULL AND substr(${table.ref}, 1, 22) = 'private/conversations/') OR (${table.kind} = 'detach_payment_method' AND ${table.providerId} IS NOT NULL AND length(${table.ref}) >= 1)`,
+        sql`(${table.kind} = 'delete_file' AND ${table.providerId} IS NULL AND (substr(${table.ref}, 1, 22) = 'private/conversations/' OR substr(${table.ref}, 1, 22) = 'private/buyer-uploads/')) OR (${table.kind} = 'detach_payment_method' AND ${table.providerId} IS NOT NULL AND length(${table.ref}) >= 1)`,
     ),
     check("customer_erasure_tasks_attempts_check", sql`${table.attempts} >= 0`),
     check("customer_erasure_tasks_last_error_length", sql`${table.lastError} IS NULL OR length(${table.lastError}) BETWEEN 1 AND 64`),
