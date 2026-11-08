@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { characterText } from "../../schemas/text";
 import { adminRouter } from "./admin-router";
 import type { Context, MiddlewareHandler } from "hono";
 import {
@@ -20,7 +21,7 @@ const paramsSchema = z.object({ replyId: idSchema });
 // Raw UTF-16 bounds allow the core normalizer to enforce Unicode character
 // limits consistently with messages, including composed text and emoji.
 const titleSchema = z.string().max(160).openapi({ description: "A one-line title, 1–80 characters after normalization." });
-const bodySchema = z.string().max(CONVERSATION_LIMITS.bodyLength * 2).openapi({ description: "Plain text, 1–5,000 characters after normalization." });
+const bodySchema = characterText(CONVERSATION_LIMITS.bodyLength).openapi({ description: "Plain text, 1–5,000 characters after normalization." });
 const savedReplySchema = z.object({
   id: idSchema,
   title: z.string(),

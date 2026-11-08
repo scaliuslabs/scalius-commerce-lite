@@ -4,6 +4,7 @@ import { presentStaffConversation } from "../../utils/conversation-view";
 // assignment need conversations.reply (route-permissions/conversations.ts).
 // Conversation writes are private and do not affect public cache dependencies.
 import { createRoute, z } from "@hono/zod-openapi";
+import { characterText } from "../../schemas/text";
 import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
 import {
@@ -74,7 +75,7 @@ const writeResponses = { ...errorResponses, 409: conflictResponse };
 
 /** A staff post: a public reply or an internal note, idempotent by `requestKey`. */
 const staffPostBodySchema = z.object({
-  body: z.string().max(CONVERSATION_LIMITS.bodyLength * 2).optional(),
+  body: characterText(CONVERSATION_LIMITS.bodyLength).optional(),
   products: z.array(conversationProductReferenceSchema).min(1).max(3).optional(),
   visibility: z.enum(["public", "internal"]),
   requestKey: clientMessageKeySchema,

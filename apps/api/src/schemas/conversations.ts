@@ -1,6 +1,7 @@
 // OpenAPI schemas for conversation threads (Wave A §6). Buyer shapes never
 // carry internal notes or staff identity (C4); staff shapes do.
 import { z } from "@hono/zod-openapi";
+import { characterText } from "./text";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import { protectedField as pii } from "./protected";
 
@@ -138,7 +139,7 @@ export const clientMessageKeySchema = z.string().trim().min(1).max(CONVERSATION_
 
 /** A buyer post: text, an idempotency key and up to three staged images. No contact fields (§4.3). */
 export const buyerPostBodySchema = z.object({
-  body: z.string().max(CONVERSATION_LIMITS.bodyLength * 2),
+  body: characterText(CONVERSATION_LIMITS.bodyLength),
   clientMessageKey: clientMessageKeySchema,
   attachmentIds: z.array(conversationAttachmentIdSchema).max(CONVERSATION_LIMITS.attachmentsPerMessage).optional(),
 }).strict();

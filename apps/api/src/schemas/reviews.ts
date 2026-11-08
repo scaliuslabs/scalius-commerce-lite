@@ -3,6 +3,7 @@
 // and the dashboard moderation shapes. Review text is buyer content: it is
 // only ever in response bodies and POST/PATCH bodies, never in URLs.
 import { z } from "@hono/zod-openapi";
+import { characterText } from "./text";
 import {
   REVIEW_AUTHOR_TYPES,
   REVIEW_MODERATION_ACTIONS,
@@ -127,7 +128,7 @@ export const reviewWriteResponseSchema = z.object({
   published: z.boolean(),
 }).openapi("ReviewWriteResult");
 
-const textInput = (max: number) => z.string().max(max * 2).nullable().optional();
+const textInput = (max: number) => characterText(max).nullable().optional();
 
 export const submitReviewBodySchema = z.object({
   orderItemId: z.string().trim().min(1).max(128),
@@ -217,7 +218,7 @@ export const moderateReviewsResultSchema = z.object({
 }).openapi("ModerateReviewsResult");
 
 export const reviewReplyBodySchema = z.object({
-  body: z.string().max(REVIEW_LIMITS.replyLength * 2).nullable(),
+  body: characterText(REVIEW_LIMITS.replyLength).nullable(),
   version: z.number().int().positive(),
 }).strict().openapi("ReviewReplyBody");
 
@@ -235,6 +236,8 @@ export const reviewSettingsBodySchema = z.object({
   moderation: z.enum(REVIEW_MODERATION_MODES).optional(),
   requestsEnabled: z.boolean().optional(),
   requestDelayDays: z.number().int().min(1).max(60).optional(),
+  // Lenient on purpose: the settings save drops a word over the limit and keeps the first 50 distinct ones.
+  // Lenient on purpose: the save drops a word over the limit and keeps the first 50 distinct ones.
   blockWords: z.array(z.string().max(REVIEW_LIMITS.blockWordLength * 2)).max(REVIEW_LIMITS.blockWords * 2).optional(),
   expectedRevision: z.number().int().nonnegative(),
 }).strict().openapi("ReviewSettingsBody");

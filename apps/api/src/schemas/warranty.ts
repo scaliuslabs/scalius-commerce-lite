@@ -1,6 +1,7 @@
 // OpenAPI schemas for warranty policies, buyer warranties and claims (Wave B
 // §5, §7). Dates are ISO strings; claim bodies never enter URLs or logs.
 import { z } from "@hono/zod-openapi";
+import { characterText } from "./text";
 import {
   WARRANTY_CLAIM_OPENERS,
   WARRANTY_CLAIM_RESOLUTIONS,
@@ -39,13 +40,13 @@ const claimResolutionSchema = z.enum(WARRANTY_CLAIM_RESOLUTIONS);
 // ─── Policies (dashboard) ────────────────────────────────────────────────
 
 const policyFields = {
-  name: z.string().max(WARRANTY_LIMITS.nameLength * 2).openapi({ description: "Buyer-facing name, like “1 year official warranty”" }),
+  name: characterText(WARRANTY_LIMITS.nameLength).openapi({ description: "Buyer-facing name, like “1 year official warranty”" }),
   provider: providerSchema.openapi({ description: "Who honours it: the brand (official) or the store" }),
   durationValue: z.number().int().min(WARRANTY_LIMITS.durationValue.min).max(WARRANTY_LIMITS.durationValue.max),
   durationUnit: durationUnitSchema,
   replacementDays: z.number().int().min(WARRANTY_LIMITS.replacementDays.min).max(WARRANTY_LIMITS.replacementDays.max).nullable()
     .openapi({ description: "Free replacement window in days from handover; null (or 0) for none" }),
-  terms: z.string().max(WARRANTY_LIMITS.termsLength * 2).nullable().openapi({ description: "Plain-text terms shown to buyers" }),
+  terms: characterText(WARRANTY_LIMITS.termsLength).nullable().openapi({ description: "Plain-text terms shown to buyers" }),
 };
 
 export const warrantyPolicyBodySchema = z.object(policyFields).strict();
@@ -144,14 +145,14 @@ export const staffClaimUpdateBodySchema = z.object({
   version: z.number().int().positive(),
   status: claimStatusSchema,
   resolution: claimResolutionSchema.nullable().optional().openapi({ description: "Required to resolve" }),
-  message: z.string().max(CONVERSATION_LIMITS.bodyLength * 2).nullable().optional()
+  message: characterText(CONVERSATION_LIMITS.bodyLength).nullable().optional()
     .openapi({ description: "Optional public reply to the buyer, posted with the status change (notifies them)" }),
   requestKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/).optional(),
 }).strict();
 
 export const staffOpenClaimBodySchema = z.object({
   warrantyId: warrantyIdSchema,
-  description: z.string().max(CONVERSATION_LIMITS.bodyLength * 2)
+  description: characterText(CONVERSATION_LIMITS.bodyLength)
     .openapi({ description: "What the buyer reported; posted as a public message from the store" }),
   quantity: z.number().int().positive().optional(),
   requestKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/),
@@ -207,7 +208,7 @@ export const claimClientKeySchema = z.string().regex(/^[A-Za-z0-9_-]{8,100}$/)
   .openapi({ description: "One key per claim form (a UUID); a replay returns the claim it opened" });
 
 export const buyerOpenClaimBodySchema = z.object({
-  description: z.string().max(CONVERSATION_LIMITS.bodyLength * 2),
+  description: characterText(CONVERSATION_LIMITS.bodyLength),
   clientKey: claimClientKeySchema,
   attachmentIds: z.array(conversationAttachmentIdSchema).max(CONVERSATION_LIMITS.attachmentsPerMessage).optional()
     .openapi({ description: "Photos staged for this claim form with claim-attachments" }),
