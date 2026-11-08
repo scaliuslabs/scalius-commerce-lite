@@ -21,7 +21,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { WeightInput } from "~/components/admin/product-form/variants/WeightInput";
-import { shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
+import { shippingProfileName, shippingProfilesQuery } from "~/lib/api-query-options/shipping-profiles";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { Page } from "~/components/admin/resource/Page";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -127,7 +127,7 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
   const profileOptions = profiles.map((profile) => ({
     value: profile.id,
     label: profile.isDefault
-      ? product("shippingProfileDefault", { name: profile.name })
+      ? product("shippingProfileDefault", { name: shippingProfileName(profile) })
       : profile.freeDelivery ? product("shippingProfileFree", { name: profile.name }) : profile.name,
   }));
   const query = useQuery({

@@ -12,7 +12,7 @@ import { SurfaceLoadError, SurfaceSkeleton } from "~/components/admin/apps/ui/su
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
-import { translate, useLocale, useMessages } from "~/i18n";
+import { getLocale, translate, useLocale, useMessages } from "~/i18n";
 import { appSurfacesMessages } from "~/i18n/app-surfaces";
 import { appUiMessages } from "~/i18n/app-ui";
 import { shellMessages } from "~/i18n/shell";
@@ -44,7 +44,9 @@ export const Route = createFileRoute("/admin/apps/$pluginId_/pages/$pageId")({
   validateSearch: (search: Record<string, unknown>): object => appPageQuery(search),
   loader: async ({ context: { queryClient }, params }) => {
     const apps = await queryClient.ensureQueryData(appSurfacesQueryOptions()).catch(() => null);
-    const page = apps?.find((app) => app.id === params.pluginId)?.pages.find((entry) => entry.id === params.pageId);
+    const app = apps?.find((entry) => entry.id === params.pluginId);
+    // The tab's title in the dashboard's language, as the page's own heading is.
+    const page = app ? localizedSurfaces(app, getLocale()).pages.find((entry) => entry.id === params.pageId) : undefined;
     return { title: page?.title ?? null };
   },
   head: ({ loaderData }) => titleHead(loaderData?.title ?? translate(shellMessages, "apps")),
