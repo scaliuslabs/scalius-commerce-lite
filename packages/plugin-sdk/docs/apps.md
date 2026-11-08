@@ -424,7 +424,7 @@ SQL triggers write event facts in the same transaction as the change, so a commi
 
 - A checkout carries its lines (product, variant, title, options, quantity, unit price and line total), subtotal, discount, shipping and total in minor units of its `currency`, the market `presence` and `language` the buyer shopped in, `customerId` (the store's customer for the typed phone, or null) with that customer's `marketingConsents`, and `recoveryUrl`: a signed link, valid for a week after the buyer's last change, that opens the store with the cart filled again. Name, email and phone need the [contact data](#contact-data) scopes. Prices are what the buyer last saw; the cart prices them again.
 - A checkout that became an order is gone: `get` answers 404. Read it again right before you send anything.
-- Remind with `ctx.messaging.email({ customerId, marketing: true, idempotencyKey })` (`read_customers`, `write_marketing`): it goes out only while that customer is subscribed, with the store's unsubscribe footer. The `cart-recovery` test app (`apps/api/src/plugins/testing/apps/cart-recovery`) files a reminder on the event, sends it from a cron after a delay, and never twice.
+- Remind with `ctx.messaging.email({ customerId, marketing: true, idempotencyKey })` (`read_customers`, `write_marketing`): it goes out only while that customer is subscribed, with the store's unsubscribe footer. The [`cart-recovery` example](../examples/cart-recovery) files a reminder on the event, sends it from a cron after a delay, and never twice; its test shows a buyer who is not subscribed (`createPluginTestHarness(app, { subscribed: { email: [] } })`).
 
 **Delivery to app handlers.**
 

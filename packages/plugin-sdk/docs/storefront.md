@@ -378,7 +378,16 @@ export default definePixel((pixel) => {
 - Each event carries `context`: `page` (`url` as origin, path and campaign parameters only, `path`, `title`, `referrer`), `language`, `currency` and `visitorId` (`null` without analytics consent). `pixel.consent` is `{ analytics, marketing, saleOfData }` as the page held it when the pixel started.
 - The pixel runs in a hidden sandboxed frame of its own (an opaque origin): it has no access to the page, the store's cookies or storage, or the buyer's session. It reaches only your `storefront.connect` hosts, with `fetch`, `navigator.sendBeacon` or an image; `sendBeacon` outlives a page that is navigating away. Bundle what you need: the frame loads no other script.
 - `pnpm plugin pack` builds `src/pixel.ts` into `storefront/pixel.js`: one classic script, at most 64 KiB (`STOREFRONT_COMPONENT_LIMITS.pixelBytes`), sealed with the release. A pixel declared without `src/pixel.ts`, or `src/pixel.ts` without the declaration or without `export default definePixel(…)`, fails pack. Running a pixel is part of the app's storefront grant: a Super Admin approves it.
-- A store without pixel apps loads nothing for them. `acme.pixel` (`apps/api/src/plugins/testing/apps/pixel`) is a complete example.
+- Money in an event is `{ amountMinor, currency }` and may be `null`: a product shown without a price (`merchandise.price`), a cart or checkout before its first quote (`total`), a delivery not yet priced (`shipping.cost`). Handle `null` before you read `amountMinor`.
+- Contact fields (`contact.email`, `contact.phone`, `address.name`, `address.line1`, `address.line2`) read `null` unless your app holds the matching `read_customer_*` scope.
+- Test a pixel with `createPixelTestHarness(app, pixel, { settings?, consent?, visitorId? })` from `@scalius/plugin-sdk/testing`: it starts the pixel only when the consent allows its category, hands it only the settings and events the manifest names, projects contact fields by your scopes, and records each `sendBeacon`, `fetch` and image request in `requests` (`blocked: true` for a host outside `storefront.connect`). `fixtures.buyerEvent(name, data?)` builds any buyer event; `data` merges into the defaults, so `fixtures.buyerEvent("checkout_started", { checkout: { total: null } })` is a checkout before its quote.
+
+  ```ts
+  const harness = createPixelTestHarness(app, pixel, { settings: { account_id: "acc_1" } });
+  harness.emit(fixtures.buyerEvent("checkout_completed"));
+  expect(harness.requests).toMatchObject([{ via: "beacon", url: "https://collect.example.com/e", blocked: false }]);
+  ```
+- A store without pixel apps loads nothing for them. The [`pixel` example](../examples/pixel) is a complete pixel with its tests.
 
 ## Experiments
 
@@ -396,7 +405,7 @@ export default defineIsland((element, _props, context) => {
 
 - `experimentVariant(visitorId, experiment, variants)` is deterministic: the same visitor, experiment and variants give the same answer in the island and in your pixel (exported by `@scalius/plugin-sdk/pixel` too), so the pixel attributes each `checkout_completed` (whose `context.visitorId` it gets) to the variant the buyer saw. `variants` lists names (equal weights) or maps names to positive weights, `{ control: 9, test: 1 }`.
 - Without analytics consent there is no visitor id, every buyer sees the first variant (the control) and nothing is recorded. Keep the control in your markup so nothing shifts while the island loads.
-- The server never sees the visitor id: no per-visitor page variants, no cache split. `acme.experiments` (`apps/api/src/plugins/testing/apps/experiments`) is a complete example.
+- The server never sees the visitor id: no per-visitor page variants, no cache split.
 
 ## Core embeds
 

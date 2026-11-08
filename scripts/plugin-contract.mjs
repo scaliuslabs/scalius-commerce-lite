@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// The SDK's copy of the stable app API contract
+// The SDK's copy of the stable app API contract (and its generated docs,
+// docs/operations.md and docs/events.md: scripts/plugin-reference.mjs)
 // (apps/api/src/openapi/stable-operations.snapshot.json), which
 // `createContractApi` in `@scalius/plugin-sdk/testing` checks `ctx.api.call`
 // against. The SDK cannot import the API app, and a published SDK has no API
@@ -13,10 +14,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { appOperationNames } from "../packages/shared/src/plugins/app-operations.ts";
+import { loadEsbuild } from "./plugin-build.mjs";
+import { renderEventsReference, renderOperationsReference } from "./plugin-reference.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 export const STABLE_SNAPSHOT = join(root, "apps/api/src/openapi/stable-operations.snapshot.json");
 export const SDK_CONTRACT_GEN = join(root, "packages/plugin-sdk/src/testing-contract.gen.ts");
+/** The generated references the SDK's docs ship (scripts/plugin-reference.mjs). */
+export const OPERATIONS_REFERENCE = join(root, "packages/plugin-sdk/docs/operations.md");
+export const EVENTS_REFERENCE = join(root, "packages/plugin-sdk/docs/events.md");
 /** Every operation the host knows, with its stability (generated from the OpenAPI contract). */
 export const AGENT_OPERATIONS_MANIFEST = join(root, "apps/api/src/generated/agent-operations.gen.txt");
 
@@ -45,7 +51,45 @@ export function renderContractModule(snapshotText, manifestText) {
   ].join("\n");
 }
 
+/** The event catalogue as the events reference reads it: topics, their resources and each topic's facts as JSON Schema. */
+export async function loadEventCatalogue() {
+  const esbuild = await loadEsbuild();
+  const result = await esbuild.build({
+    stdin: {
+      contents: [
+        'import { z } from "zod";',
+        'import { EVENT_TOPICS, EVENT_TOPIC_RESOURCE, EVENT_FACT_SCHEMAS } from "@scalius/shared/events";',
+        "export const topics = [...EVENT_TOPICS];",
+        "export const resources = EVENT_TOPIC_RESOURCE;",
+        'export const facts = Object.fromEntries(Object.entries(EVENT_FACT_SCHEMAS).map(([topic, schema]) => [topic, z.toJSONSchema(schema, { io: "output" })]));',
+      ].join("\n"),
+      resolveDir: join(root, "packages/plugin-sdk"),
+      loader: "ts",
+    },
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "node",
+    target: "node22",
+    logLevel: "silent",
+  });
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
+}
+
+/** Every generated file and its fresh contents. */
+export async function renderSdkContract() {
+  const snapshot = readFileSync(STABLE_SNAPSHOT, "utf8");
+  const catalogue = await loadEventCatalogue();
+  return new Map([
+    [SDK_CONTRACT_GEN, renderContractModule(snapshot, readFileSync(AGENT_OPERATIONS_MANIFEST, "utf8"))],
+    [OPERATIONS_REFERENCE, renderOperationsReference(snapshot)],
+    [EVENTS_REFERENCE, renderEventsReference({ ...catalogue, stableOperations: Object.keys(JSON.parse(snapshot).operations) })],
+  ]);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  writeFileSync(SDK_CONTRACT_GEN, renderContractModule(readFileSync(STABLE_SNAPSHOT, "utf8"), readFileSync(AGENT_OPERATIONS_MANIFEST, "utf8")));
-  console.log("Updated packages/plugin-sdk/src/testing-contract.gen.ts");
+  for (const [path, text] of await renderSdkContract()) {
+    writeFileSync(path, text);
+    console.log(`Updated ${path.slice(root.length + 1)}`);
+  }
 }

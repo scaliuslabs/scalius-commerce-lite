@@ -41,6 +41,7 @@ export function standaloneNextSteps({ repo, app, version }) {
     [`pnpm --dir ${repo} plugin validate ${app}`, "check it the way a store loads it"],
     [`pnpm --dir ${repo} plugin preview ${app}`, "render its storefront parts on a sample, an empty and another store"],
     [`pnpm --dir ${repo} plugin pack ${app} --key <folder>`, "pack and sign the upload package"],
+    [`pnpm --dir ${repo} plugin add ${app}`, "install it in your local store (a running pnpm dev reloads by itself)"],
   ];
 }
 
@@ -335,6 +336,7 @@ const SDK_DOCS_URL = "https://github.com/scaliuslabs/scalius-commerce-lite/blob/
  */
 export function agentGuideFiles({ id, title, theme, standalone, repo, app }) {
   const docs = standalone ? "node_modules/@scalius/plugin-sdk/docs" : "../../packages/plugin-sdk/docs";
+  const examples = standalone ? "node_modules/@scalius/plugin-sdk/examples" : "../../packages/plugin-sdk/examples";
   const scalius = standalone ? `pnpm --dir ${repo ?? "<your Scalius checkout>"} plugin` : "pnpm plugin";
   const test = standalone ? "npm test" : `pnpm --dir ${app} test`;
   const agents = `# ${title} (${id}): rules for AI agents
@@ -365,7 +367,7 @@ ${scalius} validate ${app}
 ${scalius} preview ${app}     # open dist/preview.html: check the sample, empty and other store
 \`\`\`
 
-Then \`${scalius} pack ${app} --key <folder>\`. Verify the composed pages in a local store too.
+Then \`${scalius} pack ${app} --key <folder>\`. Verify the composed pages in a local store too: \`${scalius} add ${app}\` installs it in the store \`pnpm dev\` runs (it reloads by itself); activate it on the dashboard's Apps page.
 
 ## Docs
 
@@ -373,6 +375,9 @@ Then \`${scalius} pack ${app} --key <folder>\`. Verify the composed pages in a l
 - Apps (manifest, lifecycle, storage, routes): ${docs}/apps.md
 - Storefront reference (sections, skins, islands, budgets): ${docs}/storefront.md
 - Commerce hooks (scopes, events, checkout functions, the stable API): ${docs}/commerce-hooks.md
+- Every stable API operation with its scopes, request and response: ${docs}/operations.md
+- Every event topic and its facts: ${docs}/events.md
+- Complete example apps with their tests (point of sale, reviews, cart recovery, delivery slots, a pixel, a chat provider): ${examples}
 - One-page index for AI tools: ${docs}/llms.txt
 - Online: ${SDK_DOCS_URL}
 `;
