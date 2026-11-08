@@ -374,12 +374,14 @@ export const policies = [
     sample: '<form action="/account/reviews" class="x">',
   },
   {
-    rule: "storefront analytics and Meta CAPI builders never read cart-line buyer inputs (properties)",
+    rule: "storefront analytics, buyer event and Meta CAPI builders never read cart-line buyer inputs (properties)",
     why: "engraving text, notes and gift messages are buyer content; they must never reach pixels, tag managers or the Conversions API (Wave A P6)",
     paths: [
       `${storefront}/lib/analytics.ts`,
       `${storefront}/lib/tracking/meta-capi.ts`,
-      `${storefront}/components/product/lib/product-analytics.ts`,
+      `${storefront}/lib/buyer-events/lines.ts`,
+      `${storefront}/lib/buyer-events/listing.ts`,
+      `${storefront}/lib/buyer-events/pixels.ts`,
     ],
     forbid: [/\bproperties\b/],
     sample: "contents: items.map((item) => ({ id: item.id, properties: item.properties })),",

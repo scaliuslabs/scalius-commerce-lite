@@ -27,6 +27,7 @@ import {
 import { PLUGIN_ID_PATTERN } from "@scalius/shared/plugins/ids";
 import { PLUGIN_HOST_PATTERN } from "@scalius/shared/plugins/manifest-patterns";
 import { PROTECTED_CUSTOMER_DATA, type ProtectedCustomerData } from "@scalius/shared/plugins/protected-data";
+import { serializeJsonForInlineScript } from "../safe-json";
 
 const FRAME_PATH = /^\/_x\/([a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*)\/([0-9a-f]{64})\/pixel\.html$/;
 const MAX_HOSTS = 10;
@@ -64,7 +65,7 @@ export const PIXEL_FRAME_RUNTIME =
   "try{m.setup(api)}catch(x){console.error(x)}" +
   "var pending=queue;queue=[];for(var j=0;j<pending.length;j++)deliver(pending[j])};" +
   'w.addEventListener("message",function(e){' +
-  `if(port||e.source!==w.parent||!e.data||e.data.type!==${JSON.stringify(PIXEL_CONNECT_MESSAGE)}||!e.ports||!e.ports[0])return;` +
+  `if(port||e.source!==w.parent||!e.data||e.data.type!==${serializeJsonForInlineScript(PIXEL_CONNECT_MESSAGE)}||!e.ports||!e.ports[0])return;` +
   "port=e.ports[0];port.onmessage=function(m){var d=m.data;if(!d)return;" +
   'if(d.type==="init"&&!init){init=d;start()}' +
   'else if(d.type==="event"&&d.event){if(api)deliver(d.event);else queue.push(d.event)}}})' +
