@@ -155,6 +155,8 @@ export const ROUTE_TABLE = [
   { mount: "/admin/resources", router: "adminResourceReturnRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceDiscountRoutes", group: "admin-sales" },
   { mount: "/admin/resources", router: "adminResourceCustomerSegmentRoutes", group: "admin-sales" },
+  // A cart-recovery app's abandoned checkouts.
+  { mount: "/admin/resources", router: "adminResourceAbandonedCheckoutRoutes", group: "admin-sales" },
   { mount: "/admin/categories", router: "adminCategoryRoutes", group: "admin-catalog" },
   { mount: "/admin/brands", router: "adminBrandRoutes", group: "admin-catalog" },
   { mount: "/admin/price-lists", router: "adminPriceListRoutes", group: "admin-catalog" },

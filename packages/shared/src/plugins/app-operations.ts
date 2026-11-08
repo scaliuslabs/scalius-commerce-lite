@@ -202,6 +202,10 @@ export const STABLE_APP_OPERATIONS = {
   "theme.apply_template": "dashboard.resources.theme.apply_template",
   "theme.set_section_settings": "dashboard.resources.theme.section_settings_set",
 
+  // ── Abandoned checkouts ──
+  "abandoned_checkouts.list": "dashboard.resources.abandoned_checkouts.list",
+  "abandoned_checkouts.get": "dashboard.resources.abandoned_checkouts.get",
+
   // ── Customers ──
   "customers.list": "dashboard.resources.customers.list",
   "customers.get": "dashboard.resources.customers.get",

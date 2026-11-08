@@ -42,6 +42,22 @@ function bindable(value: SqlValue): SQLInputValue {
   return value as SQLInputValue;
 }
 
+/**
+ * The hex of an index tuple's first component when it is a string
+ * (index-encoding.ts: tag 05, bytes with NUL escaped as 00 ff, terminator
+ * 00 01), walked byte by byte; null for any other slot.
+ */
+function leadingStringComponent(hex: string | null): string | null {
+  if (hex === null || !hex.startsWith("05")) return null;
+  for (let at = 2; at + 4 <= hex.length; at += 2) {
+    if (hex.slice(at, at + 2) !== "00") continue;
+    const next = hex.slice(at + 2, at + 4);
+    if (next === "01") return hex.slice(0, at + 4);
+    if (next === "ff") at += 2;
+  }
+  return null;
+}
+
 export class ReferenceOracle {
   constructor(private readonly sqlite: DatabaseSync) {}
 
@@ -154,7 +170,18 @@ export class ReferenceOracle {
     if ("columns" in template) {
       const parts = template.columns.map((column) => toText(image[column] ?? null));
       if (parts.some((part) => part === null)) return [];
-      return [`${template.prefix}${parts.join(":")}`];
+      return [`${template.prefix}${parts.join(":")}${template.suffix ?? ""}`];
+    }
+    if ("indexLeads" in template) {
+      const scope = toText(image[template.column] ?? null);
+      if (scope === null) return [];
+      // The first component of each slot's index tuple, when it is a string:
+      // its tag (05), its escaped bytes and its terminator (00 01), read
+      // byte by byte here rather than by the trigger's text search.
+      return template.indexLeads.flatMap((slot) => {
+        const lead = leadingStringComponent(toText(image[slot] ?? null));
+        return lead === null ? [] : [`${template.prefix}${scope}:${lead}`];
+      });
     }
     if ("lookup" in template) {
       const { table, select, key, column } = template.lookup;

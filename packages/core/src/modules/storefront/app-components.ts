@@ -1,7 +1,7 @@
-import { collectObjectBindingRequests, resolvePluginSettingBindings, type BindingResource, type SettingBindings } from "@scalius/shared/storefront-theme/bindings";
+import { collectObjectBindingRequests, resolvePluginSettingBindings, type BindingResource, type BindingResourceSelector, type SettingBindings } from "@scalius/shared/storefront-theme/bindings";
+import type { StorefrontObjectRead } from "@scalius/shared/plugins/storefront-components";
 import { planStorefrontObjects, type PublicObjectBindings, type StorefrontObjectLoader } from "../objects";
 import { objectTypeId, parseObjectTypeHandle } from "@scalius/shared/plugins/objects";
-import type { PluginManifest } from "@scalius/shared/plugins/manifest";
 // The data of app component sections (packages/plugin-sdk/docs/storefront.md): a
 // section an app's storefront module draws at the edge gets its settings
 // resolved there, from the images, product lists and picked products read
@@ -43,7 +43,28 @@ export interface AppComponentPlacement {
   values: unknown;
   bindings?: SettingBindings;
   resource?: BindingResource;
-  reads?: PluginManifest["storefront"]["sections"][number]["reads"];
+  /** The page's resource (`product:<id>`, `category:<id>`, ...): what a read's `{ resource }` filter binds to. */
+  resourceSelector?: BindingResourceSelector;
+  reads?: readonly StorefrontObjectRead[];
+}
+
+type ReadScalar = string | number | boolean | null;
+
+/**
+ * A read's filters with their values: a literal, the section's setting, or the
+ * page's resource id. Null when a filter names a resource the page does not
+ * show (the read then has no records), or a setting that holds no scalar.
+ */
+function readFilters(read: StorefrontObjectRead, values: PluginSettingValues, resource: BindingResourceSelector | undefined): Record<string, ReadScalar> | null {
+  const where: Record<string, ReadScalar> = {};
+  for (const [key, filter] of Object.entries(read.where ?? {})) {
+    const value: unknown = filter !== null && typeof filter === "object"
+      ? "resource" in filter ? (resource?.ownerType === filter.resource ? resource.id : undefined) : values[filter.setting]
+      : filter;
+    if (value === undefined || (value !== null && !["string", "number", "boolean"].includes(typeof value))) return null;
+    where[key] = value as ReadScalar;
+  }
+  return where;
 }
 
 /** What the storefront needs to draw one component section. */
@@ -77,10 +98,9 @@ export async function readAppComponentData(
   const objectRequests = initial.flatMap(({ placement, values }) => (placement.reads ?? []).flatMap((read) => {
     const qualified = read.object.includes(".") ? read.object : `${placement.pluginId}.${read.object}`;
     const type = parseObjectTypeHandle(qualified);
-    if (!type) return [];
-    const where = Object.fromEntries(Object.entries(read.where ?? {}).map(([key, value]) => [key, value && typeof value === "object" ? values[value.setting] : value]));
-    if (Object.values(where).some((value) => value !== null && !["string", "number", "boolean"].includes(typeof value))) return [];
-    return [{ typeId: objectTypeId(type.namespace, type.type), limit: read.limit, where: where as Record<string, string | number | boolean | null> }];
+    const where = readFilters(read, values, placement.resourceSelector);
+    if (!type || !where) return [];
+    return [{ typeId: objectTypeId(type.namespace, type.type), limit: read.limit, where }];
   }));
   const bindingRequests = collectObjectBindingRequests(placements).map(({ namespace, type, handles }) => ({ typeId: objectTypeId(namespace, type), limit: 24, handles }));
   const sharedObjects = loadObjects?.([...objectRequests, ...bindingRequests]);
@@ -195,8 +215,11 @@ export async function readAppComponentData(
       ...((placement.reads?.length ?? 0) > 0 ? { objects: Object.fromEntries((placement.reads ?? []).flatMap((read) => {
         const type = read.object.includes(".") ? read.object : `${placement.pluginId}.${read.object}`;
         const data = objects[type];
-        if (!data) return [];
-        const records = data.records.filter((record) => Object.entries(read.where ?? {}).every(([key, value]) => record.data[key] === (value && typeof value === "object" ? values[value.setting] : value))).slice(0, read.limit);
+        // The values the read was planned with (the literal settings): a
+        // binding resolved later never widens it.
+        const where = readFilters(read, literal, placement.resourceSelector);
+        if (!data || !where) return [];
+        const records = data.records.filter((record) => Object.entries(where).every(([key, value]) => (record.data[key] ?? null) === value)).slice(0, read.limit);
         return [[type, { ...data, records }]];
       })) } : {}),
       media: [...new Set([...needs.mediaIds, ...objectData.mediaIds])].slice(0, HOME_MAX_MEDIA).flatMap((id) => media.get(id) ?? []),

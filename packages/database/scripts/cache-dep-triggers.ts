@@ -150,6 +150,16 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_warranty_policies_sku_upd_old: "0189_variant_warranty",
   // An option value's swatch (0196) is a visible column of its row.
   cdep_product_option_values_upd: "0196_option_value_swatches",
+  // A filtered object read (a product's reviews) declares its type's own row
+  // and the records led by its filter string, not every record (0203).
+  cdep_object_types_ins: "0203_object_record_dependencies",
+  cdep_object_types_del: "0203_object_record_dependencies",
+  cdep_object_types_upd: "0203_object_record_dependencies",
+  cdep_object_types_upd_old: "0203_object_record_dependencies",
+  cdep_object_records_ins: "0203_object_record_dependencies",
+  cdep_object_records_del: "0203_object_record_dependencies",
+  cdep_object_records_upd: "0203_object_record_dependencies",
+  cdep_object_records_upd_old: "0203_object_record_dependencies",
 };
 
 /**
@@ -553,6 +563,8 @@ interface Dialect {
   /** A list of text expressions as a row source (may reference sibling FROM items). */
   list(expressions: readonly string[], alias: string): { from: string; value: string };
   distinct: string;
+  /** The 1-based position of `needle` in `haystack` (0 when absent, NULL for NULL). */
+  position(haystack: string, needle: string): string;
 }
 
 const sqlite: Dialect = {
@@ -562,6 +574,7 @@ const sqlite: Dialect = {
     value: `${alias}.value`,
   }),
   distinct: "IS NOT",
+  position: (haystack, needle) => `instr(${haystack}, ${needle})`,
 };
 
 const postgres: Dialect = {
@@ -571,6 +584,7 @@ const postgres: Dialect = {
     value: `${alias}.value`,
   }),
   distinct: "IS DISTINCT FROM",
+  position: (haystack, needle) => `strpos(${haystack}, ${needle})`,
 };
 
 const literal = (value: string | number) =>
@@ -688,8 +702,9 @@ function keyExpression(table: string, template: CacheDepKeyTemplate, image: stri
   if ("columns" in template) {
     for (const column of template.columns) assertColumn(table, column);
     return [literal(template.prefix), ...template.columns.map((column, index) =>
-      `${index > 0 ? `':' || ` : ""}${image}.${d.id(column)}`)].join(" || ");
+      `${index > 0 ? `':' || ` : ""}${image}.${d.id(column)}`), ...(template.suffix ? [literal(template.suffix)] : [])].join(" || ");
   }
+  if ("indexLeads" in template) throw new Error("Index lead templates are rendered separately.");
   if ("lookup" in template) {
     const { lookup } = template;
     assertColumn(table, lookup.column);
@@ -698,6 +713,25 @@ function keyExpression(table: string, template: CacheDepKeyTemplate, image: stri
     return `${literal(template.prefix)} || (SELECT ${d.id(lookup.select)} FROM ${d.id(lookup.table)} WHERE ${d.id(lookup.key)} = ${image}.${d.id(lookup.column)})`;
   }
   throw new Error("Scope templates are rendered separately.");
+}
+
+type IndexLeadTemplate = Extract<CacheDepKeyTemplate, { indexLeads: readonly string[] }>;
+
+/**
+ * One key per index slot: `prefix || R.<column> || ':' || <lead>`, `<lead>`
+ * the slot's first tuple component when it is a string (index-encoding.ts:
+ * tag `05` through the first `0001`, which only a string's terminator
+ * holds), else NULL: `substr` from NULL when the slot is not led by `05`.
+ * No CASE (remote D1 refuses it in a trigger body).
+ */
+function indexLeadExpressions(table: string, template: IndexLeadTemplate, image: string, d: Dialect): string[] {
+  assertColumn(table, template.column);
+  return template.indexLeads.map((slot) => {
+    assertColumn(table, slot);
+    const value = `${image}.${d.id(slot)}`;
+    const lead = `substr(${value}, nullif(${d.position(`substr(${value}, 1, 2)`, "'05'")}, 0), ${d.position(value, "'0001'")} + 3)`;
+    return `${literal(template.prefix)} || ${image}.${d.id(template.column)} || ':' || ${lead}`;
+  });
 }
 
 /**
@@ -727,7 +761,7 @@ function scopesSql(template: ScopeTemplate, table: string, image: string, d: Dia
 function keysSql(table: string, rule: CacheDepRule, d: Dialect): string {
   const image = rule.image === "new" ? "NEW" : "OLD";
   const plain = rule.keys.filter((template) => !isScope(template) && !("rows" in template))
-    .map((template) => keyExpression(table, template, image, d));
+    .flatMap((template) => "indexLeads" in template ? indexLeadExpressions(table, template, image, d) : [keyExpression(table, template, image, d)]);
   plain.push(literal(`t:${table}`));
   const scoped = rule.keys.filter(isScope);
   const keyList = d.list(plain, "key_list");

@@ -1,5 +1,5 @@
 import type { StorefrontObjectLoader } from "@scalius/core/modules/objects";
-import type { BindingResource } from "@scalius/shared/storefront-theme/bindings";
+import type { BindingResource, BindingResourceSelector } from "@scalius/shared/storefront-theme/bindings";
 import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/bindings";
 // src/server/routes/storefront.ts
 // Storefront API — thin HTTP layer.
@@ -28,7 +28,7 @@ import {
 import { resolveUrlRedirect } from "@scalius/core/modules/products";
 import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "@scalius/core/modules/plugins";
 import type { MarketPricing } from "@scalius/core/modules/price-lists";
-import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins";
+import { PLUGIN_HOME_SECTIONS_MAX, PLUGIN_PRODUCT_BLOCKS_MAX } from "@scalius/shared/plugins";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { CATEGORY_NAVIGATION_LAYOUT_NODES } from "@scalius/core/modules/navigation";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
@@ -46,6 +46,7 @@ import {
   STOREFRONT_PAGE_TEMPLATES,
   STOREFRONT_SKIN_IMAGES_MAX,
   homeSectionRequests,
+  productComponentRequests,
   type HomeAppSectionRequest,
   type StorefrontThemeText,
 } from "@scalius/shared/storefront-theme";
@@ -209,6 +210,12 @@ const homepageSectionsSchema = z.object({
     }),
   })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
     description: "The app sections to show, by section id, each a component section's data. An app section missing here renders nothing.",
+  }),
+  components: z.array(z.object({
+    instanceId: z.string().openapi({ description: "The product page's app block (`blocks.product.apps[].id`)." }),
+    objects: z.record(z.string(), publicObjectDataSchema),
+  })).max(PLUGIN_PRODUCT_BLOCKS_MAX).optional().openapi({
+    description: "The product template's part only: the product page's app components that declare object reads, each with its records for the product shown (`objects` in its props).",
   }),
   objects: z.array(z.object({
     id: z.string(),
@@ -437,6 +444,7 @@ const layoutDataSchema = z.object({
     release: z.string().openapi({ description: "The release's bundle SHA-256: names its storefront files (/_x/<plugin id>/<release>/) and its isolate." }),
     sections: z.array(z.string()),
     sectionSettings: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
+    resourceSections: z.array(z.string()).optional().openapi({ description: "Sections whose reads bind the page's resource." }),
     skins: z.array(z.object({
       id: z.string(),
       target: z.string().openapi({ description: "The unit the skin draws: header, footer, product_card, product_main, listing_main or section:<core section type>." }),
@@ -446,6 +454,7 @@ const layoutDataSchema = z.object({
       type: z.string(),
       targets: z.array(z.enum(STOREFRONT_COMPONENT_TARGETS)).openapi({ description: "Where it renders: component slots (storefront-protocol.ts) or page (the app's proxy pages)." }),
       settings: z.array(z.record(z.string(), z.unknown())),
+      reads: z.literal(true).optional().openapi({ description: "It declares object reads (product template part)." }),
     })),
     islands: z.array(z.string()),
     stylesheet: z.boolean(),
@@ -517,20 +526,23 @@ const homepageRoute = createRoute({
  * from one read of the apps.
  */
 function homeAppRenderer(c: Context<{ Bindings: Env }>) {
-  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource; text?: StorefrontThemeText }) => {
+  return async (requests: HomeAppSectionRequest[], page: { pricing: MarketPricing | null; cardFields: string[]; loadObjects: StorefrontObjectLoader; resource?: BindingResource; resourceSelector?: BindingResourceSelector; text?: StorefrontThemeText }) => {
     const db = c.get("db");
     // The active apps among these (`plg:<id>` each: an app that starts, stops or drops a type changes the answer).
     const installations = activePluginInstallationsFromRows(await selectActivePluginInstallations(db, [...new Set(requests.map((request) => request.pluginId))]));
     const components: AppComponentPlacement[] = [];
     for (const request of requests) {
       const installation = installations.get(request.pluginId);
-      const section = installation?.manifest.storefront.sections.find((entry) => entry.type === request.type);
+      // A product page's app component reads only its declared objects (its settings resolve at the edge).
+      const section = request.component
+        ? installation?.manifest.storefront.components.find((entry) => entry.type === request.type && entry.reads.length > 0)
+        : installation?.manifest.storefront.sections.find((entry) => entry.type === request.type);
       if (!installation || !section) continue;
       // Drawn at the edge only while the approved grant covers storefront code.
       if (installation.grant?.storefrontCode === true) {
         // The section's words in the page's language (its text settings, as its schema names them).
         const values = page.text ? translatePluginSettingValues(section.settings, request.values, page.text) : request.values;
-        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values, reads: section.reads, bindings: request.bindings, resource: page.resource });
+        components.push({ sectionId: request.sectionId, pluginId: request.pluginId, type: request.type, schema: section.settings, values, reads: section.reads, bindings: request.bindings, resource: page.resource, ...(page.resourceSelector ? { resourceSelector: page.resourceSelector } : {}) });
       }
     }
     const data = await readAppComponentData(db, components, page.pricing, page.cardFields, page.loadObjects);
@@ -964,13 +976,17 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const { pageSlug, template, sections, presence, resource } = c.req.valid("json");
   const landing = pageSlug ? preview.theme.pages.landing[pageSlug] : null;
   if (pageSlug && !landing && !sections) throw new NotFoundError("Landing page not found");
-  const requests = sections
+  const sectionRequests = sections
     ? homeSectionRequests(sections, pageSlug || template ? { kind: "sections" } : preview.theme.pages.homeMode)
     : template
       ? homeSectionRequests(preview.theme.pages.templates[template].sections, { kind: "sections" })
       : landing
         ? homeSectionRequests(landing.sections, { kind: "sections" })
         : homeSectionRequests(preview.theme.pages.home, preview.theme.pages.homeMode);
+  // The draft's product page app components read their objects with the product template.
+  const requests = template === "product"
+    ? { ...sectionRequests, apps: [...sectionRequests.apps ?? [], ...productComponentRequests(preview.theme.blocks.product.apps)] }
+    : sectionRequests;
   // A draft's app sections are drawn live (this answer is never cached).
   const data = (await getHomepageData(db, {
     requests,

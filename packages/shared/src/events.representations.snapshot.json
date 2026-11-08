@@ -2170,11 +2170,173 @@
      "minLength": 1,
      "maxLength": 128
     },
+    "status": {
+     "type": "string",
+     "enum": [
+      "open",
+      "abandoned"
+     ]
+    },
+    "customerId": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 128
+    },
+    "name": {
+     "nullable": true,
+     "x-scalius-protected": "name",
+     "type": "string",
+     "maxLength": 4000
+    },
+    "email": {
+     "nullable": true,
+     "x-scalius-protected": "email",
+     "type": "string",
+     "maxLength": 4000
+    },
     "phone": {
      "nullable": true,
      "x-scalius-protected": "phone",
      "type": "string",
      "maxLength": 4000
+    },
+    "currency": {
+     "type": "string",
+     "minLength": 3,
+     "maxLength": 3
+    },
+    "presence": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 64
+    },
+    "language": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 16
+    },
+    "lines": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "productId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "variantId": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "title": {
+        "type": "string",
+        "maxLength": 4000
+       },
+       "options": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "properties": {
+          "name": {
+           "type": "string",
+           "maxLength": 100
+          },
+          "value": {
+           "type": "string",
+           "maxLength": 200
+          }
+         },
+         "required": [
+          "name",
+          "value"
+         ]
+        }
+       },
+       "quantity": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       },
+       "unitPriceMinor": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       },
+       "totalMinor": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       }
+      },
+      "required": [
+       "productId",
+       "variantId",
+       "title",
+       "options",
+       "quantity",
+       "unitPriceMinor",
+       "totalMinor"
+      ]
+     }
+    },
+    "subtotalMinor": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "discountMinor": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "shippingMinor": {
+     "nullable": true,
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "totalMinor": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "marketingConsents": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "channel": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "state": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       }
+      },
+      "required": [
+       "channel",
+       "state"
+      ]
+     }
+    },
+    "recoveryUrl": {
+     "nullable": true,
+     "type": "string",
+     "maxLength": 2048
+    },
+    "recoveryExpiresAt": {
+     "nullable": true,
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 40,
+     "format": "date-time"
     },
     "abandonedAt": {
      "nullable": true,
@@ -2199,7 +2361,22 @@
    "required": [
     "id",
     "checkoutId",
+    "status",
+    "customerId",
+    "name",
+    "email",
     "phone",
+    "currency",
+    "presence",
+    "language",
+    "lines",
+    "subtotalMinor",
+    "discountMinor",
+    "shippingMinor",
+    "totalMinor",
+    "marketingConsents",
+    "recoveryUrl",
+    "recoveryExpiresAt",
     "abandonedAt",
     "createdAt",
     "updatedAt"
@@ -3139,6 +3316,8 @@
   "shipment": [],
   "payment": [],
   "checkout": [
+   "email=email",
+   "name=name",
    "phone=phone"
   ],
   "discount": [],

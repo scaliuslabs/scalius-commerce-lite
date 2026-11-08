@@ -1,5 +1,5 @@
 import { collectObjectBindingRequests } from "@scalius/shared/storefront-theme/bindings";
-import { objectTypeId } from "@scalius/shared/plugins/objects";
+import { OBJECT_SECTION_RECORDS_MAX, objectTypeId } from "@scalius/shared/plugins/objects";
 import { resourceProductFieldsSql, readResourceProductFields, type BindingResourceSelector } from "./resource-bindings";
 import type { BindingResource } from "@scalius/shared/storefront-theme/bindings";
 // src/modules/storefront/storefront.service.ts
@@ -57,6 +57,7 @@ import {
   HOME_MAX_MEDIA,
   homeSectionRequests,
   parseStoredStorefrontThemeDocument,
+  productComponentRequests,
   storefrontThemeTextOf,
   translateStorefrontTheme,
   type HomeAppSectionRequest,
@@ -254,6 +255,8 @@ export async function getHomepageData(
       cardFields: string[];
       loadObjects: StorefrontObjectLoader;
       resource?: BindingResource;
+      /** The page's resource, which a read's `{ resource }` filter binds to. */
+      resourceSelector?: BindingResourceSelector;
       /** The theme's words in the page's language: translate the sections' text settings with it (none at the root). */
       text?: StorefrontThemeText;
     }) => Promise<HomepageAppSection[]>;
@@ -327,9 +330,14 @@ export async function getHomepageData(
   const theme = translateStorefrontTheme(storedTheme, text);
   const landing = options.pageSlug ? theme.pages.landing[options.pageSlug] ?? null : null;
   const pageSections = options.template ? theme.pages.templates[options.template].sections : landing?.sections;
-  const requests = options.requests ?? (options.pageSlug || options.template
+  const sectionRequests = options.requests ?? (options.pageSlug || options.template
     ? homeSectionRequests(pageSections ?? [], { kind: "sections" })
     : homeSectionRequests(theme.pages.home, theme.pages.homeMode));
+  // The product template's part also reads the product page's app
+  // components' object records (a preview's requests carry its draft's).
+  const requests = options.template === "product" && !options.requests
+    ? { ...sectionRequests, apps: [...sectionRequests.apps ?? [], ...productComponentRequests(theme.blocks.product.apps)] }
+    : sectionRequests;
   // A landing page or template depends on the collections its sections name; the homepage on any.
   if (options.pageSlug || options.template) deps.collections([
     ...requests.collectionIds,
@@ -344,7 +352,7 @@ export async function getHomepageData(
   const loadObjects: StorefrontObjectLoader = (reads) => { declareAppObjects(reads); return appObjectData; };
   let previewAppFailed = false;
   const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
-    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null, cardFields: theme.blocks.card.fields ?? [], loadObjects, resource, ...(text ? { text } : {}) }).then((sections) => { declareAppObjects([]); return sections; }).catch((error: unknown) => {
+    ? options.renderApps(requests.apps ?? [], { pricing: options.pricing ?? null, cardFields: theme.blocks.card.fields ?? [], loadObjects, resource, ...(options.resource ? { resourceSelector: options.resource } : {}), ...(text ? { text } : {}) }).then((sections) => { declareAppObjects([]); return sections; }).catch((error: unknown) => {
       declareAppObjects([]);
       // A preview must retain its previous DOM and report failure, not erase
       // an app section because a required dependency temporarily failed.
@@ -469,6 +477,7 @@ export async function getHomepageData(
 
   const renderedApps = await appSections;
   if (previewAppFailed) throw new Error("Preview app render failed");
+  const componentIds = new Set((requests.apps ?? []).flatMap((request) => request.component ? [request.sectionId] : []));
   return {
     seo: seoSettings,
     ...(options.pageSlug ? { landing } : {}),
@@ -483,11 +492,16 @@ export async function getHomepageData(
       // with a redirect to the product's own page.
       homeProduct: productPlan.resolve(results, productOffset),
       // App sections that drew something, by section id (component data).
-      apps: renderedApps,
+      apps: renderedApps.filter((entry) => !componentIds.has(entry.sectionId)),
+      // The product page's app components' object records, by block id;
+      // only a product template with such a component carries the key.
+      ...(componentIds.size > 0 ? { components: renderedApps.flatMap((entry) => componentIds.has(entry.sectionId)
+        ? [{ instanceId: entry.sectionId, objects: entry.component.objects ?? {} }] : []) } : {}),
       // The Objects sections' content types with their published entries.
       // Only a page with a Objects section carries the key (other pages answer as before).
       ...(objects.types.length > 0 || (requests.objects?.length ?? 0) > 0 ? { objects: objects.types } : {}),
-      ...(bindingTypes.length > 0 ? { bindingObjects: objects.bindingObjects } : {}),
+      ...(bindingTypes.length > 0 ? { bindingObjects: Object.fromEntries(Object.entries(objects.bindingObjects)
+        .map(([type, data]) => [type, { ...data, records: data.records.slice(0, OBJECT_SECTION_RECORDS_MAX) }])) } : {}),
     },
   };
 }

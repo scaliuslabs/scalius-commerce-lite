@@ -17,6 +17,9 @@
 import type { StorefrontComponentSlot, StorefrontProductCardData, StorefrontProductPage } from "@scalius/shared/plugins/storefront-protocol";
 import AppComponent from "./AppComponent.astro";
 import { appMarkup, appSlotComponents, requestExtensions, type AppMarkup } from "@/lib/extensions";
+import { sectionObjectsOf } from "@/lib/extensions/data";
+import { getLayoutData } from "@/lib/api/storefront";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 type SlotData = StorefrontProductPage | StorefrontProductCardData;
 
@@ -35,11 +38,14 @@ let drawn: Array<{ key: string; markup: AppMarkup }> = [];
 if (components.length > 0) {
   const { host } = await requestExtensions(Astro.locals, Astro.url);
   const unit = needsData ? await data?.() : undefined;
+  // A product component's object records carry money as the page shows it.
+  const layoutData = product && components.some((component) => component.objects) ? await getLayoutData() : null;
+  const money = { currencyCode: layoutData?.currency?.code ?? DEFAULT_CURRENCY.code, currencySymbol: layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol };
   if (!needsData || unit) {
     const rendered = await Promise.all(components.map(async (component) => {
       const base = { kind: "component", type: component.type, target: name, settings: component.settings };
       const job = product
-        ? { ...base, instanceId: component.instanceId ?? component.type, data: unit }
+        ? { ...base, instanceId: component.instanceId ?? component.type, data: unit, ...(component.objects ? { objects: sectionObjectsOf(component.objects, money) } : {}) }
         : unit ? { ...base, data: unit } : base;
       // Product and card slots keep JSON-LD out: the page's structured data is core's.
       const html = await host.render(component.extension, job as never, { jsonLd: !unit });

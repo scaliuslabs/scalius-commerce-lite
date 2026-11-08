@@ -51,7 +51,7 @@ import { formatList } from "@scalius/shared/locale-words";
 import { cartPaymentCopy } from "@/lib/cart-payment-copy";
 import { cartLineCopy } from "@/lib/cart-line-copy";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
-import { formatCount, storeRegion } from "@/lib/store-time-zone";
+import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
 import { applyCheckoutButtonState } from "./checkout-button-state";
@@ -392,6 +392,13 @@ function getCheckoutFormData(): CheckoutFormData {
     data.zoneName = latestCheckoutLocation.zoneName;
     data.areaName = latestCheckoutLocation.areaName;
   }
+
+  // The page's currency (the cart's prices are in it), market and language:
+  // an abandoned checkout's recovery message and link follow them.
+  data.currency = getCurrencyCode();
+  const presence = currentPresence();
+  if (presence) data.presence = presence;
+  data.language = pageLanguage().slice(0, 2).toLowerCase();
 
   return data;
 }

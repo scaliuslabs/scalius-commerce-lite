@@ -62,6 +62,13 @@ export interface ProductSlotComponentProps<Settings = StorefrontResolvedSettings
   settings: Settings;
   /** The product page, as a product_main skin gets it. */
   data: StorefrontProductPage;
+  /**
+   * The published records of the component's declared reads
+   * (`storefront.components[].reads`), by type handle: with
+   * `where: { product: { resource: "product" } }`, this product's records.
+   * The host always sets it (empty without reads); a type that is not public is absent.
+   */
+  objects?: NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
   /** The theme's id of this placement. */
   instanceId: string;
   context: StorefrontRenderContext;
@@ -200,7 +207,9 @@ function renderJob(definition: StorefrontDefinition, job: StorefrontRenderJob, c
       const component = definition.components?.[job.type];
       if (!component) throw new Error(`No component for ${job.type}.`);
       const { id: _id, kind: _kind, type: _type, ...props } = job;
-      return toHtml(component({ ...props, context } as ComponentProps)).value;
+      // A product slot component always gets `objects` (empty without reads).
+      const objects = "instanceId" in props ? { objects: props.objects ?? {} } : {};
+      return toHtml(component({ ...props, ...objects, context } as ComponentProps)).value;
     }
     case "skin": {
       const component = definition.skins?.[job.component] as ((props: SkinProps<unknown> & { instanceId?: string }) => Renderable) | undefined;

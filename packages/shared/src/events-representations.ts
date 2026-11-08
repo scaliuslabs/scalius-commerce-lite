@@ -472,11 +472,54 @@ export const paymentRepresentationSchema = z.object({
   updatedAt: iso,
 });
 
+/** One line of a checkout as the buyer last saw it. */
+const checkoutLineSchema = z.object({
+  productId: id,
+  variantId: id.nullable(),
+  title: text,
+  /** The variant's option labels the buyer picked (`Size: M`). */
+  options: z.array(z.object({ name: z.string().max(100), value: z.string().max(200) })),
+  quantity: z.number().int(),
+  unitPriceMinor: minor,
+  totalMinor: minor,
+});
+
+/**
+ * A storefront checkout the buyer left (`abandoned_checkouts`): what was in
+ * it, as they last saw it (an estimate: checkout prices again), in the
+ * page's currency, market presence and language. `customerId` is the store's
+ * customer record for the phone the buyer typed (null for a new buyer), so a
+ * marketing message goes through `ctx.messaging` with that id and the
+ * platform's consent check; `marketingConsents` is that record's consent per
+ * channel. `recoveryUrl` opens the store with the cart filled again: a
+ * signed, expiring link that carries no contact or cart values.
+ */
 export const checkoutRepresentationSchema = z.object({
   id,
+  /** The browser's checkout session (the order it becomes ends this checkout). */
   checkoutId: id,
+  /** `open` while the buyer may still be filling it in; `abandoned` once idle an hour (`checkout.abandoned`). */
+  status: z.enum(["open", "abandoned"]),
+  customerId: id.nullable(),
+  name: pii("name", text.nullable()),
+  email: pii("email", text.nullable()),
   /** The buyer's phone when they gave one before leaving. */
   phone: pii("phone", text.nullable()),
+  currency,
+  /** The market presence the buyer shopped in (`en-in`), null at the store's root. */
+  presence: z.string().max(64).nullable(),
+  /** The page language (`en`, `bn`), null when unknown. */
+  language: z.string().max(16).nullable(),
+  lines: z.array(checkoutLineSchema),
+  subtotalMinor: minor,
+  discountMinor: minor,
+  shippingMinor: minor.nullable(),
+  totalMinor: minor,
+  marketingConsents: z.array(z.object({ channel: state, state })),
+  /** The buyer's way back to this cart, or null when the store cannot sign one (no store URL). */
+  recoveryUrl: z.string().max(2048).nullable(),
+  /** When the link stops working. */
+  recoveryExpiresAt: iso.nullable(),
   abandonedAt: iso.nullable(),
   createdAt: iso,
   updatedAt: iso,
@@ -729,7 +772,7 @@ const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: 
   refund: (_resource, facts) => ({ appOperation: "refunds.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/refunds` }),
   shipment: (resource) => ({ appOperation: "shipments.get", path: `/api/v1/admin/resources/shipments/${segment(resource)}` }),
   payment: (_resource, facts) => ({ appOperation: "payments.list", path: `/api/v1/admin/resources/orders/${segment(facts.orderId)}/payments` }),
-  checkout: null,
+  checkout: (resource) => ({ appOperation: "abandoned_checkouts.get", path: `/api/v1/admin/resources/abandoned-checkouts/${segment(resource)}` }),
   discount: (resource) => ({ appOperation: "discounts.get", path: `/api/v1/admin/discounts/${segment(resource)}` }),
   review: null,
   gift_card: (resource) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(resource)}` }),

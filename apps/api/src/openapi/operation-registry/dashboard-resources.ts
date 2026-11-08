@@ -77,6 +77,9 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.returns.cancel": { ...returnCommand(), confirmation: "required" },
   // Discounts as their webhooks carry them (routes/admin/resources-discounts.ts).
   "dashboard.resources.discounts.list": { uncurated: true },
+  // Abandoned checkouts as their webhooks carry them (routes/admin/resources-abandoned-checkouts.ts).
+  "dashboard.resources.abandoned_checkouts.list": { uncurated: true },
+  "dashboard.resources.abandoned_checkouts.get": { uncurated: true },
   // Saved customer segments (routes/admin/resources-customer-segments.ts):
   // spend in minor units; members as customers, contact gated.
   "dashboard.resources.customer_segments.list": { uncurated: true },

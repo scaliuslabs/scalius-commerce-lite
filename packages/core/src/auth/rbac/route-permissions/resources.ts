@@ -48,6 +48,9 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/returns/*/receive": { POST: returns },
   "/api/v1/admin/resources/returns/*/cancel": { POST: returns },
   "/api/v1/admin/resources/discounts": { GET: { permission: PERMISSIONS.DISCOUNTS_VIEW } },
+  // Abandoned checkouts read as the dashboard's list does (orders.view).
+  "/api/v1/admin/resources/abandoned-checkouts": { GET: orders },
+  "/api/v1/admin/resources/abandoned-checkouts/*": { GET: orders },
   // Stock screens read locations by name; their addresses need inventory.view
   // or settings.general.view (the handler nulls them otherwise), as on
   // /admin/inventory/locations.

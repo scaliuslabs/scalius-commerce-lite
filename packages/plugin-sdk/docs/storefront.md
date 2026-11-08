@@ -27,7 +27,7 @@ Set `"jsxImportSource": "@scalius/plugin-sdk/storefront"` in your `tsconfig.json
 | Point | Declare (`storefront.*`) | Implement (`defineStorefront`) | Limit |
 | --- | --- | --- | --- |
 | Section | `sections: [{ type, name, settings, reads? }]` | `sections[type]` | 32 |
-| Component (slots and app pages) | `components: [{ type, name, targets, settings }]` | `components[type]` | 16 |
+| Component (slots and app pages) | `components: [{ type, name, targets, settings, reads? }]` | `components[type]` | 16 |
 | Skin of a unit or a core section | `skins: [{ id, target, name, settings }]` | `skins[id]` | 30 |
 | Template | `templates: [{ id, name, themeVersion?, theme }]` | | 5 |
 | Page preset | `pagePresets: [{ id, name, themeVersion?, sections }]` | | 8 |
@@ -117,7 +117,7 @@ export default defineStorefront({ components: { points: Points } });
 
 The per-target prop types are `ProductSlotComponentProps`, `ProductCardSlotComponentProps`, `LayoutSlotComponentProps` (the header and footer slots) and `PageComponentProps`; `ComponentPropsFor<Target>` maps a target to its props. Type a component's settings from your manifest with `StorefrontSettingsOf<typeof manifest, "component", "points">`.
 
-Like a skin, a component reads nothing of its own: its settings name no images or products.
+A component's settings name no images or products. A component whose one target is a product slot (`product.buy_box.before`, `product.buy_box.after`, `product.below`) may declare object `reads` bound to the product shown; see [Bindings and Objects](#bindings-and-objects). Any other component reads nothing of its own.
 
 ## Skins
 
@@ -190,7 +190,30 @@ A section, component placement or skin may store `bindings` beside its literal s
 - The literal value is the fallback when a source is missing or incompatible.
 - Unused sources add no reads.
 
-A section may declare `reads: [{ object, where?, limit }]` (at most 2; `limit` up to 24; up to four indexed filters, each a literal or `{ setting }`). The host checks the type, its visibility and the indexed filter, and passes the records as `objects` in the section's props. A section never reads private records or another app's namespace.
+A section, or a component whose one target is a product slot, may declare `reads: [{ object, where?, limit }]` (at most 2; `limit` up to 24; up to four indexed filters). A filter's value is a literal, one of the section's settings (`{ setting: "<key>" }`) or the id of the page's resource (`{ resource: "product" }`; a section may also bind `collection`, `category`, `brand` or `page`). The host checks the type, its visibility and the indexed filter, and passes the published records as `objects` in the props (`objects["<app id>.<type>"].records`). A read never returns private records or another app's private types.
+
+Records per product (reviews, questions, size charts) are a type whose index leads with the product field, read with the product shown:
+
+```ts
+objects: {
+  questions: {
+    name: "Questions", storefront: true, indexes: ["product"],
+    fields: [{ key: "product", name: "Product", type: "product_reference", required: true }, { key: "question", name: "Question", type: "single_line_text" }],
+  },
+},
+storefront: {
+  components: [{
+    type: "questions", name: "Questions", targets: ["product.below"],
+    reads: [{ object: "questions", where: { product: { resource: "product" } }, limit: 10 }],
+  }],
+},
+```
+
+- A filter must lead one of the type's indexes (`pnpm plugin validate` names the missing index). Records appear once published (`status: "published"`).
+- A page without that resource (the homepage under a product binding) gets no records, never every record.
+- The product page reads them with its template part, after the page's first batch: one more read only on a store that places such a component; a store that does not pays nothing.
+- Freshness is per product: a read filtered by a text value (an id) depends on that value's records and the type's own definition, so publishing one product's answer refreshes that product's page only. A read without a text filter depends on every record of its type.
+- A variant cannot be bound: the product page renders every variant at once and the buyer picks one in the browser, so filter by the product and choose by a `variant` field in your component.
 
 ## A storefront module
 
@@ -567,7 +590,7 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 
 - **One call per app per page.** Every part an app draws on a page (header, footer, every card in a listing, every section) joins one batch. A `product_main` or `listing_main` skin is drawn first, so those pages make one more batch to the app.
 - **Memo.** Each isolate keeps rendered output keyed by your release, the job and its context, so a popular page's cards and chrome render once per isolate, not per request.
-- **Bounded reads.** Skins and components draw from data the page already has. Section data joins the page's existing batch.
+- **Bounded reads.** Skins and components draw from data the page already has. Section data joins the page's existing batch; a product component's object reads come with the product template's part.
 - **Cache.** Rendered pages use the store's dependency-validated page cache. Release files are immutable for a year; an update is a new URL.
 - **Fallback.** One failed job fails only itself. A module that cannot load, throws or answers after the 250 ms wall falls back for its whole batch, and that page is never stored in the cache.
 

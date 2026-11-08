@@ -32,7 +32,8 @@ export async function sendEventDeliveries(
   ctx: ExecutionContext,
   deliveries: readonly EventDelivery[],
 ): Promise<{ sent: number }> {
-  const resolveRepresentation = createWebhookRepresentationResolver(db);
+  // A checkout carries its signed recovery link (the store URL and the master secret sign it).
+  const resolveRepresentation = createWebhookRepresentationResolver(db, { env, storefrontUrl: env.STOREFRONT_URL });
   const appAccess = appWebhookAccessReader(db);
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
   for (const delivery of deliveries) {

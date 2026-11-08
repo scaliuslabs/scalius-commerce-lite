@@ -95,6 +95,21 @@ export function readHomepageAppSurfaces(value: unknown): Map<string, HomepageApp
   return surfaces;
 }
 
+/**
+ * The product template part's `components`: each product page app
+ * component's public object records, by its block id; malformed entries are
+ * left out (the component then gets no records).
+ */
+export function readProductComponentObjects(value: unknown): Map<string, ComponentObjects> {
+  const objects = new Map<string, ComponentObjects>();
+  for (const entry of Array.isArray(value) ? value : []) {
+    if (!isRecord(entry) || typeof entry.instanceId !== "string" || !SURFACE_ID.test(entry.instanceId) || objects.has(entry.instanceId)) continue;
+    const read = readComponentObjects(entry.objects);
+    if (read) objects.set(entry.instanceId, read);
+  }
+  return objects;
+}
+
 /** The head tags of several surfaces, in order: each meta name or property once (the first wins), each JSON-LD once. */
 export function mergeAppHeads(heads: Iterable<PluginHead>): PluginHead {
   const meta: PluginHead["meta"] = [];

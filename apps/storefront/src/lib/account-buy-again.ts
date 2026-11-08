@@ -19,8 +19,11 @@ const GONE = new Set(["product_unavailable", "variant_required", "variant_unavai
  * check in the page's words (two apps' options that both price a line); null
  * when the store couldn't be reached.
  */
-export async function addOrderToCart(items: Array<CustomerOrderItem & OrderLineFulfilmentFacts>): Promise<{ added: number; missing: number } | { refused: string } | null> {
-  const lines = items.filter((item): item is CustomerOrderItem & OrderLineFulfilmentFacts & { variantId: string } => Boolean(item.productId && item.variantId));
+/** What a line needs to go back in the cart: an order's line, or an abandoned checkout's (lib/cart-recovery.ts). */
+export type RestorableLine = Pick<CustomerOrderItem, "productId" | "variantId" | "quantity" | "price" | "productName" | "productSlug" | "variantLabel"> & Partial<Pick<OrderLineFulfilmentFacts, "properties">>;
+
+export async function addOrderToCart(items: RestorableLine[]): Promise<{ added: number; missing: number } | { refused: string } | null> {
+  const lines = items.filter((item): item is RestorableLine & { variantId: string } => Boolean(item.productId && item.variantId));
   if (lines.length === 0) return { added: 0, missing: items.length };
   let result: CartValidationResult | null;
   try {

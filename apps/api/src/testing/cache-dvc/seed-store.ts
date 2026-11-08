@@ -83,6 +83,8 @@ export function everySectionTheme() {
   theme.brand = { logo: "media_logo", logoWidth: 180, darkLogo: "media_dark_logo", footerLogo: "media_story", favicon: "media_side" };
   theme.blocks.topBar = { variant: "utility", settings: { text: "Free delivery in Dhaka", link: "/shipping-policy" } };
   theme.blocks.footer = { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, tagline: "Handmade", about: "Since 1978", copyright: "Test Store Ltd" } } as typeof theme.blocks.footer;
+  // An app component on the product page reads its records for the product shown (the product template's part).
+  theme.blocks.product = { ...theme.blocks.product, apps: [{ id: "qa", app: "acme.dvc-active/qa", values: {} }] };
   return theme;
 }
 const q = (value: unknown) => `'${(typeof value === "string" ? value : JSON.stringify(value)).replace(/'/g, "''")}'`;
@@ -92,18 +94,29 @@ const T = DVC_SEED_EPOCH;
  * Installed apps and their typed objects: an
  * active app with every index slot filled and a disabled one, so the
  * generator can insert, update and delete each plugin table and move every
- * noise column (revisions, index columns, timestamps, actors).
+ * noise column (revisions, index columns, timestamps, actors). The active
+ * app's public `questions` are read per product by its product page
+ * component (`where: { product: { resource: "product" } }`): a record moves
+ * only its product's template part.
  */
 function pluginSeedSql(): string {
   const objects = { notes: {
     name: "Notes", admin: "edit",
     fields: ["owner", "kind", "at", "tag", "ref", "code"].map((key) => ({ key, name: key, type: key === "at" ? "integer" : "single_line_text" })),
     indexes: ["owner", "kind", "at", "tag"], unique: ["ref", "code"],
+  }, questions: {
+    name: "Questions", admin: "edit", storefront: true,
+    fields: [{ key: "product", name: "Product", type: "single_line_text" }, { key: "question", name: "Question", type: "single_line_text" }, { key: "rank", name: "Rank", type: "integer" }],
+    indexes: ["product", ["product", "rank"], "rank"],
   } };
   const manifestOf = (id: string) => {
     const parsed = parsePluginManifest({
       id, name: `DVC app ${id}`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A DVC seed app.",
       author: { name: "DVC" }, events: ["order.paid"], functions: [{ point: "checkout.discounts" }], objects,
+      storefront: { components: [{
+        type: "qa", name: "Questions", targets: ["product.below"],
+        reads: [{ object: "questions", where: { product: { resource: "product" } }, limit: 5 }],
+      }] },
     });
     if (!parsed.ok) throw new Error(`DVC seed manifest: ${JSON.stringify(parsed.issues)}`);
     return parsed.manifest;
@@ -116,6 +129,12 @@ function pluginSeedSql(): string {
     const value = (column: string) => (columns[column] === null ? "NULL" : q(columns[column]));
     return `('oty_acme.dvc-active.notes', ${q(id)}, 'active', ${q(data)}, ${at - T + 1}, ${value("k1")}, ${value("k2")}, ${value("k3")}, ${value("k4")}, ${value("u1")}, ${value("u2")}, ${at}, ${at})`;
   };
+  const question = (id: string, data: Record<string, unknown>, pub: 0 | 1, at: number) => {
+    const columns = recordIndexColumns(active.objects.questions!, data);
+    const value = (column: string) => (columns[column] === null ? "NULL" : q(columns[column]));
+    return `('oty_acme.dvc-active.questions', ${q(id)}, ${pub ? "'published'" : "'draft'"}, ${q(data)}, ${pub}, ${at - T}, 1, ${value("k1")}, ${value("k2")}, ${value("k3")}, ${at}, ${at})`;
+  };
+  const questions = active.objects.questions!;
   return `
   INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES
     ('usr_dvc_owner', 'Owner', 'owner@dvc.test', 1, 'admin', 1),
@@ -128,7 +147,13 @@ function pluginSeedSql(): string {
     ('event', 'order.paid', 'acme.dvc-active', 100),
     ('function', 'checkout.discounts', 'acme.dvc-disabled', 200);
   INSERT INTO object_types (id, namespace, type, name, fields_json, indexes_json, unique_json, admin, storefront, events, created_at, updated_at) VALUES
-    ('oty_acme.dvc-active.notes', 'acme.dvc-active', 'notes', 'Notes', ${q(active.objects.notes!.fields)}, ${q(active.objects.notes!.indexes)}, ${q(active.objects.notes!.unique)}, 'edit', 0, 0, ${T}, ${T});
+    ('oty_acme.dvc-active.notes', 'acme.dvc-active', 'notes', 'Notes', ${q(active.objects.notes!.fields)}, ${q(active.objects.notes!.indexes)}, ${q(active.objects.notes!.unique)}, 'edit', 0, 0, ${T}, ${T}),
+    ('oty_acme.dvc-active.questions', 'acme.dvc-active', 'questions', 'Questions', ${q(questions.fields)}, ${q(questions.indexes)}, ${q(questions.unique)}, 'edit', 1, 0, ${T}, ${T});
+  INSERT INTO object_records (type_id, id, status, data_json, pub, position, revision, k1, k2, k3, created_at, updated_at) VALUES
+    ${question("q1", { product: "p_linen", question: "Does it shrink?", rank: 1 }, 1, T + 1)},
+    ${question("q2", { product: "p_linen", question: "Is it lined?", rank: 2 }, 1, T + 2)},
+    ${question("q3", { product: "p_cotton", question: "Ironing?", rank: 1 }, 1, T + 3)},
+    ${question("q4", { product: "p_cotton", question: "Draft question", rank: 3 }, 0, T + 4)};
   INSERT INTO object_records (type_id, id, status, data_json, revision, k1, k2, k3, k4, u1, u2, created_at, updated_at) VALUES
     ${record("n1", { owner: "c1", kind: "earn", at: 1, tag: "eid", ref: "r1", code: "A" }, T + 1)},
     ${record("n2", { owner: "c2", kind: "spend", at: 2, tag: "vip", ref: "r2", code: "B" }, T + 2)},

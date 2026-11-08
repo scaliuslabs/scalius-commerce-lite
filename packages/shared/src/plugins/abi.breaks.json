@@ -682,5 +682,29 @@
   "from": "25b00b55d1cc465c",
   "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
   "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Follows PluginManifest: the harness is typed by the manifest, whose storefront components gained a reads list. Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (COMMERCE-HOOKS H16, G7): the checkout representation becomes the whole checkout (status, customer, contact, currency, presence, language, lines, totals in minor units, consents, recovery link); every earlier field keeps its name and type, the output only gains required members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
  }
 ]

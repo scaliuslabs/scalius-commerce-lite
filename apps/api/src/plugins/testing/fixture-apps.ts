@@ -36,6 +36,10 @@
 //   contact scopes) and blocks flagged ones.
 // - acme.personalise: a `file` line input (buyer uploads) and a printing fee
 //   by cart.line_prices; reads its own files back with order_uploads.list.
+// - acme.qa: product questions as public Objects, read per product by a
+//   product.below component bound to the page's product.
+// - acme.cart-recovery: checkout.abandoned, a wait, a fresh read of the
+//   checkout and one consent-checked reminder with its recovery link.
 //
 // Each fingerprint is a fixed test value: an installation made from an entry
 // matches the "deployed" code, and a test that changes it sees an update.
@@ -56,6 +60,8 @@ import { manifest as deliverySlotsManifest } from "./apps/delivery-slots/src/ind
 import { manifest as fraudScreenManifest } from "./apps/fraud-screen/src/index";
 import { manifest as personaliseManifest } from "./apps/personalise/src/index";
 import { manifest as chatManifest } from "./apps/chat/src/index";
+import { manifest as qaManifest } from "./apps/qa/src/index";
+import { manifest as cartRecoveryManifest } from "./apps/cart-recovery/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -76,6 +82,8 @@ export const FIXTURE_APP_SOURCES = {
   "acme.fraud-screen": "./apps/api/src/plugins/testing/apps/fraud-screen",
   "acme.personalise": "./apps/api/src/plugins/testing/apps/personalise",
   "acme.chat": "./apps/api/src/plugins/testing/apps/chat",
+  "acme.qa": "./apps/api/src/plugins/testing/apps/qa",
+  "acme.cart-recovery": "./apps/api/src/plugins/testing/apps/cart-recovery",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -101,6 +109,8 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.fraud-screen": { version: fraudScreenManifest.version, sha256: "f7a0".repeat(16), load: () => import("./apps/fraud-screen/src/index") },
   "acme.personalise": { version: personaliseManifest.version, sha256: "f070".repeat(16), load: () => import("./apps/personalise/src/index") },
   "acme.chat": { version: chatManifest.version, sha256: "c4a7".repeat(16), load: () => import("./apps/chat/src/index") },
+  "acme.qa": { version: qaManifest.version, sha256: "0a0a".repeat(16), load: () => import("./apps/qa/src/index") },
+  "acme.cart-recovery": { version: cartRecoveryManifest.version, sha256: "ca27".repeat(16), load: () => import("./apps/cart-recovery/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */
