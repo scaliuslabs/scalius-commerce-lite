@@ -90,6 +90,7 @@ export {
   type StableContract,
   type StableContractOperation,
 } from "./testing-contract";
+export { sample, type SampleOverrides, type SampleRepresentationType } from "./testing-sample";
 
 export interface PluginTestHarnessOptions {
   settings?: Record<string, PluginSettingValue>;

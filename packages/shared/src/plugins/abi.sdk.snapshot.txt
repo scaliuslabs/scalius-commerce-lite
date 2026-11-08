@@ -1217,6 +1217,34 @@ import type { StableContract } from "./testing-contract";
 export declare const STABLE_CONTRACT: StableContract;
 export declare const NON_STABLE_OPERATION_NAMES: readonly string[];
 
+// packages/plugin-sdk/src/testing-sample.d.ts
+import type { EventRepresentation } from "@scalius/shared/events";
+import { type StableContract } from "./testing-contract";
+export declare const SAMPLE_REPRESENTATION_SCHEMAS: {
+    readonly order: "OrderResource";
+    readonly return: "ReturnResource";
+    readonly product: "ProductResource";
+    readonly variant: "VariantResource";
+    readonly customer: "CustomerResource";
+    readonly purchase_order: "PurchaseOrderResource";
+    readonly inventory_transfer: "InventoryTransferResource";
+    readonly fulfillment: "FulfillmentResource";
+    readonly refund: "RefundResource";
+    readonly shipment: "ShipmentResource";
+    readonly payment: "PaymentResource";
+    readonly checkout: "AbandonedCheckout";
+    readonly discount: "DiscountSummary";
+    readonly review: "ReviewResource";
+    readonly conversation: "ConversationResource";
+    readonly payout: "PayoutResource";
+};
+export type SampleRepresentationType = keyof typeof SAMPLE_REPRESENTATION_SCHEMAS;
+export type SampleOverrides<T> = T extends readonly (infer Item)[] ? Array<SampleOverrides<Item>> : T extends object ? {
+    [Key in keyof T]?: SampleOverrides<T[Key]>;
+} : T;
+export declare function sample<T extends SampleRepresentationType>(type: T, overrides?: SampleOverrides<EventRepresentation<T>>, contract?: StableContract): EventRepresentation<T>;
+export declare function sample(schema: string, overrides?: Record<string, unknown>, contract?: StableContract): Record<string, unknown>;
+
 // packages/plugin-sdk/src/testing.d.ts
 import { PLUGIN_EXTENSION_RUN, type PluginFunctionInputDraft, type PluginFunctionOutput, type PluginFunctionPoint, type PluginRunPoint, type PluginSettingValue } from "@scalius/shared/plugins";
 import { type PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
@@ -1228,6 +1256,7 @@ import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
 export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiActions, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
 export { fixtures } from "./fixtures";
 export { contractSchemaIssue, createContractApi, stableContract, type ContractApi, type ContractApiOptions, type ContractCall, type ContractHandler, type StableContract, type StableContractOperation, } from "./testing-contract";
+export { sample, type SampleOverrides, type SampleRepresentationType } from "./testing-sample";
 export interface PluginTestHarnessOptions {
     settings?: Record<string, PluginSettingValue>;
     plan?: WorkersPlan;
@@ -2777,10 +2806,10 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
             staffMemberId: z.ZodNullable<z.ZodString>;
             tenders: z.ZodArray<z.ZodObject<{
                 via: z.ZodEnum<{
-                    other: "other";
                     cash: "cash";
                     card_terminal: "card_terminal";
                     mobile_wallet: "mobile_wallet";
+                    other: "other";
                 }>;
                 amountMinor: z.ZodNumber;
                 reference: z.ZodNullable<z.ZodString>;
@@ -2976,10 +3005,10 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
         orderId: z.ZodString;
         kind: z.ZodEnum<{
             service: "service";
-            gift_card: "gift_card";
-            pickup: "pickup";
             ship: "ship";
+            pickup: "pickup";
             digital: "digital";
+            gift_card: "gift_card";
         }>;
         status: z.ZodEnum<{
             voided: "voided";
@@ -3302,11 +3331,11 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
     }, z.core.$strip>;
 };
 export type EventRepresentation<T extends EventRepresentationType = EventRepresentationType> = z.output<(typeof EVENT_REPRESENTATION_SCHEMAS)[T]>;
-export type EventRepresentationType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card" | "gift_card_transaction" | "conversation";
+export type EventRepresentationType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "gift_card" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card_transaction" | "conversation";
 
 // packages/shared/src/events.d.ts
 export type EventTopic = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated";
-export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "object.*" | "checkout.*" | "order.*" | "product.*" | "customer.*" | "payment.*" | "payout.*" | "refund.*" | "review.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card.*" | "gift_card_transaction.*" | "conversation.*" | "*";
+export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "object.*" | "checkout.*" | "order.*" | "product.*" | "customer.*" | "payment.*" | "payout.*" | "refund.*" | "review.*" | "gift_card.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card_transaction.*" | "conversation.*" | "*";
 
 // packages/shared/src/plan-limits.d.ts
 export type WorkersPlan = "paid" | "free";
