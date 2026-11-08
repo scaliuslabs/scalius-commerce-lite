@@ -78,6 +78,8 @@ import {
 } from "./rule-errors";
 import {
   clearCheckoutAttemptSession,
+  ensureCheckoutId,
+  readCheckoutId,
   clearHostedPaymentRecoverySession,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
@@ -223,7 +225,7 @@ let undoTimer: ReturnType<typeof setTimeout> | null = null;
 function pendingCheckoutForThisTab(): HostedPaymentRecoverySession | null {
   try {
     const recovery = readHostedPaymentRecoverySession();
-    return recovery?.checkoutId && recovery.checkoutId === sessionStorage.getItem("checkoutId") ? recovery : null;
+    return recovery?.checkoutId && recovery.checkoutId === readCheckoutId() ? recovery : null;
   } catch {
     return null;
   }
@@ -231,7 +233,7 @@ function pendingCheckoutForThisTab(): HostedPaymentRecoverySession | null {
 
 function clearExpiredCheckoutAttempt(checkoutId: string): void {
   try {
-    if (sessionStorage.getItem("checkoutId") === checkoutId) {
+    if (readCheckoutId() === checkoutId) {
       clearCheckoutAttemptSession({ preserveFormDraft: true });
     }
   } catch {
@@ -329,13 +331,9 @@ function notifyDiscountValidationState(): void {
   }
 }
 
+/** The browser's one checkout for its cart: a new tab continues it, never begins another. */
 function getCheckoutId(): string {
-  let checkoutId = sessionStorage.getItem("checkoutId");
-  if (!checkoutId) {
-    checkoutId = `chk_session_${nanoid()}`;
-    sessionStorage.setItem("checkoutId", checkoutId);
-  }
-  return checkoutId;
+  return ensureCheckoutId(() => `chk_session_${nanoid()}`);
 }
 
 function setCheckoutIdInputValue(checkoutId: string): void {
