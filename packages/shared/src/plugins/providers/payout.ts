@@ -20,6 +20,13 @@
 // - Only a provider-authenticated fact moves a payout: an answer to the
 //   platform's own call or a verified callback (`verifyWebhook`). Statuses
 //   only move forward: `processing`, then `paid` or `failed`.
+// - Reversals (optional, `reversePayout` with `reversalStatus`): money taken
+//   back from a `paid` payout (a marketplace clawing back a seller's share
+//   after a refund), in part or whole. The platform commits the reversal
+//   (`pending`) before `reversePayout` runs, never asks for more than the
+//   payout less its other reversals, and `reversalId` is stable across every
+//   retry: apply a reversal once per `reversalId`. A provider without them
+//   cannot reverse (`payout_reversal_unsupported`).
 
 import { z } from "zod";
 import {
@@ -76,22 +83,80 @@ export const payoutStatusSchema = z.union([
 ]);
 export type PayoutStatusAnswer = z.infer<typeof payoutStatusSchema>;
 
+/** What a reversal is at the provider: taken and on its way, settled (the money is back), or refused. */
+export const PROVIDER_PAYOUT_REVERSAL_STATUSES = ["processing", "reversed", "failed"] as const;
+export type ProviderPayoutReversalStatus = (typeof PROVIDER_PAYOUT_REVERSAL_STATUSES)[number];
+
+export const payoutReverseInputSchema = z.object({
+  /** The platform's reversal id: apply the reversal once per id. */
+  reversalId: providerRefSchema,
+  /** The paid payout it takes money back from, and the provider's reference for it. */
+  payoutId: providerRefSchema,
+  providerRef: providerRefSchema.optional(),
+  /** At most what the payout has left to give back, in the payout's currency. */
+  amountMinor: providerPositiveMinorSchema,
+  currency: providerCurrencySchema,
+  reason: z.string().min(1).max(200).optional(),
+}).strict();
+export type PayoutReverseInput = z.infer<typeof payoutReverseInputSchema>;
+
+/** The provider's answer about one reversal. `failed` names why (`failureCode`, a merchant-safe `reason`). */
+export const payoutReversalResultSchema = z.object({
+  status: z.enum(PROVIDER_PAYOUT_REVERSAL_STATUSES),
+  /** The provider's id for the reversal. */
+  providerRef: providerRefSchema,
+  failureCode: failureCode.optional(),
+  reason: providerReasonSchema.optional(),
+}).strict();
+export type PayoutReversalResult = z.infer<typeof payoutReversalResultSchema>;
+
+export const payoutReversalStatusInputSchema = z.object({
+  reversalId: providerRefSchema,
+  payoutId: providerRefSchema,
+  /** Absent when the first call never answered: look the reversal up by `reversalId`. */
+  providerRef: providerRefSchema.optional(),
+}).strict();
+export type PayoutReversalStatusInput = z.infer<typeof payoutReversalStatusInputSchema>;
+
+/** The provider's answer to a status question; `unknown` when it has no reversal under that id. */
+export const payoutReversalStatusSchema = z.union([
+  payoutReversalResultSchema,
+  z.object({ status: z.literal("unknown") }).strict(),
+]);
+export type PayoutReversalStatusAnswer = z.infer<typeof payoutReversalStatusSchema>;
+
+const payoutUpdateSchema = z.object({
+  payoutId: providerRefSchema.optional(),
+  providerRef: providerRefSchema,
+  status: z.enum(PROVIDER_PAYOUT_STATUSES),
+  failureCode: failureCode.optional(),
+  reason: providerReasonSchema.optional(),
+}).strict();
+
+const payoutReversalUpdateSchema = z.object({
+  reversalId: providerRefSchema.optional(),
+  providerRef: providerRefSchema,
+  status: z.enum(PROVIDER_PAYOUT_REVERSAL_STATUSES),
+  failureCode: failureCode.optional(),
+  reason: providerReasonSchema.optional(),
+}).strict();
+
 /**
  * An authenticated callback about payouts, or why nothing applies. Each
  * update names the payout by the platform's `payoutId` (when the provider
- * echoes it) or its own `providerRef`.
+ * echoes it) or its own `providerRef`; each of `reversals` names a reversal
+ * by `reversalId` or its own `providerRef`.
  */
 export const payoutWebhookSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("updates"),
-    updates: z.array(z.object({
-      payoutId: providerRefSchema.optional(),
-      providerRef: providerRefSchema,
-      status: z.enum(PROVIDER_PAYOUT_STATUSES),
-      failureCode: failureCode.optional(),
-      reason: providerReasonSchema.optional(),
-    }).strict()).min(1).max(50),
-  }).strict(),
+    updates: z.array(payoutUpdateSchema).max(50).default([]),
+    /** Reversal updates, each by the platform's `reversalId` or the provider's reference. */
+    reversals: z.array(payoutReversalUpdateSchema).max(50).optional(),
+  }).strict().refine((callback) => {
+    const total = callback.updates.length + (callback.reversals?.length ?? 0);
+    return total >= 1 && total <= 50;
+  }, "Send 1 to 50 updates."),
   z.object({ status: z.literal("ignored"), reason: providerReasonSchema }).strict(),
   z.object({ status: z.literal("invalid"), reason: providerReasonSchema }).strict(),
 ]);
@@ -101,4 +166,6 @@ export const PAYOUT_PORT = {
   createPayout: { input: payoutCreateInputSchema, output: payoutResultSchema },
   payoutStatus: { input: payoutStatusInputSchema, output: payoutStatusSchema },
   verifyWebhook: { input: providerHttpRequestSchema, output: payoutWebhookSchema },
+  reversePayout: { input: payoutReverseInputSchema, output: payoutReversalResultSchema },
+  reversalStatus: { input: payoutReversalStatusInputSchema, output: payoutReversalStatusSchema },
 } as const;

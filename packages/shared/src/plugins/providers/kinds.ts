@@ -73,7 +73,8 @@ export const PROVIDER_OPERATIONS = {
   // Buyer sign-in with another account (OAuth 2.0 code with PKCE).
   identity: { required: ["authorize", "exchange"], optional: ["testConnection"] },
   // Money out of the store to a payee (a marketplace's sellers): apps only.
-  payout: { required: ["createPayout", "payoutStatus"], optional: ["verifyWebhook", "testConnection"] },
+  // Reversals (`reversePayout` with `reversalStatus`) take money back from a paid payout.
+  payout: { required: ["createPayout", "payoutStatus"], optional: ["verifyWebhook", "testConnection", "reversePayout", "reversalStatus"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
 /**

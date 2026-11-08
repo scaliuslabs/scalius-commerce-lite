@@ -115,6 +115,7 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // sends (the routes answer an app its own payouts only).
   "/api/v1/admin/resources/payouts": { GET: { permission: PERMISSIONS.PAYOUTS_MANAGE }, POST: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
   "/api/v1/admin/resources/payouts/*": { GET: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
+  "/api/v1/admin/resources/payouts/*/reverse": { POST: { permission: PERMISSIONS.PAYOUTS_MANAGE } },
   // The inbox in the app API: reading threads and lines, and replying.
   "/api/v1/admin/resources/conversations": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },
   "/api/v1/admin/resources/conversations/*": { GET: { permission: PERMISSIONS.CONVERSATIONS_VIEW } },

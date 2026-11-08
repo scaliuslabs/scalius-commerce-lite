@@ -5,10 +5,10 @@
 // answer to the platform's own call, a verified callback), forward only:
 // pending → processing → paid | failed, each move a compare-and-set on
 // `version`. The triggers refuse anything else.
-import { and, asc, eq, gte, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { payouts, type Payout, type PayoutStatus } from "@scalius/database/schema";
+import { payoutReversals, payouts, type Payout, type PayoutReversal, type PayoutStatus } from "@scalius/database/schema";
 import { buildEventRepresentation, type EventRepresentation } from "@scalius/shared/events";
 import { sha256Hex } from "@scalius/shared/hash";
 import { allProtectedData } from "@scalius/shared/plugins/protected-data";
@@ -218,8 +218,23 @@ export function listAppPayouts(db: Database, options: {
 
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
 
-/** The sealed `payout` representation (what `payouts.get` answers and a webhook carries). */
-export function payoutRepresentation(row: Payout): EventRepresentation<"payout"> {
+/** The reversals of some payouts, oldest first, by payout (ids bound as one JSON value). */
+export async function readPayoutReversals(db: Database, payoutIds: readonly string[]): Promise<Map<string, PayoutReversal[]>> {
+    const byPayout = new Map<string, PayoutReversal[]>();
+    if (payoutIds.length === 0) return byPayout;
+    const rows = await db.select().from(payoutReversals)
+        .where(sql`${payoutReversals.payoutId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...new Set(payoutIds)])}))`)
+        .orderBy(asc(payoutReversals.payoutId), asc(payoutReversals.createdAt), asc(payoutReversals.id)).all();
+    for (const row of rows) byPayout.set(row.payoutId, [...(byPayout.get(row.payoutId) ?? []), row]);
+    return byPayout;
+}
+
+/**
+ * The sealed `payout` representation (what `payouts.get` answers and a
+ * webhook carries), with its reversals oldest first: `reversedMinor` is what
+ * they took back (those `reversed`).
+ */
+export function payoutRepresentation(row: Payout, reversals: readonly PayoutReversal[] = []): EventRepresentation<"payout"> {
     return buildEventRepresentation("payout", {
         id: row.id,
         appId: row.appId,
@@ -233,6 +248,20 @@ export function payoutRepresentation(row: Payout): EventRepresentation<"payout">
         providerRef: row.providerRef,
         failureCode: row.failureCode,
         failureMessage: row.failureMessage,
+        reversedMinor: reversals.reduce((total, reversal) => total + (reversal.status === "reversed" ? reversal.amountMinor : 0), 0),
+        reversals: reversals.map((reversal) => ({
+            id: reversal.id,
+            amountMinor: reversal.amountMinor,
+            currency: reversal.currency,
+            reason: reversal.reason,
+            status: reversal.status,
+            providerRef: reversal.providerRef,
+            failureCode: reversal.failureCode,
+            failureMessage: reversal.failureMessage,
+            createdAt: iso(reversal.createdAt),
+            updatedAt: iso(reversal.updatedAt),
+            settledAt: reversal.settledAt === null ? null : iso(reversal.settledAt),
+        })),
         revision: row.version,
         createdAt: iso(row.createdAt),
         updatedAt: iso(row.updatedAt),
@@ -240,8 +269,14 @@ export function payoutRepresentation(row: Payout): EventRepresentation<"payout">
     }, allProtectedData());
 }
 
+/** The representations of some payouts, in the order given: their reversals in one read. */
+export async function payoutRepresentations(db: Database, rows: readonly Payout[]): Promise<Array<EventRepresentation<"payout">>> {
+    const reversals = await readPayoutReversals(db, rows.map((row) => row.id));
+    return rows.map((row) => payoutRepresentation(row, reversals.get(row.id) ?? []));
+}
+
 /** A payout's representation by id (any app's: the event drain routes each delivery to its own app). */
 export async function readPayoutRepresentation(db: Database, payoutId: string): Promise<EventRepresentation<"payout"> | null> {
     const row = await db.select().from(payouts).where(eq(payouts.id, payoutId)).get();
-    return row ? payoutRepresentation(row) : null;
+    return row ? (await payoutRepresentations(db, [row]))[0]! : null;
 }

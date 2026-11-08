@@ -709,7 +709,8 @@ export const conversationMessageRepresentationSchema = z.object({
 
 /**
  * A thread of the inbox: an order's, a buyer account's, or a chat channel's
- * (`channel`: whatsapp, messenger, …), whose `contact` is where replies go
+ * (`channel`: whatsapp, messenger, …, or a messaging app's own channel
+ * `<app id>:<key>`), whose `contact` is where replies go
  * (the address is protected as a phone on every channel). `status` is
  * `open` (waits on the store), `pending` (waits on the buyer) or `closed`.
  * `lastMessage` is its newest line; `conversations.list_messages` pages the rest.
@@ -743,7 +744,8 @@ export const conversationRepresentationSchema = z.object({
  * Money an app sent to a payee through a payout provider. `status`:
  * `pending` (recorded, the provider has not answered: send the same
  * `payouts.create` again to resubmit it), `processing`, then `paid` or
- * `failed` (final, with `failureCode`).
+ * `failed` (final, with `failureCode`). A paid payout may be reversed in
+ * part or whole (`reversals`).
  */
 export const payoutRepresentationSchema = z.object({
   id,
@@ -758,7 +760,28 @@ export const payoutRepresentationSchema = z.object({
   providerRef: text.nullable(),
   failureCode: state.nullable(),
   failureMessage: text.nullable(),
-  /** Advances with every change of the payout. */
+  /** What the payout's reversals took back (those `reversed`), in minor units of `currency`. */
+  reversedMinor: minor,
+  /**
+   * Money taken back from the paid payout (`payouts.reverse`), oldest first:
+   * `pending` (recorded, the provider has not answered: send the same
+   * request again to resubmit it), `processing`, then `reversed` or `failed`
+   * (final, with `failureCode`).
+   */
+  reversals: z.array(z.object({
+    id,
+    amountMinor: minor,
+    currency,
+    reason: text.nullable(),
+    status: z.enum(["pending", "processing", "reversed", "failed"]),
+    providerRef: text.nullable(),
+    failureCode: state.nullable(),
+    failureMessage: text.nullable(),
+    createdAt: iso,
+    updatedAt: iso,
+    settledAt: iso.nullable(),
+  })).max(20),
+  /** Advances with every change of the payout, its reversals included. */
   revision: z.number().int(),
   createdAt: iso,
   updatedAt: iso,

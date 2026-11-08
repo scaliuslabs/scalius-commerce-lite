@@ -200,6 +200,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.payouts.list": { uncurated: true },
   "dashboard.resources.payouts.get": { uncurated: true },
   "dashboard.resources.payouts.create": storedValue({ openWorld: true, idempotency: "required" }),
+  "dashboard.resources.payouts.reverse": storedValue({ openWorld: true, idempotency: "required" }),
   // The inbox (routes/admin/resources-conversations.ts): threads and lines
   // (read_conversations); a reply or note (write_conversations) under a
   // required Idempotency-Key, sent on a chat channel through its provider.
