@@ -15,7 +15,7 @@ import { RichContent } from "../ui/rich-content";
 import { SearchableSelect } from "../ui/searchable-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { SaveConflict } from "@/components/admin/shared/SaveBar";
+import { SaveConflict, SaveNotCompleted } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import type { MediaFile } from "./media-manager";
@@ -118,7 +118,7 @@ export function BrandForm({ defaultValues }: { defaultValues?: BrandFormInput })
     // An empty address is made from the name on the server, with a number added if it is taken.
     createFn: async (data) => (await apiData(postApiV1AdminBrands({ body: { ...toBrandInput(data), slug: data.slug || undefined } }))).brand,
     updateFn: (data) => {
-      if (!data.revision) throw new Error(t("reloadToSave"));
+      if (!data.revision) throw new SaveNotCompleted(t("reloadToSave")).as("refused");
       return apiData(putApiV1AdminBrandsById({
         path: { id: data.id },
         body: { ...toBrandInput(data), slug: data.slug, expectedRevision: data.revision },

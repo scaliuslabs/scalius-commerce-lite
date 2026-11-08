@@ -35,7 +35,7 @@ import { ScopeField, useScopeItems, useScopeLabel } from "./ScopeField";
 import { SegmentField, useSegmentLabel, useSegmentNames } from "./SegmentField";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
-import { SaveBarProvider, SaveErrorBanner, useSaveBar, useSaveScope } from "~/components/admin/shared/SaveBar";
+import { SaveBarProvider, SaveConflict, SaveErrorBanner, SaveNotCompleted, useSaveBar, useSaveScope } from "~/components/admin/shared/SaveBar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -278,11 +278,11 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     } catch (error) {
       if (readPromotionRevisionConflict(error)) {
         setConflict(true);
-        throw new Error(t("conflictTitle"));
+        throw new SaveConflict(t("conflictTitle"));
       }
       if (draft.method === "code" && isCodeTaken(error)) {
         setTakenCode(draft.code.trim().toUpperCase());
-        throw new Error(`${t("codeLabel")}: ${t("errorCodeTaken")}`);
+        throw new SaveNotCompleted(`${t("codeLabel")}: ${t("errorCodeTaken")}`);
       }
       throw error;
     }

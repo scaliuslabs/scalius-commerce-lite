@@ -29,6 +29,7 @@ import { useFormWithRefusals } from "~/lib/input-refusals";
 import { sortedUniqueStrings } from "~/lib/form-values";
 import {
   SaveBarProvider,
+  SaveConflict,
   SaveErrorBanner,
   SaveNotCompleted,
   useSaveBar,
@@ -341,10 +342,10 @@ function ProductEditor({
   const invalidLines = useFieldErrorLines(form);
 
   const save = async () => {
-    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
     if (revisionConflict) {
       onOpenRevisionConflict?.();
-      throw new SaveNotCompleted(t("changedElsewhere"));
+      throw new SaveConflict(t("changedElsewhere"));
     }
     // New products send their variants with the product, so their problems block the save too.
     const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
@@ -379,7 +380,7 @@ function ProductEditor({
       form.setValue("additionalInfo", [], { shouldDirty: true });
       values = { ...values, additionalInfo: [] };
     }
-    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
     await submit(values, aggregateRevision, { ...composition, ...sectionChanges });
     for (const handle of pending) handle.saved();
     if (tabsMoved.current) {

@@ -22,7 +22,7 @@ export function throwObjectSaveError(error: unknown, kind: Kind): void {
     case "object_unique_violation":
       throw new SaveNotCompleted(t("entryUniqueTaken"));
     case "object_forbidden":
-      throw new SaveNotCompleted(t("recordReadOnly"));
+      throw new SaveNotCompleted(t("recordReadOnly")).as("refused");
     case "object_invalid": {
       const details = readAdminApiError(error)?.details;
       const issues = Array.isArray(details) ? details.filter((item): item is { key: string; message: string } =>

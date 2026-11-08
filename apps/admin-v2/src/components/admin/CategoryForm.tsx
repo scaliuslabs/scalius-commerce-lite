@@ -15,7 +15,7 @@ import { TemplateSelect } from "@/components/admin/catalog/TemplateSelect";
 import { CategoryAttributeSetCard } from "@/components/admin/catalog/CategoryAttributeSetCard";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
-import { SaveConflict } from "@/components/admin/shared/SaveBar";
+import { SaveConflict, SaveNotCompleted } from "@/components/admin/shared/SaveBar";
 import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import type { MediaFile } from "./media-manager";
@@ -120,7 +120,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     }))).category,
     updateFn: (data) => {
       if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
-        throw new Error(t("reloadToSave"));
+        throw new SaveNotCompleted(t("reloadToSave")).as("refused");
       }
       return apiData(putApiV1AdminCategoriesById({
         path: { id: data.id },

@@ -28,7 +28,7 @@ import {
   inventoryLocationsQueryOptions,
   productInventoryLevelsQueryOptions,
 } from "@/lib/api-query-options/inventory-locations";
-import { SaveNotCompleted } from "../../shared/SaveBar";
+import { SaveConflict, SaveNotCompleted } from "../../shared/SaveBar";
 import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
 import { formatNumber, useMessages } from "~/i18n";
@@ -744,11 +744,11 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
           const conflict = readProductRevisionConflict(error);
           if (conflict) {
             onRevisionConflict?.(conflict);
-            throw new SaveNotCompleted(t("changedElsewhere"));
+            throw new SaveConflict(t("changedElsewhere"));
           }
           const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
           const line = issue ? showServerIssue(issue.path, issue.message) : null;
-          throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+          throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed"))).because(error);
         }
       }
       await finishSave(dirty, sendCosts);

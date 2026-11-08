@@ -5,6 +5,7 @@ import { useId } from "react";
 import { SettingsCheckbox } from "~/components/admin/settings/SettingsCheckbox";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
+import { SaveConflict } from "~/components/admin/shared/SaveBar";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { TaxClassRecord } from "~/lib/api-query-options/taxes";
 import { queryKeys } from "~/lib/query-keys";
@@ -46,7 +47,7 @@ export function useSaveFailure(key: readonly unknown[] = queryKeys.settings.taxe
   return async (error: unknown): Promise<never> => {
     if (isAdminApiConflictError(error)) {
       await queryClient.invalidateQueries({ queryKey: key });
-      throw new Error(t("conflict"));
+      throw new SaveConflict(t("conflict"));
     }
     throw error;
   };
