@@ -1594,6 +1594,114 @@
       ],
       "additionalProperties": false
      },
+     "contact": {
+      "default": null,
+      "anyOf": [
+       {
+        "type": "object",
+        "properties": {
+         "name": {
+          "anyOf": [
+           {
+            "type": "string",
+            "maxLength": 200
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "x-scalius-protected": "name"
+         },
+         "email": {
+          "anyOf": [
+           {
+            "type": "string",
+            "maxLength": 320
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "x-scalius-protected": "email"
+         },
+         "phone": {
+          "anyOf": [
+           {
+            "type": "string",
+            "maxLength": 40
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "x-scalius-protected": "phone"
+         },
+         "address": {
+          "anyOf": [
+           {
+            "type": "object",
+            "properties": {
+             "line1": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 500
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "line2": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 500
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "dependentLocality": {
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 200
+               },
+               {
+                "type": "null"
+               }
+              ]
+             }
+            },
+            "required": [
+             "line1",
+             "line2",
+             "dependentLocality"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "null"
+           }
+          ],
+          "x-scalius-protected": "address"
+         }
+        },
+        "required": [
+         "name",
+         "email",
+         "phone",
+         "address"
+        ],
+        "additionalProperties": false
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "reads": {
       "default": {},
       "type": "object",
@@ -1699,6 +1807,31 @@
        "required": [
         "code",
         "message"
+       ],
+       "additionalProperties": false
+      }
+     },
+     "commit": {
+      "maxItems": 4,
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "as": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "record": {
+         "type": "object",
+         "propertyNames": {
+          "type": "string"
+         },
+         "additionalProperties": {}
+        }
+       },
+       "required": [
+        "as",
+        "record"
        ],
        "additionalProperties": false
       }
