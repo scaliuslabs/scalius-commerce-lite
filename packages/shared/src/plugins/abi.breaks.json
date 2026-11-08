@@ -544,5 +544,29 @@
   "from": "864eb6b74efa529a",
   "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
   "reason": "Merge of the orders.create fix round onto this branch: the same change acknowledged above against this branch's earlier snapshot. The merged snapshot kept this branch's AppErrorCode, which lacked admin_order_create_request_mismatch; sealing adds it. Sealed codes are only added (APP_ERROR_CODES): orders.create already answered it when its key belonged to another request, so an app can now branch on it. Every existing code keeps its status; only an exhaustive switch over AppErrorCode sees the new member."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Follows PluginManifest: the harness is typed by the manifest, whose storefront components gained a reads list. Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (COMMERCE-HOOKS H16, G7): the checkout representation becomes the whole checkout (status, customer, contact, currency, presence, language, lines, totals in minor units, consents, recovery link); every earlier field keeps its name and type, the output only gains required members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (COMMERCE-HOOKS H16, G11): a storefront component may declare object reads (storefront.components[].reads, defaulting to []) and a read's where value may bind the page's resource ({ resource }); the parsed manifest's component type gains a required reads list and the input type a wider filter union. Existing manifests parse unchanged."
  }
 ]
