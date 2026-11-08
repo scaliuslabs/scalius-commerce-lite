@@ -776,10 +776,37 @@ const REFUND_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
   },
 ];
 
+/**
+ * The inbox and payouts (0199). A buyer's message line, on the storefront or
+ * a chat channel (its thread's `channel`), is `conversation.message_received`;
+ * a payout's row and each move of its status are `payout.created` and
+ * `payout.updated`, with the app that sent it (delivered only to that app).
+ */
+const INBOX_PAYOUT_EVENT_TRIGGER_SPECS: EventTriggerSpec[] = [
+  {
+    name: "conversation_messages_received", table: "conversation_messages", event: "insert",
+    when: and(eq(NEW("kind"), text("message")), oneOf(NEW("author_type"), ["customer", "guest_receipt"])),
+    topic: "conversation.message_received", resourceId: NEW("conversation_id"),
+    facts: [
+      ["conversationId", NEW("conversation_id")],
+      ["messageId", NEW("id")],
+      ["seq", NEW("seq")],
+      ["channel", lookup("conversations", "channel", "id", NEW("conversation_id"))],
+    ],
+  },
+  ...(["insert", "update"] as const).map((event): EventTriggerSpec => ({
+    name: `payouts_${event}`, table: "payouts", event,
+    ...(event === "update" ? { when: changed("status") } : {}),
+    topic: event === "insert" ? "payout.created" : "payout.updated", resourceId: NEW("id"),
+    facts: [["payoutId", NEW("id")], ["appId", NEW("app_id")], ["previousStatus", event === "insert" ? NULL : OLD("status")], ["status", NEW("status")]],
+  })),
+];
+
 export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
   ...LEGACY_EVENT_TRIGGER_SPECS,
   ...BETA_EVENT_TRIGGER_SPECS,
   ...REFUND_EVENT_TRIGGER_SPECS,
+  ...INBOX_PAYOUT_EVENT_TRIGGER_SPECS,
 ];
 
 /**
@@ -954,6 +981,10 @@ export const EVENT_WHEN_BEFORE_0179: Readonly<Record<string, EventCondition>> = 
 const NEW_IN_0179: ReadonlySet<string> = new Set(["customers_erased"]);
 const INSTALLED_IN_0179: ReadonlySet<string> = new Set([...Object.keys(EVENT_WHEN_BEFORE_0179), ...NEW_IN_0179]);
 
+/** 0199 installed the inbox and payout events (no earlier form exists). */
+export const INBOX_PAYOUTS_MIGRATION = "0199_channel_inbox_payouts";
+const INSTALLED_IN_0199: ReadonlySet<string> = new Set(INBOX_PAYOUT_EVENT_TRIGGER_SPECS.map((spec) => spec.name));
+
 const current = (spec: EventTriggerSpec): RenderedSpec => ({ ...spec, resourceType: EVENT_TOPIC_RESOURCE[spec.topic] });
 /** A spec as the migrations before 0179 installed it: with its earlier guard. */
 const before0179 = (spec: EventTriggerSpec): EventTriggerSpec => {
@@ -977,6 +1008,7 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = Object
 
 /** The migration file name (without `.sql`) that installs the current trigger. */
 export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
+  if (INSTALLED_IN_0199.has(spec.name)) return INBOX_PAYOUTS_MIGRATION;
   if (INSTALLED_IN_0179.has(spec.name)) return CUSTOMER_ERASURE_MIGRATION;
   if (INSTALLED_IN_0172.has(spec.name)) return LINE_FACTS_MIGRATION;
   return renamedIn0164(spec.name) ? EVENT_TOPIC_RENAME_MIGRATION : EVENT_DEMAND_MIGRATION;
