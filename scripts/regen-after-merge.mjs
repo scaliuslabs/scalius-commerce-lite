@@ -6,8 +6,8 @@
 // After the merge, this script rebuilds every generated file from the merged
 // sources, in dependency order.
 //
-//   node scripts/regen-after-merge.mjs            regenerate, list what changed
-//   node scripts/regen-after-merge.mjs --check    same, exit 1 when anything changed
+//   pnpm regen         (node scripts/regen-after-merge.mjs)          regenerate, list what changed
+//   pnpm regen:check   (node scripts/regen-after-merge.mjs --check)  same, exit 1 when anything changed (CI)
 //   node scripts/regen-after-merge.mjs --install  define the merge driver in .git/config (once per clone)
 //   node scripts/regen-after-merge.mjs --list     print the files the driver covers
 //
@@ -15,17 +15,32 @@
 // commits keep the upstream side of every generated file.
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { resolvePnpmExecutable } from "./dev-local-utils.mjs";
+import { SOURCE_COMMIT } from "./generate-address-metadata.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 export const MERGE_DRIVER = "scalius-generated";
 
+const ADDRESS_GENERATOR = "scripts/generate-address-metadata.mjs";
+const ADDRESS_DATA = "packages/shared/src/address-metadata.data.ts";
+
+/**
+ * Whether the address table needs its generator, which fetches pinned
+ * upstream files: only when the table does not name the generator's pinned
+ * source commit (a parser change is proven by the generator's own tests).
+ */
+export function addressMetadataStale() {
+  return !readFileSync(join(root, ADDRESS_DATA), "utf8").includes(SOURCE_COMMIT);
+}
+
 /** The generators, in order: the agent contract feeds the SDK contract and the recipes. */
 export const GENERATORS = [
+  { name: "Address metadata", node: [ADDRESS_GENERATOR], when: addressMetadataStale },
   { name: "API contract and SDK", pnpm: ["generate:sdk"] },
   { name: "Plugin SDK stable contract", node: ["scripts/plugin-contract.mjs"] },
   { name: "CLI recipes", pnpm: ["--filter", "scalius", "generate:recipes"] },
@@ -73,6 +88,10 @@ async function generateRouteTree() {
 }
 
 async function runGenerator(generator) {
+  if (generator.when && !generator.when()) {
+    console.log(`\n> ${generator.name}: inputs unchanged, skipped`);
+    return;
+  }
   console.log(`\n> ${generator.name}`);
   if (generator.run) return generator.run();
   const [command, args] = generator.pnpm ? [resolvePnpmExecutable(), generator.pnpm] : [process.execPath, generator.node];

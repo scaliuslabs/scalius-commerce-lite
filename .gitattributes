@@ -1,11 +1,14 @@
 # Generated outputs. Each is a deterministic product of a generator, so a
 # merge, rebase or cherry-pick takes our side (driver `scalius-generated`,
 # installed by `node scripts/regen-after-merge.mjs --install`) and never stops
-# on a conflict; `node scripts/regen-after-merge.mjs` then rebuilds them from
-# the merged sources. They stay in git as review snapshots of contract drift.
-# Without the installed driver git merges them as ordinary text.
+# on a conflict; `pnpm regen` then rebuilds them from the merged sources and
+# `pnpm regen:check` (CI) fails when one is stale. They stay in git as review
+# snapshots of contract drift. Without the installed driver git merges them
+# as ordinary text.
 # Hand-sealed contracts (stable-operations.snapshot.json, abi.manifest/
-# protocol/beta snapshots) are not listed: their conflicts are real.
+# protocol/beta snapshots, events.representations.snapshot.json) and
+# scalius.plugins.json (the operator's plugin choices) are not listed: their
+# conflicts are real.
 
 apps/api/src/generated/** merge=scalius-generated linguist-generated=true
 packages/api-client/openapi.json merge=scalius-generated linguist-generated=true
@@ -14,5 +17,8 @@ packages/cli/src/generated/** merge=scalius-generated linguist-generated=true
 packages/cli/skills/*/references/recipes.md merge=scalius-generated linguist-generated=true
 packages/cli/skills/*/references/workflows*.md merge=scalius-generated linguist-generated=true
 packages/shared/src/plugins/abi.sdk.snapshot.txt merge=scalius-generated linguist-generated=true
+packages/shared/src/address-metadata.data.ts merge=scalius-generated linguist-generated=true
 *.gen.ts merge=scalius-generated linguist-generated=true
+*.gen.d.ts merge=scalius-generated linguist-generated=true
+*.gen.js merge=scalius-generated linguist-generated=true
 *.gen.txt merge=scalius-generated linguist-generated=true

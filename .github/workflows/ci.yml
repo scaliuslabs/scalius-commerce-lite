@@ -56,11 +56,11 @@ jobs:
       - name: Migration metadata guard
         run: pnpm --filter @scalius/database check:migrations
 
-      - name: Regenerate API client
-        run: pnpm generate:sdk
-
-      - name: Generated API client freshness
-        run: git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/generated
+      - name: Generated file freshness
+        # Every generator `pnpm regen` runs (the API contract and SDK, the plugin SDK contract and
+        # ABI declarations, CLI recipes, bundled plugins, the dashboard route tree); a stale
+        # generated file fails. The SDK step was already here; the rest add about 10 s.
+        run: pnpm regen:check
 
       - name: Lint
         run: pnpm lint
