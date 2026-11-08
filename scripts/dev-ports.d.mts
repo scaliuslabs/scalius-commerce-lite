@@ -21,6 +21,11 @@ export declare function previewProxyOrigin(
   requestOrigin: string | null | undefined,
   platformDashboardOrigin: string | null | undefined,
 ): string | null | undefined;
+export declare function platformOriginPresenter(options: {
+  apiOrigin: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}): (headers: Record<string, string | string[] | undefined>) => Promise<void>;
 export declare function platformSyncSql(origins: DevOrigins): string;
 export declare function syncLocalPlatform(options?: {
   env?: Record<string, string | undefined>;

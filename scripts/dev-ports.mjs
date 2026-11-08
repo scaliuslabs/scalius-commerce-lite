@@ -148,6 +148,42 @@ export function previewProxyOrigin(requestOrigin, platformDashboardOrigin) {
   return platformDashboardOrigin;
 }
 
+/**
+ * The dashboard dev proxy's Origin rewrite (`previewProxyOrigin`), toward the
+ * Platform dashboard origin as it is now. The returned function takes a
+ * request's headers; one that carries an Origin (sign-in, writes, the realtime
+ * socket) waits for a fresh read of GET /api/v1/platform (concurrent requests
+ * share one read), so a Platform change (sync-platform, setup, a settings
+ * save) holds for the next request without a dev-server restart. While the
+ * API does not answer, the last origin read is used; before any read, or with
+ * no dashboard URL stored, the Origin passes unchanged.
+ */
+export function platformOriginPresenter({ apiOrigin, fetchImpl = fetch, timeoutMs = 3_000 }) {
+  let known = null;
+  let inFlight = null;
+  async function read() {
+    try {
+      const response = await fetchImpl(`${apiOrigin}/api/v1/platform`, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!response.ok) return known;
+      const body = await response.json();
+      const url = body?.data?.dashboardUrl;
+      known = url ? new URL(url).origin : null;
+    } catch {
+      // Not up yet, restarting or a malformed URL: keep the last origin read.
+    }
+    return known;
+  }
+  const current = () => (inFlight ??= read().finally(() => { inFlight = null; }));
+  return async function present(headers) {
+    const origin = headers.origin;
+    if (typeof origin !== "string") return;
+    const presented = previewProxyOrigin(origin, await current());
+    if (!presented || presented === origin) return;
+    headers.origin = presented;
+    if (typeof headers.referer === "string") headers.referer = `${presented}/`;
+  };
+}
+
 const PLATFORM_FIELDS = ["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"];
 
 function sqlString(value) {
