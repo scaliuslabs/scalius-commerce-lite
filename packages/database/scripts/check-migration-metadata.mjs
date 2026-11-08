@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 
@@ -8,9 +8,18 @@ const metaDir = join(migrationsDir, "meta");
 const postgresMigrationsDir = join(migrationsDir, "postgres");
 const firstProviderNeutralMigration = 50;
 
-// Hand-written migrations own trigger changes and coordinated table rebuilds.
-// Their exact ledger identity and provider sidecars are checked below; the
-// migration chain remains the canonical schema when no Drizzle snapshot exists.
+// Drizzle Kit diffs the schema against the newest snapshot only, so meta/
+// keeps just that one (`pnpm db:generate` runs `--prune` to remove the older
+// ones after Drizzle Kit writes a new one; history keeps them). Several
+// snapshots appear only after a merge: they must chain, so two branches that
+// each generated a migration from the same parent fail here, and the later
+// one is rebased and regenerated instead of pruned.
+//
+// Hand-written migrations own trigger changes and coordinated table rebuilds;
+// one newer than the newest snapshot is listed here (an id at or below the
+// newest snapshot no longer needs listing). Their exact ledger identity and
+// provider sidecars are checked below; the migration chain remains the
+// canonical schema.
 const allowedMissingSnapshots = new Set(["0049", "0059", "0065", "0066", "0068", "0070", "0071", "0072", "0075", "0077", "0078", "0080", "0081", "0082", "0083", "0084", "0085", "0086", "0087", "0088", "0089", "0090", "0091", "0092", "0093", "0094", "0099", "0100", "0115", "0149", "0151", "0152", "0153", "0154", "0157", "0164", "0166", "0167", "0176", "0180", "0181", "0182", "0183", "0184", "0185", "0186", "0187", "0190", "0191", "0195"]);
 
 const sqlFiles = readdirSync(migrationsDir)
@@ -88,13 +97,35 @@ for (const id of snapshotIds) {
   }
 }
 
+const newestSnapshot = snapshots.at(-1)?.slice(0, 4) ?? null;
+if (newestSnapshot === null) errors.push("meta/ has no Drizzle snapshot; drizzle-kit generate needs the newest one");
+const chained = errors.length === 0;
+
 for (const id of sqlById.keys()) {
-  if (snapshotIds.has(id)) continue;
+  if (snapshotIds.has(id) || (newestSnapshot !== null && id <= newestSnapshot)) continue;
   if (!allowedMissingSnapshots.has(id)) {
     errors.push(
-      `${id} is missing a Drizzle snapshot and is not in the manual-migration allowlist`,
+      `${id} is newer than the newest Drizzle snapshot and is not in the manual-migration allowlist`,
     );
   }
+}
+
+const olderSnapshots = snapshots.slice(0, -1);
+if (process.argv.includes("--prune")) {
+  if (!chained) {
+    console.error("Not pruning: fix the snapshot chain first (pruning would hide the break).");
+  } else {
+    for (const file of olderSnapshots) rmSync(join(metaDir, file));
+    if (olderSnapshots.length > 0) console.log(`Pruned ${olderSnapshots.length} older snapshot(s); kept ${snapshots.at(-1)}.`);
+    olderSnapshots.length = 0;
+  }
+}
+if (olderSnapshots.length > 0 && chained) {
+  // A merged chain is sound; `pnpm db:generate` prunes, and so does --prune.
+  console.warn(
+    `meta/ needs only the newest snapshot (${snapshots.at(-1)}); remove ${olderSnapshots.length} older one(s) with: ` +
+      "node packages/database/scripts/check-migration-metadata.mjs --prune",
+  );
 }
 
 for (const id of allowedMissingSnapshots) {
@@ -193,5 +224,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Migration metadata OK: ${sqlFiles.length} SQL files, ${journalEntries.length} journal entries, ${snapshots.length} snapshots, ${upgradeFiles.length} provider-neutral upgrades, ${allowedMissingSnapshots.size} allowed manual snapshot gaps.`,
+  `Migration metadata OK: ${sqlFiles.length} SQL files, ${journalEntries.length} journal entries, newest snapshot ${newestSnapshot}, ${upgradeFiles.length} provider-neutral upgrades.`,
 );

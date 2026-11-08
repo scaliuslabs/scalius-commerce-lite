@@ -154,7 +154,7 @@ Migration 0184 drops `delivery_providers.last_test_attempt_at`, `last_test_succe
 |------|---------|
 | `migrations/NNNN_<name>.sql` | The canonical SQLite SQL (D1 and TursoDB) |
 | `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to the current schema version, `0184`; 135 files) |
-| `migrations/meta/` | Drizzle journal and snapshots |
+| `migrations/meta/` | Drizzle journal and the newest snapshot (the only one Drizzle Kit diffs against) |
 
 ### Private staff notification history
 
@@ -174,8 +174,8 @@ The API `/readyz` route reads the whole ledger and fails closed on a missing, ex
 ### Add a migration
 
 1. Change the schema in `src/schema/<file>.ts`.
-2. Run `pnpm db:generate`. Drizzle Kit writes the SQL file, the journal entry and a snapshot.
-3. Add any SQL Drizzle cannot express (triggers, partial indexes, FTS5) by hand. A migration without a snapshot must be listed in `allowedMissingSnapshots` in `scripts/check-migration-metadata.mjs`.
+2. Run `pnpm db:generate`. Drizzle Kit writes the SQL file, the journal entry and a snapshot, and the older snapshot is pruned.
+3. Add any SQL Drizzle cannot express (triggers, partial indexes, FTS5) by hand. A hand-written migration newer than the newest snapshot is listed in `allowedMissingSnapshots` in `scripts/check-migration-metadata.mjs`. Two branches that each generated a migration break the snapshot chain: rebase the later one and generate again.
 4. Add the PostgreSQL sidecar and the ledger row to both files.
 5. Update `CURRENT_DATABASE_SCHEMA` and `CURRENT_DATABASE_SCHEMA_MIGRATIONS` in `src/schema-contract.ts`.
 6. If you register a new table for DVC or add an event trigger, put the generated statements in the new migration (see "Generated triggers").
