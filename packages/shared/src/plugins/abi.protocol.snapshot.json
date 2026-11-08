@@ -17399,6 +17399,7 @@
    "stylesheetBytes": 98304,
    "islandBytes": 65536,
    "islandsBytes": 196608,
+   "pixelBytes": 65536,
    "publicFileBytes": 524288,
    "publicBytes": 4194304,
    "publicFiles": 40,
@@ -17425,7 +17426,7 @@
   "STOREFRONT_PACKAGE_DIR": "storefront",
   "STOREFRONT_MODULE_FILE": "storefront.js",
   "STOREFRONT_STYLESHEET_FILE": "styles.css",
-  "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
+  "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|pixel\\.js|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
   "STOREFRONT_CARD_FACT_KINDS": [
    "pack_size",

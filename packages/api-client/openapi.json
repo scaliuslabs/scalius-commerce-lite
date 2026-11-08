@@ -1429,6 +1429,81 @@
           "apps"
         ]
       },
+      "StorefrontNavigationItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "href": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "openInNewTab": {
+            "type": "boolean"
+          },
+          "subMenu": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "href": {
+                  "type": "string"
+                },
+                "imageUrl": {
+                  "type": "string"
+                },
+                "openInNewTab": {
+                  "type": "boolean"
+                },
+                "subMenu": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "href": {
+                        "type": "string"
+                      },
+                      "imageUrl": {
+                        "type": "string"
+                      },
+                      "openInNewTab": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "title"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
       "MarketMatrix": {
         "type": "object",
         "properties": {
@@ -5938,6 +6013,35 @@
           "main"
         ],
         "additionalProperties": false
+      },
+      "StorefrontBrandImage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "alt": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "alt",
+          "width",
+          "height"
+        ]
       },
       "StorefrontStoreShape": {
         "type": "object",
@@ -27023,7 +27127,11 @@
             "items": {
               "type": "string"
             },
-            "description": "Hosts the app's storefront islands reach from the buyer's browser."
+            "description": "Hosts the app's storefront islands and pixel reach from the buyer's browser."
+          },
+          "storefrontPixel": {
+            "type": "boolean",
+            "description": "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it."
           },
           "features": {
             "type": "array",
@@ -27054,6 +27162,7 @@
           "customFieldOwners",
           "storefrontCode",
           "storefrontConnect",
+          "storefrontPixel",
           "features",
           "messageRecipients"
         ],
@@ -36918,79 +37027,7 @@
                         "navigation": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "href": {
-                                "type": "string"
-                              },
-                              "imageUrl": {
-                                "type": "string"
-                              },
-                              "openInNewTab": {
-                                "type": "boolean"
-                              },
-                              "subMenu": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "title": {
-                                      "type": "string"
-                                    },
-                                    "href": {
-                                      "type": "string"
-                                    },
-                                    "imageUrl": {
-                                      "type": "string"
-                                    },
-                                    "openInNewTab": {
-                                      "type": "boolean"
-                                    },
-                                    "subMenu": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "object",
-                                        "properties": {
-                                          "id": {
-                                            "type": "string"
-                                          },
-                                          "title": {
-                                            "type": "string"
-                                          },
-                                          "href": {
-                                            "type": "string"
-                                          },
-                                          "imageUrl": {
-                                            "type": "string"
-                                          },
-                                          "openInNewTab": {
-                                            "type": "boolean"
-                                          }
-                                        },
-                                        "required": [
-                                          "title"
-                                        ]
-                                      }
-                                    }
-                                  },
-                                  "required": [
-                                    "title"
-                                  ]
-                                }
-                              }
-                            },
-                            "required": [
-                              "title"
-                            ]
+                            "$ref": "#/components/schemas/StorefrontNavigationItem"
                           }
                         },
                         "categoryTree": {
@@ -37057,79 +37094,7 @@
                               "links": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": {
-                                      "type": "string"
-                                    },
-                                    "title": {
-                                      "type": "string"
-                                    },
-                                    "href": {
-                                      "type": "string"
-                                    },
-                                    "imageUrl": {
-                                      "type": "string"
-                                    },
-                                    "openInNewTab": {
-                                      "type": "boolean"
-                                    },
-                                    "subMenu": {
-                                      "type": "array",
-                                      "items": {
-                                        "type": "object",
-                                        "properties": {
-                                          "id": {
-                                            "type": "string"
-                                          },
-                                          "title": {
-                                            "type": "string"
-                                          },
-                                          "href": {
-                                            "type": "string"
-                                          },
-                                          "imageUrl": {
-                                            "type": "string"
-                                          },
-                                          "openInNewTab": {
-                                            "type": "boolean"
-                                          },
-                                          "subMenu": {
-                                            "type": "array",
-                                            "items": {
-                                              "type": "object",
-                                              "properties": {
-                                                "id": {
-                                                  "type": "string"
-                                                },
-                                                "title": {
-                                                  "type": "string"
-                                                },
-                                                "href": {
-                                                  "type": "string"
-                                                },
-                                                "imageUrl": {
-                                                  "type": "string"
-                                                },
-                                                "openInNewTab": {
-                                                  "type": "boolean"
-                                                }
-                                              },
-                                              "required": [
-                                                "title"
-                                              ]
-                                            }
-                                          }
-                                        },
-                                        "required": [
-                                          "title"
-                                        ]
-                                      }
-                                    }
-                                  },
-                                  "required": [
-                                    "title"
-                                  ]
+                                  "$ref": "#/components/schemas/StorefrontNavigationItem"
                                 }
                               }
                             },
@@ -37178,124 +37143,36 @@
                           "type": "object",
                           "properties": {
                             "logo": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "darkLogo": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "footerLogo": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "favicon": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -37308,33 +37185,7 @@
                         "skinMedia": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "url": {
-                                "type": "string"
-                              },
-                              "alt": {
-                                "type": "string"
-                              },
-                              "width": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "height": {
-                                "type": "integer",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "url",
-                              "alt",
-                              "width",
-                              "height"
-                            ]
+                            "$ref": "#/components/schemas/StorefrontBrandImage"
                           },
                           "maxItems": 40
                         },
@@ -37821,6 +37672,95 @@
                             ]
                           }
                         },
+                        "appPixels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "pluginId": {
+                                "type": "string"
+                              },
+                              "release": {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{64}$"
+                              },
+                              "consent": {
+                                "type": "string",
+                                "enum": [
+                                  "analytics",
+                                  "marketing"
+                                ]
+                              },
+                              "events": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "page_viewed",
+                                    "product_viewed",
+                                    "collection_viewed",
+                                    "search_submitted",
+                                    "product_added_to_cart",
+                                    "product_removed_from_cart",
+                                    "cart_viewed",
+                                    "checkout_started",
+                                    "checkout_contact_submitted",
+                                    "checkout_address_submitted",
+                                    "checkout_shipping_submitted",
+                                    "checkout_payment_submitted",
+                                    "checkout_completed",
+                                    "app_event"
+                                  ]
+                                }
+                              },
+                              "protectedData": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "name",
+                                    "email",
+                                    "phone",
+                                    "address"
+                                  ]
+                                }
+                              },
+                              "connect": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "settings": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {}
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "pluginId",
+                              "release",
+                              "consent",
+                              "events",
+                              "protectedData",
+                              "connect",
+                              "settings"
+                            ]
+                          },
+                          "description": "Active apps' pixels (plugin-sdk docs/storefront.md#pixels): sandboxed, after `consent`."
+                        },
                         "appExtensions": {
                           "type": "array",
                           "items": {
@@ -38153,6 +38093,7 @@
                         "policies",
                         "storefrontCopy",
                         "appScripts",
+                        "appPixels",
                         "appExtensions",
                         "appServices"
                       ]
@@ -38607,124 +38548,36 @@
                           "type": "object",
                           "properties": {
                             "logo": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "darkLogo": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "footerLogo": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             },
                             "favicon": {
-                              "type": "object",
-                              "nullable": true,
-                              "properties": {
-                                "id": {
-                                  "type": "string"
-                                },
-                                "url": {
-                                  "type": "string"
-                                },
-                                "alt": {
-                                  "type": "string"
-                                },
-                                "width": {
-                                  "type": "integer",
-                                  "nullable": true
-                                },
-                                "height": {
-                                  "type": "integer",
-                                  "nullable": true
+                              "allOf": [
+                                {
+                                  "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              },
-                              "required": [
-                                "id",
-                                "url",
-                                "alt",
-                                "width",
-                                "height"
-                              ]
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -38737,33 +38590,7 @@
                         "skinMedia": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "url": {
-                                "type": "string"
-                              },
-                              "alt": {
-                                "type": "string"
-                              },
-                              "width": {
-                                "type": "integer",
-                                "nullable": true
-                              },
-                              "height": {
-                                "type": "integer",
-                                "nullable": true
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "url",
-                              "alt",
-                              "width",
-                              "height"
-                            ]
+                            "$ref": "#/components/schemas/StorefrontBrandImage"
                           },
                           "maxItems": 40
                         },

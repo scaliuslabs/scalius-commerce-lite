@@ -414,6 +414,28 @@ export type StorefrontHomepageSections = {
     }>;
 };
 
+export type StorefrontNavigationItem = {
+    id?: string;
+    title: string;
+    href?: string;
+    imageUrl?: string;
+    openInNewTab?: boolean;
+    subMenu?: Array<{
+        id?: string;
+        title: string;
+        href?: string;
+        imageUrl?: string;
+        openInNewTab?: boolean;
+        subMenu?: Array<{
+            id?: string;
+            title: string;
+            href?: string;
+            imageUrl?: string;
+            openInNewTab?: boolean;
+        }>;
+    }>;
+};
+
 /**
  * Every active market with its countries and subfolder presences, backup first. Draft markets are left out.
  */
@@ -1270,6 +1292,14 @@ export type StorefrontLandingPage = {
 export type StorefrontPageTemplate = {
     sections: StorefrontSectionList;
     main: number;
+};
+
+export type StorefrontBrandImage = {
+    id: string;
+    url: string;
+    alt: string;
+    width: number | null;
+    height: number | null;
 };
 
 export type StorefrontStoreShape = {
@@ -5949,9 +5979,13 @@ export type AppGrant = {
      */
     storefrontCode: boolean;
     /**
-     * Hosts the app's storefront islands reach from the buyer's browser.
+     * Hosts the app's storefront islands and pixel reach from the buyer's browser.
      */
     storefrontConnect: Array<string>;
+    /**
+     * Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it.
+     */
+    storefrontPixel: boolean;
     /**
      * The app's features that are on (empty for apps that declare none).
      */
@@ -8992,27 +9026,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 config: string;
                 location: string;
             }>;
-            navigation: Array<{
-                id?: string;
-                title: string;
-                href?: string;
-                imageUrl?: string;
-                openInNewTab?: boolean;
-                subMenu?: Array<{
-                    id?: string;
-                    title: string;
-                    href?: string;
-                    imageUrl?: string;
-                    openInNewTab?: boolean;
-                    subMenu?: Array<{
-                        id?: string;
-                        title: string;
-                        href?: string;
-                        imageUrl?: string;
-                        openInNewTab?: boolean;
-                    }>;
-                }>;
-            }>;
+            navigation: Array<StorefrontNavigationItem>;
             categoryTree: {
                 nodes: Array<{
                     id: string;
@@ -9027,27 +9041,7 @@ export type GetApiV1StorefrontLayoutResponses = {
             footerMenus: Array<{
                 id: string;
                 title: string;
-                links: Array<{
-                    id?: string;
-                    title: string;
-                    href?: string;
-                    imageUrl?: string;
-                    openInNewTab?: boolean;
-                    subMenu?: Array<{
-                        id?: string;
-                        title: string;
-                        href?: string;
-                        imageUrl?: string;
-                        openInNewTab?: boolean;
-                        subMenu?: Array<{
-                            id?: string;
-                            title: string;
-                            href?: string;
-                            imageUrl?: string;
-                            openInNewTab?: boolean;
-                        }>;
-                    }>;
-                }>;
+                links: Array<StorefrontNavigationItem>;
             }>;
             currency: {
                 code: string;
@@ -9058,42 +9052,12 @@ export type GetApiV1StorefrontLayoutResponses = {
             markets: MarketMatrix;
             theme: StorefrontThemeDocument;
             brand: {
-                logo: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
-                darkLogo: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
-                footerLogo: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
-                favicon: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
+                logo: StorefrontBrandImage | null;
+                darkLogo: StorefrontBrandImage | null;
+                footerLogo: StorefrontBrandImage | null;
+                favicon: StorefrontBrandImage | null;
             };
-            skinMedia: Array<{
-                id: string;
-                url: string;
-                alt: string;
-                width: number | null;
-                height: number | null;
-            }>;
+            skinMedia: Array<StorefrontBrandImage>;
             storeShape: StorefrontStoreShape;
             media: {
                 canonicalCdnUrl: string;
@@ -9202,6 +9166,20 @@ export type GetApiV1StorefrontLayoutResponses = {
                 src: string;
                 placement: 'head' | 'body-end';
                 pages: Array<'all' | 'home' | 'product' | 'listing'>;
+            }>;
+            /**
+             * Active apps' pixels (plugin-sdk docs/storefront.md#pixels): sandboxed, after `consent`.
+             */
+            appPixels: Array<{
+                pluginId: string;
+                release: string;
+                consent: 'analytics' | 'marketing';
+                events: Array<'page_viewed' | 'product_viewed' | 'collection_viewed' | 'search_submitted' | 'product_added_to_cart' | 'product_removed_from_cart' | 'cart_viewed' | 'checkout_started' | 'checkout_contact_submitted' | 'checkout_address_submitted' | 'checkout_shipping_submitted' | 'checkout_payment_submitted' | 'checkout_completed' | 'app_event'>;
+                protectedData: Array<'name' | 'email' | 'phone' | 'address'>;
+                connect: Array<string>;
+                settings: {
+                    [key: string]: string | number | boolean | unknown;
+                };
             }>;
             /**
              * Active apps with storefront components (packages/plugin-sdk/docs/storefront.md): the sections, components and skins their storefront module draws, with the settings schemas the storefront resolves, their islands, stylesheet and approved browser hosts.
@@ -9451,42 +9429,12 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
         data: {
             theme: StorefrontThemeDocument;
             brand: {
-                logo: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
-                darkLogo: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
-                footerLogo: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
-                favicon: {
-                    id: string;
-                    url: string;
-                    alt: string;
-                    width: number | null;
-                    height: number | null;
-                } | null;
+                logo: StorefrontBrandImage | null;
+                darkLogo: StorefrontBrandImage | null;
+                footerLogo: StorefrontBrandImage | null;
+                favicon: StorefrontBrandImage | null;
             };
-            skinMedia: Array<{
-                id: string;
-                url: string;
-                alt: string;
-                width: number | null;
-                height: number | null;
-            }>;
+            skinMedia: Array<StorefrontBrandImage>;
             draftRevision: number;
             basePublishedRevision: number;
             expiresAt?: unknown;

@@ -5259,6 +5259,55 @@
       "default": false,
       "type": "boolean"
      },
+     "pixel": {
+      "type": "object",
+      "properties": {
+       "consent": {
+        "type": "string",
+        "enum": [
+         "analytics",
+         "marketing"
+        ]
+       },
+       "events": {
+        "minItems": 1,
+        "maxItems": 14,
+        "type": "array",
+        "items": {
+         "type": "string",
+         "enum": [
+          "page_viewed",
+          "product_viewed",
+          "collection_viewed",
+          "search_submitted",
+          "product_added_to_cart",
+          "product_removed_from_cart",
+          "cart_viewed",
+          "checkout_started",
+          "checkout_contact_submitted",
+          "checkout_address_submitted",
+          "checkout_shipping_submitted",
+          "checkout_payment_submitted",
+          "checkout_completed",
+          "app_event"
+         ]
+        }
+       },
+       "settings": {
+        "default": [],
+        "maxItems": 10,
+        "type": "array",
+        "items": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_]{0,47}$"
+        }
+       }
+      },
+      "required": [
+       "consent"
+      ],
+      "additionalProperties": false
+     },
      "extensions": {
       "default": [],
       "maxItems": 12,
