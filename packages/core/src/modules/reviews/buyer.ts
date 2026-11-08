@@ -101,7 +101,7 @@ const TEXT_FIELD_NAMES: Record<ReviewTextField, string> = {
   reply: "reply",
 };
 
-function readText(input: unknown, field: ReviewTextField): string | null {
+export function readText(input: unknown, field: ReviewTextField): string | null {
   const result = normalizeReviewText(input, field);
   if (result.ok) return result.value;
   const name = TEXT_FIELD_NAMES[field];
@@ -111,12 +111,12 @@ function readText(input: unknown, field: ReviewTextField): string | null {
   throw new ValidationError(message, { field });
 }
 
-function readRating(input: unknown): number {
+export function readRating(input: unknown): number {
   if (!isReviewRating(input)) throw new ValidationError("Choose a rating from 1 to 5 stars.", { field: "rating" });
   return input;
 }
 
-function isConstraintFailure(error: unknown, pattern: RegExp): boolean {
+export function isConstraintFailure(error: unknown, pattern: RegExp): boolean {
   const text = error instanceof Error ? `${error.message} ${String((error as { cause?: unknown }).cause ?? "")}` : String(error);
   return pattern.test(text);
 }

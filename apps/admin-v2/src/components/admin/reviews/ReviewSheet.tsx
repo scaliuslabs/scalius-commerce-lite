@@ -99,7 +99,7 @@ function ReviewDetail({ review }: { review: AdminReview }) {
       <section className="flex flex-col gap-2 p-4">
         <div className="flex flex-wrap items-center gap-2">
           <ReviewStars rating={review.rating} />
-          <Badge variant="success">{t("verified")}</Badge>
+          {review.verified ? <Badge variant="success">{t("verified")}</Badge> : <Badge variant="secondary">{t("imported")}</Badge>}
         </div>
         {review.title ? <h3 className="break-words text-heading-sm">{review.title}</h3> : null}
         {review.body ? (
@@ -127,12 +127,16 @@ function ReviewDetail({ review }: { review: AdminReview }) {
             </Link>
           </div>
         </div>
-        <p className="text-body">
-          {t("order")}{" "}
-          <Link to="/admin/orders/$orderId" params={{ orderId: review.order.id }} className="text-link hover:underline">
-            <code>{review.order.orderNumber}</code>
-          </Link>
-        </p>
+        {review.order ? (
+          <p className="text-body">
+            {t("order")}{" "}
+            <Link to="/admin/orders/$orderId" params={{ orderId: review.order.id }} className="text-link hover:underline">
+              <code>{review.order.orderNumber}</code>
+            </Link>
+          </p>
+        ) : (
+          <p className="text-body text-muted-foreground">{t("importedNote")}</p>
+        )}
       </section>
 
       {canModerate ? (
@@ -250,7 +254,8 @@ function ReviewActions({
   const t = useMessages(reviewsMessages);
   const navigate = useNavigate();
   const canModerate = useHasPermission(PERMISSIONS.REVIEWS_MODERATE);
-  const canMessage = useHasPermission(PERMISSIONS.CONVERSATIONS_REPLY) && canModerate;
+  // The thread lives on the review's order: an imported review has none.
+  const canMessage = useHasPermission(PERMISSIONS.CONVERSATIONS_REPLY) && canModerate && review.order !== null;
   const thread = useOpenReviewThread();
   if (!canModerate) return null;
 

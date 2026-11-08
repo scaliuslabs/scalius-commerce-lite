@@ -1,7 +1,9 @@
 // Staff review moderation (Wave B §2.1, §7.2): the moderation queue, one
 // review, bulk publish / reject / restore, the merchant's public reply and
 // the private "Message the reviewer" thread. Staff never author or edit the
-// buyer's text: the only staff writes are status, reason and reply.
+// buyer's text: the only staff writes are status, reason and reply. The queue
+// shows apps' reviews too (`apps.ts`); one that names no order line is not a
+// verified purchase and has no thread.
 import { nanoid } from "nanoid";
 import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { searchMatch } from "../../search";
@@ -52,7 +54,12 @@ export interface AdminReview {
   authorType: ReviewAuthorType;
   variantLabel: string | null;
   product: { id: string; name: string; slug: string | null; imageObjectKey: string | null };
-  order: { id: string; orderNumber: string };
+  /** The order line's order: null for an app's review that names no line (not a verified purchase). */
+  order: { id: string; orderNumber: string } | null;
+  /** A verified purchase: on a delivered order line. */
+  verified: boolean;
+  /** The app that wrote it (an import or a reviews app). */
+  appId: string | null;
   /** Why the automatic check held it (flags only). */
   checkFlags: string[];
   moderationReason: ReviewModerationReason | null;
@@ -103,6 +110,7 @@ function adminReviewSelect() {
     )`,
     orderId: productReviews.orderId,
     orderNumber: orders.orderNumber,
+    appId: productReviews.appId,
     checkFlags: productReviews.checkFlags,
     moderationReason: productReviews.moderationReason,
     replyBody: productReviews.replyBody,
@@ -133,8 +141,9 @@ type AdminReviewRow = {
   productName: string;
   productSlug: string | null;
   productImageObjectKey: string | null;
-  orderId: string;
+  orderId: string | null;
   orderNumber: number | null;
+  appId: string | null;
   checkFlags: string | null;
   moderationReason: ReviewModerationReason | null;
   replyBody: string | null;
@@ -159,7 +168,9 @@ function presentAdminReview(row: AdminReviewRow): AdminReview {
     authorType: row.authorType,
     variantLabel: row.variantLabel,
     product: { id: row.productId, name: row.productName, slug: row.productSlug, imageObjectKey: row.productImageObjectKey },
-    order: { id: row.orderId, orderNumber: formatOrderNumber(row.orderNumber, row.orderId) },
+    order: row.orderId ? { id: row.orderId, orderNumber: formatOrderNumber(row.orderNumber, row.orderId) } : null,
+    verified: row.orderId !== null,
+    appId: row.appId,
     checkFlags: decodeCheckFlags(row.checkFlags),
     moderationReason: row.moderationReason,
     reply: row.replyBody && row.repliedAt !== null
@@ -178,7 +189,8 @@ function adminReviewQuery(db: Database) {
   return db
     .select(adminReviewSelect())
     .from(productReviews)
-    .innerJoin(orders, eq(orders.id, productReviews.orderId))
+    // An app's review may name no order (an import of history).
+    .leftJoin(orders, eq(orders.id, productReviews.orderId))
     .leftJoin(products, eq(products.id, productReviews.productId))
     .leftJoin(user, eq(user.id, productReviews.replyUserId));
 }
@@ -435,6 +447,9 @@ export async function openReviewThread(db: Database, reviewId: string): Promise<
     .where(eq(productReviews.id, reviewId))
     .get();
   if (!review) throw notFoundReview();
+  // The thread lives on the review's order: an app's imported review has none, so no buyer could read it.
+  const orderId = review.orderId;
+  if (!orderId) throw new AppError(409, "review_has_no_order", "This review was imported without an order, so its writer cannot be messaged.");
   const existing = () => db
     .select({ id: conversations.id })
     .from(conversations)
@@ -448,7 +463,7 @@ export async function openReviewThread(db: Database, reviewId: string): Promise<
     id: `cnv_${nanoid(20)}`,
     subjectType: "review",
     subjectId: review.id,
-    orderId: review.orderId,
+    orderId,
     subject,
     status: "open",
     createdAt: now,
