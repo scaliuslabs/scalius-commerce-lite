@@ -100,4 +100,4 @@ CREATE INDEX `customer_erasure_tasks_due_idx` ON `customer_erasure_tasks` (`next
 --> statement-breakpoint
 CREATE INDEX `customer_erasure_tasks_customer_idx` ON `customer_erasure_tasks` (`customer_id`);
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_buyer_uploads', '583194217250dc0a0bd89e912d439fbb00d851199a350771fd200dd99d97c230');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (201, '0201_buyer_uploads', '583194217250dc0a0bd89e912d439fbb00d851199a350771fd200dd99d97c230');

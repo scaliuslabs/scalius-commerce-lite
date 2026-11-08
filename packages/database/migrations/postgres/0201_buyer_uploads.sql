@@ -1,4 +1,4 @@
--- Buyer uploads (COMMERCE-HOOKS H17): see ../0199_buyer_uploads.sql. A row is
+-- Buyer uploads (COMMERCE-HOOKS H17): see ../0201_buyer_uploads.sql. A row is
 -- bound for good to its app, its input and (a line input) its product; the
 -- order commit attaches it to one order once.
 CREATE TABLE "buyer_uploads" (
@@ -83,4 +83,4 @@ ALTER TABLE "customer_erasure_tasks" DROP CONSTRAINT "customer_erasure_tasks_sha
 --> statement-breakpoint
 ALTER TABLE "customer_erasure_tasks" ADD CONSTRAINT "customer_erasure_tasks_shape" CHECK(("customer_erasure_tasks"."kind" = 'delete_file' AND "customer_erasure_tasks"."provider_id" IS NULL AND (substr("customer_erasure_tasks"."ref", 1, 22) = 'private/conversations/' OR substr("customer_erasure_tasks"."ref", 1, 22) = 'private/buyer-uploads/')) OR ("customer_erasure_tasks"."kind" = 'detach_payment_method' AND "customer_erasure_tasks"."provider_id" IS NOT NULL AND length("customer_erasure_tasks"."ref") >= 1));
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_buyer_uploads', '583194217250dc0a0bd89e912d439fbb00d851199a350771fd200dd99d97c230');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (201, '0201_buyer_uploads', '583194217250dc0a0bd89e912d439fbb00d851199a350771fd200dd99d97c230');
