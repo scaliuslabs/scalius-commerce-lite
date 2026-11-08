@@ -1,100 +1,27 @@
-// "Buy again" on an account order: the lines that can still be bought go back
-// in the cart at today's price, as one cart change, and the drawer opens once.
-// The store's cart check decides what is still sellable.
-import type { OpenCartEventDetail } from "@/components/CartFlyout";
-import { addLinesToCart } from "@/store/cart";
-import type { CustomerOrderItem } from "@/lib/api/customer-auth";
-import type { OrderLineFulfilmentFacts } from "@/lib/api/types";
-import type { CartValidationResult } from "@/lib/api/orders";
-import { currentPresence } from "@/lib/presence-url";
+// "Buy again" on an account order (the orders list and the order page): the
+// lines still sold go back in the cart at today's price, through the one
+// restore path (lib/cart/restore-lines.ts), and the page says what happened
+// in its own words.
+import { restoreCartLines, type StoredCartLine } from "@/lib/cart/restore-lines";
 import { accountCopy } from "@/lib/account-copy";
-import { readLinePurchaseOptions } from "@scalius/shared/line-properties";
-import { buyerApiErrorText } from "@/lib/buyer-api-errors";
+import { accountMoney, accountOfflineMessage } from "@/lib/account-format";
 
-/** Lines the store no longer sells as ordered; a short stock line still goes in, capped. */
-const GONE = new Set(["product_unavailable", "variant_required", "variant_unavailable", "variant_mismatch"]);
+/** The order's lines and their currency, as the orders list embeds them (`data-buy-again`). */
+export interface BuyAgainOrder {
+  currencyCode: string | null;
+  lines: StoredCartLine[];
+}
 
-/**
- * How many lines went back in the cart; `refused` the store's refusal of the
- * check in the page's words (two apps' options that both price a line); null
- * when the store couldn't be reached.
- */
-/** What a line needs to go back in the cart: an order's line, or an abandoned checkout's (lib/cart-recovery.ts). */
-export type RestorableLine = Pick<CustomerOrderItem, "productId" | "variantId" | "quantity" | "price" | "productName" | "productSlug" | "variantLabel"> & Partial<Pick<OrderLineFulfilmentFacts, "properties">>;
-
-export async function addOrderToCart(items: RestorableLine[]): Promise<{ added: number; missing: number } | { refused: string } | null> {
-  const lines = items.filter((item): item is RestorableLine & { variantId: string } => Boolean(item.productId && item.variantId));
-  if (lines.length === 0) return { added: 0, missing: items.length };
-  let result: CartValidationResult | null;
-  try {
-    const response = await fetch("/api/checkout/validate-cart", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: lines.map((item, index) => {
-          const purchaseOptions = readLinePurchaseOptions(item.properties ?? null);
-          return {
-            cartKey: String(index),
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.quantity,
-            price: item.price,
-            productName: item.productName,
-            variantLabel: item.variantLabel,
-            // The same buyer inputs again (the product's and the apps'); the store re-checks and re-prices them.
-            // Keys starting "_" are the platform's (an app bundle), never inputs.
-            ...(item.properties?.some(({ key }) => !key.startsWith("_"))
-              ? { properties: item.properties.filter(({ key }) => !key.startsWith("_")).map(({ key, value }) => ({ key, value })) }
-              : {}),
-            // Bought under apps' options (a subscription, a protection plan): again under them, if they are still offered.
-            ...(purchaseOptions.length > 0 ? { purchaseOptions } : {}),
-          };
-        }),
-        // Today's price in the page's market (MARKETS-DESIGN D5).
-        ...(currentPresence() ? { presence: currentPresence() } : {}),
-      }),
-    });
-    const json = await response.json().catch(() => null) as { success?: boolean; data?: CartValidationResult } | null;
-    if (json && !json.success && response.status < 500) return { refused: buyerApiErrorText(json, { status: response.status }) };
-    result = json?.success && json.data ? json.data : null;
-  } catch {
-    result = null;
-  }
-  if (!result) return null;
-
-  const gone = new Set(result.issues.filter((issue) => GONE.has(issue.code)).map((issue) => issue.index));
-  const cartLines: Parameters<typeof addLinesToCart>[0][number][] = [];
-  for (const line of result.items) {
-    const quantity = Math.min(line.quantity, line.availableQuantity ?? line.quantity);
-    if (gone.has(line.index) || quantity < 1) continue;
-    cartLines.push({
-      id: line.productId,
-      variantId: line.variantId,
-      name: line.productName,
-      price: line.unitPrice,
-      quantity,
-      slug: lines[line.index]?.productSlug ?? undefined,
-      image: line.productImage ?? undefined,
-      imageMediaId: line.productImageMediaId ?? undefined,
-      options: line.variantLabel ? [{ name: accountCopy().format.variant, label: line.variantLabel }] : undefined,
-      freeDelivery: line.freeDelivery,
-      ...(line.purchaseOptions?.length ? { purchaseOptions: line.purchaseOptions } : {}),
-      ...(line.fulfillmentKind ? { fulfillmentKind: line.fulfillmentKind } : {}),
-      ...(line.properties?.length
-        ? {
-            properties: line.properties.map(({ key, value, label, displayValue, priceMinor }) => ({
-              key, value, label, displayValue, priceMinor,
-            })),
-          }
-        : {}),
-    });
-  }
-  // One cart change for every line: a line-per-event add left later lines to
-  // race the first one's drawer load and reported lines as added that weren't.
-  const addedKeys = cartLines.length > 0 ? await addLinesToCart(cartLines) : [];
-  if (addedKeys.length > 0) {
-    document.dispatchEvent(new CustomEvent<OpenCartEventDetail>("open-cart", { detail: { addedLineKey: addedKeys[0], addedCount: addedKeys.length } }));
-  }
-  const added = addedKeys.length;
-  return { added, missing: items.length - added };
+/** Puts the order's lines in the cart; answers the status to show (empty when there is nothing to say). */
+export async function buyAgain(order: BuyAgainOrder): Promise<string> {
+  const result = await restoreCartLines(order.lines, { quantity: "add", currencyCode: order.currencyCode });
+  const words = accountCopy().orders;
+  if (!result) return accountOfflineMessage();
+  if ("refused" in result) return result.refused;
+  if (result.added === 0) return words.allGone;
+  // A line whose price moved went in at today's price: named with it, never dropped.
+  const repriced = result.repriced.length > 0
+    ? words.pricesChanged(result.repriced.map(({ name, price }) => ({ name, price: accountMoney(price, result.currencyCode) })))
+    : "";
+  return [result.missing > 0 ? words.someGone : "", repriced].filter(Boolean).join(" ");
 }

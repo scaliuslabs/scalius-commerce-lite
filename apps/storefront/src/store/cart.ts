@@ -766,29 +766,53 @@ export async function addToCart(
 }
 
 /**
- * Adds several lines as one cart change (buy again, a bundle of lines): every
- * line's key is computed first, then one patch applies them all against the
- * same cart, so no line can be lost to another line's await. Lines with the
- * same SKU and inputs merge; quantities stop at the cart's per-line limit.
- * Returns the keys of the lines it added to, in the order given; a line that
- * can't be a cart line or is already at the limit is left out.
+ * How lines meet the same line already in the cart: `add` grows it by the
+ * quantity given (add to cart, buy again); `set` makes the quantity given the
+ * line's (buy now, a recovered cart), so doing it again never multiplies it.
  */
-export async function addLinesToCart(items: readonly NewCartLine[]): Promise<string[]> {
+export type CartLineQuantity = "add" | "set";
+
+/**
+ * Puts several lines in the cart as one change (buy again, buy now, a
+ * recovered cart): every line's key is computed first, then one patch applies
+ * them all against the same cart, so no line can be lost to another line's
+ * await. Lines with the same SKU and inputs merge; quantities stop at the
+ * cart's per-line limit. A line already in the cart takes the line given (its
+ * price and picture are the newer ones); other lines are kept. Returns the
+ * keys of the lines it put in, in the order given; a line that can't be a
+ * cart line, or (`add`) is already at the limit, is left out. `requirePersistence`
+ * (a caller about to navigate) fails the change when the browser can't keep it.
+ */
+export async function addLinesToCart(
+  items: readonly NewCartLine[],
+  options: { quantity?: CartLineQuantity; requirePersistence?: boolean } = {},
+): Promise<string[]> {
+  const result = await putLinesInCart(items, options);
+  return "keys" in result ? result.keys : [];
+}
+
+async function putLinesInCart(
+  items: readonly NewCartLine[],
+  options: { quantity?: CartLineQuantity; requirePersistence?: boolean },
+): Promise<{ keys: string[] } | { failure: CartAddFailureReason }> {
   ensureCartHydrated();
   const prepared = (await Promise.all(items.map((item) => prepareNewLine(item))))
     .filter((line): line is NonNullable<typeof line> => line !== null);
-  if (prepared.length === 0) return [];
+  if (prepared.length === 0) return { failure: "invalid_item" };
   const current = cartStore.get();
   const merged = new Map<string, { line: Omit<CartItem, "quantity">; quantity: number }>();
   for (const { key, line, quantity } of prepared) {
     const seen = merged.get(key);
     merged.set(key, { line: seen?.line ?? line, quantity: (seen?.quantity ?? 0) + quantity });
   }
+  const set = options.quantity === "set";
   const patches: CartAbsoluteQuantityPatch[] = [];
+  const replacements = new Map<string, Omit<CartItem, "quantity">>();
   for (const [lineKey, { line, quantity }] of merged) {
     const existing = current.items[lineKey];
-    const next = Math.min(MAX_CART_QUANTITY, (existing?.quantity ?? 0) + quantity);
-    if (existing && next <= existing.quantity) continue;
+    const next = Math.min(MAX_CART_QUANTITY, (set ? 0 : existing?.quantity ?? 0) + quantity);
+    if (existing && !set && next <= existing.quantity) continue;
+    if (existing) replacements.set(lineKey, line);
     patches.push({
       lineKey,
       productId: line.id,
@@ -797,11 +821,11 @@ export async function addLinesToCart(items: readonly NewCartLine[]): Promise<str
       ...(!existing ? { item: line } : {}),
     });
   }
-  if (patches.length === 0) return [];
-  const result = applyLocalLinePatch(patches);
-  if (!result.ok) return [];
+  if (patches.length === 0) return { failure: "quantity_limit" };
+  const result = applyLocalLinePatch(patches, replacements, options.requirePersistence);
+  if (!result.ok) return { failure: result.code === "storage_unavailable" ? "storage_unavailable" : "invalid_item" };
   emitLineChanges(current.items, result.state.items, patches.map((patch) => patch.lineKey));
-  return patches.map((patch) => patch.lineKey);
+  return { keys: patches.map((patch) => patch.lineKey) };
 }
 
 /**
@@ -1042,9 +1066,15 @@ export function removeOrderedLines(
   if (patches.length > 0) applyLocalLinePatch(patches);
 }
 
-/** Buy now adds to the same cart, persisted before the caller navigates away. */
-export function startBuyNow(item: NewCartLine, options: Pick<CartAddOptions, "onFailure"> = {}): Promise<boolean> {
-  return addToCart(item, { ...options, requirePersistence: true });
+/**
+ * Buy now: this item at the quantity chosen (never added to what the cart
+ * already holds of it, so Back and Buy now again keeps one), the other lines
+ * kept, persisted before the caller navigates away.
+ */
+export async function startBuyNow(item: NewCartLine, options: Pick<CartAddOptions, "onFailure"> = {}): Promise<boolean> {
+  const result = await putLinesInCart([item], { quantity: "set", requirePersistence: true });
+  if ("failure" in result) options.onFailure?.(result.failure);
+  return "keys" in result;
 }
 
 export function clearCart(): void {

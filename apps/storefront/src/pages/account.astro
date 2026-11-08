@@ -86,11 +86,9 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
 </Layout>
 
 <script>
-  import { addOrderToCart } from "@/lib/account-buy-again";
+  import { buyAgain, type BuyAgainOrder } from "@/lib/account-buy-again";
   import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
-  import { accountOfflineMessage } from "@/lib/account-format";
-  import { accountCopy } from "@/lib/account-copy";
   import { enhanceBuyerUi } from "@/lib/buyer-ui";
 
   enhanceBuyerUi();
@@ -102,19 +100,13 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
       event.preventDefault();
       if (link.getAttribute("aria-disabled") === "true") return;
       const status = link.closest("article")?.querySelector<HTMLElement>("[data-buy-again-status]");
-      let items: Parameters<typeof addOrderToCart>[0] = [];
-      try { items = JSON.parse(link.dataset.buyAgain ?? "[]"); } catch { items = []; }
+      let order: BuyAgainOrder = { currencyCode: null, lines: [] };
+      try { order = JSON.parse(link.dataset.buyAgain ?? "") as BuyAgainOrder; } catch { /* nothing to put back */ }
       link.setAttribute("aria-disabled", "true");
-      void addOrderToCart(items).then((result) => {
+      void buyAgain(order).then((text) => {
         link.removeAttribute("aria-disabled");
         if (!status) return;
-        status.textContent = !result
-          ? accountOfflineMessage()
-          : "refused" in result
-            ? result.refused
-            : result.added === 0
-            ? accountCopy().orders.allGone
-            : result.missing > 0 ? accountCopy().orders.someGone : "";
+        status.textContent = text;
         status.classList.toggle("hidden", !status.textContent);
       });
     });

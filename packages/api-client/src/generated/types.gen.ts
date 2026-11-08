@@ -22722,7 +22722,10 @@ export type PostApiV1OrdersCartValidationData = {
             productId: string;
             variantId: string;
             quantity: number;
-            price: number;
+            /**
+             * The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.
+             */
+            price?: number;
             productName?: string | null;
             variantLabel?: string | null;
             /**

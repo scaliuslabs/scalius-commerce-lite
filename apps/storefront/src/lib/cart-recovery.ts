@@ -2,7 +2,7 @@
 // cart-recovery app): the server reads the link's lines from the API (a
 // POST: the token stays out of the API's URL and logs), and the page puts
 // them back in the buyer's cart through the store's own cart check, as
-// "buy again" does (lib/account-buy-again.ts), then opens the cart. The
+// "buy again" does (lib/cart/restore-lines.ts), then opens the cart. The
 // link carries no contact or cart value; the cart prices every line again.
 import { apiFetch } from "@/lib/api/transport";
 

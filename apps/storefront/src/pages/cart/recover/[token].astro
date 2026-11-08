@@ -19,9 +19,10 @@ const [layoutData, lines] = await Promise.all([getLayoutData(), readCheckoutReco
 const language = storefrontLanguage(layoutData?.storefrontCopy?.languageCode);
 const copy = cartRecoveryCopy(language);
 if (!lines) Astro.response.status = 404;
+// Products and quantities only: the cart check prices every line today (lib/cart/restore-lines.ts).
 const restore = lines?.map((line) => ({
-  productId: line.productId, variantId: line.variantId, quantity: line.quantity, price: 0,
-  productName: line.title, productSlug: line.slug, variantLabel: null,
+  productId: line.productId, variantId: line.variantId, quantity: line.quantity,
+  productName: line.title, productSlug: line.slug,
 }));
 ---
 
@@ -43,12 +44,13 @@ const restore = lines?.map((line) => ({
 </Layout>
 
 <script>
-  import { addOrderToCart, type RestorableLine } from "@/lib/account-buy-again";
+  import { restoreCartLines, type StoredCartLine } from "@/lib/cart/restore-lines";
 
   const data = document.getElementById("cart-recovery-lines")?.textContent;
   if (data) {
-    const { lines, cart, failed } = JSON.parse(data) as { lines: RestorableLine[]; cart: string; failed: string };
-    void addOrderToCart(lines).then((result) => {
+    const { lines, cart, failed } = JSON.parse(data) as { lines: StoredCartLine[]; cart: string; failed: string };
+    // The checkout's quantities, not added to the cart's: opening the link again changes nothing.
+    void restoreCartLines(lines, { quantity: "set" }).then((result) => {
       if (result && "added" in result && result.added > 0) {
         location.replace(cart);
         return;

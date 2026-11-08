@@ -65,6 +65,7 @@ import {
 } from "./order-form/create-order-request-key";
 import { executeManualOrderCreateWithRecovery } from "./order-form/manual-order-create-recovery";
 import { takeOrderPrefill } from "./order-form/order-prefill";
+import { restoreOrderLines } from "./order-form/order-line";
 import { normalizeAdminPhone } from "./shared/AdminPhoneInput";
 import { describeAmendment } from "./order-form/amendment-summary";
 import { orderItemVariantLabel } from "./order-form/order-item-presentation";
@@ -508,12 +509,18 @@ function OrderEditor({
   const isSubmitting = createMutation.isPending || amendMutation.isPending || completed;
   const isInteractionLocked = isSubmitting || confirmOpen;
   // An abandoned checkout's "Create order" hands its details over once.
+  const prefillMoney = React.useRef({ decimalPlaces: currencyDecimalPlaces, fmt });
+  prefillMoney.current = { decimalPlaces: currencyDecimalPlaces, fmt };
   useEffect(() => {
     if (isEdit) return;
     const prefill = takeOrderPrefill();
     if (!prefill) return;
     abandonedCheckoutId.current = prefill.abandonedCheckoutId ?? null;
     const set = { shouldDirty: true };
+    // Names before ids: the place pickers label the buyer's choice with them.
+    if (prefill.cityName) form.setValue("cityName", prefill.cityName);
+    if (prefill.zoneName) form.setValue("zoneName", prefill.zoneName);
+    if (prefill.areaName) form.setValue("areaName", prefill.areaName);
     for (const name of [
       "customerName", "shippingCountryCode", "shippingAddress", "shippingAddressLine2",
       "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode", "city", "zone",
@@ -523,13 +530,23 @@ function OrderEditor({
     if (prefill.customerPhone) form.setValue("customerPhone", normalizeAdminPhone(prefill.customerPhone), set);
     if (prefill.customerEmail) form.setValue("customerEmail", prefill.customerEmail, set);
     if (prefill.area) form.setValue("area", prefill.area, set);
-    if (prefill.items.length > 0) form.setValue("items", prefill.items, set);
     // The delivery the buyer saw at checkout, not a custom ৳0.
     if (prefill.shippingCharge !== null) {
       form.setValue("shippingCharge", prefill.shippingCharge, set);
       form.setValue("shippingMethodId", prefill.shippingMethodId, set);
     }
-  }, [form, isEdit]);
+    if (prefill.items.length === 0) return;
+    // The cart's lines go back as the picker adds them, at today's price: never ৳0, never a silent drop.
+    // Not cancelled on cleanup: the prefill is taken once, so a re-run (Strict Mode) has nothing to restore.
+    const { decimalPlaces, fmt: money } = prefillMoney.current;
+    void restoreOrderLines(queryClient, prefill.items, 10 ** decimalPlaces).then(({ lines, missing, repriced }) => {
+      if (lines.length > 0) form.setValue("items", [...form.getValues("items"), ...lines], { ...set, shouldValidate: true });
+      if (missing.length > 0) toast.warning(t("prefillMissing", { count: missing.length, names: missing.join(", ") }));
+      if (repriced.length > 0) {
+        toast.info(t("prefillRepriced", { lines: repriced.map(({ name, price }) => `${name}: ${money(price)}`).join(", ") }));
+      }
+    });
+  }, [form, isEdit, queryClient, t]);
 
   // --- SUBMIT ---
 
