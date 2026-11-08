@@ -104,10 +104,7 @@ API_PID=""
 ADMIN_PID=""
 STOREFRONT_PID=""
 TURBO_PID=""
-MAILPIT_PID=""
 CRON_TICK_PID=""
-MAILPIT_URL="http://127.0.0.1:8025"
-MAILPIT_READY_TIMEOUT_SECONDS="${SCALIUS_DEV_MAILPIT_READY_TIMEOUT_SECONDS:-10}"
 
 resolve_pnpm_bin() {
   if [ -n "${SCALIUS_PNPM_BIN:-}" ]; then
@@ -228,44 +225,17 @@ terminate_owned_process() {
   wait "$pid" 2>/dev/null || true
 }
 
+# The mailbox is shared by every local stack and owned by none: scripts/dev-mailbox.mjs
+# reuses a running one or starts Mailpit detached (its own session), so stopping this
+# stack, or Ctrl+C on it, never takes the mailbox from another stack.
 start_mailpit() {
   echo "Starting local mailbox (port 8025)..."
   if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025 --max 100 --max-age 24h --quiet"
+    echo "[dry-run] node scripts/dev-mailbox.mjs ensure"
     return
   fi
 
-  if curl -fsS --max-time 1 "$MAILPIT_URL/api/v1/info" >/dev/null 2>&1; then
-    echo "Local mailbox is already ready."
-    return
-  fi
-
-  if ! command -v mailpit >/dev/null 2>&1; then
-    echo "Mailpit is required for local email and OTP testing." >&2
-    echo "Install it with 'brew install mailpit' on macOS or follow https://mailpit.axllent.org/docs/install/." >&2
-    exit 1
-  fi
-
-  validate_numeric_setting "SCALIUS_DEV_MAILPIT_READY_TIMEOUT_SECONDS" "$MAILPIT_READY_TIMEOUT_SECONDS"
-  mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025 --max 100 --max-age 24h --quiet &
-  MAILPIT_PID=$!
-
-  local waited=0
-  while [ "$waited" -lt "$MAILPIT_READY_TIMEOUT_SECONDS" ]; do
-    if curl -fsS --max-time 1 "$MAILPIT_URL/api/v1/info" >/dev/null 2>&1; then
-      echo "Local mailbox is ready."
-      return
-    fi
-    if ! kill -0 "$MAILPIT_PID" 2>/dev/null; then
-      echo "Mailpit exited before its API was ready." >&2
-      exit 1
-    fi
-    sleep 1
-    waited=$((waited + 1))
-  done
-
-  echo "Mailpit did not become ready within ${MAILPIT_READY_TIMEOUT_SECONDS}s." >&2
-  exit 1
+  (cd "$ROOT_DIR" && node scripts/dev-mailbox.mjs ensure) || exit 1
 }
 
 # Applies pending migrations to the database the API Worker will open: the
@@ -339,7 +309,6 @@ cleanup() {
   terminate_owned_process "$ADMIN_PID" "Admin dashboard"
   terminate_owned_process "$API_PID" "API worker"
   terminate_owned_process "$TURBO_PID" "Turbo dev"
-  terminate_owned_process "$MAILPIT_PID" "Mailpit"
   echo "Done."
   exit "$status"
 }
