@@ -83,7 +83,7 @@ END;
 DROP TRIGGER IF EXISTS `cdep_object_records_upd`;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_object_records_upd` AFTER UPDATE ON `object_records`
-WHEN (OLD.`type_id` IS NOT NEW.`type_id` OR OLD.`id` IS NOT NEW.`id` OR OLD.`handle` IS NOT NEW.`handle` OR OLD.`status` IS NOT NEW.`status` OR OLD.`data_json` IS NOT NEW.`data_json` OR OLD.`pub` IS NOT NEW.`pub` OR OLD.`position` IS NOT NEW.`position`)
+WHEN (OLD.`type_id` IS NOT NEW.`type_id` OR OLD.`id` IS NOT NEW.`id` OR OLD.`handle` IS NOT NEW.`handle` OR OLD.`status` IS NOT NEW.`status` OR OLD.`data_json` IS NOT NEW.`data_json` OR OLD.`k1` IS NOT NEW.`k1` OR OLD.`k2` IS NOT NEW.`k2` OR OLD.`k3` IS NOT NEW.`k3` OR OLD.`k4` IS NOT NEW.`k4` OR OLD.`pub` IS NOT NEW.`pub` OR OLD.`position` IS NOT NEW.`position`)
   AND NEW.`pub` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -96,8 +96,7 @@ END;
 DROP TRIGGER IF EXISTS `cdep_object_records_upd_old`;
 --> statement-breakpoint
 CREATE TRIGGER `cdep_object_records_upd_old` AFTER UPDATE ON `object_records`
-WHEN (OLD.`type_id` IS NOT NEW.`type_id` OR OLD.`id` IS NOT NEW.`id` OR OLD.`handle` IS NOT NEW.`handle` OR OLD.`status` IS NOT NEW.`status` OR OLD.`data_json` IS NOT NEW.`data_json` OR OLD.`pub` IS NOT NEW.`pub` OR OLD.`position` IS NOT NEW.`position`)
-  AND (OLD.`type_id` IS NOT NEW.`type_id` OR OLD.`k1` IS NOT NEW.`k1` OR OLD.`k2` IS NOT NEW.`k2` OR OLD.`k3` IS NOT NEW.`k3` OR OLD.`k4` IS NOT NEW.`k4` OR OLD.`pub` IS NOT NEW.`pub`)
+WHEN (OLD.`type_id` IS NOT NEW.`type_id` OR OLD.`k1` IS NOT NEW.`k1` OR OLD.`k2` IS NOT NEW.`k2` OR OLD.`k3` IS NOT NEW.`k3` OR OLD.`k4` IS NOT NEW.`k4` OR OLD.`pub` IS NOT NEW.`pub`)
   AND OLD.`pub` = 1
 BEGIN
   INSERT INTO `cache_dep` (`dep`, `seq`)
@@ -107,4 +106,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_object_record_dependencies', '8429c66b73c6b2f5cadc1cd3ec7bd9c141ad1d40c7e7bed36d680ebf6e7f78fb');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_object_record_dependencies', '02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32');

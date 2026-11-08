@@ -30,6 +30,7 @@ import { resolveThemePreview, type ThemePreviewData } from "./api/storefront";
 import { readThemePreviewCookie } from "./theme-preview-cookie";
 import { isBuyerOwnPagePath } from "./theme-preview-route";
 import { storefrontLanguage, type StorefrontLanguage } from "./storefront-language";
+import { readStorefrontExtensions, type StorefrontRenderJob } from "@scalius/shared/plugins/storefront-components";
 
 export interface RequestTheme {
   theme: StorefrontThemeDocument;
@@ -56,6 +57,27 @@ export interface RequestTheme {
   shape: StoreShape;
   /** The page renders the default in place of an unreadable document: never shared-cached. */
   degraded: boolean;
+  /**
+   * Active apps' surfaces (`<plugin id>/<type>`) whose object reads need the
+   * page's resource: component sections whose reads bind it, and components
+   * that declare reads (the product template's part answers both).
+   */
+  objectReaders: { sections: ReadonlySet<string>; components: ReadonlySet<string> };
+  /** The product page's app components' object records, by block id (the product template's part). */
+  componentObjects?: ReadonlyMap<string, ComponentObjects>;
+}
+
+type ComponentObjects = NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
+
+/** The surfaces of the layout's `appExtensions` whose object reads need the page's resource. */
+function objectReadersOf(appExtensions: unknown): RequestTheme["objectReaders"] {
+  const sections = new Set<string>();
+  const components = new Set<string>();
+  for (const extension of readStorefrontExtensions(appExtensions)) {
+    for (const type of extension.resourceSections ?? []) sections.add(`${extension.pluginId}/${type}`);
+    for (const component of extension.components) if (component.reads) components.add(`${extension.pluginId}/${component.type}`);
+  }
+  return { sections, components };
 }
 
 interface ThemeLocals {
@@ -174,7 +196,7 @@ export function readSkinMedia(value: unknown, theme: StorefrontThemeDocument): R
 export function requestThemeFor(
   theme: StorefrontThemeDocument,
   shape: StoreShape = EMPTY_STORE_SHAPE,
-  options: { previewToken?: string | null; preview?: ThemePreviewData | null; previewEnded?: boolean; brand?: unknown; skinMedia?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean } = {},
+  options: { previewToken?: string | null; preview?: ThemePreviewData | null; previewEnded?: boolean; brand?: unknown; skinMedia?: unknown; languageCode?: unknown; bindings?: SettingBindingContext; degraded?: boolean; appExtensions?: unknown } = {},
 ): RequestTheme {
   const bindingContext = { language: storefrontLanguage(options.languageCode), ...options.bindings };
   theme = boundTheme(theme, bindingContext);
@@ -192,12 +214,13 @@ export function requestThemeFor(
     bindingContext,
     shape,
     degraded: options.degraded ?? false,
+    objectReaders: objectReadersOf(options.appExtensions),
   };
 }
 
 export function resolveRequestTheme(
   astro: { request: Request; locals: object },
-  layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown; skinMedia?: unknown; storefrontCopy?: { languageCode?: unknown } | null } | null | undefined,
+  layoutData: { theme?: unknown; storeShape?: unknown; brand?: unknown; skinMedia?: unknown; storefrontCopy?: { languageCode?: unknown } | null; appExtensions?: unknown } | null | undefined,
   bindings?: SettingBindingContext,
 ): Promise<RequestTheme> {
   const locals = astro.locals as ThemeLocals;
@@ -225,6 +248,7 @@ export function resolveRequestTheme(
         skinMedia: preview ? preview.skinMedia : layoutData?.skinMedia,
         languageCode: layoutData?.storefrontCopy?.languageCode,
         bindings,
+        appExtensions: layoutData?.appExtensions,
       },
     );
   })();

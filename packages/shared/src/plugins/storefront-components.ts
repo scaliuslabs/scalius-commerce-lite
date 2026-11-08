@@ -24,7 +24,7 @@ import {
   type StorefrontResolvedSettings,
   type StorefrontResolvedValue,
 } from "./storefront-protocol";
-import { PLUGIN_HOST_PATTERN, PLUGIN_KEY_PATTERN, PLUGIN_URL_NAME_PATTERN, pluginKeySchema, pluginUrlNameSchema } from "./manifest-patterns";
+import { PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE, PLUGIN_HOST_PATTERN, PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, pluginKeySchema, pluginUrlNameSchema } from "./manifest-patterns";
 import {
   PLUGIN_PRODUCT_ID,
   PLUGIN_PRODUCT_SOURCE,
@@ -117,6 +117,38 @@ export const storefrontIslandDeclarationSchema = z.object({
 /** The most components one app declares. */
 export const STOREFRONT_COMPONENTS_MAX = 16;
 
+/**
+ * The page resources a read's filter may name: `where: { product: { resource:
+ * "product" } }` filters by the id of the product the page shows. A page
+ * that shows no such resource (the homepage, another kind of page) gives the
+ * read no records, never every record.
+ */
+export const STOREFRONT_READ_RESOURCES = ["product", "collection", "category", "brand", "page"] as const;
+export type StorefrontReadResource = (typeof STOREFRONT_READ_RESOURCES)[number];
+
+/** The most public object reads one section or component declares, and the most records each returns. */
+export const STOREFRONT_OBJECT_READS_MAX = 2;
+export const STOREFRONT_OBJECT_READ_LIMIT_MAX = 24;
+
+/**
+ * A public object read a section or a product-slot component declares: the
+ * published records of a storefront-visible type (an own type by its name,
+ * or a public type by its full handle), filtered by up to four indexed
+ * fields, each a literal, one of its settings (`{ setting }`) or the page's
+ * resource (`{ resource }`). The records arrive as `objects` in its props.
+ */
+export const storefrontObjectReadSchema = z.object({
+  object: z.string().min(2).max(150).regex(/^[a-z][a-z0-9_.-]*$/),
+  where: z.record(z.string().regex(PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE), z.union([
+    z.string().max(128), z.number().finite(), z.boolean(), z.null(),
+    z.object({ setting: z.string().regex(PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE) }).strict(),
+    z.object({ resource: z.enum(STOREFRONT_READ_RESOURCES) }).strict(),
+  ])).refine((value) => Object.keys(value).length <= 4, "At most four indexed filters.").optional(),
+  limit: z.number().int().min(1).max(STOREFRONT_OBJECT_READ_LIMIT_MAX).default(STOREFRONT_OBJECT_READ_LIMIT_MAX),
+}).strict();
+export type StorefrontObjectRead = z.infer<typeof storefrontObjectReadSchema>;
+export type StorefrontObjectReadFilter = NonNullable<StorefrontObjectRead["where"]>[string];
+
 const PRODUCT_SLOTS = new Set<string>(STOREFRONT_PRODUCT_SLOTS);
 
 /**
@@ -138,7 +170,25 @@ export const storefrontComponentDeclarationSchema = z.object({
     .refine((targets) => new Set(targets).size === targets.length, "Each target appears once.")
     .refine((targets) => targets.filter((target) => PRODUCT_SLOTS.has(target)).length <= 1, "A component has at most one product slot."),
   settings: pluginSettingsSchemaSchema.default([]),
-}).strict();
+  /**
+   * Public object reads, for a component whose one target is a product
+   * slot: its records for the product shown (`{ resource: "product" }`)
+   * arrive as `objects`, read with the page's template part.
+   */
+  reads: z.array(storefrontObjectReadSchema).max(STOREFRONT_OBJECT_READS_MAX).default([]),
+}).strict().superRefine((component, context) => {
+  if (component.reads.length === 0) return;
+  if (!component.targets.every((target) => PRODUCT_SLOTS.has(target))) {
+    context.addIssue({ code: "custom", path: ["reads"], message: "Only a component whose one target is a product slot reads objects: it reads once for the product page, never for every card or page." });
+  }
+  component.reads.forEach((read, index) => {
+    for (const [field, value] of Object.entries(read.where ?? {})) {
+      if (value && typeof value === "object" && "resource" in value && value.resource !== "product") {
+        context.addIssue({ code: "custom", path: ["reads", index, "where", field], message: "A product slot's page shows a product: bind { resource: \"product\" }." });
+      }
+    }
+  });
+});
 export type StorefrontComponentDeclaration = z.infer<typeof storefrontComponentDeclarationSchema>;
 
 export const storefrontComponentsManifestSchema = {
@@ -269,9 +319,14 @@ export interface StorefrontExtension {
   sections: string[];
   /** Each component section's settings schema, by type (the storefront resolves the values). */
   sectionSettings: Record<string, PluginSettingsSchema>;
+  /** Section types whose object reads bind the page's resource (`{ resource }`): their template part is read per resource. */
+  resourceSections?: string[];
   skins: Array<{ id: string; target: StorefrontSkinTarget; settings: PluginSettingsSchema }>;
-  /** Components (`storefront.components`), drawn at the edge at their targets. */
-  components: Array<{ type: string; targets: StorefrontComponentTarget[]; settings: PluginSettingsSchema }>;
+  /**
+   * Components (`storefront.components`), drawn at the edge at their targets;
+   * `reads`: it declares object reads, which the product template's part answers.
+   */
+  components: Array<{ type: string; targets: StorefrontComponentTarget[]; settings: PluginSettingsSchema; reads?: true }>;
   islands: string[];
   stylesheet: boolean;
   connect: string[];
@@ -362,7 +417,7 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       if (typeof record.type !== "string" || !PLUGIN_KEY_PATTERN.test(record.type) || !Array.isArray(record.targets)) return [];
       const targets = record.targets.filter((target): target is StorefrontComponentTarget => (STOREFRONT_COMPONENT_TARGETS as readonly unknown[]).includes(target));
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
-      return settings.success && targets.length > 0 ? [{ type: record.type, targets, settings: settings.data }] : [];
+      return settings.success && targets.length > 0 ? [{ type: record.type, targets, settings: settings.data, ...(record.reads === true ? { reads: true as const } : {}) }] : [];
     }) : [];
     const sectionSettings: Record<string, PluginSettingsSchema> = {};
     if (typeof item.sectionSettings === "object" && item.sectionSettings !== null) {
@@ -379,6 +434,7 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       release: item.release,
       sections: names(item.sections, PLUGIN_KEY_PATTERN),
       sectionSettings,
+      ...(Array.isArray(item.resourceSections) ? { resourceSections: names(item.resourceSections, PLUGIN_KEY_PATTERN) } : {}),
       skins,
       components,
       islands: names(item.islands, PLUGIN_URL_NAME_PATTERN),

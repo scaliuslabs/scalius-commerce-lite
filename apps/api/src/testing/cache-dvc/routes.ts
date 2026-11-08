@@ -108,6 +108,9 @@ function otherParts(): string[] {
     "/api/v1/objects/custom.size_chart",
     "/api/v1/objects/acme.loyalty.tiers",
     "/api/v1/storefront/layout",
+    // The product template's part: the app component's questions of the product shown.
+    "/api/v1/storefront/template/product?resource=product:p_linen",
+    "/api/v1/storefront/template/product?resource=product:p_cotton",
     ...DVC_IDS.landingSlugs.map((slug) => `/api/v1/storefront/landing/${slug}`),
     "/api/v1/storefront/pages/slug/about",
     "/api/v1/checkout/config",

@@ -10,6 +10,7 @@ import { collectObjectBindingRequests, type SettingBindings } from "./bindings";
 import type { PluginSettingValue } from "../plugins/settings-schema";
 import { PLUGIN_HOME_SECTIONS_MAX, parsePluginSurfaceKey } from "../plugins/storefront";
 import type { StorefrontHomeMode } from "./document";
+import type { StorefrontProductAppBlock } from "./apps";
 import { storefrontVisibleSection, type StorefrontProductSource, type StorefrontSection } from "./sections";
 
 /** Most products one source feeds (a 6x6 grid). */
@@ -75,6 +76,23 @@ export interface HomeAppSectionRequest {
   type: string;
   values: Record<string, PluginSettingValue>;
   bindings?: SettingBindings;
+  /**
+   * A product page's app component (`blocks.product.apps`, `sectionId` its
+   * block id) rather than a section: only its object reads are read.
+   */
+  component?: true;
+}
+
+/**
+ * A product page's placed app components, as requests of the product
+ * template's part: those whose component declares object reads get their
+ * records for the product shown there (the API skips the others).
+ */
+export function productComponentRequests(blocks: readonly StorefrontProductAppBlock[] | undefined): HomeAppSectionRequest[] {
+  return (blocks ?? []).flatMap((block) => {
+    const key = parsePluginSurfaceKey(block.app);
+    return key ? [{ sectionId: block.id, pluginId: key.pluginId, type: key.type, values: block.values, ...(block.bindings ? { bindings: block.bindings } : {}), component: true as const }] : [];
+  });
 }
 
 /** One key per source: `newest`, `on-sale`, `popular`, `collection:<id>`, `category:<id>`. */

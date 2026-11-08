@@ -140,6 +140,8 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
     const ships = pluginHasStorefrontModule(storefront) || storefront.islands.length > 0 || storefront.stylesheet;
     if (!ships || installation.grant?.storefrontCode !== true) continue;
     const granted = new Set(installation.grant.storefrontConnect);
+    const resourceSections = storefront.sections.filter((section) => section.reads.some((read) =>
+      Object.values(read.where ?? {}).some((filter) => filter !== null && typeof filter === "object" && "resource" in filter))).map((section) => section.type);
     extensions.push({
       pluginId: installation.pluginId,
       version: installation.version,
@@ -147,8 +149,9 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
       release: installation.bundleSha256,
       sections: storefront.sections.map((section) => section.type),
       sectionSettings: Object.fromEntries(storefront.sections.map((section) => [section.type, section.settings])),
+      ...(resourceSections.length > 0 ? { resourceSections } : {}),
       skins: storefront.skins.map((skin) => ({ id: skin.id, target: skin.target as StorefrontSkinTarget, settings: skin.settings })),
-      components: storefront.components.map((component) => ({ type: component.type, targets: [...component.targets], settings: component.settings })),
+      components: storefront.components.map((component) => ({ type: component.type, targets: [...component.targets], settings: component.settings, ...(component.reads.length > 0 ? { reads: true as const } : {}) })),
       islands: storefront.islands.map((island) => island.name),
       stylesheet: storefront.stylesheet,
       connect: storefront.connect.filter((host) => granted.has(host)),

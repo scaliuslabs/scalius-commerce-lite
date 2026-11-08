@@ -1174,6 +1174,13 @@ export type StorefrontComponentJob =
     /** The theme's id of this placement (the product page's app blocks). */
     instanceId: string;
     data: StorefrontProductPage;
+    /**
+     * Published records from the component's declared public object reads
+     * (`storefront.components[].reads`), for the product shown: a read bound
+     * to `{ resource: "product" }` holds that product's records (money
+     * fields as `StorefrontMoney`). A type that is not public is absent.
+     */
+    objects?: Record<string, { records: Array<{ id: string; handle: string | null; data: Record<string, unknown> }>; fields: Record<string, string> }>;
   })
   | (ComponentJobBase & {
     target: StorefrontProductCardSlot;

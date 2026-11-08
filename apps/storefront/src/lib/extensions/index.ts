@@ -23,6 +23,7 @@ import {
   type StorefrontResolvedSettings,
   type StorefrontSkinJob,
   type StorefrontSkinTarget,
+  type StorefrontRenderJob,
 } from "@scalius/shared/plugins/storefront-components";
 import { splitStorefrontEmbeds, type StorefrontMarkupPart } from "@scalius/shared/plugins/storefront-embeds";
 import { getLayoutData } from "@/lib/api/storefront";
@@ -252,6 +253,11 @@ export interface AppSlotComponent {
   /** The theme's id of the placement (product slots). */
   instanceId?: string;
   settings: StorefrontResolvedSettings;
+  /**
+   * A product slot component that declares object reads: its records for the
+   * product shown, from the product template's part (empty when it answered none).
+   */
+  objects?: NonNullable<Extract<StorefrontRenderJob, { kind: "section" }>["objects"]>;
 }
 
 const PRODUCT_SLOTS = new Set<string>(STOREFRONT_PRODUCT_SLOTS);
@@ -277,6 +283,10 @@ export async function appSlotComponents(locals: object, url: URL, slot: Storefro
     const extension = key ? byId.get(key.pluginId) : undefined;
     const declaration = extension?.components.find((entry) => entry.type === key!.type);
     if (!extension || !declaration || storefrontComponentProductSlot(declaration.targets) !== slot) return [];
-    return [{ extension, instanceId: block.id, type: declaration.type, settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, block.values, block.bindings, theme.bindingContext)) }];
+    return [{
+      extension, instanceId: block.id, type: declaration.type,
+      settings: resolveSkinSettings(declaration.settings, resolvePluginSettingBindings(declaration.settings, block.values, block.bindings, theme.bindingContext)),
+      ...(declaration.reads ? { objects: theme.componentObjects?.get(block.id) ?? {} } : {}),
+    }];
   });
 }

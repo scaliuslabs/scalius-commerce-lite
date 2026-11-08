@@ -140,6 +140,12 @@ export interface HomepageSectionData {
    * section renders nothing. Absent from an older API.
    */
   objects?: HomepageObject[];
+  /**
+   * The product template's part only: the product page's app components
+   * that declare object reads, each with its records for the product shown
+   * (`instanceId` the block id); read through `readProductComponentObjects`.
+   */
+  components?: unknown[];
 }
 
 // =============================================

@@ -17,7 +17,7 @@ import {
   pluginFieldKeySchema, pluginKeySchema, pluginUrlNameSchema,
 } from "./manifest-patterns";
 import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
-import { storefrontComponentsManifestSchema } from "./storefront-components";
+import { STOREFRONT_OBJECT_READS_MAX, storefrontComponentsManifestSchema, storefrontObjectReadSchema, type StorefrontObjectRead } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
@@ -304,14 +304,7 @@ const storefrontSchema = z.object({
     name: title,
     description: description.optional(),
     settings: pluginSettingsSchemaSchema.default([]),
-    reads: z.array(z.object({
-      object: z.string().min(2).max(150).regex(/^[a-z][a-z0-9_.-]*$/),
-      where: z.record(z.string().regex(PLUGIN_FIELD_KEY_PATTERN, PLUGIN_FIELD_KEY_RULE), z.union([
-        z.string().max(128), z.number().finite(), z.boolean(), z.null(),
-        z.object({ setting: z.string().regex(PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE) }).strict(),
-      ])).refine((value) => Object.keys(value).length <= 4, "At most four indexed filters.").optional(),
-      limit: z.number().int().min(1).max(24).default(24),
-    }).strict()).max(2).default([]),
+    reads: z.array(storefrontObjectReadSchema).max(STOREFRONT_OBJECT_READS_MAX).default([]),
   }).strict()).max(32).default([]),
   /** Meta tags and JSON-LD (sanitized) for the page head. */
   head: z.boolean().default(false),
@@ -363,6 +356,26 @@ export function pluginHasStorefrontModule(storefront: Pick<PluginManifest["store
 function settingNeedsRead(field: PluginSettingsSchema[number]): boolean {
   return field.type === "image" || field.type === "products" || field.type === "product"
     || (field.type === "list" && field.fields.some((item) => item.type === "image"));
+}
+
+/**
+ * What is wrong with a storefront read of the app's own type (by its name or
+ * `<app id>.<type>`): it must be declared and storefront-visible, and each
+ * filter must lead one of its indexes (a filter that leads none would match
+ * nothing). A public type of another namespace is checked when it is read.
+ */
+function ownObjectReadIssues(
+  manifest: { id: string; objects: Record<string, ObjectTypeDeclaration> },
+  read: StorefrontObjectRead,
+): Array<{ path: (string | number)[]; message: string }> {
+  const own = read.object.startsWith(`${manifest.id}.`) ? read.object.slice(manifest.id.length + 1) : read.object.includes(".") ? null : read.object;
+  if (own === null) return [];
+  const declaration = manifest.objects[own];
+  if (!declaration) return [{ path: ["object"], message: `Object type ${own} is not declared.` }];
+  if (!declaration.storefront) return [{ path: ["object"], message: `Object type ${own} is not storefront-visible: set storefront: true.` }];
+  const leads = new Set(declaration.indexes.map((index) => Array.isArray(index) ? index[0] : index));
+  return Object.keys(read.where ?? {}).flatMap((field) => leads.has(field) ? []
+    : [{ path: ["where", field], message: `No index of ${own} leads with ${field}: add one ("${field}" or ["${field}", ...]).` }]);
 }
 
 // ── Messaging ─────────────────────────────────────────────────────────────
@@ -808,6 +821,15 @@ export const pluginManifestSchema = z.object({
     ...manifest.storefront.components.map((surface, index) => ({ settings: surface.settings, path: ["storefront", "components", index] as (string | number)[], reads: false })),
   ];
   const storefrontOnly = new Set<string>(PLUGIN_STOREFRONT_SETTING_TYPES);
+  // A read of the app's own type names a declared storefront type, filtered by fields that lead its indexes.
+  for (const [path, reads] of [
+    ...manifest.storefront.sections.map((surface, index) => [["storefront", "sections", index], surface.reads] as const),
+    ...manifest.storefront.components.map((surface, index) => [["storefront", "components", index], surface.reads] as const),
+  ]) {
+    reads.forEach((read, readIndex) => {
+      for (const issue of ownObjectReadIssues(manifest, read)) context.addIssue({ code: "custom", path: [...path, "reads", readIndex, ...issue.path], message: issue.message });
+    });
+  }
   for (const { settings, path, reads } of components) {
     settings.forEach((field, fieldIndex) => {
       if (field.type === "secret") {

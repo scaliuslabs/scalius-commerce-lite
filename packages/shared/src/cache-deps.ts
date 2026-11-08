@@ -937,10 +937,9 @@ const CACHE_DEP_TABLE_RULES = {
   },
   object_records: {
     kinds: ["obj"],
-    // k1..k4 are noise to `changed`: they move only with data_json, or in a
-    // reindex, which also changes the type's (visible) indexes. As key
-    // columns a change of theirs still fires the old-image companion.
-    noise: ["revision", "created_at", "updated_at", "ev", "k1", "k2", "k3", "k4", "u1", "u2"],
+    // k1..k4 are visible: a filtered read matches its records by them, so a
+    // move of one (a reindex too) advances the keys of its old and new lead.
+    noise: ["revision", "created_at", "updated_at", "ev", "u1", "u2"],
     note: "Only public rows advance their keys, including a row leaving publication: the type's `obj:<type_id>`, and `obj:<type_id>:<lead>` for each index slot led by a string, which a read filtered by that string (a product's reviews) declares.",
     rules: everyChange([
       { prefix: "obj:", columns: ["type_id"] },
