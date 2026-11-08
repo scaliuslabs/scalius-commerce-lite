@@ -168,7 +168,7 @@ export async function recordOrderPayment(
     throw new ConflictError("This order changed. Reload it and record the payment again.");
   }
   if (order.paymentTermsDays === null && order.paymentMethod !== RECORDED_PAYMENT_METHOD) {
-    throw new ValidationError("Payments are recorded here only for invoice (net terms) orders. Record cash on delivery with Collect cash.");
+    throw new ValidationError("Payments are recorded here only for invoice (net terms) orders and orders paid as they were placed. Record cash on delivery with Collect cash.");
   }
   if (CLOSED_STATUSES.has(order.status)) {
     throw new ValidationError("This order is closed, so no payment can be recorded on it.");
