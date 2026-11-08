@@ -24,7 +24,7 @@
  * bumping transactions commit in seq order without updating a shared row.
  */
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { getTableConfig, type SQLiteTable } from "drizzle-orm/sqlite-core";
 
@@ -727,7 +727,8 @@ type IndexLeadTemplate = Extract<CacheDepKeyTemplate, { indexLeads: readonly str
  * One key per index slot: `prefix || R.<column> || ':' || <lead>`, `<lead>`
  * the slot's first tuple component when it is a string (index-encoding.ts:
  * tag `05` through the first `0001`, which only a string's terminator
- * holds), else NULL: `substr` from NULL when the slot is not led by `05`.
+ * holds), else NULL: `substr` from or for NULL when the slot is not led by
+ * `05` or holds no `0001` (a string's encoding always ends with one).
  * No CASE (remote D1 refuses it in a trigger body).
  */
 function indexLeadExpressions(table: string, template: IndexLeadTemplate, image: string, d: Dialect): string[] {
@@ -735,7 +736,7 @@ function indexLeadExpressions(table: string, template: IndexLeadTemplate, image:
   return template.indexLeads.map((slot) => {
     assertColumn(table, slot);
     const value = `${image}.${d.id(slot)}`;
-    const lead = `substr(${value}, nullif(${d.position(`substr(${value}, 1, 2)`, "'05'")}, 0), ${d.position(value, "'0001'")} + 3)`;
+    const lead = `substr(${value}, nullif(${d.position(`substr(${value}, 1, 2)`, "'05'")}, 0), nullif(${d.position(value, "'0001'")}, 0) + 3)`;
     return `${literal(template.prefix)} || ${image}.${d.id(template.column)} || ':' || ${lead}`;
   });
 }
@@ -974,6 +975,7 @@ const generatedBaseline = (() => {
   }
 })();
 const postgresByName = new Map(generatedWithRetired.map((trigger) => [trigger.name, trigger.postgres]));
+const sqliteByName = new Map(generatedWithRetired.map((trigger) => [trigger.name, trigger.sqlite.trim()]));
 const baselineWhereTriggers = new Set(Object.keys(CACHE_DEP_BASELINE_WHERE)
   .map((key) => `${CACHE_DEP_TRIGGER_PREFIX}${key.replace(":", "_")}`));
 /** Band rules, whose 0100 text read the store default at every use (`bandChangedSql`). */
@@ -1031,6 +1033,38 @@ export function retiredCacheDepFunctionDrops(migration: string): string[] {
  * PostgreSQL schema compiler: a string for a per-table trigger, `null` for
  * the SQLite-only clock triggers, `undefined` for any other trigger.
  */
+/**
+ * Each cache trigger as a migration installed it: its SQLite text and the
+ * PostgreSQL statement of the same migration's sidecar, by name. A schema
+ * compiled before a later migration that changed the trigger's rule (its
+ * keys or visible columns, not only its table's columns) still holds the
+ * earlier text, and its PostgreSQL form is the one that migration shipped.
+ */
+let installedByName: Map<string, Array<{ sqlite: string; postgres: string }>> | null = null;
+function migrationInstalledTriggers(): Map<string, Array<{ sqlite: string; postgres: string }>> {
+  if (installedByName) return installedByName;
+  installedByName = new Map();
+  const directory = fileURLToPath(new URL("../migrations/", import.meta.url));
+  const chunks = (file: string) => readFileSync(file, "utf8").split(BREAKPOINT);
+  for (const file of readdirSync(directory).filter((entry) => /^\d{4}_.+\.sql$/.test(entry)).sort()) {
+    const sidecar = `${directory}postgres/${file}`;
+    if (!existsSync(sidecar)) continue;
+    const postgresByTrigger = new Map(chunks(sidecar).flatMap((chunk) => {
+      const match = /CREATE CONSTRAINT TRIGGER "(cdep_[a-z0-9_]+)"/.exec(chunk);
+      return match ? [[match[1]!, chunk.trim().replace(/;$/, "")] as const] : [];
+    }));
+    for (const chunk of chunks(`${directory}${file}`)) {
+      const start = chunk.search(/CREATE TRIGGER `cdep_[a-z0-9_]+`/);
+      if (start < 0) continue;
+      const sqlite = chunk.slice(start).trim().replace(/;$/, "");
+      const name = /CREATE TRIGGER `(cdep_[a-z0-9_]+)`/.exec(sqlite)![1]!;
+      const postgres = postgresByTrigger.get(name);
+      if (postgres) installedByName.set(name, [...(installedByName.get(name) ?? []), { sqlite, postgres }]);
+    }
+  }
+  return installedByName;
+}
+
 export function cacheDepPostgresTrigger(name: string, installedSqlite?: string): string | null | undefined {
   if ((CACHE_DEP_CLOCK_TRIGGERS as readonly string[]).includes(name)) return null;
   // A schema compiled before the migration that changed a baseline table's
@@ -1042,6 +1076,12 @@ export function cacheDepPostgresTrigger(name: string, installedSqlite?: string):
     ? undefined
     : supersededByName.get(name)?.find((trigger) => installedSqlite.trim() === trigger.sqlite);
   if (superseded) return `${superseded.postgres};`;
+  // An earlier rule of a trigger a later migration reinstalled: that migration's own PostgreSQL form.
+  const current = sqliteByName.get(name);
+  if (installedSqlite !== undefined && current !== undefined && installedSqlite.trim() !== current) {
+    const installed = migrationInstalledTriggers().get(name)?.find((trigger) => installedSqlite.trim() === trigger.sqlite);
+    if (installed) return `${installed.postgres};`;
+  }
   const postgresSql = postgresByName.get(name);
   return postgresSql === undefined ? undefined : `${postgresSql};`;
 }

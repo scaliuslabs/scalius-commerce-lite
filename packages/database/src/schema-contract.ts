@@ -795,7 +795,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 203,
     name: "0203_object_record_dependencies",
-    sourceSha256: "02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32",
+    sourceSha256: "f5f3ca8852fe6abd5174b16bf3ac78714f9323f5c628e19cc4920082a09c2e09",
   },
   {
     version: 204,

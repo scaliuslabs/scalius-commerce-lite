@@ -85,7 +85,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || NEW."type_id", 'obj:' || NEW."type_id" || ':' || substr(NEW."k1", nullif(strpos(substr(NEW."k1", 1, 2), '05'), 0), strpos(NEW."k1", '0001') + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k2", nullif(strpos(substr(NEW."k2", 1, 2), '05'), 0), strpos(NEW."k2", '0001') + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k3", nullif(strpos(substr(NEW."k3", 1, 2), '05'), 0), strpos(NEW."k3", '0001') + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k4", nullif(strpos(substr(NEW."k4", 1, 2), '05'), 0), strpos(NEW."k4", '0001') + 3), 't:object_records']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || NEW."type_id", 'obj:' || NEW."type_id" || ':' || substr(NEW."k1", nullif(strpos(substr(NEW."k1", 1, 2), '05'), 0), nullif(strpos(NEW."k1", '0001'), 0) + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k2", nullif(strpos(substr(NEW."k2", 1, 2), '05'), 0), nullif(strpos(NEW."k2", '0001'), 0) + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k3", nullif(strpos(substr(NEW."k3", 1, 2), '05'), 0), nullif(strpos(NEW."k3", '0001'), 0) + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k4", nullif(strpos(substr(NEW."k4", 1, 2), '05'), 0), nullif(strpos(NEW."k4", '0001'), 0) + 3), 't:object_records']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -103,7 +103,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || OLD."type_id", 'obj:' || OLD."type_id" || ':' || substr(OLD."k1", nullif(strpos(substr(OLD."k1", 1, 2), '05'), 0), strpos(OLD."k1", '0001') + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k2", nullif(strpos(substr(OLD."k2", 1, 2), '05'), 0), strpos(OLD."k2", '0001') + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k3", nullif(strpos(substr(OLD."k3", 1, 2), '05'), 0), strpos(OLD."k3", '0001') + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k4", nullif(strpos(substr(OLD."k4", 1, 2), '05'), 0), strpos(OLD."k4", '0001') + 3), 't:object_records']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || OLD."type_id", 'obj:' || OLD."type_id" || ':' || substr(OLD."k1", nullif(strpos(substr(OLD."k1", 1, 2), '05'), 0), nullif(strpos(OLD."k1", '0001'), 0) + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k2", nullif(strpos(substr(OLD."k2", 1, 2), '05'), 0), nullif(strpos(OLD."k2", '0001'), 0) + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k3", nullif(strpos(substr(OLD."k3", 1, 2), '05'), 0), nullif(strpos(OLD."k3", '0001'), 0) + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k4", nullif(strpos(substr(OLD."k4", 1, 2), '05'), 0), nullif(strpos(OLD."k4", '0001'), 0) + 3), 't:object_records']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -121,7 +121,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || NEW."type_id", 'obj:' || NEW."type_id" || ':' || substr(NEW."k1", nullif(strpos(substr(NEW."k1", 1, 2), '05'), 0), strpos(NEW."k1", '0001') + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k2", nullif(strpos(substr(NEW."k2", 1, 2), '05'), 0), strpos(NEW."k2", '0001') + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k3", nullif(strpos(substr(NEW."k3", 1, 2), '05'), 0), strpos(NEW."k3", '0001') + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k4", nullif(strpos(substr(NEW."k4", 1, 2), '05'), 0), strpos(NEW."k4", '0001') + 3), 't:object_records']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || NEW."type_id", 'obj:' || NEW."type_id" || ':' || substr(NEW."k1", nullif(strpos(substr(NEW."k1", 1, 2), '05'), 0), nullif(strpos(NEW."k1", '0001'), 0) + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k2", nullif(strpos(substr(NEW."k2", 1, 2), '05'), 0), nullif(strpos(NEW."k2", '0001'), 0) + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k3", nullif(strpos(substr(NEW."k3", 1, 2), '05'), 0), nullif(strpos(NEW."k3", '0001'), 0) + 3), 'obj:' || NEW."type_id" || ':' || substr(NEW."k4", nullif(strpos(substr(NEW."k4", 1, 2), '05'), 0), nullif(strpos(NEW."k4", '0001'), 0) + 3), 't:object_records']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -139,7 +139,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $trigger_function$
 BEGIN
-  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || OLD."type_id", 'obj:' || OLD."type_id" || ':' || substr(OLD."k1", nullif(strpos(substr(OLD."k1", 1, 2), '05'), 0), strpos(OLD."k1", '0001') + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k2", nullif(strpos(substr(OLD."k2", 1, 2), '05'), 0), strpos(OLD."k2", '0001') + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k3", nullif(strpos(substr(OLD."k3", 1, 2), '05'), 0), strpos(OLD."k3", '0001') + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k4", nullif(strpos(substr(OLD."k4", 1, 2), '05'), 0), strpos(OLD."k4", '0001') + 3), 't:object_records']::text[]) AS key_list(value)));
+  PERFORM scalius_compat."cache_dep_bump"(ARRAY(SELECT key_list.value AS dep FROM unnest(ARRAY['obj:' || OLD."type_id", 'obj:' || OLD."type_id" || ':' || substr(OLD."k1", nullif(strpos(substr(OLD."k1", 1, 2), '05'), 0), nullif(strpos(OLD."k1", '0001'), 0) + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k2", nullif(strpos(substr(OLD."k2", 1, 2), '05'), 0), nullif(strpos(OLD."k2", '0001'), 0) + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k3", nullif(strpos(substr(OLD."k3", 1, 2), '05'), 0), nullif(strpos(OLD."k3", '0001'), 0) + 3), 'obj:' || OLD."type_id" || ':' || substr(OLD."k4", nullif(strpos(substr(OLD."k4", 1, 2), '05'), 0), nullif(strpos(OLD."k4", '0001'), 0) + 3), 't:object_records']::text[]) AS key_list(value)));
   RETURN NULL;
 END
 $trigger_function$;
@@ -150,4 +150,4 @@ FOR EACH ROW
 WHEN ((OLD."type_id" IS DISTINCT FROM NEW."type_id" OR OLD."k1" IS DISTINCT FROM NEW."k1" OR OLD."k2" IS DISTINCT FROM NEW."k2" OR OLD."k3" IS DISTINCT FROM NEW."k3" OR OLD."k4" IS DISTINCT FROM NEW."k4" OR OLD."pub" IS DISTINCT FROM NEW."pub") AND OLD."pub" = 1)
 EXECUTE FUNCTION scalius_compat."cdep_object_records_upd_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (203, '0203_object_record_dependencies', '02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (203, '0203_object_record_dependencies', 'f5f3ca8852fe6abd5174b16bf3ac78714f9323f5c628e19cc4920082a09c2e09');
