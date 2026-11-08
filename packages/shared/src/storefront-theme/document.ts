@@ -24,7 +24,7 @@ import {
   type StorefrontBlockSlot,
   type StorefrontThemeBlocks,
 } from "./blocks";
-import { storefrontSkinRefSchema, storefrontThemeAppsSchemaOf } from "./apps";
+import { storefrontAppValuesSchema, storefrontSkinRefSchemaOf, storefrontThemeAppsSchemaOf } from "./apps";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontProductSourceSchema, storefrontSectionListSchemaOf } from "./sections";
 import { storefrontSettingBindingsSchema } from "./bindings";
@@ -146,8 +146,10 @@ export type StorefrontSchemaNamer = <Schema extends z.ZodType>(name: string, sch
 export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer = (_name, schema) => schema) {
   const bindings = name("StorefrontSettingBindings", storefrontSettingBindingsSchema);
   const productSource = name("StorefrontProductSource", storefrontProductSourceSchema);
-  const skin = name("StorefrontSkinRef", storefrontSkinRefSchema);
-  const sections = name("StorefrontSectionList", storefrontSectionListSchemaOf(skin, bindings, productSource));
+  // An app's setting values: one shape for its sections, skins and product blocks.
+  const appValues = name("StorefrontAppSettingValues", storefrontAppValuesSchema);
+  const skin = name("StorefrontSkinRef", storefrontSkinRefSchemaOf(appValues, bindings));
+  const sections = name("StorefrontSectionList", storefrontSectionListSchemaOf(skin, bindings, productSource, appValues));
   const landingPage = name("StorefrontLandingPage", storefrontLandingPageSchemaOf(sections));
   const pageTemplate = name("StorefrontPageTemplate", storefrontPageTemplateSchemaOf(sections));
   const tokens = storefrontThemeTokensSchemaOf(name("StorefrontThemeColors", storefrontThemeColorsSchema));
@@ -162,7 +164,7 @@ export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer 
     tokens,
     /** The logo, its width, the footer logo and the tab icon (media ids). */
     brand: storefrontThemeBrandSchema,
-    blocks: storefrontThemeBlocksSchemaOf(bindings),
+    blocks: storefrontThemeBlocksSchemaOf(bindings, appValues),
     /**
      * The units app skins draw (header, footer, product card, product page,
      * listing) and the app template the look came from. Absent: core draws

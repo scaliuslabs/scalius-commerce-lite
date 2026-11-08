@@ -747,16 +747,8 @@ export type StorefrontThemeDocument = {
             apps?: Array<{
                 id: string;
                 app: string;
-                values: {
-                    [key: string]: string | number | boolean | Array<string> | Array<{
-                        [key: string]: string | number | boolean | unknown;
-                    }> | unknown;
-                };
-                bindings?: {
-                    [key: string]: {
-                        source: string;
-                    };
-                };
+                values: StorefrontAppSettingValues;
+                bindings?: StorefrontSettingBindings;
             }>;
             sticky: {
                 phoneTop: 'none' | 'anchor-bar';
@@ -876,18 +868,16 @@ export type StorefrontSettingBindings = {
     };
 };
 
+export type StorefrontAppSettingValues = {
+    [key: string]: string | number | boolean | Array<string> | Array<{
+        [key: string]: string | number | boolean | unknown;
+    }> | unknown;
+};
+
 export type StorefrontSkinRef = {
     app: string;
-    values: {
-        [key: string]: string | number | boolean | Array<string> | Array<{
-            [key: string]: string | number | boolean | unknown;
-        }> | unknown;
-    };
-    bindings?: {
-        [key: string]: {
-            source: string;
-        };
-    };
+    values: StorefrontAppSettingValues;
+    bindings?: StorefrontSettingBindings;
 };
 
 export type StorefrontSectionList = Array<{
@@ -1281,11 +1271,7 @@ export type StorefrontSectionList = Array<{
     aiDraft?: true;
     settings: {
         app: string;
-        values: {
-            [key: string]: string | number | boolean | Array<string> | Array<{
-                [key: string]: string | number | boolean | unknown;
-            }> | unknown;
-        };
+        values: StorefrontAppSettingValues;
     };
     bindings?: StorefrontSettingBindings;
 }>;

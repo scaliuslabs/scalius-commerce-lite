@@ -20,7 +20,7 @@ import {
   has,
   type FitCondition,
 } from "./fit";
-import { storefrontProductAppBlocksSchema } from "./apps";
+import { storefrontAppValuesSchema, storefrontProductAppBlocksSchemaOf } from "./apps";
 import { storefrontLinkSchema } from "./links";
 import { storefrontSettingBindingsSchema, type StorefrontSettingBindings } from "./bindings";
 import { isCustomFieldKey, isCustomFieldNamespace } from "../custom-field-keys";
@@ -763,8 +763,11 @@ const moduleIds = Object.keys(STOREFRONT_PRODUCT_MODULES) as [keyof typeof STORE
 export type StorefrontListingToolbarPiece = keyof typeof STOREFRONT_LISTING_TOOLBAR;
 export type StorefrontProductModule = keyof typeof STOREFRONT_PRODUCT_MODULES;
 
-/** The API supplies the named bindings schema so every block refers to one component. */
-export const storefrontThemeBlocksSchemaOf = (bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema) => z.object({
+/** The API supplies the named bindings and app value schemas so every block refers to one component of each. */
+export const storefrontThemeBlocksSchemaOf = (
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
+) => z.object({
   topBar: blockSchema(STOREFRONT_TOP_BAR_VARIANTS, bindings),
   header: blockSchema(STOREFRONT_HEADER_VARIANTS, bindings),
   /** The links every header surface shows (source, top entries, link budget). */
@@ -806,7 +809,7 @@ export const storefrontThemeBlocksSchemaOf = (bindings: typeof storefrontSetting
      * each renders in the buy box or after the modules, as its app declares.
      * Absent means none.
      */
-    apps: storefrontProductAppBlocksSchema.optional(),
+    apps: storefrontProductAppBlocksSchemaOf(values, bindings).optional(),
     sticky: z.object({
       phoneTop: z.enum(STOREFRONT_PRODUCT_STICKY.phoneTop),
       phoneBottom: z.enum(STOREFRONT_PRODUCT_STICKY.phoneBottom),

@@ -40,7 +40,14 @@ import { commitOrder, type OrderCustomer } from "../commit-order";
 import type { OrderFacts, OrderLine } from "../types";
 import type { SQLiteBatchItem } from "./shared";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
-import { assertPointOfSaleStock, planPointOfSaleTenders, resolvePointOfSaleLocation, type PointOfSaleTenderPlan } from "./point-of-sale";
+import {
+    assertPointOfSaleStock,
+    buildPointOfSaleStockGuard,
+    planPointOfSaleTenders,
+    pointOfSaleStockShortfall,
+    resolvePointOfSaleLocation,
+    type PointOfSaleTenderPlan,
+} from "./point-of-sale";
 
 /** The order would total something other than what staff reviewed; `details.totalAmount` is the new total. */
 export class ManualOrderTotalChangedError extends AppError {
@@ -367,6 +374,8 @@ export async function createManualOrder(
                             // The receipt facts (minor units), and for the timeline the counter's name and the change in major units.
                             data: { ...salePlan.facts, locationName: saleLocation.name, change: fromMinor(salePlan.facts.changeMinor, taxQuote.decimalPlaces) },
                         }, sql`1`) as unknown as SQLiteBatchItem] : []),
+                        // A sale's counter covers its units, every other reservation there included.
+                        ...(saleLocation && order.inventoryAction === "reserved" ? [buildPointOfSaleStockGuard(db, orderId, saleLocation.id)] : []),
                         buildAdminOrderCreateAttemptCommit(db, attempt, response),
                     ],
                 };
@@ -375,6 +384,8 @@ export async function createManualOrder(
                 reservation.error ?? "Insufficient stock for one or more items",
             ),
             mapError(error) {
+                const short = saleLocation ? pointOfSaleStockShortfall(error, saleLocation) : null;
+                if (short) return short;
                 if (!isAdminOrderCreateAttemptGuardError(error)) return null;
                 lostClaim = true;
                 return new ConflictError(
