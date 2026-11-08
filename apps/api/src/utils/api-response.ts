@@ -27,7 +27,7 @@ export interface ApiErrorResponse {
   };
 }
 
-type ErrorStatusCode = 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 428 | 429 | 500 | 503;
+type ErrorStatusCode = 400 | 401 | 403 | 404 | 405 | 409 | 413 | 415 | 422 | 428 | 429 | 500 | 503;
 
 const INTERNAL_ERROR_MESSAGE = "Internal Server Error";
 
@@ -64,6 +64,7 @@ function toErrorStatusCode(status: number): ErrorStatusCode {
     401,
     403,
     404,
+    405,
     409,
     413,
     415,

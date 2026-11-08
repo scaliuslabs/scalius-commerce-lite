@@ -49,6 +49,7 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // deleting it is also Super Admin only (enforced by the route).
   "/api/v1/admin/apps/removed-data": { GET: view },
   "/api/v1/admin/apps/removed-data/*/delete": { POST: manage },
+  "/api/v1/admin/apps/removed-data/*/hand-over": { POST: manage },
   // Which apps' storefront parts the store recently drew without: the app
   // pages and the theme editor (where those parts are placed) both show it.
   "/api/v1/admin/apps/storefront-problems": { GET: { anyOf: [PERMISSIONS.APPS_VIEW, PERMISSIONS.SETTINGS_THEME_EDIT] } },
