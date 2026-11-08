@@ -227,7 +227,7 @@ export const smsQuery = {
  */
 export type AppProviderKind =
   | "courier" | "sms" | "email" | "courier_history" | "tax" | "translation" | "ai"
-  | "messaging" | "push" | "search" | "address" | "fx" | "identity";
+  | "messaging" | "push" | "search" | "address" | "fx" | "identity" | "payout";
 export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
 export const appProvidersQuery = (kind: AppProviderKind) => ({
   queryKey: queryKeys.settings.appProviders(kind),

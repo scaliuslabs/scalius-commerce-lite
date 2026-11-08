@@ -3,6 +3,7 @@ import {
   PaymentMethodsCard,
 } from "~/components/admin/settings/PaymentsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { AppKindCard } from "~/components/admin/settings/AppKindCard";
 import { EmiPlansCard } from "~/components/admin/settings/EmiPlansCard";
 import { emiSettingsQuery } from "~/lib/api-query-options/emi";
 import { appPaymentProvidersQuery } from "~/lib/api-query-options/payment-providers";
@@ -40,6 +41,7 @@ function PaymentsPage() {
     <SettingsPage page="payments" readOnly={!canEdit}>
       <PaymentMethodsCard />
       <EmiPlansCard />
+      <AppKindCard kind="payout" />
     </SettingsPage>
   );
 }

@@ -1,8 +1,8 @@
 /**
  * The settings card of an app provider kind that has no built-in choice list:
  * chat apps (Notifications), exchange rates (Markets), address autocomplete
- * (Checkout), sign-in with other accounts (Customer accounts) and search
- * (Integrations). It lists the installed apps' providers of the kind, each with
+ * (Checkout), sign-in with other accounts (Customer accounts), search
+ * (Integrations) and payouts to sellers (Payments). It lists the installed apps' providers of the kind, each with
  * its readiness and its setup sheet, or says in one line that none is
  * installed. Same pattern as the machine translation and AI drafting cards.
  */
@@ -25,6 +25,7 @@ export const APP_KIND_CARDS = {
   address: { id: "addressAutocomplete", title: "addressTitle", description: "addressDescription", empty: "addressEmpty" },
   identity: { id: "otherSignIn", title: "signInTitle", description: "signInDescription", empty: "signInEmpty" },
   search: { id: "appSearch", title: "searchTitle", description: "searchDescription", empty: "searchEmpty" },
+  payout: { id: "payoutApps", title: "payoutTitle", description: "payoutDescription", empty: "payoutEmpty" },
 } as const satisfies Partial<Record<AppProviderKind, { id: SettingsCardId; title: KindMessage; description: KindMessage; empty: KindMessage }>>;
 
 /** One line under a card: no app of this kind, and where to find one. */

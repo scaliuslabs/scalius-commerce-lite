@@ -7,7 +7,7 @@ import type { SettingsNavKey } from "../settings/settings-nav";
 
 export const APP_PROVIDER_KINDS = [
   "payment", "courier", "sms", "email", "courier_history", "tax", "translation", "ai",
-  "messaging", "push", "search", "address", "fx", "identity",
+  "messaging", "push", "search", "address", "fx", "identity", "payout",
 ] as const;
 export type AppProviderKind = (typeof APP_PROVIDER_KINDS)[number];
 
@@ -27,6 +27,7 @@ export const PROVIDER_CAPABILITY: Readonly<Record<AppProviderKind, { page: Setti
   address: { page: "checkout", to: "/admin/settings/checkout", card: "addressAutocomplete" },
   fx: { page: "markets", to: "/admin/settings/markets", card: "exchangeRates" },
   identity: { page: "customerAccounts", to: "/admin/settings/customer-accounts", card: "otherSignIn" },
+  payout: { page: "payments", to: "/admin/settings/payments", card: "payoutApps" },
 };
 
 export function isAppProviderKind(kind: string): kind is AppProviderKind {
