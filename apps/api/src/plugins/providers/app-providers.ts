@@ -51,6 +51,7 @@ const ADAPTERS: Record<AppProviderKind, Adapter> = {
   address: appPortProvider("address") as Adapter,
   fx: appPortProvider("fx") as Adapter,
   identity: appPortProvider("identity") as Adapter,
+  payout: appPortProvider("payout") as Adapter,
 };
 
 const PORT_NAMES: Record<AppProviderKind, string> = {
@@ -66,6 +67,7 @@ const PORT_NAMES: Record<AppProviderKind, string> = {
   address: "address autocomplete",
   fx: "exchange rate",
   identity: "sign-in",
+  payout: "payout",
 };
 
 async function resolveChoice(

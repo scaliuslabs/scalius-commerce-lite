@@ -40,6 +40,8 @@ export const PROVIDER_PORT_PERMISSIONS: Readonly<Record<ProviderKind, ProviderPo
   identity: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
   // Settings → Markets, exchange rates: /settings/markets.
   fx: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
+  // Payout providers are chosen by the app that pays (payouts.create), not in settings.
+  payout: { view: [PERMISSIONS.SETTINGS_GENERAL_VIEW], manage: [PERMISSIONS.SETTINGS_GENERAL_EDIT] },
 };
 
 /** Whether these permissions read (`view`) or test (`manage`) a port's providers. */

@@ -54,6 +54,7 @@ export const appSurfacesMessages = defineMessages({
     kind_address: "Address autocomplete",
     kind_fx: "Exchange rates",
     kind_identity: "Sign-in with other accounts",
+    kind_payout: "Payouts",
 
     generalSettings: "General",
 
@@ -109,6 +110,7 @@ export const appSurfacesMessages = defineMessages({
     kind_address: "ঠিকানা অটোকমপ্লিট",
     kind_fx: "এক্সচেঞ্জ রেট",
     kind_identity: "অন্য অ্যাকাউন্টে সাইন-ইন",
+    kind_payout: "পেআউট",
 
     generalSettings: "সাধারণ",
 

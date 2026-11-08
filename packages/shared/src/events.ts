@@ -59,6 +59,9 @@ export const EVENT_TOPICS = [
   "customer.redact_requested",
   "customer.data_requested",
   "customer.erased",
+  "conversation.message_received",
+  "payout.created",
+  "payout.updated",
 ] as const;
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
@@ -81,6 +84,8 @@ export const EVENT_RESOURCE_TYPES = [
   "gift_card",
   "gift_card_transaction",
   "object",
+  "conversation",
+  "payout",
 ] as const;
 export type EventResourceType = (typeof EVENT_RESOURCE_TYPES)[number];
 
@@ -125,6 +130,9 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "customer.redact_requested": "customer",
   "customer.data_requested": "customer",
   "customer.erased": "customer",
+  "conversation.message_received": "conversation",
+  "payout.created": "payout",
+  "payout.updated": "payout",
 };
 
 const id = z.string().min(1).max(128);
@@ -413,6 +421,31 @@ export const EVENT_FACT_SCHEMAS = {
   "customer.erased": z.object({
     customerId: id,
   }),
+  /**
+   * A buyer wrote in a thread (0199): on the storefront, or on a chat channel
+   * through a messaging app (`channel`, null for the storefront). Read the
+   * line with `conversations.list_messages` (`read_conversations`).
+   */
+  "conversation.message_received": z.object({
+    conversationId: id,
+    messageId: id,
+    seq: z.number().int().positive(),
+    channel: nullableState,
+  }),
+  /** An app recorded a payout (0199). Delivered only to the app that sent it. */
+  "payout.created": z.object({
+    payoutId: id,
+    appId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
+  /** A payout's status moved (`processing`, `paid`, `failed`). Delivered only to the app that sent it. */
+  "payout.updated": z.object({
+    payoutId: id,
+    appId: id,
+    previousStatus: nullableState,
+    status: state,
+  }),
 } as const satisfies Record<EventTopic, z.ZodType>;
 
 export type EventFacts<T extends EventTopic = EventTopic> = z.infer<(typeof EVENT_FACT_SCHEMAS)[T]>;
@@ -452,7 +485,7 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
 export const EVENT_TOPIC_PREFIXES = [
   "order", "return", "product", "variant", "purchase_order", "inventory_transfer", "customer",
   "fulfillment", "refund", "shipment", "payment", "checkout", "discount", "review", "gift_card",
-  "gift_card_transaction", "object",
+  "gift_card_transaction", "object", "conversation", "payout",
 ] as const;
 export type EventTopicPrefix = (typeof EVENT_TOPIC_PREFIXES)[number];
 export type EventTopicFilter = EventTopic | `${EventTopicPrefix}.*` | "*";

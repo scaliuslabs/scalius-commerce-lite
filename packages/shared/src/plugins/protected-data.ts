@@ -72,6 +72,7 @@ export const PROVIDER_PROTECTED_DATA = {
   search: { required: [], optional: [] },
   fx: { required: [], optional: [] },
   identity: { required: [], optional: [] },
+  payout: { required: [], optional: [] },
 } as const satisfies Record<ProviderKind, {
   required: readonly ProtectedCustomerData[];
   optional: readonly ProtectedCustomerData[];
