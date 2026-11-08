@@ -245,24 +245,27 @@ const navigationLeafSchema = z.object({
 const navigationChildSchema = navigationLeafSchema.extend({
   subMenu: z.array(navigationLeafSchema).optional(),
 });
+// Named: the header and the footer columns share it, written once in the contract.
 const navigationItemSchema = navigationLeafSchema.extend({
   subMenu: z.array(navigationChildSchema).optional(),
-});
+}).openapi("StorefrontNavigationItem");
 const socialLinkSchema = z.object({
   id: z.string(),
   label: z.string(),
   url: z.string(),
   iconUrl: z.string().optional(),
 });
-const brandAssetSchema = z.object({
+// Named: four brand images and the skins' images share it, written once in the contract.
+const brandImageSchema = z.object({
   id: z.string(),
   url: z.string(),
   alt: z.string(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
-}).nullable();
+}).openapi("StorefrontBrandImage");
+const brandAssetSchema = z.union([brandImageSchema, z.null()]);
 /** Images a theme's unit skins name (their apps' `image` settings), resolved like the brand images. */
-const skinMediaSchema = z.array(brandAssetSchema.unwrap()).max(STOREFRONT_SKIN_IMAGES_MAX);
+const skinMediaSchema = z.array(brandImageSchema).max(STOREFRONT_SKIN_IMAGES_MAX);
 /** A theme's brand images resolved (ready or trashed images; null when unset or gone). */
 const brandAssetsSchema = z.object({
   logo: brandAssetSchema,
@@ -424,7 +427,7 @@ const layoutDataSchema = z.object({
     connect: z.array(z.string()),
     settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
   })).openapi({
-    description: "Pixels of active apps (packages/plugin-sdk/docs/storefront.md, Pixels): each runs `storefront/pixel.js` of its release in a sandboxed frame on every page once the buyer's consent allows `consent`, hears `events` (contact fields only for `protectedData`), reaches only `connect` and gets `settings` (never a secret).",
+    description: "Active apps' pixels (plugin-sdk docs/storefront.md#pixels): sandboxed, after `consent`.",
   }),
   appExtensions: z.array(z.object({
     pluginId: z.string(),
