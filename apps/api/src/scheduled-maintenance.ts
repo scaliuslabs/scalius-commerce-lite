@@ -19,7 +19,7 @@ import { notificationOutboxDueProbes, pruneStaffAlerts } from "@scalius/core/mod
 import { sealAnalyticsDays } from "@scalius/core/modules/analytics";
 import { sweepAutoFulfilment, sweepExpiredShipmentClaims } from "@scalius/core/modules/fulfilment";
 import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
-import { sweepBuyerUploads } from "@scalius/core/modules/buyer-uploads";
+import { buyerUploadDueProbes, sweepBuyerUploads } from "@scalius/core/modules/buyer-uploads";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import { CAPI_LOG_PURGE_LIMIT, purgeExpiredCapiLogs } from "@scalius/core/integrations/meta/capi-settings";
 import { planTrackingSweep } from "@scalius/core/integrations/tracking/deliveries";
@@ -348,9 +348,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
-    // Conversation images uploaded but never attached within an hour, then
-    // buyer uploads no order took within 72 hours and order retention's
-    // (one indexed probe each when idle, reading no row).
+    // Conversation images uploaded but never attached within an hour.
     name: "conversation_attachment_sweep",
     async run({ db, env, timed }) {
       const cursor = await readMaintenanceCursor(db, "orphan-attachments");
@@ -362,10 +360,6 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         console.log(
           `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
         );
-      }
-      const uploads = await timed("buyer_upload_sweep", () => sweepBuyerUploads(db, env.BUCKET));
-      if (uploads.orphans > 0 || uploads.retained > 0) {
-        console.log(`[scheduled] Buyer upload sweep: orphans=${uploads.orphans}, retained=${uploads.retained}`);
       }
     },
   },
@@ -871,6 +865,20 @@ export const BACKGROUND_DRAINS: ReadonlyArray<DueProbedDrain & { run(context: Sw
     async run({ db, env, executionCtx }) {
       const { drainCustomerErasure } = await import("./background/customer-erasure");
       return drainCustomerErasure(db, env, { ctx: executionCtx });
+    },
+  },
+  {
+    // Buyer uploads no order took within 72 hours, and ordered ones past
+    // retention whose order is settled: run only when the probe finds one,
+    // so a store without uploads pays nothing for them.
+    name: "buyer_upload_sweep",
+    due: (db) => buyerUploadDueProbes(db),
+    async run({ db, env }) {
+      const uploads = await sweepBuyerUploads(db, env.BUCKET);
+      if (uploads.orphans > 0 || uploads.retained > 0) {
+        console.log(`[scheduled] Buyer upload sweep: orphans=${uploads.orphans}, retained=${uploads.retained}`);
+      }
+      return uploads;
     },
   },
   {

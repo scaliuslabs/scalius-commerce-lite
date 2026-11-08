@@ -56,6 +56,8 @@ export const BUYER_UPLOAD_ORPHAN_SECONDS = 72 * 3_600;
  * its answer; the file reads as no longer kept.
  */
 export const BUYER_UPLOAD_RETENTION_DAYS = 365;
+/** The most uploads one order holds (the commit refuses more; a list page is at most this). */
+export const BUYER_UPLOADS_PER_ORDER_MAX = 50;
 /** A signed download link lives this long. */
 export const BUYER_UPLOAD_LINK_TTL_SECONDS = 300;
 /** HKDF label of the key that signs download links (from SCALIUS_SECRET). */

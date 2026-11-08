@@ -29,7 +29,7 @@ import {
     buyerUploadAttachStatements,
     lineBuyerUploadClaims,
     type BuyerUploadClaim,
-} from "../buyer-uploads";
+} from "./buyer-upload-claims";
 import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
 import { linkedOrderHistory, type VerifiedContact } from "../customers";
 import {
