@@ -89,9 +89,13 @@ export function buildBatchGuard(
 }
 
 /**
- * Recognizes the deliberately raised guard error across provider transports.
- * D1/TursoDB expose the invalid-path marker; PostgreSQL's typed raising
- * function uses the same marker as its exception message.
+ * Recognizes the deliberately raised guard error across provider transports:
+ * D1 and workerd (`bad JSON path: 'MARKER'`), node:sqlite, the TursoDB engine
+ * (`Bad json path: MARKER`) and PostgreSQL's typed raising function (the
+ * marker is its message) all name the marker. Only the whole marker matches,
+ * so one batch's guards stay distinguishable (`GIFT_CARD` never matches
+ * `GIFT_CARD_SPENT`). An error that names no marker (a malformed JSON value,
+ * a stripped message) is no guard's: it stays the error it is.
  */
 export function isBatchGuardError(
   error: unknown,
@@ -100,9 +104,8 @@ export function isBatchGuardError(
   const failureMarker = marker.toUpperCase();
   if (!BATCH_GUARD_MARKER.test(failureMarker)) return false;
 
-  const text = collectBatchErrorText(error);
-  if (text.toUpperCase().includes(failureMarker)) return true;
-  return /malformed json/i.test(text);
+  return new RegExp(`(?<![A-Z0-9_])${failureMarker}(?![A-Z0-9_])`)
+    .test(collectBatchErrorText(error).toUpperCase());
 }
 
 function collectBatchErrorText(error: unknown, depth = 0): string {
