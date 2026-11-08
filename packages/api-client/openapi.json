@@ -38137,7 +38137,7 @@
                                 "items": {
                                   "type": "string"
                                 },
-                                "description": "Section types whose object reads bind the page's resource: their page template part is read per resource."
+                                "description": "Sections whose reads bind the page's resource."
                               },
                               "skins": {
                                 "type": "array",
@@ -38203,7 +38203,7 @@
                                       "enum": [
                                         true
                                       ],
-                                      "description": "It declares public object reads: placed on the product page, its records come with the product template's part."
+                                      "description": "It declares object reads (product template part)."
                                     }
                                   },
                                   "required": [

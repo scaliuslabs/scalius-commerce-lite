@@ -9282,7 +9282,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                     }>;
                 };
                 /**
-                 * Section types whose object reads bind the page's resource: their page template part is read per resource.
+                 * Sections whose reads bind the page's resource.
                  */
                 resourceSections?: Array<string>;
                 skins: Array<{
@@ -9305,7 +9305,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                         [key: string]: unknown;
                     }>;
                     /**
-                     * It declares public object reads: placed on the product page, its records come with the product template's part.
+                     * It declares object reads (product template part).
                      */
                     reads?: true;
                 }>;
