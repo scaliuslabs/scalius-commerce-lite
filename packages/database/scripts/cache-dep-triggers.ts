@@ -151,15 +151,15 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   // An option value's swatch (0196) is a visible column of its row.
   cdep_product_option_values_upd: "0196_option_value_swatches",
   // A filtered object read (a product's reviews) declares its type's own row
-  // and the records led by its filter string, not every record (0199).
-  cdep_object_types_ins: "0199_object_record_dependencies",
-  cdep_object_types_del: "0199_object_record_dependencies",
-  cdep_object_types_upd: "0199_object_record_dependencies",
-  cdep_object_types_upd_old: "0199_object_record_dependencies",
-  cdep_object_records_ins: "0199_object_record_dependencies",
-  cdep_object_records_del: "0199_object_record_dependencies",
-  cdep_object_records_upd: "0199_object_record_dependencies",
-  cdep_object_records_upd_old: "0199_object_record_dependencies",
+  // and the records led by its filter string, not every record (0204).
+  cdep_object_types_ins: "0204_object_record_dependencies",
+  cdep_object_types_del: "0204_object_record_dependencies",
+  cdep_object_types_upd: "0204_object_record_dependencies",
+  cdep_object_types_upd_old: "0204_object_record_dependencies",
+  cdep_object_records_ins: "0204_object_record_dependencies",
+  cdep_object_records_del: "0204_object_record_dependencies",
+  cdep_object_records_upd: "0204_object_record_dependencies",
+  cdep_object_records_upd_old: "0204_object_record_dependencies",
 };
 
 /**

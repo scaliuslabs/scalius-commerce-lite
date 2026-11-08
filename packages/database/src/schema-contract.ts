@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 199,
-  name: "0199_object_record_dependencies",
+  version: 204,
+  name: "0204_object_record_dependencies",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -773,8 +773,8 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "7e197c9e8e4fa96b60436dbe9c4ba6afe995744965e28b0a46d8000a774e4b70",
   },
   {
-    version: 199,
-    name: "0199_object_record_dependencies",
+    version: 204,
+    name: "0204_object_record_dependencies",
     sourceSha256: "02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32",
   },
 ] as const;

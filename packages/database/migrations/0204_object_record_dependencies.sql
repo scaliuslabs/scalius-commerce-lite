@@ -106,4 +106,4 @@ BEGIN
   ON CONFLICT (`dep`) DO UPDATE SET `seq` = excluded.`seq`;
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_object_record_dependencies', '02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (204, '0204_object_record_dependencies', '02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32');

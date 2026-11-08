@@ -150,4 +150,4 @@ FOR EACH ROW
 WHEN ((OLD."type_id" IS DISTINCT FROM NEW."type_id" OR OLD."k1" IS DISTINCT FROM NEW."k1" OR OLD."k2" IS DISTINCT FROM NEW."k2" OR OLD."k3" IS DISTINCT FROM NEW."k3" OR OLD."k4" IS DISTINCT FROM NEW."k4" OR OLD."pub" IS DISTINCT FROM NEW."pub") AND OLD."pub" = 1)
 EXECUTE FUNCTION scalius_compat."cdep_object_records_upd_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_object_record_dependencies', '02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (204, '0204_object_record_dependencies', '02900ac329e9a6086cda801280cb24568bba60afd8b2aecd4f694b88f5d5ee32');
