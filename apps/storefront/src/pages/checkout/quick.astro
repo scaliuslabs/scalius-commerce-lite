@@ -579,7 +579,7 @@ const secondaryButtonClass =
 
         {buyerFields.map(({ key, attribute, value }) => (
           <div>
-            <BuyerField attribute={attribute} name={`attributes.${key}`} id={`buyer-${key}`} value={value} labelClass={labelClass} controlClass={fieldClass} />
+            <BuyerField attribute={attribute} name={`attributes.${key}`} fieldKey={key} id={`buyer-${key}`} value={value} labelClass={labelClass} controlClass={fieldClass} />
           </div>
         ))}
 

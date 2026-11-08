@@ -26,6 +26,7 @@ import {
   type LinePropertyInput,
 } from "@scalius/shared/line-properties";
 import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 
 import { fromMinor } from "@scalius/shared/money";
 import { isPurchaseOptionId, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
@@ -95,6 +96,15 @@ export function customizationSchemaFromView(
           };
         case "checkbox":
           return { ...base, type: "checkbox", priceMinor: safeMinor(field.priceMinor) };
+        case "file":
+          return {
+            ...base,
+            type: "file",
+            accept: field.accept?.length ? [...field.accept] : [...BUYER_UPLOAD_TYPES],
+            maxBytes: field.maxBytes ?? BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes,
+            maxFiles: field.maxFiles ?? 1,
+            priceMinor: 0,
+          };
         default:
           return {
             ...base,
@@ -132,6 +142,7 @@ export function productBuyerInputFields(
     price: 0,
     priceMinor: 0,
     options: field.type === "select" ? field.options.map((option) => ({ value: option.value, label: option.label, price: 0, priceMinor: 0 })) : [],
+    ...(field.type === "file" ? { accept: [...field.accept], maxBytes: field.maxBytes, maxFiles: field.maxFiles } : {}),
     appId: field.appId!,
   }));
   return [...own, ...apps];

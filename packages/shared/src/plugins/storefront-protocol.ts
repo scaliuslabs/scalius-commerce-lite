@@ -741,7 +741,8 @@ export interface StorefrontSpecification {
 /** One buyer input of the buy form. */
 export interface StorefrontBuyerInput {
   key: string;
-  type: "text" | "textarea" | "select" | "checkbox";
+  /** `file`: an app's upload input (its answer is upload ids the buy form's own control makes). */
+  type: "text" | "textarea" | "select" | "checkbox" | "file";
   label: string;
   required: boolean;
   /** text and textarea; null without a limit. */

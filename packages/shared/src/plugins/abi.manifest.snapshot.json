@@ -401,7 +401,8 @@
           "number",
           "boolean",
           "date",
-          "choice"
+          "choice",
+          "file"
          ]
         },
         "required": {
@@ -442,6 +443,30 @@
           ],
           "additionalProperties": false
          }
+        },
+        "accept": {
+         "minItems": 1,
+         "maxItems": 4,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "image/jpeg",
+           "image/png",
+           "image/webp",
+           "application/pdf"
+          ]
+         }
+        },
+        "maxBytes": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 20971520
+        },
+        "maxFiles": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 10
         }
        },
        "required": [
@@ -508,7 +533,8 @@
           "text",
           "textarea",
           "select",
-          "checkbox"
+          "checkbox",
+          "file"
          ]
         },
         "maxLength": {
@@ -541,6 +567,30 @@
           ],
           "additionalProperties": false
          }
+        },
+        "accept": {
+         "minItems": 1,
+         "maxItems": 4,
+         "type": "array",
+         "items": {
+          "type": "string",
+          "enum": [
+           "image/jpeg",
+           "image/png",
+           "image/webp",
+           "application/pdf"
+          ]
+         }
+        },
+        "maxBytes": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 20971520
+        },
+        "maxFiles": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 10
         },
         "products": {
          "type": "object",

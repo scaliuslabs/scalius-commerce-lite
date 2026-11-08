@@ -38,7 +38,8 @@ import type {
   FulfillmentKind,
   FulfillmentType,
 } from "@scalius/shared/fulfilment";
-import type { CustomizationFieldType } from "@scalius/shared/line-properties";
+import type { LineInputFieldType } from "@scalius/shared/line-properties";
+import type { BuyerUploadType } from "@scalius/shared/buyer-uploads";
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
 import type { OrderLineExtras } from "../order-line-extras";
 
@@ -372,11 +373,16 @@ export interface ProductEmiOffer {
 export interface ProductCustomizationField {
   key: string;
   label: string;
-  type: CustomizationFieldType;
+  /** `file` only for an app's line input (buyer uploads). */
+  type: LineInputFieldType;
   required: boolean;
   help: string | null;
   /** text/textarea only. */
   maxLength: number | null;
+  /** `file` only: the types, largest file and most files it takes (bounded by the plan). */
+  accept?: BuyerUploadType[];
+  maxBytes?: number;
+  maxFiles?: number;
   /** text/textarea/checkbox surcharge per unit, in major units; 0 for selects. */
   price: number;
   priceMinor: number;
@@ -689,7 +695,7 @@ export interface SeoSettings {
 /** A buyer input frozen on an order line ("Engraving: Anika (+৳200)"). */
 export interface OrderLineProperty {
   key: string;
-  type: CustomizationFieldType;
+  type: LineInputFieldType;
   label: string;
   value: string;
   /** The choice label for selects, "Yes" for ticked boxes, the text otherwise. */
