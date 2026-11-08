@@ -20,8 +20,9 @@
  * A change to the test setup itself runs everything. A lockfile or workspace
  * `package.json` change selects the tests of the changed packages and of the
  * packages that link them (`scripts/lockfile-impact.mjs`); only an unreadable
- * lockfile, a change to the root dependencies or the root `package.json` runs
- * everything. The selection then runs
+ * lockfile, a change to the root dependencies or a root `package.json` change
+ * beyond its `scripts` runs everything (a scripts-only change selects the
+ * scripts' tests and the manifest readers). The selection then runs
  * through `scripts/test-runner.mjs`, so the serial files keep their own pass.
  * Suites under their own Vitest config (`tests/invariants/`) are not collected
  * here: CI runs the ones a rule cites through `node rules/cli.mjs impact` and
@@ -45,7 +46,6 @@ const root = resolve(import.meta.dirname, "..");
 export const RUN_EVERYTHING = [
   /^vitest\.config\.ts$/,
   /^scripts\/test-(passes|runner|affected)\.mjs$/,
-  /^package\.json$/,
   /^packages\/database\/src\/testing\/migrated-image-setup\.ts$/,
   /^apps\/storefront\/scripts\/test-build-id-setup\.mjs$/,
 ];
@@ -178,11 +178,44 @@ export function dependencySelection(changed, testFiles, lock = {}) {
   return { all: false, files: testsOfImporters(withDependents(importers, head), names, testFiles), rule };
 }
 
+/** The tests that read the root manifest's `scripts`: the scripts' own tests and the manifest readers. */
+export const ROOT_SCRIPT_TESTS = [
+  "scripts/",
+  "apps/api/src/routes/meta.test.ts",
+  "packages/cli/test/program.test.ts",
+  "packages/shared/src/plugins/abi.snapshot.test.ts",
+];
+
+const withoutScripts = (text) => {
+  try {
+    const { scripts: _scripts, ...rest } = JSON.parse(text);
+    return JSON.stringify(rest);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Whether a root `package.json` change can reach every test: anything but its
+ * `scripts` (dependencies, engines, the package manager, the version), or a
+ * manifest that cannot be read at both ends.
+ */
+export function rootManifestReachesEverything(manifest = {}) {
+  const before = manifest.base === undefined ? null : withoutScripts(manifest.base);
+  const after = manifest.head === undefined ? null : withoutScripts(manifest.head);
+  return before === null || after === null || before !== after;
+}
+
 /** The rule-selected test files, or "all" when the test setup itself changed. */
 export function ruleSelection(changed, testFiles, options = {}) {
   if (changed.some((file) => RUN_EVERYTHING.some((pattern) => pattern.test(file)))) return { all: true, files: [], rules: ["test setup"] };
   const files = new Set();
   const rules = [];
+  if (changed.includes("package.json")) {
+    if (rootManifestReachesEverything(options.manifest)) return { all: true, files: [], rules: ["test setup"] };
+    rules.push("root package.json scripts");
+    for (const file of testFiles) if (ROOT_SCRIPT_TESTS.some((prefix) => file.startsWith(prefix))) files.add(file);
+  }
   const dependencies = dependencySelection(changed, testFiles, options.lock);
   if (dependencies?.all) return { all: true, files: [], rules: [`dependencies: ${dependencies.reason}`] };
   if (dependencies) {
@@ -259,7 +292,10 @@ async function main() {
 
   const changed = changedFiles(base);
   const testFiles = (git(["ls-files", "--cached", "--others", "--exclude-standard"]) ?? "").split("\n").filter((file) => TEST_FILE.test(file));
-  const rules = ruleSelection(changed, testFiles, { lock: lockTexts(base, changed) });
+  const manifest = changed.includes("package.json")
+    ? { base: git(["show", `${base}:package.json`]), head: existsSync(join(root, "package.json")) ? readFileSync(join(root, "package.json"), "utf8") : undefined }
+    : {};
+  const rules = ruleSelection(changed, testFiles, { lock: lockTexts(base, changed), manifest });
   const runner = [join(root, "scripts/test-runner.mjs")];
 
   if (rules.all) {
