@@ -147,7 +147,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
   }
   const connect = request.storefrontConnect ?? [];
   const extensions = request.extensions ?? [];
-  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || connect.length > 0) {
+  if (request.storefrontSurfaces || extensions.length > 0 || request.publicRoutes || request.storefrontScripts.length > 0 || request.storefrontCode || request.storefrontPixel || connect.length > 0) {
     sections.push(
       <Section key="storefront" title={t("access_storefront")}>
         {request.storefrontSurfaces ? row("surfaces", t("storefrontSurfaces", { parts: storefrontAdds(app, t) }), added?.storefrontSurfaces === true) : null}
@@ -156,6 +156,7 @@ export function AppAccess({ app, consent }: { app: AppDetail; consent?: ReactNod
           ? row(`extension-reads:${read.as}`, t("extensionReads", { collection: read.object }), false)
           : row(`extension-reads:${read.as}`, t("extensionReadsFields", { fields: read.customFields.join(", ") }), false)))}
         {request.storefrontCode ? row("code", t("storefrontCode", { parts: storefrontParts(app, t) }), added?.storefrontCode === true) : null}
+        {request.storefrontPixel ? row("pixel", t("storefrontPixel"), added?.storefrontPixel === true) : null}
         {request.publicRoutes ? row("public", t("publicRoutes"), added?.publicRoutes === true) : null}
         {request.storefrontScripts.map((host) => {
           // "Loads scripts from {host}", with the host as code wherever the language puts it.

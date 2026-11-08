@@ -36,5 +36,6 @@ Rules an AI agent must follow in an app or theme:
 - `@scalius/plugin-sdk`: `defineManifest`, `definePlugin`, `ctx` types, `ui`, `PLUGIN_API_VERSION`.
 - `@scalius/plugin-sdk/storefront`: `defineStorefront`, `Image`, `Price`, `Island`, `Slot`, `BuyForm`, `quickAdd`, `t`, `formatMoney`, `asset`.
 - `@scalius/plugin-sdk/storefront/testing`: `renderSection`, `renderSkin`, `renderHeader`, `renderFooter`, `renderProductCard`, `fixtureStore`, `FIXTURE_STORES`.
-- `@scalius/plugin-sdk/island`: `defineIsland`.
+- `@scalius/plugin-sdk/island`: `defineIsland`, `experimentVariant`; islands get `context.events.on/publish` and `context.visitorId()`.
+- `@scalius/plugin-sdk/pixel`: `definePixel` (`src/pixel.ts`, declared by `storefront.pixel: { consent, events?, settings? }`): hears buyer events (`BUYER_EVENT_NAMES`) on every page in a sandboxed frame after consent, reaches only `storefront.connect` hosts.
 - `@scalius/plugin-sdk/testing`: `createPluginTestHarness`, `fixtures`.

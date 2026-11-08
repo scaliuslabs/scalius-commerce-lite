@@ -28,6 +28,7 @@ import {
   getEffectiveCartShippingFee,
 } from "../../store/cart";
 import {
+  emitCheckoutFormSubmitted,
   initCartFunctionality,
   isDiscountValidationPending,
   refreshCartBlockingState,
@@ -98,6 +99,7 @@ const realImports: Record<string, unknown> = {
   cartShippedSubtotal,
   cartNeedsDeliveryMethod,
   cartStore,
+  emitCheckoutFormSubmitted,
   checkoutTransferPath,
   checkoutBillingFields,
   checkoutContactNeeds,

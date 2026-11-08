@@ -62,8 +62,10 @@ interface Props {
   };
   /** The merchant's guide below the listing (unfiltered views only; the page decides). */
   content?: { html: string; label: string } | null;
-  /** `data-*` attributes on the page root (analytics reads them). */
+  /** `data-*` attributes on the page root. */
   data?: Record<`data-${string}`, string | undefined>;
+  /** The category, brand or collection id its buyer event names (`collection_viewed`). */
+  listingId?: string | null;
   /** Draws the collection template's sections (category, collection and brand pages; not search). */
   template?: boolean;
   /** The listing's storefront-visible custom fields (`<namespace>.<key>`), for a listing skin. */
@@ -72,7 +74,18 @@ interface Props {
   childCategories?: ReadonlyArray<{ name: string; slug: string; canonicalPath?: string | null; imageUrl?: string | null }>;
 }
 
-const { kind, listing, hero, content, data = {}, template, fields = {}, childCategories = [] } = Astro.props;
+const { kind, listing, hero, content, data: pageData = {}, listingId = null, template, fields = {}, childCategories = [] } = Astro.props;
+// The listing's buyer event (lib/buyer-events/listing.ts): what the buyer was shown, ids, titles and prices only.
+const data = {
+  ...pageData,
+  "data-buyer-listing": JSON.stringify({
+    kind,
+    id: listingId,
+    title: hero.title,
+    query: kind === "search" ? listing.queryState.query ?? "" : null,
+    products: listing.products.slice(0, 50).map((product) => ({ productId: product.id, title: product.name, price: product.discountedPrice ?? null })),
+  }),
+};
 const requestTheme = await currentRequestTheme(Astro.locals);
 const templateData = template ? await templateSectionData("collection", requestTheme) : null;
 const { resolved, preview } = requestTheme;
@@ -185,3 +198,16 @@ const listingEmbeds: EmbedRenderers = { filters: embed("filters"), toolbar: embe
 {collectionTemplate && (
   <TemplateSections template={collectionTemplate} region="after" data={templateData} currencySymbol={currency.symbol} currencyCode={currency.code} preview={preview !== null} />
 )}
+
+<script>
+  import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
+
+  // `collection_viewed` or `search_submitted`, outside the first paint (the bus loads then too).
+  document.addEventListener("DOMContentLoaded", () => {
+    const facts = document.querySelector<HTMLElement>("[data-buyer-listing]")?.dataset.buyerListing;
+    if (!facts) return;
+    scheduleNonCriticalAnalytics(() => {
+      void import("@/lib/buyer-events/listing").then(({ emitListingViewed }) => emitListingViewed(facts), () => undefined);
+    });
+  });
+</script>

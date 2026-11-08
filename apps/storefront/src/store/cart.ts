@@ -19,6 +19,8 @@ import {
   type CartLinePurchaseOption,
 } from "@/lib/cart/purchase-option";
 import { isAppScopedKey } from "@scalius/shared/plugins/ids";
+import { emitBuyerEvent } from "@/lib/buyer-events/bus";
+import { cartLine } from "@/lib/buyer-events/lines";
 
 export type { CartItemOption } from "@/lib/cart/item-options";
 export type { CartLinePurchaseOption } from "@/lib/cart/purchase-option";
@@ -667,6 +669,23 @@ function applyLocalLinePatch(
 }
 
 type NewCartLine = Omit<CartItem, "quantity" | "propertiesHash"> & { quantity?: number };
+
+/**
+ * The buyer events of a cart change the buyer made (buyer-events.ts): the
+ * units each line gained or lost. Every add (the buy form, a card, an
+ * island, buy now, buy again) comes through here, so each is heard once;
+ * a placed order's lines leaving the cart, a sign-out or a repair are not
+ * the buyer's change and say nothing.
+ */
+function emitLineChanges(before: CartStore["items"], after: CartStore["items"], keys: Iterable<string>): void {
+  for (const key of keys) {
+    const was = before[key]?.quantity ?? 0;
+    const now = after[key]?.quantity ?? 0;
+    const item = after[key] ?? before[key];
+    if (!item || now === was) continue;
+    emitBuyerEvent(now > was ? "product_added_to_cart" : "product_removed_from_cart", { line: cartLine(item, Math.abs(now - was)) });
+  }
+}
 export type CartAddFailureReason = "quantity_limit" | "storage_unavailable" | "invalid_item";
 type CartAddOptions = {
   requirePersistence?: boolean;
@@ -722,7 +741,8 @@ export async function addToCart(
     options.onFailure?.("invalid_item");
     return false;
   }
-  const existingItem = cartStore.get().items[prepared.key];
+  const before = cartStore.get().items;
+  const existingItem = before[prepared.key];
   const quantity = existingItem
     ? existingItem.quantity + prepared.quantity
     : prepared.quantity;
@@ -739,6 +759,8 @@ export async function addToCart(
   if (!result.ok) {
     options.onFailure?.(result.code === "invalid_quantity" ? "quantity_limit"
       : result.code === "storage_unavailable" ? "storage_unavailable" : "invalid_item");
+  } else {
+    emitLineChanges(before, result.state.items, [prepared.key]);
   }
   return result.ok;
 }
@@ -775,7 +797,10 @@ export async function addLinesToCart(items: readonly NewCartLine[]): Promise<str
       ...(!existing ? { item: line } : {}),
     });
   }
-  if (patches.length === 0 || !applyLocalLinePatch(patches).ok) return [];
+  if (patches.length === 0) return [];
+  const result = applyLocalLinePatch(patches);
+  if (!result.ok) return [];
+  emitLineChanges(current.items, result.state.items, patches.map((patch) => patch.lineKey));
   return patches.map((patch) => patch.lineKey);
 }
 
@@ -866,21 +891,27 @@ export function removeCartItemByKey(itemKey: string): boolean {
     return false;
   }
 
-  return applyLocalLinePatch([
+  const result = applyLocalLinePatch([
     {
       lineKey: itemKey,
       productId: item.id,
       variantId: item.variantId,
       quantity: 0,
     },
-  ]).ok;
+  ]);
+  if (result.ok) emitLineChanges(current.items, result.state.items, [itemKey]);
+  return result.ok;
 }
 
 export function updateCartItemByKey(
   itemKey: string,
   updates: CartLineRefresh,
 ): boolean {
-  return updateCartItemsByKeyAtomically([{ lineKey: itemKey, updates }]);
+  ensureCartHydrated();
+  const before = cartStore.get().items;
+  const updated = updateCartItemsByKeyAtomically([{ lineKey: itemKey, updates }]);
+  if (updated && updates.quantity !== undefined) emitLineChanges(before, cartStore.get().items, [itemKey]);
+  return updated;
 }
 
 export function updateCartItemsByKeyAtomically(

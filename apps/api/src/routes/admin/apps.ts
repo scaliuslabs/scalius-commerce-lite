@@ -152,7 +152,8 @@ const grantSchema = z.object({
   storefrontSurfaces: z.boolean(),
   customFieldOwners: z.array(z.string()),
   storefrontCode: z.boolean().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
-  storefrontConnect: z.array(z.string()).openapi({ description: "Hosts the app's storefront islands reach from the buyer's browser." }),
+  storefrontConnect: z.array(z.string()).openapi({ description: "Hosts the app's storefront islands and pixel reach from the buyer's browser." }),
+  storefrontPixel: z.boolean().openapi({ description: "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it." }),
   features: z.array(z.string()).openapi({ description: "The app's features that are on (empty for apps that declare none)." }),
   messageRecipients: z.array(z.string()).openapi({ description: "Fields of the app's own records (<object>.<field>) whose email addresses or phone numbers it may message." }),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });

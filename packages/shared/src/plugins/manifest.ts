@@ -26,6 +26,7 @@ import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclar
 import { FUNCTION_READS_MAX, functionReadDeclarationSchema, functionReadIssues } from "./function-reads";
 import { PROVIDER_KINDS } from "./providers/kinds";
 import { providerRequiredScopes } from "./protected-data";
+import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "./buyer-events";
 import {
   PLUGIN_FEATURES_MAX,
   pluginFeatureOwners,
@@ -327,6 +328,20 @@ const storefrontSchema = z.object({
   }).strict()).max(5).default([]),
   /** `/apps/<plugin id>/*` on the storefront origin proxies to the plugin's public routes. */
   proxy: z.boolean().default(false),
+  /**
+   * A pixel (buyer-events.ts): `src/pixel.ts`, built to `storefront/pixel.js`,
+   * runs in a sandboxed frame of its own on every page (checkout and the
+   * receipt included) once the buyer's consent allows `consent`, and hears
+   * the buyer events it names (all when absent). It reaches only the app's
+   * `storefront.connect` hosts. `settings` names app settings (never a
+   * secret) whose values it gets: public, like everything a page sends.
+   */
+  pixel: z.object({
+    consent: z.enum(PIXEL_CONSENT_CATEGORIES),
+    events: z.array(z.enum(PIXEL_EVENT_NAMES)).min(1).max(PIXEL_EVENT_NAMES.length)
+      .refine((events) => new Set(events).size === events.length, "Each event appears once.").optional(),
+    settings: z.array(z.string().regex(PLUGIN_SETTING_KEY, PLUGIN_KEY_RULE)).max(10).default([]),
+  }).strict().optional(),
   /**
    * Buyer UI on the buyer's own pages (cart, checkout, the receipt, account):
    * one entry per UI slot (`STOREFRONT_UI_SLOTS`). The module's
@@ -664,6 +679,12 @@ export const pluginManifestSchema = z.object({
   }).strict().default({ cpuMs: 50, wallMs: 10_000 }),
 }).strict().superRefine((manifest, context) => {
   const featureScopes = new Set(manifest.features.flatMap((feature) => feature.scopes));
+  manifest.storefront.pixel?.settings.forEach((key, index) => {
+    const field = manifest.settings.find((setting) => setting.key === key);
+    if (!field || field.type === "secret") {
+      context.addIssue({ code: "custom", path: ["storefront", "pixel", "settings", index], message: "Name one of the app's settings that is not a secret: a pixel's settings reach every buyer's browser." });
+    }
+  });
   manifest.routes.admin.forEach((route, index) => {
     if (route.scope && !manifest.scopes.includes(route.scope) && !featureScopes.has(route.scope)) {
       context.addIssue({ code: "custom", path: ["routes", "admin", index, "scope"], message: "An admin route scope must be among the app's scopes." });
@@ -1051,6 +1072,8 @@ export interface PluginGrantRequest {
   storefrontCode: boolean;
   /** Hosts the app's islands reach from the buyer's browser. */
   storefrontConnect: string[];
+  /** Runs a pixel (`storefront.pixel`) that hears buyer events on every page, checkout included, in a sandboxed frame. */
+  storefrontPixel: boolean;
   /** The features turned on (`manifest.features`), sorted. Everything else already includes these features' parts. */
   features: string[];
   /** Object fields whose addresses the app may email or text (`messaging.recipients`, `<object>.<field>`). */
@@ -1063,14 +1086,14 @@ export const PLUGIN_GRANT_LIST_DIMENSIONS = [
   "messageRecipients", "providers", "scopes", "storefrontConnect", "storefrontScripts",
 ] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 /** The flag dimensions of a grant request, in key order. */
-export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
+export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "storefrontPixel", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 
 /** A grant request with every dimension at its default (asks for nothing). */
 export function emptyPluginGrantRequest(): PluginGrantRequest {
   return {
     scopes: [], allowedHosts: [], events: [], functions: [], extensions: [], blockingFunctions: [], providers: [],
     publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
-    storefrontCode: false, storefrontConnect: [], features: [], messageRecipients: [],
+    storefrontCode: false, storefrontConnect: [], storefrontPixel: false, features: [], messageRecipients: [],
   };
 }
 
@@ -1100,6 +1123,7 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
     storefrontCode: pluginHasStorefrontModule(manifest.storefront) || manifest.storefront.islands.length > 0
       || Boolean(manifest.storefront.stylesheet),
     storefrontConnect: sorted(manifest.storefront.connect),
+    storefrontPixel: manifest.storefront.pixel !== undefined,
     features: enabled,
     messageRecipients: sorted(manifest.messaging.recipients.map(pluginMessageRecipientKey)),
   };
@@ -1158,6 +1182,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     customFieldOwners: added(granted.customFieldOwners, next.customFieldOwners),
     storefrontCode: next.storefrontCode && !granted.storefrontCode,
     storefrontConnect: added(granted.storefrontConnect, next.storefrontConnect),
+    storefrontPixel: next.storefrontPixel && !granted.storefrontPixel,
     features: added(granted.features, next.features),
     messageRecipients: added(granted.messageRecipients, next.messageRecipients),
   };

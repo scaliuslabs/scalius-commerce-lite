@@ -5,6 +5,7 @@
 // fonts and images (assets.ts). The storefront serves only files that passed.
 
 import { checkStorefrontPublicFile } from "./assets";
+import { STOREFRONT_PIXEL_FILE } from "./buyer-events";
 import { pluginHasStorefrontModule, type PluginManifest } from "./manifest";
 import {
   STOREFRONT_COMPONENT_LIMITS,
@@ -42,6 +43,7 @@ export async function verifyStorefrontFiles(
   };
   expect(pluginHasStorefrontModule(storefront), STOREFRONT_MODULE_FILE, "storefront components");
   expect(storefront.stylesheet, STOREFRONT_STYLESHEET_FILE, "a stylesheet");
+  expect(storefront.pixel !== undefined, STOREFRONT_PIXEL_FILE, "a pixel");
   const islands = new Set(storefront.islands.map((island) => storefrontIslandFile(island.name)));
   for (const path of paths) {
     if (path.startsWith("islands/") && !islands.has(path)) throw new Error(`storefront/${path} is not a declared island.`);
@@ -60,6 +62,7 @@ export async function verifyStorefrontFiles(
     const size = bytes.byteLength;
     if (path === STOREFRONT_MODULE_FILE && size > limits.moduleBytes) throw new Error(`storefront/${path} is over ${limits.moduleBytes} bytes.`);
     if (path === STOREFRONT_STYLESHEET_FILE && size > limits.stylesheetBytes) throw new Error(`storefront/${path} is over ${limits.stylesheetBytes} bytes.`);
+    if (path === STOREFRONT_PIXEL_FILE && size > limits.pixelBytes) throw new Error(`storefront/${path} is over ${limits.pixelBytes} bytes.`);
     if (path.startsWith("islands/")) {
       if (size > limits.islandBytes) throw new Error(`storefront/${path} is over ${limits.islandBytes} bytes.`);
       islandBytes += size;

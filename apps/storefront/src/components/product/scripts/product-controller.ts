@@ -35,11 +35,6 @@ import {
   QUANTITY_CONSTRAINTS,
 } from "../lib/product-validation";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
-import {
-  trackProductAddToCart,
-  extractProductDataFromDOM,
-  convertVariantToAnalyticsData,
-} from "../lib/product-analytics";
 import type { ProductOptionDefinition } from "@/lib/api";
 import { resolveVariantCartMedia } from "../lib/cart-media";
 import {
@@ -1242,14 +1237,6 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
     window.location.href = pagePath("/cart");
     return;
   }
-  // Analytics get the product, SKU, quantity and price, never the buyer inputs.
-  const product = extractProductDataFromDOM(cache.container);
-  if (product)
-    trackProductAddToCart({
-      product,
-      variant: convertVariantToAnalyticsData(validation.variant),
-      quantity,
-    });
   if (redirect) window.location.href = pagePath("/cart");
   else {
     // The drawer confirms this line ("Added to your cart") and lists it first.

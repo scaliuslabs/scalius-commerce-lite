@@ -1,0 +1,26 @@
+---
+// The page's app pixels (lib/buyer-events/pixels.ts). Layout renders this
+// only when the layout read names at least one, so its list and its script
+// cost a store without pixel apps nothing: no bytes, no request.
+import type { StorefrontAppPixel } from "@scalius/shared/plugins/buyer-events";
+import { BUILD_ID } from "@/config/build-id";
+import { pixelFrameUrl } from "@/lib/buyer-events/pixel-frame";
+import { PIXELS_ELEMENT_ID } from "@/lib/buyer-events/pixels";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+
+interface Props {
+  pixels: StorefrontAppPixel[];
+}
+
+const { pixels } = Astro.props;
+const pagePixels = pixels.map(({ connect, ...pixel }) => ({
+  ...pixel,
+  frame: pixelFrameUrl(pixel.pluginId, pixel.release, connect, BUILD_ID),
+}));
+---
+
+<script is:inline type="application/json" id={PIXELS_ELEMENT_ID} set:html={serializeJsonForInlineScript(pagePixels)} />
+<script>
+  import { startPixels } from "@/lib/buyer-events/pixels";
+  startPixels();
+</script>

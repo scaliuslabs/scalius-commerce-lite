@@ -574,5 +574,23 @@
   "from": "c7c8fb5e11d1be84",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontBuyerInput: an existing signature changed or gained a required member.",
   "reason": "G5 buyer uploads (COMMERCE-HOOKS H17): a product page's buyer inputs may include an app's `file` input, so StorefrontBuyerInput.type gains \"file\". An extension that switches on the type treats an unknown one as it already must."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "7ec7e9efdc925599",
+  "change": "storefront.STOREFRONT_COMPONENT_LIMITS.pixelBytes: a new limit was added.",
+  "reason": "G6 app pixels (COMMERCE-HOOKS H15): the limit bounds only the new storefront/pixel.js; no existing file or release is affected."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "7ec7e9efdc925599",
+  "change": "storefront.STOREFRONT_FILE_PATH: the constant value changed.",
+  "reason": "G6 app pixels (COMMERCE-HOOKS H15): the pattern only widens to accept pixel.js; every path it accepted before it still accepts."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#InterfaceDeclaration:PluginGrantRequest: an existing signature changed or gained a required member.",
+  "reason": "G6 app pixels (COMMERCE-HOOKS H15): the grant request the platform derives from a manifest gains storefrontPixel, approved like the other flags; apps read it, never build it."
  }
 ]

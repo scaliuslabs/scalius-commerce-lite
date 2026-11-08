@@ -4,7 +4,7 @@ An app can redesign a store without a fork: new sections, components in slots an
 
 This page is the storefront reference. Building a theme? Read [Build a theme](themes.md) first: it is the path through this page and the rules that make a theme work on any store, not only yours. [Apps](apps.md) covers the manifest and lifecycle; Buyer UI on private pages (cart, checkout, account) is in [Commerce hooks](commerce-hooks.md#buyer-ui-extensions). The reference theme is `plugins/noor` in the Scalius repository.
 
-The contract is `@scalius/shared/plugins/storefront-protocol` (data shapes, render protocol, limits) and `@scalius/shared/plugins/storefront-components` (manifest declarations). The SDK entries are `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing` and `@scalius/plugin-sdk/island`.
+The contract is `@scalius/shared/plugins/storefront-protocol` (data shapes, render protocol, limits) and `@scalius/shared/plugins/storefront-components` (manifest declarations). The SDK entries are `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing`, `@scalius/plugin-sdk/island` and `@scalius/plugin-sdk/pixel`; buyer events are `@scalius/shared/plugins/buyer-events`.
 
 ## The model
 
@@ -297,7 +297,83 @@ export default defineIsland<{ step: number }>((element, props, context) => {
 - Keep links out of an island's `props`. The store checks every link in your markup and keeps it on the page's market path (`/en-in/…`); a URL in props reaches the island unchecked and unrewritten. Put links in the markup the island enhances (an `<a>` it reads) or pass handles. `pnpm plugin validate` warns ("Island props") when a part's default render passes one.
 - On a product page, `context.product` gives `state()` and `onChange(listener)`, with or without buyer inputs. The state is `{ variantId, quantity, inputs, purchaseOptions, available, busy, error }`: `inputs` holds the product's answers and every app's line inputs (`<app id>.<key>`), `purchaseOptions` the options the buyer chose (one per app, sorted by id; test for yours with `includes`), `available` means the chosen SKU can be bought now, `busy` that an add or Buy now is running, and `error` why the form refused the last one (`StorefrontProductError`, one of `STOREFRONT_PRODUCT_ERRORS`: `option_required`, `input_invalid`, `unavailable`, `quantity_limit`, `failed`; null otherwise). The list only grows, at its end: treat a code you don't know as `failed`. `option_required` and `input_invalid` go when the buyer gives the option or fixes the field; the others go as soon as the buyer changes the SKU, quantity, an answer or the purchase option. A listener runs after the store has applied the change: the form, its SKU field and the gallery already show it, and `state()` equals the listener's state. Between a click and that moment, `state()` still returns what the page shows. To choose or buy from your own markup, use `chooseVariant` and `buyVariant`, not clicks on the form's elements.
 - Predictive search: `context.searchSuggestions(query, { limit?, signal? })` asks the store's own search for product suggestions, as its search palette does, instead of reading a listing page's markup (which another listing skin changes). It answers `StorefrontSearchSuggestion[]` (`productId`, `title`, `url` on this presence, `image` as `StorefrontImage` or `null`, `price` and `compareAt` as `StorefrontMoney` in the page's market and currency, `priceVaries`, `available`), at most `limit` (1 to `STOREFRONT_SEARCH_SUGGESTIONS_MAX`, 7; default 5), from the same public, cached request the palette makes (one per query, shared with it; the page remembers answers, so a repeated query asks nothing). A query too short to search (one Latin letter) answers `[]` and asks nothing; one Bangla, Han or Hangul grapheme that is a word searches. It rejects when the search fails, and `signal` stops waiting. Debounce keystrokes as the palette does (about 150ms). It is absent from older stores: check `context.searchSuggestions` before you call it. In tests, `fixtureSearchSuggestions(store, query, options?)` (from `@scalius/plugin-sdk/storefront/testing`) gives what each fixture store answers.
+- Buyer events: `context.events.on(name, listener, { replay? })` hears what the buyer does on the page ([Buyer events](#buyer-events)), the same events the store's own tags and app pixels hear, and returns the unsubscribe (the host also ends it when the island is removed). `replay: true` first hands you the page's earlier events (`page_viewed` first). Islands never get contact fields (they read `null`) and hear only their own app's `app_event`s. `context.events.publish(name, payload?)` emits your app's own event (`app_event`, `{ app, name, payload }`): a snake_case name and at most 4 KiB of JSON, heard by your islands and your pixel only; it answers `false` when refused or after removal.
+- `context.visitorId()` is the store's visitor id for [experiments](#experiments): a random id kept in this browser, only while the buyer allows analytics; `null` otherwise.
 - Return a cleanup for your listeners, timers and observers. The host cancels pending hydration on removal and mounts again when the element reconnects.
+
+## Buyer events
+
+One sealed catalog of what the buyer does (`BUYER_EVENT_NAMES` in `@scalius/shared/plugins/buyer-events`), emitted once where it happens, on every page the store draws:
+
+| Event | When | `data` |
+| --- | --- | --- |
+| `page_viewed` | every page, once | `{}` |
+| `product_viewed` | a product page | `{ merchandise, category }` |
+| `collection_viewed` | a category, brand or collection page | `{ collection: { kind, id, title }, products }` |
+| `search_submitted` | a search results page, once per query in a session | `{ query, results }` |
+| `product_added_to_cart` | any add: the buy form, a card, an island, buy now | `{ line }` (`quantity`: the units added) |
+| `product_removed_from_cart` | the buyer lowers or removes a line | `{ line }` (`quantity`: the units removed) |
+| `cart_viewed` | the cart page | `{ lines, total }` |
+| `checkout_started` | the checkout begins (lines and a phone, or buy now) | `{ checkout }` |
+| `checkout_contact_submitted` | the checkout form is submitted | `{ checkout, contact: { email, phone } }` |
+| `checkout_address_submitted` | the same, when something ships to an address | `{ checkout, address }` |
+| `checkout_shipping_submitted` | the same, when a delivery or pickup option is chosen | `{ checkout, shipping: { kind, methodId, title, cost } }` |
+| `checkout_payment_submitted` | payment is submitted, once per attempt and method | `{ checkout, payment: { method } }` |
+| `checkout_completed` | the receipt, once per order | `{ checkout, order: { id } }` |
+| `app_event` | your island publishes | `{ app, name, payload }` |
+
+Each event is `{ id, name, timestamp, data }`. Money is `{ amountMinor, currency }`; `merchandise` is `{ productId, variantId, title, price }`; a line is `{ merchandise, quantity }`; `checkout` is `{ id, lines, itemCount, total }`. No event carries a line's buyer inputs, a note, a gift message or a tender. Contact fields (email, phone, the address's `name`, `line1`, `line2`) reach a pixel only with the matching protected customer data scope (`read_customer_emails`, `read_customer_phones`, `read_customer_names`, `read_customer_addresses`), and an island never; otherwise they read `null`. The region (locality, admin area, postal code, country) is not protected. Names and fields are only added within an API version.
+
+## Pixels
+
+A pixel is your code that hears buyer events on every page, the cart, checkout and the receipt included, to send them to your service. Declare it and write `src/pixel.ts`:
+
+```ts
+// src/index.ts (manifest)
+storefront: {
+  pixel: { consent: "marketing", events: ["product_added_to_cart", "checkout_completed"], settings: ["account_id"] },
+  connect: ["collect.example.com"],
+},
+
+// src/pixel.ts
+import { definePixel } from "@scalius/plugin-sdk/pixel";
+
+export default definePixel((pixel) => {
+  pixel.on("checkout_completed", (event) => {
+    navigator.sendBeacon("https://collect.example.com/e", JSON.stringify({
+      account: pixel.settings.account_id,
+      order: event.data.order.id,
+      total: event.data.checkout.total,
+      visitor: event.context.visitorId,
+    }));
+  });
+});
+```
+
+- `consent` is the buyer's cookie choice the pixel needs: `analytics` or `marketing`. Before the buyer allows it the pixel does not exist on the page: no frame, no request, nothing queued. Once allowed, it starts and hears the page's events from the start (`page_viewed` first); withdrawn, it is removed. A store with a pixel app shows the consent banner.
+- `events` lists what it hears (all, `app_event` included, when absent); `pixel.on("*", listener)` hears every one of those. `settings` names app settings whose merchant values it gets as `pixel.settings`: never a secret (refused), since they reach every buyer's browser.
+- Each event carries `context`: `page` (`url` as origin, path and campaign parameters only, `path`, `title`, `referrer`), `language`, `currency` and `visitorId` (`null` without analytics consent). `pixel.consent` is `{ analytics, marketing, saleOfData }` as the page held it when the pixel started.
+- The pixel runs in a hidden sandboxed frame of its own (an opaque origin): it has no access to the page, the store's cookies or storage, or the buyer's session. It reaches only your `storefront.connect` hosts, with `fetch`, `navigator.sendBeacon` or an image; `sendBeacon` outlives a page that is navigating away. Bundle what you need: the frame loads no other script.
+- `pnpm plugin pack` builds `src/pixel.ts` into `storefront/pixel.js`: one classic script, at most 64 KiB (`STOREFRONT_COMPONENT_LIMITS.pixelBytes`), sealed with the release. A pixel declared without `src/pixel.ts`, or `src/pixel.ts` without the declaration or without `export default definePixel(…)`, fails pack. Running a pixel is part of the app's storefront grant: a Super Admin approves it.
+- A store without pixel apps loads nothing for them. `acme.pixel` (`apps/api/src/plugins/testing/apps/pixel`) is a complete example.
+
+## Experiments
+
+A/B tests run in the browser, so every buyer gets the same cached page: the page carries the control, and an island swaps in the visitor's variant.
+
+```ts
+import { defineIsland, experimentVariant } from "@scalius/plugin-sdk/island";
+
+export default defineIsland((element, _props, context) => {
+  const variant = experimentVariant(context.visitorId?.() ?? null, "delivery_note", ["control", "urgency"]);
+  if (variant === "urgency") element.querySelector(".note")!.textContent = "Order in the next hour for delivery tomorrow";
+  context.events?.publish("experiment_viewed", { experiment: "delivery_note", variant });
+});
+```
+
+- `experimentVariant(visitorId, experiment, variants)` is deterministic: the same visitor, experiment and variants give the same answer in the island and in your pixel (exported by `@scalius/plugin-sdk/pixel` too), so the pixel attributes each `checkout_completed` (whose `context.visitorId` it gets) to the variant the buyer saw. `variants` lists names (equal weights) or maps names to positive weights, `{ control: 9, test: 1 }`.
+- Without analytics consent there is no visitor id, every buyer sees the first variant (the control) and nothing is recorded. Keep the control in your markup so nothing shifts while the island loads.
+- The server never sees the visitor id: no per-visitor page variants, no cache split. `acme.experiments` (`apps/api/src/plugins/testing/apps/experiments`) is a complete example.
 
 ## Core embeds
 
@@ -504,6 +580,7 @@ Noor, a full theme, packs to a 40 KB module, 3.8 KB of islands and a 44 KB style
 - Island code is served from the store's origin; CSP `script-src` gains nothing. Browser hosts join `connect-src` and `img-src` only, on pages whose theme uses the app.
 - Approved islands are trusted same-origin JavaScript: they can read the page's DOM, including embedded forms, and make requests the browser allows. Activation approval, CSP and server authorization are the boundaries; HTML sanitizing does not sandbox an island.
 - Approved apps are trusted same-origin JavaScript. Keeping app code off a buyer's pages does not stop an app script on a public page reading buyer data through same-origin requests (the buyer's JSON routes under `/api`, a fetch of a page, a popup) with the buyer's cookies, as the store's own scripts do. Real containment needs apps on a separate origin; until then, request only the scopes you need and approve apps accordingly.
+- Pixels are the one piece of app code on a buyer's own pages, and never as code of the page: each runs in a `sandbox="allow-scripts"` frame with an opaque origin, under its own policy (its two scripts by hash, only your hosts), and hears only the projected buyer events the page sends it, after the buyer's consent. The page's policy gains no host for it, and `storefront/pixel.js` is never served as a file of the store's origin.
 - SVG files are served with a sandboxing CSP and `nosniff`.
 
 ## Stored themes and versioning

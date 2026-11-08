@@ -9,6 +9,8 @@ import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront
 import { LINE_INPUT_FIELD_TYPES } from "@scalius/shared/line-properties";
 import { BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
+import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "@scalius/shared/plugins/buyer-events";
+import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -244,24 +246,27 @@ const navigationLeafSchema = z.object({
 const navigationChildSchema = navigationLeafSchema.extend({
   subMenu: z.array(navigationLeafSchema).optional(),
 });
+// Named: the header and the footer columns share it, written once in the contract.
 const navigationItemSchema = navigationLeafSchema.extend({
   subMenu: z.array(navigationChildSchema).optional(),
-});
+}).openapi("StorefrontNavigationItem");
 const socialLinkSchema = z.object({
   id: z.string(),
   label: z.string(),
   url: z.string(),
   iconUrl: z.string().optional(),
 });
-const brandAssetSchema = z.object({
+// Named: four brand images and the skins' images share it, written once in the contract.
+const brandImageSchema = z.object({
   id: z.string(),
   url: z.string(),
   alt: z.string(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
-}).nullable();
+}).openapi("StorefrontBrandImage");
+const brandAssetSchema = z.union([brandImageSchema, z.null()]);
 /** Images a theme's unit skins name (their apps' `image` settings), resolved like the brand images. */
-const skinMediaSchema = z.array(brandAssetSchema.unwrap()).max(STOREFRONT_SKIN_IMAGES_MAX);
+const skinMediaSchema = z.array(brandImageSchema).max(STOREFRONT_SKIN_IMAGES_MAX);
 /** A theme's brand images resolved (ready or trashed images; null when unset or gone). */
 const brandAssetsSchema = z.object({
   logo: brandAssetSchema,
@@ -414,6 +419,17 @@ const layoutDataSchema = z.object({
     placement: z.enum(["head", "body-end"]),
     pages: z.array(z.enum(PLUGIN_STOREFRONT_SCRIPT_PAGES)),
   })),
+  appPixels: z.array(z.object({
+    pluginId: z.string(),
+    release: z.string().regex(/^[0-9a-f]{64}$/),
+    consent: z.enum(PIXEL_CONSENT_CATEGORIES),
+    events: z.array(z.enum(PIXEL_EVENT_NAMES)),
+    protectedData: z.array(z.enum(PROTECTED_CUSTOMER_DATA)),
+    connect: z.array(z.string()),
+    settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  })).openapi({
+    description: "Active apps' pixels (plugin-sdk docs/storefront.md#pixels): sandboxed, after `consent`.",
+  }),
   appExtensions: z.array(z.object({
     pluginId: z.string(),
     version: z.string(),

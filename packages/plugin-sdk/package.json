@@ -15,7 +15,8 @@
     "./storefront/jsx-runtime": "./src/storefront/jsx-runtime.ts",
     "./storefront/jsx-dev-runtime": "./src/storefront/jsx-dev-runtime.ts",
     "./storefront/testing": "./src/storefront/testing.ts",
-    "./island": "./src/storefront/island.ts"
+    "./island": "./src/storefront/island.ts",
+    "./pixel": "./src/storefront/pixel.ts"
   },
   "scripts": {
     "lint": "oxlint -c ../../.oxlintrc.json src/",
@@ -92,6 +93,11 @@
         "types": "./dist/types/plugin-sdk/src/storefront/island.d.ts",
         "import": "./dist/storefront/island.js",
         "default": "./dist/storefront/island.js"
+      },
+      "./pixel": {
+        "types": "./dist/types/plugin-sdk/src/storefront/pixel.d.ts",
+        "import": "./dist/storefront/pixel.js",
+        "default": "./dist/storefront/pixel.js"
       }
     }
   }

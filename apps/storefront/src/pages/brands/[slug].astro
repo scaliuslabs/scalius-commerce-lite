@@ -138,6 +138,7 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(brand, `/bra
   <CatalogListingPage
     template
     kind="brand"
+    listingId={brand.id}
     fields={storefrontFieldValues(brand.customFields, { currencyCode, currencySymbol })}
     data={{ "data-brand-name": brand.name }}
     hero={{

@@ -77,14 +77,13 @@ export const BUYER_PAGE_SCRIPTS = {
     "src/components/catalog/CatalogListing.astro",
     "src/components/catalog/CatalogDescription.astro",
     "src/components/catalog/CatalogEmbed.astro",
-    "src/pages/categories/[slug].astro",
-    "src/pages/search/index.astro",
+    "src/components/catalog/CatalogListingPage.astro",
   ],
 };
 
 /**
  * The lazy loads the first add to cart starts: the drawer (lazy-global-ui.ts),
- * the add's analytics (product-analytics.ts), and a card's quick add reading
+ * the store's tags hearing the add (lib/buyer-events/bus.ts loads lib/analytics.ts), and a card's quick add reading
  * the product (quick-add-card.ts), and an app purchase option validating its
  * authoritative price (new-line.ts).
  */

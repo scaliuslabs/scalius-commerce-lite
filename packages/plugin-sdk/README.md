@@ -63,6 +63,7 @@ Worked examples that no store bundles are test fixtures in `apps/api/src/plugins
 | Buyer UI | `storefront.extensions: [{ target, reads }]`, `checkout.attributes` | `extensions[target]`, a pure render returning `{ ui }` |
 | Storefront components: sections, components in slots and app pages, skins (header, footer, product card, product page, listing, core sections), templates | `storefront.sections`, `components`, `skins`, `templates` | `defineStorefront` in `src/storefront.tsx` (`@scalius/plugin-sdk/storefront`) |
 | Client islands, stylesheet, public files | `storefront.islands`, `stylesheet`, `connect` | `src/islands/<name>.ts` (`defineIsland`), `src/storefront.css`, `public/` |
+| Pixels (buyer events on every page, checkout included, sandboxed, after consent) and client-side experiments | `storefront.pixel`, `connect` | `src/pixel.ts` (`definePixel`), `context.events`, `context.visitorId()`, `experimentVariant` ([Pixels](docs/storefront.md#pixels)) |
 | Scripts, head, proxy | `storefront.scripts`, `head`, `proxy` | |
 | Public routes, webhooks | `routes.public`, `routes.webhooks` | `routes.public[name]`, `routes.webhooks[name]` |
 | Customer roles | `read_customers` | `ctx.customers.roles.*`; read back as `request.customer.roles` and `cart.customer.roles` |

@@ -1177,6 +1177,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
   import { loadLazyScript } from "@/scripts/lazy-script";
   import {
     initCartFunctionality,
+    emitCheckoutFormSubmitted,
     isDiscountValidationPending,
     refreshCartBlockingState,
     resumeCartPageFromHistory,
@@ -2433,6 +2434,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
             showCheckoutTransferError(checkoutCopy[transferWrite.copyKey]);
             return;
           }
+          emitCheckoutFormSubmitted(checkoutData);
 
           submitButton.disabled = true;
           setSubmitButtonText(checkoutCopy.redirectingToPaymentText);
@@ -2446,6 +2448,11 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         }
 
         // ── COD-only flow: normal form POST ──
+        const postedFields: Record<string, string> = {};
+        new FormData(form).forEach((value, key) => {
+          if (typeof value === "string") postedFields[key] = value;
+        });
+        emitCheckoutFormSubmitted({ ...postedFields, customerPhone: phoneValidation.value });
         rememberSubmittedCart(submittedCart);
         submitButton.disabled = true;
         setSubmitButtonText(checkoutCopy.processingText);

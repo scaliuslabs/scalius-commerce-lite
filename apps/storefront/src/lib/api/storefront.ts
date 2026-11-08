@@ -278,6 +278,8 @@ export interface LayoutData {
    * older API.
    */
   appScripts?: unknown;
+  /** Pixels of active apps. Untrusted until `readLayoutPixels` (lib/buyer-events/pixel-frame) checks it. */
+  appPixels?: unknown;
   /**
    * Active apps with storefront components. Untrusted until
    * `readStorefrontExtensions` checks it; absent from an older API.
