@@ -214,6 +214,12 @@ export const STABLE_APP_OPERATIONS = {
   "customer_segments.update": "dashboard.resources.customer_segments.update",
   "customer_segments.list_members": "dashboard.resources.customer_segments.list_members",
 
+  // ── Reviews ──
+  "reviews.list": "dashboard.resources.reviews.list",
+  "reviews.get": "dashboard.resources.reviews.get",
+  "reviews.create": "dashboard.resources.reviews.create",
+  "reviews.set_status": "dashboard.resources.reviews.set_status",
+
   // ── Gift cards ──
   "gift_cards.list": "dashboard.resources.gift_cards.list",
   "gift_cards.get": "dashboard.resources.gift_cards.get",

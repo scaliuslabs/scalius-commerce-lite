@@ -84,6 +84,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.customer_segments.create": { batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.update": { revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.customer_segments.list_members": { uncurated: true },
+  // Product reviews (routes/admin/resources-reviews.ts): buyer text, so agents
+  // reach them only through the opt-in review_moderation grant scope, as the
+  // dashboard's review rows. Only an app writes one; its id derives from the
+  // required Idempotency-Key, so a repeat writes nothing twice. Moderation
+  // sets a status under the review's required revision.
+  "dashboard.resources.reviews.list": { grantScope: "review_moderation", uncurated: true },
+  "dashboard.resources.reviews.get": { grantScope: "review_moderation", uncurated: true },
+  "dashboard.resources.reviews.create": { grantScope: "review_moderation", idempotency: "required", batch: "forbidden", uncurated: true },
+  "dashboard.resources.reviews.set_status": { grantScope: "review_moderation", revision: "required", batch: "forbidden", uncurated: true },
   "dashboard.resources.inventory_locations.list": { uncurated: true },
   "dashboard.resources.shipments.create": {
     openWorld: true,

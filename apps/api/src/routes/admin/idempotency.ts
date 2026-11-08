@@ -125,6 +125,7 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.resources.purchase_orders.receive",
   "dashboard.resources.inventory_transfers.receive",
   "dashboard.resources.refunds.create",
+  "dashboard.resources.reviews.create",
   "dashboard.resources.variants.bulk_set_prices",
   "dashboard.resources.variants.bulk_set_stock",
   "dashboard.resources.variants.lookup",
