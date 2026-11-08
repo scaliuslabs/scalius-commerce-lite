@@ -754,5 +754,113 @@
   "from": "25b00b55d1cc465c",
   "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
   "reason": "W7 (G9 and the wider stable tier): PluginScope gains read_staff, read_reviews, write_reviews and read_analytics (read_settings also confers delivery zones and tax regions). Only added: every existing scope keeps its meaning; only an exhaustive switch over PluginScope sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#TypeAliasDeclaration:EventRepresentationType: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#InterfaceDeclaration:PluginGrantRequest: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginProviderKind: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/providers.d.ts#TypeAliasDeclaration:Ports: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/providers/descriptors.d.ts#TypeAliasDeclaration:PluginProviderDeclaration: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/providers/kinds.d.ts#variable:PROVIDER_OPERATIONS: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/providers/kinds.d.ts#TypeAliasDeclaration:ProviderKind: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "82d387f08b8132fb",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontBuyerInput: an existing signature changed or gained a required member.",
+  "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
  }
 ]
