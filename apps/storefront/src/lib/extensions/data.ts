@@ -4,7 +4,7 @@
 // the page's section data. The shapes are the versioned contract
 // (@scalius/shared/plugins/storefront-protocol): additive only.
 
-import { discountPercentOff } from "@scalius/shared/money";
+import { priceLineClaim } from "@scalius/shared/money";
 import type {
   StorefrontFieldValues,
   StorefrontFooterData,
@@ -346,9 +346,8 @@ function fieldValue(value: unknown, page: StorefrontPageMoney): unknown {
 
 /** A product as an app card gets it, from the core card model (same prices, photo and quick-add rules). */
 export function productCardData(product: ProductCardProduct, model: ProductCardModel, page: StorefrontPageMoney): StorefrontProductCard {
-  const discounted = model.price.regular !== null;
-  // The core card's badge rule, so a skin's "-13%" matches the store's own.
-  const percent = discounted ? (discountPercentOff(product.price, product.discountedPrice) ?? 0) : 0;
+  // The core card's price rule (priceLineClaim), so a skin's "-13%" matches the store's own.
+  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from: model.price.from });
   const image = model.image
     ? { url: model.image.src, srcset: model.image.srcset ?? null, width: null, height: null, alt: model.image.alt }
     : null;
@@ -369,9 +368,9 @@ export function productCardData(product: ProductCardProduct, model: ProductCardM
     title: product.name,
     url: product.canonicalPath?.startsWith("/") ? product.canonicalPath : model.href,
     price: { ...pageAmount(product.discountedPrice, page), formatted: model.price.current },
-    compareAt: discounted ? { ...pageAmount(product.price, page), formatted: model.price.regular! } : null,
+    compareAt: claim.compareAt !== null && model.price.regular !== null ? { ...pageAmount(claim.compareAt, page), formatted: model.price.regular } : null,
     priceVaries: model.price.from,
-    percentOff: percent > 0 ? percent : null,
+    percentOff: claim.percentOff,
     image,
     hoverImage: hover,
     soldOut: model.soldOut,
@@ -475,7 +474,10 @@ export function productPageData(input: {
     summary: warrantySummaryText(warrantyTerms(view), warrantyWords),
   }));
   const amount = (value: number): StorefrontMoney => pageAmount(value, page);
-  const compare = (current: number, regular: number) => (regular > current ? amount(regular) : null);
+  const compare = (current: number, regular: number, from: boolean) => {
+    const { compareAt } = priceLineClaim({ current, regular, from });
+    return compareAt === null ? null : amount(compareAt);
+  };
   const media = productGalleryItems(product, input.media).flatMap((item) => {
     const url = item.kind === "video" ? item.posterUrl : item.url;
     const source = input.media.find((each) => each.id === item.id);
@@ -498,7 +500,7 @@ export function productPageData(input: {
       descriptionHtml: product.description ? sanitizeHtml(product.description) : "",
       media,
       price: amount(input.price.current),
-      compareAt: compare(input.price.current, input.price.regular),
+      compareAt: compare(input.price.current, input.price.regular, input.price.from),
       priceVaries: input.price.from,
       sku: only?.sku?.trim() || null,
       installments: emi && emi.monthlyMinor > 0 && emi.months > 0

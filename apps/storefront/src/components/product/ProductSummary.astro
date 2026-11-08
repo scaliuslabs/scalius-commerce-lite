@@ -43,6 +43,8 @@ import { pickBuyerInputCopy, productBuyerInputFields } from "./lib/buyer-inputs"
 import { moneyPlaces } from "./lib/line-price";
 import { BUY_FORM_ID, BUY_FORM_VARIANT_FIELDS } from "./lib/buy-form";
 import { catalogCopy } from "@/lib/catalog-copy";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import { priceLineClaim } from "@scalius/shared/money";
 import { shopCopy } from "@/lib/storefront-shop-copy";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { getLayoutData } from "@/lib/api/storefront";
@@ -234,9 +236,13 @@ const openingRegularPrice = projection?.product.compareAt?.formatted ?? formatPr
 // 10%", "Buy 3 for ৳600") so they hold for every SKU; checkout prices them.
 const bundleTiers = describeBundleTiers(product.bundles ?? [], pageCopy, formatPrice);
 const bundleListLabel = bundleTiers.map((tier) => [tier.label, tier.text].filter(Boolean).join(": ")).join("; ");
-const discountBadge = pricing.hasDiscount
+// One rule with the product card (priceLineClaim): beside a "From" price no
+// struck price or percent, only "Sale" when the lowest choice is discounted.
+const priceClaim = priceLineClaim({ current: pricing.finalPrice, regular: pricing.originalPrice, from: showsStartingPrice });
+const saleText = storefrontCopy(language).badge.sale;
+const discountBadge = priceClaim.percentOff !== null
   ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
-  : null;
+  : priceClaim.onSale ? saleText : null;
 
 const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {
   const variantPrice = variant.price ?? product.price;
@@ -371,8 +377,9 @@ function optionAriaLabel(
         <BuyFormPrice
           price={showsStartingPrice ? checkoutText(actionCopy.fromPriceText, { price: openingPrice }) : openingPrice}
           regularPrice={openingRegularPrice}
-          hasDiscount={pricing.hasDiscount}
+          hasDiscount={priceClaim.compareAt !== null}
           discountBadge={discountBadge}
+          saleText={saleText}
           fromTemplate={actionCopy.fromPriceText}
         />
       )}
@@ -429,8 +436,9 @@ function optionAriaLabel(
         <BuyFormPrice
           price={showsStartingPrice ? checkoutText(actionCopy.fromPriceText, { price: openingPrice }) : openingPrice}
           regularPrice={openingRegularPrice}
-          hasDiscount={pricing.hasDiscount}
+          hasDiscount={priceClaim.compareAt !== null}
           discountBadge={discountBadge}
+          saleText={saleText}
           fromTemplate={actionCopy.fromPriceText}
         />
       )}

@@ -11,6 +11,7 @@ import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
 import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
+import { priceLineClaim } from "@scalius/shared/money";
 import { specificationText } from "@/lib/specification-text";
 import { capImageSrcSet } from "@/lib/responsive-image";
 import type { ProductCondition } from "@scalius/shared/product-condition";
@@ -61,12 +62,12 @@ export interface ProductCardModel {
   hoverImage: { url: string; maxWidth: number | undefined } | null;
   price: {
     current: string;
-    /** The struck regular price, when discounted. */
+    /** The struck regular price, when this one price is discounted (never beside a "From" price: priceLineClaim). */
     regular: string | null;
     /** The price varies by option ("From ৳2,450"). */
     from: boolean;
   };
-  /** "-20%", or null without a discount. */
+  /** The sale badge: "-20%", "Sale" beside a discounted "From" price, or null without a discount. */
   percentOff: string | null;
   /** The product can be added from the card: in stock, a simple product, no buyer inputs, a real price. */
   quickAddEligible: boolean;
@@ -150,7 +151,9 @@ export function productCardModel(
   },
 ): ProductCardModel {
   const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode, language: options.language });
-  const hasDiscount = product.discountedPrice < product.price;
+  const from = product.priceVaries === true;
+  // One rule with the product page: no struck price or percent beside a "From" price.
+  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from });
   const soldOut = product.availableForSale === false;
   const photo = cardPhoto(product.imageUrl);
   const hoverPhoto = photo ? cardPhoto(product.secondaryImageUrl) : null;
@@ -178,10 +181,12 @@ export function productCardModel(
       : null,
     price: {
       current: money(product.discountedPrice),
-      regular: hasDiscount ? money(product.price) : null,
-      from: product.priceVaries === true,
+      regular: claim.compareAt === null ? null : money(claim.compareAt),
+      from,
     },
-    percentOff: formatDiscountBadge(product.price, product.discountedPrice, options.language),
+    percentOff: claim.percentOff !== null
+      ? formatDiscountBadge(product.price, product.discountedPrice, options.language)
+      : claim.onSale ? storefrontCopy(storefrontLanguage(options.language ?? pageLanguage())).badge.sale : null,
     quickAddEligible,
     needsOptions: !soldOut && product.hasVariants,
     facts: cardFactValues(product, money, options.ratings !== false),
