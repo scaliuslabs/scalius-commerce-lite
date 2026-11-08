@@ -28086,6 +28086,7 @@
                         "write_payment_methods",
                         "write_refunds",
                         "write_fulfillments",
+                        "write_digital_access",
                         "read_customers",
                         "write_customers",
                         "write_marketing",
@@ -29052,6 +29053,7 @@
                 "write_payment_methods",
                 "write_refunds",
                 "write_fulfillments",
+                "write_digital_access",
                 "read_customers",
                 "write_customers",
                 "write_marketing",
@@ -29233,6 +29235,7 @@
                         "write_payment_methods",
                         "write_refunds",
                         "write_fulfillments",
+                        "write_digital_access",
                         "read_customers",
                         "write_customers",
                         "write_marketing",
@@ -120387,7 +120390,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.edit"
+          "permission": "orders.manage_digital_access"
         }
       }
     },
@@ -120568,7 +120571,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.edit"
+          "permission": "orders.manage_digital_access"
         }
       }
     },
@@ -185143,6 +185146,7 @@
             "orders.delete",
             "orders.edit",
             "orders.issue_invoice",
+            "orders.manage_digital_access",
             "orders.manage_shipments",
             "orders.record_payment",
             "orders.refund",
@@ -188468,6 +188472,7 @@
             "orders.delete",
             "orders.edit",
             "orders.issue_invoice",
+            "orders.manage_digital_access",
             "orders.manage_shipments",
             "orders.record_payment",
             "orders.refund",
@@ -189582,6 +189587,7 @@
             "orders.delete",
             "orders.edit",
             "orders.issue_invoice",
+            "orders.manage_digital_access",
             "orders.manage_shipments",
             "orders.record_payment",
             "orders.refund",
@@ -197025,6 +197031,7 @@
             "orders.delete",
             "orders.edit",
             "orders.issue_invoice",
+            "orders.manage_digital_access",
             "orders.manage_shipments",
             "orders.record_payment",
             "orders.refund",
@@ -270572,6 +270579,7 @@
             "orders.delete",
             "orders.edit",
             "orders.issue_invoice",
+            "orders.manage_digital_access",
             "orders.manage_shipments",
             "orders.record_payment",
             "orders.refund",
@@ -282637,7 +282645,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.edit"
+          "permission": "orders.manage_digital_access"
         }
       }
     },
@@ -282790,7 +282798,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "orders.edit"
+          "permission": "orders.manage_digital_access"
         }
       }
     },

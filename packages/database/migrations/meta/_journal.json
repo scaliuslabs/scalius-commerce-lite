@@ -1436,6 +1436,13 @@
       "when": 1794162391716,
       "tag": "0204_app_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 205,
+      "version": "6",
+      "when": 1794250000000,
+      "tag": "0205_digital_access_permission",
+      "breakpoints": true
     }
   ]
 }

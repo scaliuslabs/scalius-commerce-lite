@@ -3282,7 +3282,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -8512,7 +8513,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -8778,7 +8780,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -9195,7 +9198,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -9251,7 +9255,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -11234,7 +11239,7 @@
    "idempotency": "required",
    "revision": "none",
    "scopes": [
-    "write_orders"
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -11337,7 +11342,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -11446,7 +11452,7 @@
    "idempotency": "supported",
    "revision": "none",
    "scopes": [
-    "write_orders"
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -11927,7 +11933,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -14279,7 +14286,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -14335,7 +14343,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -15268,7 +15277,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -18676,7 +18686,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -19107,7 +19118,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -19163,7 +19175,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -19916,7 +19929,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [
@@ -19972,7 +19986,8 @@
     "write_payments",
     "write_payment_methods",
     "write_refunds",
-    "write_fulfillments"
+    "write_fulfillments",
+    "write_digital_access"
    ],
    "input": {
     "parameters": [

@@ -125,9 +125,15 @@ const storePath = z.string().max(2048).regex(/^\/(?!\/)[^\\\s?#]*$/, "Use a path
 
 type JsonPrimitive = string | number | boolean | null;
 export type PluginUiJson = JsonPrimitive | PluginUiJson[] | { [key: string]: PluginUiJson };
-const json: z.ZodType<PluginUiJson> = z.lazy(() =>
-  z.union([z.string().max(PLUGIN_UI_LIMITS.text), z.number().finite(), z.boolean(), z.null(), z.array(json).max(100), z.record(z.string().max(64), json)]))
-  .meta({ id: "PluginUiJson" });
+// A recursive schema's lazy returns one schema built once: zod's JSON Schema
+// conversion calls a lazy's getter again (and a refined clone resolves its own
+// copy until the first resolve is cached), so a getter that builds a new union
+// on every call changes the sealed ABI schema with what ran first.
+const jsonUnion = z.union([
+  z.string().max(PLUGIN_UI_LIMITS.text), z.number().finite(), z.boolean(), z.null(),
+  z.array(z.lazy(() => json)).max(100), z.record(z.string().max(64), z.lazy(() => json)),
+]);
+const json: z.ZodType<PluginUiJson> = z.lazy(() => jsonUnion).meta({ id: "PluginUiJson" });
 
 /**
  * Where a link goes. Admin: one of this app's pages (by manifest page id), a
@@ -372,8 +378,7 @@ const children = z.array(z.lazy(() => pluginUiNodeSchema)).max(PLUGIN_UI_LIMITS.
 /** An app's public file (`public/…`, served under its release). */
 const appFile = z.string().max(256).regex(/^public\/[a-zA-Z0-9_/-]+(?:\.[a-zA-Z0-9]+)?$/).refine((path) => !path.includes(".."));
 
-/** One node of either surface (the surface rules are checked on the whole tree: `pluginUiTreeSchema`). */
-export const pluginUiNodeSchema: z.ZodType<PluginUiNode> = z.lazy(() => z.discriminatedUnion("type", [
+const nodeUnion = z.discriminatedUnion("type", [
   z.object({ type: z.literal("page"), title: optionalLabel.optional(), description: text.optional(), actions: buttons.optional(), children }).strict(),
   z.object({ type: z.literal("section"), title: optionalLabel.optional(), description: text.optional(), children }).strict(),
   z.object({ type: z.literal("card"), title: optionalLabel.optional(), description: text.optional(), actions: buttons.optional(), children }).strict(),
@@ -432,7 +437,13 @@ export const pluginUiNodeSchema: z.ZodType<PluginUiNode> = z.lazy(() => z.discri
     help: optionalLabel.optional(),
     live: z.boolean().optional(),
   }).strict(),
-])).meta({ id: "PluginUiNode" }) as z.ZodType<PluginUiNode>;
+]);
+
+/**
+ * One node of either surface (the surface rules are checked on the whole tree:
+ * `pluginUiTreeSchema`). The lazy returns the one union above, never a new one.
+ */
+export const pluginUiNodeSchema: z.ZodType<PluginUiNode> = z.lazy(() => nodeUnion).meta({ id: "PluginUiNode" }) as z.ZodType<PluginUiNode>;
 
 /** What a UI route or function answers: the tree and its version. */
 export interface PluginUiDocument {
