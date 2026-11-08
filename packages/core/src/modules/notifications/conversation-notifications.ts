@@ -8,7 +8,7 @@ import { recordStaffAlert } from "./staff-alerts";
 //     no text and is coalesced to one per thread per hour.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
-//   A chat-channel thread (0199) replies on its channel only: the line's
+//   A chat-channel thread (0202) replies on its channel only: the line's
 //     outbound row (`pending`, committed with the post) is sent as text
 //     through the thread's messaging app provider, keyed by the message id,
 //     and moves to `sent` or `failed`; never email or SMS.

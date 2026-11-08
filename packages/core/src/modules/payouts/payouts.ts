@@ -1,4 +1,4 @@
-// The payout record (0199): money an app sends to a payee through a payout
+// The payout record (0202): money an app sends to a payee through a payout
 // provider. A payout is committed `pending` before its provider call, one row
 // per (app, Idempotency-Key): a repeat finds the row, a different request
 // under the key is refused. Only a provider-authenticated fact moves it (the

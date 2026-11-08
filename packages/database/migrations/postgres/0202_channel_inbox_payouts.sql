@@ -1,4 +1,4 @@
--- Chat channels in the inbox, and payouts: see ../0199_channel_inbox_payouts.sql.
+-- Chat channels in the inbox, and payouts: see ../0202_channel_inbox_payouts.sql.
 CREATE TABLE "conversation_channel_contacts" (
 	"conversation_id" text COLLATE "C" PRIMARY KEY NOT NULL,
 	"channel" text COLLATE "C" NOT NULL,
@@ -193,4 +193,4 @@ FOR EACH ROW
 WHEN ((OLD."status" IS DISTINCT FROM NEW."status"))
 EXECUTE FUNCTION scalius_compat."evt_payouts_update_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_channel_inbox_payouts', '085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (202, '0202_channel_inbox_payouts', '085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795');

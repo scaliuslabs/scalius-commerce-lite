@@ -143,4 +143,4 @@ BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'payout.updated', 'payout', NEW.`id`, json_object('payoutId', NEW.`id`, 'appId', NEW.`app_id`, 'previousStatus', OLD.`status`, 'status', NEW.`status`));
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_channel_inbox_payouts', '085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (202, '0202_channel_inbox_payouts', '085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795');

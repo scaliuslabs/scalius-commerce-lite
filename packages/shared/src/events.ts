@@ -422,7 +422,7 @@ export const EVENT_FACT_SCHEMAS = {
     customerId: id,
   }),
   /**
-   * A buyer wrote in a thread (0199): on the storefront, or on a chat channel
+   * A buyer wrote in a thread (0202): on the storefront, or on a chat channel
    * through a messaging app (`channel`, null for the storefront). Read the
    * line with `conversations.list_messages` (`read_conversations`).
    */
@@ -432,7 +432,7 @@ export const EVENT_FACT_SCHEMAS = {
     seq: z.number().int().positive(),
     channel: nullableState,
   }),
-  /** An app recorded a payout (0199). Delivered only to the app that sent it. */
+  /** An app recorded a payout (0202). Delivered only to the app that sent it. */
   "payout.created": z.object({
     payoutId: id,
     appId: id,

@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 199,
-  name: "0199_channel_inbox_payouts",
+  version: 202,
+  name: "0202_channel_inbox_payouts",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -773,8 +773,8 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "7e197c9e8e4fa96b60436dbe9c4ba6afe995744965e28b0a46d8000a774e4b70",
   },
   {
-    version: 199,
-    name: "0199_channel_inbox_payouts",
+    version: 202,
+    name: "0202_channel_inbox_payouts",
     sourceSha256: "085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795",
   },
 ] as const;

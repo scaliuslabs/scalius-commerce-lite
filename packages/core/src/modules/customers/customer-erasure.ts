@@ -336,7 +336,7 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     db.delete(conversationSearchTerms).where(sql`${conversationSearchTerms.messageId} IN (SELECT ${conversationMessages.id} FROM ${conversationMessages} WHERE ${buyerMessage})`),
     db.update(conversationMessages).set({ body: erased }).where(and(buyerMessage, sql`${conversationMessages.body} <> ${erased}`)),
     db.update(conversations).set({ subject: null }).where(and(inIds(conversations.customerId), eq(conversations.subjectType, "store"), isNotNull(conversations.subject))),
-    // A chat-channel contact (0199): the address and profile name leave; the
+    // A chat-channel contact (0202): the address and profile name leave; the
     // key stays unique, so the buyer's next message starts a new thread.
     db.update(conversationChannelContacts).set({ contactKey: sql`'erased:' || ${conversationChannelContacts.conversationId}`, contactName: null, updatedAt: now })
       .where(and(inTheirConversations(conversationChannelContacts.conversationId), sql`substr(${conversationChannelContacts.contactKey}, 1, 7) <> 'erased:'`)),

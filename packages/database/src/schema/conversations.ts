@@ -39,7 +39,7 @@ export const conversations = sqliteTable("conversations", {
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
     closedAt: integer("closed_at"),
     /**
-     * The chat channel of a thread a messaging app started (0199): `whatsapp`,
+     * The chat channel of a thread a messaging app started (0202): `whatsapp`,
      * `messenger`, … (`MESSAGING_CHANNELS`); null for every storefront thread.
      * A channel thread is a store thread of the contact's customer that the
      * buyer never reads on the storefront: replies go out on the channel.
@@ -60,7 +60,7 @@ export const conversations = sqliteTable("conversations", {
     index("conversations_order_idx")
         .on(table.orderId)
         .where(sql`${table.orderId} IS NOT NULL`),
-    // The app inbox sync (`conversations.list`, 0199): (updatedAt, id) order.
+    // The app inbox sync (`conversations.list`, 0202): (updatedAt, id) order.
     index("conversations_updated_idx").on(table.updatedAt, table.id),
     check("conversations_id_shape", sql`substr(${table.id}, 1, 4) = 'cnv_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("conversations_subject_type_check", sql`${table.subjectType} IN ('order', 'store', 'warranty_claim', 'review')`),
@@ -110,7 +110,7 @@ export const conversationMessages = sqliteTable("conversation_messages", {
     /** Idempotency key of the post, unique per conversation. */
     clientMessageKey: text("client_message_key"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
-    /** The app that posted a staff line through the app API (0199); `author_user_id` is its approver. */
+    /** The app that posted a staff line through the app API (0202); `author_user_id` is its approver. */
     authorAppId: text("author_app_id"),
 }, (table) => [
     uniqueIndex("conversation_messages_conversation_seq_unique").on(table.conversationId, table.seq),
@@ -226,7 +226,7 @@ export const conversationSearchTerms = sqliteTable("conversation_search_terms", 
 ]);
 
 /**
- * The contact of a channel thread (0199): one row per `conversations.channel`
+ * The contact of a channel thread (0202): one row per `conversations.channel`
  * thread, unique by channel and contact, so an inbound message finds its
  * thread whichever app delivered it. `contact_key` is the address replies go
  * to (E.164 on WhatsApp and Viber, the channel's own id otherwise); it and
@@ -252,7 +252,7 @@ export const conversationChannelContacts = sqliteTable("conversation_channel_con
 ]);
 
 /**
- * A channel thread's message as the channel knows it (0199). Inbound: the
+ * A channel thread's message as the channel knows it (0202). Inbound: the
  * provider's message id (unique per provider: a redelivery is applied once)
  * and its attachments as references (kind, media type, name, size, the
  * provider's media id or an https URL; never the bytes). Outbound: written

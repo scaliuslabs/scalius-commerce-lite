@@ -1,4 +1,4 @@
-// Payouts (0199): money an app sends out of the store to a payee through a
+// Payouts (0202): money an app sends out of the store to a payee through a
 // payout provider (the `payout` port), such as a marketplace paying its
 // sellers. One row per payout command, written and committed before the
 // provider is called, keyed by the app's idempotency key: a retry of the same

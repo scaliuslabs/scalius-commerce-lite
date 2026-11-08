@@ -1,4 +1,4 @@
-// Chat-channel threads (0199, COMMERCE-HOOKS H18): a messaging app delivers
+// Chat-channel threads (0202, COMMERCE-HOOKS H18): a messaging app delivers
 // buyers' WhatsApp, Messenger, … messages into the inbox, and staff replies
 // go back out on the channel.
 //
