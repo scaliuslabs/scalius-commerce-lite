@@ -75,6 +75,7 @@
     "test": "node scripts/test-runner.mjs",
     "test:ci": "node scripts/test-runner.mjs",
     "test:affected": "node scripts/test-affected.mjs",
+    "worktree": "node scripts/worktree.mjs",
     "test:watch": "vitest"
   },
   "devDependencies": {
