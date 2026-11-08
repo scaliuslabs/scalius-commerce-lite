@@ -385,6 +385,7 @@ export interface PluginRouteResponse {
 import type { EventTopic } from "@scalius/shared/events";
 import { type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 import type { BuyerUiInput, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { BuyerEvent, BuyerEventData, PixelEventName } from "@scalius/shared/plugins/buyer-events";
 import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 declare function event<T extends EventTopic>(topic: T, overrides?: Partial<PluginEvent<T>>): PluginEvent<T>;
 declare function cartLine(overrides?: Partial<FunctionCart["lines"][number]>): FunctionCart["lines"][number];
@@ -403,6 +404,10 @@ type StorefrontExtensionInputOverrides = Partial<Omit<BuyerUiInput, "target" | "
     cart?: Partial<FunctionCart> | null;
 };
 declare function storefrontExtensionInput(target: StorefrontUiSlot, overrides?: StorefrontExtensionInputOverrides): BuyerUiInput;
+type DeepPartial<T> = T extends readonly (infer U)[] ? U[] : T extends object ? {
+    [K in keyof T]?: DeepPartial<T[K]> | null;
+} : T;
+declare function buyerEvent<N extends PixelEventName>(name: N, data?: DeepPartial<BuyerEventData[N]>, overrides?: Partial<Omit<BuyerEvent<N>, "name" | "data">>): BuyerEvent<N>;
 export declare const fixtures: {
     event: typeof event;
     cartLine: typeof cartLine;
@@ -412,6 +417,7 @@ export declare const fixtures: {
     money: typeof money;
     readRecord: typeof readRecord;
     adminRouteRequest: typeof adminRouteRequest;
+    buyerEvent: typeof buyerEvent;
 };
 export {};
 
@@ -427,6 +433,7 @@ export { defineManifest, type DefinedManifest, type ObjectFieldValue, type Objec
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
+export { PLUGIN_SCOPES, PLUGIN_SCOPE_NAMES, isPluginScope, type PluginScope } from "@scalius/shared/plugins/scopes";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentCapability, PaymentCapture, PaymentCaptureInput, PaymentCharge, PaymentChargeInput, PaymentDeleteSavedMethod, PaymentDeleteSavedMethodInput, PaymentEvent, PaymentVoid, PaymentVoidInput, SavedPaymentMethod, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
 export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
@@ -676,6 +683,1255 @@ export {};
 
 // packages/plugin-sdk/src/manifest.d.ts
 export { parsePluginManifest, pluginFeatureRequest, pluginGrantRequest, pluginManifestWithFeatures, type PluginManifest, type PluginManifestInput, } from "@scalius/shared/plugins";
+
+// packages/plugin-sdk/src/pixel-testing.d.ts
+import { type AnyBuyerEvent, type BuyerConsent, type BuyerEvent, type BuyerEventContext, type PixelModule } from "@scalius/shared/plugins/buyer-events";
+export interface PixelTestHarnessOptions {
+    settings?: Record<string, string | number | boolean | null>;
+    consent?: Partial<BuyerConsent>;
+    visitorId?: string;
+    context?: Partial<Omit<BuyerEventContext, "visitorId">>;
+}
+export interface PixelTestRequest {
+    via: "beacon" | "fetch" | "image";
+    url: string;
+    body: string | null;
+    blocked: boolean;
+}
+export declare function createPixelTestHarness(app: unknown, pixel: PixelModule, options?: PixelTestHarnessOptions): {
+    manifest: {
+        id: string;
+        name: string;
+        version: string;
+        apiVersion: "2026-10";
+        description: string;
+        author: {
+            name: string;
+            url?: string | undefined;
+            email?: string | undefined;
+        };
+        categories: ("checkout" | "shipping" | "payments" | "orders" | "inventory" | "returns" | "pricing" | "marketing" | "loyalty" | "store-design" | "content" | "notifications" | "analytics" | "finances" | "support" | "operations" | "compliance")[];
+        screenshots: string[];
+        scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics")[];
+        allowedHosts: string[];
+        events: import("@scalius/shared/events").EventTopicFilter[];
+        functions: {
+            point: "cart.transform" | "cart.line_prices" | "cart.validate" | "checkout.discounts" | "checkout.shipping_rates" | "checkout.payment_methods";
+            priority: number;
+            onError: "skip" | "block";
+            reads: ({
+                as: string;
+                object: string;
+                key: string | {
+                    from: string;
+                };
+                max?: number | undefined;
+            } | {
+                as: string;
+                customFields: string[];
+                key?: string | {
+                    from: string;
+                } | undefined;
+                max?: number | undefined;
+            })[];
+        }[];
+        providers: import("@scalius/shared/plugins/providers").PluginProviderDeclaration[];
+        routes: {
+            admin: {
+                name: string;
+                methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
+                description?: string | undefined;
+                scope?: "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics" | undefined;
+            }[];
+            public: {
+                name: string;
+                methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
+                description?: string | undefined;
+            }[];
+            webhooks: {
+                name: string;
+                methods: ("POST" | "PUT" | "PATCH" | "DELETE" | "GET")[];
+                description?: string | undefined;
+            }[];
+        };
+        cron: {
+            name: string;
+            schedule: string;
+        }[];
+        jobs: {
+            name: string;
+            title: string;
+        }[];
+        objects: Record<string, {
+            name: string;
+            fields: {
+                key: string;
+                name: string;
+                type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference" | "customer_reference" | "order_reference";
+                required: boolean;
+                validations: {
+                    min?: string | number | null | undefined;
+                    max?: string | number | null | undefined;
+                    regex?: string | null | undefined;
+                    choices?: string[] | null | undefined;
+                };
+                to?: string | undefined;
+                description?: string | undefined;
+            }[];
+            indexes: (string | string[])[];
+            unique: (string | string[])[];
+            handle: boolean;
+            storefront: boolean;
+            events: boolean;
+            description?: string | undefined;
+            display?: string | undefined;
+            admin?: "read" | "none" | "edit" | undefined;
+        }>;
+        customFields: {
+            ownerType: "page" | "order" | "brand" | "product" | "customer" | "category" | "collection" | "variant";
+            key: string;
+            name: string;
+            type: "boolean" | "date" | "url" | "integer" | "decimal" | "single_line_text" | "multi_line_text" | "date_time" | "color" | "json" | "money" | "product_reference" | "variant_reference" | "collection_reference" | "media_reference" | "object_reference" | "list.date" | "list.url" | "list.integer" | "list.decimal" | "list.single_line_text" | "list.multi_line_text" | "list.date_time" | "list.color" | "list.money" | "list.product_reference" | "list.variant_reference" | "list.collection_reference" | "list.media_reference" | "list.object_reference";
+            storefrontVisible: boolean;
+            description?: string | undefined;
+            to?: string | undefined;
+        }[];
+        migrations: {
+            version: number;
+            description: string;
+        }[];
+        salesChannels: {
+            id: string;
+            name: string;
+        }[];
+        settings: ({
+            type: "text";
+            maxLength: number;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "textarea";
+            maxLength: number;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "number";
+            integer: boolean;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: number | undefined;
+            min?: number | undefined;
+            max?: number | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "boolean";
+            default: boolean;
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "select";
+            options: {
+                value: string;
+                label: string;
+            }[];
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "multiselect";
+            options: {
+                value: string;
+                label: string;
+            }[];
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string[] | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "secret";
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "url";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "email";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "color";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "image";
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "products";
+            limit: number;
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "product";
+            key: string;
+            label: string;
+            required: boolean;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "link";
+            key: string;
+            label: string;
+            required: boolean;
+            default?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        } | {
+            type: "list";
+            fields: ({
+                type: "text";
+                maxLength: number;
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "textarea";
+                maxLength: number;
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "number";
+                integer: boolean;
+                key: string;
+                label: string;
+                required: boolean;
+                default?: number | undefined;
+                min?: number | undefined;
+                max?: number | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "boolean";
+                default: boolean;
+                key: string;
+                label: string;
+                required: boolean;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "select";
+                options: {
+                    value: string;
+                    label: string;
+                }[];
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "url";
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "color";
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "image";
+                key: string;
+                label: string;
+                required: boolean;
+                help?: string | undefined;
+                group?: string | undefined;
+            } | {
+                type: "link";
+                key: string;
+                label: string;
+                required: boolean;
+                default?: string | undefined;
+                help?: string | undefined;
+                group?: string | undefined;
+            })[];
+            min: number;
+            max: number;
+            key: string;
+            label: string;
+            required: boolean;
+            itemLabel?: string | undefined;
+            help?: string | undefined;
+            group?: string | undefined;
+        })[];
+        messaging: {
+            recipients: {
+                object: string;
+                field: string;
+            }[];
+        };
+        features: {
+            id: string;
+            name: string;
+            description: string;
+            recommended: boolean;
+            scopes: ("read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics")[];
+            allowedHosts: string[];
+            providers: string[];
+            settingsGroups: string[];
+            routes: {
+                admin: string[];
+                public: string[];
+                webhooks: string[];
+            };
+            cron: string[];
+            events: import("@scalius/shared/events").EventTopicFilter[];
+            functions: string[];
+            admin: string[];
+            storefront: {
+                sections: string[];
+                components: string[];
+                skins: string[];
+                extensions: ("checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile")[];
+            };
+        }[];
+        admin: {
+            pages: {
+                id: string;
+                title: string;
+                placement: "orders" | "marketing" | "content" | "analytics" | "products" | "settings" | "apps" | "customers";
+                route: string;
+                tabs?: {
+                    id: string;
+                    title: string;
+                    route: string;
+                }[] | undefined;
+            }[];
+            cards: {
+                id: string;
+                target: "page" | "order" | "brand" | "product" | "customer" | "category" | "collection" | "return" | "variant";
+                title: string;
+                route: string;
+            }[];
+            actions: {
+                id: string;
+                target: "page" | "order" | "brand" | "product" | "customer" | "category" | "collection" | "return" | "variant";
+                label: string;
+                route: string;
+                bulk: boolean;
+                destructive: boolean;
+            }[];
+            widgets: {
+                id: string;
+                title: string;
+                route: string;
+            }[];
+            listColumns: {
+                id: string;
+                resource: "order" | "product" | "customer";
+                title: string;
+                type: "number" | "boolean" | "text" | "date" | "money";
+                source: {
+                    kind: "object";
+                    object: string;
+                    field: string;
+                } | {
+                    kind: "customField";
+                    key: string;
+                };
+                filterable: boolean;
+            }[];
+            settingsGroups: {
+                id: string;
+                title: string;
+                order: number;
+                description?: string | undefined;
+            }[];
+            timeline: {
+                kind: string;
+                title: string;
+            }[];
+        };
+        storefront: {
+            components: {
+                type: string;
+                name: string;
+                targets: ("header.actions" | "product.buy_box.before" | "product.buy_box.after" | "product.below" | "footer.columns" | "product_card.badges" | "product_card.meta" | "page")[];
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                reads: {
+                    object: string;
+                    limit: number;
+                    where?: Record<string, string | number | boolean | {
+                        setting: string;
+                    } | {
+                        resource: "page" | "brand" | "product" | "category" | "collection";
+                    } | null> | undefined;
+                }[];
+                description?: string | undefined;
+            }[];
+            skins: {
+                id: string;
+                target: "header" | "footer" | "product_card" | "product_main" | "listing_main" | `section:${string}`;
+                name: string;
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                description?: string | undefined;
+            }[];
+            templates: {
+                id: string;
+                name: string;
+                theme: Record<string, unknown>;
+                description?: string | undefined;
+                themeVersion?: number | undefined;
+            }[];
+            pagePresets: {
+                id: string;
+                name: string;
+                sections: Record<string, unknown>[];
+                description?: string | undefined;
+                themeVersion?: number | undefined;
+            }[];
+            islands: {
+                name: string;
+                description?: string | undefined;
+            }[];
+            stylesheet: boolean;
+            connect: string[];
+            sections: {
+                type: string;
+                name: string;
+                settings: ({
+                    type: "text";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "textarea";
+                    maxLength: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "number";
+                    integer: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: number | undefined;
+                    min?: number | undefined;
+                    max?: number | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "boolean";
+                    default: boolean;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "select";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "multiselect";
+                    options: {
+                        value: string;
+                        label: string;
+                    }[];
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string[] | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "secret";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "url";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "email";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "color";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "image";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "products";
+                    limit: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "product";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "link";
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    default?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                } | {
+                    type: "list";
+                    fields: ({
+                        type: "text";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "textarea";
+                        maxLength: number;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "number";
+                        integer: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: number | undefined;
+                        min?: number | undefined;
+                        max?: number | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "boolean";
+                        default: boolean;
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "select";
+                        options: {
+                            value: string;
+                            label: string;
+                        }[];
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "url";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "color";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "image";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    } | {
+                        type: "link";
+                        key: string;
+                        label: string;
+                        required: boolean;
+                        default?: string | undefined;
+                        help?: string | undefined;
+                        group?: string | undefined;
+                    })[];
+                    min: number;
+                    max: number;
+                    key: string;
+                    label: string;
+                    required: boolean;
+                    itemLabel?: string | undefined;
+                    help?: string | undefined;
+                    group?: string | undefined;
+                })[];
+                reads: {
+                    object: string;
+                    limit: number;
+                    where?: Record<string, string | number | boolean | {
+                        setting: string;
+                    } | {
+                        resource: "page" | "brand" | "product" | "category" | "collection";
+                    } | null> | undefined;
+                }[];
+                description?: string | undefined;
+            }[];
+            head: boolean;
+            scripts: {
+                src: string;
+                placement: "head" | "body-end";
+                pages: ("product" | "all" | "home" | "listing")[];
+            }[];
+            proxy: boolean;
+            extensions: {
+                target: "checkout.contact.after" | "checkout.delivery.after" | "cart.page.summary" | "cart.page.below" | "checkout.payment.after" | "checkout.actions.before" | "checkout.summary.after" | "cart_drawer.footer" | "order.confirmation" | "account.order" | "account.overview" | "account.profile";
+                reads: ({
+                    as: string;
+                    object: string;
+                    key: string | {
+                        from: string;
+                    };
+                    max?: number | undefined;
+                } | {
+                    as: string;
+                    customFields: string[];
+                    key?: string | {
+                        from: string;
+                    } | undefined;
+                    max?: number | undefined;
+                })[];
+            }[];
+            pixel?: {
+                consent: "marketing" | "analytics";
+                settings: string[];
+                events?: ("page_viewed" | "product_viewed" | "collection_viewed" | "search_submitted" | "product_added_to_cart" | "product_removed_from_cart" | "cart_viewed" | "checkout_started" | "checkout_contact_submitted" | "checkout_address_submitted" | "checkout_shipping_submitted" | "checkout_payment_submitted" | "checkout_completed" | "app_event")[] | undefined;
+            } | undefined;
+        };
+        limits: {
+            cpuMs: number;
+            wallMs: number;
+        };
+        homepage?: string | undefined;
+        license?: string | undefined;
+        icon?: string | undefined;
+        tagline?: string | undefined;
+        support?: {
+            url?: string | undefined;
+            email?: string | undefined;
+        } | undefined;
+        privacyPolicyUrl?: string | undefined;
+        documentationUrl?: string | undefined;
+        changelogUrl?: string | undefined;
+        countries?: string[] | undefined;
+        minPlatformVersion?: string | undefined;
+        checkout?: {
+            attributes: {
+                key: string;
+                label: string;
+                type: "number" | "boolean" | "text" | "date" | "file" | "multiline" | "choice";
+                accept?: ("image/png" | "image/jpeg" | "image/webp" | "application/pdf")[] | undefined;
+                maxBytes?: number | undefined;
+                maxFiles?: number | undefined;
+                help?: string | undefined;
+                required?: boolean | undefined;
+                maxLength?: number | undefined;
+                min?: number | undefined;
+                max?: number | undefined;
+                choices?: {
+                    value: string;
+                    label: string;
+                }[] | undefined;
+            }[];
+            purchaseOptions: {
+                key: string;
+                title: string;
+                description?: string | undefined;
+            }[];
+            lineInputs: {
+                key: string;
+                label: string;
+                type: "select" | "text" | "textarea" | "checkbox" | "file";
+                products?: {
+                    customField: string;
+                } | undefined;
+                accept?: ("image/png" | "image/jpeg" | "image/webp" | "application/pdf")[] | undefined;
+                maxBytes?: number | undefined;
+                maxFiles?: number | undefined;
+                help?: string | undefined;
+                maxLength?: number | undefined;
+                options?: {
+                    value: string;
+                    label: string;
+                }[] | undefined;
+            }[];
+        } | undefined;
+        translations?: Record<string, {
+            name?: string | undefined;
+            tagline?: string | undefined;
+            description?: string | undefined;
+            pages?: Record<string, string> | undefined;
+            cards?: Record<string, string> | undefined;
+            salesChannels?: Record<string, string> | undefined;
+            actions?: Record<string, string> | undefined;
+            widgets?: Record<string, string> | undefined;
+            listColumns?: Record<string, string> | undefined;
+            timeline?: Record<string, string> | undefined;
+            tabs?: Record<string, Record<string, string>> | undefined;
+            settingsGroups?: Record<string, {
+                title?: string | undefined;
+                description?: string | undefined;
+            }> | undefined;
+            settings?: Record<string, {
+                label?: string | undefined;
+                help?: string | undefined;
+                options?: Record<string, string> | undefined;
+            }> | undefined;
+            features?: Record<string, {
+                name?: string | undefined;
+                description?: string | undefined;
+            }> | undefined;
+        }> | undefined;
+    };
+    running: boolean;
+    settings: {
+        [k: string]: string | number | boolean | null;
+    };
+    requests: PixelTestRequest[];
+    errors: unknown[];
+    emit(event: BuyerEvent | AnyBuyerEvent): boolean;
+};
 
 // packages/plugin-sdk/src/runtime.d.ts
 import type { PluginEvent, PluginRouteRequest, PluginStoreInfo } from "./context";
@@ -1258,6 +2514,7 @@ import type { PluginApiCallInput, PluginApiResult, PluginEvent, PluginRouteReque
 import { type PluginInvocationResult, type PluginLogRecord } from "./runtime";
 export { parsePluginUiActionResult, parsePluginUiDocument, pluginUiActions, pluginUiRouteActions, sanitizePluginHead, } from "@scalius/shared/plugins";
 export { fixtures } from "./fixtures";
+export { createPixelTestHarness, type PixelTestHarnessOptions, type PixelTestRequest } from "./pixel-testing";
 export { contractSchemaIssue, createContractApi, stableContract, type ContractApi, type ContractApiOptions, type ContractCall, type ContractHandler, type StableContract, type StableContractOperation, } from "./testing-contract";
 export { sample, type SampleOverrides, type SampleRepresentationType } from "./testing-sample";
 export interface PluginTestHarnessOptions {
@@ -1285,6 +2542,10 @@ export interface PluginTestHarnessOptions {
         body: string;
     }>;
     customers?: string[];
+    subscribed?: {
+        email?: string[];
+        sms?: string[];
+    };
 }
 export interface PluginJobTestStep {
     result: PluginInvocationResult;
@@ -2548,6 +3809,13 @@ export declare function createPluginTestHarness(module: unknown, options?: Plugi
     }) => Promise<PluginInvocationResult>;
     deliver: (event: PluginEvent) => Promise<PluginInvocationResult>;
     fn: <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>) => Promise<PluginFunctionTestResult<P>>;
+    commit: (result: PluginFunctionTestResult<PluginFunctionPoint>) => Promise<{
+        ok: true;
+        written: number;
+    } | {
+        ok: false;
+        code: "app_offer_changed";
+    }>;
     extension: (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>) => Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>>;
     runMigration: (version: number) => Promise<PluginInvocationResult>;
     runMigrations: (options?: {
@@ -3008,10 +4276,10 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
         orderId: z.ZodString;
         kind: z.ZodEnum<{
             service: "service";
+            gift_card: "gift_card";
             ship: "ship";
             pickup: "pickup";
             digital: "digital";
-            gift_card: "gift_card";
         }>;
         status: z.ZodEnum<{
             voided: "voided";
@@ -3361,11 +4629,11 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
     }, z.core.$strip>;
 };
 export type EventRepresentation<T extends EventRepresentationType = EventRepresentationType> = z.output<(typeof EVENT_REPRESENTATION_SCHEMAS)[T]>;
-export type EventRepresentationType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "gift_card" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card_transaction" | "conversation";
+export type EventRepresentationType = "object" | "checkout" | "order" | "product" | "customer" | "payment" | "payout" | "refund" | "review" | "return" | "variant" | "purchase_order" | "inventory_transfer" | "fulfillment" | "shipment" | "discount" | "gift_card" | "gift_card_transaction" | "conversation";
 
 // packages/shared/src/events.d.ts
 export type EventTopic = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated";
-export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "object.*" | "checkout.*" | "order.*" | "product.*" | "customer.*" | "payment.*" | "payout.*" | "refund.*" | "review.*" | "gift_card.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card_transaction.*" | "conversation.*" | "*";
+export type EventTopicFilter = "order.created" | "order.updated" | "order.paid" | "order.cancelled" | "order.fulfilled" | "order.refunded" | "return.updated" | "product.created" | "product.updated" | "product.deleted" | "product.publication_changed" | "variant.inventory_changed" | "purchase_order.updated" | "inventory_transfer.updated" | "customer.created" | "customer.updated" | "customer.consent_changed" | "fulfillment.created" | "fulfillment.voided" | "refund.created" | "refund.updated" | "shipment.updated" | "payment.updated" | "checkout.abandoned" | "discount.created" | "discount.updated" | "discount.deleted" | "discount.redeemed" | "review.created" | "review.updated" | "gift_card.created" | "gift_card.updated" | "gift_card_transaction.created" | "object.created" | "object.updated" | "object.deleted" | "customer.redact_requested" | "customer.data_requested" | "customer.erased" | "conversation.message_received" | "payout.created" | "payout.updated" | "object.*" | "checkout.*" | "order.*" | "product.*" | "customer.*" | "payment.*" | "payout.*" | "refund.*" | "review.*" | "return.*" | "variant.*" | "purchase_order.*" | "inventory_transfer.*" | "fulfillment.*" | "shipment.*" | "discount.*" | "gift_card.*" | "gift_card_transaction.*" | "conversation.*" | "*";
 
 // packages/shared/src/plan-limits.d.ts
 export type WorkersPlan = "paid" | "free";
@@ -5280,6 +6548,329 @@ export type TaxCalculation = { calculationId: string; lines: { lineId: string; t
 export type TaxCalculationLine = { taxMinor: number; rateBps: number; jurisdiction: string; name?: string | undefined; rateRef?: string | undefined; };
 
 // packages/shared/src/plugins/scopes.d.ts
+export declare function isPluginScope(value: string): value is PluginScope;
+export declare const PLUGIN_SCOPE_NAMES: [
+    PluginScope,
+    ...PluginScope[]
+];
+export declare const PLUGIN_SCOPES: {
+    readonly read_products: {
+        readonly rbac: readonly [
+            "products.view",
+            "categories.view",
+            "collections.view",
+            "attributes.view"
+        ];
+        readonly staff: "products.view";
+    };
+    readonly write_products: {
+        readonly rbac: readonly [
+            "products.view",
+            "categories.view",
+            "collections.view",
+            "attributes.view",
+            "products.create",
+            "products.edit",
+            "products.delete",
+            "products.restore",
+            "categories.create",
+            "categories.edit",
+            "categories.delete",
+            "categories.restore",
+            "collections.create",
+            "collections.edit",
+            "collections.delete",
+            "collections.restore",
+            "collections.toggle_status",
+            "attributes.create",
+            "attributes.edit",
+            "attributes.delete"
+        ];
+        readonly staff: "products.edit";
+    };
+    readonly read_inventory: {
+        readonly rbac: readonly [
+            "inventory.view"
+        ];
+        readonly staff: "inventory.view";
+    };
+    readonly write_inventory: {
+        readonly rbac: readonly [
+            "inventory.view",
+            "products.adjust_stock",
+            "inventory.manage"
+        ];
+        readonly staff: "products.adjust_stock";
+    };
+    readonly read_orders: {
+        readonly rbac: readonly [
+            "orders.view"
+        ];
+        readonly staff: "orders.view";
+    };
+    readonly write_orders: {
+        readonly rbac: readonly [
+            "orders.view",
+            "orders.create",
+            "orders.edit",
+            "orders.change_status"
+        ];
+        readonly staff: "orders.edit";
+    };
+    readonly write_payments: {
+        readonly rbac: readonly [
+            "orders.view",
+            "orders.record_payment"
+        ];
+        readonly staff: "orders.record_payment";
+        readonly sensitive: true;
+    };
+    readonly write_payment_methods: {
+        readonly rbac: readonly [
+            "orders.view",
+            "orders.charge_saved_methods"
+        ];
+        readonly staff: "orders.charge_saved_methods";
+        readonly sensitive: true;
+    };
+    readonly write_refunds: {
+        readonly rbac: readonly [
+            "orders.view",
+            "orders.refund"
+        ];
+        readonly staff: "orders.refund";
+        readonly sensitive: true;
+    };
+    readonly write_fulfillments: {
+        readonly rbac: readonly [
+            "orders.view",
+            "orders.manage_shipments"
+        ];
+        readonly staff: "orders.manage_shipments";
+    };
+    readonly write_digital_access: {
+        readonly rbac: readonly [
+            "orders.view",
+            "orders.manage_digital_access"
+        ];
+        readonly staff: "orders.manage_digital_access";
+    };
+    readonly read_customers: {
+        readonly rbac: readonly [
+            "customers.view"
+        ];
+        readonly staff: "customers.view";
+    };
+    readonly write_customers: {
+        readonly rbac: readonly [
+            "customers.view",
+            "customers.create",
+            "customers.edit"
+        ];
+        readonly staff: "customers.edit";
+    };
+    readonly write_marketing: {
+        readonly rbac: readonly [
+            "marketing.send"
+        ];
+        readonly staff: "marketing.send";
+    };
+    readonly send_messages_any: {
+        readonly rbac: readonly [
+        ];
+        readonly staff: "marketing.send";
+        readonly sensitive: true;
+    };
+    readonly read_customer_names: {
+        readonly rbac: readonly [
+        ];
+        readonly staff: "customers.view";
+        readonly protects: "name";
+    };
+    readonly read_customer_emails: {
+        readonly rbac: readonly [
+        ];
+        readonly staff: "customers.view";
+        readonly protects: "email";
+    };
+    readonly read_customer_phones: {
+        readonly rbac: readonly [
+        ];
+        readonly staff: "customers.view";
+        readonly protects: "phone";
+    };
+    readonly read_customer_addresses: {
+        readonly rbac: readonly [
+        ];
+        readonly staff: "customers.view";
+        readonly protects: "address";
+    };
+    readonly read_discounts: {
+        readonly rbac: readonly [
+            "discounts.view"
+        ];
+        readonly staff: "discounts.view";
+    };
+    readonly write_discounts: {
+        readonly rbac: readonly [
+            "discounts.view",
+            "discounts.create",
+            "discounts.edit",
+            "discounts.delete",
+            "discounts.toggle_status"
+        ];
+        readonly staff: "discounts.edit";
+    };
+    readonly read_content: {
+        readonly rbac: readonly [
+            "pages.view"
+        ];
+        readonly staff: "pages.view";
+    };
+    readonly write_content: {
+        readonly rbac: readonly [
+            "pages.view",
+            "pages.create",
+            "pages.edit",
+            "pages.delete",
+            "pages.publish"
+        ];
+        readonly staff: "pages.edit";
+    };
+    readonly read_objects: {
+        readonly rbac: readonly [
+            "objects.view"
+        ];
+        readonly staff: "objects.view";
+    };
+    readonly write_objects: {
+        readonly rbac: readonly [
+            "objects.view",
+            "objects.edit"
+        ];
+        readonly staff: "objects.edit";
+    };
+    readonly read_files: {
+        readonly rbac: readonly [
+            "media.view"
+        ];
+        readonly staff: "media.view";
+    };
+    readonly write_files: {
+        readonly rbac: readonly [
+            "media.view",
+            "media.upload",
+            "media.delete",
+            "media.manage_folders"
+        ];
+        readonly staff: "media.upload";
+    };
+    readonly read_gift_cards: {
+        readonly rbac: readonly [
+            "gift_cards.view"
+        ];
+        readonly staff: "gift_cards.view";
+    };
+    readonly write_gift_cards: {
+        readonly rbac: readonly [
+            "gift_cards.view",
+            "gift_cards.manage"
+        ];
+        readonly staff: "gift_cards.manage";
+        readonly sensitive: true;
+    };
+    readonly write_webhooks: {
+        readonly rbac: readonly [
+            "webhooks.view",
+            "webhooks.manage"
+        ];
+        readonly staff: "webhooks.manage";
+        readonly sensitive: true;
+    };
+    readonly read_settings: {
+        readonly rbac: readonly [
+            "settings.general.view",
+            "settings.shipping_methods.view",
+            "taxes.view"
+        ];
+        readonly staff: "settings.general.view";
+    };
+    readonly write_themes: {
+        readonly rbac: readonly [
+            "settings.theme.edit"
+        ];
+        readonly staff: "settings.theme.edit";
+        readonly sensitive: true;
+    };
+    readonly write_navigation: {
+        readonly rbac: readonly [
+            "settings.header.edit"
+        ];
+        readonly staff: "settings.header.edit";
+        readonly sensitive: true;
+    };
+    readonly write_places: {
+        readonly rbac: readonly [
+            "settings.delivery_locations.view",
+            "settings.delivery_locations.import"
+        ];
+        readonly staff: "settings.delivery_locations.import";
+    };
+    readonly read_product_costs: {
+        readonly rbac: readonly [
+            "products.view_costs"
+        ];
+        readonly staff: "products.view_costs";
+        readonly sensitive: true;
+    };
+    readonly read_conversations: {
+        readonly rbac: readonly [
+            "conversations.view"
+        ];
+        readonly staff: "conversations.view";
+        readonly sensitive: true;
+    };
+    readonly write_conversations: {
+        readonly rbac: readonly [
+            "conversations.view",
+            "conversations.reply"
+        ];
+        readonly staff: "conversations.reply";
+        readonly sensitive: true;
+    };
+    readonly write_payouts: {
+        readonly rbac: readonly [
+            "payouts.manage"
+        ];
+        readonly staff: "payouts.manage";
+        readonly sensitive: true;
+    };
+    readonly read_staff: {
+        readonly rbac: readonly [
+            "staff.view"
+        ];
+        readonly staff: "staff.view";
+    };
+    readonly read_reviews: {
+        readonly rbac: readonly [
+            "reviews.view"
+        ];
+        readonly staff: "reviews.view";
+    };
+    readonly write_reviews: {
+        readonly rbac: readonly [
+            "reviews.view",
+            "reviews.moderate"
+        ];
+        readonly staff: "reviews.moderate";
+    };
+    readonly read_analytics: {
+        readonly rbac: readonly [
+            "dashboard.analytics"
+        ];
+        readonly staff: "dashboard.analytics";
+    };
+};
 export type PluginScope = "read_products" | "write_products" | "read_inventory" | "write_inventory" | "read_orders" | "write_orders" | "write_payments" | "write_payment_methods" | "write_refunds" | "write_fulfillments" | "write_digital_access" | "read_customers" | "write_customers" | "write_marketing" | "send_messages_any" | "read_customer_names" | "read_customer_emails" | "read_customer_phones" | "read_customer_addresses" | "read_discounts" | "write_discounts" | "read_content" | "write_content" | "read_objects" | "write_objects" | "read_files" | "write_files" | "read_gift_cards" | "write_gift_cards" | "write_webhooks" | "read_settings" | "write_themes" | "write_navigation" | "write_places" | "read_product_costs" | "read_conversations" | "write_conversations" | "write_payouts" | "read_staff" | "read_reviews" | "write_reviews" | "read_analytics";
 
 // packages/shared/src/plugins/settings-schema.d.ts

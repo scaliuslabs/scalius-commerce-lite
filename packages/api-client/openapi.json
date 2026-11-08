@@ -13719,17 +13719,17 @@
           "title": {
             "type": "string",
             "nullable": true,
-            "maxLength": 240
+            "maxLength": 120
           },
           "body": {
             "type": "string",
             "nullable": true,
-            "maxLength": 10000
+            "maxLength": 5000
           },
           "displayName": {
             "type": "string",
             "nullable": true,
-            "maxLength": 120
+            "maxLength": 60
           },
           "clientKey": {
             "type": "string",
@@ -13765,17 +13765,17 @@
           "title": {
             "type": "string",
             "nullable": true,
-            "maxLength": 240
+            "maxLength": 120
           },
           "body": {
             "type": "string",
             "nullable": true,
-            "maxLength": 10000
+            "maxLength": 5000
           },
           "displayName": {
             "type": "string",
             "nullable": true,
-            "maxLength": 120
+            "maxLength": 60
           }
         },
         "required": [
@@ -30344,7 +30344,7 @@
           "body": {
             "type": "string",
             "nullable": true,
-            "maxLength": 4000
+            "maxLength": 2000
           },
           "version": {
             "type": "integer",
@@ -57753,11 +57753,11 @@
                 "properties": {
                   "subject": {
                     "type": "string",
-                    "maxLength": 240
+                    "maxLength": 120
                   },
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientMessageKey": {
                     "type": "string",
@@ -58909,7 +58909,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientMessageKey": {
                     "type": "string",
@@ -60104,7 +60104,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientMessageKey": {
                     "type": "string",
@@ -64819,7 +64819,7 @@
                 "properties": {
                   "description": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientKey": {
                     "type": "string",
@@ -96005,7 +96005,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientMessageKey": {
                     "type": "string",
@@ -99272,7 +99272,7 @@
                 "properties": {
                   "description": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientKey": {
                     "type": "string",
@@ -100002,7 +100002,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "clientMessageKey": {
                     "type": "string",
@@ -120863,19 +120863,19 @@
                   "title": {
                     "type": "string",
                     "nullable": true,
-                    "maxLength": 240,
+                    "maxLength": 120,
                     "description": "At most 120 characters."
                   },
                   "body": {
                     "type": "string",
                     "nullable": true,
-                    "maxLength": 10000,
+                    "maxLength": 5000,
                     "description": "At most 5000 characters."
                   },
                   "authorDisplayName": {
                     "type": "string",
                     "nullable": true,
-                    "maxLength": 120,
+                    "maxLength": 60,
                     "description": "The name it is shown under (at most 60 characters); defaults to the customer's (\"First L.\"). Required with no customer."
                   },
                   "status": {
@@ -233309,7 +233309,7 @@
                   },
                   "description": {
                     "type": "string",
-                    "maxLength": 10000,
+                    "maxLength": 5000,
                     "description": "What the buyer reported; posted as a public message from the store"
                   },
                   "quantity": {
@@ -234181,7 +234181,7 @@
                   },
                   "body": {
                     "type": "string",
-                    "maxLength": 10000,
+                    "maxLength": 5000,
                     "description": "Plain text, 1–5,000 characters after normalization."
                   },
                   "mode": {
@@ -234621,7 +234621,7 @@
                   },
                   "body": {
                     "type": "string",
-                    "maxLength": 10000,
+                    "maxLength": 5000,
                     "description": "Plain text, 1–5,000 characters after normalization."
                   },
                   "archived": {
@@ -236790,7 +236790,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "products": {
                     "type": "array",
@@ -238517,7 +238517,7 @@
                 "properties": {
                   "body": {
                     "type": "string",
-                    "maxLength": 10000
+                    "maxLength": 5000
                   },
                   "products": {
                     "type": "array",
@@ -282973,7 +282973,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "maxLength": 160,
+                    "maxLength": 80,
                     "description": "Buyer-facing name, like “1 year official warranty”"
                   },
                   "provider": {
@@ -283007,7 +283007,7 @@
                   "terms": {
                     "type": "string",
                     "nullable": true,
-                    "maxLength": 8000,
+                    "maxLength": 4000,
                     "description": "Plain-text terms shown to buyers"
                   }
                 },
@@ -283337,7 +283337,7 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "maxLength": 160,
+                    "maxLength": 80,
                     "description": "Buyer-facing name, like “1 year official warranty”"
                   },
                   "provider": {
@@ -283371,7 +283371,7 @@
                   "terms": {
                     "type": "string",
                     "nullable": true,
-                    "maxLength": 8000,
+                    "maxLength": 4000,
                     "description": "Plain-text terms shown to buyers"
                   },
                   "version": {
@@ -285899,7 +285899,7 @@
                   "message": {
                     "type": "string",
                     "nullable": true,
-                    "maxLength": 10000,
+                    "maxLength": 5000,
                     "description": "Optional public reply to the buyer, posted with the status change (notifies them)"
                   },
                   "requestKey": {
