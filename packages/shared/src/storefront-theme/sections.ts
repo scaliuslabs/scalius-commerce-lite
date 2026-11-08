@@ -476,15 +476,21 @@ export const STOREFRONT_MAX_SECTIONS = 24;
  * `<plugin id>/<type>`, `settings.values` are the merchant's values for the
  * app's section settings.
  */
-export const storefrontAppSectionSchema = z.object({
-  id: sectionIdSchema,
-  type: z.literal("app"),
-  version: z.literal(1),
-  hidden: z.boolean().optional(),
-  aiDraft,
-  settings: z.object({ app: storefrontAppKeySchema, values: storefrontAppValuesSchema }).strict(),
-  bindings: storefrontSettingBindingsSchema.optional(),
-}).strict();
+function storefrontAppSectionSchemaOf(
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+) {
+  return z.object({
+    id: sectionIdSchema,
+    type: z.literal("app"),
+    version: z.literal(1),
+    hidden: z.boolean().optional(),
+    aiDraft,
+    settings: z.object({ app: storefrontAppKeySchema, values }).strict(),
+    bindings: bindings.optional(),
+  }).strict();
+}
+export const storefrontAppSectionSchema = storefrontAppSectionSchemaOf();
 export type StorefrontAppSection = z.infer<typeof storefrontAppSectionSchema>;
 
 const sectionSchemas = STOREFRONT_SECTION_TYPES.map((type) => STOREFRONT_SECTION_REGISTRY[type].schema);
@@ -508,13 +514,14 @@ function storefrontSectionSchemaOf(
   skin: typeof storefrontSkinRefSchema,
   bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
   productSource: typeof storefrontProductSourceSchema = storefrontProductSourceSchema,
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
 ) {
   const schemas = skin === storefrontSkinRefSchema && bindings === storefrontSettingBindingsSchema && productSource === storefrontProductSourceSchema
     ? sectionSchemas
     : Object.values(storefrontSectionRegistryOf(skin, bindings, productSource)).map((entry) => entry.schema);
-  const app = bindings === storefrontSettingBindingsSchema
+  const app = bindings === storefrontSettingBindingsSchema && values === storefrontAppValuesSchema
     ? storefrontAppSectionSchema
-    : storefrontAppSectionSchema.extend({ bindings: bindings.optional() });
+    : storefrontAppSectionSchemaOf(values, bindings);
   return z.discriminatedUnion(
     "type",
     [...schemas, app] as unknown as [Registry["hero"]["schema"], ...Registry[StorefrontSectionType]["schema"][]],
@@ -531,8 +538,9 @@ export function storefrontSectionListSchemaOf(
   skin: typeof storefrontSkinRefSchema = storefrontSkinRefSchema,
   bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
   productSource: typeof storefrontProductSourceSchema = storefrontProductSourceSchema,
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
 ) {
-  return z.array(storefrontSectionSchemaOf(skin, bindings, productSource)).max(STOREFRONT_MAX_SECTIONS)
+  return z.array(storefrontSectionSchemaOf(skin, bindings, productSource, values)).max(STOREFRONT_MAX_SECTIONS)
     .superRefine((sections, context) => {
       const ids = new Set<string>();
       sections.forEach((each, index) => {

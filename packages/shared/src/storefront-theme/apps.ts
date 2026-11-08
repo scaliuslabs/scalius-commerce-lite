@@ -33,18 +33,34 @@ export const storefrontAppValuesSchema = z.record(z.string().regex(PLUGIN_SETTIN
 
 export const storefrontAppKeySchema = z.string().regex(PLUGIN_SURFACE_KEY_PATTERN, "Use <app id>/<type>.");
 
-/** A product-page block of an app; its placement (buy box or below) is the app's. */
-export const storefrontProductAppBlockSchema = z.object({
-  id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/),
-  app: storefrontAppKeySchema,
-  values: storefrontAppValuesSchema,
-  bindings: storefrontSettingBindingsSchema.optional(),
-}).strict();
+/**
+ * A product-page block of an app; its placement (buy box or below) is the
+ * app's. `values` and `bindings` are the shared value and binding schemas
+ * (the API passes its named ones, so its contract states each once).
+ */
+export function storefrontProductAppBlockSchemaOf(
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+) {
+  return z.object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/),
+    app: storefrontAppKeySchema,
+    values,
+    bindings: bindings.optional(),
+  }).strict();
+}
+export const storefrontProductAppBlockSchema = storefrontProductAppBlockSchemaOf();
 export type StorefrontProductAppBlock = z.infer<typeof storefrontProductAppBlockSchema>;
 
 /** The product page's app blocks, in the merchant's order: unique ids, at most `PLUGIN_PRODUCT_BLOCKS_MAX`. */
-export const storefrontProductAppBlocksSchema = z.array(storefrontProductAppBlockSchema).max(PLUGIN_PRODUCT_BLOCKS_MAX)
-  .refine((blocks) => new Set(blocks.map((block) => block.id)).size === blocks.length, "Each block id appears once.");
+export function storefrontProductAppBlocksSchemaOf(
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+) {
+  return z.array(storefrontProductAppBlockSchemaOf(values, bindings)).max(PLUGIN_PRODUCT_BLOCKS_MAX)
+    .refine((blocks) => new Set(blocks.map((block) => block.id)).size === blocks.length, "Each block id appears once.");
+}
+export const storefrontProductAppBlocksSchema = storefrontProductAppBlocksSchemaOf();
 
 /**
  * An app's skin of a core-owned unit (`storefront.skins` of its manifest):
@@ -53,11 +69,17 @@ export const storefrontProductAppBlocksSchema = z.array(storefrontProductAppBloc
  * nothing, core draws the unit, so a page never lacks its header, footer,
  * card, product page, listing or section.
  */
-export const storefrontSkinRefSchema = z.object({
-  app: storefrontAppKeySchema,
-  values: storefrontAppValuesSchema,
-  bindings: storefrontSettingBindingsSchema.optional(),
-}).strict();
+export function storefrontSkinRefSchemaOf(
+  values: typeof storefrontAppValuesSchema = storefrontAppValuesSchema,
+  bindings: typeof storefrontSettingBindingsSchema = storefrontSettingBindingsSchema,
+) {
+  return z.object({
+    app: storefrontAppKeySchema,
+    values,
+    bindings: bindings.optional(),
+  }).strict();
+}
+export const storefrontSkinRefSchema = storefrontSkinRefSchemaOf();
 export type StorefrontSkinRef = z.infer<typeof storefrontSkinRefSchema>;
 
 /**
