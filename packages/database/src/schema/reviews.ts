@@ -2,7 +2,7 @@
 // order line (`UNIQUE(order_item_id)`), at most one live review per product
 // per buyer, and a BEFORE INSERT trigger refuses any named line that was not
 // handed over on a delivered/completed order. An app may also write a review
-// (`author_type = 'app'`, `app_id`; migration 0199): an import of history names
+// (`author_type = 'app'`, `app_id`; migration 0204): an import of history names
 // no line, and only a review on a line is a verified purchase.
 // `product_review_stats` is a trigger projection of the published reviews;
 // nothing else writes it. Vocabulary and limits live in `@scalius/shared/reviews`.
@@ -76,7 +76,7 @@ export const productReviews = sqliteTable("product_reviews", {
     // ascending columns, which SQLite walks backwards for (created_at, id) DESC.
     index("product_reviews_status_list_idx").on(table.status, table.createdAt, table.id),
     index("product_reviews_created_idx").on(table.createdAt, table.id),
-    // The stable app list walks (updated_at, id) (0199).
+    // The stable app list walks (updated_at, id) (0204).
     index("product_reviews_updated_idx").on(table.updatedAt, table.id),
     index("product_reviews_customer_idx")
         .on(table.customerId, sql`${table.createdAt} DESC`)

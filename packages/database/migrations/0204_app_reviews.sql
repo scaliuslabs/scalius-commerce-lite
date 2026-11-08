@@ -283,4 +283,4 @@ END;
 -- went with the old table and are reinstalled here (migration-artifacts.ts).
 SELECT 'search_fts_terms:product_reviews';
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_app_reviews', '267fcf0cc2d31bede8bd918125fc3423e828f9d00b0d711117152e5a90fedb91');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (204, '0204_app_reviews', '267fcf0cc2d31bede8bd918125fc3423e828f9d00b0d711117152e5a90fedb91');

@@ -111,7 +111,7 @@ export function isSearchIndexMarker(statement: string): boolean {
 
 /**
  * The statement of a later migration that rebuilt a search source's table
- * (`SELECT 'search_fts_terms:<source>'`, 0199 for product_reviews): its
+ * (`SELECT 'search_fts_terms:<source>'`, 0204 for product_reviews): its
  * search index triggers went with the old table, so a provider without FTS5
  * reinstalls them (the index rows are keyed by the row id and stay). D1 runs
  * it as a no-op. Null for any other statement; an unknown source throws.

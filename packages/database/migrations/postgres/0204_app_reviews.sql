@@ -1,4 +1,4 @@
--- App reviews: see ../0199_app_reviews.sql. PostgreSQL changes the table in
+-- App reviews: see ../0204_app_reviews.sql. PostgreSQL changes the table in
 -- place (no rebuild): the line columns become nullable, the app column and
 -- the shape checks are added, the line trigger checks a named line only and
 -- identity covers who wrote the review. The cache dependency triggers are
@@ -133,4 +133,4 @@ FOR EACH ROW
 WHEN ((OLD."product_id" IS DISTINCT FROM NEW."product_id"))
 EXECUTE FUNCTION scalius_compat."cdep_product_reviews_upd_old_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_app_reviews', '267fcf0cc2d31bede8bd918125fc3423e828f9d00b0d711117152e5a90fedb91');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (204, '0204_app_reviews', '267fcf0cc2d31bede8bd918125fc3423e828f9d00b0d711117152e5a90fedb91');

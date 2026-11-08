@@ -150,12 +150,12 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_warranty_policies_sku_upd_old: "0189_variant_warranty",
   // An option value's swatch (0196) is a visible column of its row.
   cdep_product_option_values_upd: "0196_option_value_swatches",
-  // App reviews (0199) rebuild product_reviews (an import names no order
+  // App reviews (0204) rebuild product_reviews (an import names no order
   // line): its triggers go with the old table and are reinstalled unchanged.
-  cdep_product_reviews_ins: "0199_app_reviews",
-  cdep_product_reviews_del: "0199_app_reviews",
-  cdep_product_reviews_upd: "0199_app_reviews",
-  cdep_product_reviews_upd_old: "0199_app_reviews",
+  cdep_product_reviews_ins: "0204_app_reviews",
+  cdep_product_reviews_del: "0204_app_reviews",
+  cdep_product_reviews_upd: "0204_app_reviews",
+  cdep_product_reviews_upd_old: "0204_app_reviews",
 };
 
 /**

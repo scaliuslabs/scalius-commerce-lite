@@ -133,7 +133,7 @@ export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([
   // Identity: a trigger refuses every update (product_reviews_identity_immutable);
   // a review with another key is a new row, which inserts cover.
   "product_reviews.reviewer_key",
-  // The app that wrote a review (0199): identity too, set only by an app review's insert.
+  // The app that wrote a review (0204): identity too, set only by an app review's insert.
   "product_reviews.app_id",
 ]);
 
