@@ -90,6 +90,10 @@ export const staffConversationSummarySchema = z.object({
   lastMessageVisibility: z.enum(["public", "internal"]).nullable(),
   unread: z.number().int(),
   version: z.number().int(),
+  /** A chat thread's channel: a built-in (`whatsapp`, …) or an app's own `<app id>:<key>`; null otherwise. */
+  channel: z.string().nullable(),
+  /** An app's own channel's name, from its manifest (the dashboard names built-ins itself); null otherwise. */
+  channelName: z.string().nullable(),
 });
 
 export const staffConversationMessageSchema = z.object({

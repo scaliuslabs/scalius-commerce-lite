@@ -92,6 +92,8 @@ export interface StaffConversationSummary {
   lastMessageVisibility: ConversationMessageVisibility | null;
   unread: number;
   version: number;
+  /** The chat channel of a channel thread (`whatsapp`, … or an app's own `<app id>:<key>`); null otherwise. */
+  channel: string | null;
 }
 
 export interface StaffConversationCase {

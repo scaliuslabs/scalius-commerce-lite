@@ -1,7 +1,12 @@
 // The messaging and push ports (packages/plugin-sdk/docs/apps.md, "Providers").
 //
 // Messaging: chat channels (WhatsApp, Messenger, Instagram, Telegram,
-// Viber). A provider declares the channels it carries (`channels`). Core
+// Viber), and an app's own channels (LINE, Signal, a site chat): a provider
+// declares the built-ins it carries (`channels`) and its own
+// (`customChannels`, each a key and a display name). An app's own channel is
+// `<app id>:<key>` on the wire, so two apps never share one, and only that
+// app's providers deliver or send on it. Its contact address is the
+// channel's own id: it never matches a customer by phone. Core
 // sends a store's buyer messages on a channel through the provider the
 // merchant chose for it; the built-in WhatsApp sender (Meta Cloud API) is
 // the default for WhatsApp.
@@ -31,10 +36,46 @@ import {
 } from "./common";
 import { courierWebhookReplySchema } from "./courier";
 import { messageStatusInputSchema, messageStatusSchema } from "./messaging";
+import { PLUGIN_ID_PATTERN } from "../ids";
 
-/** The chat channels a messaging provider may carry. */
+/** The built-in chat channels a messaging provider may carry. */
 export const MESSAGING_CHANNELS = ["whatsapp", "messenger", "instagram", "telegram", "viber"] as const;
-export type MessagingChannel = (typeof MESSAGING_CHANNELS)[number];
+export type BuiltInMessagingChannel = (typeof MESSAGING_CHANNELS)[number];
+/** A built-in channel, or an app's own channel `<app id>:<key>`. */
+export type MessagingChannel = BuiltInMessagingChannel | `${string}:${string}`;
+
+/** An app's own channel key (`line`, `site_chat`). */
+export const CUSTOM_CHANNEL_KEY_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
+/** The longest qualified channel id, `<app id>:<key>`. */
+export const MESSAGING_CHANNEL_ID_MAX = 64;
+const CUSTOM_CHANNEL_ID_PATTERN = new RegExp(`^${PLUGIN_ID_PATTERN.source.slice(1, -1)}:${CUSTOM_CHANNEL_KEY_PATTERN.source.slice(1, -1)}$`);
+
+/** An app's own channel as the wire carries it: `<app id>:<key>`. */
+export function customChannelId(appId: string, key: string): `${string}:${string}` {
+  return `${appId}:${key}`;
+}
+
+/** Whether a channel is an app's own (`<app id>:<key>`), and whose. */
+export function parseCustomChannelId(channel: string): { appId: string; key: string } | null {
+  if (channel.length > MESSAGING_CHANNEL_ID_MAX || !CUSTOM_CHANNEL_ID_PATTERN.test(channel)) return null;
+  const split = channel.indexOf(":");
+  return { appId: channel.slice(0, split), key: channel.slice(split + 1) };
+}
+
+/** A built-in channel name or an app's own `<app id>:<key>`. */
+export const messagingChannelSchema = z.union([
+  z.enum(MESSAGING_CHANNELS),
+  z.string().max(MESSAGING_CHANNEL_ID_MAX).refine((channel) => parseCustomChannelId(channel) !== null, "Use a built-in channel or <app id>:<key>."),
+]) as unknown as z.ZodType<MessagingChannel>;
+
+/** An app's own channel in its manifest: the key (qualified by the app id on the wire) and the name staff see. */
+export const customMessagingChannelSchema = z.object({
+  key: z.string().regex(CUSTOM_CHANNEL_KEY_PATTERN, "Use a lowercase key: letters, digits and underscores, starting with a letter."),
+  name: z.string().trim().min(1).max(40),
+}).strict();
+export type CustomMessagingChannel = z.infer<typeof customMessagingChannelSchema>;
+/** The most own channels one messaging provider declares. */
+export const CUSTOM_MESSAGING_CHANNELS_MAX = 5;
 
 const rawStatus = z.string().max(300);
 
@@ -48,7 +89,7 @@ export const messagingTemplateSchema = z.object({
 }).strict();
 
 export const messagingSendInputSchema = z.object({
-  channel: z.enum(MESSAGING_CHANNELS),
+  channel: messagingChannelSchema,
   /** E.164 (`+8801XXXXXXXXX`) for WhatsApp and Viber; the channel's own recipient id otherwise. */
   to: z.string().min(1).max(128),
   /** Free text (inside the channel's reply window). Send `text` or `template`. */
@@ -99,7 +140,8 @@ export const MESSAGING_ATTACHMENTS_MAX = 10;
  */
 export const messagingInboundMessageSchema = z.object({
   type: z.literal("message"),
-  channel: z.enum(MESSAGING_CHANNELS),
+  /** A built-in channel, or the app's own `<app id>:<key>`. */
+  channel: messagingChannelSchema,
   messageId: providerRefSchema,
   from: z.object({
     address: z.string().min(1).max(128),
