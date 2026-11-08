@@ -1,4 +1,6 @@
-// Binding buyer uploads to the order that uses them (COMMERCE-HOOKS H17).
+// Binding buyer uploads to the order that uses them (COMMERCE-HOOKS H17):
+// part of the order commit, so the orders domain owns it (the buyer-uploads
+// domain stages, lists and sweeps the files).
 //
 // An order's `file` answers name upload ids: a line input's (frozen on the
 // order line with type `file`) or a checkout attribute's. The commit checks
@@ -12,12 +14,11 @@
 // sends the buyer back to review.
 import { buildBatchGuard, type Database } from "@scalius/database/client";
 import { buyerUploads } from "@scalius/database/schema";
-import { parseBuyerUploadValue } from "@scalius/shared/buyer-uploads";
+import { BUYER_UPLOADS_PER_ORDER_MAX, parseBuyerUploadValue } from "@scalius/shared/buyer-uploads";
 import { readOrderLineProperties } from "@scalius/shared/line-properties";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { AppError } from "../../errors";
-import { BUYER_UPLOADS_PER_ORDER_MAX } from "./uploads";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 

@@ -8,6 +8,7 @@ import type { Database } from "@scalius/database/client";
 import { buyerUploads, orders } from "@scalius/database/schema";
 import {
     BUYER_UPLOAD_ORPHAN_SECONDS,
+    BUYER_UPLOADS_PER_ORDER_MAX,
     BUYER_UPLOAD_RETENTION_DAYS,
     buyerUploadFilename,
     buyerUploadR2Key,
@@ -18,7 +19,7 @@ import {
 import { ERASURE_BLOCKING_ORDER_STATUSES } from "@scalius/shared/customer-erasure";
 import { sha256Hex } from "@scalius/shared/hash";
 import { planLimits } from "@scalius/shared/plan-limits";
-import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, lt, notInArray, sql, type SQL } from "drizzle-orm";
 import { AppError, NotFoundError, RateLimitError } from "../../errors";
 
 const ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -144,8 +145,6 @@ export interface OrderBuyerUpload {
     attachedAt: number;
 }
 
-/** The most uploads one order holds (the commit refuses more). */
-export const BUYER_UPLOADS_PER_ORDER_MAX = 50;
 
 /**
  * An order's files, in id order: every app's for store readers, only its own
@@ -218,12 +217,39 @@ async function deleteRows(
     return deleted;
 }
 
+/** The upload sweep's condition for an ordered upload past retention: its order is settled or gone. */
+function pastRetention(cutoff: SQL | number): SQL {
+    return sql`${buyerUploads.attachedAt} IS NOT NULL AND ${buyerUploads.attachedAt} < ${cutoff}
+        AND (${orders.id} IS NULL OR ${notInArray(orders.status, [...ERASURE_BLOCKING_ORDER_STATUSES])})`;
+}
+
 /**
- * The scheduled sweep (one job of the maintenance rotation, beside the
- * conversation images): uploads no order took within 72 hours, then order
- * retention, uploads attached a year ago whose order is no longer in
- * progress. Oldest first on partial indexes; an idle run is one probe of
- * each that reads no row. At most `limit` deletions a run.
+ * Whether the upload sweep has work, as the cron's one due-work statement
+ * asks it (a column beside the other drains'): an upload no order took
+ * within 72 hours, or one past retention whose order is settled. Each is a
+ * one-row walk of a partial index, the second joined to its order by key,
+ * exactly the sweep's own conditions; an idle store reads no row and pays no
+ * query of its own.
+ */
+export function buyerUploadDueProbes(db: Database) {
+    return [
+        db.select({ id: buyerUploads.id }).from(buyerUploads)
+            .where(and(isNull(buyerUploads.orderId), lt(buyerUploads.createdAt, sql`unixepoch() - ${BUYER_UPLOAD_ORPHAN_SECONDS}`)))
+            .limit(1),
+        db.select({ id: buyerUploads.id }).from(buyerUploads)
+            .leftJoin(orders, eq(orders.id, buyerUploads.orderId))
+            .where(pastRetention(sql`unixepoch() - ${BUYER_UPLOAD_RETENTION_DAYS * 86_400}`))
+            .limit(1),
+    ];
+}
+
+/**
+ * The upload sweep (a background drain the due-work probe runs only when
+ * `buyerUploadDueProbes` finds work): uploads no order took within 72 hours,
+ * then order retention, uploads attached a year ago whose order is settled
+ * or gone. Oldest first on partial indexes, the retention read driven from
+ * the uploads and joined to their orders by key. At most `limit` deletions a
+ * run.
  */
 export async function sweepBuyerUploads(
     db: Database,
@@ -245,26 +271,15 @@ export async function sweepBuyerUploads(
     const room = limit - orphanRows.length;
     if (room <= 0) return { orphans, retained: 0 };
     const retentionCutoff = now - BUYER_UPLOAD_RETENTION_DAYS * 86_400;
-    // Driven from the upload's retention index, then its orders by key: the
-    // read follows the due uploads, never the order history. An upload whose
-    // order is still in progress waits for the next run.
-    const dueRows = await db.select({ id: buyerUploads.id, r2Key: buyerUploads.r2Key, orderId: buyerUploads.orderId }).from(buyerUploads)
-        .where(and(isNotNull(buyerUploads.attachedAt), lt(buyerUploads.attachedAt, retentionCutoff)))
+    // A LEFT JOIN keeps the uploads the outer loop: the read follows the due
+    // uploads, never the order history; an order still in progress keeps its files.
+    const retainedRows = await db.select({ id: buyerUploads.id, r2Key: buyerUploads.r2Key }).from(buyerUploads)
+        .leftJoin(orders, eq(orders.id, buyerUploads.orderId))
+        .where(pastRetention(retentionCutoff))
         .orderBy(asc(buyerUploads.attachedAt))
         .limit(room)
         .all();
-    if (dueRows.length === 0) return { orphans, retained: 0 };
-    const orderIds = [...new Set(dueRows.map((row) => row.orderId!))];
-    // An order still in progress keeps its files; a settled or deleted one does not.
-    const inProgress = new Set((await db.select({ id: orders.id }).from(orders)
-        .where(and(
-            sql`${orders.id} IN (SELECT value FROM json_each(${JSON.stringify(orderIds)}))`,
-            inArray(orders.status, [...ERASURE_BLOCKING_ORDER_STATUSES]),
-        ))
-        .all()).map((row) => row.id));
-    const retainedRows = dueRows.filter((row) => !inProgress.has(row.orderId!));
     const retained = await deleteRows(db, bucket, retainedRows, (id) =>
         and(eq(buyerUploads.id, id), isNotNull(buyerUploads.attachedAt), lt(buyerUploads.attachedAt, retentionCutoff)));
     return { orphans, retained };
 }
-

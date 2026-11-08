@@ -51,6 +51,7 @@
 
 import {
   abandonedCheckouts,
+  buyerUploads,
   conversationAttachments,
   conversationChannelContacts,
   conversationChannelMessages,
@@ -82,7 +83,6 @@ import { NO_PHONE } from "@scalius/shared/customer-auth-policy";
 import { ERASED_TEXT, ERASURE_BLOCKING_ORDER_STATUSES } from "@scalius/shared/customer-erasure";
 import { REVIEW_FALLBACK_DISPLAY_NAME } from "@scalius/shared/reviews";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { buyerUploadErasureStatements } from "../buyer-uploads";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -156,6 +156,24 @@ async function readBlockingOrder(db: Database, scope: ErasureScope) {
 }
 
 /** One delete task a buyer image of the customer's conversations (a repeat is a no-op). */
+/**
+ * The files the buyer uploaded for their orders' app inputs (buyer uploads,
+ * migration 0201): one `delete_file` task each (`upload:<id>`, a repeat is a
+ * no-op), before the batch deletes their rows.
+ */
+function enqueueUploadTasks(
+  db: Database,
+  subjectId: string,
+  theirOrder: (column: typeof buyerUploads.orderId) => SQL,
+): SQLiteBatchItem {
+  return db.insert(customerErasureTasks).select(sql`
+    SELECT 'upload:' || ${buyerUploads.id}, ${subjectId}, 'delete_file', NULL, ${buyerUploads.r2Key},
+      0, unixepoch(), NULL, unixepoch()
+    FROM ${buyerUploads}
+    WHERE ${buyerUploads.orderId} IS NOT NULL AND ${theirOrder(buyerUploads.orderId)}
+  `).onConflictDoNothing() as unknown as SQLiteBatchItem;
+}
+
 function enqueueFileTasks(
   db: Database,
   subjectId: string,
@@ -279,7 +297,8 @@ function scrubStatements(db: Database, subjectId: string, scope: ErasureScope): 
     enqueueDetachTasks(db, subjectId, scope),
     enqueueFileTasks(db, subjectId, scope),
     // The files they uploaded for their orders: tasks first, then the rows.
-    ...buyerUploadErasureStatements(db, subjectId, (column) => orderIdSet(column)),
+    enqueueUploadTasks(db, subjectId, (column) => orderIdSet(column)),
+    db.delete(buyerUploads).where(sql`${buyerUploads.orderId} IS NOT NULL AND ${orderIdSet(buyerUploads.orderId)}`),
     // First: it matches the contacts the statements below clear.
     db.delete(abandonedCheckouts).where(abandonedCheckoutsOfBuyer(scope)),
     // Erased first: the address-book delete below then announces no update.
