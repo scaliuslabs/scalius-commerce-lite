@@ -209,7 +209,7 @@ export interface PluginMessaging {
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
   /**
-   * A browser notification to one signed-in buyer (needs `customers.view`):
+   * A browser notification to one signed-in buyer (needs `read_customers`):
    * Web Push to the browsers they subscribed on their account page, or the
    * store's app push provider. `url` is a store path (`/account/orders`).
    * `delivered: false` when the buyer has no subscribed browser.
@@ -218,7 +218,7 @@ export interface PluginMessaging {
 }
 
 /**
- * Typed lines on order timelines (needs `orders.edit`; each kind declared in
+ * Typed lines on order timelines (needs `write_orders`; each kind declared in
  * `manifest.admin.timeline`): the one way an app writes on a timeline. Staff
  * notes (`orders.comment_add`) are the dashboard's, not the app API's.
  */
@@ -430,7 +430,7 @@ export interface PluginRouteRequest {
    * own session (the app never sees a cookie or token). Null for guests, on
    * direct API requests and on every other surface. Use it to key the
    * buyer's own records; read more with `ctx.api` if the app has
-   * `customers.view`.
+   * `read_customers`.
    *
    * Forms: a signed-in buyer's form post (`POST`, `PUT`, `PATCH`, `DELETE`
    * as a form, multipart or text body) reaches the handler only with the

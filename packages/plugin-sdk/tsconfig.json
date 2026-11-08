@@ -14,7 +14,8 @@
     "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/plugin-sdk.tsbuildinfo"
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "examples/**/*"
   ],
   "references": [
     {

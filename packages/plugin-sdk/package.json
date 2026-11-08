@@ -38,6 +38,7 @@
     "dist",
     "README.md",
     "docs",
+    "examples",
     "LICENSE",
     "PLUGIN-EXCEPTION"
   ],

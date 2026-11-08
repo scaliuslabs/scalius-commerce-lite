@@ -946,5 +946,11 @@
   "from": "db4fb71e39c132a0",
   "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
   "reason": "Merge of the representation-shape and dev-tooling fixes onto mono-repo: the same change is acknowledged above against the branch's own snapshot. The merged snapshot kept one branch's declaration; sealing adds the other's additions. Each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "94eabe1f1f10f754",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive for test authors (clean-room app builder, Nov 9): the harness's return gained commit (checkout holds at the revision read, app_offer_changed for the loser of a race) and its options gained subscribed (marketing consent per channel); records now hold the wire form (money as { amountMinor, currency }), the shape ctx.objects reads."
  }
 ]
