@@ -2,9 +2,9 @@
 // plugin, run on the author's machine, reported one line each. Packs nothing
 // and writes nothing.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative } from "node:path";
-import { bundlePlugin, componentJobs, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sealBundle, smokeSettings } from "./plugin-build.mjs";
+import { bundlePlugin, componentJobs, installedSdk, loadPluginContract, packStorefront, pluginPackageDir, resolvePluginEntry, root, sdkBuildStamp, sdkSourceDigest, SDK_DIR, sealBundle, smokeSettings } from "./plugin-build.mjs";
 import { BUNDLE_MAX_BYTES, shownPath } from "./plugin-registry.mjs";
 
 export const BUNDLE_WARN_BYTES = 1024 * 1024;
@@ -32,6 +32,8 @@ export async function validatePlugin(directory) {
     return result();
   }
   add("pass", "Plugin entry", relative(directory, entry) || entry);
+  const sdk = sdkBuildCheck(directory);
+  if (sdk) add(sdk.status, "SDK build", sdk.detail);
 
   const contract = await loadPluginContract();
   let bundled;
@@ -128,14 +130,7 @@ export async function validatePlugin(directory) {
   let files = null;
   try {
     files = await packStorefront(contract, manifest, directory);
-    const { sections, components, skins, islands } = manifest.storefront;
-    const parts = [
-      ["section", sections.length],
-      ["component", components.length],
-      ["skin", skins.length],
-      ["island", islands.length],
-    ].filter(([, count]) => count > 0).map(([noun, count]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
-    add("pass", "Storefront", files.length === 0 ? "none declared" : `${parts.join(", ") || "files"} compiled and rendered with their defaults`);
+    add("pass", "Storefront", storefrontSummary(manifest.storefront, files.length));
   } catch (error) {
     const first = error?.errors?.[0];
     const message = first ? `${first.text}${first.location ? ` (${first.location.file}:${first.location.line})` : ""}` : String(error?.message ?? error);
@@ -307,6 +302,48 @@ export function formatChecks(checks) {
 }
 
 /** Runs the checks, prints them and sets the exit code. */
+/**
+ * The app's installed SDK build against this checkout's SDK sources: a
+ * tarball packed before a platform change types and tests an older platform
+ * (a missing scope or operation) while the docs describe the new one. Null
+ * when the app uses this repository's SDK source (a workspace app).
+ */
+export function sdkBuildCheck(directory, digest = sdkSourceDigest) {
+  const sdk = installedSdk(directory);
+  if (!sdk || realpathSync(sdk.path) === realpathSync(SDK_DIR)) return null;
+  const stamp = sdkBuildStamp(sdk.path);
+  const refresh = `pnpm --dir ${root}/packages/plugin-sdk pack --pack-destination <app>/vendor, point package.json at the new tarball and npm install`;
+  if (stamp?.sourceDigest === digest()) return { status: "pass", detail: `${sdk.version}, built from this checkout's sources` };
+  return { status: "warn", detail: `The app's SDK (${shownPath(sdk.path)}) was built from other sources than this checkout's, so its types and harness may lack what the docs describe. Refresh it: ${refresh}.` };
+}
+
+const counted = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+/**
+ * Every storefront part the manifest declares, compiled or not: Buyer UI
+ * extensions, a pixel, scripts, head tags and the proxy are storefront parts
+ * too, so an app with only a checkout extension never reads "none declared".
+ */
+export function storefrontSummary(storefront, compiledFiles) {
+  const { sections, components, skins, islands, templates, extensions, scripts } = storefront;
+  const compiled = [
+    [sections.length, "section"],
+    [components.length, "component"],
+    [skins.length, "skin"],
+    [templates.length, "template"],
+    [islands.length, "island"],
+  ].filter(([count]) => count > 0).map(([count, noun]) => counted(count, noun));
+  const declared = [
+    ...(compiled.length > 0 ? [`${compiled.join(", ")} compiled and rendered with their defaults`] : compiledFiles > 0 ? [`${counted(compiledFiles, "file")} compiled`] : []),
+    ...(extensions.length > 0 ? [`${counted(extensions.length, "Buyer UI extension")} (${extensions.map((extension) => extension.target).join(", ")})`] : []),
+    ...(storefront.pixel ? ["a pixel"] : []),
+    ...(scripts.length > 0 ? [counted(scripts.length, "script")] : []),
+    ...(storefront.head ? ["head tags"] : []),
+    ...(storefront.proxy ? ["the app proxy"] : []),
+  ];
+  return declared.join("; ") || "none declared";
+}
+
 export async function runValidate(directory) {
   if (!existsSync(directory)) {
     console.error(`✗ ${shownPath(directory)} does not exist.`);

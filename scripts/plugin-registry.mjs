@@ -12,7 +12,7 @@
 import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { crc32, deflateRawSync } from "node:zlib";
+import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
 import {
   loadEsbuild,
   loadPluginContract,
@@ -459,29 +459,49 @@ export async function installFromRegistry({ id, indexUrl, version = null, plugin
     storefront.push({ path, bytes });
   }
 
-  const directory = join(pluginsDir, packageFolderName(entry.id));
+  const directory = writeReleasePackage(pluginsDir, {
+    id: entry.id,
+    version: entry.version,
+    code,
+    manifest: entry.manifest,
+    assets,
+    storefront,
+    origin: { registry: indexUrl, id: entry.id, sha256, keyId: entry.signature.keyId, signer: check.key.name },
+  }, registry);
+  return { directory, id: entry.id, version: entry.version, sha256, signer: check.key, registryName: index.name };
+}
+
+/**
+ * Writes a checked release as a local package (`<pluginsDir>/<vendor>-<name>/`):
+ * package.json (its `scalius` field says where the release came from),
+ * plugin.js, manifest.json, its listing images and compiled storefront files.
+ * Replaces only a folder an earlier install made.
+ */
+function writeReleasePackage(pluginsDir, { id, version, code, manifest, assets, storefront, origin }, registry) {
+  const directory = join(pluginsDir, packageFolderName(id));
   const marker = join(directory, "package.json");
   if (existsSync(directory)) {
-    let installedFromRegistry = false;
+    let installed = false;
     try {
-      installedFromRegistry = JSON.parse(readFileSync(marker, "utf8")).scalius?.registry !== undefined;
+      const scalius = JSON.parse(readFileSync(marker, "utf8")).scalius;
+      installed = scalius?.registry !== undefined || scalius?.local !== undefined;
     } catch {
       // Not a package folder: refused below.
     }
-    if (!installedFromRegistry) throw new Error(`${directory} already exists and was not installed from a registry; move it first.`);
+    if (!installed) throw new Error(`${directory} already exists and was not installed by pnpm plugin add; move it first.`);
     rmSync(directory, { recursive: true, force: true });
   }
   mkdirSync(directory, { recursive: true });
   writeFileSync(marker, `${JSON.stringify({
-    name: `@scalius/plugin-${packageFolderName(entry.id)}`,
-    version: entry.version,
+    name: `@scalius/plugin-${packageFolderName(id)}`,
+    version,
     private: true,
     type: "module",
     exports: { ".": "./plugin.js" },
-    scalius: { registry: indexUrl, id: entry.id, sha256, keyId: entry.signature.keyId, signer: check.key.name },
+    scalius: origin,
   }, null, 2)}\n`);
   writeFileSync(join(directory, "plugin.js"), code);
-  writeFileSync(join(directory, "manifest.json"), `${JSON.stringify(entry.manifest, null, 2)}\n`);
+  writeFileSync(join(directory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   for (const asset of assets) {
     const target = join(directory, asset.path);
     if (relative(directory, target).startsWith("..")) throw new Error(`Unsafe asset path ${asset.path}.`);
@@ -494,7 +514,138 @@ export async function installFromRegistry({ id, indexUrl, version = null, plugin
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, file.bytes);
   }
-  return { directory, id: entry.id, version: entry.version, sha256, signer: check.key, registryName: index.name };
+  return directory;
+}
+
+// ── Install a packed app from this machine ───────────────────────────────
+
+/** The files of a ZIP that `writeZip` (or an archiver) wrote: stored or deflated entries, no ZIP64. */
+export function readZip(bytes) {
+  if (bytes.length > PACKAGE_MAX_BYTES) throw new Error("The package is larger than 20 MiB, the most a store accepts.");
+  let end = -1;
+  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 65_557); at -= 1) {
+    if (bytes.readUInt32LE(at) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  }
+  if (end < 0) throw new Error("The file is not a ZIP package.");
+  const count = bytes.readUInt16LE(end + 10);
+  if (count > PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PACKAGE_MAX_ENTRIES} files.`);
+  const files = new Map();
+  let at = bytes.readUInt32LE(end + 16);
+  for (let index = 0; index < count; index += 1) {
+    if (bytes.readUInt32LE(at) !== 0x02014b50) throw new Error("The ZIP package is damaged.");
+    const method = bytes.readUInt16LE(at + 10);
+    const compressed = bytes.readUInt32LE(at + 20);
+    const size = bytes.readUInt32LE(at + 24);
+    const nameLength = bytes.readUInt16LE(at + 28);
+    const extraLength = bytes.readUInt16LE(at + 30);
+    const commentLength = bytes.readUInt16LE(at + 32);
+    const local = bytes.readUInt32LE(at + 42);
+    const name = bytes.subarray(at + 46, at + 46 + nameLength).toString("utf8");
+    at += 46 + nameLength + extraLength + commentLength;
+    if (name.endsWith("/")) continue;
+    if (name.startsWith("/") || name.split("/").includes("..")) throw new Error(`Unsafe path in the package: ${name}`);
+    if (bytes.readUInt32LE(local) !== 0x04034b50) throw new Error("The ZIP package is damaged.");
+    const start = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+    const body = bytes.subarray(start, start + compressed);
+    if (method !== 0 && method !== 8) throw new Error(`${name} uses a ZIP compression a store does not read.`);
+    const data = method === 0 ? Buffer.from(body) : inflateRawSync(body, { maxOutputLength: Math.max(size, 1) });
+    if (data.length !== size) throw new Error("The ZIP package is damaged.");
+    files.set(name, data);
+  }
+  // A ZIP made by zipping the dist folder itself: drop the one top folder every file shares.
+  const tops = new Set([...files.keys()].map((name) => (name.includes("/") ? name.split("/")[0] : "")));
+  if (tops.size === 1 && !tops.has("") && !files.has("plugin.js")) {
+    const [top] = tops;
+    return new Map([...files].map(([name, data]) => [name.slice(top.length + 1), data]));
+  }
+  return files;
+}
+
+/** Whether `path` is what `pnpm plugin pack` writes: the upload ZIP, or a `dist` folder holding plugin.js and manifest.json. */
+export function isPackedRelease(path) {
+  try {
+    if (statSync(path).isFile()) return path.toLowerCase().endsWith(".zip");
+    return existsSync(join(path, "plugin.js")) && existsSync(join(path, "manifest.json")) && !existsSync(join(path, "src"));
+  } catch {
+    return false;
+  }
+}
+
+function releaseFiles(path) {
+  if (statSync(path).isFile()) return readZip(readFileSync(path));
+  return new Map(listFiles(path)
+    .map((file) => [relative(path, file).split("\\").join("/"), file])
+    .filter(([name]) => name === "plugin.js" || name === "manifest.json" || name === "signature.json" || name.startsWith("assets/") || name.startsWith("storefront/"))
+    .map(([name, file]) => [name, readFileSync(file)]));
+}
+
+/**
+ * Checks a packed release the way a store checks an upload: the manifest
+ * parses and is compatible, each sealed listing image and storefront file
+ * matches the bundle, and a signature, when there is one, matches the code,
+ * the manifest and the key it names. The operator who runs `pnpm plugin add`
+ * decides to trust it, as a Super Admin does for an unsigned upload.
+ */
+export async function readPackedRelease(path) {
+  const registry = await loadRegistryContract();
+  const contract = await loadPluginContract();
+  const files = releaseFiles(path);
+  const code = files.get("plugin.js");
+  const manifestBytes = files.get("manifest.json");
+  if (!code || !manifestBytes) throw new Error(`${path} is not a packed app: it needs plugin.js and manifest.json (what pnpm plugin pack writes).`);
+  if (code.length > BUNDLE_MAX_BYTES) throw new Error("plugin.js is larger than 16 MiB.");
+  let manifest;
+  try {
+    manifest = JSON.parse(manifestBytes.toString("utf8"));
+  } catch {
+    throw new Error("manifest.json is not JSON.");
+  }
+  const parsed = contract.parsePluginManifest(manifest);
+  if (!parsed.ok) throw new Error(`The app's manifest is invalid: ${parsed.issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`);
+  const compatible = contract.pluginCompatibility(manifest);
+  if (!compatible.ok) throw new Error(compatible.message);
+  const sha256 = sha256Of(code);
+  const text = code.toString("utf8");
+  const sealed = (digests, prefix) => Object.entries(digests).map(([name, digest]) => {
+    const bytes = files.get(`${prefix}${name}`);
+    if (!bytes || sha256Of(bytes) !== digest) throw new Error(`${prefix}${name} is missing or does not match the bundle. Pack the app again.`);
+    return { path: name, bytes };
+  });
+  const assets = sealed(registry.sealedAssetDigests(text), "assets/");
+  const storefront = sealed(registry.sealedStorefrontDigests(text), "storefront/");
+  let signer = null;
+  const signatureBytes = files.get("signature.json");
+  if (signatureBytes) {
+    const signature = registry.pluginPackageSignatureSchema.safeParse(JSON.parse(signatureBytes.toString("utf8")));
+    if (!signature.success) throw new Error("signature.json is not a Scalius package signature.");
+    const key = await registry.trustedKeyFrom(signature.data.publicKey, signature.data.developer);
+    const check = key && key.id === signature.data.keyId
+      ? await registry.verifyPluginSignature({ id: manifest.id, version: manifest.version, sha256, manifest }, { keyId: signature.data.keyId, value: signature.data.value }, [key])
+      : { ok: false };
+    if (!check.ok) throw new Error("The signature does not match the code and manifest. Do not install this package. Nothing was installed.");
+    signer = { keyId: key.id, name: key.name, fingerprint: registry.pluginKeyFingerprint(key.id) };
+  }
+  return { id: manifest.id, version: manifest.version, sha256, code, manifest, assets, storefront, signer };
+}
+
+/**
+ * Installs an app from anywhere on this machine as a local package of the
+ * fork (`<pluginsDir>/<vendor>-<name>/`), which `pnpm plugin add` then
+ * bundles: an app folder is packed first (unsigned); an upload ZIP or a
+ * `dist` folder is installed as packed.
+ */
+export async function installLocalRelease({ source, pluginsDir }) {
+  const registry = await loadRegistryContract();
+  const releasePath = isPackedRelease(source) ? source : (await packSigned(source)).dist;
+  const release = await readPackedRelease(releasePath);
+  const directory = writeReleasePackage(pluginsDir, {
+    ...release,
+    origin: { local: resolve(source), id: release.id, sha256: release.sha256, ...(release.signer ? { keyId: release.signer.keyId, signer: release.signer.name } : {}) },
+  }, registry);
+  return { directory, id: release.id, version: release.version, sha256: release.sha256, signer: release.signer };
 }
 
 /** Adds a developer key to the lockfile's `trustedKeys` content. */

@@ -222,7 +222,9 @@ export default definePlugin({
   },
 });
 `,
-    "src/storefront.tsx": `import type { StorefrontSettingsOf } from "@scalius/plugin-sdk";
+    "src/storefront.tsx": `// The app's storefront section. An app that draws nothing on the storefront
+// deletes this file, src/storefront.test.ts and \`storefront\` in the manifest.
+import type { StorefrontSettingsOf } from "@scalius/plugin-sdk";
 import { defineStorefront, type SectionProps } from "@scalius/plugin-sdk/storefront";
 import type { manifest } from "./index";
 
@@ -241,13 +243,25 @@ function Banner({ settings }: SectionProps<StorefrontSettingsOf<typeof manifest,
 
 export default defineStorefront({ sections: { banner: Banner } });
 `,
+    "src/storefront.test.ts": `// The storefront section on its own, so an app without one deletes this file with it.
+import { describe, expect, it } from "vitest";
+import { renderSection } from "@scalius/plugin-sdk/storefront/testing";
+import storefront from "./storefront";
+
+describe("the banner section", () => {
+  it("draws from its settings and escapes them", () => {
+    const html = renderSection(storefront, "banner", { heading: "Sale <now>", text: "" });
+    expect(html).toContain("Sale &lt;now&gt;");
+    expect(html).not.toContain("<now>");
+    expect(renderSection(storefront, "banner", { heading: "", text: "" })).toBe("");
+  });
+});
+`,
     "src/index.test.ts": `// Unit tests with the SDK's test harness: the platform's own runtime over an
 // in-memory bridge. Run them with \`pnpm test\`.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness, fixtures, parsePluginUiDocument } from "@scalius/plugin-sdk/testing";
-import { renderSection } from "@scalius/plugin-sdk/storefront/testing";
 import plugin from "./index";
-import storefront from "./storefront";
 
 describe(${JSON.stringify(id)}, () => {
   it("remembers the latest order", async () => {
@@ -269,13 +283,6 @@ describe(${JSON.stringify(id)}, () => {
     harness.records.get("notes")!.set("install_note", { value: "Changed by the merchant" });
     expect((await harness.runMigrations()).ok).toBe(true);
     expect(harness.records.get("notes")?.get("install_note")).toEqual({ value: "Changed by the merchant" });
-  });
-
-  it("draws the banner from its settings and escapes them", () => {
-    const html = renderSection(storefront, "banner", { heading: "Sale <now>", text: "" });
-    expect(html).toContain("Sale &lt;now&gt;");
-    expect(html).not.toContain("<now>");
-    expect(renderSection(storefront, "banner", { heading: "", text: "" })).toBe("");
   });
 
   it("answers its admin page with a valid UI document", async () => {
