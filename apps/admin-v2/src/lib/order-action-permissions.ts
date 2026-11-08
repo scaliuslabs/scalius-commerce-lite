@@ -16,6 +16,8 @@ export interface OrderActionPermissions {
   canRefundOrders: boolean;
   /** Record money received against an invoice (pay-later) order. */
   canRecordPayments: boolean;
+  /** Allow more downloads on, or take away, a buyer's digital access. */
+  canManageDigitalAccess: boolean;
   /** Print and issue invoices (the invoice header needs the store's business details). */
   canPrintInvoices: boolean;
   /** Courier delivery history (fraud check) for the buyer's phone. */
@@ -43,6 +45,7 @@ export function getOrderActionPermissions(
     canUpdateOrderCod: hasPermission(PERMISSIONS.ORDERS_EDIT),
     canRefundOrders: hasPermission(PERMISSIONS.ORDERS_REFUND),
     canRecordPayments: hasPermission(PERMISSIONS.ORDERS_RECORD_PAYMENT),
+    canManageDigitalAccess: hasPermission(PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS),
     canPrintInvoices: hasPermission(PERMISSIONS.ORDERS_ISSUE_INVOICE),
     canViewFraudCheck: hasPermission(PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW),
     canBulkDeleteOrders: canDeleteOrders,

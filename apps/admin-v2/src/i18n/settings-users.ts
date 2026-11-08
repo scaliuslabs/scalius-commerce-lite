@@ -241,6 +241,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "orders.record_payment": "Record invoice payments",
     "orders.charge_saved_methods": "Charge saved payment methods",
     "orders.issue_invoice": "Issue invoices",
+    "orders.manage_digital_access": "Manage buyers' downloads",
     "conversations.view": "Read the inbox",
     "conversations.reply": "Reply to customers",
 
@@ -356,6 +357,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "orders.record_payment": "ইনভয়েসের পেমেন্ট রেকর্ড করা",
     "orders.charge_saved_methods": "সংরক্ষিত পেমেন্ট মেথড থেকে চার্জ করা",
     "orders.issue_invoice": "ইনভয়েস দেওয়া",
+    "orders.manage_digital_access": "ক্রেতার ডাউনলোড সামলানো",
     "conversations.view": "ইনবক্স দেখা",
     "conversations.reply": "ক্রেতাকে উত্তর দেওয়া",
 

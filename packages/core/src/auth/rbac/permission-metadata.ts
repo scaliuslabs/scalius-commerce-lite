@@ -377,6 +377,15 @@ export const PERMISSION_METADATA: Record<
     category: "Orders",
     isSensitive: true,
   },
+  [PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS]: {
+    name: PERMISSIONS.ORDERS_MANAGE_DIGITAL_ACCESS,
+    displayName: "Manage Digital Access",
+    description: "Give, reset and take away a buyer's downloads and licence keys",
+    resource: "orders",
+    action: "manage_digital_access",
+    category: "Orders",
+    isSensitive: false,
+  },
   [PERMISSIONS.CONVERSATIONS_VIEW]: {
     name: PERMISSIONS.CONVERSATIONS_VIEW,
     displayName: "View Inbox",

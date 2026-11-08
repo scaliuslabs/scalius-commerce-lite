@@ -121,6 +121,14 @@ export const PLUGIN_SCOPES = {
   write_refunds: { rbac: ["orders.view", "orders.refund"], staff: "orders.refund", sensitive: true },
   /** Hand over order lines, create and void fulfilments and courier shipments. */
   write_fulfillments: { rbac: ["orders.view", "orders.manage_shipments"], staff: "orders.manage_shipments" },
+  /**
+   * Give a buyer the download or licence keys their paid order line bought
+   * (as the store's automatic delivery would), give back access that was
+   * taken away, and take it away (`digital_access.grant`, `.revoke`). Taking
+   * it away cannot be undone by the buyer: the consent screen marks it
+   * destructive. Reading an order's access is `read_orders`.
+   */
+  write_digital_access: { rbac: ["orders.view", "orders.manage_digital_access"], staff: "orders.manage_digital_access" },
   /** Customers, their tags, saved segments and marketing consent; email, text or push a customer by id (`ctx.messaging`). Contact fields need the protected data scopes. */
   read_customers: { rbac: ["customers.view"], staff: "customers.view" },
   /** Create and edit customers, their tags and custom fields; save and change customer segments (not one a live discount or price list uses, without that area's write scope). */

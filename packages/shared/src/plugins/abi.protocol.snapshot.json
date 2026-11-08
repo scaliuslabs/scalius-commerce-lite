@@ -15228,6 +15228,13 @@
    ],
    "staff": "orders.manage_shipments"
   },
+  "write_digital_access": {
+   "rbac": [
+    "orders.view",
+    "orders.manage_digital_access"
+   ],
+   "staff": "orders.manage_digital_access"
+  },
   "read_customers": {
    "rbac": [
     "customers.view"

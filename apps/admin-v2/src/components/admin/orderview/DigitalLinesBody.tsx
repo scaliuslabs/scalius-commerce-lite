@@ -33,7 +33,10 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const { lines, accessEnded } = delivery;
-  const canEdit = useOrderActionPermissions().canEditOrders && !accessEnded;
+  const permissions = useOrderActionPermissions();
+  // Resending is an order edit; allowing more downloads and revoking change the buyer's access.
+  const canResend = permissions.canEditOrders && !accessEnded;
+  const canManage = permissions.canManageDigitalAccess && !accessEnded;
   const [revoking, setRevoking] = useState<LineDownload | null>(null);
   const resendKey = useRef<string | null>(null);
   const done = (message: string) => {
@@ -72,7 +75,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <CardTitle>{t("orderTitle")}</CardTitle>
-          {canEdit && hasDelivered ? (
+          {canResend && hasDelivered ? (
             <Button
               type="button"
               variant="outline"
@@ -115,7 +118,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
                     : t("downloadsOf", { count: entry.downloadCount, limit: entry.downloadLimit }),
                   expiry ? t(expired ? "expired" : "expires", { date: expiry }) : null,
                 ].filter(Boolean).join(" · ");
-                const canReset = canEdit && !entry.revoked && entry.downloadLimit !== null && entry.downloadCount > 0;
+                const canReset = canManage && !entry.revoked && entry.downloadLimit !== null && entry.downloadCount > 0;
                 return (
                   <div key={entry.entitlementId} className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 break-words">
@@ -125,7 +128,7 @@ export function DigitalLinesBody({ orderId, delivery }: { orderId: string; deliv
                       </p>
                       <p className="text-muted-foreground tabular-nums">{facts}</p>
                     </div>
-                    {canEdit && !entry.revoked ? (
+                    {canManage && !entry.revoked ? (
                       <div className="flex flex-wrap gap-2">
                         {canReset ? (
                           <Button

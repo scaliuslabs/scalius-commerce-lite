@@ -68,7 +68,7 @@ export const PERMISSIONS = {
   COLLECTIONS_TOGGLE_STATUS: "collections.toggle_status",
 
   // =============================================
-  // Orders (11 permissions)
+  // Orders (12 permissions)
   // =============================================
   ORDERS_VIEW: "orders.view",
   ORDERS_CREATE: "orders.create",
@@ -81,6 +81,7 @@ export const PERMISSIONS = {
   ORDERS_RECORD_PAYMENT: "orders.record_payment",
   ORDERS_CHARGE_SAVED_METHODS: "orders.charge_saved_methods",
   ORDERS_ISSUE_INVOICE: "orders.issue_invoice",
+  ORDERS_MANAGE_DIGITAL_ACCESS: "orders.manage_digital_access",
 
   // =============================================
   // Conversations (2 permissions): the inbox and order threads

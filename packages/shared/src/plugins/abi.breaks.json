@@ -862,5 +862,41 @@
   "from": "82d387f08b8132fb",
   "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontBuyerInput: an existing signature changed or gained a required member.",
   "reason": "Merge of the Nov 9 wave (G4-G11, point of sale, wider stable tier) onto mono-repo: the same change is acknowledged above against each worker branch's own snapshot. The merged snapshot kept one branch's declaration, so sealing adds the other branches' additions; each addition's reason is in its earlier entry."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "85d7bf8309ae6262",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "A new scope, write_digital_access (give and take away a buyer's downloads and licence keys; digital_access.grant and .revoke moved to it from write_orders, so an order app no longer asks for a destructive revoke), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member. An app that granted or revoked access under write_orders must now ask for write_digital_access (pre-release, recorded in stable-operations.breaks.json)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "85d7bf8309ae6262",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "A new scope, write_digital_access (give and take away a buyer's downloads and licence keys; digital_access.grant and .revoke moved to it from write_orders, so an order app no longer asks for a destructive revoke), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member. An app that granted or revoked access under write_orders must now ask for write_digital_access (pre-release, recorded in stable-operations.breaks.json)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "85d7bf8309ae6262",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "A new scope, write_digital_access (give and take away a buyer's downloads and licence keys; digital_access.grant and .revoke moved to it from write_orders, so an order app no longer asks for a destructive revoke), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member. An app that granted or revoked access under write_orders must now ask for write_digital_access (pre-release, recorded in stable-operations.breaks.json)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "85d7bf8309ae6262",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "A new scope, write_digital_access (give and take away a buyer's downloads and licence keys; digital_access.grant and .revoke moved to it from write_orders, so an order app no longer asks for a destructive revoke), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member. An app that granted or revoked access under write_orders must now ask for write_digital_access (pre-release, recorded in stable-operations.breaks.json)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "85d7bf8309ae6262",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "A new scope, write_digital_access (give and take away a buyer's downloads and licence keys; digital_access.grant and .revoke moved to it from write_orders, so an order app no longer asks for a destructive revoke), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member. An app that granted or revoked access under write_orders must now ask for write_digital_access (pre-release, recorded in stable-operations.breaks.json)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "85d7bf8309ae6262",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "A new scope, write_digital_access (give and take away a buyer's downloads and licence keys; digital_access.grant and .revoke moved to it from write_orders, so an order app no longer asks for a destructive revoke), widens the PluginScope union every manifest and grant type is built from. An app that names scopes keeps compiling and every existing value stays valid; only an exhaustive switch over PluginScope sees one more member. An app that granted or revoked access under write_orders must now ask for write_digital_access (pre-release, recorded in stable-operations.breaks.json)."
  }
 ]
