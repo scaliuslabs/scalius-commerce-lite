@@ -252,6 +252,15 @@ export const STABLE_APP_OPERATIONS = {
   "objects.upsert": "objects.upsert",
   "objects.delete": "objects.delete",
 
+  // ── Markets, shipping, tax and analytics ──
+  "markets.list": "dashboard.resources.markets.list",
+  "markets.get": "dashboard.resources.markets.get",
+  "shipping_zones.list": "dashboard.resources.shipping_zones.list",
+  "shipping_zones.get": "dashboard.resources.shipping_zones.get",
+  "tax_regions.list": "dashboard.resources.tax_regions.list",
+  "tax_regions.get": "dashboard.resources.tax_regions.get",
+  "analytics.get_summary": "dashboard.resources.analytics.get_summary",
+
   // ── Store settings and webhooks ──
   "languages.list": "dashboard.languages.list",
   "delivery_locations.import": "dashboard.delivery_locations.import",

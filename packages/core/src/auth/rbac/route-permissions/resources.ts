@@ -16,6 +16,10 @@ const giftCards = { permission: PERMISSIONS.GIFT_CARDS_VIEW };
 const giftCardsManage = { permission: PERMISSIONS.GIFT_CARDS_MANAGE };
 const webhooks = { permission: PERMISSIONS.WEBHOOKS_VIEW };
 const webhooksManage = { permission: PERMISSIONS.WEBHOOKS_MANAGE };
+const general = { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW };
+const shippingMethods = { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW };
+const taxes = { permission: PERMISSIONS.TAXES_VIEW };
+const analytics = { permission: PERMISSIONS.DASHBOARD_ANALYTICS };
 
 export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/orders": { GET: orders, POST: { permission: PERMISSIONS.ORDERS_CREATE } },
@@ -48,6 +52,15 @@ export const RESOURCE_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/resources/returns/*/receive": { POST: returns },
   "/api/v1/admin/resources/returns/*/cancel": { POST: returns },
   "/api/v1/admin/resources/discounts": { GET: { permission: PERMISSIONS.DISCOUNTS_VIEW } },
+  // Store settings an app reads: each with the permission its settings page reads with (an app: read_settings).
+  "/api/v1/admin/resources/markets": { GET: general },
+  "/api/v1/admin/resources/markets/*": { GET: general },
+  "/api/v1/admin/resources/shipping-zones": { GET: shippingMethods },
+  "/api/v1/admin/resources/shipping-zones/*": { GET: shippingMethods },
+  "/api/v1/admin/resources/tax-regions": { GET: taxes },
+  "/api/v1/admin/resources/tax-regions/*": { GET: taxes },
+  // The sales summary (an app: read_analytics).
+  "/api/v1/admin/resources/analytics/summary": { GET: analytics },
   // Stock screens read locations by name; their addresses need inventory.view
   // or settings.general.view (the handler nulls them otherwise), as on
   // /admin/inventory/locations.

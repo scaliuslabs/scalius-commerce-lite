@@ -77,6 +77,15 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.returns.cancel": { ...returnCommand(), confirmation: "required" },
   // Discounts as their webhooks carry them (routes/admin/resources-discounts.ts).
   "dashboard.resources.discounts.list": { uncurated: true },
+  // Store settings an app reads (routes/admin/resources-settings.ts): markets, shipping zones and tax regions
+  // (read_settings), and a bounded sales summary (read_analytics).
+  "dashboard.resources.markets.list": { uncurated: true },
+  "dashboard.resources.markets.get": { uncurated: true },
+  "dashboard.resources.shipping_zones.list": { uncurated: true },
+  "dashboard.resources.shipping_zones.get": { uncurated: true },
+  "dashboard.resources.tax_regions.list": { uncurated: true },
+  "dashboard.resources.tax_regions.get": { uncurated: true },
+  "dashboard.resources.analytics.get_summary": { uncurated: true },
   // Saved customer segments (routes/admin/resources-customer-segments.ts):
   // spend in minor units; members as customers, contact gated.
   "dashboard.resources.customer_segments.list": { uncurated: true },
@@ -172,7 +181,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   // apps only (write_webhooks), within their approved hosts, topics and
   // customer data. Create returns the signing secret to the app once and
   // never replays it.
-  "dashboard.resources.webhook_subscriptions.list": { limits: { response: 32_768 }, uncurated: true },
+  "dashboard.resources.webhook_subscriptions.list": { uncurated: true },
   "dashboard.resources.webhook_subscriptions.create": {
     batch: "forbidden",
     limits: { request: 16_384, response: 16_384 },
