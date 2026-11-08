@@ -1171,7 +1171,8 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
 />
 
 <script>
-  import { readBuyerAttributes } from "@/lib/buyer-ui";
+  import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+  import { buyerUiDrawn, buyerUiPending } from "@/lib/buyer-ui/lazy";
   import { checkoutText } from "@/lib/checkout-text";
   import { pagePath } from "@/lib/presence-url";
   import { loadLazyScript } from "@/scripts/lazy-script";
@@ -1931,6 +1932,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
     let submitAfterCustomerSessionCheck = false;
     let submitAfterCartValidation = false;
     let awaitingPhoneValidator = false;
+    let awaitingBuyerUi = false;
     // A press confirms the total it was made on. Checking the cart before the
     // order re-prices it (a rate, a shipping profile, a price, a discount, tax
     // or the rate of exchange may have changed since): a different total is
@@ -2153,6 +2155,18 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
         }
         resubmitting = false;
         clearCheckoutFormError();
+        if (buyerUiPending()) {
+          // An app's fields are still loading: check their answers once they are drawn.
+          e.preventDefault();
+          if (awaitingBuyerUi) return;
+          awaitingBuyerUi = true;
+          submitButton.disabled = true;
+          await buyerUiDrawn();
+          awaitingBuyerUi = false;
+          restoreSubmitButton();
+          resubmit();
+          return;
+        }
         for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("[data-buyer-attribute]")) {
           if (!control.reportValidity()) { e.preventDefault(); return; }
         }

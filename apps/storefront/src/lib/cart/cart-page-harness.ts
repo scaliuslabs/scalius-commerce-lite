@@ -16,7 +16,8 @@ import ts from "typescript";
 import { formatMoney } from "@/lib/currency";
 import { getCustomerSession } from "../api/customer-auth";
 import { browserApiUrl } from "../api/browser-url";
-import { readBuyerAttributes } from "../buyer-ui";
+import { readBuyerAttributes } from "../buyer-ui/state";
+import { buyerUiDrawn, buyerUiPending } from "../buyer-ui/lazy";
 import { pagePath } from "../presence-url";
 import { addressAutocompleteService, pageLocale } from "../app-services";
 import { storefrontSourcePath } from "../test-source-paths";
@@ -117,6 +118,8 @@ const realImports: Record<string, unknown> = {
   fetchLocationOptions,
   findNamedCheckoutControl,
   checkoutText,
+  buyerUiDrawn,
+  buyerUiPending,
   formatMoney,
   getCustomerSession,
   getEffectiveCartShippingFee,

@@ -1,6 +1,7 @@
 import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorText } from "../buyer-api-errors";
-import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
+import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import { emitBuyerEvent } from "@/lib/buyer-events/bus";
 import { buyerCheckout, buyerMoney, cartLines, eventText } from "@/lib/buyer-events/lines";
@@ -1096,7 +1097,7 @@ export async function validateCartSnapshot(
   cartValidationAbort = controller;
 
   if (payloadItems.length === 0) {
-    renderBuyerUi([]);
+    void renderBuyerUiWhenNeeded([]);
     cartValidationRetryable = false;
     cartValidationIssues = {};
     validationRuleErrors = [];
@@ -1176,7 +1177,7 @@ export async function validateCartSnapshot(
       }
       latestOnlineOnlyLines = onlineOnlyLines(json.data.items);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
-      renderBuyerUi(json.data.buyerUi, { onChange: refreshBuyerUi });
+      void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi });
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     const deliveryRateRefused =
@@ -1428,7 +1429,7 @@ async function refreshTotals() {
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
     setQuotedLineDiscounts(quote);
-    renderBuyerUi(quote.buyerUi, { onChange: refreshBuyerUi });
+    void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: refreshBuyerUi });
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     // An item that changed is shown on its line and a refused delivery rate

@@ -7,9 +7,8 @@
  * The form already works without this; the API checks every address.
  */
 import type { AddressRules } from "@scalius/shared/address";
-import { getApiV1AddressRulesByCountryCode } from "@scalius/api-client/sdk";
-import { getConfiguredSdkClient } from "@/lib/api/transport";
-import { unwrapData } from "@/lib/api/unwrap";
+import { browserApiUrl } from "@/lib/api/browser-url";
+import { unwrapEnvelope } from "@/lib/api/unwrap";
 import { LOCATION_COUNTRY, shippingCountryOf } from "./shipping-country";
 
 const rulesByCountry = new Map<string, Promise<AddressRules | null>>();
@@ -18,8 +17,10 @@ const rulesByCountry = new Map<string, Promise<AddressRules | null>>();
 export function loadAddressRules(countryCode: string): Promise<AddressRules | null> {
   let pending = rulesByCountry.get(countryCode);
   if (!pending) {
-    pending = getApiV1AddressRulesByCountryCode({ client: getConfiguredSdkClient(), path: { countryCode } })
-      .then(({ data }) => unwrapData<AddressRules>(data) ?? null)
+    // A plain fetch: the generated SDK client would ride along on the cart page (the buyer-page budget).
+    pending = Promise.resolve()
+      .then(() => fetch(browserApiUrl(`/address-rules/${encodeURIComponent(countryCode)}`), { headers: { Accept: "application/json" } }))
+      .then(async (response) => (response.ok ? unwrapEnvelope<AddressRules>(await response.json()) : null))
       .catch(() => null);
     rulesByCountry.set(countryCode, pending);
   }

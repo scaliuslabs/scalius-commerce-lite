@@ -519,10 +519,10 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
   import { getAreas, getZones } from "@/lib/api/shipping";
   import { enhanceLocationSelects } from "@/lib/checkout/location-select";
   import { enhanceShippingCountry } from "@/lib/checkout/country-address";
-  import { enhanceBuyerUi } from "@/lib/buyer-ui";
+  import { enhanceBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
   import { loadLazyScript } from "@/scripts/lazy-script";
 
-  enhanceBuyerUi();
+  void enhanceBuyerUiWhenNeeded();
 
   // The same search-or-scroll pickers as checkout; without JavaScript the
   // server answers "choose a thana" with the new city's list. Another

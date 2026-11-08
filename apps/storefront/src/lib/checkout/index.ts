@@ -1,5 +1,6 @@
 import { checkoutText, pagePhone } from "@/lib/checkout-text";
-import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
+import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+import { buyerUiDrawn, buyerUiPending, renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { cartStore, hydrateCartFromStorage, removeOrderedLines } from "@/store/cart";
 import type { CheckoutConfig, PaymentContext } from "./types";
 import { registerGateway, getGateway } from "./registry";
@@ -1137,7 +1138,15 @@ async function selectMethod(
 
 // ── Process payment ───────────────────────────────────────────────────────────
 
+let awaitingBuyerUi = false;
+
 async function processPayment(): Promise<void> {
+  // The quote's app fields draw once their renderer loads: their required answers are checked on them.
+  if (buyerUiPending()) {
+    if (awaitingBuyerUi) return;
+    awaitingBuyerUi = true;
+    try { await buyerUiDrawn(); } finally { awaitingBuyerUi = false; }
+  }
   if (
     !selectedMethod ||
     isProcessing ||
@@ -1499,7 +1508,7 @@ async function fetchQuoteForCheckout(): Promise<{ quote: CheckoutTaxQuote; notic
 /** Makes a quote the page's truth: the order carries its fingerprint and amount due. */
 function adoptQuote(quote: CheckoutTaxQuote): void {
   authoritativeTaxQuote = quote;
-  renderBuyerUi(quote.buyerUi, { onChange: async () => {
+  void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: async () => {
     if (!checkoutData || isProcessing) return;
     hydrateCartFromStorage();
     const cart = cartStore.get();
