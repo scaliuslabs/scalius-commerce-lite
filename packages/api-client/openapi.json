@@ -13263,7 +13263,8 @@
                           "number",
                           "boolean",
                           "date",
-                          "choice"
+                          "choice",
+                          "file"
                         ]
                       },
                       "required": {
@@ -13304,6 +13305,30 @@
                         },
                         "minItems": 1,
                         "maxItems": 50
+                      },
+                      "accept": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "image/jpeg",
+                            "image/png",
+                            "image/webp",
+                            "application/pdf"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 4
+                      },
+                      "maxBytes": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20971520
+                      },
+                      "maxFiles": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10
                       }
                     },
                     "required": [
@@ -15538,6 +15563,37 @@
           "resolution",
           "createdAt",
           "closedAt"
+        ]
+      },
+      "StagedBuyerUpload": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^bup_[A-Za-z0-9_-]{24}$",
+            "description": "An upload id, `bup_` and 24 characters."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "application/pdf"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "mediaType",
+          "sizeBytes"
         ]
       },
       "OrderResource": {
@@ -24160,6 +24216,75 @@
           "item",
           "warranty",
           "policy"
+        ]
+      },
+      "OrderBuyerUpload": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "appId": {
+            "type": "string",
+            "description": "The app whose input took the file; only it (and store readers) see it."
+          },
+          "key": {
+            "type": "string",
+            "description": "The input, `<app id>.<key>`: a line input's key on the line's `properties`, or a checkout attribute's key."
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "line",
+              "attribute"
+            ]
+          },
+          "orderItemId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The order line of a line input; null for an attribute."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "application/pdf"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "A signed link that streams the file until `urlExpiresAt` (5 minutes). A bearer link: never log or share it."
+          },
+          "urlExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attachedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "appId",
+          "key",
+          "target",
+          "orderItemId",
+          "filename",
+          "mediaType",
+          "sizeBytes",
+          "url",
+          "urlExpiresAt",
+          "attachedAt"
         ]
       },
       "ProductMutationConflict": {
@@ -38015,7 +38140,8 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
+                                        "checkbox",
+                                        "file"
                                       ]
                                     },
                                     "maxLength": {
@@ -38038,6 +38164,27 @@
                                           "label"
                                         ]
                                       }
+                                    },
+                                    "accept": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "image/jpeg",
+                                          "image/png",
+                                          "image/webp",
+                                          "application/pdf"
+                                        ]
+                                      },
+                                      "description": "`file`: the types it takes."
+                                    },
+                                    "maxBytes": {
+                                      "type": "integer",
+                                      "description": "`file`: the largest file, already bounded by the deployment's plan."
+                                    },
+                                    "maxFiles": {
+                                      "type": "integer",
+                                      "description": "`file`: the most files of one answer, already bounded by the plan."
                                     },
                                     "products": {
                                       "type": "object",
@@ -53307,7 +53454,8 @@
                                         "number",
                                         "boolean",
                                         "date",
-                                        "choice"
+                                        "choice",
+                                        "file"
                                       ]
                                     },
                                     "required": {
@@ -53348,6 +53496,30 @@
                                       },
                                       "minItems": 1,
                                       "maxItems": 50
+                                    },
+                                    "accept": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "image/jpeg",
+                                          "image/png",
+                                          "image/webp",
+                                          "application/pdf"
+                                        ]
+                                      },
+                                      "minItems": 1,
+                                      "maxItems": 4
+                                    },
+                                    "maxBytes": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 20971520
+                                    },
+                                    "maxFiles": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 10
                                     }
                                   },
                                   "required": [
@@ -53792,8 +53964,10 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
-                                      ]
+                                        "checkbox",
+                                        "file"
+                                      ],
+                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                     },
                                     "label": {
                                       "type": "string"
@@ -82212,7 +82386,8 @@
                                             "number",
                                             "boolean",
                                             "date",
-                                            "choice"
+                                            "choice",
+                                            "file"
                                           ]
                                         },
                                         "required": {
@@ -82253,6 +82428,30 @@
                                           },
                                           "minItems": 1,
                                           "maxItems": 50
+                                        },
+                                        "accept": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "enum": [
+                                              "image/jpeg",
+                                              "image/png",
+                                              "image/webp",
+                                              "application/pdf"
+                                            ]
+                                          },
+                                          "minItems": 1,
+                                          "maxItems": 4
+                                        },
+                                        "maxBytes": {
+                                          "type": "integer",
+                                          "minimum": 1,
+                                          "maximum": 20971520
+                                        },
+                                        "maxFiles": {
+                                          "type": "integer",
+                                          "minimum": 1,
+                                          "maximum": 10
                                         }
                                       },
                                       "required": [
@@ -82908,8 +83107,10 @@
                                             "text",
                                             "textarea",
                                             "select",
-                                            "checkbox"
-                                          ]
+                                            "checkbox",
+                                            "file"
+                                          ],
+                                          "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                         },
                                         "label": {
                                           "type": "string"
@@ -87342,7 +87543,8 @@
                                         "number",
                                         "boolean",
                                         "date",
-                                        "choice"
+                                        "choice",
+                                        "file"
                                       ]
                                     },
                                     "required": {
@@ -87383,6 +87585,30 @@
                                       },
                                       "minItems": 1,
                                       "maxItems": 50
+                                    },
+                                    "accept": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "image/jpeg",
+                                          "image/png",
+                                          "image/webp",
+                                          "application/pdf"
+                                        ]
+                                      },
+                                      "minItems": 1,
+                                      "maxItems": 4
+                                    },
+                                    "maxBytes": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 20971520
+                                    },
+                                    "maxFiles": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 10
                                     }
                                   },
                                   "required": [
@@ -87589,8 +87815,10 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
-                                      ]
+                                        "checkbox",
+                                        "file"
+                                      ],
+                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                     },
                                     "label": {
                                       "type": "string"
@@ -87636,8 +87864,10 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
-                                      ]
+                                        "checkbox",
+                                        "file"
+                                      ],
+                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                     },
                                     "label": {
                                       "type": "string"
@@ -91527,7 +91757,8 @@
                                         "number",
                                         "boolean",
                                         "date",
-                                        "choice"
+                                        "choice",
+                                        "file"
                                       ]
                                     },
                                     "required": {
@@ -91568,6 +91799,30 @@
                                       },
                                       "minItems": 1,
                                       "maxItems": 50
+                                    },
+                                    "accept": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "image/jpeg",
+                                          "image/png",
+                                          "image/webp",
+                                          "application/pdf"
+                                        ]
+                                      },
+                                      "minItems": 1,
+                                      "maxItems": 4
+                                    },
+                                    "maxBytes": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 20971520
+                                    },
+                                    "maxFiles": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 10
                                     }
                                   },
                                   "required": [
@@ -92259,8 +92514,10 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
-                                      ]
+                                        "checkbox",
+                                        "file"
+                                      ],
+                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                     },
                                     "label": {
                                       "type": "string"
@@ -92309,8 +92566,10 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
-                                      ]
+                                        "checkbox",
+                                        "file"
+                                      ],
+                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                     },
                                     "label": {
                                       "type": "string"
@@ -98798,6 +99057,417 @@
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
           "exclusionReason": "Warranty claims are the buyer's own description and photos, written from the hosted account or receipt page; agents never read a buyer's warranties or open, answer or read a claim. Guest routes require raw receipt proof in a header.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/orders/uploads": {
+      "post": {
+        "operationId": "storefront.orders_uploads.create",
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Upload one file for an app's file input (a line input or a checkout attribute)",
+        "description": "Multipart form: `file`, `field` (`<app id>.<key>`), `target` (`line` or `attribute`) and, for a line input, `productId`. The type is read from the bytes; the file stays private. Send the returned id as the input's answer (ids joined by commas). Files no order takes within 72 hours are deleted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "field": {
+                    "type": "string",
+                    "maxLength": 160
+                  },
+                  "target": {
+                    "type": "string",
+                    "enum": [
+                      "line",
+                      "attribute"
+                    ]
+                  },
+                  "productId": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "field",
+                  "target"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The stored upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "upload": {
+                          "$ref": "#/components/schemas/StagedBuyerUpload"
+                        }
+                      },
+                      "required": [
+                        "upload"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "A buyer's file for an app's file input, sent from the buyer's browser; agents never upload or read buyer files.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/orders/uploads/{id}": {
+      "delete": {
+        "operationId": "storefront.orders_uploads.delete",
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Take back a file no order holds yet",
+        "description": "Only from the visitor that uploaded it; anything else is 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^bup_[A-Za-z0-9_-]{24}$",
+              "description": "An upload id, `bup_` and 24 characters."
+            },
+            "required": true,
+            "description": "An upload id, `bup_` and 24 characters.",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The uploading browser takes back its own file before ordering.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/orders/uploads/{id}/{exp}/{sig}": {
+      "get": {
+        "operationId": "storefront.orders_uploads.get",
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Stream an ordered buyer file from a signed link",
+        "description": "The link comes from `order_uploads.list` (staff or the owning app) and lives 5 minutes. Every failure is 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 12
+            },
+            "required": true,
+            "name": "exp",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sig",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file, as an attachment",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "stability": "internal",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": true,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Streams an ordered buyer file from a short-lived signed link handed to staff or the owning app.",
           "dryRun": "none",
           "confirmation": "none"
         },
@@ -220163,8 +220833,10 @@
                                         "text",
                                         "textarea",
                                         "select",
-                                        "checkbox"
-                                      ]
+                                        "checkbox",
+                                        "file"
+                                      ],
+                                      "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                     },
                                     "label": {
                                       "type": "string"
@@ -221976,8 +222648,10 @@
                                     "text",
                                     "textarea",
                                     "select",
-                                    "checkbox"
-                                  ]
+                                    "checkbox",
+                                    "file"
+                                  ],
+                                  "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                 },
                                 "label": {
                                   "type": "string"
@@ -224370,8 +225044,10 @@
                                             "text",
                                             "textarea",
                                             "select",
-                                            "checkbox"
-                                          ]
+                                            "checkbox",
+                                            "file"
+                                          ],
+                                          "description": "`file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files)."
                                         },
                                         "label": {
                                           "type": "string"
@@ -225594,6 +226270,147 @@
             "conversations.reply",
             "orders.edit"
           ]
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/uploads": {
+      "get": {
+        "operationId": "dashboard.orders.uploads",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "The files buyers gave the order's file inputs, with short-lived signed links",
+        "description": "An app sees only the files its own inputs took. Follow nextCursor for more (an order holds at most 50).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The `nextCursor` of the page before; leave it out for the first page."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before; leave it out for the first page.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The order's files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "uploads": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/OrderBuyerUpload"
+                          },
+                          "x-scalius-app-owned": "items"
+                        },
+                        "nextCursor": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "uploads",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "stable",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when reading the files a buyer uploaded for an order (photos to print, documents) and getting short-lived download links.",
+          "dryRun": "none",
+          "confirmation": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
         }
       }
     },
@@ -297551,6 +298368,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.order-cancel"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.uploads",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.uploads"
           ]
         },
         {

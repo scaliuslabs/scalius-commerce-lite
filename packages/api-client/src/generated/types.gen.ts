@@ -2553,7 +2553,7 @@ export type CustomerAccountSummary = {
             key: string;
             label: string;
             help?: string;
-            type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+            type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
             required?: boolean;
             maxLength?: number;
             min?: number;
@@ -2562,6 +2562,9 @@ export type CustomerAccountSummary = {
                 value: string;
                 label: string;
             }>;
+            accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+            maxBytes?: number;
+            maxFiles?: number;
         }>;
         values: {
             [key: string]: string;
@@ -3038,6 +3041,16 @@ export type BuyerWarrantyClaim = {
     resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
     createdAt: string;
     closedAt: string | null;
+};
+
+export type StagedBuyerUpload = {
+    /**
+     * An upload id, `bup_` and 24 characters.
+     */
+    id: string;
+    filename: string;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+    sizeBytes: number;
 };
 
 export type OrderResource = {
@@ -5146,6 +5159,32 @@ export type WarrantyClaim = {
         replacementDays: number | null;
         terms: string | null;
     };
+};
+
+export type OrderBuyerUpload = {
+    id: string;
+    /**
+     * The app whose input took the file; only it (and store readers) see it.
+     */
+    appId: string;
+    /**
+     * The input, `<app id>.<key>`: a line input's key on the line's `properties`, or a checkout attribute's key.
+     */
+    key: string;
+    target: 'line' | 'attribute';
+    /**
+     * The order line of a line input; null for an attribute.
+     */
+    orderItemId: string | null;
+    filename: string;
+    mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+    sizeBytes: number;
+    /**
+     * A signed link that streams the file until `urlExpiresAt` (5 minutes). A bearer link: never log or share it.
+     */
+    url: string;
+    urlExpiresAt: string;
+    attachedAt: string;
 };
 
 export type ProductMutationConflict = {
@@ -9265,12 +9304,24 @@ export type GetApiV1StorefrontLayoutResponses = {
                     key: string;
                     label: string;
                     help?: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     maxLength?: number;
                     options?: Array<{
                         value: string;
                         label: string;
                     }>;
+                    /**
+                     * `file`: the types it takes.
+                     */
+                    accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+                    /**
+                     * `file`: the largest file, already bounded by the deployment's plan.
+                     */
+                    maxBytes?: number;
+                    /**
+                     * `file`: the most files of one answer, already bounded by the plan.
+                     */
+                    maxFiles?: number;
                     products?: {
                         customField: string;
                     };
@@ -13559,7 +13610,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     key: string;
                     label: string;
                     help?: string;
-                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
                     required?: boolean;
                     maxLength?: number;
                     min?: number;
@@ -13568,6 +13619,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                         value: string;
                         label: string;
                     }>;
+                    accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+                    maxBytes?: number;
+                    maxFiles?: number;
                 }>;
                 values: {
                     [key: string]: string;
@@ -13672,7 +13726,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 fulfilledQuantity: number;
                 properties: Array<{
                     key: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    /**
+                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                     */
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     label: string;
                     value: string;
                     displayValue: string;
@@ -21601,7 +21658,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         key: string;
                         label: string;
                         help?: string;
-                        type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                        type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
                         required?: boolean;
                         maxLength?: number;
                         min?: number;
@@ -21610,6 +21667,9 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                             value: string;
                             label: string;
                         }>;
+                        accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+                        maxBytes?: number;
+                        maxFiles?: number;
                     }>;
                     values: {
                         [key: string]: string;
@@ -21783,7 +21843,10 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     fulfilledQuantity: number;
                     properties: Array<{
                         key: string;
-                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        /**
+                         * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                         */
+                        type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                         label: string;
                         value: string;
                         displayValue: string;
@@ -22632,7 +22695,7 @@ export type PostApiV1OrdersCartValidationResponses = {
                     key: string;
                     label: string;
                     help?: string;
-                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
                     required?: boolean;
                     maxLength?: number;
                     min?: number;
@@ -22641,6 +22704,9 @@ export type PostApiV1OrdersCartValidationResponses = {
                         value: string;
                         label: string;
                     }>;
+                    accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+                    maxBytes?: number;
+                    maxFiles?: number;
                 }>;
                 values: {
                     [key: string]: string;
@@ -22693,7 +22759,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                 propertiesPriceMinor: number;
                 properties: Array<{
                     key: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    /**
+                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                     */
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     label: string;
                     value: string;
                     displayValue: string;
@@ -22703,7 +22772,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                 }>;
                 adjustments: Array<{
                     key: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    /**
+                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                     */
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     label: string;
                     value: string;
                     displayValue: string;
@@ -23419,7 +23491,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     key: string;
                     label: string;
                     help?: string;
-                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice';
+                    type: 'text' | 'multiline' | 'number' | 'boolean' | 'date' | 'choice' | 'file';
                     required?: boolean;
                     maxLength?: number;
                     min?: number;
@@ -23428,6 +23500,9 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                         value: string;
                         label: string;
                     }>;
+                    accept?: Array<'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'>;
+                    maxBytes?: number;
+                    maxFiles?: number;
                 }>;
                 values: {
                     [key: string]: string;
@@ -23662,7 +23737,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
                 properties: Array<{
                     key: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    /**
+                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                     */
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     label: string;
                     value: string;
                     displayValue: string;
@@ -23673,7 +23751,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 propertiesPriceMinor: number;
                 adjustments: Array<{
                     key: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    /**
+                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                     */
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     label: string;
                     value: string;
                     displayValue: string;
@@ -25582,6 +25663,149 @@ export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachm
 };
 
 export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses];
+
+export type PostApiV1OrdersUploadsData = {
+    body: {
+        file?: Blob | File;
+        field: string;
+        target: 'line' | 'attribute';
+        productId?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/uploads';
+};
+
+export type PostApiV1OrdersUploadsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1OrdersUploadsError = PostApiV1OrdersUploadsErrors[keyof PostApiV1OrdersUploadsErrors];
+
+export type PostApiV1OrdersUploadsResponses = {
+    /**
+     * The stored upload
+     */
+    201: {
+        success: true;
+        data: {
+            upload: StagedBuyerUpload;
+        };
+    };
+};
+
+export type PostApiV1OrdersUploadsResponse = PostApiV1OrdersUploadsResponses[keyof PostApiV1OrdersUploadsResponses];
+
+export type DeleteApiV1OrdersUploadsByIdData = {
+    body?: never;
+    path: {
+        /**
+         * An upload id, `bup_` and 24 characters.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/uploads/{id}';
+};
+
+export type DeleteApiV1OrdersUploadsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1OrdersUploadsByIdError = DeleteApiV1OrdersUploadsByIdErrors[keyof DeleteApiV1OrdersUploadsByIdErrors];
+
+export type DeleteApiV1OrdersUploadsByIdResponses = {
+    /**
+     * Removed
+     */
+    200: {
+        success: true;
+        data: {
+            removed: true;
+        };
+    };
+};
+
+export type DeleteApiV1OrdersUploadsByIdResponse = DeleteApiV1OrdersUploadsByIdResponses[keyof DeleteApiV1OrdersUploadsByIdResponses];
+
+export type GetApiV1OrdersUploadsByIdByExpBySigData = {
+    body?: never;
+    path: {
+        id: string;
+        exp: string;
+        sig: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/uploads/{id}/{exp}/{sig}';
+};
+
+export type GetApiV1OrdersUploadsByIdByExpBySigErrors = {
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1OrdersUploadsByIdByExpBySigError = GetApiV1OrdersUploadsByIdByExpBySigErrors[keyof GetApiV1OrdersUploadsByIdByExpBySigErrors];
+
+export type GetApiV1OrdersUploadsByIdByExpBySigResponses = {
+    /**
+     * The file, as an attachment
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1OrdersUploadsByIdByExpBySigResponse = GetApiV1OrdersUploadsByIdByExpBySigResponses[keyof GetApiV1OrdersUploadsByIdByExpBySigResponses];
 
 export type GetApiV1AdminResourcesOrdersData = {
     body?: never;
@@ -62516,7 +62740,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 fulfilledQuantity: number;
                 properties: Array<{
                     key: string;
-                    type: 'text' | 'textarea' | 'select' | 'checkbox';
+                    /**
+                     * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                     */
+                    type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                     label: string;
                     value: string;
                     displayValue: string;
@@ -62955,7 +63182,10 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
             fulfilledQuantity: number;
             properties: Array<{
                 key: string;
-                type: 'text' | 'textarea' | 'select' | 'checkbox';
+                /**
+                 * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                 */
+                type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                 label: string;
                 value: string;
                 displayValue: string;
@@ -63514,7 +63744,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     fulfillmentType: 'ship' | 'pickup' | 'digital' | 'gift_card' | 'service';
                     properties: Array<{
                         key: string;
-                        type: 'text' | 'textarea' | 'select' | 'checkbox';
+                        /**
+                         * `file`: an app's upload input; `value` is the upload ids joined by commas (`order_uploads.list` reads the files).
+                         */
+                        type: 'text' | 'textarea' | 'select' | 'checkbox' | 'file';
                         label: string;
                         value: string;
                         displayValue: string;
@@ -63884,6 +64117,49 @@ export type PostApiV1AdminOrdersByIdWarrantyClaimsResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdWarrantyClaimsResponse = PostApiV1AdminOrdersByIdWarrantyClaimsResponses[keyof PostApiV1AdminOrdersByIdWarrantyClaimsResponses];
+
+export type GetApiV1AdminOrdersByIdUploadsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * The `nextCursor` of the page before; leave it out for the first page.
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/orders/{id}/uploads';
+};
+
+export type GetApiV1AdminOrdersByIdUploadsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1AdminOrdersByIdUploadsError = GetApiV1AdminOrdersByIdUploadsErrors[keyof GetApiV1AdminOrdersByIdUploadsErrors];
+
+export type GetApiV1AdminOrdersByIdUploadsResponses = {
+    /**
+     * The order's files
+     */
+    200: {
+        success: true;
+        data: {
+            uploads: Array<OrderBuyerUpload>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdUploadsResponse = GetApiV1AdminOrdersByIdUploadsResponses[keyof GetApiV1AdminOrdersByIdUploadsResponses];
 
 export type GetApiV1AdminConversationsData = {
     body?: never;
