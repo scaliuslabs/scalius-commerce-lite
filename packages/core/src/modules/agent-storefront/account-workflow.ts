@@ -1,4 +1,4 @@
-import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
   agentStorefrontContexts,
   agentStorefrontContinuations,
@@ -55,6 +55,13 @@ type ContextRow = typeof agentStorefrontContexts.$inferSelect;
 type ContinuationRow = typeof agentStorefrontContinuations.$inferSelect;
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
+const CUSTOMER_CONTINUATION_CONFLICT = "agent_storefront_customer_continuation_conflict";
+const CUSTOMER_CONTEXT_CONFLICT = "agent_storefront_customer_context_conflict";
+const RECOVERY_CONTINUATION_CONFLICT = "agent_storefront_recovery_continuation_conflict";
+const LOGOUT_CONFLICT = "agent_storefront_logout_conflict";
+const STEP_NO_LONGER_ACTIVE = "This secure storefront step is no longer active.";
+const CONTEXT_REVISION_CHANGED = "Storefront context revision changed.";
+
 function nowSeconds(now = new Date()): number {
   return Math.floor(now.getTime() / 1_000);
 }
@@ -99,7 +106,7 @@ async function loadHostedContinuation(
     || continuation.bootstrapCodeHash !== null
     || continuation.bootstrapClaimedAt === null
   ) {
-    throw new ConflictError("This secure storefront step is no longer active.");
+    throw new ConflictError(STEP_NO_LONGER_ACTIVE);
   }
   return { context, continuation };
 }
@@ -299,7 +306,7 @@ export async function bindAgentStorefrontCustomerSession(
       AND ${agentStorefrontContinuations.kind} = 'customer_auth'
       AND ${agentStorefrontContinuations.status} = 'pending'
       AND ${agentStorefrontContinuations.expiresAt} > unixepoch()
-  )`, "agent_storefront_customer_continuation_conflict") as SQLiteBatchItem;
+  )`, CUSTOMER_CONTINUATION_CONFLICT) as SQLiteBatchItem;
   const contextGuard = buildBatchGuard(db, sql`EXISTS (
     SELECT 1 FROM ${agentStorefrontContexts}
     WHERE ${agentStorefrontContexts.id} = ${context.id}
@@ -307,30 +314,37 @@ export async function bindAgentStorefrontCustomerSession(
       AND ${agentStorefrontContexts.closedAt} IS NULL
       AND ${agentStorefrontContexts.expiresAt} > unixepoch()
       AND ${agentStorefrontContexts.revision} = ${context.revision}
-  )`, "agent_storefront_customer_context_conflict") as SQLiteBatchItem;
-  await safeBatch(db, [
-    continuationGuard,
-    contextGuard,
-    db.update(agentStorefrontContexts).set({
-      customerSessionTokenHash,
-      revision: sql`${agentStorefrontContexts.revision} + 1`,
-      lastUsedAt: now,
-      updatedAt: now,
-    }).where(and(
-      eq(agentStorefrontContexts.id, context.id),
-      eq(agentStorefrontContexts.revision, context.revision),
-    )),
-    db.update(agentStorefrontContinuations).set({
-      status: "complete",
-      bootstrapCodeHash: null,
-      safeResultJson: JSON.stringify({ authenticated: true }),
-      completedAt: now,
-      updatedAt: now,
-    }).where(and(
-      eq(agentStorefrontContinuations.id, continuation.id),
-      eq(agentStorefrontContinuations.status, "pending"),
-    )),
-  ] as SQLiteBatchItem[]);
+  )`, CUSTOMER_CONTEXT_CONFLICT) as SQLiteBatchItem;
+  try {
+    await safeBatch(db, [
+      continuationGuard,
+      contextGuard,
+      db.update(agentStorefrontContexts).set({
+        customerSessionTokenHash,
+        revision: sql`${agentStorefrontContexts.revision} + 1`,
+        lastUsedAt: now,
+        updatedAt: now,
+      }).where(and(
+        eq(agentStorefrontContexts.id, context.id),
+        eq(agentStorefrontContexts.revision, context.revision),
+      )),
+      db.update(agentStorefrontContinuations).set({
+        status: "complete",
+        bootstrapCodeHash: null,
+        safeResultJson: JSON.stringify({ authenticated: true }),
+        completedAt: now,
+        updatedAt: now,
+      }).where(and(
+        eq(agentStorefrontContinuations.id, continuation.id),
+        eq(agentStorefrontContinuations.status, "pending"),
+      )),
+    ] as SQLiteBatchItem[]);
+  } catch (error) {
+    // The step finished, expired or was replaced, or the agent moved the context, since the read above.
+    if (isBatchGuardError(error, CUSTOMER_CONTINUATION_CONFLICT)) throw new ConflictError(STEP_NO_LONGER_ACTIVE);
+    if (isBatchGuardError(error, CUSTOMER_CONTEXT_CONFLICT)) throw new ConflictError(CONTEXT_REVISION_CHANGED);
+    throw error;
+  }
   return { contextId: context.id, customerId: customerSession.customerId };
 }
 
@@ -351,41 +365,46 @@ export async function bindAgentStorefrontRecoveredOrder(
   }
   const expiresAt = new Date(Math.min(context.expiresAt.getTime(), input.authorityExpiresAt.getTime()));
   if (expiresAt <= now) throw new ConflictError("Recovered order authority already expired.");
-  await safeBatch(db, [
-    buildBatchGuard(db, sql`EXISTS (
-      SELECT 1 FROM ${agentStorefrontContinuations}
-      WHERE ${agentStorefrontContinuations.id} = ${continuation.id}
-        AND ${agentStorefrontContinuations.contextId} = ${context.id}
-        AND ${agentStorefrontContinuations.kind} = 'payment_recovery'
-        AND ${agentStorefrontContinuations.status} = 'pending'
-        AND ${agentStorefrontContinuations.expiresAt} > unixepoch()
-    )`, "agent_storefront_recovery_continuation_conflict") as SQLiteBatchItem,
-    db.insert(agentStorefrontOrderGrants).values({
-      contextId: context.id,
-      orderId: input.orderId,
-      authorityKind: "recovered",
-      expiresAt,
-      createdAt: now,
-    }).onConflictDoUpdate({
-      target: [agentStorefrontOrderGrants.contextId, agentStorefrontOrderGrants.orderId],
-      set: { authorityKind: "recovered", expiresAt },
-    }),
-    db.update(agentStorefrontContinuations).set({
-      status: "complete",
-      bootstrapCodeHash: null,
-      safeResultJson: JSON.stringify({
-        recovered: true,
+  try {
+    await safeBatch(db, [
+      buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${agentStorefrontContinuations}
+        WHERE ${agentStorefrontContinuations.id} = ${continuation.id}
+          AND ${agentStorefrontContinuations.contextId} = ${context.id}
+          AND ${agentStorefrontContinuations.kind} = 'payment_recovery'
+          AND ${agentStorefrontContinuations.status} = 'pending'
+          AND ${agentStorefrontContinuations.expiresAt} > unixepoch()
+      )`, RECOVERY_CONTINUATION_CONFLICT) as SQLiteBatchItem,
+      db.insert(agentStorefrontOrderGrants).values({
+        contextId: context.id,
         orderId: input.orderId,
-        gateway: input.gateway,
-        paymentType: input.paymentType,
+        authorityKind: "recovered",
+        expiresAt,
+        createdAt: now,
+      }).onConflictDoUpdate({
+        target: [agentStorefrontOrderGrants.contextId, agentStorefrontOrderGrants.orderId],
+        set: { authorityKind: "recovered", expiresAt },
       }),
-      completedAt: now,
-      updatedAt: now,
-    }).where(and(
-      eq(agentStorefrontContinuations.id, continuation.id),
-      eq(agentStorefrontContinuations.status, "pending"),
-    )),
-  ] as SQLiteBatchItem[]);
+      db.update(agentStorefrontContinuations).set({
+        status: "complete",
+        bootstrapCodeHash: null,
+        safeResultJson: JSON.stringify({
+          recovered: true,
+          orderId: input.orderId,
+          gateway: input.gateway,
+          paymentType: input.paymentType,
+        }),
+        completedAt: now,
+        updatedAt: now,
+      }).where(and(
+        eq(agentStorefrontContinuations.id, continuation.id),
+        eq(agentStorefrontContinuations.status, "pending"),
+      )),
+    ] as SQLiteBatchItem[]);
+  } catch (error) {
+    if (isBatchGuardError(error, RECOVERY_CONTINUATION_CONFLICT)) throw new ConflictError(STEP_NO_LONGER_ACTIVE);
+    throw error;
+  }
   return { contextId: context.id, orderId: input.orderId };
 }
 
@@ -462,7 +481,7 @@ export async function logoutAgentStorefrontCustomer(
   now = new Date(),
 ): Promise<{ revision: number; authenticated: false }> {
   const context = await loadOwnedActiveContext(db, grantId, contextId, now);
-  if (context.revision !== expectedRevision) throw new ConflictError("Storefront context revision changed.");
+  if (context.revision !== expectedRevision) throw new ConflictError(CONTEXT_REVISION_CHANGED);
   const activeGuard = and(
     eq(agentStorefrontContexts.id, contextId),
     eq(agentStorefrontContexts.grantId, grantId),
@@ -470,26 +489,32 @@ export async function logoutAgentStorefrontCustomer(
     eq(agentStorefrontContexts.revision, expectedRevision),
     gt(agentStorefrontContexts.expiresAt, now),
   );
-  await safeBatch(db, [
-    buildBatchGuard(db, sql`EXISTS (
-      SELECT 1 FROM ${agentStorefrontContexts} WHERE ${activeGuard}
-    )`, "agent_storefront_logout_conflict"),
-    ...(context.customerSessionTokenHash ? [
-      db.update(customerSessions).set({
-        revokedAt: nowSeconds(now),
-        updatedAt: nowSeconds(now),
-      }).where(and(
-        eq(customerSessions.tokenHash, context.customerSessionTokenHash),
-        isNull(customerSessions.revokedAt),
-      )),
-    ] : []),
-    db.update(agentStorefrontContexts).set({
-      customerSessionTokenHash: null,
-      revision: sql`${agentStorefrontContexts.revision} + 1`,
-      lastUsedAt: now,
-      updatedAt: now,
-    }).where(activeGuard),
-  ] as SQLiteBatchItem[]);
+  try {
+    await safeBatch(db, [
+      buildBatchGuard(db, sql`EXISTS (
+        SELECT 1 FROM ${agentStorefrontContexts} WHERE ${activeGuard}
+      )`, LOGOUT_CONFLICT),
+      ...(context.customerSessionTokenHash ? [
+        db.update(customerSessions).set({
+          revokedAt: nowSeconds(now),
+          updatedAt: nowSeconds(now),
+        }).where(and(
+          eq(customerSessions.tokenHash, context.customerSessionTokenHash),
+          isNull(customerSessions.revokedAt),
+        )),
+      ] : []),
+      db.update(agentStorefrontContexts).set({
+        customerSessionTokenHash: null,
+        revision: sql`${agentStorefrontContexts.revision} + 1`,
+        lastUsedAt: now,
+        updatedAt: now,
+      }).where(activeGuard),
+    ] as SQLiteBatchItem[]);
+  } catch (error) {
+    // Another call moved, closed or expired the context since the read above.
+    if (isBatchGuardError(error, LOGOUT_CONFLICT)) throw new ConflictError(CONTEXT_REVISION_CHANGED);
+    throw error;
+  }
   return { revision: expectedRevision + 1, authenticated: false };
 }
 

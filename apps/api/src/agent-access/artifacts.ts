@@ -1,13 +1,15 @@
 import { nanoid } from "nanoid";
 import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { agentArtifactHandles, agentGrants } from "@scalius/database/schema";
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { agentConnectionInactive } from "./dispatch-error";
 import type { AgentPrincipal, AgentResource } from "./types";
 
 const MAX_ARTIFACT_BYTES = 16_777_216;
 const ARTIFACT_TTL_MS = 5 * 60 * 1000;
+const ARTIFACT_AUTHORITY_INACTIVE = "agent_artifact_authority_inactive";
 const SAFE_MEDIA_TYPES = new Set([
   "application/pdf",
   "application/zip",
@@ -117,7 +119,7 @@ export async function createAgentArtifact(
             AND agent_credentials.revoked_at IS NULL
             AND agent_credentials.expires_at > unixepoch()
         )`,
-    "agent_artifact_authority_inactive",
+    ARTIFACT_AUTHORITY_INACTIVE,
   );
   const insert = db.insert(agentArtifactHandles).values({
     id: artifactId,
@@ -135,7 +137,13 @@ export async function createAgentArtifact(
     createdAt: now,
     updatedAt: now,
   });
-  await safeBatch(db, [guard, insert]);
+  try {
+    await safeBatch(db, [guard, insert]);
+  } catch (error) {
+    // The grant or credential was revoked or expired after the read above.
+    if (isBatchGuardError(error, ARTIFACT_AUTHORITY_INACTIVE)) throw agentConnectionInactive();
+    throw error;
+  }
   const downloadPath = input.credentialId === null
     ? `/api/v1/mcp/${input.resource}/artifacts/${artifactId}`
     : `/api/v1/agent-artifacts/${artifactId}`;

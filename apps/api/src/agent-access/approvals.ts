@@ -35,7 +35,7 @@ import {
   grantAuthorityGuard,
   requireEncryptionKey,
 } from "./browser-handoffs";
-import { AgentDispatchError } from "./dispatch-error";
+import { AgentDispatchError, agentConnectionInactive } from "./dispatch-error";
 import type { ConfirmTarget, ConfirmTargetKind } from "./mcp/confirm";
 import type { AgentPrincipal } from "./types";
 import { qualifiedColumn } from "@scalius/core/utils/qualified-column";
@@ -144,7 +144,7 @@ export async function requestAgentApproval(
     ]);
   } catch (error) {
     if (isBatchGuardError(error, "AGENT_APPROVAL_AUTHORITY_INACTIVE")) {
-      throw new AgentDispatchError("agent_grant_inactive", "This connection is no longer active", 401);
+      throw agentConnectionInactive();
     }
     throw error;
   }

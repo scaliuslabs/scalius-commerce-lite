@@ -22,3 +22,12 @@ export class AgentDispatchError extends Error {
     this.status = status;
   }
 }
+
+/**
+ * The refusal of a write a connection makes for itself (an approval link, a
+ * browser handoff, an artifact handle) when its grant or credential was
+ * revoked, expired or narrowed after the call was authorized.
+ */
+export function agentConnectionInactive(): AgentDispatchError {
+  return new AgentDispatchError("agent_grant_inactive", "This connection is no longer active", 401);
+}
