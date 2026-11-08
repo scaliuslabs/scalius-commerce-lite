@@ -1,7 +1,7 @@
 // Admin OpenAPI routes for installed apps (plugins, packages/plugin-sdk/docs/apps.md):
 // the list (bundled plugins appear as installed automatically), one app's
 // detail with its consent request in structured form, activation (Super Admin
-// approves the grant), its features (each off until a Super Admin turns it on
+// approves the grant), the order apps run in at checkout function points, its features (each off until a Super Admin turns it on
 // and approves that feature's access; anyone who manages apps turns one
 // off), settings (secrets write-only), deactivation,
 // uninstall (keep or delete data), the plugin log and event deliveries, and
@@ -102,6 +102,7 @@ import { ServiceUnavailableError } from "@scalius/core/errors";
 import { getThemeSettings } from "@scalius/core/modules/settings";
 import { registerAppLifecycleRoutes } from "./apps-lifecycle";
 import { registerRemovedAppDataRoutes } from "./apps-removed-data";
+import { registerFunctionOrderRoutes } from "./apps-function-order";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
 // per permission) load only on the requests that need them, never when this
@@ -1069,6 +1070,10 @@ registerAppLifecycleRoutes(app, { detail, detailSchema: appDetailSchema, lifecyc
 // ── Data from removed apps (apps-removed-data.ts; before `/{id}`) ──
 
 registerRemovedAppDataRoutes(app);
+
+// ── Checkout order of apps at function points (apps-function-order.ts; before `/{id}`) ──
+
+registerFunctionOrderRoutes(app);
 
 // ── Get ──
 

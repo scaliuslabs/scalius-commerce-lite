@@ -3,7 +3,8 @@
 // customer data). One classification serves every surface: route output
 // schemas mark their fields with `x-scalius-protected`, the event
 // representations mark theirs the same way, provider inputs carry only the
-// granted categories, and function inputs carry none at all.
+// granted categories, and function inputs carry none but cart.validate's
+// `contact`, whose marked fields are projected the same way per app.
 //
 // `address` is the street: lines, company and dependent locality. The region
 // (country, admin area, locality, delivery place ids and names, postal code)

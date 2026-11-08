@@ -7,6 +7,7 @@
 
 import type { Database } from "@scalius/database/client";
 import {
+  orderFunctionRegistrations,
   resolveActiveFunctionRegistrations,
   writePluginLogs,
   type ActiveFunctionRegistrationRow,
@@ -23,7 +24,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_EXTENSION_RUN, PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint, type PluginRunPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
 import { prepareBuyerUiBlocks } from "./buyer-ui";
-import { createSandboxRunQueue, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
+import { createSandboxRuns, functionReadRequests, PluginFunctionsBlockedError, runPluginFunctions, type FunctionCustomerRoles } from "./functions";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
 
 export interface CheckoutAppFunctionsOptions {
@@ -49,7 +50,7 @@ function contextOf(ctx: ExecutionContext | undefined): ExecutionContext {
 
 export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions): CheckoutAppFunctions {
   const active = isResolved(options.registrations)
-    ? [...options.registrations]
+    ? orderFunctionRegistrations(options.registrations)
     : resolveActiveFunctionRegistrations(options.registrations as readonly ActiveFunctionRegistrationRow[]);
   // Purchase options (manifest `checkout.purchaseOptions`): what a cart line may
   // name, from every app checkout reads (a function or a payment provider: the
@@ -73,8 +74,10 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
 
   const ctx = contextOf(options.ctx);
   const memo = new Map<string, Promise<unknown[]>>();
-  // Points run concurrently, but the request's sandboxed runs go one at a time (functions.ts).
-  const sandboxRuns = createSandboxRunQueue();
+  // Points run concurrently; the request's sandboxed runs share one bounded set of slots (functions.ts).
+  const sandboxRuns = createSandboxRuns(registrations
+    .filter((registration) => registration.installation.source !== "bundled")
+    .map((registration) => registration.installation.pluginId));
   // Declared reads, one cache per request: facts batches fill it, calls read from it.
   const reads = createAppReadsCache(options.db);
   // The signed-in buyer's roles for every app of the request: one read, at the first app run that needs it.

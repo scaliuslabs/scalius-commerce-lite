@@ -36,6 +36,8 @@ export const DASHBOARD_WHEN_A: Readonly<Record<string, string>> = {
   "dashboard.apps.deliveries_list": "Use when checking what events were delivered to an app and which failed.",
   "dashboard.apps.delivery_retry": "Use when a failed or exhausted event delivery to an app should be sent again.",
   "dashboard.apps.feature_disable": "Use when turning off one feature of an installed app and revoking that feature's access.",
+  "dashboard.apps.function_order_get": "Use when asked which apps run at checkout, in what order, or which app's price or decision wins when two apps overlap.",
+  "dashboard.apps.function_order_update": "Use when the merchant wants one app to run before another at a checkout point (its price or discount to win); sends every app at the point in the new order, or null to go back to the apps' own priorities.",
   "dashboard.apps.features_list": "Use when asked what an app's optional features are, which are on and what access each needs.",
   "dashboard.apps.get": "Use when inspecting one installed app: what it asks to access, its settings and its scheduled jobs.",
   "dashboard.apps.list": "Use when asked which apps or integrations are installed and running in the store.",

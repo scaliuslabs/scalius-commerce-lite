@@ -235,7 +235,7 @@ export async function applyManualOrderAppFunctions(
 
     // One wave of app calls: every point sees the same cart.
     const [validations, discounts, rates, payments] = await Promise.all([
-        apps.points.has("cart.validate") ? apps.run("cart.validate", { cart }) : Promise.resolve([]),
+        apps.points.has("cart.validate") ? apps.run("cart.validate", { cart, contact: null }) : Promise.resolve([]),
         apps.points.has("checkout.discounts") ? apps.run("checkout.discounts", { cart }) : Promise.resolve([]),
         wantsRates && rateOptions.length > 0
             ? apps.run("checkout.shipping_rates", {

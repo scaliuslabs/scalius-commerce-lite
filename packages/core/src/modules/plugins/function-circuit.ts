@@ -17,12 +17,14 @@
 // holds the thread, so no timer, no failure count and no other request runs
 // until the Worker restarts. A sandboxed run is therefore marked in flight
 // before it starts and cleared when it answers; a mark still set well past
-// the wall limit means it hung, and the next checkout stops the app (the
-// emergency stop, with its reason) instead of running it again, so one hang
-// never freezes the store a second time after a restart. A request runs its
-// sandboxed runs one at a time (apps/api plugins/functions.ts,
-// `SandboxRunQueue`), so a hung run's mark is the only one it leaves: only
-// the app that never returned is stopped, never another app of that checkout.
+// the wall limit means it hung. A request runs several sandboxed runs at once
+// (apps/api plugins/functions.ts, `SandboxRuns`), and a held thread freezes
+// them all, so the mark says whether its run shared the request with another
+// app's run. A stale mark of a run alone names the app that never returned:
+// the next checkout stops it (the emergency stop, with its reason) instead of
+// running it again. A stale shared mark only makes the app a suspect: it runs
+// alone next time, so a second hang names it, and an innocent app beside the
+// culprit is never stopped.
 //
 // The state lives on the registration row checkout already reads in its own
 // batch, so a closed circuit costs nothing; only a failure, and the first
@@ -54,6 +56,8 @@ export interface FunctionCircuitState {
   openUntil: number | null;
   /** Unix seconds a sandboxed run started and has not answered yet; null when none is in flight. */
   inflightAt?: number | null;
+  /** The in-flight run shared its request with other sandboxed runs (a stale mark then names a suspect, not the culprit). */
+  inflightShared?: boolean;
 }
 
 /** Whether the circuit keeps checkout from calling the app now. */
@@ -68,6 +72,18 @@ export function functionCircuitOpen(circuit: FunctionCircuitState | null | undef
  * would freeze the store again.
  */
 export function functionHung(circuit: FunctionCircuitState | null | undefined, nowSeconds: number): boolean {
+  return staleMark(circuit, nowSeconds) && !circuit?.inflightShared;
+}
+
+/**
+ * Whether a sandboxed run that shared its request with other apps' runs
+ * never answered: it, or one beside it, held the thread. It runs alone next.
+ */
+export function functionSuspect(circuit: FunctionCircuitState | null | undefined, nowSeconds: number): boolean {
+  return staleMark(circuit, nowSeconds) && Boolean(circuit?.inflightShared);
+}
+
+function staleMark(circuit: FunctionCircuitState | null | undefined, nowSeconds: number): boolean {
   const started = circuit?.inflightAt;
   return started !== null && started !== undefined && nowSeconds - started > FUNCTION_CIRCUIT.hangSeconds;
 }
@@ -135,8 +151,10 @@ export async function recordFunctionSuccess(db: Database, input: { pluginId: str
  * Marks a sandboxed run in flight before it starts, committed before the app
  * gets the thread, so a run that never returns is known after a restart.
  */
-export async function markFunctionInflight(db: Database, input: { pluginId: string; point: string }): Promise<void> {
-  await db.update(pluginRegistrations).set({ circuitInflightAt: sql`unixepoch()` }).where(registration(input.pluginId, input.point));
+export async function markFunctionInflight(db: Database, input: { pluginId: string; point: string; shared?: boolean }): Promise<void> {
+  await db.update(pluginRegistrations)
+    .set({ circuitInflightAt: sql`unixepoch()`, circuitInflightShared: input.shared ? 1 : 0 })
+    .where(registration(input.pluginId, input.point));
 }
 
 /** The run answered (or failed): it is no longer in flight. */

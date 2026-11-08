@@ -24,15 +24,17 @@ export interface AppliedAppDiscount {
 }
 
 /**
- * A write an app's `checkout.discounts` answer commits with the order: its
- * snapshot record (the buyer's, id = customer id) at the revision the
- * function saw (null: it did not exist). The order and the write commit in
- * one batch or not at all, so a balance the discount spends is spent once.
- * Built by the platform from a validated answer (size and index columns
- * checked), never taken from the app as is.
+ * A write an app's `checkout.discounts` or `cart.validate` answer commits
+ * with the order: a record its function read, at the revision the function
+ * saw (null: it did not exist). The order and the write commit in one batch
+ * or not at all, so a balance a discount spends is spent once and a slot a
+ * hold takes is taken once. Built by the platform from a validated answer
+ * (size and index columns checked), never taken from the app as is.
  */
 export interface AppObjectCommit {
   pluginId: string;
+  /** The answer it came from: a discount's write (only with an applied discount) or a hold (always with the order). */
+  point: "checkout.discounts" | "cart.validate";
   object: string;
   public: boolean;
   events: boolean;

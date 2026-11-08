@@ -2,10 +2,17 @@
 // (primary key kind, name, plugin) joined to active installations: when no
 // active plugin declares the point the read returns nothing and the caller
 // does no plugin work at all.
+//
+// The order apps run (and merge) at a function point is the merchant's
+// (`functionRunOrder`): apps the merchant ordered at that point first, by
+// their rank (`plugin_installations.function_ranks`, read with the
+// installation, so ordering costs no read), then every other app by its
+// manifest priority, then app id. With no merchant order it is the manifest
+// priority, as before.
 
 import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
-import type { PluginRunPoint } from "@scalius/shared/plugins";
+import type { PluginFunctionPoint, PluginRunPoint } from "@scalius/shared/plugins";
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
@@ -17,12 +24,14 @@ const circuitColumns = {
   circuitFailures: pluginRegistrations.circuitFailures,
   circuitOpenUntil: pluginRegistrations.circuitOpenUntil,
   circuitInflightAt: pluginRegistrations.circuitInflightAt,
+  circuitInflightShared: pluginRegistrations.circuitInflightShared,
 };
 const seconds = (value: number | null | undefined): number | null => (value === null || value === undefined ? null : Number(value));
-const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: number | null; circuitInflightAt?: number | null }): FunctionCircuitState => ({
+const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: number | null; circuitInflightAt?: number | null; circuitInflightShared?: number | null }): FunctionCircuitState => ({
   failures: Number(row.circuitFailures ?? 0),
   openUntil: seconds(row.circuitOpenUntil),
   inflightAt: seconds(row.circuitInflightAt),
+  inflightShared: Number(row.circuitInflightShared ?? 0) === 1,
 });
 
 export interface RegisteredPlugin {
@@ -34,6 +43,33 @@ export interface RegisteredPlugin {
   kind?: "event" | "function" | "cron" | "provider";
   /** A function registration's circuit (function-circuit.ts), read with it. */
   circuit?: FunctionCircuitState;
+}
+
+/** The merchant's rank for a registration's app at its function point; null when it has none there. */
+export function functionRank(registration: Pick<RegisteredPlugin, "installation" | "name">): number | null {
+  return registration.installation.functionRanks?.[registration.name as PluginFunctionPoint] ?? null;
+}
+
+/**
+ * The one order of apps at a function point: merchant-ranked apps first (by
+ * rank), then the rest by manifest priority, then app id. Checkout runs and
+ * merges in this order whatever order the answers arrive in.
+ */
+export function functionRunOrder(
+  left: Pick<RegisteredPlugin, "installation" | "name" | "priority">,
+  right: Pick<RegisteredPlugin, "installation" | "name" | "priority">,
+): number {
+  const leftRank = functionRank(left);
+  const rightRank = functionRank(right);
+  if (leftRank !== null && rightRank !== null && leftRank !== rightRank) return leftRank - rightRank;
+  if ((leftRank === null) !== (rightRank === null)) return leftRank === null ? 1 : -1;
+  if (left.priority !== right.priority) return left.priority - right.priority;
+  return left.installation.pluginId < right.installation.pluginId ? -1 : left.installation.pluginId > right.installation.pluginId ? 1 : 0;
+}
+
+/** Registrations in `functionRunOrder` (a copy). */
+export function orderFunctionRegistrations<T extends Pick<RegisteredPlugin, "installation" | "name" | "priority">>(registrations: readonly T[]): T[] {
+  return [...registrations].sort(functionRunOrder);
 }
 
 async function activeRegistrations(db: Database, kind: "event" | "function" | "cron" | "provider", names: readonly string[]): Promise<RegisteredPlugin[]> {
@@ -53,10 +89,10 @@ async function activeRegistrations(db: Database, kind: "event" | "function" | "c
     const installation = toPluginInstallation(row.installation);
     if (installation) result.push({ installation, priority: row.priority, name: row.name, circuit: circuitOf(row) });
   }
-  return result;
+  return kind === "function" ? orderFunctionRegistrations(result) : result;
 }
 
-/** Active plugins implementing a function point, by priority then plugin id. */
+/** Active plugins implementing a function point, in `functionRunOrder`. */
 export function listActiveFunctionPlugins(db: Database, point: PluginRunPoint): Promise<RegisteredPlugin[]> {
   return activeRegistrations(db, "function", [point]);
 }
@@ -81,6 +117,7 @@ export interface ActiveFunctionRegistrationRow {
   circuitFailures?: number | null;
   circuitOpenUntil?: number | null;
   circuitInflightAt?: number | null;
+  circuitInflightShared?: number | null;
   installation: typeof pluginInstallations.$inferSelect;
 }
 
@@ -91,7 +128,8 @@ export function resolveActiveFunctionRegistrations(rows: readonly ActiveFunction
     const installation = toPluginInstallation(row.installation);
     if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}), circuit: circuitOf(row) });
   }
-  return result;
+  // Function registrations in the merchant's order (provider rows have no rank: priority, then id).
+  return orderFunctionRegistrations(result);
 }
 
 /**
@@ -125,7 +163,7 @@ export async function listActiveProviderPlugins(db: Database, kind: ProviderKind
   return rows.map((row) => row.installation).sort((left, right) => left.pluginId.localeCompare(right.pluginId));
 }
 
-/** Every active function registration (all points), by priority then plugin id. */
+/** Every active function registration (all points), in `functionRunOrder`. */
 export async function listActiveFunctionRegistrations(db: Database): Promise<RegisteredPlugin[]> {
   return resolveActiveFunctionRegistrations(await selectActiveFunctionRegistrations(db).all());
 }

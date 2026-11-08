@@ -1,5 +1,6 @@
 // Function points (packages/plugin-sdk/docs/apps.md, "Extension points" 2): checkout
-// asks every active plugin that implements a point, in priority order, and
+// asks every active plugin that implements a point, in the merchant's order
+// (`functionRunOrder`; with none set, manifest priority), and
 // merges what comes back (core checkout/app-functions.ts). This is the runner
 // it calls. With no active implementation the cost is one indexed read that
 // returns nothing (or none: checkout passes the registrations it already
@@ -18,11 +19,16 @@
 // gets its own as `input.reads`, from the request's reads cache (filled by
 // the checkout facts batch) or read now in one batch for every app at the
 // point. Reads over their bounds count as a failed answer. A
-// checkout.discounts answer's `commit` entries become checked
-// `AppObjectCommit`s the order commit writes at the revisions read. A commit
-// the platform cannot take (an undeclared or per-line read, a key with no id,
-// an invalid record) invalidates the whole answer: a discount must never
-// apply without the write that pays for it.
+// checkout.discounts or cart.validate answer's `commit` entries become
+// checked `AppObjectCommit`s the order commit writes at the revisions read.
+// A commit the platform cannot take (an undeclared or per-line read, a key
+// with no id, an invalid record) is a failed answer, under the failure
+// policy: a discount must never apply without the write that pays for it,
+// and a hold that cannot be taken blocks when the store approved it so.
+//
+// Contact (cart.validate `contact`): each field reaches an app only with its
+// protected-data scope, projected from the schema's marks exactly as the
+// API's responses are (protected-data.ts); every other app reads it null.
 //
 // Storefront extensions (manifest `storefront.extensions`) render through
 // this runner under PLUGIN_EXTENSION_RUN: an app runs for a UI slot it
@@ -44,8 +50,10 @@ import {
   functionCircuitDirty,
   functionCircuitOpen,
   functionHung,
+  functionSuspect,
   listActiveFunctionPlugins,
   markFunctionInflight,
+  orderFunctionRegistrations,
   PluginError,
   recordFunctionFailure,
   recordFunctionSuccess,
@@ -64,6 +72,7 @@ import {
 import type { AppObjectCommit } from "@scalius/shared/checkout-app-facts";
 import {
   PLUGIN_EXTENSION_RUN,
+  functionInputProtectedPaths,
   pluginRunSchemas,
   pluginRunSource,
   type FunctionReadDeclaration,
@@ -72,14 +81,22 @@ import {
   type PluginRunPoint,
 } from "@scalius/shared/plugins";
 import type { PluginCustomerRole } from "@scalius/shared/plugins/customer-roles";
+import { grantedProtectedData, redactProtectedData } from "@scalius/shared/plugins/protected-data";
 import type { PluginHost, PluginHostOptions } from "./host";
 
 export interface PluginFunctionResult<P extends PluginRunPoint> {
   pluginId: string;
   priority: number;
   output: PluginFunctionOutput<P>;
-  /** checkout.discounts: the writes of read records this answer commits with the order. */
+  /** checkout.discounts and cart.validate: the writes of read records this answer commits with the order. */
   commits?: AppObjectCommit[];
+}
+
+/** The input with `contact` narrowed to the protected-data categories the app's grant reveals. */
+function withGrantedContact(input: Record<string, unknown>, point: PluginRunPoint, installation: RegisteredPlugin["installation"]): Record<string, unknown> {
+  if (!input.contact) return input;
+  const paths = functionInputProtectedPaths(point);
+  return redactProtectedData(structuredClone(input), paths, grantedProtectedData(installation.grant?.scopes ?? []));
 }
 
 /** An app registered with `onError: "block"` could not answer: checkout must stop. */
@@ -141,27 +158,70 @@ function ownLineProperties(properties: Readonly<Record<string, string>>, pluginI
 
 /** Plugins asked at once; each is CPU-bound and wall-limited, so a few in flight bound latency. */
 const CONCURRENCY = 4;
+/** Sandboxed runs one request has in flight at once, across every point it runs. */
+export const SANDBOX_CONCURRENCY = 4;
 
 /**
- * One request's sandboxed function runs, one at a time. A sandboxed run is
- * marked in flight before it starts and cleared after (function-circuit.ts);
- * if two overlapped and one held the thread (a busy loop the isolate's CPU
- * limit does not end, as local development's Worker Loader enforces none),
- * the other's clear would never commit and, after the restart, both apps
- * would look hung. Run one at a time, at most one mark is set per request, so
- * a stale mark names exactly the app that never returned. Bundled runs are
- * in-process code, never marked, and stay concurrent; only sandboxed runs
- * pay the wait. A queue belongs to one request (checkout makes one per
- * request; a call without one gets its own), never to the module.
+ * One request's sandboxed function runs: up to SANDBOX_CONCURRENCY at once,
+ * so checkout latency does not grow with every Paid app. Answers merge in the
+ * merchant's order (`functionRunOrder`), never in the order they arrive.
+ *
+ * A sandboxed run is marked in flight before it starts and cleared after
+ * (function-circuit.ts). A run that holds the thread (a busy loop the
+ * isolate's CPU limit does not end, as local development's Worker Loader
+ * enforces none) freezes every run beside it, so after the restart each of
+ * their marks is stale. A mark therefore says whether its run shared the
+ * request with another app's sandboxed run: a stale shared mark makes the app
+ * a suspect, which runs alone (no other sandboxed run beside it) with a mark
+ * that says so; a stale mark of a run alone names the app that never
+ * returned, and that app is stopped. An innocent app thus costs one run
+ * alone, never a stop. A request whose sandboxed runs are all one app's marks
+ * them alone. Runs start in arrival order; a suspect's run waits for the runs
+ * in flight and holds back the ones after it. Bundled runs are in-process
+ * code, never marked, and never wait here. Runs belong to one request
+ * (checkout makes one per request; a call without one gets its own), never
+ * to the module.
  */
-export type SandboxRunQueue = <T>(run: () => Promise<T>) => Promise<T>;
+export interface SandboxRuns {
+  /** Runs `task` when a slot is free (`alone`: when no other sandboxed run is in flight); `shared` tells it how to mark itself. */
+  run<T>(alone: boolean, task: (shared: boolean) => Promise<T>): Promise<T>;
+}
 
-export function createSandboxRunQueue(): SandboxRunQueue {
-  let tail: Promise<unknown> = Promise.resolve();
-  return <T>(run: () => Promise<T>) => {
-    const result = tail.then(run);
-    tail = result.catch(() => undefined);
-    return result;
+/** `apps`: every sandboxed app the request may run (one app alone shares with no one). */
+export function createSandboxRuns(apps: Iterable<string>, limit = SANDBOX_CONCURRENCY): SandboxRuns {
+  const single = new Set(apps).size <= 1;
+  const waiting: Array<{ alone: boolean; start: () => void }> = [];
+  let active = 0;
+  let exclusive = false;
+  const pump = () => {
+    while (waiting.length > 0) {
+      const head = waiting[0]!;
+      if (exclusive || (head.alone ? active > 0 : active >= limit)) return;
+      waiting.shift();
+      active += 1;
+      if (head.alone) exclusive = true;
+      head.start();
+    }
+  };
+  return {
+    run<T>(alone: boolean, task: (shared: boolean) => Promise<T>): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
+        waiting.push({
+          alone,
+          start: () => {
+            Promise.resolve()
+              .then(() => task(!alone && !single))
+              .then(resolve, reject)
+              .finally(() => {
+                active -= 1;
+                if (alone) exclusive = false;
+                pump();
+              });
+          },
+        });
+        pump();
+      });
+    },
   };
 }
 
@@ -194,7 +254,8 @@ export function functionReadRequests(registered: readonly RegisteredPlugin[], po
 
 /**
  * Runs `point` for every active implementing plugin and returns the valid
- * outputs, ordered by priority then plugin id. A plugin that throws, times
+ * outputs in the merchant's order (`functionRunOrder`: ranked apps, then
+ * manifest priority, then plugin id). A plugin that throws, times
  * out or returns an invalid output is skipped (fail-open) and logged for the
  * merchant. The input is the platform's own and must match the point's
  * schema; a mismatch is a platform bug and throws. A plugin whose approved
@@ -216,13 +277,14 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     reads?: AppReadsCache;
     /** The request's customer-roles read (absent: read here, once, for the point's apps). */
     roles?: FunctionCustomerRoles;
-    /** The request's sandboxed-run queue, shared by every point it runs (absent: one for this call). */
-    sandboxRuns?: SandboxRunQueue;
+    /** The request's sandboxed runs, shared by every point it runs (absent: its own for this call). */
+    sandboxRuns?: SandboxRuns;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
-  const registered = (options.registered ?? await listActiveFunctionPlugins(db, point))
-    .filter((registration) => registration.name === point && grantAllows(registration.installation, point));
+  // The merchant's order: runs and answers merge in it, whatever order the answers arrive in.
+  const registered = orderFunctionRegistrations((options.registered ?? await listActiveFunctionPlugins(db, point))
+    .filter((registration) => registration.name === point && grantAllows(registration.installation, point)));
   if (registered.length === 0) return [];
 
   const checked = pluginRunSchemas(point).input.safeParse(input);
@@ -247,7 +309,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       : import("./customer-roles").then(({ pluginCustomerRolesByApp }) => pluginCustomerRolesByApp(db, customerId, apps));
     return (await rolesByApp).get(pluginId) ?? [];
   };
-  const sandboxRuns = options.sandboxRuns ?? createSandboxRunQueue();
+  const sandboxRuns = options.sandboxRuns
+    ?? createSandboxRuns(registered.filter((registration) => registration.installation.source !== "bundled").map((registration) => registration.installation.pluginId));
   const results: Array<PluginFunctionResult<P> | null> = new Array(registered.length).fill(null);
   const blocked: string[] = [];
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -291,20 +354,23 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         const own = ownAttributes(buyer.attributes, installation.pluginId);
         scopedInput = { ...scopedInput, attributes: Object.fromEntries(Object.entries(own).map(([key, value]) => [key.slice(prefix.length), value])) };
       }
-      // A run that never returned (it held its thread): stop the app rather than freeze the store again.
+      // A run alone that never returned (it held its thread): stop the app rather than freeze the store again.
       // A stopped app neither answers nor blocks, so it is left out here too.
       if (functionHung(registration.circuit, nowSeconds)) {
         await stopHungApp(db, env, host, installation, point);
         continue;
       }
+      // A shared run that never returned: this app, or one beside it, held the thread. It runs alone to tell.
+      const suspect = functionSuspect(registration.circuit, nowSeconds);
       // An open circuit: the failure policy at once, without calling the app (or logging again).
       if (functionCircuitOpen(registration.circuit, nowSeconds)) {
         fail();
         continue;
       }
-      // Each app sees only the roles it granted.
+      // Each app sees only the roles it granted, and only the contact fields its grant reveals.
       const roles = await rolesOf(installation.pluginId);
       if (roles) scopedInput = withCustomerRoles(scopedInput, roles);
+      scopedInput = withGrantedContact(scopedInput, point, installation);
       const wantsReads = readNames ? readNames.size > 0 : Boolean(declaration?.reads?.length);
       const read: AppFunctionReadResult = readsCache && wantsReads
         ? await readsCache.get(requests, readContext, installation.pluginId, point)
@@ -316,10 +382,10 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
       const invoke = () => host.invokeFunction(installation, point, { ...scopedInput, reads });
-      // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows.
-      // The request runs its sandboxed runs one at a time, so the mark is the only one and is cleared before the next starts.
-      const outcome = installation.source === "bundled" ? await invoke() : await sandboxRuns(async () => {
-        await markFunctionInflight(db, { pluginId: installation.pluginId, point });
+      // A sandboxed run is marked in flight first (function-circuit.ts): if it never returns, the next checkout knows,
+      // and the mark says whether other apps' runs shared the request with it (then it only names a suspect).
+      const outcome = installation.source === "bundled" ? await invoke() : await sandboxRuns.run(suspect, async (shared) => {
+        await markFunctionInflight(db, { pluginId: installation.pluginId, point, shared });
         const answer = await invoke();
         await clearFunctionInflight(db, { pluginId: installation.pluginId, point }).catch(() => console.warn("[plugins] function in-flight clear failed"));
         return answer;
@@ -336,7 +402,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       if (commit?.length) {
         const prepared = await prepareCommits(host, installation, point, read, commit);
         if (!prepared) {
-          count();
+          failed();
           continue;
         }
         result.commits = prepared;
@@ -370,9 +436,11 @@ async function prepareCommits(
     if (!target) return refuse(`A commit names ${commit.as}, which is not a single-key object read of this function with a record id (a guest's customer read, an empty attribute or hop, a per-line or custom-field read).`);
     const declaration = installation.manifest.objects[target.object];
     if (!declaration) return refuse(`Storage object ${target.object} is not declared.`);
+    if (point !== "checkout.discounts" && point !== "cart.validate") return refuse(`${point} answers commit nothing.`);
     try {
       prepared.push(prepareAppObjectCommit({
         pluginId: installation.pluginId,
+        point,
         object: target.object,
         declaration,
         id: target.id,

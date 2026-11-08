@@ -962,6 +962,15 @@ export async function createStorefrontOrder(
         discountCodes: data.discountCodes,
         customerId: accountOwnerCustomer?.id,
         customerPhone: data.customerPhone,
+        // The contact the order keeps: cart.validate apps see the fields their scopes reveal (a fraud check).
+        contact: {
+            name: data.customerName?.trim() || null,
+            email: contact.customerEmail,
+            phone: data.customerPhone?.trim() || null,
+            address: shippingAddress
+                ? { line1: shippingAddress.line1 ?? null, line2: shippingAddress.line2 ?? null, dependentLocality: shippingAddress.dependentLocality ?? null }
+                : null,
+        },
         // Segment-limited promotions: the signed-in account only, as the commit re-check sees it.
         segmentCustomerId: accountOwnerCustomer?.id ?? null,
         // A tax-exempt account pays no tax (read with its session; a guest never is).

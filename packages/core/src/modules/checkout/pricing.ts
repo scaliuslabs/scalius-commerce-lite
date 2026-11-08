@@ -6,7 +6,7 @@
 // With no active app implementing a point, this is exactly the platform
 // pricing: no extra read and no app call.
 import type { Database } from "@scalius/database/client";
-import { PLUGIN_EXTENSION_RUN, type FunctionCart } from "@scalius/shared/plugins";
+import { PLUGIN_EXTENSION_RUN, type FunctionCart, type FunctionContact } from "@scalius/shared/plugins";
 import type { AppProviders } from "../../integrations/provider-port";
 import { fromMinor } from "@scalius/shared/money";
 import type { PricingCurrency } from "@scalius/shared/currency-policy";
@@ -31,13 +31,17 @@ import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
 import type { StorefrontOrderShippingMethodSnapshot } from "../orders";
 import { resolveBundlePromotionInterplay, type BundlePromotionInterplay } from "./bundle-discounts";
 import { deliveryShippingLines, type StorefrontCartValidationResult } from "./cart-validation";
+import { readCheckoutCopy } from "./store-copy";
 import {
   applyAppPaymentMethodOperations,
   applyAppShippingRateOperations,
   appCartMarketCountry,
   buildAppFunctionCart,
   functionStoreCurrency,
+  APP_COMMITS_CONFLICT_REASON,
+  CHECKOUT_APP_UNAVAILABLE_REASON,
   CHECKOUT_RULES_FAILED_REASON,
+  checkoutAppObjectCommits,
   collectCheckoutRuleErrors,
   combineDiscountAllocations,
   loadAppFunctionCartFacts,
@@ -97,6 +101,12 @@ export interface StorefrontCheckoutPricingInput {
   taxExemption?: TaxExemption | null;
   customerPhone?: string | null;
   /**
+   * The buyer's contact as the order keeps it, for cart.validate's
+   * `contact` (each app sees only the fields its scopes reveal). Absent on
+   * quotes and cart checks: apps then read null.
+   */
+  contact?: FunctionContact | null;
+  /**
    * The shop currency at the store's price increment. A cart priced in a
    * market's own currency (`cartValidation.money`) prices in that currency at
    * its increment instead.
@@ -139,7 +149,7 @@ export interface StorefrontCheckoutPricing {
   bundleDiscountMinor: number;
   bundleLines: BundlePromotionInterplay["bundleLines"];
   appDiscounts: AppliedAppDiscount[];
-  /** Snapshot writes the applied app discounts commit with the order. */
+  /** Record writes the order commits for its apps: every cart.validate hold and the applied discounts' writes. */
   appObjectCommits: AppObjectCommit[];
   /** The delivery charge before discounts (an app may have priced the chosen rate). */
   shippingMinor: number;
@@ -347,7 +357,7 @@ export async function priceStorefrontCheckout(
     const cart = appCart;
     // One wave of app calls: every point sees the same cart.
     const [validations, discounts, rates] = !cart ? [[], [], []] as const : await Promise.all([
-      apps.points.has("cart.validate") ? apps.run("cart.validate", { cart }) : Promise.resolve([]),
+      apps.points.has("cart.validate") ? apps.run("cart.validate", { cart, contact: input.contact ?? null }) : Promise.resolve([]),
       apps.points.has("checkout.discounts") ? apps.run("checkout.discounts", { cart }) : Promise.resolve([]),
       wantsRates && rateOptions.length > 0
         ? apps.run("checkout.shipping_rates", {
@@ -414,6 +424,12 @@ export async function priceStorefrontCheckout(
       appObjectCommits = resolution.commits;
       claimedCodes = resolution.claimedCodes;
     }
+    // Every app's holds (cart.validate `commit`) go with the order, beside the applied discounts' writes.
+    const commits = checkoutAppObjectCommits(validations, appObjectCommits, apps);
+    if (!commits) {
+      throw new ValidationError(await readCheckoutCopy(db, "checkoutAppUnavailableText"), { reason: CHECKOUT_APP_UNAVAILABLE_REASON, conflict: APP_COMMITS_CONFLICT_REASON });
+    }
+    appObjectCommits = commits;
   }
 
   // A code only an app answers to is not "not found" any more.
@@ -572,7 +588,7 @@ export async function checkStorefrontCartRules(
   input.onCart?.(cart);
   if (!apps?.points.has("cart.validate")) return [];
   return collectCheckoutRuleErrors(
-    await apps.run("cart.validate", { cart }),
+    await apps.run("cart.validate", { cart, contact: null }),
     new Map(cartValidation.items.map((item, position) => [lineIds[position]!, { index: item.index, cartKey: item.cartKey ?? null }])),
     apps,
   );

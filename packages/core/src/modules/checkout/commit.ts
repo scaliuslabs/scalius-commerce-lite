@@ -367,12 +367,13 @@ function checkoutOrderFacts(
         }
     }
 
-    // App record writes (a balance the discount spends) commit with the
-    // order, each at the revision its app saw: a lost race fails the order.
+    // App record writes (a balance a discount spends, a slot a hold takes)
+    // commit with the order, each at the revision its app saw: a lost race
+    // fails the order. A discount's write needs that app's applied discount.
     const storageCommits = payload.appObjectCommits ?? [];
     if (storageCommits.length > 0) {
         const discounted = new Set(appDiscounts.map((discount) => discount.pluginId));
-        if (storageCommits.some((commit) => !discounted.has(commit.pluginId))) {
+        if (storageCommits.some((commit) => commit.point === "checkout.discounts" && !discounted.has(commit.pluginId))) {
             throw new ValidationError("Committed app storage write has no applied discount.");
         }
         const { guards, writes: commitWrites } = appObjectCommitStatements(db, storageCommits);

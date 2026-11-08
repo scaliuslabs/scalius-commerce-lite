@@ -18,6 +18,8 @@ const use = { allOf: [PERMISSIONS.APPS_VIEW, PERMISSIONS.APPS_USE] };
 export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps": { GET: view },
   "/api/v1/admin/apps/*": { GET: view },
+  // The order apps run in at each checkout function point: reordering decides which app's price or decision wins.
+  "/api/v1/admin/apps/function-order": { GET: view, PUT: manage },
   "/api/v1/admin/apps/*/activate": { POST: manage },
   "/api/v1/admin/apps/*/deactivate": { POST: manage },
   // Features: listing is a read; turning one on is also Super Admin only
