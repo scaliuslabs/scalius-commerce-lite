@@ -95,8 +95,8 @@ commands and exclusions. Use `passed`, `failed`, `not-run`, `blocked`, and
 scenarios and untested dimensions separately from unit-test counts. One browser
 viewport is not a real-device result; preview evidence is not published evidence.
 
-Open defects belong in the repository issue tracker; run artifacts are dated
-evidence, not a second permanent backlog. Estimate the remaining named work after
+Open defects go to the project's one defect tracker; run artifacts are dated
+evidence, not a second backlog. Estimate the remaining named work after
 the first representative run exposes fixture/setup cost and defect rate. Never
 convert passing checks into a percentage of unknown bugs eliminated.
 
