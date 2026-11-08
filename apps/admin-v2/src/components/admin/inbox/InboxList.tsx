@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { pollWhileOffline } from "~/lib/admin-query-client";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useInboxShortcuts } from "./use-inbox-shortcuts";
 import { matchesShortcut } from "../layout/shortcuts";
@@ -28,12 +28,30 @@ import { apiData } from "~/lib/api";
 import { postApiV1AdminConversationsQuery } from "@scalius/api-client/sdk";
 import { ListDate } from "../data-table/ListDate";
 import { threadPreview, threadTitle } from "./conversation-format";
-import { inboxKeys, type InboxItem, type InboxQuery } from "~/lib/api-query-options/inbox";
+import { inboxKeys, threadQueryOptions, type InboxItem, type InboxQuery } from "~/lib/api-query-options/inbox";
 import { INBOX_SUBJECTS, type InboxSearch } from "./inbox-search";
 
 const STATUSES = ["open", "pending", "closed"] as const;
 const SEARCH_DEBOUNCE_MS = 300;
 let focusSearchOnMount = false;
+
+/** The open conversation as the list last showed it, and where. */
+export interface OpenRow {
+  item: InboxItem;
+  index: number;
+}
+
+/**
+ * The rows to draw: the open conversation stays where it was while it is
+ * being read, even once a reply, a close or a reassignment moves it out of
+ * this view (Gmail, Front). It goes when another conversation is opened or
+ * the list is read again from scratch.
+ */
+export function rowsWithOpenConversation(items: InboxItem[], selectedId: string | null, open: OpenRow | null): InboxItem[] {
+  if (!selectedId || !open || open.item.id !== selectedId || items.some((item) => item.id === selectedId)) return items;
+  const index = Math.min(open.index, items.length);
+  return [...items.slice(0, index), open.item, ...items.slice(index)];
+}
 
 /**
  * The inbox list (Shopify Inbox): Open / Waiting / Closed, who it's assigned
@@ -94,7 +112,21 @@ export function InboxList({
     getNextPageParam: (page) => page.nextCursor ?? undefined,
     refetchInterval: pollWhileOffline(30_000),
   });
-  const items = list.data?.pages.flatMap((page) => page.items) ?? [];
+  const listed = list.data?.pages.flatMap((page) => page.items) ?? [];
+  // The open conversation as last listed here, kept while it is read.
+  const [openRow, setOpenRow] = useState<OpenRow | null>(null);
+  const listedIndex = selectedId ? listed.findIndex((item) => item.id === selectedId) : -1;
+  if (listedIndex >= 0 && (openRow?.item !== listed[listedIndex] || openRow.index !== listedIndex)) {
+    setOpenRow({ item: listed[listedIndex]!, index: listedIndex });
+  } else if (listedIndex < 0 && openRow && openRow.item.id !== selectedId) {
+    setOpenRow(null);
+  }
+  // The thread the reading pane loaded: its status once a reply or a close changed it (no read of its own).
+  const thread = useQuery({ ...threadQueryOptions(selectedId ?? ""), enabled: false }).data;
+  const kept = openRow && thread?.id === openRow.item.id
+    ? { ...openRow, item: { ...openRow.item, status: thread.status, unread: 0, assigneeName: thread.assigneeName } }
+    : openRow;
+  const items = rowsWithOpenConversation(listed, selectedId, kept);
   const lastPage = list.data?.pages.at(-1);
   const continuingSearch = lastPage?.scanExhausted === false;
   const filtered = Boolean(searchQuery) || assignee !== "all" || subject !== "all" || search.unread || search.sort;
@@ -183,7 +215,7 @@ export function InboxList({
         ) : (
           <ul className="divide-y">
             {items.map((item) => (
-              <InboxRow key={item.id} item={item} search={search} selected={item.id === selectedId} />
+              <InboxRow key={item.id} item={item} search={search} selected={item.id === selectedId} outOfView={item.status !== status} />
             ))}
           </ul>
         )}
@@ -216,7 +248,13 @@ export function InboxEmpty({ kind, onClear }: { kind: InboxEmptyKind; onClear: (
   );
 }
 
-function InboxRow({ item, search, selected }: { item: InboxItem; search: InboxSearch; selected: boolean }) {
+function InboxRow({ item, search, selected, outOfView }: {
+  item: InboxItem;
+  search: InboxSearch;
+  selected: boolean;
+  /** Kept while open though it left this view: its new status shows why it will go. */
+  outOfView: boolean;
+}) {
   const t = useMessages(inboxMessages);
   const title = item.customerName?.trim() || t("unknownCustomer");
   return (
@@ -238,8 +276,9 @@ function InboxRow({ item, search, selected }: { item: InboxItem; search: InboxSe
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-body text-muted-foreground">{threadTitle(t, item)}</span>
           {item.unread > 0 ? <Badge variant="info">{t("unread", { count: item.unread })}</Badge> : null}
+          {outOfView ? <Badge variant="secondary">{t(`status.${item.status}`)}</Badge> : null}
         </div>
-        <span className="sr-only">{t(`status.${item.status}`)}{item.assigneeName ? ` · ${t("assignedTo", { name: item.assigneeName })}` : ""}</span>
+        <span className="sr-only">{outOfView ? "" : t(`status.${item.status}`)}{item.assigneeName ? ` · ${t("assignedTo", { name: item.assigneeName })}` : ""}</span>
       </Link>
     </li>
   );
