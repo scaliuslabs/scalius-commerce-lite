@@ -7,12 +7,19 @@
 // recorded as a payment of its `via`. The location, the staff member who
 // rang it up and the tenders commit with the order as its `pos_sale` fact
 // (the receipt an app prints), in the order's own batch.
-import { and, eq } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
-import { inventoryLocations, salesChannelLocations, user } from "@scalius/database/schema";
+//
+// The counter's units are promised in that same batch: a guard after the
+// order's rows refuses the commit when the location's on-hand no longer
+// covers every reservation that names it, this sale's included. Two sales
+// racing for the last unit serialize there (the reservation locks the SKU
+// row first), so the loser commits nothing, and no payment is recorded for a
+// sale its counter cannot hand over.
+import { and, eq, sql } from "drizzle-orm";
+import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/database/client";
+import { inventoryLevels, inventoryLocations, orderItems, orders, salesChannelLocations, user } from "@scalius/database/schema";
 import type { PointOfSaleTenderVia } from "@scalius/shared/payment-terms";
 import { AppError } from "../../../errors";
-import { assertInventoryLocationCovers, type InventoryLocationRef } from "../../inventory";
+import { assertInventoryLocationCovers, InventoryLocationShortfallError, type InventoryLocationRef } from "../../inventory";
 import type { PointOfSaleInput } from "../validation";
 
 /** The receipt facts a sale commits with (order_events kind `pos_sale`, the order's `pointOfSale`). */
@@ -90,6 +97,46 @@ export async function assertPointOfSaleStock(
     await assertInventoryLocationCovers(db, location, lines
         .filter((line) => line.inventoryTracked && line.fulfillmentType === "pickup")
         .map((line) => ({ variantId: line.variantId, quantity: line.quantity })));
+}
+
+const POINT_OF_SALE_STOCK_GUARD = "POS_LOCATION_STOCK_SHORT";
+
+/**
+ * The commit guard of a sale (after its order and lines in the batch): every
+ * tracked picked-up SKU of the order is covered at the counter, counting the
+ * units every reserved order naming that location holds there, this one
+ * included. Physical lines only: digital units leave where they are.
+ */
+export function buildPointOfSaleStockGuard(db: Database, orderId: string, locationId: string) {
+    return buildBatchGuard(db, sql`NOT EXISTS (
+        SELECT 1 FROM ${orderItems} AS sold
+        WHERE sold.order_id = ${orderId}
+          AND sold.variant_id IS NOT NULL
+          AND sold.inventory_tracked
+          AND sold.fulfillment_type = 'pickup'
+          AND coalesce((
+            SELECT level.on_hand FROM ${inventoryLevels} AS level
+            WHERE level.variant_id = sold.variant_id AND level.location_id = ${locationId}
+          ), 0) < (
+            SELECT coalesce(sum(held.quantity), 0)
+            FROM ${orders} AS holder
+            JOIN ${orderItems} AS held ON held.order_id = holder.id
+            WHERE holder.fulfillment_location_id = ${locationId}
+              AND holder.inventory_action = 'reserved'
+              AND held.variant_id = sold.variant_id
+              AND held.inventory_tracked
+              AND held.fulfillment_type IN ('ship', 'pickup')
+          )
+    )`, POINT_OF_SALE_STOCK_GUARD);
+}
+
+/** The sale's commit lost its counter's units to another order: 409 `inventory_location_shortfall`, nothing written. */
+export function pointOfSaleStockShortfall(error: unknown, location: InventoryLocationRef): InventoryLocationShortfallError | null {
+    if (!isBatchGuardError(error, POINT_OF_SALE_STOCK_GUARD)) return null;
+    return new InventoryLocationShortfallError(
+        `${location.name} no longer has the units: another sale took them first. Move stock there or choose another location.`,
+        { locationId: location.id },
+    );
 }
 
 /**
