@@ -58,6 +58,7 @@ import { releaseHeldPluginDeliveriesStatement } from "./held-deliveries";
 import {
   appDataDeleteStatements,
   assertAppDataDeletable,
+  refuseAppDataDeleteInTheme,
   forgetRetainedAppStatement,
   readRetainedApp,
   removedAppDataOf,
@@ -626,7 +627,7 @@ export async function installPlugin(db: Database, input: InstallPluginInput): Pr
   } catch (error) {
     if (isPrimaryKeyConflict(error)) throw new PluginError("installation_exists", `Plugin ${manifest.id} is already installed.`);
     // The old release's leftovers are deleted only while the theme shows none of its fields on cards.
-    if (kept && !retained) await assertAppDataDeletable(db, manifest.id);
+    if (kept && !retained) await refuseAppDataDeleteInTheme(db, manifest.id, error);
     throw error;
   }
   await syncInstallationObjects(db, manifest.id, manifest);
@@ -1109,7 +1110,7 @@ export async function uninstallPlugin(
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
     // A theme saved since the check above that shows one of the app's fields on cards.
-    if (!options.keepData) await assertAppDataDeletable(db, pluginId);
+    if (!options.keepData) await refuseAppDataDeleteInTheme(db, pluginId, error);
     throw error;
   }
 }
