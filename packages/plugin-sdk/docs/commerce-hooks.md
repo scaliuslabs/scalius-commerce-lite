@@ -182,7 +182,7 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 
 | Area | Operations |
 | --- | --- |
-| Orders | `orders.create`, `get`, `list` (`ids` up to 90, `updatedSince`, status filters), `set_status`, `mark_delivered`, `mark_pickup_ready`, `release_hold`; `order_timeline.list` |
+| Orders | `orders.create`, `get`, `list` (`ids` up to 90, `updatedSince`, status filters), `set_status`, `mark_delivered`, `mark_pickup_ready`, `release_hold`; `order_timeline.list`; `order_uploads.list` (your inputs' buyer files, with 5-minute links) |
 | Payments | `payments.create`, `list`, `charge`, `capture`, `void`; `payment_methods.list`, `delete` |
 | Refunds and returns | `refunds.create`, `list`; `returns.create`, `approve`, `receive`, `cancel`, `get`, `list` |
 | Fulfilment | `fulfillments.create`, `list`, `void`; `shipments.create`, `get`, `list` |
@@ -267,12 +267,29 @@ An app declares `checkout.purchaseOptions` (up to 10, `{ key, title, description
 
 An app declares `checkout.lineInputs` (up to 10): inputs the buyer fills per line, such as a gift message, a device serial for a protection plan or a delivery date for a booking.
 
-- Each is `{ key, label, help?, type, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`).
+- Each is `{ key, label, help?, type, maxLength?, options?, products? }`, with the product's own input types: `text` (up to 200 characters), `textarea` (up to 1,000), `select` (`options: [{ value, label }]`, up to 20) or `checkbox` (sends `"true"`), or `file` (the buyer uploads files: see below).
 - The buy form draws them after the product's own inputs, under `<app id>.<key>`; the cart edits them; they are part of the line, and the order line freezes them with your app's id.
 - `products: { customField }` shows an input only on products whose flag is true: one of your own `customFields`, a `product` `boolean` with `storefrontVisible: true`. Checkout does not read the flag.
 - An app input is never required: a card's quick add, an island or an order form adds a line without the product page, so ask for a missing one in `cart.validate` with an error on the line.
 - Core prices nothing for them. Add to the line with `cart.line_prices` `adjustments`. A function that fails is left out (`onError: "skip"`), which sells the input without your add-on: declare `onError: "block"` when an input must never sell unpaid (a protection plan), and read your add-on from the order line (`lines[].adjustments`) before you deliver what it paid for.
 - Your functions see the product's inputs and your own in `line.properties`, never another app's; `orders.get` and your own webhooks show you the same. An island's `context.addLine({ variantId, inputs: { gift_message: "…" } })` sets your own by key.
+
+### Buyer uploads
+
+A `file` line input or checkout attribute lets the buyer upload files: a photo to print, a logo to engrave, a prescription.
+
+```ts
+checkout: {
+  lineInputs: [{ key: "photo", label: "Your photo", type: "file", accept: ["image/jpeg", "image/png"], maxBytes: 2 * 1024 * 1024, maxFiles: 2 }],
+}
+```
+
+- `accept` is any of `image/jpeg`, `image/png`, `image/webp`, `application/pdf` (default all); `maxBytes` at most 20 MB; `maxFiles` at most 10 (default 1). The store's plan bounds both again (Free: 5 MB, 3 files) and the lower value wins; the buy form and checkout show the bounds that apply.
+- The store types each file from its bytes (never its name), keeps it private and answers an upload id. The answer of the input is the ids joined by commas: your functions see it in `line.properties` (or the attribute) and the order line shows "2 files". You never receive the bytes in a function; price the input with a `cart.line_prices` add-on like any other.
+- Each upload is bound to your input, its product and one order: an id copied from another buyer, another product or an earlier order refuses checkout (`upload_unavailable`).
+- After the order, `order_uploads.list` (`read_orders`) answers your inputs' files on an order: `{ id, key, target, orderItemId, filename, mediaType, sizeBytes, url, urlExpiresAt }`. `url` streams the file for 5 minutes: fetch it when you need it, hand it to your print partner at once, never store or log it. You never see another app's files.
+- Files no order takes are deleted after 72 hours; ordered ones a year after the order, and when the store erases the customer. Keep your own copy only if your service needs one, under your own privacy terms.
+- Without JavaScript a file input cannot upload; a `file` input is never required on a line.
 
 #### Example: an engraving priced per letter
 
