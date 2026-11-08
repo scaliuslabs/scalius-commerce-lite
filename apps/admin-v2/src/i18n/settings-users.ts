@@ -336,6 +336,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "apps.manage": "Set up, turn off and uninstall apps",
 
     "team.view": "View staff",
+    "staff.view": "See staff names and roles",
     "team.manage": "Add, suspend and remove staff",
     "team.manage_roles": "Change roles and permissions",
   },
@@ -449,6 +450,7 @@ export const permissionMessages = defineMessages<PermissionName>({
     "apps.manage": "অ্যাপ সেটআপ, বন্ধ ও আনইনস্টল করা",
 
     "team.view": "স্টাফ দেখা",
+    "staff.view": "স্টাফদের নাম ও ভূমিকা দেখা",
     "team.manage": "স্টাফ যোগ, সাসপেন্ড ও বাদ দেওয়া",
     "team.manage_roles": "রোল ও পারমিশন বদলানো",
   },
