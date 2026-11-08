@@ -890,6 +890,8 @@ const CACHE_DEP_TABLE_RULES = {
       "migrated_version", "signer_key_id", "storage_bytes", "storage_measured_at", "breach_count", "last_breach_at",
       // Private event-start bookkeeping; it cannot change cached storefront app output.
       "event_start_exclusions",
+      // 0199: the merchant's order of apps at checkout function points; only checkout (never cached) reads it.
+      "function_ranks",
     ],
     note: "Storefront app output (sections, product blocks, scripts) and the checkout's app payment methods read the installation's status, version, grant, manifest and settings.",
     rules: everyChange(own("plg", "plugin_id")),
@@ -897,7 +899,7 @@ const CACHE_DEP_TABLE_RULES = {
   plugin_registrations: {
     kinds: ["plg"],
     // 0179: a function's circuit is checkout bookkeeping, re-read with every checkout; no cached page shows it.
-    noise: ["circuit_failures", "circuit_window_at", "circuit_open_until", "circuit_inflight_at"],
+    noise: ["circuit_failures", "circuit_window_at", "circuit_open_until", "circuit_inflight_at", "circuit_inflight_shared"],
     note: "Derived from the manifest in the batch of every installation write; read with the installation (which providers and functions an active app has).",
     rules: everyChange(own("plg", "plugin_id")),
   },
