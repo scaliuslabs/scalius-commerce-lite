@@ -3526,92 +3526,35 @@ export type BulkRun = {
     finishedAt: string | null;
 };
 
-export type GiftCardSummaryResource = {
-    id: string;
-    /**
-     * The code's last four characters; the code itself never leaves the store.
-     */
-    last4: string;
-    currency: string;
-    /**
-     * The value it was issued with, in minor units of `currency`.
-     */
-    initialAmountMinor: number;
-    /**
-     * What is left to spend, in minor units of `currency`.
-     */
-    balanceMinor: number;
-    status: 'active' | 'disabled';
-    expiresAt: string | null;
-    expired: boolean;
-    source: 'purchase' | 'manual' | 'refund';
-    /**
-     * The customer who owns it, if any.
-     */
-    customerId: string | null;
-    recipientName: string | null;
-    /**
-     * Send it as `expectedRevision` to change the card; every balance movement advances it.
-     */
-    revision: number;
-    createdAt: string;
-};
-
 export type GiftCardResource = {
     id: string;
-    /**
-     * The code's last four characters; the code itself never leaves the store.
-     */
     last4: string;
-    currency: string;
-    /**
-     * The value it was issued with, in minor units of `currency`.
-     */
-    initialAmountMinor: number;
-    /**
-     * What is left to spend, in minor units of `currency`.
-     */
-    balanceMinor: number;
     status: 'active' | 'disabled';
+    currency: string;
+    initialAmountMinor: number;
+    balanceMinor: number;
+    source: 'purchase' | 'manual' | 'refund';
+    sourceOrderId: string | null;
+    customerId: string | null;
+    recipient: {
+        name: string | null;
+        email: string | null;
+        phone: string | null;
+    };
+    message: string | null;
+    note: string | null;
     expiresAt: string | null;
     expired: boolean;
-    source: 'purchase' | 'manual' | 'refund';
-    /**
-     * The customer who owns it, if any.
-     */
-    customerId: string | null;
-    recipientName: string | null;
-    /**
-     * Send it as `expectedRevision` to change the card; every balance movement advances it.
-     */
     revision: number;
     createdAt: string;
-    recipientEmail: string | null;
-    recipientPhone: string | null;
-    /**
-     * The message the recipient reads with the card.
-     */
-    message: string | null;
-    /**
-     * The store's own note; buyers never see it.
-     */
-    note: string | null;
-    /**
-     * The order it was bought or refunded on, if any.
-     */
-    sourceOrderId: string | null;
-    /**
-     * Its ledger, in minor units of `currency`.
-     */
-    transactions: Array<GiftCardTransactionResource>;
+    updatedAt: string;
 };
 
 export type GiftCardTransactionResource = {
     id: string;
+    giftCardId: string;
     kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
-    /**
-     * Signed: positive adds value, negative spends it, in minor units of the card's `currency`.
-     */
+    currency: string;
     amountMinor: number;
     balanceAfterMinor: number;
     orderId: string | null;
@@ -29476,7 +29419,7 @@ export type GetApiV1AdminResourcesGiftCardsResponses = {
     200: {
         success: true;
         data: {
-            giftCards: Array<GiftCardSummaryResource>;
+            giftCards: Array<GiftCardResource>;
             /**
              * Pass it as `cursor` for the next page; null on the last page.
              */
@@ -29566,6 +29509,10 @@ export type PostApiV1AdminResourcesGiftCardsResponses = {
         success: true;
         data: {
             giftCard: GiftCardResource;
+            /**
+             * The card's ledger, newest first: its newest 200 entries.
+             */
+            transactions: Array<GiftCardTransactionResource>;
         };
     };
 };
@@ -29618,6 +29565,10 @@ export type GetApiV1AdminResourcesGiftCardsByIdResponses = {
         success: true;
         data: {
             giftCard: GiftCardResource;
+            /**
+             * The card's ledger, newest first: its newest 200 entries.
+             */
+            transactions: Array<GiftCardTransactionResource>;
         };
     };
 };
@@ -29692,6 +29643,10 @@ export type PatchApiV1AdminResourcesGiftCardsByIdResponses = {
         success: true;
         data: {
             giftCard: GiftCardResource;
+            /**
+             * The card's ledger, newest first: its newest 200 entries.
+             */
+            transactions: Array<GiftCardTransactionResource>;
         };
     };
 };
@@ -29761,6 +29716,10 @@ export type PostApiV1AdminResourcesGiftCardsByIdAdjustResponses = {
         success: true;
         data: {
             giftCard: GiftCardResource;
+            /**
+             * The card's ledger, newest first: its newest 200 entries.
+             */
+            transactions: Array<GiftCardTransactionResource>;
         };
     };
 };
@@ -31852,6 +31811,10 @@ export type GetApiV1AdminResourcesDiscountsData = {
          * Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync.
          */
         updatedSince?: string;
+        /**
+         * Only these records: up to 90 comma-separated ids. Ids that match nothing are left out; the rest page in the list's order.
+         */
+        ids?: string;
         /**
          * Only discounts in this status; omitted, every status (archived too).
          */

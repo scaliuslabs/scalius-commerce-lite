@@ -1237,6 +1237,9 @@ export declare const SAMPLE_REPRESENTATION_SCHEMAS: {
     readonly review: "ReviewResource";
     readonly conversation: "ConversationResource";
     readonly payout: "PayoutResource";
+    readonly gift_card: "GiftCardResource";
+    readonly gift_card_transaction: "GiftCardTransactionResource";
+    readonly object: "ObjectRecord";
 };
 export type SampleRepresentationType = keyof typeof SAMPLE_REPRESENTATION_SCHEMAS;
 export type SampleOverrides<T> = T extends readonly (infer Item)[] ? Array<SampleOverrides<Item>> : T extends object ? {
@@ -3205,11 +3208,18 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
     readonly gift_card: z.ZodObject<{
         id: z.ZodString;
         last4: z.ZodString;
-        status: z.ZodString;
+        status: z.ZodEnum<{
+            disabled: "disabled";
+            active: "active";
+        }>;
         currency: z.ZodString;
         initialAmountMinor: z.ZodNumber;
         balanceMinor: z.ZodNumber;
-        source: z.ZodString;
+        source: z.ZodEnum<{
+            refund: "refund";
+            manual: "manual";
+            purchase: "purchase";
+        }>;
         sourceOrderId: z.ZodNullable<z.ZodString>;
         customerId: z.ZodNullable<z.ZodString>;
         recipient: z.ZodObject<{
@@ -3217,7 +3227,10 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
             email: z.ZodNullable<z.ZodString>;
             phone: z.ZodNullable<z.ZodString>;
         }, z.core.$strip>;
+        message: z.ZodNullable<z.ZodString>;
+        note: z.ZodNullable<z.ZodString>;
         expiresAt: z.ZodNullable<z.ZodString>;
+        expired: z.ZodBoolean;
         revision: z.ZodNumber;
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
@@ -3225,21 +3238,38 @@ export declare const EVENT_REPRESENTATION_SCHEMAS: {
     readonly gift_card_transaction: z.ZodObject<{
         id: z.ZodString;
         giftCardId: z.ZodString;
-        kind: z.ZodString;
+        kind: z.ZodEnum<{
+            refund: "refund";
+            issue: "issue";
+            redeem: "redeem";
+            release: "release";
+            adjust: "adjust";
+        }>;
         currency: z.ZodString;
         amountMinor: z.ZodNumber;
         balanceAfterMinor: z.ZodNumber;
         orderId: z.ZodNullable<z.ZodString>;
-        actorType: z.ZodString;
+        actorType: z.ZodEnum<{
+            customer: "customer";
+            admin: "admin";
+            system: "system";
+        }>;
+        reason: z.ZodNullable<z.ZodString>;
         createdAt: z.ZodString;
     }, z.core.$strip>;
     readonly object: z.ZodObject<{
         id: z.ZodString;
-        type: z.ZodString;
+        typeId: z.ZodString;
         handle: z.ZodNullable<z.ZodString>;
-        status: z.ZodString;
-        revision: z.ZodNumber;
+        status: z.ZodEnum<{
+            active: "active";
+            draft: "draft";
+            published: "published";
+        }>;
+        displayName: z.ZodString;
         data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+        position: z.ZodNumber;
+        revision: z.ZodNumber;
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
     }, z.core.$strip>;
