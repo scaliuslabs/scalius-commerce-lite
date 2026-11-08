@@ -108,6 +108,10 @@ export interface PluginRuntimeBridge {
   jobsGet?(id: unknown): Promise<unknown>;
   jobsList?(options?: unknown): Promise<unknown>;
   jobsCancel?(id: unknown): Promise<unknown>;
+  /** Optional on older hosts (`ctx.uploads`): a clear refusal. */
+  uploadsGet?(id: unknown): Promise<unknown>;
+  uploadsRead?(id: unknown, options?: unknown): Promise<unknown>;
+  uploadsDelete?(id: unknown): Promise<boolean>;
 }
 
 const MAX_LOGS = 100;
@@ -347,6 +351,20 @@ function createContext(seed: PluginContextSeed, bridge: PluginRuntimeBridge, log
       cancel: (id: unknown) => call(() => {
         if (!bridge.jobsCancel) throw new Error("[jobs_unavailable] This platform does not run app background jobs yet.");
         return bridge.jobsCancel(id);
+      }),
+    }),
+    uploads: Object.freeze({
+      get: (id: unknown) => call(() => {
+        if (!bridge.uploadsGet) throw new Error("[uploads_unavailable] This platform does not keep app uploads yet.");
+        return bridge.uploadsGet(id);
+      }),
+      read: (id: unknown, options?: unknown) => call(() => {
+        if (!bridge.uploadsRead) throw new Error("[uploads_unavailable] This platform does not keep app uploads yet.");
+        return bridge.uploadsRead(id, options ?? {});
+      }),
+      delete: (id: unknown) => call(() => {
+        if (!bridge.uploadsDelete) throw new Error("[uploads_unavailable] This platform does not keep app uploads yet.");
+        return bridge.uploadsDelete(id);
       }),
     }),
     log: Object.freeze({ debug: log("debug"), info: log("info"), warn: log("warn"), error: log("error") }),

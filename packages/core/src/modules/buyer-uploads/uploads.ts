@@ -176,7 +176,8 @@ export async function listOrderBuyerUploads(
         .orderBy(asc(buyerUploads.id))
         .limit(limit)
         .all();
-    return rows.map((row) => ({ ...row, mediaType: row.mediaType as BuyerUploadType, attachedAt: row.attachedAt ?? 0 }));
+    // An attached upload is a line input's or an attribute's (an admin upload is never attached: `buyer_uploads_attach_shape`).
+    return rows.map((row) => ({ ...row, target: row.target as OrderBuyerUpload["target"], mediaType: row.mediaType as BuyerUploadType, attachedAt: row.attachedAt ?? 0 }));
 }
 
 /** An attached upload's object, for the signed link route. Unattached or unknown: null. */

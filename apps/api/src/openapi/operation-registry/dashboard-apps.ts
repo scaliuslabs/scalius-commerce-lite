@@ -121,6 +121,13 @@ export const DASHBOARD_APP_OPERATIONS = {
     exposure: "excluded",
     reason: "A package file upload, and the trust choices that may come with it, are a person's in the dashboard; agents install from a registry (dashboard.apps.registry_install).",
   },
+  // A file staff choose in an app's admin form (a CSV import): a person's
+  // upload from the dashboard, read only by that app (ctx.uploads).
+  "dashboard.apps.uploads_create": {
+    exposure: "excluded",
+    sensitive: true,
+    reason: "A file staff choose in an app's admin form, sent from the dashboard for that app to read; agents run imports through the stable API instead.",
+  },
   "dashboard.apps.stop": {
     risk: "security",
     batch: "forbidden",

@@ -5,7 +5,7 @@ import { isEmailAddress } from "@scalius/shared/text-scan";
 import type { PluginUiInput, PluginUiJson } from "@scalius/shared/plugins/ui";
 import type { AppUiMessageKey } from "~/i18n/app-ui";
 
-/** A field's draft: text and dates as typed, numbers (NaN while not a number), choices, ticks. */
+/** A field's draft: text and dates as typed, numbers (NaN while not a number), choices, ticks, a file's upload id. */
 export type InputValue = string | number | boolean | null;
 
 export interface InputProblem {
@@ -30,6 +30,8 @@ export function initialInputValue(input: PluginUiInput): InputValue {
       return input.value ?? false;
     case "date-field":
       return input.value ?? null;
+    case "file-field":
+      return null;
   }
 }
 
@@ -82,6 +84,8 @@ export function checkInput(input: PluginUiInput, value: InputValue): InputProble
       if (input.max !== undefined && value > input.max) return { key: "dateAfter", vars: { max: input.max }, dates: true };
       return null;
     }
+    case "file-field":
+      return input.required && (typeof value !== "string" || value === "") ? { key: "required" } : null;
   }
 }
 
@@ -95,6 +99,7 @@ export function inputValueToJson(input: PluginUiInput, value: InputValue): Plugi
       return typeof value === "number" && Number.isFinite(value) ? value : null;
     case "select":
     case "date-field":
+    case "file-field":
       return typeof value === "string" && value !== "" ? value : null;
     case "checkbox":
       return value === true;

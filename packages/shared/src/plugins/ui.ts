@@ -22,6 +22,7 @@
 import { z } from "zod";
 import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE } from "./manifest-patterns";
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
+import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -48,8 +49,12 @@ export type PluginUiResource = (typeof PLUGIN_UI_RESOURCES)[number];
 export const PLUGIN_UI_ACTION_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 export type PluginUiActionMethod = (typeof PLUGIN_UI_ACTION_METHODS)[number];
 
-/** Input node types: valid only inside a form. */
-export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", "select", "checkbox", "date-field"] as const;
+/**
+ * Input node types: valid only inside a form. `file-field` is admin only
+ * (the buyer surface allows no form): the dashboard uploads the chosen file
+ * first and the form sends its upload id (`ctx.uploads`).
+ */
+export const PLUGIN_UI_INPUT_TYPES = ["text-field", "textarea", "number-field", "select", "checkbox", "date-field", "file-field"] as const;
 
 const NODE_TYPES = [
   "page", "section", "card", "stack", "columns", "heading", "text", "badge", "banner", "key-value", "stat", "table",
@@ -249,7 +254,15 @@ export type PluginUiInput =
   | (InputBase & { type: "select"; value?: string | null; options: Array<{ value: string; label: string }>; placeholder?: string })
   | (InputBase & { type: "checkbox"; value?: boolean })
   /** `YYYY-MM-DD`. */
-  | (InputBase & { type: "date-field"; value?: string | null; min?: string; max?: string });
+  | (InputBase & { type: "date-field"; value?: string | null; min?: string; max?: string })
+  /**
+   * A file staff choose (admin): the dashboard sends it to the platform,
+   * which types it from its bytes and keeps it privately for this app; the
+   * form sends its upload id (`bup_…`) under `name`, or null. `accept`: the
+   * types it takes (`text/csv`, the default: UTF-8 text); `maxBytes`: at most
+   * the plan's upload size, which the platform enforces whatever is declared.
+   */
+  | (InputBase & { type: "file-field"; accept?: Array<(typeof ADMIN_UPLOAD_TYPES)[number]>; maxBytes?: number });
 
 export type PluginUiNode =
   | { type: "page"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[] }
@@ -372,6 +385,12 @@ const inputSchemas = [
   }).strict(),
   z.object({ ...inputBase, type: z.literal("checkbox"), value: z.boolean().optional() }).strict(),
   z.object({ ...inputBase, type: z.literal("date-field"), value: isoDate.nullable().optional(), min: isoDate.optional(), max: isoDate.optional() }).strict(),
+  z.object({
+    ...inputBase,
+    type: z.literal("file-field"),
+    accept: z.array(z.enum(ADMIN_UPLOAD_TYPES)).min(1).max(ADMIN_UPLOAD_TYPES.length).optional(),
+    maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
+  }).strict(),
 ] as const;
 
 const children = z.array(z.lazy(() => pluginUiNodeSchema)).max(PLUGIN_UI_LIMITS.maxChildren);

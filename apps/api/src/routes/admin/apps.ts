@@ -103,6 +103,7 @@ import { getThemeSettings } from "@scalius/core/modules/settings";
 import { registerAppLifecycleRoutes } from "./apps-lifecycle";
 import { registerRemovedAppDataRoutes } from "./apps-removed-data";
 import { registerFunctionOrderRoutes } from "./apps-function-order";
+import { registerAppUploadRoutes } from "./apps-uploads";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
 // per permission) load only on the requests that need them, never when this
@@ -1075,6 +1076,10 @@ registerRemovedAppDataRoutes(app);
 // ── Checkout order of apps at function points (apps-function-order.ts; before `/{id}`) ──
 
 registerFunctionOrderRoutes(app);
+
+// ── Files staff give an app's admin form (apps-uploads.ts) ──
+
+registerAppUploadRoutes(app);
 
 // ── Get ──
 
