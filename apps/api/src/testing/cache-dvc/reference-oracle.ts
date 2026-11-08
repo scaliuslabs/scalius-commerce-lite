@@ -43,12 +43,22 @@ function bindable(value: SqlValue): SQLInputValue {
 }
 
 /**
- * The hex of an index tuple's first component when it is a string
- * (index-encoding.ts: tag 05, bytes with NUL escaped as 00 ff, terminator
- * 00 01), walked byte by byte; null for any other slot.
+ * The hex of an index slot's first component when it is a string: from its
+ * tag `05` through the first `0001`. For a slot `encodeIndexTuple` wrote,
+ * that is the string's terminator, found byte by byte (a NUL in the string
+ * is escaped as `00 ff`, so its bytes never hold `00 01`); the generator's
+ * arbitrary slots have no byte alignment, so the model reads the slot as
+ * text, the way the trigger's `instr` does. Null without the tag or a terminator.
  */
 function leadingStringComponent(hex: string | null): string | null {
   if (hex === null || !hex.startsWith("05")) return null;
+  const terminator = hex.indexOf("0001");
+  return terminator < 0 ? null : hex.slice(0, terminator + 4);
+}
+
+/** The byte walk the text read stands in for, on a well-formed slot (`leadingStringComponent`'s premise). */
+export function leadingStringComponentByBytes(hex: string): string | null {
+  if (!hex.startsWith("05")) return null;
   for (let at = 2; at + 4 <= hex.length; at += 2) {
     if (hex.slice(at, at + 2) !== "00") continue;
     const next = hex.slice(at + 2, at + 4);
@@ -57,6 +67,8 @@ function leadingStringComponent(hex: string | null): string | null {
   }
   return null;
 }
+
+export { leadingStringComponent };
 
 export class ReferenceOracle {
   constructor(private readonly sqlite: DatabaseSync) {}

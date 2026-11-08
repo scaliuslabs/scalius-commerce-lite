@@ -727,7 +727,8 @@ type IndexLeadTemplate = Extract<CacheDepKeyTemplate, { indexLeads: readonly str
  * One key per index slot: `prefix || R.<column> || ':' || <lead>`, `<lead>`
  * the slot's first tuple component when it is a string (index-encoding.ts:
  * tag `05` through the first `0001`, which only a string's terminator
- * holds), else NULL: `substr` from NULL when the slot is not led by `05`.
+ * holds), else NULL: `substr` from or for NULL when the slot is not led by
+ * `05` or holds no `0001` (a string's encoding always ends with one).
  * No CASE (remote D1 refuses it in a trigger body).
  */
 function indexLeadExpressions(table: string, template: IndexLeadTemplate, image: string, d: Dialect): string[] {
@@ -735,7 +736,7 @@ function indexLeadExpressions(table: string, template: IndexLeadTemplate, image:
   return template.indexLeads.map((slot) => {
     assertColumn(table, slot);
     const value = `${image}.${d.id(slot)}`;
-    const lead = `substr(${value}, nullif(${d.position(`substr(${value}, 1, 2)`, "'05'")}, 0), ${d.position(value, "'0001'")} + 3)`;
+    const lead = `substr(${value}, nullif(${d.position(`substr(${value}, 1, 2)`, "'05'")}, 0), nullif(${d.position(value, "'0001'")}, 0) + 3)`;
     return `${literal(template.prefix)} || ${image}.${d.id(template.column)} || ':' || ${lead}`;
   });
 }
