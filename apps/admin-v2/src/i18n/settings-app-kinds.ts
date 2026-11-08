@@ -3,7 +3,7 @@ import { defineMessages } from "./index";
 /**
  * The settings cards of the app provider kinds that add a service beside the
  * built-ins: chat apps, browser notifications, exchange rates, address
- * autocomplete, sign-in with other accounts and search. Each card lists the
+ * autocomplete, sign-in with other accounts, search and payouts. Each card lists the
  * installed apps' providers of its kind, or says none is installed.
  */
 export const appKindsMessages = defineMessages({
@@ -37,6 +37,10 @@ export const appKindsMessages = defineMessages({
     searchTitle: "Search",
     searchDescription: "An app can find products when buyers search your store.",
     searchEmpty: "No search app is installed. Your store uses its built-in search.",
+
+    payoutTitle: "Payouts",
+    payoutDescription: "Apps that send money to your sellers or other payees, such as a marketplace app.",
+    payoutEmpty: "No payout app is installed.",
   },
   bn: {
     browseApps: "অ্যাপস দেখুন",
@@ -68,5 +72,9 @@ export const appKindsMessages = defineMessages({
     searchTitle: "সার্চ",
     searchDescription: "ক্রেতা আপনার স্টোরে খুঁজলে একটি অ্যাপ পণ্য খুঁজে দিতে পারে।",
     searchEmpty: "কোনো সার্চ অ্যাপ ইনস্টল করা নেই। আপনার স্টোর বিল্ট-ইন সার্চ ব্যবহার করে।",
+
+    payoutTitle: "পেআউট",
+    payoutDescription: "যেসব অ্যাপ আপনার বিক্রেতা বা অন্য প্রাপকদের টাকা পাঠায়, যেমন মার্কেটপ্লেস অ্যাপ।",
+    payoutEmpty: "কোনো পেআউট অ্যাপ ইনস্টল করা নেই।",
   },
 });

@@ -64,6 +64,7 @@ export const SETTINGS_CARDS = [
   { page: "policies", card: "warrantyPolicies" },
   { page: "payments", card: "paymentMethods" },
   { page: "payments", card: "emiPlans" },
+  { page: "payments", card: "payoutApps" },
   { page: "checkout", card: "customerContact" },
   { page: "checkout", card: "checkoutText" },
   { page: "checkout", card: "customerRequests" },
