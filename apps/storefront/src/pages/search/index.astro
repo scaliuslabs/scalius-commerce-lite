@@ -116,12 +116,6 @@ const searchOnlyHref = buildProductListHref({ pathname: "/search", currentFilter
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
-// Include product name for richer analytics data
-const analyticsProductData = products.map((p) => ({
-  id: p.id,
-  name: p.name,
-  price: p.discountedPrice,
-}));
 ---
 
 <Layout
@@ -135,7 +129,6 @@ const analyticsProductData = products.map((p) => ({
     kind="search"
     data={{
       "data-search-query": query,
-      "data-products-for-analytics": JSON.stringify(analyticsProductData),
     }}
     hero={{
       title: query ? copy.search.resultsTitle : copy.search.allProducts,
@@ -227,48 +220,3 @@ const analyticsProductData = products.map((p) => ({
         </div>
   </CatalogListingPage>
 </Layout>
-
-<script>
-  import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
-
-  type ProductAnalyticsData = {
-    id: string;
-    name: string;
-    price: number;
-  };
-
-  async function trackSearchResults() {
-    const productListElement = document.querySelector<HTMLElement>(
-      "[data-products-for-analytics]",
-    );
-    if (
-      !productListElement ||
-      productListElement.dataset.searchTracked === "true"
-    )
-      return;
-
-    try {
-      const productsData: ProductAnalyticsData[] = JSON.parse(
-        productListElement.dataset.productsForAnalytics || "[]",
-      );
-      const searchQuery = productListElement.dataset.searchQuery || "";
-
-      const { trackStorefrontSearchResults } = await import("@/lib/analytics");
-      const tracked = trackStorefrontSearchResults({
-        searchQuery,
-        products: productsData,
-        currency: window.__CURRENCY_CODE__ || "BDT",
-      });
-
-      if (tracked) productListElement.dataset.searchTracked = "true";
-    } catch (error: unknown) {
-      console.error("Failed to track search event:", error);
-    }
-  }
-
-  const scheduleSearchResults = () => {
-    scheduleNonCriticalAnalytics(() => void trackSearchResults());
-  };
-  document.addEventListener("DOMContentLoaded", scheduleSearchResults);
-  document.addEventListener("astro:page-load", scheduleSearchResults);
-</script>

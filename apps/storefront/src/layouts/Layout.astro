@@ -52,6 +52,8 @@ import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-bo
 import { gateMarketingScript, optimizeAnalyticsScriptDelivery, scriptNeedsConsent, isGoogleTagScript } from "@/lib/analytics-script-delivery";
 import { consentRegimeFor } from "@scalius/shared/tracking-consent";
 import ConsentBanner from "../components/consent/ConsentBanner.astro";
+import BuyerPixels from "../components/buyer-events/BuyerPixels.astro";
+import { readLayoutPixels } from "@/lib/buyer-events/pixel-frame";
 import { consentBootScript } from "../components/consent/consent-scripts";
 import { appComponentsRenderOn, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
@@ -168,8 +170,13 @@ const storeAnalyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics
 // destination needs consent; Meta and TikTok snippets stay inert until
 // marketing is granted. The regime is the page market's (its URL presence):
 // opt-in for a market selling to the EEA, the UK or Switzerland.
+// App pixels (lib/buyer-events/pixels.ts) run wherever the store's own tags
+// do: every page, the cart, checkout and the receipt included, in sandboxed
+// frames that no app code on the page can reach and that reach no page. Each
+// waits for its consent category, so pixels need the banner too.
+const appPixels = isThemePreview || !analytics ? [] : readLayoutPixels(layoutData?.appPixels);
 const consentNeeded = !isThemePreview && analytics
-  && (storeAnalyticsScripts.some(scriptNeedsConsent) || layoutData?.tracking?.serverEvents === true);
+  && (storeAnalyticsScripts.some(scriptNeedsConsent) || layoutData?.tracking?.serverEvents === true || appPixels.length > 0);
 const analyticsScripts: AnalyticsConfig[] = consentNeeded
   ? storeAnalyticsScripts.map(gateMarketingScript)
   : storeAnalyticsScripts;
@@ -622,6 +629,7 @@ const pageStoreTimeZone = storeTimeZone();
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
     {consentNeeded && <ConsentBanner regime={consentRegime} language={themeLanguage} />}
+    {appPixels.length > 0 && <BuyerPixels pixels={appPixels} />}
     {appBodyScripts.map((script) => <script is:inline async src={script.src} data-app-script={script.pluginId}></script>)}
 
     {themeEditorBridge && <script is:inline set:html={themeEditorBridge} />}

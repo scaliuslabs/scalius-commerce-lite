@@ -2,7 +2,6 @@ import type { ProductPageData } from "@/lib/api/product-payloads";
 import type { CartItem } from "@/store/cart";
 import { resolveVariantCartMedia } from "@/components/product/lib/cart-media";
 import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
-import { trackProductAddToCart } from "@/components/product/lib/product-analytics";
 import { isVariantAvailable, resolveBuyerVariants } from "@/lib/product-sellable-variants";
 
 /** Listing data has no SKU ID; the public detail read resolves the exact simple SKU on click. */
@@ -66,11 +65,6 @@ export function initQuickAddCards(): void {
         ? quickAddCartLine(result.data, window.__CURRENCY_CODE__ || "BDT")
         : null;
       if (!line || !(await addToCart(line))) throw new Error("Product requires its detail page");
-      trackProductAddToCart({
-        product: { id: line.id, name: line.name, price: line.price },
-        variant: { id: line.variantId!, price: line.price },
-        quantity: 1,
-      });
       const addedLineKey = await cartLineKeyFor({ id: line.id, variantId: line.variantId! }).catch(() => undefined);
       document.dispatchEvent(new CustomEvent("open-cart", { detail: { addedLineKey } }));
     } catch {

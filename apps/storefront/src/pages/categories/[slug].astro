@@ -127,12 +127,6 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
-const analyticsProductData = products.map((p) => ({
-  id: p.id,
-  name: p.name,
-  price: p.discountedPrice,
-}));
-
 // --- SEO: per SEO-03, SEO-04, OG-02 ---
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 // Each paginated page is self-canonical; sort, filter and tracking params are stripped.
@@ -240,10 +234,10 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(category, `/
   <CatalogListingPage
     template
     kind="category"
+    listingId={category.id}
     fields={storefrontFieldValues(category.customFields, { currencyCode, currencySymbol })}
     data={{
       "data-category-name": category.name,
-      "data-products-for-analytics": JSON.stringify(analyticsProductData),
     }}
     hero={{
       title: category.name,
@@ -285,64 +279,3 @@ await resolveRequestTheme(Astro, layoutData, resourceBindingContext(category, `/
     />
   </CatalogListingPage>
 </Layout>
-
-<script>
-  import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
-
-  type ProductAnalyticsData = {
-    id: string;
-    name: string;
-    price: number;
-  };
-
-  async function trackCategoryView() {
-    const productListElement = document.querySelector<HTMLElement>(
-      "[data-products-for-analytics]",
-    );
-    if (
-      !productListElement ||
-      productListElement.dataset.viewContentTracked === "true"
-    )
-      return;
-
-    try {
-      const productsData: ProductAnalyticsData[] = JSON.parse(
-        productListElement.dataset.productsForAnalytics || "[]",
-      );
-      const categoryName =
-        productListElement.dataset.categoryName || "Category";
-
-      if (productsData.length === 0) return;
-
-      const content_ids = productsData.map((p) => p.id);
-      const contents = productsData.map((p) => ({
-        id: p.id,
-        item_name: p.name,
-        quantity: 1,
-        item_price: p.price,
-      }));
-      const value = productsData.reduce((sum, p) => sum + p.price, 0);
-
-      const { trackFbViewContent } = await import("@/lib/analytics");
-      trackFbViewContent({
-        content_ids,
-        content_name: `Product list for category: ${categoryName}`,
-        content_type: "product_group",
-        content_category: categoryName,
-        contents,
-        currency: window.__CURRENCY_CODE__ || "BDT",
-        value,
-      });
-
-      productListElement.dataset.viewContentTracked = "true";
-    } catch (error: unknown) {
-      console.error("Failed to track category view content:", error);
-    }
-  }
-
-  const scheduleCategoryView = () => {
-    scheduleNonCriticalAnalytics(() => void trackCategoryView());
-  };
-  document.addEventListener("DOMContentLoaded", scheduleCategoryView);
-  document.addEventListener("astro:page-load", scheduleCategoryView);
-</script>

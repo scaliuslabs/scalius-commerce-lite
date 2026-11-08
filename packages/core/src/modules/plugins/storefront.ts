@@ -11,6 +11,9 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { pluginHasStorefrontModule, type StorefrontExtension, type StorefrontSkinTarget } from "@scalius/shared/plugins";
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
+import { PIXEL_EVENT_NAMES, type StorefrontAppPixel } from "@scalius/shared/plugins/buyer-events";
+import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
+import { resolvePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
@@ -155,4 +158,39 @@ export function activePluginStorefrontExtensions(installations: Iterable<PluginI
     });
   }
   return extensions.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+}
+
+/**
+ * The pixels of active apps whose approved grant covers one
+ * (`storefrontPixel`), as the layout lists them (`appPixels`): the consent
+ * category, the events it hears, the protected data its scopes reveal, its
+ * approved hosts and the values of the settings it names (never a secret).
+ * Plugin id order.
+ */
+export function activePluginPixels(installations: Iterable<PluginInstallation>): StorefrontAppPixel[] {
+  const pixels: StorefrontAppPixel[] = [];
+  for (const installation of installations) {
+    const pixel = installation.manifest.storefront.pixel;
+    const grant = installation.grant;
+    if (!pixel || grant?.storefrontPixel !== true) continue;
+    const granted = new Set(grant.storefrontConnect);
+    const values = resolvePluginSettingValues(installation.manifest.settings, installation.storedSettings);
+    const settings: StorefrontAppPixel["settings"] = {};
+    for (const key of pixel.settings) {
+      const field = installation.manifest.settings.find((setting) => setting.key === key);
+      const value = values[key];
+      if (!field || field.type === "secret") continue;
+      settings[key] = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : null;
+    }
+    pixels.push({
+      pluginId: installation.pluginId,
+      release: installation.bundleSha256,
+      consent: pixel.consent,
+      events: [...(pixel.events ?? PIXEL_EVENT_NAMES)],
+      protectedData: [...grantedProtectedData(grant.scopes)],
+      connect: installation.manifest.storefront.connect.filter((host) => granted.has(host)),
+      settings,
+    });
+  }
+  return pixels.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
 }

@@ -8,6 +8,8 @@ import { parseBindingResourceSelector } from "@scalius/shared/storefront-theme/b
 import { STOREFRONT_COMPONENT_TARGETS } from "@scalius/shared/plugins/storefront-protocol";
 import { CUSTOMIZATION_FIELD_TYPES } from "@scalius/shared/line-properties";
 import { PLUGIN_STOREFRONT_SCRIPT_PAGES } from "@scalius/shared/plugins/manifest";
+import { PIXEL_CONSENT_CATEGORIES, PIXEL_EVENT_NAMES } from "@scalius/shared/plugins/buyer-events";
+import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
@@ -413,6 +415,17 @@ const layoutDataSchema = z.object({
     placement: z.enum(["head", "body-end"]),
     pages: z.array(z.enum(PLUGIN_STOREFRONT_SCRIPT_PAGES)),
   })),
+  appPixels: z.array(z.object({
+    pluginId: z.string(),
+    release: z.string().regex(/^[0-9a-f]{64}$/),
+    consent: z.enum(PIXEL_CONSENT_CATEGORIES),
+    events: z.array(z.enum(PIXEL_EVENT_NAMES)),
+    protectedData: z.array(z.enum(PROTECTED_CUSTOMER_DATA)),
+    connect: z.array(z.string()),
+    settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  })).openapi({
+    description: "Pixels of active apps (packages/plugin-sdk/docs/storefront.md, Pixels): each runs `storefront/pixel.js` of its release in a sandboxed frame on every page once the buyer's consent allows `consent`, hears `events` (contact fields only for `protectedData`), reaches only `connect` and gets `settings` (never a secret).",
+  }),
   appExtensions: z.array(z.object({
     pluginId: z.string(),
     version: z.string(),

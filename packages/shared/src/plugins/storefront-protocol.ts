@@ -5,6 +5,7 @@
 // schemas, settings resolution) is ./storefront-components.ts.
 
 import type { CustomFieldWireValue } from "../custom-fields";
+import type { BuyerEvent, PixelEventName } from "./buyer-events";
 
 // ── Protocol ──────────────────────────────────────────────────────────────
 
@@ -341,7 +342,7 @@ export const storefrontIslandFile = (name: string) => `islands/${name}.js`;
 export const storefrontPublicFile = (path: string) => `public/${path}`;
 
 /** A file path inside the storefront part of a package: lower case, no `..`. */
-export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
+export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|pixel\.js|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
 
 /** The content type a storefront file is served with; null for a path that is not one. */
 export function storefrontFileContentType(path: string): string | null {
@@ -1288,6 +1289,36 @@ export interface StorefrontIslandContext {
     state(): StorefrontProductState;
     onChange(listener: (state: StorefrontProductState) => void): () => void;
   };
+  /**
+   * The buyer event bus (buyer-events.ts): the events the store emits on
+   * this page, and this app's own. Absent from older stores.
+   */
+  events?: StorefrontIslandEvents;
+  /**
+   * The visitor id: stable for this browser, kept only while the buyer's
+   * consent allows analytics (null otherwise, and the id is forgotten when
+   * it is withdrawn). The same id a pixel's events carry, so an experiment
+   * an island shows (`experimentVariant`) is the one a pixel attributes.
+   * Absent from older stores.
+   */
+  visitorId?(): string | null;
+}
+
+/** An island's view of the buyer event bus (`StorefrontIslandContext.events`). */
+export interface StorefrontIslandEvents {
+  /**
+   * Calls `listener` for each event of `name` from now on (`replay`: the
+   * page's earlier ones first); returns the unsubscribe, which the store
+   * also calls when the island unmounts. Islands never get contact fields;
+   * `app_event` is this app's own only.
+   */
+  on<N extends PixelEventName>(name: N, listener: (event: BuyerEvent<N>) => void, options?: { replay?: boolean }): () => void;
+  /**
+   * Publishes this app's own event (`app_event`, `name` in snake_case, a JSON
+   * `payload` of at most 4 KiB) to its islands and its pixel; false when
+   * refused (a bad name, a payload too big or not JSON).
+   */
+  publish(name: string, payload?: unknown): boolean;
 }
 
 /** An island's client module (`defineIsland`): mounts on its element, may return a cleanup. */

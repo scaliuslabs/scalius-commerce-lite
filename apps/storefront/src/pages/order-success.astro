@@ -537,7 +537,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
 <script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedRecoveryCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}></script>
 
 <script>
-  import { trackFbPurchase } from "@/lib/analytics";
+  import { emitBuyerEvent } from "@/lib/buyer-events/bus";
+  import { buyerCheckout, buyerMoney, merchandise } from "@/lib/buyer-events/lines";
   import type { PurchaseTrackingPayload } from "@/lib/order-success-state";
   import { claimMetaPurchaseTracking } from "@/lib/tracking/meta-purchase-guard";
   import { finalizeCheckoutReceipt } from "@/lib/checkout/receipt-finalization";
@@ -565,44 +566,19 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       const parsedData: PurchaseTrackingPayload = JSON.parse(orderDataAttr);
       const { order, items: orderItems } = parsedData;
 
-      setTimeout(() => {
-        if (!order || !orderItems) {
-          console.warn("Order data not available for FB Purchase tracking.");
-          return;
-        }
-
-        const claim = claimMetaPurchaseTracking(order.id);
-        if (!claim.shouldSend) {
-          console.info("FB Purchase event already tracked for order:", order.id);
-          return;
-        }
-
-        trackFbPurchase(
-          {
-            order_id: order.id,
-            content_name: `Order ${order.id}`,
-            content_ids: orderItems.map(
-              (item) => item.variantId || item.productId
-            ),
-            content_type: "product_group",
-            contents: orderItems.map((item) => ({
-              id: item.variantId || item.productId,
-              quantity: item.quantity,
-              item_price: item.price,
-            })),
-            // The order's currency (a market's own, MARKETS-DESIGN step 6), not the page's.
-            currency: mainElement.dataset.orderCurrency || window.__CURRENCY_CODE__ || "BDT",
-            num_items: orderItems.reduce(
-              (sum, item) => sum + item.quantity,
-              0
-            ),
-            value: order.totalAmount,
-          },
-          {},
-          { eventId: claim.eventId, sendCapi: false }
-        );
-        console.log("FB Purchase event tracked for order:", order.id);
-      }, 500);
+      if (!order || !orderItems) return;
+      // `checkout_completed` once per order (buyer-events.ts): a reload or a second tab says nothing.
+      if (!claimMetaPurchaseTracking(order.id).shouldSend) return;
+      // The order's currency (a market's own, MARKETS-DESIGN step 6), not the page's.
+      const currency = mainElement.dataset.orderCurrency || window.__CURRENCY_CODE__ || "BDT";
+      const lines = orderItems.map((item) => ({
+        merchandise: merchandise({ productId: item.productId, variantId: item.variantId, price: item.price, currency }),
+        quantity: item.quantity,
+      }));
+      emitBuyerEvent("checkout_completed", {
+        checkout: buyerCheckout(null, lines, buyerMoney(order.totalAmount, currency)),
+        order: { id: order.id },
+      });
     } catch (error: unknown) {
       console.error("FB Purchase: Error parsing data attribute:", error);
     }

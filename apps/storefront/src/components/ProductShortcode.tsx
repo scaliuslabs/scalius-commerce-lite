@@ -112,15 +112,6 @@ export default function ProductShortcode({ productData }: { productData: Product
       ...(matchingVariant.fulfillmentKind ? { fulfillmentKind: matchingVariant.fulfillmentKind } : {}),
     }).finally(() => setAdding(false));
     if (!added) return showToast(copy.addFailed, "error");
-    void import("@/lib/analytics").then(({ trackFbAddToCart }) => {
-      trackFbAddToCart({
-        content_ids: [matchingVariant.id], content_name: product.name, content_type: "product",
-        contents: [{ id: matchingVariant.id, quantity, item_price: finalPrice }],
-        currency: currencyCode, value: finalPrice * quantity,
-      });
-    }).catch((error: unknown) => {
-      console.error("Failed to track add to cart:", error);
-    });
     showToast(copy.added, "success");
     if (redirect) window.setTimeout(() => { window.location.href = pagePath("/cart"); }, 300);
     else {

@@ -1,180 +1,149 @@
-// src/lib/analytics.ts
+// The store's own tags as listeners of the buyer event bus
+// (lib/buyer-events/bus.ts, packages/shared/src/plugins/buyer-events.ts): the
+// Meta Pixel and its Conversions API relay, the TikTok Pixel, GA4/GTM's
+// dataLayer and Cloudflare Zaraz's e-commerce API hear the same events app
+// pixels and islands do. The bus loads this module when the page has one of
+// those destinations, and it hears the page's events from the start.
+//
+// A destination gets ids, quantities, unit prices, titles, the category,
+// currency and totals: never a line's buyer inputs (Wave A P6), a contact, a
+// payment method or tender detail. A Meta or TikTok event and its server relay
+// carry one id (`<Event>:<bus event id>`; a purchase is `Purchase:<order id>`,
+// and its Conversions API event comes from the server outbox).
 
-/**
- * Storefront commerce event tracking for the configured analytics providers,
- * plus a passive Cloudflare Zaraz e-commerce bridge when Zaraz is enabled on the zone.
- *
- * NOW INCLUDES SERVER-SIDE EVENT DISPATCHING FOR META CONVERSIONS API (CAPI).
- */
+import { getCurrencyCode, getDecimalPlaces } from "@scalius/shared/currency";
+import { fromMinor } from "@scalius/shared/money";
+import type { AnyBuyerEvent, BuyerLine, BuyerMerchandise, BuyerMoney } from "@scalius/shared/plugins/buyer-events";
+import { onBuyerEvents } from "./buyer-events/bus";
+import { claimOnce } from "./buyer-events/once";
+import type { MetaCapiEventPayload } from "./api/tracking";
 import { sendServerEvent } from "./tracking/meta-capi";
 import { marketingAllowed } from "./tracking/consent";
 import { createMetaEventId } from "./tracking/meta-event-id";
-import { normalizeSearchQuery } from "./search-query";
+import { createPurchaseEventId } from "./tracking/meta-purchase-guard";
 
-// Window augmentation for dataLayer, fbq, ttq, and Zaraz is in src/env.d.ts
+// Window augmentation for dataLayer, fbq, ttq and Zaraz is in src/env.d.ts.
 
-// CAPI: Define a type for user data that can be passed into tracking functions.
-interface CapiUserData {
-  em?: string; // Email
-  ph?: string; // Phone
-  // Add other potential PII fields here if needed in the future
-}
+type Item = { id: string; quantity: number; price?: number; name?: string };
 
-interface MetaEventOptions {
-  eventId?: string;
-  sendCapi?: boolean;
-}
-
-function pixelEventOptions(eventId: string) {
-  return { eventID: eventId };
-}
-
-type AnalyticsPrimitive = string | number | boolean;
-type AnalyticsValue =
-  | AnalyticsPrimitive
-  | null
-  | undefined
-  | AnalyticsValue[]
-  | { [key: string]: AnalyticsValue };
-
-type ZarazParameters = Record<string, AnalyticsValue>;
-type FbCommerceContent = {
-  id: string;
-  quantity: number;
-  item_price?: number;
-};
-
-// TikTok's current standard events (ads.tiktok.com/help/article/standard-events-parameters):
-// the purchase is `Purchase` (`CompletePayment` is retired), a newsletter
-// signup `SubmitForm`, an account `CompleteRegistration`.
-type TikTokStandardEvent =
-  | "ViewContent"
-  | "AddToCart"
-  | "InitiateCheckout"
-  | "AddPaymentInfo"
-  | "Purchase"
-  | "Search"
-  | "SubmitForm"
-  | "CompleteRegistration";
-
-type TikTokCommerceData = {
-  content_ids?: string[];
-  content_type?: "product" | "product_group";
-  contents?: FbCommerceContent[];
-  currency?: string;
-  num_items?: number;
+/** One event in the destinations' common terms (decimal amounts, as their APIs take them). */
+interface Commerce {
+  items: Item[];
+  currency: string;
   value?: number;
-};
-
-type TikTokParams = {
-  event_id: string;
-  content_type?: "product" | "product_group";
-  content_ids?: string[];
-  contents?: Array<{ content_id: string; quantity: number }>;
-  quantity?: number;
-  currency?: string;
-  value?: number;
-  search_string?: string;
-};
-
-type StorefrontAnalyticsProduct = {
-  id: string;
   name?: string;
-  price?: number;
-  quantity?: number;
-};
-
-type AnalyticsDedupeWindow = Window & {
-  __scaliusAnalyticsDedupe?: Set<string>;
-};
-
-const ANALYTICS_DEDUPE_STORAGE_KEY = "scalius_analytics_dedupe_v1";
-const MAX_PERSISTED_DEDUPE_KEYS = 100;
-
-/**
- * The only commerce facts a pixel, tag manager or CAPI ever receives: ids,
- * quantities, unit prices, names, category, currency and totals. Buyer
- * inputs on a cart line (engraving text, notes, gift messages) are buyer
- * content and must never reach analytics (Wave A P6), so every funnel
- * tracker copies just these fields, whatever object its caller passes.
- */
-const FB_COMMERCE_FIELDS = [
-  "content_ids",
-  "content_category",
-  "content_name",
-  "content_type",
-  "currency",
-  "num_items",
-  "value",
-  "order_id",
-  "search_string",
-] as const;
-
-type FbCommerceData = {
-  content_ids?: string[];
-  content_category?: string;
-  content_name?: string;
-  content_type?: "product" | "product_group";
-  contents?: FbCommerceContent[];
-  currency?: string;
-  num_items?: number;
-  value?: number;
-  order_id?: string;
-  search_string?: string;
-};
-
-export function pickFbCommerceData<T extends FbCommerceData>(data: T): T {
-  const picked: Record<string, unknown> = {};
-  for (const field of FB_COMMERCE_FIELDS) {
-    if (data[field] !== undefined) picked[field] = data[field];
-  }
-  if (Array.isArray(data.contents)) {
-    picked.contents = data.contents.map(({ id, quantity, item_price }) => ({
-      id,
-      quantity,
-      ...(item_price !== undefined ? { item_price } : {}),
-    }));
-  }
-  return picked as T;
+  category?: string;
+  orderId?: string;
+  query?: string;
+  /** A list (category, collection, an order): Meta's `product_group`. */
+  group?: boolean;
+  /** Ids other than the items' (a product page names the product). */
+  contentIds?: string[];
 }
 
-function cleanAnalyticsValue(value: AnalyticsValue): AnalyticsValue {
-  if (Array.isArray(value)) {
-    return value
-      .map(cleanAnalyticsValue)
-      .filter((item) => item !== undefined) as AnalyticsValue[];
-  }
+type Params = Record<string, unknown>;
 
+/** Without `undefined` values, recursively (destinations read a missing key, not `undefined`). */
+function clean<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(clean) as T;
   if (value && typeof value === "object") {
-    const entries = Object.entries(value)
-      .map(([key, entryValue]) => [key, cleanAnalyticsValue(entryValue)])
-      .filter(([, entryValue]) => entryValue !== undefined);
-    return Object.fromEntries(entries) as { [key: string]: AnalyticsValue };
+    return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined).map(([key, item]) => [key, clean(item)])) as T;
   }
-
-  return value === undefined ? undefined : value;
+  return value;
 }
 
-function cleanAnalyticsParams(
-  params: ZarazParameters,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(params)
-      .map(([key, value]) => [key, cleanAnalyticsValue(value)])
-      .filter(([, value]) => value !== undefined),
-  );
+const major = (money: BuyerMoney | null | undefined): number | undefined =>
+  money ? fromMinor(money.amountMinor, getDecimalPlaces(money.currency)) : undefined;
+
+function itemOf(merchandise: BuyerMerchandise, quantity = 1): Item {
+  return { id: merchandise.variantId ?? merchandise.productId, quantity, price: major(merchandise.price), name: merchandise.title || undefined };
 }
 
-function sendZarazEcommerce(eventName: string, params: ZarazParameters): void {
-  const ecommerce = window.zaraz?.ecommerce;
-  if (typeof ecommerce !== "function") {
+function sum(items: Item[]): number | undefined {
+  const priced = items.filter((item) => item.price !== undefined);
+  return priced.length > 0 ? priced.reduce((total, item) => total + item.price! * item.quantity, 0) : undefined;
+}
+
+function ofLines(lines: BuyerLine[], total: BuyerMoney | null, extra: Partial<Commerce> = {}): Commerce {
+  const items = lines.map((line) => itemOf(line.merchandise, line.quantity));
+  const currency = total?.currency ?? lines.find((line) => line.merchandise.price)?.merchandise.price?.currency ?? getCurrencyCode();
+  return { items, currency, value: major(total) ?? sum(items), ...extra };
+}
+
+const quantityOf = (c: Commerce) => c.items.reduce((total, item) => total + item.quantity, 0);
+const idsOf = (c: Commerce) => c.contentIds ?? c.items.map((item) => item.id);
+
+/** Meta Pixel (`eventID`) and its server relay under one id; `relay: false` when the server outbox sends it. */
+function meta(name: MetaCapiEventPayload["eventName"], c: Commerce, eventId: string, relay = true): void {
+  const data = clean({
+    content_ids: idsOf(c),
+    content_type: c.group ? "product_group" as const : "product" as const,
+    contents: c.items.map((item) => ({ id: item.id, quantity: item.quantity, item_price: item.price })),
+    content_name: c.name,
+    content_category: c.category,
+    currency: c.currency,
+    value: c.value,
+    num_items: name === "InitiateCheckout" || name === "Purchase" ? quantityOf(c) : undefined,
+    order_id: c.orderId,
+    search_string: c.query,
+  });
+  if (marketingAllowed() && typeof window.fbq === "function") window.fbq("track", name, data, { eventID: eventId });
+  if (relay) sendServerEvent({ eventId, eventName: name, customData: data });
+}
+
+/** TikTok's standard events; only a configured pixel hears them (an unrelated `ttq` global never does). */
+function tiktok(name: string, c: Commerce | null, eventId: string): void {
+  const track = window.ttq?.track;
+  if (window.__TIKTOK_PIXEL_ENABLED__ !== true || !marketingAllowed() || typeof track !== "function") return;
+  const params = c
+    ? {
+      event_id: eventId,
+      content_type: "product",
+      content_ids: idsOf(c),
+      contents: c.items.map((item) => ({ content_id: item.id, quantity: item.quantity })),
+      quantity: quantityOf(c),
+      currency: c.currency,
+      value: c.value,
+      search_string: c.query,
+    }
+    : { event_id: eventId };
+  try {
+    track.call(window.ttq, name, clean(params));
+  } catch (error) {
+    console.warn("TikTok Pixel event failed:", error);
+  }
+}
+
+/** GA4/GTM: an e-commerce event (the previous `ecommerce` cleared first), or a plain one. */
+function ga4(name: string, c: Commerce | null, eventId: string, params: Params = {}): void {
+  window.dataLayer = window.dataLayer || [];
+  if (!c) {
+    window.dataLayer.push(clean({ event: name, event_id: eventId, ...params }));
     return;
   }
+  const items = c.items.map((item, index) => ({
+    item_id: item.id,
+    item_name: c.items.length === 1 && !c.orderId ? item.name ?? c.name : undefined,
+    item_category: c.category,
+    price: item.price,
+    quantity: item.quantity,
+    index,
+  }));
+  window.dataLayer.push({ ecommerce: null });
+  window.dataLayer.push(clean({
+    event: name,
+    event_id: eventId,
+    ecommerce: { currency: c.currency, value: c.value, items, transaction_id: c.orderId, ...params, event_id: eventId },
+  }));
+}
 
+/** Cloudflare Zaraz's e-commerce API, when Zaraz is on the zone. */
+function zaraz(name: string, c: Commerce, params: Params = {}): void {
+  const ecommerce = window.zaraz?.ecommerce;
+  if (typeof ecommerce !== "function") return;
+  const products = c.items.map((item, index) => ({ product_id: item.id, sku: item.id, quantity: item.quantity, price: item.price, position: index + 1 }));
   try {
-    void Promise.resolve(
-      ecommerce(eventName, cleanAnalyticsParams(params)),
-    ).catch((error: unknown) => {
+    void Promise.resolve(ecommerce(name, clean({ products, currency: c.currency, value: c.value, ...params }))).catch((error: unknown) => {
       console.warn("Zaraz ecommerce event failed:", error);
     });
   } catch (error) {
@@ -182,827 +151,102 @@ function sendZarazEcommerce(eventName: string, params: ZarazParameters): void {
   }
 }
 
-function mapFbContentsToZarazProducts(
-  contents?: Array<{ id: string; quantity: number; item_price?: number }>,
-  contentIds?: string[],
-): Array<Record<string, AnalyticsValue>> | undefined {
-  if (contents?.length) {
-    return contents.map((item, index) => ({
-      product_id: item.id,
-      sku: item.id,
-      quantity: item.quantity,
-      price: item.item_price,
-      position: index + 1,
-    }));
-  }
-
-  if (contentIds?.length) {
-    return contentIds.map((id, index) => ({
-      product_id: id,
-      sku: id,
-      quantity: 1,
-      position: index + 1,
-    }));
-  }
-
-  return undefined;
-}
-
-function firstProduct(
-  products?: Array<Record<string, AnalyticsValue>>,
-): Record<string, AnalyticsValue> {
-  return products?.[0] ?? {};
-}
-
-// --- Event Parameter Interfaces ---
-
-interface ItemParameters {
-  item_id?: string; // SKU or product ID
-  item_name?: string;
-  affiliation?: string; // Store or business name
-  coupon?: string;
-  currency?: string;
-  discount?: number;
-  index?: number; // Position in a list
-  item_brand?: string;
-  item_category?: string;
-  item_category2?: string;
-  item_category3?: string;
-  item_category4?: string;
-  item_category5?: string;
-  item_list_id?: string; // ID of the list from which the item was selected
-  item_list_name?: string; // Name of the list
-  item_variant?: string;
-  location_id?: string; // For physical stores
-  price?: number; // Unit price
-  quantity?: number;
-}
-
-type GA4ParamValue =
-  | string
-  | number
-  | boolean
-  | undefined
-  | null
-  | ItemParameters
-  | ItemParameters[]
-  | GA4ParamValue[];
-
-type DataLayerParameters = Record<string, GA4ParamValue>;
-
-// --- E-commerce Event Tracking ---
-
-// Helper to ensure dataLayer exists for GA4/GTM.
-function getGaDataLayer(): Record<string, unknown>[] {
-  window.dataLayer = window.dataLayer || [];
-  return window.dataLayer!;
-}
-
-function finiteNumber(value: number | undefined): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-function inferCommerceValue(data: {
-  value?: number;
-  contents?: FbCommerceContent[];
-}): number | undefined {
-  const explicitValue = finiteNumber(data.value);
-  if (explicitValue !== undefined) {
-    return explicitValue;
-  }
-
-  let total = 0;
-  let hasPricedItem = false;
-  for (const item of data.contents ?? []) {
-    const price = finiteNumber(item.item_price);
-    const quantity = finiteNumber(item.quantity) ?? 1;
-    if (price === undefined) {
-      continue;
+/** One bus event to every destination that has a counterpart. */
+function hear(event: AnyBuyerEvent): void {
+  const id = (name: string) => createMetaEventId(name, event.id);
+  switch (event.name) {
+    case "product_viewed": {
+      const { merchandise, category } = event.data;
+      const item = itemOf(merchandise);
+      const c: Commerce = { items: [item], contentIds: [merchandise.productId], currency: merchandise.price?.currency ?? getCurrencyCode(), value: item.price, name: merchandise.title || undefined, category: category ?? undefined };
+      meta("ViewContent", c, id("ViewContent"));
+      tiktok("ViewContent", c, id("ViewContent"));
+      zaraz("Product Viewed", c, { product_id: item.id, sku: item.id, name: c.name, category: c.category, price: item.price, quantity: 1, products: undefined });
+      ga4("view_item", c, id("ViewContent"));
+      return;
     }
-    total += price * quantity;
-    hasPricedItem = true;
-  }
-
-  return hasPricedItem ? total : undefined;
-}
-
-function getTikTokContentIds(data: TikTokCommerceData): string[] | undefined {
-  const explicitIds = data.content_ids?.filter(Boolean);
-  if (explicitIds?.length) {
-    return explicitIds;
-  }
-
-  const contentIds = data.contents?.map((item) => item.id).filter(Boolean);
-  return contentIds?.length ? contentIds : undefined;
-}
-
-function mapFbContentsToTikTokContents(
-  data: TikTokCommerceData,
-): Array<{ content_id: string; quantity: number }> | undefined {
-  const fromContents =
-    data.contents
-      ?.map((item) => ({
-        content_id: item.id,
-        quantity: finiteNumber(item.quantity) ?? 1,
-      }))
-      .filter((item) => Boolean(item.content_id)) ?? [];
-
-  if (fromContents.length > 0) {
-    return fromContents;
-  }
-
-  return data.content_ids?.filter(Boolean).map((id) => ({
-    content_id: id,
-    quantity: 1,
-  }));
-}
-
-function inferTikTokQuantity(data: TikTokCommerceData): number | undefined {
-  const explicitQuantity = finiteNumber(data.num_items);
-  if (explicitQuantity !== undefined) {
-    return explicitQuantity;
-  }
-
-  const contents = mapFbContentsToTikTokContents(data);
-  if (contents?.length) {
-    return contents.reduce((sum, item) => sum + item.quantity, 0);
-  }
-
-  return undefined;
-}
-
-function normalizeGa4Items(
-  data: {
-    content_ids?: string[];
-    content_name?: string;
-    content_category?: string;
-    contents?: FbCommerceContent[];
-  },
-  options: { includeContentName?: boolean } = {},
-): ItemParameters[] {
-  const includeContentName = options.includeContentName !== false;
-  const fromContents =
-    data.contents
-      ?.map((item, index) => ({
-        item_id: item.id,
-        item_name:
-          includeContentName && data.contents?.length === 1
-            ? data.content_name
-            : undefined,
-        item_category: data.content_category,
-        price: finiteNumber(item.item_price),
-        quantity: finiteNumber(item.quantity),
-        index,
-      }))
-      .filter((item) => Boolean(item.item_id)) ?? [];
-
-  if (fromContents.length > 0) {
-    return fromContents;
-  }
-
-  return (
-    data.content_ids?.filter(Boolean).map((id, index, ids) => ({
-      item_id: id,
-      item_name:
-        includeContentName && ids.length === 1 ? data.content_name : undefined,
-      item_category: data.content_category,
-      quantity: 1,
-      index,
-    })) ?? []
-  );
-}
-
-function cleanDataLayerParams(
-  params: DataLayerParameters,
-): Record<string, unknown> {
-  return cleanAnalyticsParams(params as unknown as ZarazParameters);
-}
-
-function pushDataLayerEcommerceEvent(
-  eventName: string,
-  params: DataLayerParameters,
-  eventId?: string,
-): void {
-  const dataLayer = getGaDataLayer();
-  const ecommerce = cleanDataLayerParams(
-    eventId ? { ...params, event_id: eventId } : params,
-  );
-  const event: Record<string, unknown> = {
-    event: eventName,
-    ecommerce,
-  };
-
-  if (eventId) {
-    event.event_id = eventId;
-  }
-
-  dataLayer.push({ ecommerce: null });
-  dataLayer.push(event);
-}
-
-function pushDataLayerEvent(
-  eventName: string,
-  params: DataLayerParameters,
-  eventId?: string,
-): void {
-  const dataLayer = getGaDataLayer();
-  dataLayer.push(
-    cleanDataLayerParams(
-      eventId
-        ? { event: eventName, event_id: eventId, ...params }
-        : { event: eventName, ...params },
-    ),
-  );
-}
-
-function bridgeFbCommerceToDataLayer(
-  eventName:
-    | "view_item"
-    | "add_to_cart"
-    | "begin_checkout"
-    | "add_payment_info"
-    | "purchase",
-  data: {
-    content_ids?: string[];
-    content_name?: string;
-    content_category?: string;
-    contents?: FbCommerceContent[];
-    currency?: string;
-    num_items?: number;
-    value?: number;
-    order_id?: string;
-  },
-  eventId: string,
-): void {
-  const currency = data.currency ?? window.__CURRENCY_CODE__;
-  const value = inferCommerceValue(data);
-  const params: DataLayerParameters = {
-    currency,
-    value,
-    items: normalizeGa4Items(data, {
-      includeContentName: eventName !== "purchase",
-    }),
-  };
-
-  if (data.num_items !== undefined) {
-    params.num_items = finiteNumber(data.num_items);
-  }
-
-  if (eventName === "purchase") {
-    params.transaction_id = data.order_id ?? eventId;
-  }
-
-  pushDataLayerEcommerceEvent(eventName, params, eventId);
-}
-
-function trackTikTokEvent(
-  eventName: TikTokStandardEvent,
-  params: TikTokParams,
-): void {
-  // Only a configured TikTok pixel may receive events; fail closed otherwise
-  // so an unrelated `ttq` global cannot surface an `undefined.track` error.
-  if (window.__TIKTOK_PIXEL_ENABLED__ !== true || !marketingAllowed()) {
-    return;
-  }
-
-  const track = window.ttq?.track;
-  if (typeof track !== "function") {
-    return;
-  }
-
-  try {
-    track.call(
-      window.ttq,
-      eventName,
-      cleanAnalyticsParams(params as unknown as ZarazParameters),
-    );
-  } catch (error) {
-    console.warn("TikTok Pixel event failed:", error);
+    case "collection_viewed": {
+      const { collection, products } = event.data;
+      const c = ofLines(products.map((merchandise) => ({ merchandise, quantity: 1 })), null, { group: true, name: collection.title, category: collection.title });
+      meta("ViewContent", c, id("ViewContent"));
+      zaraz("Product List Viewed", c, { list_id: collection.id ?? undefined, category: collection.title });
+      ga4("view_item_list", { ...c, value: undefined }, id("ViewContent"), { item_list_id: collection.id ?? undefined, item_list_name: collection.title });
+      return;
+    }
+    case "search_submitted": {
+      const c = ofLines(event.data.results.map((merchandise) => ({ merchandise, quantity: 1 })), null, { query: event.data.query });
+      meta("Search", c, id("Search"));
+      tiktok("Search", c, id("Search"));
+      zaraz("Products Searched", c, { query: event.data.query });
+      ga4("search", null, id("Search"), { search_term: event.data.query, currency: c.currency, value: c.value });
+      return;
+    }
+    case "product_added_to_cart": {
+      const c = ofLines([event.data.line], null, { name: event.data.line.merchandise.title || undefined });
+      const [item] = c.items;
+      meta("AddToCart", c, id("AddToCart"));
+      tiktok("AddToCart", c, id("AddToCart"));
+      zaraz("Product Added", c, { product_id: item?.id, sku: item?.id, name: c.name, price: item?.price, quantity: item?.quantity });
+      ga4("add_to_cart", c, id("AddToCart"));
+      return;
+    }
+    case "product_removed_from_cart": {
+      const c = ofLines([event.data.line], null);
+      zaraz("Product Removed", c, { product_id: c.items[0]?.id, quantity: c.items[0]?.quantity });
+      ga4("remove_from_cart", c, id("RemoveFromCart"));
+      return;
+    }
+    case "cart_viewed": {
+      const c = ofLines(event.data.lines, event.data.total);
+      zaraz("Cart Viewed", c);
+      ga4("view_cart", c, id("ViewCart"));
+      return;
+    }
+    case "checkout_started": {
+      const c = ofLines(event.data.checkout.lines, event.data.checkout.total);
+      meta("InitiateCheckout", c, id("InitiateCheckout"));
+      tiktok("InitiateCheckout", c, id("InitiateCheckout"));
+      zaraz("Checkout Started", c, { total: c.value, quantity: quantityOf(c) });
+      ga4("begin_checkout", c, id("InitiateCheckout"));
+      return;
+    }
+    case "checkout_shipping_submitted": {
+      const c = ofLines(event.data.checkout.lines, event.data.checkout.total);
+      ga4("add_shipping_info", c, id("AddShippingInfo"), { shipping_tier: event.data.shipping.title || undefined });
+      return;
+    }
+    case "checkout_payment_submitted": {
+      // The method stays out: a gift card or tender is nobody's business but the store's.
+      const c = ofLines(event.data.checkout.lines, event.data.checkout.total);
+      meta("AddPaymentInfo", c, id("AddPaymentInfo"));
+      tiktok("AddPaymentInfo", c, id("AddPaymentInfo"));
+      zaraz("Payment Info Entered", c, { total: c.value });
+      ga4("add_payment_info", c, id("AddPaymentInfo"));
+      return;
+    }
+    case "checkout_completed": {
+      const orderId = event.data.order.id;
+      const c = ofLines(event.data.checkout.lines, event.data.checkout.total, { orderId, group: true, name: `Order ${orderId}` });
+      const purchaseId = createPurchaseEventId(orderId);
+      // The Conversions API purchase comes from the server outbox, under the same id.
+      meta("Purchase", c, purchaseId, false);
+      tiktok("Purchase", c, purchaseId);
+      zaraz("Order Completed", c, { order_id: orderId, total: c.value, revenue: c.value, quantity: quantityOf(c) });
+      ga4("purchase", c, purchaseId);
+      return;
+    }
+    default:
+      return;
   }
 }
 
-function bridgeFbCommerceToTikTok(
-  eventName: Exclude<TikTokStandardEvent, "Search" | "SubmitForm" | "CompleteRegistration">,
-  data: TikTokCommerceData,
-  eventId: string,
-): void {
-  const contentIds = getTikTokContentIds(data);
-  const contents = mapFbContentsToTikTokContents(data);
-  const hasCatalogContent = Boolean(contentIds?.length || contents?.length);
+let started = false;
 
-  trackTikTokEvent(eventName, {
-    event_id: eventId,
-    content_type:
-      data.content_type ?? (hasCatalogContent ? "product" : undefined),
-    content_ids: contentIds,
-    contents,
-    quantity: inferTikTokQuantity(data),
-    currency: data.currency ?? window.__CURRENCY_CODE__,
-    value: inferCommerceValue(data),
-  });
-}
-
-function bridgeFbSearchToTikTok(
-  data: TikTokCommerceData & { search_string: string },
-  eventId: string,
-): void {
-  const contentIds = getTikTokContentIds(data);
-  const contents = mapFbContentsToTikTokContents(data);
-  const hasCatalogContent = Boolean(contentIds?.length || contents?.length);
-
-  trackTikTokEvent("Search", {
-    event_id: eventId,
-    content_type:
-      data.content_type ?? (hasCatalogContent ? "product" : undefined),
-    content_ids: contentIds,
-    contents,
-    quantity: inferTikTokQuantity(data),
-    currency: data.currency ?? window.__CURRENCY_CODE__,
-    value: inferCommerceValue(data),
-    search_string: data.search_string,
-  });
-}
-
-function getAnalyticsDedupeSet(): Set<string> {
-  const browserWindow = window as AnalyticsDedupeWindow;
-  browserWindow.__scaliusAnalyticsDedupe ??= new Set<string>();
-  return browserWindow.__scaliusAnalyticsDedupe;
-}
-
-function readPersistedAnalyticsDedupeKeys(): Set<string> {
-  try {
-    const raw = window.sessionStorage?.getItem(ANALYTICS_DEDUPE_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(
-      Array.isArray(parsed)
-        ? parsed.filter((key): key is string => typeof key === "string")
-        : [],
-    );
-  } catch {
-    return new Set();
-  }
-}
-
-function writePersistedAnalyticsDedupeKeys(keys: Set<string>): void {
-  try {
-    const boundedKeys = Array.from(keys).slice(-MAX_PERSISTED_DEDUPE_KEYS);
-    window.sessionStorage?.setItem(
-      ANALYTICS_DEDUPE_STORAGE_KEY,
-      JSON.stringify(boundedKeys),
-    );
-  } catch {
-    // Browser storage can be blocked; the in-memory guard still protects this page.
-  }
-}
-
-function claimAnalyticsEventKey(key: string): boolean {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
-  const memoryKeys = getAnalyticsDedupeSet();
-  if (memoryKeys.has(key)) {
-    return false;
-  }
-
-  const persistedKeys = readPersistedAnalyticsDedupeKeys();
-  if (persistedKeys.has(key)) {
-    memoryKeys.add(key);
-    return false;
-  }
-
-  memoryKeys.add(key);
-  persistedKeys.add(key);
-  writePersistedAnalyticsDedupeKeys(persistedKeys);
-  return true;
-}
-
-function normalizeStorefrontAnalyticsProducts(
-  products: StorefrontAnalyticsProduct[] | undefined,
-): FbCommerceContent[] {
-  return (
-    products
-      ?.map((product) => {
-        const id = product.id.trim();
-        if (!id) return null;
-        const quantity = finiteNumber(product.quantity) ?? 1;
-        const item: FbCommerceContent = { id, quantity };
-        const price = finiteNumber(product.price);
-        if (price !== undefined) item.item_price = price;
-        return item;
-      })
-      .filter((product): product is FbCommerceContent => product !== null) ?? []
-  );
-}
-
-function contentIdsFromContents(contents: FbCommerceContent[]): string[] {
-  return contents.map((item) => item.id).filter(Boolean);
-}
-
-/**
- * Tracks a storefront search results page once for each normalized query.
- */
-export function trackStorefrontSearchResults(data: {
-  searchQuery: string;
-  products?: StorefrontAnalyticsProduct[];
-  currency?: string;
-}): boolean {
-  const searchString = normalizeSearchQuery(data.searchQuery);
-  if (!searchString) {
-    return false;
-  }
-
-  if (!claimAnalyticsEventKey(`Search:${searchString}`)) {
-    return false;
-  }
-
-  const contents = normalizeStorefrontAnalyticsProducts(data.products);
-  const contentIds = contentIdsFromContents(contents);
-  trackFbSearch({
-    content_ids: contentIds.length > 0 ? contentIds : undefined,
-    contents: contents.length > 0 ? contents : undefined,
-    currency: data.currency ?? window.__CURRENCY_CODE__ ?? "BDT",
-    search_string: searchString,
-    value: inferCommerceValue({ contents }),
-  });
-
-  return true;
-}
-
-/**
- * Tracks AddPaymentInfo once for each checkout attempt and selected method.
- */
-export function trackStorefrontAddPaymentInfoOnce(data: {
-  checkoutId?: string;
-  paymentMethod: string;
-  content_category?: string;
-  content_ids?: string[];
-  contents?: FbCommerceContent[];
-  currency?: string;
-  value?: number;
-}): boolean {
-  const paymentMethod = data.paymentMethod.trim();
-  if (!paymentMethod) {
-    return false;
-  }
-
-  const checkoutId = data.checkoutId?.trim() || "unknown-checkout";
-  if (
-    !claimAnalyticsEventKey(`AddPaymentInfo:${checkoutId}:${paymentMethod}`)
-  ) {
-    return false;
-  }
-
-  const contentIds =
-    data.content_ids?.map((id) => id.trim()).filter(Boolean) ??
-    contentIdsFromContents(data.contents ?? []);
-  const contents =
-    data.contents
-      ?.map((item) => {
-        const normalizedItem: FbCommerceContent = {
-          id: item.id.trim(),
-          quantity: finiteNumber(item.quantity) ?? 1,
-        };
-        const price = finiteNumber(item.item_price);
-        if (price !== undefined) normalizedItem.item_price = price;
-        return normalizedItem;
-      })
-      .filter((item): item is FbCommerceContent => Boolean(item.id)) ?? [];
-
-  trackFbAddPaymentInfo({
-    content_category: data.content_category,
-    content_ids: contentIds.length > 0 ? contentIds : undefined,
-    contents: contents.length > 0 ? contents : undefined,
-    currency: data.currency ?? window.__CURRENCY_CODE__ ?? "BDT",
-    value: inferCommerceValue({ value: data.value, contents }),
-  });
-
-  return true;
-}
-
-// --- Facebook Pixel Event Tracking ---
-
-/**
- * Tracks a ViewContent event for Facebook Pixel.
- * Typically used when a user views a product details page.
- */
-export function trackFbViewContent(data: {
-  content_ids?: string[];
-  content_category?: string;
-  content_name?: string;
-  content_type?: "product" | "product_group";
-  contents?: FbCommerceContent[];
-  currency?: string;
-  value?: number;
-}): void {
-  data = pickFbCommerceData(data);
-  const eventId = createMetaEventId("ViewContent");
-
-  // Client-side Pixel
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "ViewContent", data, pixelEventOptions(eventId));
-  }
-
-  // A list (category, collection) is a product group: GA4 calls it
-  // view_item_list, and TikTok has no list event (audit spec 3.10).
-  const listView = data.content_type === "product_group";
-  if (!listView) bridgeFbCommerceToTikTok("ViewContent", data, eventId);
-
-  const products = mapFbContentsToZarazProducts(
-    data.contents,
-    data.content_ids,
-  );
-  const product = firstProduct(products);
-  sendZarazEcommerce("Product Viewed", {
-    product_id: product.product_id,
-    sku: product.sku,
-    category: data.content_category,
-    name: data.content_name,
-    price: product.price,
-    quantity: product.quantity,
-    currency: data.currency,
-    value: data.value,
-  });
-
-  if (listView) {
-    pushDataLayerEcommerceEvent("view_item_list", {
-      item_list_name: data.content_name ?? data.content_category,
-      currency: data.currency ?? window.__CURRENCY_CODE__,
-      items: normalizeGa4Items(data, { includeContentName: false }),
-    }, eventId);
-  } else {
-    bridgeFbCommerceToDataLayer("view_item", data, eventId);
-  }
-
-  // CAPI: Server-side Event
-  sendServerEvent({
-    eventId,
-    eventName: "ViewContent",
-    customData: {
-      content_ids: data.content_ids,
-      content_category: data.content_category,
-      content_name: data.content_name,
-      content_type: data.content_type,
-      contents: data.contents,
-      currency: data.currency,
-      value: data.value,
-    },
-  });
-}
-
-/**
- * Tracks an AddToCart event for Facebook Pixel.
- */
-export function trackFbAddToCart(data: {
-  content_ids?: string[];
-  content_name?: string;
-  content_type?: "product" | "product_group";
-  contents?: FbCommerceContent[];
-  currency?: string;
-  value?: number;
-}): void {
-  data = pickFbCommerceData(data);
-  const eventId = createMetaEventId("AddToCart");
-
-  // Client-side Pixel
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "AddToCart", data, pixelEventOptions(eventId));
-  }
-
-  bridgeFbCommerceToTikTok("AddToCart", data, eventId);
-
-  const products = mapFbContentsToZarazProducts(
-    data.contents,
-    data.content_ids,
-  );
-  const product = firstProduct(products);
-  sendZarazEcommerce("Product Added", {
-    product_id: product.product_id,
-    sku: product.sku,
-    name: data.content_name,
-    price: product.price,
-    quantity: product.quantity,
-    products,
-    currency: data.currency,
-    value: data.value,
-  });
-
-  bridgeFbCommerceToDataLayer("add_to_cart", data, eventId);
-
-  // CAPI: Server-side Event
-  sendServerEvent({
-    eventId,
-    eventName: "AddToCart",
-    customData: {
-      content_ids: data.content_ids,
-      content_name: data.content_name,
-      content_type: data.content_type,
-      contents: data.contents,
-      currency: data.currency,
-      value: data.value,
-    },
-  });
-}
-
-/**
- * Tracks an InitiateCheckout event for Facebook Pixel.
- */
-export function trackFbInitiateCheckout(data: {
-  content_ids?: string[];
-  content_category?: string;
-  content_name?: string;
-  contents?: FbCommerceContent[];
-  currency?: string;
-  num_items?: number;
-  value?: number;
-}): void {
-  data = pickFbCommerceData(data);
-  const eventId = createMetaEventId("InitiateCheckout");
-
-  // Client-side Pixel
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "InitiateCheckout", data, pixelEventOptions(eventId));
-  }
-
-  bridgeFbCommerceToTikTok("InitiateCheckout", data, eventId);
-
-  sendZarazEcommerce("Checkout Started", {
-    products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
-    category: data.content_category,
-    name: data.content_name,
-    currency: data.currency,
-    total: data.value,
-    value: data.value,
-    quantity: data.num_items,
-  });
-
-  bridgeFbCommerceToDataLayer("begin_checkout", data, eventId);
-
-  // CAPI: Server-side Event
-  sendServerEvent({
-    eventId,
-    eventName: "InitiateCheckout",
-    customData: {
-      content_ids: data.content_ids,
-      content_category: data.content_category,
-      content_name: data.content_name,
-      contents: data.contents,
-      currency: data.currency,
-      num_items: data.num_items,
-      value: data.value,
-    },
-  });
-}
-
-/**
- * Tracks an AddPaymentInfo event for Facebook Pixel.
- */
-export function trackFbAddPaymentInfo(data?: {
-  content_category?: string;
-  content_ids?: string[];
-  contents?: FbCommerceContent[];
-  currency?: string;
-  value?: number;
-}): void {
-  data = data ? pickFbCommerceData(data) : data;
-  const eventId = createMetaEventId("AddPaymentInfo");
-
-  // Client-side Pixel
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq(
-      "track",
-      "AddPaymentInfo",
-      data || {},
-      pixelEventOptions(eventId),
-    );
-  }
-
-  bridgeFbCommerceToTikTok("AddPaymentInfo", data ?? {}, eventId);
-
-  sendZarazEcommerce("Payment Info Entered", {
-    products: mapFbContentsToZarazProducts(data?.contents, data?.content_ids),
-    category: data?.content_category,
-    currency: data?.currency,
-    total: data?.value,
-    value: data?.value,
-  });
-
-  bridgeFbCommerceToDataLayer("add_payment_info", data ?? {}, eventId);
-
-  // CAPI: Server-side Event
-  sendServerEvent({
-    eventId,
-    eventName: "AddPaymentInfo",
-    customData: data,
-  });
-}
-
-/**
- * Tracks a Purchase event for Facebook Pixel.
- * ENHANCEMENT: Accepts PII to be passed for CAPI enrichment.
- */
-export function trackFbPurchase(
-  data: {
-    content_ids?: string[];
-    content_name?: string;
-    content_type?: "product" | "product_group";
-    contents?: FbCommerceContent[];
-    currency: string;
-    num_items?: number;
-    value: number;
-    order_id?: string;
-  },
-  userData: CapiUserData, // This is crucial for matching purchase events.
-  options: MetaEventOptions = {},
-): void {
-  data = pickFbCommerceData(data);
-  const eventId =
-    options.eventId ?? createMetaEventId("Purchase", data.order_id);
-
-  // Client-side Pixel
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "Purchase", data, pixelEventOptions(eventId));
-  }
-
-  // TikTok matches the buyer (hashed contact) before the purchase it dedupes
-  // with the Events API by the same `Purchase:<orderId>` id.
-  void identifyTikTokBuyer({ email: userData.em, phone: userData.ph })
-    .catch(() => undefined)
-    .finally(() => bridgeFbCommerceToTikTok("Purchase", data, eventId));
-
-  sendZarazEcommerce("Order Completed", {
-    order_id: data.order_id,
-    total: data.value,
-    revenue: data.value,
-    currency: data.currency,
-    products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
-    quantity: data.num_items,
-  });
-
-  bridgeFbCommerceToDataLayer("purchase", data, eventId);
-
-  if (options.sendCapi !== false) {
-    // CAPI: Server-side Event
-    sendServerEvent({
-      eventId,
-      eventName: "Purchase",
-      userData: userData, // Pass explicit PII for the most important event.
-      customData: {
-        ...data,
-      },
-    });
-  }
-}
-
-/**
- * Tracks a Search event for Facebook Pixel.
- */
-export function trackFbSearch(data: {
-  content_category?: string;
-  content_ids?: string[];
-  contents?: FbCommerceContent[];
-  currency?: string;
-  search_string: string;
-  value?: number;
-}): void {
-  data = pickFbCommerceData(data);
-  const eventId = createMetaEventId("Search");
-
-  // Client-side Pixel
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "Search", data, pixelEventOptions(eventId));
-  }
-
-  bridgeFbSearchToTikTok(data, eventId);
-
-  sendZarazEcommerce("Products Searched", {
-    query: data.search_string,
-    products: mapFbContentsToZarazProducts(data.contents, data.content_ids),
-    category: data.content_category,
-    currency: data.currency,
-    value: data.value,
-  });
-
-  pushDataLayerEvent(
-    "search",
-    {
-      search_term: data.search_string,
-      currency: data.currency,
-      value: data.value,
-    },
-    eventId,
-  );
-
-  // CAPI: Server-side Event
-  sendServerEvent({
-    eventId,
-    eventName: "Search",
-    customData: {
-      ...data,
-    },
-  });
+/** Starts the store's tags on the bus, once: the page's earlier events first. */
+export function startStoreTags(): void {
+  if (started) return;
+  started = true;
+  onBuyerEvents((event) => hear(event), { replay: true });
 }
 
 /**
@@ -1011,12 +255,11 @@ export function trackFbSearch(data: {
  */
 export function trackLead(data: { source?: string } = {}): void {
   const eventId = createMetaEventId("Lead");
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "Lead", data.source ? { content_name: data.source } : {}, pixelEventOptions(eventId));
-  }
-  trackTikTokEvent("SubmitForm", { event_id: eventId });
-  pushDataLayerEvent("generate_lead", data.source ? { lead_source: data.source } : {}, eventId);
-  sendServerEvent({ eventId, eventName: "Lead", customData: data.source ? { content_name: data.source } : undefined });
+  const customData = data.source ? { content_name: data.source } : undefined;
+  if (marketingAllowed() && typeof window.fbq === "function") window.fbq("track", "Lead", customData ?? {}, { eventID: eventId });
+  tiktok("SubmitForm", null, eventId);
+  ga4("generate_lead", null, eventId, data.source ? { lead_source: data.source } : {});
+  sendServerEvent({ eventId, eventName: "Lead", customData });
 }
 
 /**
@@ -1027,44 +270,14 @@ export function trackLead(data: { source?: string } = {}): void {
 export function trackCompleteRegistration(data: { customerId?: string | null; method?: string } = {}): void {
   const customerId = data.customerId?.trim() || undefined;
   const eventId = createMetaEventId("CompleteRegistration", customerId);
-  if (!claimAnalyticsEventKey(eventId)) return;
-  if (marketingAllowed() && typeof window.fbq === "function") {
-    window.fbq("track", "CompleteRegistration", { status: true }, pixelEventOptions(eventId));
-  }
-  trackTikTokEvent("CompleteRegistration", { event_id: eventId });
-  pushDataLayerEvent("sign_up", { method: data.method ?? "otp" }, eventId);
-  sendServerEvent({
-    eventId,
-    eventName: "CompleteRegistration",
-    ...(customerId ? { userData: { external_id: [customerId] } } : {}),
-  });
+  if (!claimOnce(eventId)) return;
+  if (marketingAllowed() && typeof window.fbq === "function") window.fbq("track", "CompleteRegistration", { status: true }, { eventID: eventId });
+  tiktok("CompleteRegistration", null, eventId);
+  ga4("sign_up", null, eventId, { method: data.method ?? "otp" });
+  sendServerEvent({ eventId, eventName: "CompleteRegistration", ...(customerId ? { userData: { external_id: [customerId] } } : {}) });
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-/**
- * TikTok advanced matching before the purchase: SHA-256 of the trimmed
- * lowercase email, of the E.164 phone and of the customer id, never the raw
- * values (ttq.identify).
- */
-export async function identifyTikTokBuyer(contact: { email?: string | null; phone?: string | null; customerId?: string | null }): Promise<void> {
-  if (window.__TIKTOK_PIXEL_ENABLED__ !== true || !marketingAllowed()) return;
-  const identify = window.ttq?.identify;
-  if (typeof identify !== "function" || !globalThis.crypto?.subtle) return;
-  const email = contact.email?.trim().toLowerCase();
-  const phone = contact.phone?.replace(/[^\d+]/g, "");
-  const customerId = contact.customerId?.trim().toLowerCase();
-  const identity: Record<string, string> = {};
-  if (email) identity.sha256_email = await sha256Hex(email);
-  if (phone) identity.sha256_phone_number = await sha256Hex(phone.startsWith("+") ? phone : `+${phone}`);
-  if (customerId) identity.external_id = await sha256Hex(customerId);
-  if (Object.keys(identity).length === 0) return;
-  try {
-    identify.call(window.ttq, identity);
-  } catch (error) {
-    console.warn("TikTok Pixel identify failed:", error);
-  }
+/** Test seam. */
+export function resetStoreTagsForTest(): void {
+  started = false;
 }

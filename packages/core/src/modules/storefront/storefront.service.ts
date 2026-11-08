@@ -84,6 +84,7 @@ import {
   activePluginPurchaseOptions,
   activePluginStorefrontExtensions,
   activePluginStorefrontScripts,
+  activePluginPixels,
   selectActivePluginInstallations,
 } from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
@@ -858,6 +859,7 @@ export async function getLayoutData(
     policies: publicPolicies,
     // Active apps' approved scripts: the storefront loads them on their pages and adds their hosts to the CSP.
     appScripts: activePluginStorefrontScripts(activeApps.values()),
+    appPixels: activePluginPixels(activeApps.values()),
     appExtensions,
     // Ways to buy a line the active apps offer (a subscription): the buy form lists them.
     purchaseOptions: activePluginPurchaseOptions(activeApps.values()),

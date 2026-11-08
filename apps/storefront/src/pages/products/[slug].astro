@@ -973,54 +973,27 @@ const productCategoryAnalytics = productCategory
   import type { Product, Category, ProductVariant } from "@/lib/api";
   import { scheduleNonCriticalAnalytics } from "@/lib/non-critical-analytics";
 
+  // `product_viewed` (buyer-events.ts), outside the first paint: the product,
+  // the SKU shown when the page names one price, and its category.
   document.addEventListener("DOMContentLoaded", () => {
     const container = document.getElementById("product-container");
-    if (!container) return;
-
-    const productDataAttr = container.dataset.fbProductDetails;
-    const categoryDataAttr = container.dataset.fbCategoryDetails;
-    const variantsDataAttr = container.dataset.fbVariantsDetails;
-
-    if (!productDataAttr || !categoryDataAttr || !variantsDataAttr) {
-      console.error("FB ViewContent: Missing data attributes on container.");
-      return;
-    }
-
+    const { fbProductDetails, fbCategoryDetails, fbVariantsDetails } = container?.dataset ?? {};
+    if (!fbProductDetails || !fbCategoryDetails || !fbVariantsDetails) return;
     try {
-      const product: Product = JSON.parse(productDataAttr);
-      const category: Category | null = JSON.parse(categoryDataAttr);
-      const variants: ProductVariant[] = JSON.parse(variantsDataAttr);
-
-      const triggerAnalytics = () => {
-        import("@/lib/analytics").then(({ trackFbViewContent }) => {
-          trackFbViewContent({
-            content_ids: [product.id],
-            content_name: product.name,
-            content_category: category?.name,
-            content_type: "product",
-            currency: window.__CURRENCY_CODE__ || "BDT",
-            value: product.discountedPrice,
-            contents:
-              variants.length > 0
-                ? variants.map((v: ProductVariant) => ({
-                    id: v.id && v.id !== "default" ? v.id : product.id,
-                    quantity: 1,
-                    item_price: v.price || product.discountedPrice,
-                  }))
-                : [
-                    {
-                      id: product.id,
-                      quantity: 1,
-                      item_price: product.discountedPrice,
-                    },
-                  ],
+      const product: Product = JSON.parse(fbProductDetails);
+      const category: Category | null = JSON.parse(fbCategoryDetails);
+      const [variant]: ProductVariant[] = JSON.parse(fbVariantsDetails);
+      // The bus loads then too, off the first paint.
+      scheduleNonCriticalAnalytics(() => {
+        void Promise.all([import("@/lib/buyer-events/bus"), import("@/lib/buyer-events/lines")]).then(([{ emitBuyerEvent }, { merchandise }]) => {
+          emitBuyerEvent("product_viewed", {
+            merchandise: merchandise({ productId: product.id, variantId: variant?.id ?? null, title: product.name, price: product.discountedPrice }),
+            category: category?.name ?? null,
           });
-        }).catch(() => undefined); // Analytics only: the page is the same without it.
-      };
-
-      scheduleNonCriticalAnalytics(triggerAnalytics);
+        }, () => undefined);
+      });
     } catch (error: unknown) {
-      console.error("FB ViewContent: Error parsing data attributes:", error);
+      console.error("product_viewed: the page's product data did not parse", error);
     }
   });
 </script>

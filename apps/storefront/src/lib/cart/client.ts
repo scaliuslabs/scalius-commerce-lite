@@ -2,6 +2,9 @@ import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorText } from "../buyer-api-errors";
 import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
+import { emitBuyerEvent } from "@/lib/buyer-events/bus";
+import { buyerCheckout, buyerMoney, cartLines, eventText } from "@/lib/buyer-events/lines";
+import type { BuyerMoney } from "@scalius/shared/plugins/buyer-events";
 // src/lib/cart/client.ts
 import { billingQuoteFields } from "@/lib/checkout/billing-address";
 import {
@@ -155,11 +158,6 @@ function inlineJsString(value: string): string {
 }
 
 // Pixel mappers load on first use, off the checkout's critical path.
-function withAnalytics(
-  run: (analytics: typeof import("@/lib/analytics")) => void,
-): void {
-  void import("@/lib/analytics").then(run).catch(() => undefined);
-}
 
 // cart.astro always serializes the fully resolved active checkout language
 // (English fallback included) before this module runs.
@@ -458,7 +456,7 @@ async function processQuickBuy() {
 
       if (data.cartItem) {
         // Buyer inputs (from the product page's no-JS form) come with the
-        // line; the analytics events below never carry them.
+        // line; buyer events never carry them.
         // The quick-buy line joins the existing cart before checkout.
         if (!(await startBuyNow(data.cartItem))) {
           const notice = document.getElementById("quickBuyStorageNotice");
@@ -469,19 +467,8 @@ async function processQuickBuy() {
           return;
         }
 
-        const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
-        if (data.addToCartEvent) {
-          data.addToCartEvent.currency = dynamicCurrency;
-          withAnalytics((analytics) =>
-            analytics.trackFbAddToCart(data.addToCartEvent),
-          );
-        }
-        if (data.initiateCheckoutEvent) {
-          data.initiateCheckoutEvent.currency = dynamicCurrency;
-          withAnalytics((analytics) =>
-            analytics.trackFbInitiateCheckout(data.initiateCheckoutEvent),
-          );
-        }
+        // The add itself was heard (the cart store emits it); buy now begins the checkout.
+        if (data.initiateCheckoutEvent) emitCheckoutStarted();
       }
     }
   } catch (e: unknown) {
@@ -762,6 +749,7 @@ function renderAuthoritativeCartQuote(
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
   elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
   latestAllowedPaymentMethods = quote.allowedPaymentMethods;
+  latestQuotedTotal = { amountMinor: quote.totalMinor, currency: quote.currencyCode };
   // The cart page drops the payment step when these leave cash alone (lib/checkout/payment-step.ts).
   window.dispatchEvent(new CustomEvent("cart-quote-payment-methods", { detail: quote.allowedPaymentMethods }));
   if (quote.shippingMethod) {
@@ -1689,40 +1677,72 @@ export function updateCheckoutButtonState() {
   });
 }
 
-// --- Analytics & Event Tracking ---
-function attemptToTrackInitiateCheckout() {
-  if (hasTrackedInitiateCheckout) return;
+// --- Buyer events ---
+let cartViewed = false;
+/** The checkout's total as last quoted (buyer events' `checkout.total`). */
+let latestQuotedTotal: BuyerMoney | null = null;
 
+/**
+ * The checkout form's steps as the buyer submits it (one form holds the
+ * contact, the address and the delivery choice): `checkout_contact_submitted`,
+ * then `checkout_address_submitted` when something ships to an address and
+ * `checkout_shipping_submitted` when an option is chosen. `fields` are the
+ * form's values; nothing else of them is read.
+ */
+export function emitCheckoutFormSubmitted(fields: Readonly<Record<string, string | undefined>>): void {
+  const checkout = buyerCheckout(fields.checkoutId, cartLines(cartStore.get().items), latestQuotedTotal);
+  const value = (name: string) => eventText(fields[name]) || null;
+  emitBuyerEvent("checkout_contact_submitted", { checkout, contact: { email: value("customerEmail"), phone: value("customerPhone") } });
+  const mode = readCheckoutDeliveryMode();
+  if (mode === "delivery") {
+    emitBuyerEvent("checkout_address_submitted", {
+      checkout,
+      address: {
+        name: value("customerName"),
+        line1: value("shippingAddress"),
+        line2: value("shippingAddressLine2"),
+        locality: value("shippingLocality") ?? value("cityName"),
+        adminArea: value("shippingAdminArea") ?? value("zoneName"),
+        postalCode: value("shippingPostalCode"),
+        countryCode: value("shippingCountryCode"),
+      },
+    });
+  }
+  const chosen = mode === "none" ? undefined : window.lastShippingEventDetail;
+  if (chosen) {
+    const fee = getEffectiveCartShippingFee(cartStore.get().items, chosen.fee, chosen.freeOver, chosen.quoted);
+    emitBuyerEvent("checkout_shipping_submitted", {
+      checkout,
+      shipping: { kind: chosen.kind, methodId: chosen.id || null, title: eventText(chosen.name), cost: buyerMoney(fee) },
+    });
+  }
+}
+
+/** `cart_viewed`, once per page. */
+function emitCartViewed(): void {
+  if (cartViewed) return;
+  cartViewed = true;
   const { items, totalAmount } = cartStore.get();
+  emitBuyerEvent("cart_viewed", { lines: cartLines(items), total: buyerMoney(totalAmount) });
+}
+
+/** `checkout_started` (buyer-events.ts), once per page: the cart's lines and total. */
+function emitCheckoutStarted(): void {
+  if (hasTrackedInitiateCheckout) return;
+  const { items, totalAmount } = cartStore.get();
+  if (Object.keys(items).length === 0) return;
+  hasTrackedInitiateCheckout = true;
+  emitBuyerEvent("checkout_started", { checkout: buyerCheckout(null, cartLines(items), buyerMoney(totalAmount)) });
+}
+
+/** The checkout begins once the cart has lines and the buyer gave a phone number. */
+function attemptToTrackInitiateCheckout() {
   const customerPhoneInput = document.querySelector<HTMLInputElement>(
     '[name="customerPhone"]',
   );
   const phone =
     customerPhoneInput?.dataset.e164Value || customerPhoneInput?.value;
-  const isPhoneValid = phone && phone.trim().length >= 7;
-
-  // The checkout is considered "initiated" once we have items and a valid phone number.
-  if (Object.keys(items).length > 0 && isPhoneValid) {
-    const event = {
-      content_ids: Object.values(items).map(
-        (item) => item.variantId || item.id,
-      ),
-      contents: Object.values(items).map((item) => ({
-        id: item.variantId || item.id,
-        quantity: item.quantity,
-        item_price: item.price,
-      })),
-      currency: window.__CURRENCY_CODE__ || "BDT",
-      num_items: Object.values(items).reduce(
-        (sum, item) => sum + item.quantity,
-        0,
-      ),
-      value: totalAmount,
-    };
-    withAnalytics((analytics) => analytics.trackFbInitiateCheckout(event));
-
-    hasTrackedInitiateCheckout = true;
-  }
+  if (phone && phone.trim().length >= 7) emitCheckoutStarted();
 }
 
 // --- Discount Logic ---
@@ -1867,6 +1887,7 @@ export async function initCartFunctionality() {
 
   await processQuickBuy();
   syncCheckoutIdInput();
+  emitCartViewed();
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
   window.validateCartSnapshot = validateCartSnapshot;

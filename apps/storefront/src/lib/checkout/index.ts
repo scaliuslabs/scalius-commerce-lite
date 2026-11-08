@@ -32,7 +32,9 @@ import {
   resolveCheckoutPaymentRequest,
 } from "./payment-mode";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
-import { trackStorefrontAddPaymentInfoOnce } from "../analytics";
+import { emitBuyerEvent } from "../buyer-events/bus";
+import { buyerCheckout, merchandise } from "../buyer-events/lines";
+import { claimOnce } from "../buyer-events/once";
 import { writeCartRepairState } from "../cart/repair-state";
 import { CheckoutBuyerMessage, CheckoutCopyError, checkoutFailureText } from "./error-messages";
 import {
@@ -644,23 +646,20 @@ function readCheckoutAttemptId(data: Record<string, unknown>): string | undefine
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+/** `checkout_payment_submitted` (buyer-events.ts), once per checkout attempt and method: the quoted lines and total. */
 function trackAddPaymentInfoForSelection(methodId: string): void {
-  if (!checkoutData || !authoritativeTaxQuote) return;
-
-  const contents = authoritativeTaxQuote.items.map((item) => ({
-    id: item.variantId,
+  const method = methodId.trim();
+  if (!checkoutData || !authoritativeTaxQuote || !method) return;
+  const checkoutId = readCheckoutAttemptId(checkoutData) ?? null;
+  if (!claimOnce(`AddPaymentInfo:${checkoutId ?? "unknown-checkout"}:${method}`)) return;
+  const quote = authoritativeTaxQuote;
+  const lines = quote.items.map((item) => ({
+    merchandise: merchandise({ productId: item.productId, variantId: item.variantId, title: item.productName, price: item.unitPrice, currency: quote.currencyCode }),
     quantity: item.quantity,
-    item_price: item.unitPrice,
   }));
-  const contentIds = contents.map((item) => item.id).filter(Boolean);
-
-  trackStorefrontAddPaymentInfoOnce({
-    checkoutId: readCheckoutAttemptId(checkoutData),
-    paymentMethod: methodId,
-    content_ids: contentIds,
-    contents,
-    currency: authoritativeTaxQuote.currencyCode,
-    value: authoritativeTaxQuote.totalAmount,
+  emitBuyerEvent("checkout_payment_submitted", {
+    checkout: buyerCheckout(checkoutId, lines, { amountMinor: quote.totalMinor, currency: quote.currencyCode }),
+    payment: { method },
   });
 }
 

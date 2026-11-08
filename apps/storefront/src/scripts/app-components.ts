@@ -24,6 +24,9 @@ import { DEFERRED_REVEAL_EVENT } from "./browser-events";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
 import { loadLazyScript } from "@/scripts/lazy-script";
 import { formatCount } from "@/lib/store-time-zone";
+import { BUYER_EVENT_LIMITS, projectBuyerEvent } from "@scalius/shared/plugins/buyer-events";
+import { emitBuyerEvent, onBuyerEvents } from "@/lib/buyer-events/bus";
+import { visitorId } from "@/lib/buyer-events/visitor";
 
 type CartSummary = { count: number; total: StorefrontMoney };
 
@@ -125,6 +128,29 @@ function addLineFor(pluginId: string, host: HTMLElement): NonNullable<Storefront
   };
 }
 
+const NOTHING_PROTECTED = new Set<never>();
+
+/** An island's view of the buyer event bus: no contact fields, and only its own app's events. */
+function eventsFor(pluginId: string): NonNullable<StorefrontIslandContext["events"]> {
+  return {
+    on: (name, listener, options) => onBuyerEvents((event) => {
+      if (event.name !== name || (event.name === "app_event" && event.data.app !== pluginId)) return;
+      listener(projectBuyerEvent(event, NOTHING_PROTECTED) as Parameters<typeof listener>[0]);
+    }, { replay: options?.replay === true }),
+    publish: (name, payload = null) => {
+      if (typeof name !== "string" || !BUYER_EVENT_LIMITS.appEventName.test(name)) return false;
+      let json: string | undefined;
+      try {
+        json = JSON.stringify(payload);
+      } catch {
+        return false;
+      }
+      if (json === undefined || new TextEncoder().encode(json).length > BUYER_EVENT_LIMITS.appEventBytes) return false;
+      return emitBuyerEvent("app_event", { app: pluginId, name, payload: JSON.parse(json) }) !== null;
+    },
+  };
+}
+
 function contextFor(element: Element): StorefrontIslandContext | null {
   const host = element.closest<HTMLElement>("[data-sx-app][data-sx-base]");
   const pluginId = host?.dataset.sxApp;
@@ -146,6 +172,8 @@ function contextFor(element: Element): StorefrontIslandContext | null {
     signedIn: signedInHint,
     // The store's search, as its palette asks it (lib/predictive-search.ts), loaded on the first call.
     searchSuggestions: async (query, options) => (await loadLazyScript(() => import("@/lib/predictive-search"))).searchSuggestions(query, options),
+    events: eventsFor(pluginId),
+    visitorId,
     ...(product ? { product } : {}),
   };
 }
@@ -245,6 +273,18 @@ export function createIslandElement(
         connection.cleanups.add(stop);
         return () => { if (connection.cleanups.delete(stop)) stop(); };
       };
+      const events = context.events;
+      if (events) {
+        context.events = {
+          publish: (name, payload) => this.#current(connection) && events.publish(name, payload),
+          on: (name, listener, options) => {
+            if (!this.#current(connection)) return () => {};
+            const stop = events.on(name, (event) => { if (this.#current(connection)) listener(event); }, options);
+            connection.cleanups.add(stop);
+            return () => { if (connection.cleanups.delete(stop)) stop(); };
+          },
+        };
+      }
       const product = context.product;
       if (product) {
         context.product = {
