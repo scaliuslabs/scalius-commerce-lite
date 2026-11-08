@@ -30,7 +30,7 @@ The code is the truth. When a page and the code disagree, the code wins. The ver
 - `@scalius/plugin-sdk`: `definePlugin`, `defineManifest`, the `ctx` types, `ProviderError`, `APP_ERROR_CODES`.
 - `@scalius/plugin-sdk/manifest`: `parsePluginManifest`, the strict manifest parser.
 - `@scalius/plugin-sdk/testing` and `@scalius/plugin-sdk/fixtures`: the test harness, the stable-API contract checker and typed fixtures.
-- `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing` and `@scalius/plugin-sdk/island`: storefront modules, their tests and client islands.
+- `@scalius/plugin-sdk/storefront`, `@scalius/plugin-sdk/storefront/testing`, `@scalius/plugin-sdk/island` and `@scalius/plugin-sdk/pixel`: storefront modules, their tests, client islands and pixels (buyer events, [storefront.md](storefront.md#buyer-events)).
 - `@scalius/shared/plugins/*`: manifest schemas, scopes, function schemas, provider ports, the storefront protocol and the app operation names.
 - `@scalius/shared/events`: the event catalogue, webhook representations and webhook signing.
 
