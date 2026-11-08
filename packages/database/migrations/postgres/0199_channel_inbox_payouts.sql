@@ -87,6 +87,8 @@ ALTER TABLE "conversation_messages" ADD COLUMN "author_app_id" text COLLATE "C";
 --> statement-breakpoint
 ALTER TABLE "conversations" ADD COLUMN "channel" text COLLATE "C";
 --> statement-breakpoint
+CREATE INDEX "conversations_updated_idx" ON "conversations" ("updated_at","id");
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION scalius_compat."payouts_identity_immutable_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -191,4 +193,4 @@ FOR EACH ROW
 WHEN ((OLD."status" IS DISTINCT FROM NEW."status"))
 EXECUTE FUNCTION scalius_compat."evt_payouts_update_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_channel_inbox_payouts', 'ec56959f4179fb753557083b23eecb873fe23cd0329cdc67a8bacd6846b4b61c');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_channel_inbox_payouts', '085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795');

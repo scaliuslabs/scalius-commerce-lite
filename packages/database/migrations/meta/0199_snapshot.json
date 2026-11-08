@@ -16454,6 +16454,14 @@
           ],
           "isUnique": false,
           "where": "\"conversations\".\"order_id\" IS NOT NULL"
+        },
+        "conversations_updated_idx": {
+          "name": "conversations_updated_idx",
+          "columns": [
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {

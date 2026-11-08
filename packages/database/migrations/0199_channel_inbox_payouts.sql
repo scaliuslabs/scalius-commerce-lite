@@ -98,6 +98,8 @@ CREATE INDEX `payouts_app_updated_idx` ON `payouts` (`app_id`,`updated_at`,`id`)
 ALTER TABLE `conversation_messages` ADD `author_app_id` text;--> statement-breakpoint
 ALTER TABLE `conversations` ADD `channel` text;
 --> statement-breakpoint
+CREATE INDEX `conversations_updated_idx` ON `conversations` (`updated_at`,`id`);
+--> statement-breakpoint
 CREATE TRIGGER `payouts_identity_immutable`
 BEFORE UPDATE ON `payouts`
 WHEN NEW.`id` IS NOT OLD.`id` OR NEW.`app_id` IS NOT OLD.`app_id` OR NEW.`provider_id` IS NOT OLD.`provider_id`
@@ -141,4 +143,4 @@ BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'payout.updated', 'payout', NEW.`id`, json_object('payoutId', NEW.`id`, 'appId', NEW.`app_id`, 'previousStatus', OLD.`status`, 'status', NEW.`status`));
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_channel_inbox_payouts', 'ec56959f4179fb753557083b23eecb873fe23cd0329cdc67a8bacd6846b4b61c');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (199, '0199_channel_inbox_payouts', '085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795');

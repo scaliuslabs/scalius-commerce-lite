@@ -775,7 +775,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 199,
     name: "0199_channel_inbox_payouts",
-    sourceSha256: "ec56959f4179fb753557083b23eecb873fe23cd0329cdc67a8bacd6846b4b61c",
+    sourceSha256: "085f791a4a241dbf33c8bcb46a2461c4a6b9db62417cd022cec03dbdacf8d795",
   },
 ] as const;
 

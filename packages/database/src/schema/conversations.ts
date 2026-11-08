@@ -60,6 +60,8 @@ export const conversations = sqliteTable("conversations", {
     index("conversations_order_idx")
         .on(table.orderId)
         .where(sql`${table.orderId} IS NOT NULL`),
+    // The app inbox sync (`conversations.list`, 0199): (updatedAt, id) order.
+    index("conversations_updated_idx").on(table.updatedAt, table.id),
     check("conversations_id_shape", sql`substr(${table.id}, 1, 4) = 'cnv_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("conversations_subject_type_check", sql`${table.subjectType} IN ('order', 'store', 'warranty_claim', 'review')`),
     check("conversations_status_check", sql`${table.status} IN ('open', 'pending', 'closed')`),
