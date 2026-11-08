@@ -11,7 +11,7 @@ import { execFileSync, spawn } from "child_process";
 import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
-import { devOrigins } from "./dev-ports.mjs";
+import { devOrigins, exportDevPorts, readStackPorts } from "./dev-ports.mjs";
 import {
   assertSafeLocalMutationUrl,
   assertStringOptions,
@@ -79,7 +79,7 @@ export const paymentReadinessGateways = [
 ];
 
 const defaults = {
-  apiBaseUrl: process.env.LOCAL_API_BASE_URL || devOrigins().apiUrl,
+  apiBaseUrl: process.env.LOCAL_API_BASE_URL || devOrigins(readStackPorts()).apiUrl,
   wranglerState: resolveLocalStatePath(root, process.env.SCALIUS_WRANGLER_STATE),
   orders: 25,
   concurrency: 5,
@@ -113,7 +113,11 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
     "target",
   ]);
 
-  const apiBaseUrl = trimTrailingSlash(options.api || env.LOCAL_API_BASE_URL || defaults.apiBaseUrl);
+  const wranglerState = resolveLocalStatePath(root, options.state || env.SCALIUS_WRANGLER_STATE || defaults.wranglerState);
+  // The stack on that state: its recorded ports unless SCALIUS_DEV_*_PORT says otherwise.
+  const ports = readStackPorts({ env, state: wranglerState });
+  const origins = devOrigins(ports);
+  const apiBaseUrl = trimTrailingSlash(options.api || env.LOCAL_API_BASE_URL || origins.apiUrl);
   const target = options.target || "local";
   if (target !== "local") {
     throw new Error("Post-sale mutation smokes are local-only until an explicit staging test-store policy is wired.");
@@ -131,7 +135,9 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
   return {
     command,
     apiBaseUrl,
-    wranglerState: resolveLocalStatePath(root, options.state || env.SCALIUS_WRANGLER_STATE || defaults.wranglerState),
+    wranglerState,
+    ports,
+    storefrontUrl: origins.storefrontUrl,
     noStart: Boolean(options["no-start"]),
     skipMigrations: Boolean(options["skip-migrations"] || options["no-migrate"]),
     skipSeed: Boolean(options["skip-seed"]),
@@ -143,9 +149,9 @@ export function getPostsaleConfig(rawArgs = process.argv.slice(2), env = process
   };
 }
 
-export function buildFixtureSql() {
+export function buildFixtureSql({ storefrontUrl = devOrigins().storefrontUrl } = {}) {
   return [
-    ...otpFixtureStatements(),
+    ...otpFixtureStatements({ storefrontUrl }),
     patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳" }),
     patchSettingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
     // A delivery rate belongs to a shipping zone (0114): the fixture city's.
@@ -235,11 +241,11 @@ export function buildFixtureSql() {
   ].map((statement) => compactSql(statement)).join("; ");
 }
 
-export function buildOtpFixtureSql() {
-  return otpFixtureStatements().map((statement) => compactSql(statement)).join("; ");
+export function buildOtpFixtureSql({ storefrontUrl = devOrigins().storefrontUrl } = {}) {
+  return otpFixtureStatements({ storefrontUrl }).map((statement) => compactSql(statement)).join("; ");
 }
 
-function otpFixtureStatements() {
+function otpFixtureStatements({ storefrontUrl }) {
   const customerAuthPolicy = {
     otpChannels: ["email"],
     requiredContactFields: ["phone"],
@@ -248,7 +254,8 @@ function otpFixtureStatements() {
   };
 
   return [
-    patchSettingsDocument("platform", { storefrontUrl: devOrigins().storefrontUrl }),
+    // Background mail links need a stored storefront URL; a stack's own (scripts/dev.sh) stays.
+    fillUnsetSettingsFields("platform", { storefrontUrl }),
     patchSettingsDocument("checkout", {
       guestCheckoutEnabled: true,
       checkoutMode: "all",
@@ -398,7 +405,7 @@ function seedFixture(config) {
   ensureLocalMigrations(config);
   importDevPlaces(config);
   resolveFixturePlaces(config);
-  runD1Execute(config, buildFixtureSql());
+  runD1Execute(config, buildFixtureSql(config));
   const row = readD1FirstRow(config, fixtureStatusSql());
   const result = {
     seeded: true,
@@ -416,7 +423,7 @@ function seedFixture(config) {
 
 function seedOtpFixture(config) {
   ensureLocalMigrations(config);
-  runD1Execute(config, buildOtpFixtureSql());
+  runD1Execute(config, buildOtpFixtureSql(config));
 }
 
 export function buildPaymentReadinessFixtureSql() {
@@ -732,23 +739,22 @@ async function withApi(config, work) {
     if (config.noStart) {
       throw new Error(`API is not running at ${config.apiBaseUrl}. Start it with pnpm dev:api.`);
     }
-    if (config.apiBaseUrl !== defaults.apiBaseUrl) {
+    const stackApiUrl = devOrigins(config.ports).apiUrl;
+    if (config.apiBaseUrl !== stackApiUrl) {
       throw new Error(
         `Custom --api ${config.apiBaseUrl} requires --no-start with an already running API worker. ` +
-        `The bundled API dev script starts on ${defaults.apiBaseUrl}.`,
+        `The bundled API dev script starts on ${stackApiUrl}.`,
       );
     }
 
     ensureLocalMigrations(config);
     console.log(`Starting temporary API worker and local mailbox at ${config.apiBaseUrl}...`);
+    const childEnv = { ...process.env, SCALIUS_WRANGLER_STATE: config.wranglerState, SCALIUS_SKIP_DEV_MIGRATIONS: "1" };
+    exportDevPorts(config.ports, childEnv);
     child = spawn(pnpmExecutable, ["dev:api"], {
       cwd: root,
       stdio: "inherit",
-      env: {
-        ...process.env,
-        SCALIUS_WRANGLER_STATE: config.wranglerState,
-        SCALIUS_SKIP_DEV_MIGRATIONS: "1",
-      },
+      env: childEnv,
     });
 
     let childStatus = null;
@@ -903,6 +909,25 @@ function patchSettingsDocument(category, patch) {
       value = json_patch(CASE WHEN json_valid(settings.value) THEN settings.value ELSE '{}' END, excluded.value),
       revision = settings.revision + 1,
       updated_at = unixepoch()`;
+}
+
+/**
+ * Sets the document's fields that are unset (missing or empty) and keeps every
+ * other value, so a fixture never repoints what the running stack saved.
+ */
+export function fillUnsetSettingsFields(category, fields) {
+  const current = "CASE WHEN json_valid(settings.value) THEN settings.value ELSE '{}' END";
+  const next = `json_set(${current}, ${Object.entries(fields).map(([field, value]) => {
+    const stored = `json_extract(${current}, '$.${field}')`;
+    return `'$.${field}', CASE WHEN coalesce(${stored}, '') = '' THEN ${sqlString(value)} ELSE ${stored} END`;
+  }).join(", ")})`;
+  return `INSERT INTO settings (id, key, value, type, category, revision, updated_at)
+    VALUES (${sqlString(`ops006_${category}`)}, 'document', ${sqlString(JSON.stringify(fields))}, 'json', ${sqlString(category)}, 1, unixepoch())
+    ON CONFLICT(key, category) DO UPDATE SET
+      value = ${next},
+      revision = settings.revision + 1,
+      updated_at = unixepoch()
+    WHERE ${next} IS NOT json(${current})`;
 }
 
 /** Loads plugins/bangladesh/places through the place import (idempotent; apps/api/scripts/places-import.ts). */

@@ -17,7 +17,7 @@ import { execFileSync, spawn } from "child_process";
 import { readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
-import { DEV_PORT_ENV, devOrigins, readDevPorts, syncLocalPlatform } from "./dev-ports.mjs";
+import { DEV_PORT_ENV, devOrigins, exportDevPorts, readStackPorts, syncLocalPlatform } from "./dev-ports.mjs";
 import { localAuthResetSql } from "./dev-admin-reset.mjs";
 import {
   assertLocalUrl,
@@ -40,8 +40,9 @@ const positionalCommand = args[0] && !args[0].startsWith("--") ? args[0] : undef
 const command = positionalCommand || "create";
 const options = parseOptions(positionalCommand ? args.slice(1) : args);
 
-// The stack's ports (`--api-port` ... or the SCALIUS_DEV_*_PORT variables, as scripts/dev.sh takes
-// them) are the one source of every origin below and of the Platform settings written to the store.
+// The stack's ports: `--api-port` ... (as scripts/dev.sh takes them), else SCALIUS_DEV_*_PORT, else
+// the ports the stack recorded in its state (--state or SCALIUS_WRANGLER_STATE) when it started. They
+// are exported so the temporary API and every origin below agree; a running stack is never repointed.
 for (const [name, key] of [["api-port", "api"], ["storefront-port", "storefront"], ["admin-port", "admin"]]) {
   if (options[name] === true) {
     console.error(`Option --${name} requires a value.`);
@@ -50,7 +51,8 @@ for (const [name, key] of [["api-port", "api"], ["storefront-port", "storefront"
   if (options[name]) process.env[DEV_PORT_ENV[key]] = String(options[name]);
 }
 try {
-  readDevPorts();
+  assertStringOptions(options, ["state"]);
+  exportDevPorts(readStackPorts({ state: options.state }));
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
@@ -156,8 +158,9 @@ Options:
   --currency <code>     Currency (default: the country's)
   --api <url>           Local API origin (default: ${defaults.apiBaseUrl})
   --api-port <n>, --storefront-port <n>, --admin-port <n>
-                        This stack's ports (or SCALIUS_DEV_{API,STOREFRONT,ADMIN}_PORT); the
-                        printed dashboard URL and the store's saved web addresses follow them
+                        This stack's ports (else SCALIUS_DEV_{API,STOREFRONT,ADMIN}_PORT, else the
+                        ports the stack recorded in --state). A running stack's saved web
+                        addresses are never changed; a temporary API gets these ports
   --state <path>        Wrangler local state path; relative paths resolve from repo root
   --no-start            Require API to already be running
   --skip-migrations     Do not apply local D1 migrations before starting/resetting
@@ -185,6 +188,13 @@ async function withApi(work) {
     }
 
     ensureLocalMigrations();
+    // No stack runs on this state: point its Platform settings at these ports before the API
+    // starts, as scripts/dev.sh does. A running stack keeps its settings.
+    try {
+      await syncLocalPlatform({ state: config.wranglerState });
+    } catch (error) {
+      console.warn(`Could not point the store's web addresses at these ports (${error instanceof Error ? error.message.split("\n")[0] : String(error)}); run node scripts/dev-ports.mjs sync-platform.`);
+    }
     console.log(`Starting temporary API worker at ${config.apiBaseUrl}...`);
     child = spawn(pnpmExecutable, ["--filter", "@scalius/api", "dev"], {
       cwd: root,
@@ -289,16 +299,12 @@ async function createAdmin({ allowExisting }) {
     store: storeSetup(),
   });
 
-  // The API stores its built-in local origins (4322/4323) for a new store; point them at this stack.
-  try {
-    const { origins } = await syncLocalPlatform({ state: config.wranglerState });
-    console.log(`Local web addresses: storefront ${origins.storefrontUrl}, dashboard ${origins.dashboardUrl}.`);
-  } catch (error) {
-    console.warn(`Could not point the store's web addresses at this stack (${error instanceof Error ? error.message.split("\n")[0] : String(error)}); run node scripts/dev-ports.mjs sync-platform.`);
-  }
+  // The store's setup writes no web address; the dashboard URL is the one this stack's API trusts.
+  const platform = await requestJson("GET", "/api/v1/platform").catch(() => null);
+  const dashboardUrl = trimTrailingSlash(platform?.dashboardUrl || devOrigins().dashboardUrl);
 
   console.log("\nLocal admin ready:");
-  console.log(`  Admin URL: ${devOrigins().dashboardUrl}/admin`);
+  console.log(`  Admin URL: ${dashboardUrl}/admin`);
   console.log(`  Email:     ${config.email}`);
   console.log(`  Store:     ${config.storeName}, ${config.country} (${result?.storeSetup ?? "not_requested"})`);
   console.log("  Password:  use the value supplied through --password or LOCAL_ADMIN_PASSWORD");

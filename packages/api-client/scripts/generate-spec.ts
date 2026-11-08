@@ -1,6 +1,7 @@
 import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { devOrigins, readStackPorts } from "../../../scripts/dev-ports.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = resolve(__dirname, "../../..");
@@ -40,7 +41,7 @@ async function generateSpec() {
 
   // Strategy 2: Fetch from a running dev server
   try {
-    const response = await fetch("http://localhost:8787/api/v1/openapi.json");
+    const response = await fetch(`${devOrigins(readStackPorts()).apiUrl}/api/v1/openapi.json`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const spec = await response.json();
     writeSpec(spec);

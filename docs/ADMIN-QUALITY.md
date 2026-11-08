@@ -178,14 +178,14 @@ The API trusts one dashboard origin: the Platform setting (`GET /api/v1/platform
 
 ### What the preview does
 
-The Vite dev proxy in `apps/admin-v2/vite.config.ts` presents the Platform dashboard origin as the `Origin` (and `Referer`) of requests that carry one (`previewProxyOrigin` in `scripts/dev-ports.mjs`). It reads that origin once from `GET /api/v1/platform`.
+The Vite dev proxy in `apps/admin-v2/vite.config.ts` presents the Platform dashboard origin as the `Origin` (and `Referer`) of requests that carry one (`previewProxyOrigin` in `scripts/dev-ports.mjs`). It reads that origin from `GET /api/v1/platform` before each such request (`platformOriginPresenter`), so a Platform change (`sync-platform`, setup, a settings save) holds for the next sign-in without restarting Vite.
 
 - It rewrites only when both origins are loopback (`localhost`, `127.0.0.1`, `[::1]` over `http`). It never rewrites toward a real domain.
 - It is in the Vite dev server only. It is not in a bundle, and `apps/api` is unchanged: the API still enforces every origin check.
 - It adds no environment variable and no secret. Ports come from `scripts/dev-ports.mjs` as before.
 - Cookies do not use the port, so the browser session of `localhost:4323` and `localhost:4400` is one session.
 
-Tests: `previewProxyOrigin` in `scripts/dev-ports.test.mjs`.
+Tests: `previewProxyOrigin` and `platformOriginPresenter` in `scripts/dev-ports.test.mjs`.
 
 ### Limits
 

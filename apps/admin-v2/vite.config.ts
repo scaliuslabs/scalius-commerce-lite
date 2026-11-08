@@ -5,7 +5,7 @@ import viteReact from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { adminChunkGraphPlugin } from "../../scripts/admin-chunk-graph.mjs";
-import { DEFAULT_DEV_PORTS, devOrigins, previewProxyOrigin, readDevPorts } from "../../scripts/dev-ports.mjs";
+import { devOrigins, platformOriginPresenter, readDevPorts } from "../../scripts/dev-ports.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,53 +15,29 @@ const __dirname = dirname(__filename);
  * which the API Worker serves as its `ASSETS` binding (apps/api/wrangler.jsonc)
  * on the dashboard hostname. Locally, `vite dev` serves it on the admin port
  * and proxies the API Worker's dashboard routes to the API port (both from
- * scripts/dev-ports.mjs: SCALIUS_DEV_ADMIN_PORT and SCALIUS_DEV_API_PORT,
- * default 4323 and 8787).
+ * scripts/dev-ports.mjs: SCALIUS_DEV_ADMIN_PORT and SCALIUS_DEV_API_PORT).
  */
 const devPorts = readDevPorts();
 const API_DEV_ORIGIN = devOrigins(devPorts).apiUrl;
 
 /**
  * Dashboard UI preview (docs/ADMIN-QUALITY.md): this dev server may run on a
- * port other than the one in the API's Platform settings (a worktree on 4400
- * against the shared API on 8787). The API trusts only the Platform dashboard
- * origin, so the proxy presents that origin for requests that carry an Origin
- * (sign-in, writes, the realtime socket). Dev server only; loopback origins
- * only (`previewProxyOrigin`); the API is unchanged.
+ * port other than the one in the API's Platform settings (a worktree's
+ * dashboard against another stack's API). The API trusts only the Platform
+ * dashboard origin, so the proxy presents that origin for requests that carry
+ * an Origin (sign-in, writes, the realtime socket), read fresh from the API
+ * for each of them, so a Platform change never needs a dev-server restart.
+ * Vite awaits `bypass` before it proxies a request or a socket upgrade. Dev
+ * server only; loopback origins only (`previewProxyOrigin`); the API is unchanged.
  */
-let platformDashboardOrigin = devOrigins({ ...devPorts, admin: DEFAULT_DEV_PORTS.admin }).dashboardUrl;
-let platformRead: Promise<void> | null = null;
-function readPlatformDashboardOrigin(): Promise<void> {
-  platformRead ??= fetch(`${API_DEV_ORIGIN}/api/v1/platform`)
-    .then((response) => response.json() as Promise<{ data?: { dashboardUrl?: string } }>)
-    .then((body) => {
-      const origin = body.data?.dashboardUrl ? new URL(body.data.dashboardUrl).origin : "";
-      if (origin) platformDashboardOrigin = origin;
-    })
-    .catch(() => {
-      platformRead = null; // The API is not up yet: ask again on the next request.
-    });
-  return platformRead;
-}
-
-type ProxyRequest = { getHeader(name: string): unknown; setHeader(name: string, value: string): void };
+const presentPlatformOrigin = platformOriginPresenter({ apiOrigin: API_DEV_ORIGIN });
 function apiProxy(target: string) {
-  const present = (request: ProxyRequest) => {
-    const origin = request.getHeader("origin");
-    if (typeof origin !== "string") return;
-    const presented = previewProxyOrigin(origin, platformDashboardOrigin);
-    if (presented && presented !== origin) {
-      request.setHeader("origin", presented);
-      if (typeof request.getHeader("referer") === "string") request.setHeader("referer", `${presented}/`);
-    }
-  };
   return {
     target,
     changeOrigin: true,
-    configure(proxy: { on(event: string, handler: (request: ProxyRequest) => void): void }) {
-      void readPlatformDashboardOrigin();
-      proxy.on("proxyReq", present);
-      proxy.on("proxyReqWs", present);
+    async bypass(request: { headers: Record<string, string | string[] | undefined> }) {
+      await presentPlatformOrigin(request.headers);
+      return undefined;
     },
   };
 }

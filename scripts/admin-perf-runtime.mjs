@@ -14,8 +14,8 @@
 //   - optional typing latency in the product editor (--typing-product <id>).
 //
 // Usage:
-//   node scripts/admin-perf-check.mjs --runtime --admin http://localhost:4323 \
-//     [--cpu 4] [--cdp-port 9396] [--explorer http://localhost:8787] \
+//   node scripts/admin-perf-check.mjs --runtime --admin http://localhost:<admin port> \
+//     [--cpu 4] [--cdp-port 9396] [--explorer http://localhost:<api port>] \
 //     [--typing-product <productId>] [--json <file>] [--check]
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";

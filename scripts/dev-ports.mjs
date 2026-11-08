@@ -14,7 +14,14 @@
  *
  * `bash scripts/dev.sh --api-port 8931 --storefront-port 4531 --admin-port 4532`
  * sets them for every app it starts. Running an app on its own, export them
- * first (see the README "Parallel local stacks").
+ * first (see the README "Parallel local stacks"). These defaults are the only
+ * port numbers dev tooling spells out (scripts/check-source-policies.mjs).
+ *
+ * A helper that attaches to a running stack (dev-admin, the smokes, the
+ * doctor) reads `readStackPorts`: each variable that is set, else the ports
+ * the stack recorded in its Wrangler state when `sync-platform` pointed its
+ * Platform settings there, else the defaults. Given only `--state`, it finds
+ * that stack's dashboard and storefront instead of assuming :4323 and :4322.
  *
  * Readers: apps/api `pnpm dev` (wrangler --port), apps/storefront `pnpm dev`
  * (astro --port, and the API origin `astro dev` calls), apps/admin-v2
@@ -23,6 +30,8 @@
  * the same origins.
  *
  *   node scripts/dev-ports.mjs sync-platform [--state <dir>]
+ *   node scripts/dev-ports.mjs defaults              # "<api> <storefront> <admin>" (dev.sh)
+ *   node scripts/dev-ports.mjs port <api|storefront|admin>
  *   node scripts/dev-ports.mjs api-worker-name       # scalius-api-local[-<api port>]
  *   node scripts/dev-ports.mjs storefront-config     # built storefront bound to it
  *   node scripts/dev-ports.mjs verify-binding        # the storefront reached this API
@@ -30,7 +39,11 @@
  *   node scripts/dev-ports.mjs scheduled-tick        # call it every minute until stopped (dev.sh)
  */
 
-import { pathToFileURL } from "node:url";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export const DEFAULT_DEV_PORTS = Object.freeze({ api: 8787, storefront: 4322, admin: 4323 });
 
@@ -60,6 +73,66 @@ export function readDevPorts(env = process.env) {
     throw new Error(`Local dev ports must differ: api ${ports.api}, storefront ${ports.storefront}, admin ${ports.admin}.`);
   }
   return ports;
+}
+
+/** Sets the SCALIUS_DEV_*_PORT variables, so child processes and `readDevPorts()` agree. */
+export function exportDevPorts(ports, env = process.env) {
+  for (const [key, name] of Object.entries(DEV_PORT_ENV)) env[name] = String(ports[key]);
+  return ports;
+}
+
+/** The file in a stack's Wrangler state that records the ports its Platform settings point at. */
+export const STACK_PORTS_FILE = "scalius-dev-ports.json";
+
+/**
+ * The Wrangler state directory of a stack: `state`, else SCALIUS_WRANGLER_STATE,
+ * else the repository's `.wrangler/state`; a relative path resolves from the
+ * repository root (as dev-local-utils.mjs resolveLocalStatePath; this file
+ * imports nothing at load, so a built storefront's tooling can copy it alone).
+ */
+export function devStateDir({ env = process.env, state } = {}) {
+  const value = state || env.SCALIUS_WRANGLER_STATE;
+  if (!value) return resolve(REPO_ROOT, ".wrangler", "state");
+  return isAbsolute(value) ? value : resolve(REPO_ROOT, value);
+}
+
+/** Records the ports a stack's Platform settings point at, beside its database. */
+export function writeStackPorts(stateDir, ports) {
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(join(stateDir, STACK_PORTS_FILE), `${JSON.stringify({ api: ports.api, storefront: ports.storefront, admin: ports.admin })}\n`);
+}
+
+/** The ports recorded in a stack's state, or null when none (or an unreadable record) is there. */
+export function readRecordedStackPorts(stateDir) {
+  let recorded;
+  try {
+    recorded = JSON.parse(readFileSync(join(stateDir, STACK_PORTS_FILE), "utf8"));
+  } catch {
+    return null;
+  }
+  // All three or nothing: a partial record must not mix with the defaults.
+  if (!Object.keys(DEV_PORT_ENV).every((key) => Number.isInteger(recorded?.[key]))) return null;
+  try {
+    return readDevPorts(Object.fromEntries(Object.entries(DEV_PORT_ENV).map(([key, name]) => [name, String(recorded[key])])));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ports of a running stack, for a helper that attaches to it: each
+ * SCALIUS_DEV_*_PORT that is set, else the port recorded in the stack's
+ * Wrangler state (`state`, else SCALIUS_WRANGLER_STATE, else the default
+ * state), else the default. A helper given only the API port and the state
+ * therefore never takes the stack's dashboard for the default one.
+ */
+export function readStackPorts({ env = process.env, state } = {}) {
+  const recorded = readRecordedStackPorts(devStateDir({ env, state }));
+  const merged = { ...env };
+  for (const [key, name] of Object.entries(DEV_PORT_ENV)) {
+    if (String(env[name] ?? "").trim() === "" && recorded) merged[name] = String(recorded[key]);
+  }
+  return readDevPorts(merged);
 }
 
 /** Loopback origins of this stack, in the Platform settings shape. */
@@ -146,6 +219,42 @@ export function previewProxyOrigin(requestOrigin, platformDashboardOrigin) {
   if (!requestOrigin || requestOrigin === platformDashboardOrigin) return requestOrigin;
   if (!isLoopbackOrigin(requestOrigin) || !isLoopbackOrigin(platformDashboardOrigin)) return requestOrigin;
   return platformDashboardOrigin;
+}
+
+/**
+ * The dashboard dev proxy's Origin rewrite (`previewProxyOrigin`), toward the
+ * Platform dashboard origin as it is now. The returned function takes a
+ * request's headers; one that carries an Origin (sign-in, writes, the realtime
+ * socket) waits for a fresh read of GET /api/v1/platform (concurrent requests
+ * share one read), so a Platform change (sync-platform, setup, a settings
+ * save) holds for the next request without a dev-server restart. While the
+ * API does not answer, the last origin read is used; before any read, or with
+ * no dashboard URL stored, the Origin passes unchanged.
+ */
+export function platformOriginPresenter({ apiOrigin, fetchImpl = fetch, timeoutMs = 3_000 }) {
+  let known = null;
+  let inFlight = null;
+  async function read() {
+    try {
+      const response = await fetchImpl(`${apiOrigin}/api/v1/platform`, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!response.ok) return known;
+      const body = await response.json();
+      const url = body?.data?.dashboardUrl;
+      known = url ? new URL(url).origin : null;
+    } catch {
+      // Not up yet, restarting or a malformed URL: keep the last origin read.
+    }
+    return known;
+  }
+  const current = () => (inFlight ??= read().finally(() => { inFlight = null; }));
+  return async function present(headers) {
+    const origin = headers.origin;
+    if (typeof origin !== "string") return;
+    const presented = previewProxyOrigin(origin, await current());
+    if (!presented || presented === origin) return;
+    headers.origin = presented;
+    if (typeof headers.referer === "string") headers.referer = `${presented}/`;
+  };
 }
 
 const PLATFORM_FIELDS = ["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"];
@@ -271,8 +380,11 @@ export async function verifyStorefrontBinding({ storefrontUrl, mediaUrl, fetchIm
 }
 
 function parseArgs(argv) {
-  const [command, ...rest] = argv;
-  const options = { command, state: undefined, out: undefined, mediaUrl: undefined };
+  const [command, ...args] = argv;
+  // `port <app>` takes the app name as its one positional argument.
+  const app = command === "port" && args[0] && !args[0].startsWith("--") ? args[0] : undefined;
+  const rest = app ? args.slice(1) : args;
+  const options = { command, app, state: undefined, out: undefined, mediaUrl: undefined };
   const valued = { "--state": "state", "--out": "out", "--media-url": "mediaUrl" };
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
@@ -304,13 +416,11 @@ function returnedRows(output) {
  */
 export async function syncLocalPlatform({ env = process.env, state } = {}) {
   const { execFileSync } = await import("node:child_process");
-  const { dirname, resolve } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
-  const { resolveLocalStatePath, resolvePnpmExecutable } = await import("./dev-local-utils.mjs");
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const apiDir = resolve(root, "apps", "api");
-  const wranglerState = resolveLocalStatePath(root, state || env.SCALIUS_WRANGLER_STATE);
-  const origins = devOrigins(readDevPorts(env));
+  const { resolvePnpmExecutable } = await import("./dev-local-utils.mjs");
+  const apiDir = resolve(REPO_ROOT, "apps", "api");
+  const wranglerState = devStateDir({ env, state });
+  const ports = readDevPorts(env);
+  const origins = devOrigins(ports);
   const pnpm = resolvePnpmExecutable({ env });
   const wrangler = (args, stdio) => execFileSync(pnpm, ["exec", "wrangler", ...args, "--local", "--persist-to", wranglerState], {
     cwd: apiDir,
@@ -322,6 +432,8 @@ export async function syncLocalPlatform({ env = process.env, state } = {}) {
     ["d1", "execute", "DB", "--config", "wrangler.local.jsonc", "--json", "--command", platformSyncSql(origins)],
     ["ignore", "pipe", "pipe"],
   );
+  // Helpers that attach to this stack later read its ports from here (readStackPorts).
+  writeStackPorts(wranglerState, ports);
   return { origins, changed: returnedRows(output) !== 0, wranglerState };
 }
 
@@ -338,6 +450,16 @@ async function main() {
   if (options.command === "print") {
     const ports = readDevPorts();
     console.log(JSON.stringify({ ports, origins: devOrigins(ports), apiWorkerName: devApiWorkerName(ports) }, null, 2));
+    return;
+  }
+  if (options.command === "defaults") {
+    console.log(`${DEFAULT_DEV_PORTS.api} ${DEFAULT_DEV_PORTS.storefront} ${DEFAULT_DEV_PORTS.admin}`);
+    return;
+  }
+  if (options.command === "port") {
+    const ports = readDevPorts();
+    if (!Object.hasOwn(ports, options.app ?? "")) throw new Error("Usage: node scripts/dev-ports.mjs port <api|storefront|admin>");
+    console.log(ports[options.app]);
     return;
   }
   if (options.command === "api-worker-name") {
@@ -379,7 +501,7 @@ async function main() {
     console.log(`${origins.storefrontUrl} renders through this stack's API (${devApiWorkerName()}).`);
     return;
   }
-  console.error("Usage: node scripts/dev-ports.mjs <sync-platform [--state <dir>] | print | api-worker-name | scheduled-url | scheduled-tick | storefront-config [--out <file>] | verify-binding [--media-url <origin>]>");
+  console.error("Usage: node scripts/dev-ports.mjs <sync-platform [--state <dir>] | print | defaults | port <api|storefront|admin> | api-worker-name | scheduled-url | scheduled-tick | storefront-config [--out <file>] | verify-binding [--media-url <origin>]>");
   process.exitCode = 1;
 }
 
