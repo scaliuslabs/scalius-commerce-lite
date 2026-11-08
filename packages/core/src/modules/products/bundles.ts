@@ -4,8 +4,9 @@
 // with `bundleGroupPricing` (@scalius/shared/product-bundles), so the product
 // page, a landing pack picker and the order total always agree.
 //
-// Every write fences in-flight checkouts: 0090's triggers bump
-// `checkout_authority` on each insert, price-relevant update and delete.
+// Every write fences in-flight checkouts of the product: 0199's triggers
+// advance its `checkout_fences` scope on each insert, price-relevant update
+// and delete.
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";

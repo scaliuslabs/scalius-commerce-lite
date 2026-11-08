@@ -6,7 +6,6 @@ import {
 import { createTursoPortabilityExecutor } from "@scalius/database/portability";
 import {
   checkoutAttempts,
-  checkoutAuthority,
   codTracking,
   customers,
   inventoryMovements,
@@ -21,6 +20,7 @@ import {
 import {
   commitStorefrontOrderPayload,
   createAtomicCheckoutAttempt,
+  readStorefrontCheckoutFence,
   resolveExistingCheckoutAttempt,
   type AtomicCheckoutAttempt,
   type StorefrontOrderCommitPayload,
@@ -83,7 +83,7 @@ export function createPayload(
   productId: string,
   variantId: string,
   phone: string,
-  checkoutAuthorityRevision: number,
+  checkoutFence: StorefrontOrderCommitPayload["checkoutFence"],
   quantity = 2,
 ): StorefrontOrderCommitPayload {
   const unitPriceMinor = 125_000;
@@ -92,7 +92,7 @@ export function createPayload(
 
   return {
     checkoutToken: attempt.checkoutToken,
-    checkoutAuthorityRevision,
+    checkoutFence,
     existingCustomer: null,
     orderData: {
       id: attempt.orderId,
@@ -314,16 +314,14 @@ async function main(): Promise<void> {
   // serverless connection per simulated checkout rather than serializing all
   // transactions through one client stream.
   const checkoutDbs = attempts.map(() => createObservedCheckoutDb());
-  const authority = await db.select({ revision: checkoutAuthority.revision })
-    .from(checkoutAuthority).where(eq(checkoutAuthority.id, "default")).get();
-  assert(authority, "Checkout authority is unavailable after fixture writes.");
+  const fences = await Promise.all(cases.map((testCase) => readStorefrontCheckoutFence(db, [testCase.productId])));
 
   const payloads = attempts.map((attempt, index) => createPayload(
     attempt,
     cases[index]!.productId,
     cases[index]!.variantId,
     cases[index]!.phone,
-    authority.revision,
+    fences[index]!,
   ));
   const startedAt = performance.now();
   const timedResults = await Promise.all(payloads.map(async (payload, index) => {
@@ -409,15 +407,12 @@ async function main(): Promise<void> {
     statusToken: `cst_${failureKeyHash}`,
   };
   const failedAttempt = createAtomicCheckoutAttempt(failedIdentity);
-  const failureAuthority = await db.select({ revision: checkoutAuthority.revision })
-    .from(checkoutAuthority).where(eq(checkoutAuthority.id, "default")).get();
-  assert(failureAuthority, "Checkout authority is unavailable before the rollback smoke.");
   const failedPayload = createPayload(
     failedAttempt,
     failureCase.productId,
     failureCase.variantId,
     `+8801${randomDigits(10)}`,
-    failureAuthority.revision,
+    await readStorefrontCheckoutFence(db, [failureCase.productId]),
     100,
   );
   let failedAsExpected = false;

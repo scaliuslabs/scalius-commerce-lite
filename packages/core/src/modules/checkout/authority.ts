@@ -1,7 +1,12 @@
 import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
-import { checkoutAuthority } from "@scalius/database/schema";
-import { inArray, sql } from "drizzle-orm";
+import {
+    CHECKOUT_FENCE_PRODUCT_PREFIX,
+    CHECKOUT_FENCE_SETTINGS_PREFIX,
+    CHECKOUT_FENCE_STORE_SCOPES,
+    checkoutFences,
+} from "@scalius/database/schema";
+import { sql } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import {
   type AppPaymentUsability,
@@ -81,6 +86,84 @@ const CHECKOUT_SETTINGS_DOCUMENTS = [
     ...TRACKING_SETTINGS_DOCUMENTS,
 ];
 
+/**
+ * The server analytics destinations (Meta CAPI, GA4, TikTok): read with the
+ * rest, but not fenced. An order's claims are decided at its read, and each
+ * sender re-reads its settings before it sends, so a destination switched on
+ * during a checkout starts with the next order and one switched off sends
+ * nothing; saving them never sends a buyer back to the cart.
+ */
+const CHECKOUT_UNFENCED_DOCUMENTS: ReadonlySet<{ key: string }> = new Set([
+    metaConversionsDocument,
+    ga4MeasurementDocument,
+    tiktokEventsDocument,
+]);
+
+/** The settings documents whose change can move a quote, a payment, a contact rule, consent or a buyer message. */
+const CHECKOUT_FENCED_SETTINGS_SCOPES = [...CHECKOUT_SETTINGS_DOCUMENTS, checkoutDocument]
+    .filter((document) => !CHECKOUT_UNFENCED_DOCUMENTS.has(document))
+    .map((document) => `${CHECKOUT_FENCE_SETTINGS_PREFIX}${document.key}`);
+
+/**
+ * What a checkout's commit re-checks: the fence rows of everything it priced
+ * against (`checkout_fences`), as read with its facts. The commit refuses when
+ * `revision`, the sum of their revisions, moved (each only rises). A staff
+ * edit of another product, a push token or an analytics setting is outside
+ * the scopes and never refuses it.
+ */
+export interface CheckoutFence {
+    /** The store-wide scopes, the fenced settings documents and the cart's products. */
+    scopes: readonly string[];
+    /** The scopes' revisions summed (a scope with no row is 0). */
+    revision: number;
+    /** Each scope's revision, for comparing two reads of one checkout. */
+    revisions: Readonly<Record<string, number>>;
+}
+
+/** The fence scopes of a checkout of these products. */
+export function checkoutFenceScopes(productIds: readonly (string | null | undefined)[]): string[] {
+    return [
+        ...CHECKOUT_FENCE_STORE_SCOPES,
+        ...CHECKOUT_FENCED_SETTINGS_SCOPES,
+        ...uniqueNonEmpty(productIds).sort().map((id) => `${CHECKOUT_FENCE_PRODUCT_PREFIX}${id}`),
+    ];
+}
+
+interface CheckoutFenceRow {
+    scope: string;
+    revision: number;
+}
+
+function selectCheckoutFenceRows(db: Database, scopes: readonly string[]) {
+    return db.select({ scope: checkoutFences.scope, revision: checkoutFences.revision })
+        .from(checkoutFences)
+        .where(sql`${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(scopes)}))`);
+}
+
+/**
+ * The fence a checkout of these products would commit under now: for a
+ * caller that builds a commit payload itself (an operator smoke, a test).
+ */
+export async function readStorefrontCheckoutFence(
+    db: Database,
+    productIds: readonly string[],
+): Promise<{ scopes: string[]; revision: number }> {
+    const scopes = checkoutFenceScopes(productIds);
+    const rows = await selectCheckoutFenceRows(db, scopes);
+    return { scopes, revision: rows.reduce((total, row) => total + Number(row.revision), 0) };
+}
+
+function resolveCheckoutFence(scopes: readonly string[], revisions: ReadonlyMap<string, number>): CheckoutFence {
+    const byScope: Record<string, number> = {};
+    let revision = 0;
+    for (const scope of scopes) {
+        const value = revisions.get(scope) ?? 0;
+        byScope[scope] = value;
+        revision += value;
+    }
+    return { scopes, revision, revisions: byScope };
+}
+
 export interface StorefrontCheckoutAuthorityInput {
     items: StorefrontCartValidationItem[];
     inventoryPool?: string | null;
@@ -143,7 +226,8 @@ export interface StorefrontCheckoutSettingsAuthority {
 export type CheckoutCurrency = CurrencySettings & { priceIncrementMinor: number };
 
 export interface StorefrontCheckoutAuthoritySnapshot {
-    authorityRevision: number;
+    /** What the commit re-checks: the fence of everything this snapshot priced against. */
+    authorityFence: CheckoutFence;
     currency: CheckoutCurrency;
     cartValidation: StorefrontCartValidationResult;
     deliveryPreflight: StorefrontDeliveryPreflightResult;
@@ -168,9 +252,7 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     };
 }
 
-interface CheckoutSideEffectSettingsRow {
-    revision: number;
-    hasActiveAdminPushTarget: number;
+interface CheckoutStoreRow {
     /** The backup market's stored price increment (MARKETS-DESIGN D1), read in this row. */
     backupPriceIncrementMinor: number | null;
     /** The countries the active markets sell to (comma-separated), read in this row. */
@@ -290,6 +372,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         ...destinations.map((destination) => destination.countryCode),
         ...inputs.map((input) => input.billingCountryCode),
     ]);
+    const fenceScopes = inputs.map((input) => checkoutFenceScopes(input.items.map((item) => item.productId)));
+    const allFenceScopes = [...new Set(fenceScopes.flat())];
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),
@@ -298,23 +382,20 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
         selectDeliveryRateRowsByIds(db, shippingMethodIds, regionDestinations),
-        // Quantity bundle tiers price the cart; any change bumps the revision below.
+        // Quantity bundle tiers price the cart; any change moves its product's fence.
         selectActiveProductBundleRows(db, productIds),
         db.select({
-            revision: checkoutAuthority.revision,
-            hasActiveAdminPushTarget: sql<number>`EXISTS(
-                SELECT 1 FROM admin_fcm_tokens WHERE is_active = 1
-            )`,
-            // The price increment every checkout prices at, in a row this read already runs.
+            // The price increment every checkout prices at.
             backupPriceIncrementMinor: backupPriceIncrementSql(),
             // The countries checkout ships to, in the same row.
             sellingCountries: sellingCountriesSql(),
         })
-            .from(checkoutAuthority)
-            .where(inArray(checkoutAuthority.id, ["default"]))
-            .limit(1),
+            .from(sql`(SELECT 1) AS checkout_store_source`),
+        // The fence rows of every checkout of the batch, read with its facts.
+        selectCheckoutFenceRows(db, allFenceScopes),
         ...taxPlan.statements,
     ];
+    const taxStatementsStart = 10;
 
     return {
         statements,
@@ -345,13 +426,13 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 tiktok: tiktokServerEnabled(tiktokRead),
                 consent: consentRead.value,
             };
-            const sideEffectRows = Array.isArray(results[8])
-                ? results[8] as CheckoutSideEffectSettingsRow[]
+            const storeRows = Array.isArray(results[8])
+                ? results[8] as CheckoutStoreRow[]
                 : [];
-            const sideEffectSettings = sideEffectRows[0];
+            const storeRow = storeRows[0];
             const currency: CheckoutCurrency = {
                 ...currencyDocumentRead.value,
-                priceIncrementMinor: storeCurrencyOf(currencyDocumentRead.value, sideEffectSettings?.backupPriceIncrementMinor).priceIncrementMinor,
+                priceIncrementMinor: storeCurrencyOf(currencyDocumentRead.value, storeRow?.backupPriceIncrementMinor).priceIncrementMinor,
             };
             const site = checkoutRead.value;
             const meta = metaRead.value;
@@ -386,7 +467,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             // Staff order emails go to the notification settings' recipient list.
             const staffEmailRecipients = (notificationsRead.value as { staffEmailRecipients?: unknown[] })
                 .staffEmailRecipients ?? [];
-            const shippingCountries = sellingCountriesFromSql(sideEffectSettings?.sellingCountries);
+            const shippingCountries = sellingCountriesFromSql(storeRow?.sellingCountries);
             // The phone countries checkout accepts: the merchant's list united
             // with the countries the markets sell to (one rule, in settings).
             const allowedCountries = acceptedCustomerCountries(countriesRead.value, shippingCountries);
@@ -409,7 +490,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             }
             let taxAuthority: StorefrontTaxAuthoritySnapshot;
             try {
-                taxAuthority = taxPlan.resolve(results.slice(9, 9 + taxPlan.statements.length));
+                taxAuthority = taxPlan.resolve(results.slice(taxStatementsStart, taxStatementsStart + taxPlan.statements.length));
             } catch (error) {
                 if (error instanceof Error && !("code" in error)) {
                     Object.defineProperty(error, "code", {
@@ -420,9 +501,14 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 }
                 throw error;
             }
-            const authorityRevision = Number(sideEffectSettings?.revision);
-            if (!Number.isSafeInteger(authorityRevision) || authorityRevision < 1) {
-                throw new Error("Checkout authority revision is unavailable.");
+            if (!Array.isArray(results[9])) throw new Error("Checkout fence is unavailable.");
+            const fenceRevisions = new Map<string, number>();
+            for (const row of results[9] as CheckoutFenceRow[]) {
+                const revision = Number(row.revision);
+                if (typeof row.scope !== "string" || !Number.isSafeInteger(revision) || revision < 1) {
+                    throw new Error("Checkout fence is unavailable.");
+                }
+                fenceRevisions.set(row.scope, revision);
             }
 
             // Each checkout's market prices its lines (the order's market rule);
@@ -492,7 +578,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                     return {
                         ok: true,
                         snapshot: {
-                            authorityRevision,
+                            authorityFence: resolveCheckoutFence(fenceScopes[inputIndex]!, fenceRevisions),
                             currency,
                             cartValidation,
                             get deliveryPreflight() {
@@ -523,8 +609,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                         && orderCreatedChannels.some((channel) =>
                                             channel === "sms" || channel === "whatsapp"
                                         ))
-                                    || (Number(sideEffectSettings?.hasActiveAdminPushTarget) === 1
-                                        && adminOrderCreatedChannels.includes("push"))
+                                    // Staff push is the channel's; the sender reaches the devices registered then.
+                                    || adminOrderCreatedChannels.includes("push")
                                     || staffEmailRecipients.length > 0,
                                 ),
                                 metaPurchase: metaPurchaseEnabled,
@@ -574,10 +660,18 @@ export function createStorefrontCheckoutAuthorityReadPlan(
     };
 }
 
-/** A retained pricing market must never cross a checkout authority revision. */
-export function assertStorefrontCheckoutAuthorityRevision(current: number, original: number): void {
-    if (current !== original) {
-        throw new ValidationError("Checkout details changed while the order was being placed. Return to your cart to review them and try again.");
+/**
+ * Two reads of one checkout (before and after `cart.transform`) agree: every
+ * scope both priced against has the same revision. A retained pricing market
+ * never crosses a change of its facts; a product only one read priced is
+ * checked by the read (and the commit) that priced it.
+ */
+export function assertStorefrontCheckoutFenceUnchanged(current: CheckoutFence, original: CheckoutFence): void {
+    for (const [scope, revision] of Object.entries(original.revisions)) {
+        const now = current.revisions[scope];
+        if (now !== undefined && now !== revision) {
+            throw new ValidationError("Checkout details changed while the order was being placed. Return to your cart to review them and try again.");
+        }
     }
 }
 
@@ -596,7 +690,7 @@ export async function loadStorefrontCheckoutAuthority(
             ...input, transformer: undefined, beforeTransform: undefined,
             items: transform?.items ?? input.items, marketAuthority: first.cartValidation.marketAuthority,
         }, credentialEncryptionKey, appPayments);
-        assertStorefrontCheckoutAuthorityRevision(final.authorityRevision, first.authorityRevision);
+        assertStorefrontCheckoutFenceUnchanged(final.authorityFence, first.authorityFence);
         return final;
     }
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, input);

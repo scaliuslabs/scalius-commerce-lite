@@ -13,7 +13,7 @@ import {
     agentStorefrontContexts,
     agentStorefrontContinuations,
     agentStorefrontOrderGrants,
-    checkoutAuthority,
+    checkoutFences,
     orderDiscountAllocations,
     notificationOutbox,
     OrderStatus,
@@ -89,18 +89,21 @@ export interface StorefrontOrderCheckoutCommit<TResponse = unknown> {
 // the order id); stable, so movement ids stay what they always were.
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
-const CHECKOUT_AUTHORITY_CHANGED = "checkout_authority_changed";
+const CHECKOUT_FENCE_MOVED = "checkout_fence_moved";
+/** More scopes than any checkout has: the store-wide ones, the settings documents and a full cart's products. */
+const MAX_CHECKOUT_FENCE_SCOPES = MAX_ORDER_LINE_ITEMS + 64;
 /** An app's offer (a record its function read) changed between the quote and the commit. */
 export const APP_OFFER_CHANGED_REASON = "app_offer_changed";
-const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
+const CHECKOUT_FENCE_MOVED_MESSAGE =
     "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
 // Checked before the inventory classifier, whose Turso matcher treats any
 // "conflict" text as a retryable write conflict.
 const AGENT_CONTEXT_CHECKOUT_CONFLICT = "agent_storefront_context_checkout_conflict";
 
+/** Each guard of the commit batch by its own marker: one never stands in for another. */
 function checkoutGuardError(error: unknown): Error | null {
-    if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
-        return new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
+    if (isBatchGuardError(error, CHECKOUT_FENCE_MOVED)) {
+        return new ValidationError(CHECKOUT_FENCE_MOVED_MESSAGE);
     }
     // A card spent, disabled or expired since the quote (the ledger guards, G2).
     if (isGiftCardLedgerError(error)) {
@@ -221,7 +224,7 @@ function checkoutOrderFacts(
     // An order is priced by its promotion or by its quantity bundles, never
     // both (checkout/bundle-discounts.ts): its line discounts must stay equal
     // to its promotion allocations, which refunds and receipts reconcile. The
-    // checkout authority revision fences the tiers bundles were priced from.
+    // product's checkout fence covers the tiers bundles were priced from.
     let bundleDiscountTotal = 0;
     const bundleByLine = new Map<string, number>();
     for (const item of payload.items) {
@@ -416,9 +419,10 @@ function checkoutOrderFacts(
 }
 
 /**
- * The checkout authority snapshot proves whether any order-created channel or
- * Meta integration is configured; its revision fence rejects the commit if
- * that changes before the batch runs, so skipped outbox rows are never lost.
+ * The checkout authority snapshot says whether any order-created channel is
+ * configured; the notifications document is in the checkout's fence, so a
+ * channel switched on before the batch runs refuses the commit instead of
+ * losing the skipped outbox row.
  */
 export function wantsOrderCreatedNotification(payload: StorefrontOrderCommitPayload): boolean {
     return payload.checkoutSideEffects?.orderCreatedNotification !== false
@@ -478,11 +482,17 @@ export async function commitStorefrontOrderPayload(
     ) {
         throw new ValidationError("Checkout attempt identity does not match the prepared order.");
     }
+    const fence = payload.checkoutFence;
     if (
-        !Number.isSafeInteger(payload.checkoutAuthorityRevision)
-        || (payload.checkoutAuthorityRevision ?? 0) < 1
+        !fence
+        || !Array.isArray(fence.scopes)
+        || fence.scopes.length === 0
+        || fence.scopes.length > MAX_CHECKOUT_FENCE_SCOPES
+        || fence.scopes.some((scope) => typeof scope !== "string" || scope.length === 0)
+        || !Number.isSafeInteger(fence.revision)
+        || fence.revision < 0
     ) {
-        throw new ValidationError("Checkout authority revision is unavailable. Please retry checkout.");
+        throw new ValidationError("Checkout fence is unavailable. Please retry checkout.");
     }
 
     // A buyer agent's checkout carries its storefront context; every other
@@ -526,15 +536,15 @@ export async function commitStorefrontOrderPayload(
             const agentPlan = checkoutCommit?.agentContext
                 ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
                 : null;
-            const authorityGuard = buildBatchGuard(db, sql`EXISTS (
-                SELECT 1 FROM ${checkoutAuthority}
-                WHERE ${checkoutAuthority.id} = 'default'
-                  AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
-            )`, CHECKOUT_AUTHORITY_CHANGED) as SQLiteBatchItem;
+            // Revisions only rise, so an equal sum is every scope unchanged.
+            const fenceGuard = buildBatchGuard(db, sql`(
+                SELECT coalesce(sum(${checkoutFences.revision}), 0) FROM ${checkoutFences}
+                WHERE ${checkoutFences.scope} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(fence.scopes)}))
+            ) = ${fence.revision}`, CHECKOUT_FENCE_MOVED) as SQLiteBatchItem;
             return {
                 customer,
                 before: [
-                    authorityGuard,
+                    fenceGuard,
                     ...(attemptPlan?.writesBeforeOrder ?? []),
                     ...(agentPlan?.writesBeforeOrder ?? []),
                 ],

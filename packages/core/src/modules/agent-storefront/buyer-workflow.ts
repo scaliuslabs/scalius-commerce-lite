@@ -555,7 +555,7 @@ export async function submitAgentStorefrontCheckout(
     createTrustedStorefrontCheckoutPolicySnapshot({
       partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
       partialPaymentAmount: checkoutSettings.partialPaymentAmount,
-      authorityRevision: authority.authorityRevision,
+      authorityFence: authority.authorityFence,
       orderCreatedNotificationEnabled: authority.sideEffects.orderCreatedNotification,
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
       contactFields: authority.contactFields,

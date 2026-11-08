@@ -2,8 +2,9 @@
 // markets outside the EEA/UK/CH, GA4 Measurement Protocol and the TikTok
 // Events API. Secrets (the GA4 API secret, the TikTok access token) are
 // encrypted with CREDENTIAL_ENCRYPTION_KEY and read strictly, like Meta's.
-// Every settings write advances the checkout authority revision, so a
-// checkout commit never misses a destination enabled under it.
+// These documents are read by checkout but not fenced (checkout/authority.ts):
+// an order's server destinations are decided at its read, and each sender
+// re-reads its settings before it sends.
 
 import { z } from "zod";
 import {

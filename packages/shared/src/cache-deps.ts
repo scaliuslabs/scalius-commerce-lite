@@ -1116,7 +1116,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   media_upload_sessions: PRIVATE,
   media_upload_parts: PRIVATE,
   // Private and operational.
-  checkout_authority: "Checkout fence revision; cart and checkout are never cached.",
+  checkout_fences: "Checkout fence revisions; cart and checkout are never cached.",
   delivery_providers: PRIVATE,
   delivery_shipments: PRIVATE,
   // Orders and their lines: no public cached read touches them. Their cache

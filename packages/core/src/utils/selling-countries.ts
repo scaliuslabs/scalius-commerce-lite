@@ -9,7 +9,7 @@ import { deps } from "../cache-deps";
 
 /**
  * The countries of the active markets as a comma-separated scalar (NULL
- * without any). A market change advances the checkout authority fence, so a
+ * without any). A market change advances the `markets` checkout fence, so a
  * quote and its commit read the same list; a public read that carries it
  * declares `mk:selling`, which only a country or status change advances (a
  * market's name or presence edit leaves it alone).

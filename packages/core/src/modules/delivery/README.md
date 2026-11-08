@@ -19,7 +19,7 @@ The `delivery` domain owns the courier port, saved courier accounts (delivery pr
 | `shipping_methods` | A rate: `zone_id`, `kind` (`delivery` or `pickup`), `fee_minor`, `free_over_minor`, `pickup_address`. A live delivery rate has a zone (trigger `SHIPPING_RATE_ZONE_REQUIRED`); local pickup has none. Soft delete. |
 
 - Settings document `delivery_pickup` (`zones.ts`) is empty. Its revision guards edits of the local pickup rates.
-- DVC: `shipping_methods`, `delivery_zones`, `delivery_zone_locations` and `delivery_zone_regions` advance dependency `ship`. `places` advances `loc` (not for its `source*` columns). Providers and shipments are private. Zone, place and region writes also advance `checkout_authority`; a place write only when its name, parent, level, country, status or deletion changes.
+- DVC: `shipping_methods`, `delivery_zones`, `delivery_zone_locations` and `delivery_zone_regions` advance dependency `ship`. `places` advances `loc` (not for its `source*` columns). Providers and shipments are private. Rate, zone, place, region and shipping-profile writes also advance the `shipping` checkout fence; a place write only when its name, parent, level, country, status or deletion changes.
 
 ## Couriers
 
