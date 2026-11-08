@@ -211,6 +211,26 @@ export const PLUGIN_SCOPES = {
    * Sensitive: costs and margins are the merchant's trade secrets.
    */
   read_product_costs: { rbac: ["products.view_costs"], staff: "products.view_costs", sensitive: true },
+  /**
+   * The inbox: threads (order, store and chat-channel threads) with their
+   * messages, staff notes included, and `conversation.message_received`.
+   * The contact's name and address need `read_customer_names` and
+   * `read_customer_phones`. Sensitive: buyers' own words.
+   */
+  read_conversations: { rbac: ["conversations.view"], staff: "conversations.view", sensitive: true },
+  /**
+   * Reply in a thread and add staff notes (`conversations.create_message`):
+   * a public reply reaches the buyer by the thread's own way (email for
+   * storefront threads, the chat channel for channel threads), as a staff
+   * reply does, and names the app. Sensitive: it speaks for the store.
+   */
+  write_conversations: { rbac: ["conversations.view", "conversations.reply"], staff: "conversations.reply", sensitive: true },
+  /**
+   * Send money to payees (`payouts.create`) through a payout provider the
+   * merchant installed, and read the payouts the app sent (never another
+   * app's). Sensitive: it moves money out of the store.
+   */
+  write_payouts: { rbac: ["payouts.manage"], staff: "payouts.manage", sensitive: true },
 } as const satisfies Record<string, PluginScopeDefinition>;
 
 export type PluginScope = keyof typeof PLUGIN_SCOPES;

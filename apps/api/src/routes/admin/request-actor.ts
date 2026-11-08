@@ -58,3 +58,14 @@ export function requireStaffId(c: RequestContext, signInMessage: string): string
   if (!id) throw new UnauthorizedError(signInMessage);
   return id;
 }
+
+/**
+ * The staff account an app's conversation line stands on (a staff line needs
+ * one): the Super Admin who approved the app, while the line names the app
+ * itself (`author_app_id`). Null for staff, agents or no app. Never use it to
+ * record who acted.
+ */
+export function requestAppApproverId(c: RequestContext): string | null {
+  if (!requestAppId(c)) return null;
+  return (c.get("user") as { id?: string } | undefined)?.id ?? null;
+}

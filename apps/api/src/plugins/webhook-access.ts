@@ -1,7 +1,8 @@
 // What an app's own webhook subscriptions may do (operation-registry/README.md,
 // `write_webhooks`): its live grant's approved hosts, event topics and
 // protected customer data, and whether it may see costs (purchase order
-// events need `read_product_costs`), read from the active installation. The routes check
+// events need `read_product_costs`) and the inbox (conversation events need
+// `read_conversations`), read from the active installation. The routes check
 // a subscription against it when the app writes one, and every delivery checks
 // it again, so a narrowed, disabled or uninstalled app stops sending at once.
 import type { Database } from "@scalius/database/client";
@@ -19,11 +20,13 @@ export async function readAppWebhookAccess(db: Database, pluginId: string): Prom
   const grant = installation?.grant;
   if (!grant || !grant.scopes.includes(APP_WEBHOOK_SCOPE)) return null;
   const protectedData = grantedProtectedData(grant.scopes);
+  const permissions = effectivePluginPermissions(grant);
   return {
     allowedHosts: [...grant.allowedHosts],
     topics: [...grant.events],
     customerData: PROTECTED_CUSTOMER_DATA.filter((category) => protectedData.has(category)),
-    productCosts: effectivePluginPermissions(grant).has("products.view_costs"),
+    productCosts: permissions.has("products.view_costs"),
+    conversations: permissions.has("conversations.view"),
   };
 }
 

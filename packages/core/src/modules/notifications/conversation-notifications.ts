@@ -8,11 +8,17 @@ import { recordStaffAlert } from "./staff-alerts";
 //     no text and is coalesced to one per thread per hour.
 //   conversation_message (buyer → staff): push ("New message about #1234", no
 //     text) and, when enabled, the staff email recipients.
+//   A chat-channel thread (0202) replies on its channel only: the line's
+//     outbound row (`pending`, committed with the post) is sent as text
+//     through the thread's messaging app provider, keyed by the message id,
+//     and moves to `sent` or `failed`; never email or SMS.
 // Reads the conversation tables directly (no conversations-domain import):
 // notifications sits below conversations in the domain graph.
 
 import type { Database } from "@scalius/database/client";
 import {
+  conversationChannelContacts,
+  conversationChannelMessages,
   conversationMessages,
   conversations,
   customers,
@@ -26,7 +32,8 @@ import { isReady } from "@scalius/shared/readiness";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, gt } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
-import type { AppProviders } from "../../integrations/provider-port";
+import { resolveAppProvider, type AppProviders } from "../../integrations/provider-port";
+import { messagingSendSchema, providerErrorOf, type MessagingChannel } from "@scalius/shared/plugins/providers";
 import { notificationsDocument } from "./documents";
 import { getAdminNotificationChannels, getNotificationChannels } from "./channel-settings";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
@@ -73,6 +80,8 @@ export type ConversationNotificationResult =
 
 interface ThreadFacts {
   id: string;
+  messageId: string;
+  channel: string | null;
   subjectType: string;
   orderId: string | null;
   customerId: string | null;
@@ -89,6 +98,8 @@ async function readThreadLine(db: Database, conversationId: string, seq: number)
   return await db
     .select({
       id: conversations.id,
+      messageId: conversationMessages.id,
+      channel: conversations.channel,
       subjectType: conversations.subjectType,
       orderId: conversations.orderId,
       customerId: conversations.customerId,
@@ -268,6 +279,7 @@ export async function sendConversationNotification(
   const buyerLine = thread.authorType === "customer" || thread.authorType === "guest_receipt";
   if (claim.notificationType === "conversation_reply") {
     if (thread.authorType !== "staff") return { kind: "nothing_to_send", reason: "not_a_staff_reply" };
+    if (thread.channel) return { kind: "dispatched", result: await sendReplyOnChannel(db, thread, options) };
     return { kind: "dispatched", result: await sendReplyToBuyer(db, claim, thread, options) };
   }
   if (!buyerLine) return { kind: "nothing_to_send", reason: "not_a_buyer_message" };
@@ -352,6 +364,78 @@ async function sendReplyToBuyer(
   }
 
   return buildDispatchResult(outcomes);
+}
+
+/** How long one channel send may take before its outcome counts as unknown. */
+const CHANNEL_SEND_TIMEOUT_MS = 15_000;
+
+/**
+ * A staff reply in a chat-channel thread, as text through the thread's
+ * messaging provider. Sent once: only a `pending` outbound row is sent, the
+ * message id is the provider's idempotency key, and a send that may have
+ * gone (an uncertain failure) is repeated only by a provider that dedupes on
+ * that key; otherwise the line ends `failed` for staff to resend.
+ */
+async function sendReplyOnChannel(db: Database, thread: ThreadFacts, options: ConversationNotificationOptions): Promise<OrderNotificationDispatchResult> {
+  const row = await db
+    .select({ status: conversationChannelMessages.status, providerId: conversationChannelMessages.providerId, to: conversationChannelContacts.contactKey })
+    .from(conversationChannelMessages)
+    .innerJoin(conversationChannelContacts, eq(conversationChannelContacts.conversationId, conversationChannelMessages.conversationId))
+    .where(and(eq(conversationChannelMessages.messageId, thread.messageId), eq(conversationChannelMessages.direction, "outbound")))
+    .get();
+  if (!row || row.status !== "pending") return buildDispatchResult([]);
+  const pending = and(eq(conversationChannelMessages.messageId, thread.messageId), eq(conversationChannelMessages.status, "pending"));
+  const outcome = (status: OrderNotificationChannelOutcome["status"], retryable: boolean, error?: string): OrderNotificationChannelOutcome => ({
+    channel: "whatsapp",
+    provider: `${thread.channel}:${row.providerId}`,
+    recipientMasked: maskPhone(row.to),
+    status,
+    retryable,
+    ...(error ? { error } : {}),
+  });
+  const fail = async (failure: string) => {
+    await db.update(conversationChannelMessages).set({ status: "failed", failure, updatedAt: Math.floor(Date.now() / 1000) }).where(pending);
+    return buildDispatchResult([outcome("skipped", false, failure)]);
+  };
+
+  const choice = await resolveAppProvider(options.appProviders, "messaging", row.providerId);
+  if (!choice.provider) return fail("The messaging app that carries this chat is not available. Set it up, then send the reply again.");
+  const provider = choice.provider;
+  const language = (await readStoreIdentity(db)).language;
+  const text = (displayBody(thread, language) ?? "").slice(0, 4096);
+  if (!text) return fail("The reply has no text to send.");
+  try {
+    const answer = messagingSendSchema.safeParse(await provider.send({
+      channel: thread.channel as MessagingChannel,
+      to: row.to,
+      text,
+      idempotencyKey: thread.messageId,
+    }, { signal: AbortSignal.timeout(CHANNEL_SEND_TIMEOUT_MS) }));
+    if (!answer.success) throw new Error("The messaging app answered outside the port.");
+    if (answer.data.success) {
+      const now = Math.floor(Date.now() / 1000);
+      try {
+        await db.update(conversationChannelMessages)
+          .set({ status: "sent", providerMessageId: answer.data.providerRef ?? null, updatedAt: now }).where(pending);
+      } catch {
+        // A reference another line already holds: the reply went, its receipts cannot be matched.
+        await db.update(conversationChannelMessages).set({ status: "sent", updatedAt: now }).where(pending);
+      }
+      return buildDispatchResult([outcome("accepted", false)]);
+    }
+    if (answer.data.retryable === false) return fail("The channel refused the reply.");
+    return buildDispatchResult([outcome("failed", true, "channel_send_failed")]);
+  } catch (error: unknown) {
+    const failure = providerErrorOf(error);
+    const mayHaveGone = !failure || failure.uncertain === true;
+    if (failure?.category === "retryable" && (!mayHaveGone || provider.dedupesOnIdempotencyKey === true)) {
+      return buildDispatchResult([outcome("failed", true, failure.code ?? "channel_send_failed")]);
+    }
+    console.warn(JSON.stringify({ event: "conversation_channel_reply_failed", conversationId: thread.id, messageId: thread.messageId, code: failure?.code ?? "provider_call_failed" }));
+    return fail(failure?.category === "retryable"
+      ? "The channel may not have delivered this reply. Check with the buyer before sending it again."
+      : "The channel refused the reply.");
+  }
 }
 
 async function sendReplySms(

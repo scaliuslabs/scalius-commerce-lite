@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "88f87442-4290-4a2c-bfe7-672b03541b4d",
-  "prevId": "d9126576-6e74-47ef-9b02-e837adf4b8f1",
+  "id": "a39d73df-1314-4ef0-bfa5-5a51dfeeb47d",
+  "prevId": "88f87442-4290-4a2c-bfe7-672b03541b4d",
   "tables": {
     "account": {
       "name": "account",
@@ -15669,6 +15669,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(strftime('%s','now') as int))"
+        },
+        "author_app_id": {
+          "name": "author_app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -16131,6 +16138,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -16185,6 +16199,14 @@
           ],
           "isUnique": false,
           "where": "\"conversations\".\"order_id\" IS NOT NULL"
+        },
+        "conversations_updated_idx": {
+          "name": "conversations_updated_idx",
+          "columns": [
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -34312,6 +34334,489 @@
         "buyer_uploads_attach_shape": {
           "name": "buyer_uploads_attach_shape",
           "value": "(\"buyer_uploads\".\"order_id\" IS NULL AND \"buyer_uploads\".\"order_item_id\" IS NULL AND \"buyer_uploads\".\"attached_at\" IS NULL) OR (\"buyer_uploads\".\"order_id\" IS NOT NULL AND \"buyer_uploads\".\"attached_at\" IS NOT NULL AND (\"buyer_uploads\".\"target\" = 'line') = (\"buyer_uploads\".\"order_item_id\" IS NOT NULL))"
+        }
+      }
+    },
+    "conversation_channel_messages": {
+      "name": "conversation_channel_messages",
+      "columns": {
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "direction": {
+          "name": "direction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_message_id": {
+          "name": "provider_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attachments": {
+          "name": "attachments",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure": {
+          "name": "failure",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "conversation_channel_messages_provider_unique": {
+          "name": "conversation_channel_messages_provider_unique",
+          "columns": [
+            "provider_id",
+            "provider_message_id"
+          ],
+          "isUnique": true,
+          "where": "\"conversation_channel_messages\".\"provider_message_id\" IS NOT NULL"
+        },
+        "conversation_channel_messages_conversation_idx": {
+          "name": "conversation_channel_messages_conversation_idx",
+          "columns": [
+            "conversation_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "conversation_channel_messages_message_id_conversation_messages_id_fk": {
+          "name": "conversation_channel_messages_message_id_conversation_messages_id_fk",
+          "tableFrom": "conversation_channel_messages",
+          "tableTo": "conversation_messages",
+          "columnsFrom": [
+            "message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "conversation_channel_messages_conversation_id_conversations_id_fk": {
+          "name": "conversation_channel_messages_conversation_id_conversations_id_fk",
+          "tableFrom": "conversation_channel_messages",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "conversation_channel_messages_direction_check": {
+          "name": "conversation_channel_messages_direction_check",
+          "value": "\"conversation_channel_messages\".\"direction\" IN ('inbound', 'outbound')"
+        },
+        "conversation_channel_messages_status_shape": {
+          "name": "conversation_channel_messages_status_shape",
+          "value": "(\"conversation_channel_messages\".\"direction\" = 'inbound' AND \"conversation_channel_messages\".\"status\" = 'received' AND \"conversation_channel_messages\".\"provider_message_id\" IS NOT NULL) OR (\"conversation_channel_messages\".\"direction\" = 'outbound' AND \"conversation_channel_messages\".\"status\" IN ('pending', 'sent', 'delivered', 'read', 'failed'))"
+        },
+        "conversation_channel_messages_provider_message_length": {
+          "name": "conversation_channel_messages_provider_message_length",
+          "value": "\"conversation_channel_messages\".\"provider_message_id\" IS NULL OR length(\"conversation_channel_messages\".\"provider_message_id\") BETWEEN 1 AND 256"
+        },
+        "conversation_channel_messages_attachments_check": {
+          "name": "conversation_channel_messages_attachments_check",
+          "value": "\"conversation_channel_messages\".\"attachments\" IS NULL OR (json_valid(\"conversation_channel_messages\".\"attachments\") AND length(\"conversation_channel_messages\".\"attachments\") <= 8000)"
+        },
+        "conversation_channel_messages_failure_length": {
+          "name": "conversation_channel_messages_failure_length",
+          "value": "\"conversation_channel_messages\".\"failure\" IS NULL OR length(\"conversation_channel_messages\".\"failure\") BETWEEN 1 AND 300"
+        }
+      }
+    },
+    "payouts": {
+      "name": "payouts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_id": {
+          "name": "app_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payee_ref": {
+          "name": "payee_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payee_account_ref": {
+          "name": "payee_account_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "provider_ref": {
+          "name": "provider_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_code": {
+          "name": "failure_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_message": {
+          "name": "failure_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "payouts_app_key_unique": {
+          "name": "payouts_app_key_unique",
+          "columns": [
+            "app_id",
+            "idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "payouts_provider_ref_unique": {
+          "name": "payouts_provider_ref_unique",
+          "columns": [
+            "provider_id",
+            "provider_ref"
+          ],
+          "isUnique": true,
+          "where": "\"payouts\".\"provider_ref\" IS NOT NULL"
+        },
+        "payouts_app_updated_idx": {
+          "name": "payouts_app_updated_idx",
+          "columns": [
+            "app_id",
+            "updated_at",
+            "id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "payouts_id_shape": {
+          "name": "payouts_id_shape",
+          "value": "substr(\"payouts\".\"id\", 1, 4) = 'pyt_' AND length(\"payouts\".\"id\") BETWEEN 12 AND 68"
+        },
+        "payouts_app_id_length": {
+          "name": "payouts_app_id_length",
+          "value": "length(\"payouts\".\"app_id\") BETWEEN 3 AND 100"
+        },
+        "payouts_provider_shape": {
+          "name": "payouts_provider_shape",
+          "value": "instr(\"payouts\".\"provider_id\", ':') > 1 AND length(\"payouts\".\"provider_id\") <= 160"
+        },
+        "payouts_payee_ref_length": {
+          "name": "payouts_payee_ref_length",
+          "value": "length(\"payouts\".\"payee_ref\") BETWEEN 1 AND 128"
+        },
+        "payouts_payee_account_ref_length": {
+          "name": "payouts_payee_account_ref_length",
+          "value": "\"payouts\".\"payee_account_ref\" IS NULL OR length(\"payouts\".\"payee_account_ref\") BETWEEN 1 AND 256"
+        },
+        "payouts_amount_positive": {
+          "name": "payouts_amount_positive",
+          "value": "\"payouts\".\"amount_minor\" > 0"
+        },
+        "payouts_currency_shape": {
+          "name": "payouts_currency_shape",
+          "value": "length(\"payouts\".\"currency\") = 3 AND upper(\"payouts\".\"currency\") = \"payouts\".\"currency\""
+        },
+        "payouts_description_length": {
+          "name": "payouts_description_length",
+          "value": "\"payouts\".\"description\" IS NULL OR length(\"payouts\".\"description\") BETWEEN 1 AND 200"
+        },
+        "payouts_status_check": {
+          "name": "payouts_status_check",
+          "value": "\"payouts\".\"status\" IN ('pending', 'processing', 'paid', 'failed')"
+        },
+        "payouts_provider_ref_length": {
+          "name": "payouts_provider_ref_length",
+          "value": "\"payouts\".\"provider_ref\" IS NULL OR length(\"payouts\".\"provider_ref\") BETWEEN 1 AND 256"
+        },
+        "payouts_failure_shape": {
+          "name": "payouts_failure_shape",
+          "value": "(\"payouts\".\"status\" = 'failed') = (\"payouts\".\"failure_code\" IS NOT NULL) AND (\"payouts\".\"failure_code\" IS NULL OR length(\"payouts\".\"failure_code\") BETWEEN 1 AND 64) AND (\"payouts\".\"failure_message\" IS NULL OR length(\"payouts\".\"failure_message\") BETWEEN 1 AND 300)"
+        },
+        "payouts_settled_shape": {
+          "name": "payouts_settled_shape",
+          "value": "(\"payouts\".\"status\" IN ('paid', 'failed')) = (\"payouts\".\"settled_at\" IS NOT NULL)"
+        },
+        "payouts_key_length": {
+          "name": "payouts_key_length",
+          "value": "length(\"payouts\".\"idempotency_key\") BETWEEN 1 AND 200"
+        },
+        "payouts_request_hash_shape": {
+          "name": "payouts_request_hash_shape",
+          "value": "length(\"payouts\".\"request_hash\") = 64"
+        },
+        "payouts_version_positive": {
+          "name": "payouts_version_positive",
+          "value": "\"payouts\".\"version\" >= 1"
+        }
+      }
+    },
+    "conversation_channel_contacts": {
+      "name": "conversation_channel_contacts",
+      "columns": {
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contact_key": {
+          "name": "contact_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contact_name": {
+          "name": "contact_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_inbound_at": {
+          "name": "last_inbound_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(strftime('%s','now') as int))"
+        }
+      },
+      "indexes": {
+        "conversation_channel_contacts_contact_unique": {
+          "name": "conversation_channel_contacts_contact_unique",
+          "columns": [
+            "channel",
+            "contact_key"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "conversation_channel_contacts_conversation_id_conversations_id_fk": {
+          "name": "conversation_channel_contacts_conversation_id_conversations_id_fk",
+          "tableFrom": "conversation_channel_contacts",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "conversation_channel_contacts_channel_check": {
+          "name": "conversation_channel_contacts_channel_check",
+          "value": "\"conversation_channel_contacts\".\"channel\" IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber')"
+        },
+        "conversation_channel_contacts_key_length": {
+          "name": "conversation_channel_contacts_key_length",
+          "value": "length(\"conversation_channel_contacts\".\"contact_key\") BETWEEN 1 AND 128"
+        },
+        "conversation_channel_contacts_name_length": {
+          "name": "conversation_channel_contacts_name_length",
+          "value": "\"conversation_channel_contacts\".\"contact_name\" IS NULL OR length(\"conversation_channel_contacts\".\"contact_name\") BETWEEN 1 AND 200"
+        },
+        "conversation_channel_contacts_provider_shape": {
+          "name": "conversation_channel_contacts_provider_shape",
+          "value": "instr(\"conversation_channel_contacts\".\"provider_id\", ':') > 1 AND length(\"conversation_channel_contacts\".\"provider_id\") <= 160"
         }
       }
     }

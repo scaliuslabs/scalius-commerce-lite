@@ -28,7 +28,7 @@ Related docs:
 └────────────────────────────┬───────────────────────────┘
                              │
 ┌────────────────────────────▼───────────────────────────┐
-│ @scalius/core: 45 domains (acyclic graph)              │
+│ @scalius/core: 46 domains (acyclic graph)              │
 │ plus settings-store, cache-deps, errors, auth,         │
 │ integrations, search, utils                            │
 └────────────────────────────┬───────────────────────────┘
@@ -69,7 +69,7 @@ Worker bindings, database clients, credentials, in-flight I/O and tenant data ar
 Each directory under `packages/core/src/modules/` is one domain with at most two public entries:
 
 - `index.ts` is the server API.
-- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files. 22 of the 45 domains have one.
+- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files. 22 of the 46 domains have one.
 
 Other code reaches a domain only through these entries: `../<domain>` or `../<domain>/browser` inside core, `@scalius/core/modules/<domain>` (and `/browser`) outside it. Core also has shared areas that are not domains: `settings-store`, `cache-deps`, `errors`, `auth`, `integrations`, `search`, `utils` and `testing` (test-only fixtures).
 
@@ -106,6 +106,7 @@ Other code reaches a domain only through these entries: `../<domain>` or `../<do
 | `orders` | The order record: lists, manual orders, edits, status lifecycle, app holds, returns, invoices, receipts, payment recovery, account orders |
 | `pages` | CMS pages, articles, store policy pages |
 | `payments` | Gateway port and adapters, sessions, payment application, refunds, COD records, net terms and recorded payments |
+| `payouts` | Money an app sends to a payee through a payout provider: the record, committed before the call, forward-only status |
 | `platform` | The `platform` settings document: origins, CORS, identity handoff |
 | `plugins` | Installed apps' state and lifecycle |
 | `product-admin` | The dashboard product editor under one aggregate revision |
@@ -150,14 +151,14 @@ L3   custom-fields · notifications · objects · onboarding · products · tax
 L2   customers · markets · media · platform
 L1   settings
 L0   agent-access · attributes · collections · events · fraud-checker
-     gift-cards · media-references · order-kernel · translations
+     gift-cards · media-references · order-kernel · payouts · translations
 ```
 
 Objects consolidates the former metaobjects and plugin-record engines. Plugin lifecycle sync and checkout snapshot commits use this domain; its only domain dependencies are the existing market and settings currency readers. The dependency graph remains acyclic.
 
 Rules that keep it acyclic:
 
-- **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`, `translations`. Put a fact in a leaf when several domains act on it and none should own the others.
+- **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`, `payouts`, `translations`. Put a fact in a leaf when several domains act on it and none should own the others.
 - **`settings` imports only `media-references`.** The document store is infrastructure (`@scalius/core/settings-store`). A domain declares the documents it owns.
 - **`markets` imports only `settings` and `translations`** (a presence names a store language). A domain that prices reads the store currency and the price increment from `markets` (`readStoreCurrency()`, `storePriceIncrementSql()`); the code-only money helpers stay in `settings`.
 - **`plugins` imports only `events` and `objects`.**

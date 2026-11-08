@@ -592,5 +592,95 @@
   "from": "25b00b55d1cc465c",
   "change": "sdk.packages/shared/src/plugins/manifest.d.ts#InterfaceDeclaration:PluginGrantRequest: an existing signature changed or gained a required member.",
   "reason": "G6 app pixels (COMMERCE-HOOKS H15): the grant request the platform derives from a manifest gains storefrontPixel, approved like the other flags; apps read it, never build it."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#TypeAliasDeclaration:EventRepresentationType: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeature: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/features.d.ts#TypeAliasDeclaration:PluginFeatureInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginProviderKind: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/providers.d.ts#TypeAliasDeclaration:Ports: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/providers/descriptors.d.ts#TypeAliasDeclaration:PluginProviderDeclaration: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/providers/kinds.d.ts#TypeAliasDeclaration:ProviderKind: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/providers/kinds.d.ts#variable:PROVIDER_OPERATIONS: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "25b00b55d1cc465c",
+  "change": "sdk.packages/shared/src/plugins/scopes.d.ts#TypeAliasDeclaration:PluginScope: an existing signature changed or gained a required member.",
+  "reason": "Additive (COMMERCE-HOOKS H18, gaps G8 and G10): the union grew by members only. A new provider kind `payout` (createPayout, payoutStatus, optional verifyWebhook) and the messaging port's optional verifyWebhook; scopes read_conversations, write_conversations and write_payouts; topics conversation.message_received, payout.created and payout.updated with the conversation and payout representations; app error codes payout_provider_unavailable, payout_request_mismatch, payout_outcome_unknown, conversation_channel_unavailable and conversation_scope_required. Every existing member keeps its shape; only an exhaustive switch over the union sees the new members."
  }
 ]

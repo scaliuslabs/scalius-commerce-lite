@@ -280,6 +280,7 @@ const PROVIDER_DESCRIPTOR_SCHEMAS = {
   address: addressProviderDescriptorSchema,
   fx: plain("fx"),
   identity: plain("identity"),
+  payout: plain("payout"),
 } as const satisfies Record<ProviderKind, z.ZodType>;
 
 export type PaymentProviderDescriptor = z.output<typeof paymentProviderDescriptorSchema>;
@@ -299,7 +300,7 @@ export type PluginProviderDeclaration =
   | ({ kind: "address" } & AddressProviderDescriptor)
   | ({ kind: "sms" | "email" } & MessageSenderProviderDescriptor)
   | ({ kind: "push" } & MessageSenderProviderDescriptor)
-  | ({ kind: "tax" | "translation" | "ai" | "search" | "fx" | "identity" } & PlainProviderDescriptor);
+  | ({ kind: "tax" | "translation" | "ai" | "search" | "fx" | "identity" | "payout" } & PlainProviderDescriptor);
 
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat

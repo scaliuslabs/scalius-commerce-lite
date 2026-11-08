@@ -55,6 +55,7 @@
     "./modules/pages/browser": "./src/modules/pages/browser.ts",
     "./modules/payments": "./src/modules/payments/index.ts",
     "./modules/payments/browser": "./src/modules/payments/browser.ts",
+    "./modules/payouts": "./src/modules/payouts/index.ts",
     "./modules/platform": "./src/modules/platform/index.ts",
     "./modules/objects": "./src/modules/objects/index.ts",
     "./modules/plugins": "./src/modules/plugins/index.ts",

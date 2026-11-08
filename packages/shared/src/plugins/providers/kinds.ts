@@ -3,7 +3,7 @@
 //
 // A port is one interface per kind (payment, courier, sms, email,
 // courier_history, tax, translation, ai, messaging, push, search, address,
-// fx, identity). The platform's own adapters (COD, Stripe, the email
+// fx, identity, payout). The platform's own adapters (COD, Stripe, the email
 // providers, Web Push) and app providers (the Bangladesh pack's SSLCommerz,
 // couriers, SMS gateways and courier-history checkers; bKash; Nagad)
 // implement the same port; core code resolves a provider by id and
@@ -15,7 +15,7 @@
 
 export const PROVIDER_KINDS = [
   "payment", "courier", "sms", "email", "courier_history", "tax", "translation", "ai",
-  "messaging", "push", "search", "address", "fx", "identity",
+  "messaging", "push", "search", "address", "fx", "identity", "payout",
 ] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
@@ -60,7 +60,8 @@ export const PROVIDER_OPERATIONS = {
   // AI drafting (the theme editor's "Draft with AI"): no built-in provider or key, apps only.
   ai: { required: ["generate"], optional: ["testConnection"] },
   // Chat channels (WhatsApp, Messenger, …): the built-in WhatsApp sender or an app's.
-  messaging: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
+  // Inbound messages and delivery receipts arrive through `verifyWebhook` (the inbox).
+  messaging: { required: ["send"], optional: ["deliveryStatus", "testConnection", "verifyWebhook"] },
   // A push service with its own subscribers; Web Push (VAPID) is built in.
   push: { required: ["send"], optional: ["testConnection"] },
   // Product ids for a buyer's words; built-in full-text search is the fallback.
@@ -71,6 +72,8 @@ export const PROVIDER_OPERATIONS = {
   fx: { required: ["rates"], optional: ["testConnection"] },
   // Buyer sign-in with another account (OAuth 2.0 code with PKCE).
   identity: { required: ["authorize", "exchange"], optional: ["testConnection"] },
+  // Money out of the store to a payee (a marketplace's sellers): apps only.
+  payout: { required: ["createPayout", "payoutStatus"], optional: ["verifyWebhook", "testConnection"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
 /**
@@ -97,6 +100,7 @@ export const PROVIDER_PORT_TIERS = {
   address: "beta",
   fx: "beta",
   identity: "beta",
+  payout: "beta",
 } as const satisfies Record<ProviderKind, "stable" | "beta">;
 export type ProviderPortTier = (typeof PROVIDER_PORT_TIERS)[ProviderKind];
 

@@ -35,6 +35,7 @@ export * from "./reviews";
 export * from "./digital";
 export * from "./buyer-uploads";
 export * from "./gift-cards";
+export * from "./payouts";
 export * from "./warranty";
 export * from "./events";
 export * from "./custom-fields";

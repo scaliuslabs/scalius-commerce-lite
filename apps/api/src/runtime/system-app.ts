@@ -11,6 +11,8 @@ import { cacheControlRoutes } from "../routes/cache";
 import { paymentRoutes } from "../routes/payment/payment-routes";
 import { courierWebhookRoutes } from "../routes/webhooks/couriers";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
+import { payoutWebhookRoutes } from "../routes/webhooks/payouts";
+import { messagingWebhookRoutes } from "../routes/webhooks/messaging";
 
 export const systemParts: RouteGroupParts<"system"> = {
   routers: {
@@ -18,6 +20,8 @@ export const systemParts: RouteGroupParts<"system"> = {
     agentAuthRoutes,
     agentArtifactRoutes,
     courierWebhookRoutes,
+    payoutWebhookRoutes,
+    messagingWebhookRoutes,
     paymentWebhookRoutes,
     cacheControlRoutes,
     authSetupRoutes,

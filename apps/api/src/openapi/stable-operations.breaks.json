@@ -3100,5 +3100,11 @@
   "from": "64eecdeae2466d48",
   "change": "behaviour: webhook_subscriptions.create and webhook_subscriptions.update refuse a purchase_order topic (or `*`) without read_product_costs (403 cost_scope_required).",
   "reason": "Pre-lock security fix (G2 review): a purchase order's representation carries the store's costs (unit, shipping, other and tax), which an app sees only with read_product_costs. An app's own webhook endpoint therefore gets purchase_order topics only while its live grant confers products.view_costs: creating or updating a subscription whose topics reach one (`*`, `purchase_order.*`, `purchase_order.updated`) without it is refused with 403 cost_scope_required (core events webhook-subscriptions.ts), and a delivery to an existing subscription whose grant lacks it is cancelled with app_cost_scope_not_granted before its representation is read (webhook-delivery.ts). The store's own endpoints are unchanged. A behaviour change, so no snapshot diff produces this entry: it records the break for review."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "4feb93300dd2259a",
+  "change": "behaviour: webhook_subscriptions.create and webhook_subscriptions.update refuse a conversation topic (or `*`) without read_conversations (403 conversation_scope_required).",
+  "reason": "Pre-lock privacy fix (COMMERCE-HOOKS H18): a conversation's representation carries buyers' words and staff notes, which an app reads only with read_conversations. An app's own webhook endpoint therefore gets conversation topics only while its live grant confers conversations.view: creating or updating a subscription whose topics reach one (`*`, `conversation.*`, `conversation.message_received`) without it is refused with 403 conversation_scope_required (core events webhook-subscriptions.ts), and a delivery to an existing subscription whose grant lacks it is cancelled with app_conversation_scope_not_granted before its representation is read (webhook-delivery.ts). The store's own endpoints are unchanged. A behaviour change, so no snapshot diff produces this entry: it records the break for review."
  }
 ]

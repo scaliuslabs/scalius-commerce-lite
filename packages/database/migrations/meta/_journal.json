@@ -1415,6 +1415,13 @@
       "when": 1794161791677,
       "tag": "0201_buyer_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 202,
+      "version": "6",
+      "when": 1794161765115,
+      "tag": "0202_channel_inbox_payouts",
+      "breakpoints": true
     }
   ]
 }

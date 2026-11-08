@@ -222,6 +222,15 @@ export const STABLE_APP_OPERATIONS = {
   "gift_cards.update": "dashboard.resources.gift_cards.update",
   "gift_cards.adjust": "dashboard.resources.gift_cards.adjust",
 
+  // ── Inbox and payouts ──
+  "conversations.list": "dashboard.resources.conversations.list",
+  "conversations.get": "dashboard.resources.conversations.get",
+  "conversations.list_messages": "dashboard.resources.conversations.messages_list",
+  "conversations.create_message": "dashboard.resources.conversations.messages_create",
+  "payouts.list": "dashboard.resources.payouts.list",
+  "payouts.get": "dashboard.resources.payouts.get",
+  "payouts.create": "dashboard.resources.payouts.create",
+
   // ── Custom fields ──
   "custom_field_definitions.list": "dashboard.custom_field_definitions.list",
   "custom_field_definitions.get": "dashboard.custom_field_definitions.get",

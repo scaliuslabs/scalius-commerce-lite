@@ -122,18 +122,21 @@ Your manifest asks; a Super Admin approves. Every `ctx.api` call, timeline write
 
 | Tier | Scopes | Effect |
 | --- | --- | --- |
-| Access | `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `read_customers`, `write_customers`, `write_marketing`, `read_discounts`, `write_discounts`, `read_content`, `write_content`, `read_objects`, `write_objects`, `read_files`, `write_files`, `read_gift_cards`, `write_gift_cards`, `write_webhooks`, `read_settings`, `write_themes`, `write_navigation`, `write_places` | Each grants a fixed set of store permissions. A `write_*` scope includes its `read_*` scope. |
+| Access | `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_orders`, `write_orders`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_fulfillments`, `read_customers`, `write_customers`, `write_marketing`, `read_discounts`, `write_discounts`, `read_content`, `write_content`, `read_objects`, `write_objects`, `read_files`, `write_files`, `read_gift_cards`, `write_gift_cards`, `read_conversations`, `write_conversations`, `write_payouts`, `write_webhooks`, `read_settings`, `write_themes`, `write_navigation`, `write_places` | Each grants a fixed set of store permissions. A `write_*` scope includes its `read_*` scope. |
 | Contact data | `read_customer_names`, `read_customer_emails`, `read_customer_phones`, `read_customer_addresses` | Grant no permission alone. Each reveals one kind of buyer contact data in what your other scopes return. |
 | Cost data | `read_product_costs` | Grants only `products.view_costs` and reaches nothing alone: purchase orders carry their costs, so `purchase_orders.*` and an app's webhook subscription to a purchase order topic (`*` included) need it beside `read_inventory` (reads) or `write_inventory` (writes); without it a subscription is refused with 403 `cost_scope_required`, and deliveries stop once the grant loses it. |
 | Capability | `send_messages_any` | Grants no permission. Lets `ctx.messaging` reach any address. |
 
-The consent screen marks these as **Sensitive**: every contact data scope, `read_product_costs`, `send_messages_any`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_gift_cards`, `write_webhooks`, `write_themes` and `write_navigation`.
+The consent screen marks these as **Sensitive**: every contact data scope, `read_product_costs`, `send_messages_any`, `write_payments`, `write_payment_methods`, `write_refunds`, `write_gift_cards`, `read_conversations`, `write_conversations`, `write_payouts`, `write_webhooks`, `write_themes` and `write_navigation`.
 
 Rules worth knowing:
 
 - Stock belongs to `read_inventory` and `write_inventory`, never to `write_products`.
 - `write_marketing` sends to customers who agreed to marketing. The platform resolves the address and never returns it.
 - `write_payments` records money received against an invoice. `write_payment_methods` charges, captures and voids, and lists and removes saved methods, only for your own purchase options. `write_refunds` gives money back.
+- `read_conversations` reads the inbox (`conversations.*`): order, store and chat-channel threads and their lines, staff notes included. A chat thread's contact name and address read null without `read_customer_names` / `read_customer_phones`. An app's own webhook endpoint gets `conversation.*` topics (`*` included) only with it; otherwise the subscription is refused with 403 `conversation_scope_required`.
+- `write_conversations` replies in a thread or adds a staff note (`conversations.create_message`, Idempotency-Key required). The line names your app. A reply reaches the buyer by the thread's own way: email for storefront threads, the chat channel for channel threads.
+- `write_payouts` sends money to payees through an installed payout provider (`payouts.create`) and reads the payouts your app sent, never another app's. `payout.*` events reach only the app that sent the payout.
 - `write_themes` changes the shared theme draft, never the live theme. `write_navigation` writes menus. Staff publish the theme and choose where a menu shows.
 - No scope reaches staff, agent access, the store's own webhook endpoints or app management.
 - An admin route may name one of the app's scopes as its `scope`. Staff then also need that scope's dashboard permission to use the route.
@@ -412,7 +415,7 @@ A schedule has five fields and runs in the store's time zone. The platform check
 SQL triggers write event facts in the same transaction as the change, so a committed change is never lost. A store writes no event rows for topics nobody subscribes to.
 
 - An event is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts carry ids, states and quantities, never contact data, credentials or money. Read the resource with `ctx.api`.
-- The catalogue (`EVENT_TOPICS` in `@scalius/shared/events`) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, and object events. `customer.redact_requested` and `customer.data_requested` are reserved and have no emitter yet.
+- The catalogue (`EVENT_TOPICS` in `@scalius/shared/events`) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). `customer.redact_requested` and `customer.data_requested` are reserved and have no emitter yet.
 - Fulfilment and refund events list the order lines they cover (see [Line facts and refunds](commerce-hooks.md#5-line-facts-and-refunds)).
 
 **Delivery to app handlers.**

@@ -38,6 +38,13 @@ export const conversations = sqliteTable("conversations", {
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
     closedAt: integer("closed_at"),
+    /**
+     * The chat channel of a thread a messaging app started (0202): `whatsapp`,
+     * `messenger`, … (`MESSAGING_CHANNELS`); null for every storefront thread.
+     * A channel thread is a store thread of the contact's customer that the
+     * buyer never reads on the storefront: replies go out on the channel.
+     */
+    channel: text("channel"),
 }, (table) => [
     uniqueIndex("conversations_order_thread_unique")
         .on(table.orderId)
@@ -53,6 +60,8 @@ export const conversations = sqliteTable("conversations", {
     index("conversations_order_idx")
         .on(table.orderId)
         .where(sql`${table.orderId} IS NOT NULL`),
+    // The app inbox sync (`conversations.list`, 0202): (updatedAt, id) order.
+    index("conversations_updated_idx").on(table.updatedAt, table.id),
     check("conversations_id_shape", sql`substr(${table.id}, 1, 4) = 'cnv_' AND length(${table.id}) BETWEEN 12 AND 68`),
     check("conversations_subject_type_check", sql`${table.subjectType} IN ('order', 'store', 'warranty_claim', 'review')`),
     check("conversations_status_check", sql`${table.status} IN ('open', 'pending', 'closed')`),
@@ -101,6 +110,8 @@ export const conversationMessages = sqliteTable("conversation_messages", {
     /** Idempotency key of the post, unique per conversation. */
     clientMessageKey: text("client_message_key"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    /** The app that posted a staff line through the app API (0202); `author_user_id` is its approver. */
+    authorAppId: text("author_app_id"),
 }, (table) => [
     uniqueIndex("conversation_messages_conversation_seq_unique").on(table.conversationId, table.seq),
     uniqueIndex("conversation_messages_client_key_unique")
@@ -213,3 +224,66 @@ export const conversationSearchTerms = sqliteTable("conversation_search_terms", 
     index("conversation_search_terms_message_idx").on(table.conversationId, table.seq, table.term),
     check("conversation_search_terms_length", sql`length(${table.term}) BETWEEN 2 AND 32`),
 ]);
+
+/**
+ * The contact of a channel thread (0202): one row per `conversations.channel`
+ * thread, unique by channel and contact, so an inbound message finds its
+ * thread whichever app delivered it. `contact_key` is the address replies go
+ * to (E.164 on WhatsApp and Viber, the channel's own id otherwise); it and
+ * `contact_name` are buyer contact data. `provider_id` is the messaging app
+ * provider that last delivered from the contact: replies go out through it.
+ */
+export const conversationChannelContacts = sqliteTable("conversation_channel_contacts", {
+    conversationId: text("conversation_id").primaryKey()
+        .references(() => conversations.id, { onDelete: "restrict" }),
+    channel: text("channel").notNull(),
+    contactKey: text("contact_key").notNull(),
+    contactName: text("contact_name"),
+    providerId: text("provider_id").notNull(),
+    lastInboundAt: integer("last_inbound_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("conversation_channel_contacts_contact_unique").on(table.channel, table.contactKey),
+    check("conversation_channel_contacts_channel_check", sql`${table.channel} IN ('whatsapp', 'messenger', 'instagram', 'telegram', 'viber')`),
+    check("conversation_channel_contacts_key_length", sql`length(${table.contactKey}) BETWEEN 1 AND 128`),
+    check("conversation_channel_contacts_name_length", sql`${table.contactName} IS NULL OR length(${table.contactName}) BETWEEN 1 AND 200`),
+    check("conversation_channel_contacts_provider_shape", sql`instr(${table.providerId}, ':') > 1 AND length(${table.providerId}) <= 160`),
+]);
+
+/**
+ * A channel thread's message as the channel knows it (0202). Inbound: the
+ * provider's message id (unique per provider: a redelivery is applied once)
+ * and its attachments as references (kind, media type, name, size, the
+ * provider's media id or an https URL; never the bytes). Outbound: written
+ * when the reply is handed to the provider, then moved by its receipts
+ * (`sent` → `delivered` → `read`, or `failed`), never backwards.
+ */
+export const conversationChannelMessages = sqliteTable("conversation_channel_messages", {
+    messageId: text("message_id").primaryKey()
+        .references(() => conversationMessages.id, { onDelete: "restrict" }),
+    conversationId: text("conversation_id").notNull()
+        .references(() => conversations.id, { onDelete: "restrict" }),
+    direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
+    providerId: text("provider_id").notNull(),
+    providerMessageId: text("provider_message_id"),
+    status: text("status", { enum: ["received", "pending", "sent", "delivered", "read", "failed"] }).notNull(),
+    attachments: text("attachments"),
+    /** A short, sanitized reason a send failed; never provider text with contact data. */
+    failure: text("failure"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("conversation_channel_messages_provider_unique")
+        .on(table.providerId, table.providerMessageId)
+        .where(sql`${table.providerMessageId} IS NOT NULL`),
+    index("conversation_channel_messages_conversation_idx").on(table.conversationId),
+    check("conversation_channel_messages_direction_check", sql`${table.direction} IN ('inbound', 'outbound')`),
+    check("conversation_channel_messages_status_shape", sql`(${table.direction} = 'inbound' AND ${table.status} = 'received' AND ${table.providerMessageId} IS NOT NULL) OR (${table.direction} = 'outbound' AND ${table.status} IN ('pending', 'sent', 'delivered', 'read', 'failed'))`),
+    check("conversation_channel_messages_provider_message_length", sql`${table.providerMessageId} IS NULL OR length(${table.providerMessageId}) BETWEEN 1 AND 256`),
+    check("conversation_channel_messages_attachments_check", sql`${table.attachments} IS NULL OR (json_valid(${table.attachments}) AND length(${table.attachments}) <= 8000)`),
+    check("conversation_channel_messages_failure_length", sql`${table.failure} IS NULL OR length(${table.failure}) BETWEEN 1 AND 300`),
+]);
+
+export type ConversationChannelContact = InferSelectModel<typeof conversationChannelContacts>;
+export type ConversationChannelMessage = InferSelectModel<typeof conversationChannelMessages>;

@@ -10,6 +10,8 @@
 import { chunkForD1, type Database } from "@scalius/database/client";
 import {
   conversationAttachments,
+  conversationChannelContacts,
+  conversationChannelMessages,
   conversationInboxCounts,
   conversationMessages,
   conversations,
@@ -201,6 +203,8 @@ export async function resolveBuyerThread(
   const thread = await readThread(db, conversationId);
   if (!thread) throw new NotFoundError("Conversation not found");
   if (thread.subjectType === "store") {
+    // A chat-channel thread is read and answered on its channel, never on the storefront.
+    if (thread.channel) throw new NotFoundError("Conversation not found");
     if (actor.kind !== "customer" || thread.customerId !== actor.customerId) throw new NotFoundError("Conversation not found");
     if (!await isVerifiedCustomerAccount(db, actor.customerId)) throw new NotFoundError("Conversation not found");
     return thread;
@@ -222,6 +226,8 @@ export interface ConversationLine {
   authorType: ConversationAuthorType;
   authorCustomerId?: string | null;
   authorUserId?: string | null;
+  /** The app that posted a staff line through the app API; `authorUserId` is its approver. */
+  authorAppId?: string | null;
   body?: string | null;
   eventKind?: string | null;
   eventData?: Record<string, unknown> | null;
@@ -326,6 +332,7 @@ export function planConversationAppend(
       authorType: line.authorType,
       authorCustomerId: line.authorCustomerId ?? null,
       authorUserId: line.authorUserId ?? null,
+      authorAppId: line.authorAppId ?? null,
       body: line.body ?? null,
       eventKind: line.eventKind ?? null,
       eventData: line.eventData ? JSON.stringify(line.eventData) : null,
@@ -357,6 +364,29 @@ export function planConversationAppend(
   });
 
   return { statements, lines: planned, outboxIds };
+}
+
+/** The contact (and the provider replies go out through) of a chat-channel thread, or null. */
+export async function readChannelContact(db: Database, conversationId: string) {
+  return await db.select().from(conversationChannelContacts)
+    .where(eq(conversationChannelContacts.conversationId, conversationId)).get() ?? null;
+}
+
+/**
+ * The outbound row a public reply in a chat-channel thread commits with its
+ * line (`pending`): the reply notification sends it through the provider.
+ */
+export function planChannelReply(db: Database, input: { conversationId: string; messageId: string; providerId: string }): Statement {
+  const now = nowSeconds();
+  return db.insert(conversationChannelMessages).values({
+    messageId: input.messageId,
+    conversationId: input.conversationId,
+    direction: "outbound",
+    providerId: input.providerId,
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+  }) as unknown as Statement;
 }
 
 /** Hands committed outbox rows to the sender; the scheduled drain sends any it could not. */
@@ -440,6 +470,8 @@ export interface PostMessageInput {
   visibility?: ConversationMessageVisibility;
   clientMessageKey?: string | null;
   attachmentIds?: readonly string[];
+  /** A staff line an app posts through the app API (`conversations.create_message`). */
+  authorAppId?: string | null;
 }
 
 export interface PostMessageResult {
@@ -473,6 +505,14 @@ export async function postConversationMessage(
   const attachmentIds = input.attachmentIds ?? [];
   const replay = await replayConversationPost(db, thread.id, input);
   if (replay) return replay;
+  // A chat channel carries the reply as text through the thread's provider.
+  const channelReply = thread.channel && !buyer && visibility === "public" ? await readChannelContact(db, thread.id) : null;
+  if (thread.channel && !buyer && visibility === "public") {
+    if (!channelReply) throw new ConflictError("This chat thread has no contact to reply to.");
+    if (products.length || attachmentIds.length) {
+      throw new ValidationError("A chat channel reply carries text only. Remove the products and images, or add them as an internal note.");
+    }
+  }
   if (buyer) await assertBuyerDailyCap(db, thread.id);
   await assertAttachable(db, thread.id, input.actor, attachmentIds);
   const eventData = products.length ? { v: 1, cards: products } : null;
@@ -487,6 +527,7 @@ export async function postConversationMessage(
     authorType: input.actor.kind,
     authorCustomerId: input.actor.kind === "customer" ? input.actor.customerId : null,
     authorUserId: input.actor.kind === "staff" ? input.actor.userId : null,
+    authorAppId: input.actor.kind === "staff" ? input.authorAppId ?? null : null,
     body,
     clientMessageKey,
     attachmentIds,
@@ -496,6 +537,9 @@ export async function postConversationMessage(
   let current = thread;
   for (let attempt = 1; attempt <= POST_ATTEMPTS; attempt += 1) {
     const plan = planConversationAppend(db, current, [line], { notify: true });
+    if (channelReply) {
+      plan.statements.push(planChannelReply(db, { conversationId: thread.id, messageId: plan.lines[0]!.id, providerId: channelReply.providerId }));
+    }
     try {
       await db.batch(plan.statements as unknown as BatchStatements);
       await sendConversationNotifications(options.send, plan.outboxIds);
@@ -547,6 +591,7 @@ export async function replayConversationPost(
   const visibility = input.actor.kind === "staff" ? input.visibility ?? "public" : "public";
   const actorMatches = existing.authorType === input.actor.kind
     && (input.actor.kind !== "staff" || existing.authorUserId === input.actor.userId)
+    && (existing.authorAppId ?? null) === (input.actor.kind === "staff" ? input.authorAppId ?? null : null)
     && (input.actor.kind !== "customer" || existing.authorCustomerId === input.actor.customerId);
   if (!actorMatches || existing.body !== body || existing.visibility !== visibility
     || JSON.stringify(refs(storedProducts)) !== JSON.stringify(refs(input.products ?? []))
@@ -900,7 +945,7 @@ async function buyerThreadsCondition(db: Database, customerId: string): Promise<
     isNotNull(conversations.lastMessageAt),
     verified
       ? or(
-        and(eq(conversations.customerId, customerId), eq(conversations.subjectType, "store")),
+        and(eq(conversations.customerId, customerId), eq(conversations.subjectType, "store"), isNull(conversations.channel)),
         orderScoped,
       )
       : orderScoped,

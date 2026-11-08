@@ -7486,7 +7486,8 @@
   "search": "beta",
   "address": "beta",
   "fx": "beta",
-  "identity": "beta"
+  "identity": "beta",
+  "payout": "beta"
  },
  "providers": {
   "payment": {
@@ -15371,6 +15372,28 @@
    ],
    "staff": "products.view_costs",
    "sensitive": true
+  },
+  "read_conversations": {
+   "rbac": [
+    "conversations.view"
+   ],
+   "staff": "conversations.view",
+   "sensitive": true
+  },
+  "write_conversations": {
+   "rbac": [
+    "conversations.view",
+    "conversations.reply"
+   ],
+   "staff": "conversations.reply",
+   "sensitive": true
+  },
+  "write_payouts": {
+   "rbac": [
+    "payouts.manage"
+   ],
+   "staff": "payouts.manage",
+   "sensitive": true
   }
  },
  "errors": {
@@ -15618,6 +15641,10 @@
    "status": 403,
    "meaning": "Purchase order events carry costs: the app's endpoint needs read_product_costs to receive them."
   },
+  "conversation_scope_required": {
+   "status": 403,
+   "meaning": "Conversation events carry buyers' messages: the app's endpoint needs read_conversations to receive them."
+  },
   "menu_in_trash": {
    "status": 409,
    "meaning": "The menu is in the trash."
@@ -15673,6 +15700,22 @@
   "app_gift_card_limit": {
    "status": 403,
    "meaning": "The app reached the merchant's daily gift card value limit."
+  },
+  "payout_provider_unavailable": {
+   "status": 422,
+   "meaning": "The payout provider is not an installed, active, set-up payout provider; nothing was recorded."
+  },
+  "payout_request_mismatch": {
+   "status": 409,
+   "meaning": "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout."
+  },
+  "payout_outcome_unknown": {
+   "status": 503,
+   "meaning": "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice."
+  },
+  "conversation_channel_unavailable": {
+   "status": 422,
+   "meaning": "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up."
   },
   "object_undeclared_type": {
    "status": 400,
@@ -15928,7 +15971,10 @@
    "object.deleted": "object",
    "customer.redact_requested": "customer",
    "customer.data_requested": "customer",
-   "customer.erased": "customer"
+   "customer.erased": "customer",
+   "conversation.message_received": "conversation",
+   "payout.created": "payout",
+   "payout.updated": "payout"
   },
   "facts": {
    "order.created": {
@@ -17404,6 +17450,126 @@
     },
     "required": [
      "customerId"
+    ],
+    "additionalProperties": false
+   },
+   "conversation.message_received": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "conversationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "messageId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "seq": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+     },
+     "channel": {
+      "anyOf": [
+       {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "conversationId",
+     "messageId",
+     "seq",
+     "channel"
+    ],
+    "additionalProperties": false
+   },
+   "payout.created": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "appId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "previousStatus": {
+      "anyOf": [
+       {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     }
+    },
+    "required": [
+     "payoutId",
+     "appId",
+     "previousStatus",
+     "status"
+    ],
+    "additionalProperties": false
+   },
+   "payout.updated": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "appId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+     },
+     "previousStatus": {
+      "anyOf": [
+       {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+     }
+    },
+    "required": [
+     "payoutId",
+     "appId",
+     "previousStatus",
+     "status"
     ],
     "additionalProperties": false
    }

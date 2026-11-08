@@ -42,6 +42,12 @@ export const PERMISSIONS = {
   GIFT_CARDS_MANAGE: "gift_cards.manage",
 
   // =============================================
+  // Payouts (1 permission) - SENSITIVE: sends money out of the store to a
+  // payee (a marketplace's sellers) through a payout provider
+  // =============================================
+  PAYOUTS_MANAGE: "payouts.manage",
+
+  // =============================================
   // Categories (6 permissions)
   // =============================================
   CATEGORIES_VIEW: "categories.view",

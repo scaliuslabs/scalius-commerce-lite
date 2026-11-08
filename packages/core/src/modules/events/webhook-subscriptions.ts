@@ -68,6 +68,8 @@ export interface AppWebhookAccess {
   customerData: readonly ProtectedCustomerData[];
   /** The grant confers `products.view_costs` (`read_product_costs`): purchase order events carry costs. */
   productCosts: boolean;
+  /** The grant confers `conversations.view` (`read_conversations`): conversation events carry buyers' words. */
+  conversations: boolean;
 }
 
 /** Resources whose representation carries the store's costs: an app endpoint receives them only with `productCosts`. */
@@ -79,6 +81,17 @@ const COST_BEARING_TOPICS = (Object.keys(EVENT_TOPIC_RESOURCE) as EventTopic[])
 /** The cost-bearing topics a filter reaches (`*`, `purchase_order.*`, `purchase_order.updated`). */
 export function costBearingTopicsOf(filter: EventTopicFilter): EventTopic[] {
   return COST_BEARING_TOPICS.filter((topic) => eventFilterCovered(topic, [filter]));
+}
+
+/** Resources whose representation carries buyers' words: an app endpoint receives them only with `conversations`. */
+export const INBOX_EVENT_RESOURCES: ReadonlySet<EventResourceType> = new Set<EventResourceType>(["conversation"]);
+
+const INBOX_TOPICS = (Object.keys(EVENT_TOPIC_RESOURCE) as EventTopic[])
+  .filter((topic) => INBOX_EVENT_RESOURCES.has(EVENT_TOPIC_RESOURCE[topic]));
+
+/** The inbox topics a filter reaches (`*`, `conversation.*`, `conversation.message_received`). */
+export function inboxTopicsOf(filter: EventTopicFilter): EventTopic[] {
+  return INBOX_TOPICS.filter((topic) => eventFilterCovered(topic, [filter]));
 }
 
 /** Whose subscriptions a call reaches: an app's own, or (omitted) every one, for staff. */
@@ -261,6 +274,10 @@ function assertWithinAppAccess(
   const costly = owner.access.productCosts ? [] : values.topics?.filter((topic) => costBearingTopicsOf(topic).length > 0) ?? [];
   if (costly.length > 0) {
     throw new AppError(403, "cost_scope_required", `${costly.join(", ")} delivers purchase orders with their costs: the app needs read_product_costs, or name the topics it receives without them.`, { field: "topics" });
+  }
+  const inbox = owner.access.conversations ? [] : values.topics?.filter((topic) => inboxTopicsOf(topic).length > 0) ?? [];
+  if (inbox.length > 0) {
+    throw new AppError(403, "conversation_scope_required", `${inbox.join(", ")} delivers conversations with buyers' messages: the app needs read_conversations, or name the topics it receives without them.`, { field: "topics" });
   }
   const hidden = values.customerData?.filter((category) => !owner.access.customerData.includes(category)) ?? [];
   if (hidden.length > 0) {

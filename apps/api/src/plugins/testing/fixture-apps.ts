@@ -24,6 +24,9 @@
 // - acme.members: customer roles (ctx.customers.roles, cart.customer.roles)
 //   and a background job with a live progress page (ctx.jobs).
 // - acme.marketplace: a multi-seller split kept from fulfilment and refund line facts.
+// - acme.chat: a WhatsApp and Messenger channel (inbound pushes into the
+//   inbox, staff replies out through `send`) and an acknowledgement posted
+//   through the stable inbox operations.
 // - acme.subscriptions: a purchase option, contracts from order.created, a
 //   renewal cron (orders.create + payments.charge of the saved method) and a
 //   test payment provider that vaults, charges off-session, captures and voids.
@@ -52,6 +55,7 @@ import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/inde
 import { manifest as deliverySlotsManifest } from "./apps/delivery-slots/src/index";
 import { manifest as fraudScreenManifest } from "./apps/fraud-screen/src/index";
 import { manifest as personaliseManifest } from "./apps/personalise/src/index";
+import { manifest as chatManifest } from "./apps/chat/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -71,6 +75,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.delivery-slots": "./apps/api/src/plugins/testing/apps/delivery-slots",
   "acme.fraud-screen": "./apps/api/src/plugins/testing/apps/fraud-screen",
   "acme.personalise": "./apps/api/src/plugins/testing/apps/personalise",
+  "acme.chat": "./apps/api/src/plugins/testing/apps/chat",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -95,6 +100,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.delivery-slots": { version: deliverySlotsManifest.version, sha256: "d51a".repeat(16), load: () => import("./apps/delivery-slots/src/index") },
   "acme.fraud-screen": { version: fraudScreenManifest.version, sha256: "f7a0".repeat(16), load: () => import("./apps/fraud-screen/src/index") },
   "acme.personalise": { version: personaliseManifest.version, sha256: "f070".repeat(16), load: () => import("./apps/personalise/src/index") },
+  "acme.chat": { version: chatManifest.version, sha256: "c4a7".repeat(16), load: () => import("./apps/chat/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

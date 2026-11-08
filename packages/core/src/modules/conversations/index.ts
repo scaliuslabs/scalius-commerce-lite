@@ -1,5 +1,6 @@
 // Conversations domain: buyer and store threads, messages, image attachments
-// and support-request cases on the order thread (Wave A §4).
+// and support-request cases on the order thread (Wave A §4), and chat-channel
+// threads a messaging app delivers (COMMERCE-HOOKS H18).
 export * from "./browser";
 export {
   assertBuyerOrderAccess,
@@ -25,6 +26,7 @@ export {
   postBuyerOrderMessage,
   postConversationMessage,
   postStaffOrderMessage,
+  readChannelContact,
   readOrderThread,
   readThread,
   resolveBuyerThread,
@@ -47,6 +49,25 @@ export {
   updateAdminOrderSupportRequestStatus,
   type CaseSubmitResult,
 } from "./order-cases";
+
+export {
+  applyChannelReceipt,
+  channelMessageBody,
+  findChannelThread,
+  receiveChannelMessage,
+  storedChannelAttachments,
+  type ChannelContact,
+  type ChannelReceiveOutcome,
+  type ReceiveChannelMessageInput,
+} from "./channels";
+export {
+  CONVERSATION_PAGE_MAX,
+  conversationMessageRepresentations,
+  conversationRepresentations,
+  listConversationMessageRows,
+  listConversationRows,
+  readConversationRepresentation,
+} from "./representation";
 
 export * from "./saved-replies";
 export * from "./cart-share";

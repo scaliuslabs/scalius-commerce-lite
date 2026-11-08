@@ -27,18 +27,20 @@ Contact data is protected in one place and projected everywhere:
 
 ### Provider ports
 
-Fourteen ports are typed and validated on both sides. Each has a tier (`PROVIDER_PORT_TIERS`):
+Fifteen ports are typed and validated on both sides. Each has a tier (`PROVIDER_PORT_TIERS`):
 
 | Tier | Ports | Meaning |
 | --- | --- | --- |
 | `stable` | `payment`, `courier`, `sms`, `courier_history` | Real providers implement them. Sealed; changes are additive only. |
-| `beta` | `email`, `tax`, `messaging`, `push`, `translation`, `ai`, `search`, `address`, `fx`, `identity` | Any app may implement them. The consent screen labels them Beta. Their schemas may still change. |
+| `beta` | `email`, `tax`, `messaging`, `push`, `translation`, `ai`, `search`, `address`, `fx`, `identity`, `payout` | Any app may implement them. The consent screen labels them Beta. Their schemas may still change. |
 
 A port is promoted by changing its tier, never demoted.
 
 - A provider runs only when it is ready: the app is active and approved for the port, its own settings are complete and readable, and no value is an obvious placeholder ("test", "your api key"). One provider's broken settings never stop its siblings.
 - A provider may reach its service through `ctx.http` on approved hosts. `ctx.messaging` is refused inside a provider operation.
 - Fail with `ProviderError(category, message, { uncertain?, code? })`: `declined` (nothing happened; not retried), `retryable` (add `uncertain: true` if the call may have reached the provider; the platform reconciles and never repeats an uncertain call blindly) or `misconfigured` (the provider is not ready; the platform fails closed). A throw that is not a `ProviderError`, a timeout or an invalid answer counts as retryable and uncertain. A message is at most 300 characters and safe for a merchant.
+- A `messaging` provider that declares `verifyWebhook` brings its chat channels into the store's inbox. The channel pushes to `/api/v1/webhooks/messaging/{app id}:{provider id}` (GET for the subscription check, answered with your `reply`; POST for pushes). Authenticate the push, then answer its buyer messages (`messageId` is the channel's own id: each is filed once per provider and id, in the thread of its channel and contact; attachments are references, `ref` or an https `url`) and delivery receipts (`providerRef` is what `send` answered; statuses only move forward). A message on a channel you do not declare is ignored. Staff and app replies in a chat thread go out through `send` once, as text, keyed by the message id; declare `dedupesOnIdempotencyKey` if a lost answer may be sent again.
+- A `payout` provider moves money to a payee (`createPayout`, `payoutStatus`, optional `verifyWebhook` at `/api/v1/webhooks/payouts/{app id}:{provider id}`). The platform commits the payout `pending` before it calls you, with the same `payoutId` on every retry: apply a payout once per `payoutId`. A lost answer: raise `ProviderError("retryable", …, { uncertain: true })`; the payout stays pending and the next `payouts.create` with the same key asks `payoutStatus` first. Statuses move forward only: `processing`, then `paid` or `failed` (with `failureCode`).
 - Courier `rates` get parcel and destination facts without contact details. A missing usable rate fails checkout closed. A tax provider failure refuses checkout with `tax_unavailable`.
 
 The SDK README walks through building a payment provider, a courier, SMS, email, courier history and the service ports.
@@ -208,7 +210,7 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 
 ### What the stable tier covers
 
-174 operations (`stableContract.operations` in `@scalius/plugin-sdk/testing` lists each with its scopes):
+181 operations (`stableContract.operations` in `@scalius/plugin-sdk/testing` lists each with its scopes):
 
 | Area | Operations |
 | --- | --- |
@@ -223,6 +225,8 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 | Customers | `customers.create`, `get`, `list` (`ids`), `update`, `set_tags`, `bulk_tag`; `customer_segments.create`, `get`, `list`, `update`, `list_members` |
 | Discounts and prices | `discounts.create`, `get`, `list`, `update`, `activate`, `pause`, `archive`; `price_lists.create`, `get`, `list`, `update`, `delete`, `list_prices`, `set_prices` |
 | Gift cards | `gift_cards.create`, `get`, `list`, `update`, `adjust` |
+| Inbox | `conversations.list`, `get`, `list_messages`, `create_message` |
+| Payouts | `payouts.create`, `get`, `list` |
 | Content and media | `pages.create`, `get`, `list`, `update`; `media.get`, `list`, `update`, `trash`, `import_url` |
 | Objects and custom fields | `object_types.create`, `get`, `list`, `update`, `delete`; `objects.get`, `list`, `upsert`, `delete`; `custom_field_definitions.get`, `list`; `custom_fields.get_<owner>_values`, `set_<owner>_values` |
 | Store building | `theme.get`, `apply_template`, `set_section_settings`; `menus.get`, `create`, `update`; `app_content.delete` |
@@ -235,6 +239,10 @@ A third-party app calling a beta or internal operation gets `api_operation_not_s
 **Apps sync products.** `products.create` makes a product with options and SKUs, with minor-unit prices and stock 0. Quantities move through `variants.bulk_set_stock` or `inventory.*` under `write_inventory`. `products.update` patches under `expectedRevision`.
 
 **Gift cards** (`read_gift_cards`, Sensitive `write_gift_cards`) issue, adjust and update under `expectedVersion`. The code never reaches the app; the store delivers it to the owning customer. What one app issues and tops up a day stays within the merchant's limit (403 `app_gift_card_limit`).
+
+**The inbox** (Sensitive `read_conversations`, `write_conversations`). Threads are order, store and chat-channel threads (`channel`: whatsapp, messenger, …), synced by `updatedAt`. `conversations.create_message` posts a public reply (the thread then waits on the buyer) or an internal note; the line names your app. A public reply in a chat thread is refused (422 `conversation_channel_unavailable`) while its messaging app is not ready. Handle `conversation.message_received` (facts: `conversationId`, `messageId`, `seq`, `channel`) to react to buyers.
+
+**Payouts** (Sensitive `write_payouts`). `payouts.create` takes `providerId`, `payeeRef` (your seller id), `payeeAccountRef`, `amountMinor`, `currency` and a required Idempotency-Key: one key sends one payout. It answers 201 with the payout (`processing`, `paid`, or `failed` with `failureCode`); 503 `payout_outcome_unknown` (`details.payoutId`) means the provider's answer was lost: repeat the same request with the same key and it is resubmitted, never sent twice. The key with another request is refused (422 `idempotency_key_reused` within the key's 24 hours, 409 `payout_request_mismatch` after); a provider that is not ready is 422 `payout_provider_unavailable` with nothing recorded. `payout.created` and `payout.updated` reach only your app.
 
 **Bulk runs.** `variants.bulk_set_prices`, `variants.bulk_set_stock`, `customers.bulk_tag`, `products.bulk_set_status` and `products.bulk_publish` take up to 5,000 items and support a dry run. 250 items finish inline; a larger run answers 202 and drains in the background (`bulk_runs.get`).
 

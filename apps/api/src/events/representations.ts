@@ -42,6 +42,8 @@ import {
 } from "@scalius/database/schema";
 import { and, asc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 import { getObjectEventRepresentation } from "@scalius/core/modules/objects";
+import { readPayoutRepresentation } from "@scalius/core/modules/payouts";
+import { readConversationRepresentation } from "@scalius/core/modules/conversations";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { loadProductMediaProjections, parsePublishedChannelIds, productVariantBarcodeIdentityIn, publishedChannelIdsSql, resolveProductImageRepresentation } from "@scalius/core/modules/products";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
@@ -1127,6 +1129,10 @@ function representationReader(db: Database): WebhookRepresentationResolver {
         const objectType = factString(event, "objectType");
         return objectType ? objectRepresentation(db, objectType, event.resourceId) : null;
       }
+      case "payout":
+        return readPayoutRepresentation(db, event.resourceId);
+      case "conversation":
+        return readConversationRepresentation(db, event.resourceId);
     }
   };
 }

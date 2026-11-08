@@ -567,6 +567,99 @@ export const objectRepresentationSchema = z.object({
   updatedAt: iso,
 });
 
+/**
+ * One line of a conversation. `author` is who wrote it: the buyer
+ * (`customer`), the store's staff (`staff`), an app replying for the store
+ * (`app`, with its `appId`) or the platform (`system`, an event line).
+ * `internal` lines are staff notes the buyer never sees. Attachments are
+ * references: a storefront image by its id, a chat channel's media by the
+ * provider's `ref` or an https `url`. `delivery` is how a chat channel
+ * carried the line (null on storefront threads).
+ */
+export const conversationMessageRepresentationSchema = z.object({
+  id,
+  seq: z.number().int(),
+  kind: z.enum(["message", "event"]),
+  visibility: z.enum(["public", "internal"]),
+  author: z.enum(["customer", "staff", "app", "system"]),
+  appId: id.nullable(),
+  body: text.nullable(),
+  eventKind: state.nullable(),
+  attachments: z.array(z.object({
+    kind: state,
+    mediaType: text.nullable(),
+    name: text.nullable(),
+    sizeBytes: z.number().int().nullable(),
+    ref: text.nullable(),
+    url: text.nullable(),
+  })).max(10),
+  delivery: z.object({
+    direction: z.enum(["inbound", "outbound"]),
+    /** `received` (inbound), or `pending`, `sent`, `delivered`, `read`, `failed`. */
+    status: state,
+    providerId: id,
+  }).nullable(),
+  createdAt: iso,
+});
+
+/**
+ * A thread of the inbox: an order's, a buyer account's, or a chat channel's
+ * (`channel`: whatsapp, messenger, …), whose `contact` is where replies go
+ * (the address is protected as a phone on every channel). `status` is
+ * `open` (waits on the store), `pending` (waits on the buyer) or `closed`.
+ * `lastMessage` is its newest line; `conversations.list_messages` pages the rest.
+ */
+export const conversationRepresentationSchema = z.object({
+  id,
+  subjectType: state,
+  status: z.enum(["open", "pending", "closed"]),
+  channel: state.nullable(),
+  orderId: id.nullable(),
+  customerId: id.nullable(),
+  subject: text.nullable(),
+  contact: z.object({
+    name: pii("name", text.nullable()),
+    address: pii("phone", text.nullable()),
+    /** The messaging app provider replies go out through (`<app id>:<provider id>`). */
+    providerId: id,
+  }).nullable(),
+  assigneeUserId: id.nullable(),
+  lastSeq: z.number().int(),
+  lastMessageAt: iso.nullable(),
+  lastMessage: conversationMessageRepresentationSchema.nullable(),
+  /** Advances with every change of the thread. */
+  revision: z.number().int(),
+  createdAt: iso,
+  updatedAt: iso,
+  closedAt: iso.nullable(),
+});
+
+/**
+ * Money an app sent to a payee through a payout provider. `status`:
+ * `pending` (recorded, the provider has not answered: send the same
+ * `payouts.create` again to resubmit it), `processing`, then `paid` or
+ * `failed` (final, with `failureCode`).
+ */
+export const payoutRepresentationSchema = z.object({
+  id,
+  appId: id,
+  providerId: id,
+  payeeRef: text,
+  payeeAccountRef: text.nullable(),
+  amountMinor: minor,
+  currency,
+  description: text.nullable(),
+  status: z.enum(["pending", "processing", "paid", "failed"]),
+  providerRef: text.nullable(),
+  failureCode: state.nullable(),
+  failureMessage: text.nullable(),
+  /** Advances with every change of the payout. */
+  revision: z.number().int(),
+  createdAt: iso,
+  updatedAt: iso,
+  settledAt: iso.nullable(),
+});
+
 /** One sealed representation per resource type (`EVENT_TOPIC_RESOURCE`). */
 export const EVENT_REPRESENTATION_SCHEMAS = {
   order: orderRepresentationSchema,
@@ -586,6 +679,8 @@ export const EVENT_REPRESENTATION_SCHEMAS = {
   gift_card: giftCardRepresentationSchema,
   gift_card_transaction: giftCardTransactionRepresentationSchema,
   object: objectRepresentationSchema,
+  conversation: conversationRepresentationSchema,
+  payout: payoutRepresentationSchema,
 } as const;
 
 export type EventRepresentationType = keyof typeof EVENT_REPRESENTATION_SCHEMAS;
@@ -640,6 +735,8 @@ const FETCH_HINTS: Record<EventRepresentationType, ((resourceId: string, facts: 
   gift_card: (resource) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(resource)}` }),
   gift_card_transaction: (_resource, facts) => ({ appOperation: "gift_cards.get", path: `/api/v1/admin/resources/gift-cards/${segment(facts.giftCardId)}` }),
   object: (resource, facts) => ({ appOperation: "objects.get", path: `/api/v1/admin/objects/${segment(facts.objectType)}/${segment(resource)}` }),
+  conversation: (resource) => ({ appOperation: "conversations.get", path: `/api/v1/admin/resources/conversations/${segment(resource)}` }),
+  payout: (resource) => ({ appOperation: "payouts.get", path: `/api/v1/admin/resources/payouts/${segment(resource)}` }),
 };
 
 /** The `data` of a delivery too large to carry its representation. */

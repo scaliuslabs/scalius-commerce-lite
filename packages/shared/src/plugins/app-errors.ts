@@ -95,6 +95,7 @@ export const APP_ERROR_CODES = {
   variant_retired: { status: 409, meaning: "The SKU was retired from its product; restore it or leave it out." },
   supplier_has_open_purchase_orders: { status: 409, meaning: "Purchase orders are still expected from the supplier; receive or cancel them first." },
   cost_scope_required: { status: 403, meaning: "Purchase order events carry costs: the app's endpoint needs read_product_costs to receive them." },
+  conversation_scope_required: { status: 403, meaning: "Conversation events carry buyers' messages: the app's endpoint needs read_conversations to receive them." },
   menu_in_trash: { status: 409, meaning: "The menu is in the trash." },
   handle_unresolved: { status: 422, meaning: "No category or collection has the handle; details.unresolved lists them." },
   section_not_found: { status: 404, meaning: "No section with that id is on the page." },
@@ -109,6 +110,10 @@ export const APP_ERROR_CODES = {
   payment_method_customer_mismatch: { status: 422, meaning: "The saved method belongs to another customer than the order's." },
   provider_invalid_response: { status: 503, meaning: "A provider answered something invalid (another order, a malformed answer); treat the outcome as unknown and retry with the same Idempotency-Key." },
   app_gift_card_limit: { status: 403, meaning: "The app reached the merchant's daily gift card value limit." },
+  payout_provider_unavailable: { status: 422, meaning: "The payout provider is not an installed, active, set-up payout provider; nothing was recorded." },
+  payout_request_mismatch: { status: 409, meaning: "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout." },
+  payout_outcome_unknown: { status: 503, meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice." },
+  conversation_channel_unavailable: { status: 422, meaning: "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up." },
 
   // ── ctx refusals (PluginPlatformError.code) ──
   object_undeclared_type: { status: 400, meaning: "The manifest declares no object type of that name." },

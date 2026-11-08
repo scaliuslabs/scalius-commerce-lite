@@ -77,6 +77,12 @@ const en = {
   scope_write_places_help: "Add and update the cities, areas and postal codes buyers pick for delivery. It can't delete one.",
   scope_read_product_costs: "View product costs",
   scope_read_product_costs_help: "What you pay for stock: purchase order costs, shipping, other charges and tax, and the cost per item a receipt can update. With inventory access it reads or manages purchase orders; webhooks for purchase orders need it too.",
+  scope_read_conversations: "View the inbox",
+  scope_read_conversations_help: "Conversations with buyers, including chat apps such as WhatsApp, with their messages and your team's notes. Names and phone numbers need the customer contact permissions.",
+  scope_write_conversations: "Reply in the inbox",
+  scope_write_conversations_help: "Reply to buyers and add notes. A reply reaches the buyer the way the conversation came in, by email or the chat app, and shows that the app sent it.",
+  scope_write_payouts: "Send payouts",
+  scope_write_payouts_help: "Send money to payees, such as your marketplace's sellers, through a payout app you installed, and see the payouts this app sent.",
 } satisfies ScopeCopy;
 
 const bn = {
@@ -148,6 +154,12 @@ const bn = {
   scope_write_places_help: "ডেলিভারির জন্য ক্রেতারা যে শহর, এলাকা ও পোস্টাল কোড বেছে নেন সেগুলো যোগ ও আপডেট করা। কোনোটি ডিলিট করতে পারে না।",
   scope_read_product_costs: "প্রোডাক্টের খরচ দেখা",
   scope_read_product_costs_help: "স্টক কিনতে আপনার খরচ: পারচেজ অর্ডারের খরচ, শিপিং, অন্যান্য চার্জ ও ট্যাক্স, এবং রিসিভ করার সময় যে প্রতি আইটেমের খরচ বদলাতে পারে। ইনভেন্টরির অনুমতির সঙ্গে পারচেজ অর্ডার দেখা বা সামলানো যায়; পারচেজ অর্ডারের ওয়েবহুকেও এটি লাগে।",
+  scope_read_conversations: "ইনবক্স দেখা",
+  scope_read_conversations_help: "ক্রেতাদের সঙ্গে কথোপকথন, হোয়াটসঅ্যাপের মতো চ্যাট অ্যাপসহ, তাদের মেসেজ ও আপনার টিমের নোট। নাম ও ফোন নম্বরের জন্য কাস্টমারের যোগাযোগের অনুমতি লাগে।",
+  scope_write_conversations: "ইনবক্সে উত্তর দেওয়া",
+  scope_write_conversations_help: "ক্রেতাদের উত্তর দেওয়া ও নোট যোগ করা। উত্তর ক্রেতার কাছে সেই পথেই যায় যে পথে কথোপকথন এসেছিল, ইমেইল বা চ্যাট অ্যাপে, এবং দেখায় যে অ্যাপটি পাঠিয়েছে।",
+  scope_write_payouts: "পেআউট পাঠানো",
+  scope_write_payouts_help: "আপনার ইনস্টল করা পেআউট অ্যাপের মাধ্যমে প্রাপকদের, যেমন আপনার মার্কেটপ্লেসের বিক্রেতাদের, টাকা পাঠানো এবং এই অ্যাপের পাঠানো পেআউট দেখা।",
 } satisfies ScopeCopy;
 
 export const appScopeMessages = defineMessages({ en, bn });

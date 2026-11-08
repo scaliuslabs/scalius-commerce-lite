@@ -17,6 +17,7 @@ import { AI_PORT } from "./providers/ai";
 import { MESSAGING_PORT, PUSH_PORT } from "./providers/channels";
 import { ADDRESS_PORT, FX_PORT, SEARCH_PORT } from "./providers/storefront-services";
 import { IDENTITY_PORT } from "./providers/identity";
+import { PAYOUT_PORT } from "./providers/payout";
 
 export * from "./providers/kinds";
 export * from "./providers/common";
@@ -31,6 +32,7 @@ export * from "./providers/ai";
 export * from "./providers/channels";
 export * from "./providers/storefront-services";
 export * from "./providers/identity";
+export * from "./providers/payout";
 export * from "./providers/descriptors";
 
 /** Every port answers whether its saved credentials authenticate. */
@@ -52,6 +54,7 @@ export const PROVIDER_PORTS = {
   address: { ...ADDRESS_PORT, testConnection: TEST_CONNECTION },
   fx: { ...FX_PORT, testConnection: TEST_CONNECTION },
   identity: { ...IDENTITY_PORT, testConnection: TEST_CONNECTION },
+  payout: { ...PAYOUT_PORT, testConnection: TEST_CONNECTION },
 } as const;
 
 type Ports = typeof PROVIDER_PORTS;

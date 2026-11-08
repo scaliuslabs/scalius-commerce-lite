@@ -154,6 +154,17 @@ export const PERMISSION_METADATA: Record<
     isSensitive: true,
   },
 
+  // Payouts
+  [PERMISSIONS.PAYOUTS_MANAGE]: {
+    name: PERMISSIONS.PAYOUTS_MANAGE,
+    displayName: "Manage Payouts",
+    description: "Send and read payouts to payees (such as a marketplace's sellers) through a payout provider",
+    resource: "payouts",
+    action: "manage",
+    category: "Orders",
+    isSensitive: true,
+  },
+
   // Categories
   [PERMISSIONS.CATEGORIES_VIEW]: {
     name: PERMISSIONS.CATEGORIES_VIEW,
