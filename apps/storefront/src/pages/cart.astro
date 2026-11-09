@@ -424,7 +424,7 @@ const templateData = await templateSectionData("cart", cartRequestTheme);
           });
           if (!physical) root.dataset.deliveryNeed = "none";
           if (root.dataset.modeSwitch === "true") {
-            var draft = JSON.parse(sessionStorage.getItem("scalius_checkout_form_draft") || "null");
+            var draft = JSON.parse(localStorage.getItem("scalius_checkout_form_draft") || "null");
             if (draft && draft.values && draft.values.deliveryMode === "pickup") root.dataset.deliveryMode = "pickup";
           }
         } catch (error) {}

@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ReadOnlyValue } from "~/components/ui/field";
 import { useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
+import { DiscountUsage } from "./DiscountUsage";
 import { storeTimeToEpoch, type DiscountDraft, type SummaryFormat } from "./discount-form";
 
 /** The same saved rules as the editor, without mutation controls or abbreviated selections. */
@@ -27,7 +28,7 @@ export function DiscountSavedView({ draft, format, redemptionCount }: {
             <ReadOnlyValue label={t("getsCard")} value={format.scope(draft.getScope)} />
           </> : null}
           <ReadOnlyValue label={t("eligibilityCard")} value={draft.eligibility === "all" ? t("eligibilityAll") : format.segments?.(draft.customerSegmentIds)} help={draft.eligibility === "segments" ? t("eligibilitySignInHelp") : undefined} />
-          <ReadOnlyValue label={t("columnUsed")} value={t("performance", { count: redemptionCount })} numeric />
+          <ReadOnlyValue label={t("columnUsed")} value={<DiscountUsage code={draft.method === "code" ? draft.code : null} count={redemptionCount} />} numeric />
         </CardContent>
       </Card>
       <Card>

@@ -16,7 +16,7 @@
 //   is copied into the projection, and phoneless guests never merge.
 import { currencyExponent, EXCLUDED_CURRENCY_CODES, SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency-policy";
 import {
-  COUNTED_RETURN_STATUSES, NON_SALES_STATUSES, REVERSED_STATUSES, lineKeptTaxSql, lineReturnsSql,
+  COUNTED_RETURN_STATUSES, NON_SALES_STATUSES, REVERSED_STATUSES, lineKeptTaxSql, lineReturnsSql, orderReturnsText,
 } from "./analytics-sales-sql";
 import { symmetricDifference } from "./derived-projections";
 
@@ -148,12 +148,14 @@ export function analyticsFactMeasureSql(f: string): Record<(typeof ANALYTICS_MEA
     cancelled: `${f}.cancelled`,
     gross: `(case when ${sale} then ${f}.line_gross else 0 end)`,
     disc: `(case when ${sale} then ${f}.line_disc else 0 end)`,
-    // Returned goods at what went back: a return refunded only in part (a
-    // restocking fee kept) counts the refund, not the item value; a return
-    // nothing was refunded for yet (cash on delivery never paid) counts the items.
-    returns: `(case when not (${sale}) then 0 when ${f}.reversed = 1 then ${f}.line_rev_returns
-      when ${f}.refund_sum > 0 and ${shop(`${f}.refund_sum`, f)} < ${f}.line_returns then ${shop(`${f}.refund_sum`, f)}
-      else ${f}.line_returns end)`,
+    // What went back, net of refunds (`orderReturnsText`, the live reports' rule).
+    returns: `(case when not (${sale}) then 0 else ${orderReturnsText({
+      reversed: `${f}.reversed`,
+      merchandise: `(${f}.line_gross - ${f}.line_disc)`,
+      itemReturns: `${f}.line_returns`,
+      reversedReturns: `${f}.line_rev_returns`,
+      refund: shop(`${f}.refund_sum`, f),
+    })} end)`,
     // Charged shipping less its discount (order discount − line discounts) and included shipping tax.
     shipping: `(case when ${kept} then ${f}.order_shipping - (${f}.order_discount - ${f}.line_disc_all)
       - (case when ${f}.incl = 1 then ${f}.order_tax - ${f}.line_tax_all else 0 end) else 0 end)`,

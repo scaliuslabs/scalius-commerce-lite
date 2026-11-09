@@ -14,6 +14,10 @@ export interface AbandonedCheckoutCartItem {
   quantity: number;
   price: number;
   options?: Array<{ name: string; value: string }>;
+  /** The option values ("S / Red"), as the order form and the order page name a variant; null without options. */
+  variantLabel: string | null;
+  /** The buyer inputs on the line (an engraving), as entered. */
+  properties?: Array<{ key: string; value: string }>;
   [key: string]: unknown;
 }
 
@@ -113,10 +117,17 @@ function parseCartItems(value: unknown): AbandonedCheckoutCartItem[] {
           ? candidate.options.flatMap((option) => {
               const parsed = asObject(option);
               const name = asString(parsed?.name);
-              const value = asString(parsed?.value);
+              // The storefront's cart keeps each option as { name, label }.
+              const value = asString(parsed?.value) ?? asString(parsed?.label);
               return name && value ? [{ name, value }] : [];
             })
           : undefined;
+        const properties = Array.isArray(candidate.properties)
+          ? candidate.properties.flatMap((property) => {
+              const parsed = asObject(property);
+              return typeof parsed?.key === "string" && typeof parsed.value === "string" ? [{ key: parsed.key, value: parsed.value }] : [];
+            })
+          : [];
 
         return [{
           ...candidate,
@@ -126,6 +137,8 @@ function parseCartItems(value: unknown): AbandonedCheckoutCartItem[] {
           quantity: candidate.quantity,
           price: candidate.price,
           options,
+          variantLabel: options?.length ? options.map((option) => option.value).join(" / ") : null,
+          properties,
         }];
       })
     : [];

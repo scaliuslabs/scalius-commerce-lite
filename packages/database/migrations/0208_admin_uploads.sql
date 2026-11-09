@@ -77,4 +77,4 @@ BEGIN
   SELECT RAISE(ABORT, 'buyer_upload_immutable');
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (207, '0207_admin_uploads', 'c75cc8d70bde716f0ed3ff2ad77a2981c9b9df7403c4cc1e7799a2e7c657ba4f');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (208, '0208_admin_uploads', 'c75cc8d70bde716f0ed3ff2ad77a2981c9b9df7403c4cc1e7799a2e7c657ba4f');

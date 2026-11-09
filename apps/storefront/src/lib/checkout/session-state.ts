@@ -15,8 +15,18 @@ const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_gift_cards",
 ] as const;
 
+/*
+ * The checkout's identity (`checkoutId`, also its abandoned-checkout snapshot's
+ * id), whose details these are, and the form draft follow the cart, which
+ * lives in localStorage: a checkout reopened in another tab is the same
+ * checkout, with the same details and the same snapshot, so the order placed
+ * from either tab ends it. The draft keeps a day; placing the order, an
+ * account switch and signing out clear all three. The hand-off to the payment
+ * page (`scalius_checkout_data` and the rest) stays the tab's own.
+ */
+const CHECKOUT_ID_KEY = "checkoutId";
 const CHECKOUT_OWNER_KEY = "scalius_checkout_owner";
-const CHECKOUT_RUNTIME_KEYS = ["checkoutId", CHECKOUT_OWNER_KEY] as const;
+const CHECKOUT_RUNTIME_KEYS = [CHECKOUT_ID_KEY, CHECKOUT_OWNER_KEY] as const;
 const CHECKOUT_FORM_DRAFT_KEY = "scalius_checkout_form_draft";
 const CHECKOUT_FORM_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 const CHECKOUT_FORM_DRAFT_FIELDS = [
@@ -139,7 +149,7 @@ export function writeCheckoutFormDraft(values: CheckoutFormDraft): void {
     ...(owner ? { owner } : {}),
   };
   try {
-    sessionStorage.setItem(CHECKOUT_FORM_DRAFT_KEY, JSON.stringify(stored));
+    localStorage.setItem(CHECKOUT_FORM_DRAFT_KEY, JSON.stringify(stored));
   } catch {
     // Draft persistence is a convenience; checkout submission still fails closed
     // through the required transfer-state write below.
@@ -147,9 +157,9 @@ export function writeCheckoutFormDraft(values: CheckoutFormDraft): void {
 }
 
 function readStoredDraft(): { values: CheckoutFormDraft; owner?: string } | null {
-  if (typeof sessionStorage === "undefined") return null;
+  if (typeof localStorage === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(CHECKOUT_FORM_DRAFT_KEY);
+    const raw = localStorage.getItem(CHECKOUT_FORM_DRAFT_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredCheckoutFormDraft>;
     if (
@@ -160,7 +170,7 @@ function readStoredDraft(): { values: CheckoutFormDraft; owner?: string } | null
       typeof parsed.values !== "object" ||
       Array.isArray(parsed.values)
     ) {
-      sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
+      localStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
       return null;
     }
 
@@ -175,7 +185,7 @@ function readStoredDraft(): { values: CheckoutFormDraft; owner?: string } | null
     };
   } catch {
     try {
-      sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
+      localStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
     } catch {
       // ignore storage cleanup errors
     }
@@ -198,8 +208,8 @@ export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
   if (!stored || (stored.owner ?? "guest") === owner) return false;
   // Keep an existing account's identity when an expired session clears its draft.
   try {
-    if (!sessionStorage.getItem(CHECKOUT_OWNER_KEY) && stored.owner && stored.owner !== "guest" && stored.owner !== "customer") {
-      sessionStorage.setItem(CHECKOUT_OWNER_KEY, stored.owner);
+    if (!localStorage.getItem(CHECKOUT_OWNER_KEY) && stored.owner && stored.owner !== "guest" && stored.owner !== "customer") {
+      localStorage.setItem(CHECKOUT_OWNER_KEY, stored.owner);
     }
   } catch {
     // Storage may be unavailable.
@@ -213,7 +223,7 @@ export function discardCheckoutFormDraftOfOtherOwner(owner: string): boolean {
 export function reconcileCheckoutAfterSignIn(customerId: string): boolean {
   let previousOwner: string | undefined | null;
   try {
-    previousOwner = sessionStorage.getItem(CHECKOUT_OWNER_KEY) ?? readStoredDraft()?.owner;
+    previousOwner = localStorage.getItem(CHECKOUT_OWNER_KEY) ?? readStoredDraft()?.owner;
   } catch {
     return false;
   }
@@ -231,7 +241,7 @@ export function reconcileCheckoutAfterSignIn(customerId: string): boolean {
   }
   setCheckoutFormDraftOwner(customerId);
   try {
-    sessionStorage.setItem(CHECKOUT_OWNER_KEY, customerId);
+    localStorage.setItem(CHECKOUT_OWNER_KEY, customerId);
   } catch {
     // Signing in remains available when checkout storage is blocked.
   }
@@ -240,7 +250,7 @@ export function reconcileCheckoutAfterSignIn(customerId: string): boolean {
 
 export function clearCheckoutFormDraft(): void {
   try {
-    sessionStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
+    localStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
   } catch {
     // ignore storage access errors
   }
@@ -301,7 +311,7 @@ export function writeCheckoutTransferSession(
       throw new Error("Checkout transfer storage was not persisted.");
     }
     const owner = currentDraftOwner ?? readStoredDraft()?.owner;
-    if (owner && owner !== "customer" && !owner.includes("@")) sessionStorage.setItem(CHECKOUT_OWNER_KEY, owner);
+    if (owner && owner !== "customer" && !owner.includes("@")) localStorage.setItem(CHECKOUT_OWNER_KEY, owner);
   } catch {
     try {
       removeSessionKeys(CHECKOUT_TRANSFER_KEYS);
@@ -330,6 +340,28 @@ export function writeCheckoutTransferSession(
   return { ok: true };
 }
 
+/** This browser's checkout identity, or null before one is begun (or when storage is blocked). */
+export function readCheckoutId(): string | null {
+  try {
+    return localStorage.getItem(CHECKOUT_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** The checkout identity, begun with `create` when there is none; every tab of this browser shares it. */
+export function ensureCheckoutId(create: () => string): string {
+  const existing = readCheckoutId();
+  if (existing) return existing;
+  const checkoutId = create();
+  try {
+    localStorage.setItem(CHECKOUT_ID_KEY, checkoutId);
+  } catch {
+    // Blocked storage: this page keeps the identity it shows; a reload begins another.
+  }
+  return checkoutId;
+}
+
 export function clearCheckoutSession(): void {
   clearCheckoutAttemptSession();
 }
@@ -340,7 +372,7 @@ export function clearCheckoutAttemptSession(options?: {
   try {
     clearCheckoutTransferSession();
     if (options?.preserveFormDraft !== true) clearCheckoutFormDraft();
-    removeSessionKeys(CHECKOUT_RUNTIME_KEYS);
+    for (const key of CHECKOUT_RUNTIME_KEYS) localStorage.removeItem(key);
   } catch {
     // ignore storage access errors
   }
@@ -465,7 +497,7 @@ export function matchesCheckoutRecoverySession(
   if (!matchesCheckoutRecoveryCart(recovery, cartItems)) return false;
   if (!recovery?.checkoutId) return true;
   try {
-    return sessionStorage.getItem("checkoutId") === recovery.checkoutId;
+    return readCheckoutId() === recovery.checkoutId;
   } catch {
     return false;
   }

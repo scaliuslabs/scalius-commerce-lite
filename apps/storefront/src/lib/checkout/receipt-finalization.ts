@@ -6,6 +6,7 @@ import {
   clearHostedPaymentRecoverySession,
   fingerprintCheckoutCart,
   hashCheckoutCartFingerprint,
+  readCheckoutId,
   readHostedPaymentRecoverySession,
 } from "./session-state";
 
@@ -105,7 +106,7 @@ export async function finalizeCheckoutReceipt(receiptElement: HTMLElement): Prom
 
   syncCartFromStorage();
   const submitted = readSessionValue(SUBMITTED_CART_KEY);
-  const activeCheckoutId = readSessionValue("checkoutId");
+  const activeCheckoutId = readCheckoutId();
   const recovery = readHostedPaymentRecoverySession();
   const recoveryMatchesOrder = recovery?.orderId === orderId;
   const recoveryMatchesAttempt = Boolean(recoveryMatchesOrder && recovery.checkoutId && recovery.checkoutId === activeCheckoutId);

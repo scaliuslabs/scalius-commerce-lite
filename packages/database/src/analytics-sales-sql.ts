@@ -95,6 +95,34 @@ export function lineKeptTaxSql(tax: string, quantity: string, returned: string):
 }
 
 /**
+ * An order's returns in shop-currency minor units: the one definition the
+ * live reports (`orderMetricsCtesText`) and the projection
+ * (`analyticsFactMeasureSql`) share, so every sales figure (net and total
+ * sales, the app summary's refunds, Home's revenue) is net of the money given
+ * back. Each argument is an SQL expression of a sales order:
+ *
+ * - a reversed order (`returned`, `refunded`) returns all its merchandise;
+ * - money refunded while no goods came back (a goodwill or price refund)
+ *   returns that money, at most the merchandise (gross less discounts);
+ * - a return refunded only in part (a restocking fee kept) counts the refund;
+ * - otherwise the accepted returned goods, refunded or not yet (cash on
+ *   delivery never paid).
+ */
+export function orderReturnsText(order: {
+  reversed: string;
+  merchandise: string;
+  itemReturns: string;
+  reversedReturns: string;
+  refund: string;
+}): string {
+  const { reversed, merchandise, itemReturns, reversedReturns, refund } = order;
+  return `(case when ${reversed} = 1 then ${reversedReturns}
+    when ${refund} > 0 and (${itemReturns} = 0 or ${refund} < ${itemReturns})
+      then (case when ${refund} < ${merchandise} then ${refund} else ${merchandise} end)
+    else ${itemReturns} end)`;
+}
+
+/**
  * `lo` → `om`: one row per sales order with its measures.
  *
  * - shipping: charged shipping less its discount (the order discount minus
@@ -102,8 +130,10 @@ export function lineKeptTaxSql(tax: string, quantity: string, returned: string):
  *   for a reversed order
  * - taxes: kept line tax plus shipping tax (the order tax minus every
  *   line's), the shipping part zero for a reversed order
- * - returns: the lines' returns, or the money refunded when a return was
- *   refunded only in part (a fee kept); a reversed order returns everything
+ * - returns: `orderReturnsText`: a reversed order returns everything; money
+ *   refunded with no goods returned (a goodwill or price refund) returns that
+ *   money, up to the merchandise; a return refunded only in part (a fee kept)
+ *   counts the refund; otherwise the returned goods
  * - net = gross − disc − returns; total = net + shipping + taxes
  */
 export function orderMetricsCtesText(): string {
@@ -132,8 +162,14 @@ export function orderMetricsCtesText(): string {
     select so.*,
       coalesce(lo.gross, 0) as gross,
       coalesce(lo.disc, 0) as disc,
-      case when so.reversed = 0 and coalesce(rf.refund, 0) > 0 and ${shopMinorSql("rf.refund")} < coalesce(lo.returns, 0)
-        then ${shopMinorSql("rf.refund")} else coalesce(lo.returns, 0) end as returns,
+      ${orderReturnsText({
+        reversed: "so.reversed",
+        merchandise: "coalesce(lo.gross, 0) - coalesce(lo.disc, 0)",
+        itemReturns: "coalesce(lo.returns, 0)",
+        // A reversed order's lines return every unit already.
+        reversedReturns: "coalesce(lo.returns, 0)",
+        refund: `(case when rf.refund is null then 0 else ${shopMinorSql("rf.refund")} end)`,
+      })} as returns,
       coalesce(lo.net_units, 0) as net_units,
       case when so.reversed = 1 then 0 else
         so.shipping_amount_minor

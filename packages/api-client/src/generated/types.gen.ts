@@ -22722,7 +22722,10 @@ export type PostApiV1OrdersCartValidationData = {
             productId: string;
             variantId: string;
             quantity: number;
-            price: number;
+            /**
+             * The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed.
+             */
+            price?: number;
             productName?: string | null;
             variantLabel?: string | null;
             /**
@@ -63305,6 +63308,10 @@ export type GetApiV1AdminOrdersData = {
          */
         channelSource?: string;
         /**
+         * Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored).
+         */
+        discountCode?: string;
+        /**
          * Filter by hosted-payment recovery state
          */
         paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
@@ -63727,6 +63734,10 @@ export type GetApiV1AdminOrdersExportData = {
          * A stored source slug, e.g. facebook, whatsapp or walk_in.
          */
         channelSource?: string;
+        /**
+         * Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored).
+         */
+        discountCode?: string;
         paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
         archived?: 'true' | 'false';
         sort?: 'relevance' | 'customerName' | 'totalAmount' | 'createdAt' | 'updatedAt';
@@ -64154,7 +64165,7 @@ export type PostApiV1AdminOrdersQuoteData = {
         discountAmount: number | null;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'cod' | 'net_terms';
+        paymentMethod?: 'cod' | 'net_terms' | 'manual';
         customerId?: string | null;
     };
     path?: never;
@@ -64512,6 +64523,10 @@ export type PostApiV1AdminOrdersArchiveData = {
                  * A stored source slug, e.g. facebook, whatsapp or walk_in.
                  */
                 channelSource?: string;
+                /**
+                 * Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored).
+                 */
+                discountCode?: string;
                 paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
                 startDate?: string;
                 endDate?: string;

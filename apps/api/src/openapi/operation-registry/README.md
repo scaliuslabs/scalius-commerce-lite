@@ -59,6 +59,9 @@ mirror a dashboard screen, an editor section or a summary card.
   "net", days }`); money received against an invoice is recorded with
   `dashboard.resources.payments.create` (Idempotency-Key required), and
   `dashboard.resources.orders.list?overdue=true` lists overdue invoices.
+  An order paid as it is placed (an in-person sale's `pointOfSale`, or
+  staff's Mark as paid) reads `paymentMethod: "manual"` with `paymentTerms:
+  null`: its money is recorded payments of their `via`, never an invoice.
 - **Apps sync products, issue gift cards and keep their own webhooks.**
   `dashboard.resources.products.create` makes a product with its options and
   SKUs (prices in minor units, stock at 0: quantities move through

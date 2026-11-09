@@ -282,6 +282,7 @@
  "orderReceiptPaymentIssueMessageText",
  "orderReceiptPaymentIssueTitleText",
  "orderReceiptPaymentMethodCardText",
+ "orderReceiptPaymentMethodPaidToStoreText",
  "orderReceiptPaymentMethodPayAtPickupText",
  "orderReceiptPaymentMethodPayOnServiceText",
  "orderReceiptPaymentMethodSslcommerzText",

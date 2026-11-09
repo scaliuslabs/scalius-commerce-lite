@@ -86119,7 +86119,8 @@
                         },
                         "price": {
                           "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "description": "The unit price the buyer saw. Absent: the line is quoted at today's price and never answers price_changed."
                         },
                         "productName": {
                           "type": "string",
@@ -86167,8 +86168,7 @@
                       "required": [
                         "productId",
                         "variantId",
-                        "quantity",
-                        "price"
+                        "quantity"
                       ]
                     },
                     "minItems": 1,
@@ -221212,6 +221212,18 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored)."
+            },
+            "required": false,
+            "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored).",
+            "name": "discountCode",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "recoverable",
                 "awaiting_payment",
@@ -222776,6 +222788,18 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored)."
+            },
+            "required": false,
+            "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored).",
+            "name": "discountCode",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "recoverable",
                 "awaiting_payment",
@@ -224277,7 +224301,8 @@
                     "type": "string",
                     "enum": [
                       "cod",
-                      "net_terms"
+                      "net_terms",
+                      "manual"
                     ]
                   },
                   "customerId": {
@@ -225630,6 +225655,12 @@
                             "maxLength": 64,
                             "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
                             "description": "A stored source slug, e.g. facebook, whatsapp or walk_in."
+                          },
+                          "discountCode": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "description": "Only orders that redeemed this discount code at checkout (case and surrounding spaces ignored)."
                           },
                           "paymentRecovery": {
                             "type": "string",

@@ -134,10 +134,13 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
   const previewMinor = toMinor(valid ? value : limit);
   // Store credit hands over a gift card, not money: nothing to confirm. An
   // original-method refund's cash or transfer share is paid back by hand.
-  const manualMinor = settlement === "original" ? manualRefundShareMinor(refundSources, previewMinor, decimalPlaces) : 0;
-  const manual = manualMinor > 0;
+  const previewManualMinor = settlement === "original" ? manualRefundShareMinor(refundSources, previewMinor, decimalPlaces) : 0;
   // Every unit of it goes back by hand: the refund is recorded, not sent.
-  const recordOnly = manual && manualMinor >= previewMinor;
+  const recordOnly = previewManualMinor > 0 && previewManualMinor >= previewMinor;
+  // What staff confirm they paid back: the share of the amount entered. No
+  // amount, no claim: the dialog never says money went back before one is typed.
+  const manualMinor = valid ? previewManualMinor : 0;
+  const manual = manualMinor > 0;
   const manualConfirmed = manual && confirmedManualMinor === manualMinor;
   const manualAmount = money(manualMinor / 10 ** decimalPlaces);
   const problem = (): string | null => (valid ? null : t("refund.amountInvalid", { amount: money(limit) }));
@@ -183,7 +186,9 @@ export default function RefundDialog({ order, open, onOpenChange, paid, money, l
                 ? t("refund.manualHelp")
                 : manual
                   ? t("refund.mixedHelp", { manual: manualAmount, other: money((previewMinor - manualMinor) / 10 ** decimalPlaces) })
-                  : t("refund.help")}
+                  : previewManualMinor > 0
+                    ? t("refund.mixedHelpAny")
+                    : t("refund.help")}
           </DialogDescription>
         </DialogHeader>
         <form id="order-refund" method="post" className="space-y-4" onSubmit={submit} noValidate>

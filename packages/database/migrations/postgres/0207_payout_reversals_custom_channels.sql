@@ -1,4 +1,4 @@
--- Payout reversals and apps' own chat channels: see ../0206_payout_reversals_custom_channels.sql.
+-- Payout reversals and apps' own chat channels: see ../0207_payout_reversals_custom_channels.sql.
 CREATE TABLE "payout_reversals" (
 	"id" text COLLATE "C" PRIMARY KEY NOT NULL,
 	"payout_id" text COLLATE "C" NOT NULL,
@@ -187,4 +187,4 @@ FOR EACH ROW
 WHEN ((OLD."status" IS DISTINCT FROM NEW."status"))
 EXECUTE FUNCTION scalius_compat."evt_payout_reversals_update_fn"();
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (206, '0206_payout_reversals_custom_channels', '62d7be2d72b1bdd668459884a87136939f5c59eb2778581ce08757f380bfd233');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (207, '0207_payout_reversals_custom_channels', '62d7be2d72b1bdd668459884a87136939f5c59eb2778581ce08757f380bfd233');

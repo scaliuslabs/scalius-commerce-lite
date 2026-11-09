@@ -6,6 +6,7 @@ import { formatList } from "@scalius/shared/locale-words";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 
 import { DiscountSavedView } from "./DiscountSavedView";
+import { DiscountUsage } from "./DiscountUsage";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { announceSave, PresenceSlot, presenceKey } from "~/lib/realtime/store";
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
@@ -683,7 +684,9 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                   </div>
                 ) : null}
                 {discount ? (
-                  <p className="text-body text-muted-foreground">{t("performance", { count: discount.redemptionCount })}</p>
+                  <p className="text-body text-muted-foreground">
+                    <DiscountUsage code={savedDraft.method === "code" ? savedDraft.code : null} count={discount.redemptionCount} />
+                  </p>
                 ) : null}
               </CardContent>
             </Card>
