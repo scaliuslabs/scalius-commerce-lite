@@ -28,7 +28,10 @@ import { APP_ROUTE_PERMISSIONS } from "./apps";
 import { STORE_TRANSFER_ROUTE_PERMISSIONS } from "./store-transfer";
 import { OBJECT_ROUTE_PERMISSIONS } from "./objects";
 import { RESOURCE_ROUTE_PERMISSIONS } from "./resources";
+import { MethodNotAllowedError, NotFoundError } from "../../../errors";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
+
+const HTTP_METHODS: readonly HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
 /**
  * Every domain's route map. A path pattern belongs to exactly one map
@@ -128,6 +131,29 @@ export function getRoutePermission(
   }
 
   return null;
+}
+
+/** The methods the dashboard API maps at this path, in a fixed order. */
+export function getRouteMethods(pathname: string): HttpMethod[] {
+  return HTTP_METHODS.filter((method) => getRoutePermission(pathname, method) !== null);
+}
+
+/**
+ * The permission rule for a request, or the refusal for a request no rule
+ * names: 405 with the methods the path takes (sent as Allow), or 404 for a
+ * path the dashboard API does not have. Every admin lane (staff sessions,
+ * agent connections, in-process apps) asks this before anything else, so a
+ * wrong method is never reported as a permission problem.
+ */
+export function requireRoutePermission(pathname: string, method: string): RoutePermission {
+  const upper = method.toUpperCase();
+  const permission = (HTTP_METHODS as readonly string[]).includes(upper)
+    ? getRoutePermission(pathname, upper as HttpMethod)
+    : null;
+  if (permission) return permission;
+  const allow = getRouteMethods(pathname);
+  if (allow.length > 0) throw new MethodNotAllowedError(allow);
+  throw new NotFoundError("No dashboard API endpoint has this path");
 }
 
 function normalizePathname(pathname: string): string {

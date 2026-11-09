@@ -216,6 +216,12 @@ export const orders = sqliteTable("orders", {
      */
     marketId: text("market_id").references(() => markets.id, { onDelete: "restrict" }),
     /**
+     * The storefront presence the buyer ordered on (`bn`, `en-in`; null at the
+     * root or off the storefront), migration 0206. The buyer's messages speak
+     * its language and link into it (notifications `buyerMessageScope`).
+     */
+    presence: text("presence"),
+    /**
      * The sales channel the order sold from (MARKETS-DESIGN D6, migration
      * 0122): the storefront checkout sells the online store's catalogue, a
      * buyer agent the agents channel's, staff the channel they pick (the

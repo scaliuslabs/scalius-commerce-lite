@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "30c60095-e0dc-4708-bdee-ff00c1eaa8e3",
-  "prevId": "a39d73df-1314-4ef0-bfa5-5a51dfeeb47d",
+  "id": "926e4dfa-30fe-42da-af44-a1dec3430357",
+  "prevId": "30c60095-e0dc-4708-bdee-ff00c1eaa8e3",
   "tables": {
     "account": {
       "name": "account",
@@ -13451,6 +13451,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'sc_online_store'"
+        },
+        "presence": {
+          "name": "presence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {

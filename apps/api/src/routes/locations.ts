@@ -1,10 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { deps } from "@scalius/core/cache-deps";
 
+import type { Database } from "@scalius/database/client";
 import { placeAddressFieldSql, places } from "@scalius/database/schema";
 import { PLACE_ADDRESS_COUNTRY, deliveryHierarchyLevel } from "@scalius/shared/places";
-import { eq, and, isNull, asc, count } from "drizzle-orm";
-import { containsText } from "@scalius/core/utils/text-match";
+import { eq, and, isNull, asc, count, type SQL } from "drizzle-orm";
+import { rankPlaces } from "@scalius/shared/place-search";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -99,6 +100,43 @@ app.openapi(listCitiesRoute, async (c) => {
   return ok(c, cities.map(formatLocation));
 });
 
+/**
+ * One page of a field's places matching `search`. A field's places under one
+ * parent are a bounded list (Bangladesh: at most a few hundred), so a search
+ * reads them all and ranks them with the shared place matcher, which finds an
+ * English name from Bangla typing and an older spelling from the new one.
+ */
+async function placeSummaryPage(
+  db: Database,
+  scope: SQL[],
+  { page, limit, search }: { page: number; limit: number; search: string },
+) {
+  const where = and(...scope);
+  if (search) {
+    const rows = await db.select(publicColumns).from(places).where(where)
+      .orderBy(asc(places.sortOrder), asc(places.name)).limit(PLACE_SEARCH_SCOPE_LIMIT);
+    const matches = rankPlaces(rows, search);
+    return {
+      locations: matches.slice((page - 1) * limit, page * limit).map(formatLocation),
+      pagination: { page, limit, total: matches.length, totalPages: Math.ceil(matches.length / limit) },
+    };
+  }
+  const [counts, rows] = await db.batch([
+    db.select({ total: count() }).from(places).where(where),
+    db.select(publicColumns).from(places).where(where)
+      .orderBy(asc(places.sortOrder), asc(places.name))
+      .limit(limit).offset((page - 1) * limit),
+  ]);
+  const total = Number(counts[0]?.total ?? 0);
+  return {
+    locations: rows.map(formatLocation),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+}
+
+/** More places than any one parent holds (Bangladesh's largest: 367 areas). */
+const PLACE_SEARCH_SCOPE_LIMIT = 2_000;
+
 const listCitySummariesRoute = createRoute({
   method: "get",
   path: "/cities/summaries",
@@ -114,22 +152,8 @@ const listCitySummariesRoute = createRoute({
 
 app.openapi(listCitySummariesRoute, async (c) => {
   const db = c.get("db");
-  const { page, limit, search } = c.req.valid("query");
-  const where = and(
-    ...ofField("city"),
-    search ? containsText(places.name, search) : undefined,
-  );
-  const [counts, rows] = await db.batch([
-    db.select({ total: count() }).from(places).where(where),
-    db.select(publicColumns).from(places).where(where)
-      .orderBy(asc(places.sortOrder), asc(places.name))
-      .limit(limit).offset((page - 1) * limit),
-  ]);
-  const total = Number(counts[0]?.total ?? 0);
-  return ok(c, {
-    locations: rows.map(formatLocation),
-    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-  });
+  const query = c.req.valid("query");
+  return ok(c, await placeSummaryPage(db, ofField("city"), query));
 });
 
 // GET /locations/zones — get all active zones for a given city
@@ -185,22 +209,8 @@ const listZoneSummariesRoute = createRoute({
 
 app.openapi(listZoneSummariesRoute, async (c) => {
   const db = c.get("db");
-  const { cityId, page, limit, search } = c.req.valid("query");
-  const where = and(
-    ...ofField("zone", cityId),
-    search ? containsText(places.name, search) : undefined,
-  );
-  const [counts, rows] = await db.batch([
-    db.select({ total: count() }).from(places).where(where),
-    db.select(publicColumns).from(places).where(where)
-      .orderBy(asc(places.sortOrder), asc(places.name))
-      .limit(limit).offset((page - 1) * limit),
-  ]);
-  const total = Number(counts[0]?.total ?? 0);
-  return ok(c, {
-    locations: rows.map(formatLocation),
-    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-  });
+  const query = c.req.valid("query");
+  return ok(c, await placeSummaryPage(db, ofField("zone", query.cityId), query));
 });
 
 // GET /locations/areas — get all active areas for a given zone
@@ -256,22 +266,8 @@ const listAreaSummariesRoute = createRoute({
 
 app.openapi(listAreaSummariesRoute, async (c) => {
   const db = c.get("db");
-  const { zoneId, page, limit, search } = c.req.valid("query");
-  const where = and(
-    ...ofField("area", zoneId),
-    search ? containsText(places.name, search) : undefined,
-  );
-  const [counts, rows] = await db.batch([
-    db.select({ total: count() }).from(places).where(where),
-    db.select(publicColumns).from(places).where(where)
-      .orderBy(asc(places.sortOrder), asc(places.name))
-      .limit(limit).offset((page - 1) * limit),
-  ]);
-  const total = Number(counts[0]?.total ?? 0);
-  return ok(c, {
-    locations: rows.map(formatLocation),
-    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-  });
+  const query = c.req.valid("query");
+  return ok(c, await placeSummaryPage(db, ofField("area", query.zoneId), query));
 });
 
 export { app as locationRoutes };

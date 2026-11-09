@@ -4,6 +4,8 @@
 // the order needs, then the API's reviewed total, then a cash-on-delivery
 // order (lib/checkout/quick-checkout.ts). Private and never cached.
 import { checkoutText } from "@/lib/checkout-text";
+import { serverPagePath } from "@/lib/server-presence";
+import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import BuyerField from "@/components/apps/BuyerField.astro";
 import Layout from "@/layouts/Layout.astro";
@@ -47,6 +49,8 @@ import {
   quickCheckoutMode,
   quickCheckoutOrderForm,
   quickCheckoutPhoneCountry,
+  QUICK_CHECKOUT_PATH,
+  quickCheckoutChoiceKey,
   quickCheckoutQuoteInput,
   readQuickCheckoutForm,
   readQuickCheckoutLines,
@@ -145,6 +149,11 @@ const offersDelivery = abroad
   ? allRates.some((rate) => rate.kind !== "pickup" && (rate.countries ?? []).some((entry) => entry.code === form.shippingCountryCode))
   : allRates.some((rate) => rate.kind !== "pickup") && cities.length > 0;
 const mode = quickCheckoutMode(lines, form, offersPickup, offersDelivery);
+// The store reaches none of its buyers (no zone serves where it sells, and no
+// pickup): the cart's and the product page's rule, said instead of a form the
+// buyer can't finish.
+const storeDelivers = allRatesResponse === null
+  || physicalDeliveryOffered(allRates, shippingCountries, bangladeshAddressesOffered(checkoutConfig) && cities.length > 0);
 
 // The address as far as it is still valid: a city that is gone clears it, a
 // thana from another city (the buyer changed city) is asked for again.
@@ -233,6 +242,10 @@ const billingRequired = billingAsk.asked && billingRules ? billingRequiredFields
 const billingErrors: Partial<Record<BillingAddressField, string>> = {};
 
 let errorMessage = "";
+/** The total now shown is for choices the buyer just changed: confirm it (not an error). */
+let totalUpdatedNotice = "";
+/** The buyer's choices the shown total is quoted for (a different total for the same choices is the store's change). */
+const quoteChoices = quoteInput ? quickCheckoutChoiceKey(quoteInput) : "";
 /** A store app's own words for what blocks the order, listed under the message. */
 let ruleMessages: string[] = [];
 let fieldErrors: QuickCheckoutFieldError[] = [];
@@ -250,7 +263,10 @@ if (quoteResult && !quoteResult.ok) {
           : copy.taxVerificationFailedText;
   }
 }
-if (!codAvailable) {
+if (mode !== "none" && !storeDelivers) {
+  errorMessage = copy.cartDeliveryUnavailableText;
+  ruleMessages = [];
+} else if (!codAvailable) {
   errorMessage = checkoutConfig.unavailableMessage || copy.checkoutUnavailableMessage;
   ruleMessages = [];
 } else if (!codServesDestination) {
@@ -274,8 +290,11 @@ if (!codAvailable) {
     // Options that couldn't be read are said once, at the options; never as the buyer's mistake.
     errorMessage = ratesFailed ? "" : mode === "delivery" ? copy.cityZoneRequiredText : copy.deliveryRequiredText;
   } else if (quote.quoteFingerprint !== form.expectedQuoteFingerprint) {
-    // The buyer places only the total they were shown.
-    errorMessage = copy.totalChangedReviewText;
+    // The buyer places only the total they were shown. A total for choices the
+    // buyer just changed (another delivery option) is shown to confirm, not an
+    // error; the same choices at a new total mean the store changed it.
+    if (form.reviewedChoices && form.reviewedChoices === quoteChoices) errorMessage = copy.totalChangedReviewText;
+    else totalUpdatedNotice = copy.totalUpdatedForChoiceText;
   } else {
     const result = await processOrder(
       quickCheckoutOrderForm(form, mode, rateId, quote),
@@ -371,6 +390,9 @@ const secondaryButtonClass =
     <CheckoutProgress current="information" paymentRequired={false} copy={copy} />
     <h1 class="sr-only">{copy.pageTitle}</h1>
 
+    {!errorMessage && totalUpdatedNotice && (
+      <p class="mb-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm font-medium text-foreground" role="status">{totalUpdatedNotice}</p>
+    )}
     {errorMessage && (
       <div class="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive" role="alert">
         {errorMessage}
@@ -382,13 +404,14 @@ const secondaryButtonClass =
       </div>
     )}
 
-    <form method="post" action="/checkout/quick" class="grid content-start gap-4 lg:grid-cols-12 lg:gap-8" novalidate>
+    <form method="post" action={serverPagePath(QUICK_CHECKOUT_PATH)} class="grid content-start gap-4 lg:grid-cols-12 lg:gap-8" novalidate>
       {/* Enter in a text field only refreshes the page; placing is always a deliberate tap. */}
       <button type="submit" name="intent" value="review" class="sr-only" tabindex="-1" aria-hidden="true">{copy.continueText}</button>
       <input type="hidden" name="cartItems" value={form.cartItems} />
       <input type="hidden" name="checkoutId" value={form.checkoutId} />
       {form.attributes && <input type="hidden" name="attributes" value={JSON.stringify(form.attributes)} />}
       {quote && <input type="hidden" name="expectedQuoteFingerprint" value={quote.quoteFingerprint} />}
+      {quote && quoteChoices && <input type="hidden" name="reviewedChoices" value={quoteChoices} />}
 
       <div class="order-2 min-w-0 space-y-6 rounded-xl border border-border bg-card p-4 sm:p-5 lg:order-1 lg:col-span-7">
         <section aria-labelledby="quickContactHeading" class="space-y-3">
@@ -620,10 +643,15 @@ const secondaryButtonClass =
                 <p class="shrink-0 font-medium tabular-nums text-foreground">{quoteMoney(item.unitPrice * item.quantity)}</p>
               </li>
             ))}
+            {/* Before a total is quoted, the lines as the product page priced them (the quote prices the order). */}
             {!quote && lines.map((line) => (
               <li class="flex justify-between gap-3 py-3 text-sm">
-                <p class="min-w-0 font-medium text-foreground">{line.name}</p>
-                <p class="shrink-0 text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: line.quantity })}</p>
+                <div class="min-w-0">
+                  <p class="font-medium text-foreground">{line.name}</p>
+                  {line.variantLabel && <p class="text-muted-foreground">{line.variantLabel}</p>}
+                  <p class="text-muted-foreground">{checkoutText(copy.quantityShortText, { quantity: line.quantity })}{line.price !== null && ` × ${quoteMoney(line.price)}`}</p>
+                </div>
+                {line.price !== null && <p class="shrink-0 font-medium tabular-nums text-foreground">{quoteMoney(line.price * line.quantity)}</p>}
               </li>
             ))}
           </ul>
@@ -652,7 +680,12 @@ const secondaryButtonClass =
                 </div>
               </>
             ) : (
-              <p class="text-muted-foreground">{mode === "none" ? copy.calculatingText : copy.chooseAddressForDeliveryText}</p>
+              <>
+                {lines.every((line) => line.price !== null) && (
+                  <div class="flex justify-between text-muted-foreground"><span>{copy.subtotalText}</span><span class="font-medium tabular-nums text-foreground">{quoteMoney(lines.reduce((sum, line) => sum + line.price! * line.quantity, 0))}</span></div>
+                )}
+                <p class="text-muted-foreground">{mode === "none" ? copy.calculatingText : copy.chooseAddressForDeliveryText}</p>
+              </>
             )}
             <div class="pt-2">
               <label for="discountCode" class="sr-only">{copy.discountCodePlaceholder}</label>

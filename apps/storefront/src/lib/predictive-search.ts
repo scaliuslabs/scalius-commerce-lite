@@ -4,7 +4,7 @@
 // browser's and the edge's cache, and one page-lifetime memo of answers.
 import type { StorefrontImage, StorefrontSearchSuggestion } from "@scalius/shared/plugins/storefront-protocol";
 import { STOREFRONT_SEARCH_SUGGESTIONS_MAX } from "@scalius/shared/plugins/storefront-protocol";
-import { toMinor } from "@scalius/shared/money";
+import { priceLineClaim, toMinor } from "@scalius/shared/money";
 import { isSearchableQuery } from "@scalius/shared/search-query";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import { pageLocale, searchProvider } from "@/lib/app-services";
@@ -138,7 +138,10 @@ export function searchSuggestionOf(item: PredictiveSearchItem): StorefrontSearch
     url: pagePath(`/products/${item.slug}`),
     image: suggestionImage(item, title),
     price: money(paid),
-    compareAt: paid < regular ? money(regular) : null,
+    compareAt: (() => {
+      const { compareAt } = priceLineClaim({ current: paid, regular, from: item.priceVaries === true });
+      return compareAt === null ? null : money(compareAt);
+    })(),
     priceVaries: item.priceVaries === true,
     available: item.availableForSale !== false,
   };

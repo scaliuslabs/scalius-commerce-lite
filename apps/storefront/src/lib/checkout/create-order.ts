@@ -2,6 +2,7 @@
  * Creates an order via the server-side proxy.
  * Shared by all gateway handlers.
  */
+import { currentPresence } from "@/lib/presence-url";
 import { CheckoutCopyError, getCheckoutErrorMessage } from "./error-messages";
 import type { CreateOrderPayload } from "../api/types";
 import type { CartValidationIssue } from "../api/orders";
@@ -184,7 +185,10 @@ export async function createOrder(
   const tender = giftCardOrderFields(checkoutData);
   const attributes = parseCheckoutAttributes(checkoutData.attributes);
 
+  const presence = currentPresence();
   const payload: CheckoutOrderRequest = {
+    // The page's presence: the order's emails and SMS speak its language.
+    ...(presence ? { presence } : {}),
     checkoutRequestId,
     expectedQuoteFingerprint,
     customerName: readString(checkoutData.customerName),

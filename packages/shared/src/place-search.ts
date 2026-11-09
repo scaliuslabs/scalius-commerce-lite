@@ -1,11 +1,12 @@
 /**
- * Place-name search for the location pickers: "mirpur 2" finds "Mirpur-2",
+ * Place-name search for every place picker (the storefront's checkout, the
+ * dashboard's and the API's place searches): "mirpur 2" finds "Mirpur-2",
  * case, accents and Bengali digits don't matter, and Bangla typing
  * ("মিরপুর") finds the English name through a rough transliteration and,
  * failing an exact spelling, a consonant skeleton. Names that start with the
  * typed text come first, then names with a word that starts with it.
  */
-import { toLatinDigits } from "@scalius/shared/phone-input";
+import { toLatinDigits } from "./phone-input";
 
 const BANGLA_LATIN: Record<string, string> = {
   "অ": "o", "আ": "a", "ই": "i", "ঈ": "i", "উ": "u", "ঊ": "u", "ঋ": "ri", "এ": "e", "ঐ": "oi", "ও": "o", "ঔ": "ou",
@@ -13,12 +14,23 @@ const BANGLA_LATIN: Record<string, string> = {
   "ক": "k", "খ": "kh", "গ": "g", "ঘ": "gh", "ঙ": "ng", "চ": "ch", "ছ": "chh", "জ": "j", "ঝ": "jh", "ঞ": "n",
   "ট": "t", "ঠ": "th", "ড": "d", "ঢ": "dh", "ণ": "n", "ত": "t", "থ": "th", "দ": "d", "ধ": "dh", "ন": "n",
   "প": "p", "ফ": "f", "ব": "b", "ভ": "bh", "ম": "m", "য": "j", "র": "r", "ল": "l", "শ": "sh", "ষ": "sh",
-  "স": "s", "হ": "h", "ড়": "r", "ঢ়": "rh", "য়": "y", "ৎ": "t", "ং": "ng", "ঃ": "h", "ঁ": "", "্": "",
+  "স": "s", "হ": "h", "ৎ": "t", "ং": "ng", "ঃ": "h", "ঁ": "", "্": "",
+};
+
+/**
+ * ড়, ঢ় and য় are a letter plus the nukta sign (U+09BC) after Unicode
+ * normalisation, whichever way they were typed: two code points, so they
+ * are read as a pair before the letters one by one ("বগুড়া" is "bogura",
+ * not "boguda"; "নারায়ণগঞ্জ" is "narayanganj", not "narajanganj").
+ */
+const BANGLA_NUKTA_LATIN: Record<string, string> = {
+  "\u09A1\u09BC": "r", "\u09A2\u09BC": "rh", "\u09AF\u09BC": "y",
 };
 
 /** Lower-case Latin letters and digits only; Bangla transliterated, accents dropped. */
 export function placeSearchText(value: string): string {
-  const plain = value.normalize("NFD").replace(/[̀-ͯ]/g, "").normalize("NFC");
+  const plain = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").normalize("NFC")
+    .replace(/[\u09A1\u09A2\u09AF]\u09BC/gu, (pair) => BANGLA_NUKTA_LATIN[pair] ?? pair);
   const latin = Array.from(toLatinDigits(plain))
     .map((character) => BANGLA_LATIN[character] ?? character)
     .join("");
@@ -59,13 +71,31 @@ const PLACE_NAME_VARIANTS: ReadonlyArray<readonly [string, string]> = [
   ["coxsbazar", "coxbazar"],
 ];
 
-/** The typed text and the other spelling of a place it begins (at least 4 letters). */
+/**
+ * The typed text and the other spelling of a place it begins (at least 4
+ * letters). Bangla typing has no fixed vowels ("চট্টগ্রাম" reads
+ * "chttgram"), so a spelling also counts when its consonant skeleton begins
+ * the typed text's, or the typed text's begins it.
+ */
 function searchSpellings(wanted: string): string[] {
   const spellings = [wanted];
   if (wanted.length < 4) return spellings;
+  const wantedSkeleton = skeleton(wanted);
   for (const [first, second] of PLACE_NAME_VARIANTS) {
-    if (first.startsWith(wanted) || wanted.startsWith(first)) spellings.push(second + wanted.slice(first.length));
-    else if (second.startsWith(wanted) || wanted.startsWith(second)) spellings.push(first + wanted.slice(second.length));
+    for (const [from, to] of [[first, second], [second, first]] as const) {
+      if (from.startsWith(wanted) || wanted.startsWith(from)) {
+        spellings.push(to + wanted.slice(from.length));
+        continue;
+      }
+      const fromSkeleton = skeleton(from);
+      if (wantedSkeleton.length >= 3 && fromSkeleton.startsWith(wantedSkeleton)) {
+        spellings.push(to);
+      } else if (wantedSkeleton.startsWith(fromSkeleton)) {
+        // The rest after the shortest typed prefix spelling the whole place.
+        const end = [...wanted].findIndex((_, index) => skeleton(wanted.slice(0, index + 1)) === fromSkeleton);
+        spellings.push(to + wanted.slice(end + 1));
+      }
+    }
   }
   return spellings;
 }

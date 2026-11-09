@@ -63,6 +63,7 @@ import { errorResponses, serviceUnavailableResponse, conflictResponse } from "..
 import { linePropertiesInputSchema, linePurchaseOptionsInputSchema } from "../../schemas/order-lines";
 import { billingAddressBodyShape } from "../../schemas/billing-address";
 import {
+    checkoutPresenceSchema,
     getCustomerSessionTokenFromRequest,
     giftCardHandlesSchema,
     persistedStorefrontVariantIdSchema,
@@ -228,6 +229,9 @@ const checkoutTrackingSignalsSchema = z.object({
 });
 
 const createOrderSchema = z.object({
+  presence: checkoutPresenceSchema.openapi({
+    description: "The storefront presence the buyer orders on (`bn`, `en-in`); omit at the root. The order keeps it: the buyer's emails and SMS speak its language and link into it.",
+  }),
   checkoutRequestId: z
     .string()
     .trim()

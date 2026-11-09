@@ -9,6 +9,7 @@ export {
   UnauthorizedError,
   ForbiddenError,
   ConflictError,
+  MethodNotAllowedError,
   RateLimitError,
   ServiceUnavailableError,
 } from "@scalius/core/errors";

@@ -11,9 +11,11 @@ interface Props {
   discountBadge: string | null;
   /** The "From {price}" words, for the controller. */
   fromTemplate: string;
+  /** The badge beside a discounted "From" price ("Sale"), for the controller. */
+  saleText: string;
 }
 
-const { price, regularPrice, hasDiscount, discountBadge, fromTemplate } = Astro.props;
+const { price, regularPrice, hasDiscount, discountBadge, fromTemplate, saleText } = Astro.props;
 ---
 
 <div class="buy-box-main-price flex flex-wrap items-center gap-x-2 gap-y-1" data-buy-part="price">
@@ -27,5 +29,5 @@ const { price, regularPrice, hasDiscount, discountBadge, fromTemplate } = Astro.
       {regularPrice}
     </s>
   </div>
-  <span data-sx-buy="discount" class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
+  <span data-sx-buy="discount" data-sale-text={saleText} class:list={["discount-badge whitespace-nowrap rounded-md bg-primary/10 px-1.5 py-0.5 text-sm font-medium text-primary-ink", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
 </div>

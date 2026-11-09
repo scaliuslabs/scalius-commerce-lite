@@ -4,7 +4,7 @@ import { pendingAdminAuthStep } from "@scalius/shared/admin-auth-step";
 import { and, eq, sql } from "drizzle-orm";
 import { autoSeedRbacIfNeeded, rbacSeedMarker } from "@scalius/core/auth/rbac/auto-seed";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
-import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { requireRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { routedApiPath } from "../utils/routed-path";
 import { retryTransientD1 } from "@scalius/core/utils/transient-d1";
 import { session as sessionTable, user as userTable } from "@scalius/database/schema";
@@ -346,6 +346,8 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
             const pathname = routedApiPath(c);
             const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+            // A wrong method or path is 405/404 before any agent policy question.
+            const routePermission = requireRoutePermission(pathname, method);
             const { resolveDirectAgentOperation } = await import("../agent-access/direct-operation");
             operation = resolveDirectAgentOperation(method, pathname);
             if (
@@ -358,10 +360,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
                 throw new ForbiddenError(
                     "This dashboard operation is not available to direct agent credentials",
                 );
-            }
-            const routePermission = getRoutePermission(pathname, method);
-            if (!routePermission) {
-                throw new ForbiddenError("This admin endpoint is not configured for RBAC");
             }
             const allowed = routePermission.allowAnyAdmin
                 ? agentPrincipal.isSuperAdmin
@@ -564,18 +562,8 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     // 4. Fine-grained Route Permissions mapped from Astro routes configuration
     // getRoutePermission expects paths like "/api/v1/admin/categories"
-    const routePermission = getRoutePermission(pathname, method);
-
-    if (!routePermission) {
-        console.warn(
-            "[AdminAuth] Missing RBAC route mapping:",
-            method,
-            pathname,
-        );
-        throw new ForbiddenError(
-            "This admin endpoint is not configured for RBAC",
-        );
-    }
+    // A path or method no rule names is 404 or 405 (with Allow), never 403.
+    const routePermission = requireRoutePermission(pathname, method);
 
     let hasRequiredPermission = false;
 

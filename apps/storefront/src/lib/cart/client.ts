@@ -54,7 +54,7 @@ import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
-import { applyCheckoutButtonState } from "./checkout-button-state";
+import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import {
@@ -1676,8 +1676,10 @@ export function updateCheckoutButtonState() {
     checkoutPendingMessage: copy.existingCheckoutTitle,
     discountValidationPending: isDiscountValidationPending(),
     discountValidationPendingMessage: copy.processingText,
-    // No delivery option takes this cart to the address (said beside the options too).
-    deliveryBlockedMessage: document.querySelector<HTMLElement>("[data-shipping-methods]")?.dataset.deliveryBlocked || "",
+    // The store delivers nowhere this cart can go, or no delivery option takes it
+    // to the address (each said beside the form too).
+    deliveryBlockedMessage: storeNotDeliveringMessage()
+      || document.querySelector<HTMLElement>("[data-shipping-methods]")?.dataset.deliveryBlocked || "",
     reasonElement: document.getElementById("submitButtonReason"),
   });
 }

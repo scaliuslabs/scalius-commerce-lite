@@ -92,7 +92,7 @@ export {
   recordSkippedDelivery,
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
-export { composeAuthOtpMessage, readStoreIdentity, readStoreName } from "./store-messages";
+export { buyerMessageScope, buyerStorefrontLink, composeAuthOtpMessage, readStoreIdentity, readStoreName, type BuyerMessageScope } from "./store-messages";
 export { describeNotificationProviderBlock } from "./notification-provider-health";
 export { getNotificationTemplates, saveNotificationTemplate } from "./notification-templates.service";
 export {

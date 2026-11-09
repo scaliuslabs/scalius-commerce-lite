@@ -5,6 +5,7 @@
 // "—", and a buy action per column. One public read joins the render's
 // storefront batch. The page is a tool, not content: noindex,follow, never
 // in a sitemap, and canonical to /compare without the ids.
+import { priceLineClaim } from "@scalius/shared/money";
 import Layout from "@/layouts/Layout.astro";
 import CompareTray from "@/components/compare/CompareTray.astro";
 import {
@@ -79,7 +80,8 @@ const photo = (product: CompareProduct) =>
                 <td class="compare-label"></td>
                 {products.map((product) => {
                   const image = photo(product);
-                  const discounted = product.discountedPrice < product.price;
+                  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from: product.priceVaries === true });
+                  const discounted = claim.onSale;
                   return (
                     <th scope="col" class="compare-product">
                       <a href={`/products/${product.slug}`} class="compare-photo">
@@ -103,7 +105,7 @@ const photo = (product: CompareProduct) =>
                       <span class="compare-price">
                         <span class="sr-only">{discounted ? words.price.sale : words.price.price} </span>
                         {product.priceVaries ? words.price.from(money(product.discountedPrice)) : money(product.discountedPrice)}
-                        {discounted && <s class="compare-regular"><span class="sr-only">{words.price.regular} </span>{money(product.price)}</s>}
+                        {claim.compareAt !== null && <s class="compare-regular"><span class="sr-only">{words.price.regular} </span>{money(claim.compareAt)}</s>}
                       </span>
                       {!product.availableForSale ? (
                         <span class="compare-action compare-action-muted">{words.stock.soldOut}</span>

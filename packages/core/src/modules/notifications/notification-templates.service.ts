@@ -25,12 +25,22 @@ import { formatNumber } from "@scalius/shared/locale-format";
 export async function getNotificationTemplates(
   db: Database,
   knownLanguage?: MessageLanguage,
+  options: {
+    /**
+     * The store's default language, when the message is in the buyer's
+     * (`buyerMessageScope`): the merchant writes their templates in the
+     * default language, so a buyer in another language gets that language's
+     * own wording, never the merchant's in the wrong language.
+     */
+    storeLanguage?: MessageLanguage;
+  } = {},
 ): Promise<{ templates: NotificationTemplates; revision: number; language: MessageLanguage }> {
   const [{ value, revision }, language] = await Promise.all([
     notificationTemplatesDocument.readDetailed(db),
     knownLanguage ?? readStoreLanguage(db),
   ]);
-  return { templates: resolveNotificationTemplates(value, language), revision, language };
+  const merchantWording = options.storeLanguage === undefined || options.storeLanguage === language;
+  return { templates: resolveNotificationTemplates(merchantWording ? value : { email: {}, sms: {} }, language), revision, language };
 }
 
 type Issue = { path: Array<string | number>; message: string };

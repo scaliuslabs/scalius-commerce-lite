@@ -231,7 +231,9 @@ export async function createOrder(
             ? { "X-Customer-Session": options.customerSessionToken }
             : {}),
         },
-        body: JSON.stringify(payload),
+        // The page's presence (the browser's, else the render's): the order's
+        // messages speak its language and link into it.
+        body: JSON.stringify({ ...payload, ...cartPresence(payload.presence) }),
         cache: "no-store",
       },
       // Do not retry the actual creation to prevent double ingestion

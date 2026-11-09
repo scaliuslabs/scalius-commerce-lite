@@ -791,7 +791,11 @@ export async function sendOrderNotificationEmail(
         console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
     }
 
-    const templates = once(async () => (await getNotificationTemplates(db, (await context()).language)).templates);
+    // The buyer's language (the order's presence); the merchant's wording only when it is the store's.
+    const templates = once(async () => {
+        const { language, storeLanguage } = await context();
+        return (await getNotificationTemplates(db, language, { storeLanguage })).templates;
+    });
     const smsMessage = async () => composeOrderSms(await context(), (await templates()).sms[type].body);
 
     const outboxId = options.outboxId;
@@ -1208,6 +1212,8 @@ export async function sendOrderNotificationEmail(
                 return {
                     title: (message.variables.store_name || ORDER_NOTIFICATION_LABELS[type] || "Order update").slice(0, 120),
                     body: (await smsMessage()).slice(0, 500),
+                    // The order's page in the presence it was placed on (`/bn/account/...`).
+                    path: message.path,
                 };
             },
         }));
@@ -1234,7 +1240,7 @@ async function sendOrderWebPush(options: {
     /** The order's account (null for a guest order). */
     customerId: () => Promise<string | null>;
     receipt: { outboxId: string } | null;
-    message: () => Promise<{ title: string; body: string }>;
+    message: () => Promise<{ title: string; body: string; path: string }>;
 }): Promise<OrderNotificationChannelOutcome[]> {
     const { db, orderId, type } = options;
     const outcomes: OrderNotificationChannelOutcome[] = [];
@@ -1243,7 +1249,8 @@ async function sendOrderWebPush(options: {
         if (!customerId) return [];
         const { pushProvider } = await notificationsDocument.read(db);
         if (isQualifiedProviderId(pushProvider)) {
-            const notification = { ...await options.message(), url: `/account/orders/${encodeURIComponent(orderId)}` };
+            const { path, ...message } = await options.message();
+            const notification = { ...message, url: `${path}/account/orders/${encodeURIComponent(orderId)}` };
             const send = async (idempotencyKey?: string): Promise<DeliverySendResult> => {
                 const result = await sendAppPush(options.appProviders, pushProvider, { audience: "customer", to: [customerId], notification, ...(idempotencyKey ? { idempotencyKey } : {}) });
                 return { success: result.success, provider: pushProvider, providerMessageId: result.providerRef, providerStatus: result.rawStatus, rawResponse: result.rawStatus, retryable: result.retryable };
@@ -1268,9 +1275,10 @@ async function sendOrderWebPush(options: {
         if (subscriptions.length === 0) return [];
         const sender = await webPushSender((options.env ?? {}) as Record<string, unknown>);
         if (!sender) return [];
+        const { path, ...message } = await options.message();
         const payload = webPushPayload({
-            ...await options.message(),
-            url: `/account/orders/${encodeURIComponent(orderId)}`,
+            ...message,
+            url: `${path}/account/orders/${encodeURIComponent(orderId)}`,
             tag: `order:${orderId}`.slice(0, 64),
         });
         for (const subscription of subscriptions) {

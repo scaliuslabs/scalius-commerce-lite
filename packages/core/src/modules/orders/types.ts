@@ -421,6 +421,11 @@ export interface StorefrontOrderItem {
 export interface CreateStorefrontOrderInput {
     checkoutRequestId: string;
     expectedQuoteFingerprint: string;
+    /**
+     * The storefront presence the buyer ordered on (`bn`, `en-in`); absent at
+     * the root. The order keeps it so its messages speak the buyer's language.
+     */
+    presence?: string | null;
     customerName: string;
     /**
      * E.164, or null for an order the shared contact rule lets go without a
@@ -581,6 +586,8 @@ export type OrderFacts = OrderShippingAddressFields & Partial<OrderBillingAddres
     customerWhatsapp?: string | null;
     notes: string | null;
     attributes?: string;
+    /** The storefront presence the order was placed on (`bn`); absent at the root and off the storefront. */
+    presence?: string | null;
     /**
      * The keys (`<app id>.<key>`) of the declared `file` checkout attributes:
      * their answers name buyer uploads the commit attaches. Line inputs need

@@ -107,6 +107,33 @@ export function discountPercentOff(original: number, current: number): number | 
   return Math.max(1, Math.floor(((original - Math.max(current, 0)) / original) * 100 + 1e-9));
 }
 
+/** What a price line may say beside the price it shows: a struck regular price, a percent off, a sale mark. */
+export interface PriceLineClaim {
+  /** The struck regular price, or null. */
+  compareAt: number | null;
+  /** The whole percent off for a "-13%" badge, or null. */
+  percentOff: number | null;
+  /** The line marks a sale (a "-13%" badge, or "Sale" beside a "From" price). */
+  onSale: boolean;
+}
+
+/**
+ * The one rule every price line follows (product cards, the product page,
+ * search suggestions, compare, app and theme data): a struck regular price
+ * and a percent off describe one price, so they stand only beside a single
+ * price. A "From" price (the buyer's choices are priced differently) shows
+ * the lowest price alone: struck beside it, "৳650" would read as every
+ * choice's old price and "-10%" as every choice's saving, while the other
+ * choices may cost more and have no discount. It is marked "Sale" when the
+ * choice it stands for is discounted.
+ */
+export function priceLineClaim(input: { current: number; regular: number; from: boolean }): PriceLineClaim {
+  const percentOff = discountPercentOff(input.regular, input.current);
+  if (percentOff === null) return { compareAt: null, percentOff: null, onSale: false };
+  if (input.from) return { compareAt: null, percentOff: null, onSale: true };
+  return { compareAt: input.regular, percentOff, onSale: true };
+}
+
 // ---------------------------------------------------------------------------
 // The market's price increment
 // ---------------------------------------------------------------------------
