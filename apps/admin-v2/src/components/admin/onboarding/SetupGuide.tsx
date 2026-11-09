@@ -4,7 +4,7 @@
 // never because it was clicked. Dismissing hides the card for this staff
 // member only, with Undo in the toast and "Show setup guide" in Home's menu.
 // Code-split: Home loads it after its first render.
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postApiV1AdminDashboardSetupGuideDismiss } from "@scalius/api-client/sdk";
@@ -34,6 +34,10 @@ function Glyph({ children, className }: { children: ReactNode; className?: strin
   );
 }
 
+// Only a store whose Bangladesh zone has no places to choose loads it (its dialog and icons stay off Home's first download).
+const BangladeshPlacesNotice = lazy(() =>
+  import("../settings/BangladeshPlacesNotice").then((module) => ({ default: module.BangladeshPlacesNotice })));
+
 /** The API counts drafts up to here ("1,000+"). */
 const DRAFT_COUNT_CAP = 1000;
 
@@ -55,6 +59,8 @@ interface Step {
   params?: Record<string, string>;
   /** The page the step opens, for the role check (a step the person can't open isn't shown). */
   access: string;
+  /** Rates serve Bangladesh but buyers there have no City and Thana: the step offers loading them instead. */
+  needsPlaces?: boolean;
   body: "detailsBody" | "productBody" | "themeBody" | "paymentsBody" | "paymentsBodyBd" | "shippingBody" | "packBody" | "domainBody" | "orderBody" | "orderBodyManual";
 }
 
@@ -85,7 +91,7 @@ export function setupGuideSteps(guide: SetupGuideData, canOpen: (to: string) => 
       key: "payments", done: steps.payments, to: "/admin/settings/payments", access: "/admin/settings/payments",
       body: countryCode === "BD" ? "paymentsBodyBd" : "paymentsBody",
     },
-    { key: "shipping", done: steps.shipping, to: "/admin/settings/shipping", access: "/admin/settings/shipping", body: "shippingBody" },
+    { key: "shipping", done: steps.shipping, to: "/admin/settings/shipping", access: "/admin/settings/shipping", body: "shippingBody", needsPlaces: guide.shippingNeedsPlaces },
     // Regional steps show for their country only, whatever else the data says.
     ...(bangladeshPack && countryCode === "BD"
       ? [{ key: "pack" as const, done: bangladeshPack.active, to: "/admin/apps/$pluginId", params: { pluginId: BANGLADESH_PACK_ID }, access: "/admin/apps", body: "packBody" as const }]
@@ -197,7 +203,12 @@ export default function SetupGuide({ guide, canOpen }: { guide: SetupGuideData; 
                         </p>
                       ) : null}
                     </div>
-                    <Button variant={step.done ? "outline" : "default"} size="sm" asChild>
+                    {step.needsPlaces ? (
+                      <Suspense fallback={null}>
+                        <BangladeshPlacesNotice />
+                      </Suspense>
+                    ) : null}
+                    <Button variant={step.done || step.needsPlaces ? "outline" : "default"} size="sm" asChild>
                       {step.href ? (
                         <a href={step.href} target="_blank" rel="noopener">{t(step.action ?? `${step.key}Action`)}</a>
                       ) : (

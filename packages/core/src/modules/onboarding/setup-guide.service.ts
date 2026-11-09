@@ -17,6 +17,7 @@ import {
     themeSettingsVersions,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { PLACE_ADDRESS_COUNTRY } from "@scalius/shared/places";
 import { qualifiedColumn } from "../../utils/qualified-column";
 
 export interface SetupGuideFacts {
@@ -30,8 +31,15 @@ export interface SetupGuideFacts {
     testOrderProductSlug: string | null;
     /** The theme was published from the editor at least once (a restore counts, the first seed does not). */
     themePublished: boolean;
-    /** A live delivery rate whose zone serves somewhere, or a live local pickup rate. */
+    /**
+     * A buyer can be reached: a live local pickup rate, or a live delivery
+     * rate whose zone serves a country outside Bangladesh, or Bangladesh while
+     * a buyer there can choose a City and Thana (an active thana under an
+     * active city: the storefront's `physicalDeliveryOffered`).
+     */
     shippingReady: boolean;
+    /** A live delivery rate serves Bangladesh, but no thana can be chosen: load Bangladesh's places. */
+    shippingNeedsPlaces: boolean;
     /** An order placed through the storefront's checkout (the online store channel). */
     hasOrders: boolean;
     /**
@@ -46,6 +54,22 @@ export interface SetupGuideFacts {
 export const ONLINE_PAID_PRODUCT_COUNT_CAP = 1000;
 /** Drafts are counted up to here, for the same reason. */
 export const DRAFT_PRODUCT_COUNT_CAP = 1000;
+
+/** A rate's zone serves Bangladesh: whole (a `BD` region) or through its delivery areas. */
+const servesBangladesh = sql`(
+    EXISTS (SELECT 1 FROM ${deliveryZoneRegions} WHERE ${deliveryZoneRegions.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)}
+      AND ${deliveryZoneRegions.countryCode} = ${PLACE_ADDRESS_COUNTRY})
+    OR EXISTS (SELECT 1 FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)})
+)`;
+
+/** A buyer in Bangladesh can choose an address: an active thana under an active city (checkout readiness's hierarchy). */
+const bangladeshAddressable = sql`EXISTS (
+    SELECT 1 FROM places AS setup_thana
+    JOIN places AS setup_city ON setup_city.id = setup_thana.parent_id
+    WHERE setup_thana.country_code = ${PLACE_ADDRESS_COUNTRY} AND setup_thana.level = 2
+      AND setup_thana.is_active = 1 AND setup_thana.deleted_at IS NULL
+      AND setup_city.level = 1 AND setup_city.is_active = 1 AND setup_city.deleted_at IS NULL
+)`;
 
 /** The setup facts the database answers, in one round trip. */
 export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts> {
@@ -70,10 +94,17 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
                     ${shippingMethods.zoneId} IS NOT NULL
                     AND EXISTS (SELECT 1 FROM ${deliveryZones} WHERE ${deliveryZones.id} = ${qualifiedColumn(shippingMethods.zoneId)})
                     AND (
-                      EXISTS (SELECT 1 FROM ${deliveryZoneRegions} WHERE ${deliveryZoneRegions.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)})
-                      OR EXISTS (SELECT 1 FROM ${deliveryZoneLocations} WHERE ${deliveryZoneLocations.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)})
+                      EXISTS (SELECT 1 FROM ${deliveryZoneRegions} WHERE ${deliveryZoneRegions.zoneId} = ${qualifiedColumn(shippingMethods.zoneId)}
+                        AND ${deliveryZoneRegions.countryCode} <> ${PLACE_ADDRESS_COUNTRY})
+                      OR (${servesBangladesh} AND ${bangladeshAddressable})
                     )
                   ))
+            )`,
+            shippingNeedsPlaces: sql<number>`(NOT ${bangladeshAddressable}) AND EXISTS (
+                SELECT 1 FROM ${shippingMethods}
+                WHERE ${shippingMethods.isActive} = 1 AND ${shippingMethods.deletedAt} IS NULL
+                  AND ${shippingMethods.kind} = 'delivery' AND ${shippingMethods.zoneId} IS NOT NULL
+                  AND ${servesBangladesh}
             )`,
             hasOrders: sql<number>`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.channel} = 'online_store')`,
             onlinePaidProducts: sql<number>`(SELECT COUNT(*) FROM (
@@ -106,6 +137,7 @@ export async function getSetupGuideFacts(db: Database): Promise<SetupGuideFacts>
         testOrderProductSlug: row?.testOrderProductSlug ?? null,
         themePublished: Boolean(Number(row?.themePublished ?? 0)),
         shippingReady: Boolean(Number(row?.shippingReady ?? 0)),
+        shippingNeedsPlaces: Boolean(Number(row?.shippingNeedsPlaces ?? 0)),
         hasOrders: Boolean(Number(row?.hasOrders ?? 0)),
         onlinePaidProducts: Number(row?.onlinePaidProducts ?? 0),
     };

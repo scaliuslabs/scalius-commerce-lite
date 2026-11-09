@@ -60,7 +60,6 @@ export const shippingMessages = defineMessages({
     templateConfirmBody: "Adds shipping zones you can edit later, with the zone Bangladesh charging Outside Dhaka for the rest of the country.",
     templateUse: "Use setup",
     templateAdded: "Zones added",
-    templateNeedsPlaces: "Add or import Bangladesh locations first.",
 
     charges: "Charges",
     addCharge: "Add charge",
@@ -281,7 +280,6 @@ export const shippingMessages = defineMessages({
     templateConfirmBody: "শিপিং জোনগুলো যোগ হবে, পরে বদলাতে পারবেন। দেশের বাকি অংশে বাংলাদেশ জোন ঢাকার বাইরের চার্জ নেবে।",
     templateUse: "সেটআপ ব্যবহার করুন",
     templateAdded: "জোন যোগ হয়েছে",
-    templateNeedsPlaces: "আগে বাংলাদেশের লোকেশন যোগ বা ইমপোর্ট করুন।",
 
     charges: "চার্জ",
     addCharge: "চার্জ যোগ করুন",
@@ -442,5 +440,43 @@ export const shippingMessages = defineMessages({
     deleteProfile: "প্রোফাইল মুছুন",
     deleteProfileConfirm: "এর পণ্য General-এ যাবে এবং General-এর চার্জ দেবে।",
     profileDeleted: "প্রোফাইল মুছে ফেলা হয়েছে",
+  },
+});
+
+/** Bangladesh's places are what a buyer there picks at checkout: what is missing and the one-click fix. */
+export const bangladeshPlacesMessages = defineMessages({
+  en: {
+    title: "Buyers in Bangladesh can't order yet",
+    body: "At checkout they choose their City and Thana, and this store has none yet. Load Bangladesh's delivery places (66 cities, 1,258 thanas and 10,226 areas from Pathao's list) to start taking orders.",
+    load: "Load Bangladesh places",
+    loading: "Bangladesh places are loading. This page updates when buyers can choose them.",
+    askOwner: "Only the store owner can load them: ask them to open this page.",
+    importOwn: "Add your own delivery areas",
+    openPack: "Open the Bangladesh pack",
+    dialogTitle: "Load Bangladesh places?",
+    dialogBody: "Turns on Bangladesh places in the Bangladesh pack, which loads the City, Thana and Area list into your delivery areas. It adds and updates places and never deletes one; you can edit them afterwards.",
+    dialogActivate: "The Bangladesh pack is turned on first. It asks for nothing by itself; each of its services stays off until you turn it on.",
+    cancel: "Cancel",
+    confirm: "Load places",
+    loaded: "Bangladesh places loaded. Buyers can now choose their City and Thana.",
+    partly: "Loading Bangladesh places. The rest finish within the hour.",
+    failed: "Bangladesh places couldn't be loaded. Try again, or open the Bangladesh pack.",
+  },
+  bn: {
+    title: "বাংলাদেশের ক্রেতারা এখনো অর্ডার করতে পারছেন না",
+    body: "চেকআউটে তাঁরা শহর আর থানা বাছেন, কিন্তু এই স্টোরে এখনো কোনোটি নেই। অর্ডার নেওয়া শুরু করতে বাংলাদেশের ডেলিভারি এলাকা লোড করুন (Pathao-র তালিকা থেকে ৬৬টি শহর, ১,২৫৮টি থানা ও ১০,২২৬টি এলাকা)।",
+    load: "বাংলাদেশের এলাকা লোড করুন",
+    loading: "বাংলাদেশের এলাকা লোড হচ্ছে। ক্রেতারা বাছতে পারলে এই পাতা হালনাগাদ হবে।",
+    askOwner: "শুধু স্টোরের মালিক এগুলো লোড করতে পারেন: তাঁকে এই পাতাটি খুলতে বলুন।",
+    importOwn: "নিজের ডেলিভারি এলাকা যোগ করুন",
+    openPack: "বাংলাদেশ প্যাক খুলুন",
+    dialogTitle: "বাংলাদেশের এলাকা লোড করবেন?",
+    dialogBody: "বাংলাদেশ প্যাকে বাংলাদেশের এলাকা চালু হবে, যা শহর, থানা ও এলাকার তালিকা আপনার ডেলিভারি এলাকায় লোড করে। এটি এলাকা যোগ ও হালনাগাদ করে, কখনো মুছে ফেলে না; পরে আপনি এগুলো বদলাতে পারবেন।",
+    dialogActivate: "আগে বাংলাদেশ প্যাক চালু হবে। এটি নিজে কিছু চায় না; এর প্রতিটি সেবা আপনি চালু না করা পর্যন্ত বন্ধ থাকে।",
+    cancel: "বাতিল",
+    confirm: "এলাকা লোড করুন",
+    loaded: "বাংলাদেশের এলাকা লোড হয়েছে। ক্রেতারা এখন শহর আর থানা বাছতে পারবেন।",
+    partly: "বাংলাদেশের এলাকা লোড হচ্ছে। বাকিটা এক ঘণ্টার মধ্যে শেষ হবে।",
+    failed: "বাংলাদেশের এলাকা লোড করা গেল না। আবার চেষ্টা করুন, বা বাংলাদেশ প্যাক খুলুন।",
   },
 });
