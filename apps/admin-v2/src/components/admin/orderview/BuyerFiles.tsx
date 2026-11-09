@@ -1,60 +1,44 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, lazy, Suspense, useContext, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Image as ImageIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderUploadsQueryOptions } from "~/lib/api-query-options/orders";
-import { toast } from "~/lib/toast";
-import { formatFileSize } from "../media-manager/utils/formatters";
-import { answerUploadIds, buyerFileKind, linkIsFresh, matchUploadAnswer, orderHasUploadAnswers, type BuyerFile } from "./buyer-files";
+import { answerUploadIds, orderHasUploadAnswers, type BuyerFile } from "./buyer-files";
 import type { Order } from "./types";
 
-interface BuyerFilesState {
+export interface BuyerFilesState {
   status: "loading" | "error" | "ready";
   uploads: readonly BuyerFile[];
   pendingId: string | null;
-  download: (file: BuyerFile) => void;
+  /** Marks the file whose fresh link is being fetched (null when done). */
+  setPendingId: (id: string | null) => void;
+  /** Reads the list again: fresh signed links. */
+  refetch: () => Promise<{ data?: readonly BuyerFile[] }>;
   retry: () => void;
 }
 
 const BuyerFilesContext = createContext<BuyerFilesState | null>(null);
 
+// The files themselves (names, sizes, Download) load once the list is ready.
+const BuyerFileList = lazy(() => import("./BuyerFileList").then((module) => ({ default: module.BuyerFileList })));
+
 /**
  * Reads the order's buyer files once for every card that shows a file answer
  * (line inputs and checkout attributes alike). The list is requested only when
- * the order holds a file answer. A download opens a fresh signed link in a new
- * tab; the link is never logged or shown.
+ * the order holds a file answer. Downloads (BuyerFileList) open a fresh signed
+ * link in a new tab; the link is never logged or shown.
  */
 export function OrderBuyerFilesProvider({ order, children }: {
   order: Pick<Order, "id" | "items" | "attributes">;
   children: ReactNode;
 }) {
-  const t = useMessages(orderDetailMessages);
   const hydrated = useHydrated();
   const wanted = orderHasUploadAnswers(order);
   const query = useQuery({ ...orderUploadsQueryOptions(order.id), enabled: wanted && hydrated });
   const { refetch } = query;
   const [pendingId, setPendingId] = useState<string | null>(null);
-
-  const download = useCallback((file: BuyerFile) => {
-    const open = (url: string) => window.open(url, "_blank", "noopener,noreferrer");
-    // A link with time left opens at once (a new tab opened after a wait can be blocked as a pop-up).
-    if (linkIsFresh(file)) {
-      open(file.url);
-      return;
-    }
-    setPendingId(file.id);
-    void refetch()
-      .then((result) => {
-        const fresh = result.data?.find((entry) => entry.id === file.id);
-        if (fresh) open(fresh.url);
-        else toast.error(t("files.gone"));
-      })
-      .catch(() => toast.error(t("files.downloadFailed")))
-      .finally(() => setPendingId(null));
-  }, [refetch, t]);
 
   const state = useMemo<BuyerFilesState | null>(() => {
     if (!wanted) return null;
@@ -62,10 +46,11 @@ export function OrderBuyerFilesProvider({ order, children }: {
       status: query.isError ? "error" : query.data ? "ready" : "loading",
       uploads: query.data ?? [],
       pendingId,
-      download,
+      setPendingId,
+      refetch,
       retry: () => void refetch(),
     };
-  }, [wanted, query.isError, query.data, pendingId, download, refetch]);
+  }, [wanted, query.isError, query.data, pendingId, refetch]);
 
   return <BuyerFilesContext.Provider value={state}>{children}</BuyerFilesContext.Provider>;
 }
@@ -92,39 +77,9 @@ export function BuyerFiles({ value, fallback }: { value: string; fallback?: stri
       </span>
     );
   }
-  const { files, missing } = matchUploadAnswer(ids, state.uploads);
   return (
-    <ul className="space-y-2" data-testid="buyer-files">
-      {files.map((file) => {
-        const kind = buyerFileKind(file.mediaType);
-        const Icon = kind === "pdf" ? FileText : ImageIcon;
-        return (
-          <li key={file.id} className="flex flex-wrap items-center justify-between gap-2 text-foreground">
-            <div className="flex min-w-0 items-start gap-2">
-              <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <div className="min-w-0">
-                <p className="wrap-anywhere">{file.filename}</p>
-                <p className="text-muted-foreground tabular-nums">
-                  {t(kind === "pdf" ? "files.typePdf" : "files.typeImage")} · {formatFileSize(file.sizeBytes)}
-                </p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              loading={state.pendingId === file.id}
-              aria-label={t("files.downloadName", { name: file.filename })}
-              onClick={() => state.download(file)}
-            >
-              {t("files.download")}
-            </Button>
-          </li>
-        );
-      })}
-      {missing.map((id) => (
-        <li key={id} className="text-muted-foreground">{t("files.noLongerKept")}</li>
-      ))}
-    </ul>
+    <Suspense fallback={<span role="status" className="text-muted-foreground">{t("files.loading")}</span>}>
+      <BuyerFileList ids={ids} state={state} />
+    </Suspense>
   );
 }

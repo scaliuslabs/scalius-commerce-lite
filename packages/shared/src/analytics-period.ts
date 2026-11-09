@@ -10,42 +10,38 @@ import {
 } from "./commerce-time";
 import type { WeekDay } from "./week-start";
 
-const DAY_SECONDS = 86_400;
-const DATE_KEY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-/** The longest range a report reads: two years and a day (a leap year pair). */
-export const ANALYTICS_MAX_RANGE_DAYS = 731;
-/**
- * Day buckets stop at about three months; longer ranges bucket by week (at
- * most 105 for two years) or month. This keeps a whole overview, both periods
- * and every bucket, inside one 64 KB agent response.
- */
-export const ANALYTICS_MAX_DAY_BUCKETS = 92;
-
-export const ANALYTICS_COMPARISONS = ["previous_period", "previous_year", "none"] as const;
-export type AnalyticsComparison = (typeof ANALYTICS_COMPARISONS)[number];
-
-export const ANALYTICS_GRANULARITIES = ["day", "week", "month"] as const;
-export type AnalyticsGranularity = (typeof ANALYTICS_GRANULARITIES)[number];
-
-export const ANALYTICS_PRESETS = [
-  "today",
-  "yesterday",
-  "last_7_days",
-  "last_30_days",
-  "last_90_days",
-  "month_to_date",
-  "last_month",
-  "year_to_date",
-  "last_365_days",
-] as const;
-export type AnalyticsPreset = (typeof ANALYTICS_PRESETS)[number];
-
-/** An inclusive range of merchant calendar days. */
-export interface AnalyticsRange {
-  from: string;
-  to: string;
-}
+// The range rules (date keys, the two-year limit, the choice lists) live in
+// ./analytics-range, so a page that only validates a range in its URL does
+// not load the calendar arithmetic below.
+export {
+  ANALYTICS_COMPARISONS,
+  ANALYTICS_GRANULARITIES,
+  ANALYTICS_MAX_DAY_BUCKETS,
+  ANALYTICS_MAX_RANGE_DAYS,
+  ANALYTICS_PRESETS,
+  analyticsDateKeyFromEpochDay,
+  analyticsEpochDay,
+  analyticsRangeDays,
+  isAnalyticsDateKey,
+  validateAnalyticsRange,
+  type AnalyticsComparison,
+  type AnalyticsGranularity,
+  type AnalyticsPreset,
+  type AnalyticsRange,
+} from "./analytics-range";
+import {
+  ANALYTICS_MAX_DAY_BUCKETS,
+  ANALYTICS_PRESETS,
+  DAY_SECONDS,
+  analyticsDateKeyFromEpochDay,
+  analyticsEpochDay,
+  analyticsRangeDays,
+  parseDateKey,
+  type AnalyticsComparison,
+  type AnalyticsGranularity,
+  type AnalyticsPreset,
+  type AnalyticsRange,
+} from "./analytics-range";
 
 /** A range as exact UTC epoch seconds: `[start, endExclusive)`. */
 export interface AnalyticsInstantRange {
@@ -59,54 +55,6 @@ export interface AnalyticsBucket {
   /** First and last merchant day of the bucket inside the range. */
   from: string;
   to: string;
-}
-
-function parseDateKey(value: string): { year: number; month: number; day: number } | null {
-  const match = DATE_KEY_PATTERN.exec(value);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-    ? { year, month, day }
-    : null;
-}
-
-export function isAnalyticsDateKey(value: unknown): value is string {
-  return typeof value === "string" && parseDateKey(value) !== null;
-}
-
-/** Days since 1970-01-01 of a merchant date key. */
-export function analyticsEpochDay(dateKey: string): number {
-  const parts = parseDateKey(dateKey);
-  if (!parts) throw new RangeError("A valid YYYY-MM-DD date is required.");
-  return Math.floor(Date.UTC(parts.year, parts.month - 1, parts.day) / (DAY_SECONDS * 1000));
-}
-
-/** The merchant date key of an epoch day. */
-export function analyticsDateKeyFromEpochDay(epochDay: number): string {
-  return new Date(epochDay * DAY_SECONDS * 1000).toISOString().slice(0, 10);
-}
-
-export function analyticsRangeDays(range: AnalyticsRange): number {
-  return analyticsEpochDay(range.to) - analyticsEpochDay(range.from) + 1;
-}
-
-/**
- * A valid range: real dates, `from <= to`, at most two years. Throws a
- * RangeError naming the problem (the API turns it into a 400).
- */
-export function validateAnalyticsRange(range: { from?: unknown; to?: unknown }): AnalyticsRange {
-  if (!isAnalyticsDateKey(range.from) || !isAnalyticsDateKey(range.to)) {
-    throw new RangeError("Dates must be real calendar days written YYYY-MM-DD.");
-  }
-  const days = analyticsEpochDay(range.to) - analyticsEpochDay(range.from) + 1;
-  if (days < 1) throw new RangeError("The start date must be on or before the end date.");
-  if (days > ANALYTICS_MAX_RANGE_DAYS) {
-    throw new RangeError(`A report covers at most ${ANALYTICS_MAX_RANGE_DAYS} days.`);
-  }
-  return { from: range.from, to: range.to };
 }
 
 /** Exact UTC bounds of a merchant-day range in the store's zone (daylight saving included). */

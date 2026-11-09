@@ -4,7 +4,7 @@
 // in the dashboard's language from the app (`adminContext().locale`).
 import type { Locale } from "~/i18n";
 import type { AppAdminSurfaces, AppSummary } from "~/lib/api-query-options/apps";
-import { pluginTranslationFor, type PluginTranslations } from "@scalius/shared/plugins/manifest-text";
+import { pluginTranslationFor, type PluginTranslations } from "@scalius/shared/plugins/manifest-translation";
 
 type Translations = AppSummary["translations"];
 type Translation = NonNullable<Translations>[string];

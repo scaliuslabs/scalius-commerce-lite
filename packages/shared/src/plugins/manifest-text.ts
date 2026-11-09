@@ -7,20 +7,11 @@
 // storefront layout and the dashboard share it.
 import { translationChain } from "../translations";
 import type { PluginTranslation } from "./manifest";
+import { pluginTranslationFor, type PluginTranslations } from "./manifest-translation";
 
-export type PluginTranslations = Readonly<Record<string, PluginTranslation>> | null | undefined;
-
-/** The translation of one language: its exact tag (`pt-BR`), else its language (`pt`). None for English or a language the app lacks. */
-export function pluginTranslationFor(translations: PluginTranslations, language: string | null | undefined): PluginTranslation | null {
-  if (!translations || !language) return null;
-  const wanted = language.toLowerCase();
-  const tags = Object.keys(translations);
-  const exact = tags.find((tag) => tag.toLowerCase() === wanted);
-  if (exact) return translations[exact] ?? null;
-  const base = wanted.split("-")[0]!;
-  const tag = tags.find((each) => each.toLowerCase() === base);
-  return tag ? translations[tag] ?? null : null;
-}
+// One language's lookup lives apart, so the dashboard shell (app names in the
+// navigation) does not load the buyer-page chain and its translation rules.
+export { pluginTranslationFor, type PluginTranslations } from "./manifest-translation";
 
 /** Where a buyer reads an app's words: the page's language and the store's default (`translationChain()`'s locales). */
 export interface PluginTextContext {

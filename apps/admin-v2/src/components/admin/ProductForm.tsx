@@ -1,5 +1,5 @@
 import React from "react";
-import { useCreateDraft } from "./shared/use-create-draft";
+import { LazyCreateDraft } from "./shared/LazyCreateDraft";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFormState, useWatch, type UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
@@ -404,14 +404,16 @@ function ProductEditor({
   });
   const scope = useSaveScope();
   // A new product's fields and variants survive a reload or a closed tab.
-  useCreateDraft<{ fields: ProductFormValues; variants?: unknown }>({
-    enabled: !isEdit && !readOnly,
-    read: () => ({ fields: form.getValues(), variants: createDraftVariants?.read() }),
-    restore: ({ fields, variants }) => {
-      form.reset(fields, { keepDefaultValues: true });
-      if (variants) createDraftVariants?.restore(variants);
-    },
-  });
+  const createDraft = (
+    <LazyCreateDraft<{ fields: ProductFormValues; variants?: unknown }>
+      enabled={!isEdit && !readOnly}
+      read={() => ({ fields: form.getValues(), variants: createDraftVariants?.read() })}
+      restore={({ fields, variants }) => {
+        form.reset(fields, { keepDefaultValues: true });
+        if (variants) createDraftVariants?.restore(variants);
+      }}
+    />
+  );
 
   // New products show the web address the server will make from the title until it is edited;
   // an address the merchant didn't type is never sent (see formatFormValuesForSubmission).
@@ -471,6 +473,7 @@ function ProductEditor({
 
   return (
     <Page width="form">
+      {createDraft}
       <PageHeader
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"

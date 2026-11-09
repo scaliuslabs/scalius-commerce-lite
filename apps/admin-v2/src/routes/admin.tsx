@@ -9,7 +9,7 @@ import { SETTINGS_ITEM, visibleNav } from "@/components/admin/layout/AdminNav";
 import { useAppNavPages } from "@/components/admin/apps/ui/surfaces";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
-import { setCreateDraftAccount } from "~/lib/create-drafts";
+import { setCreateDraftAccount } from "~/lib/create-draft-account";
 import { AdminSessionSync } from "@/components/auth/AdminSessionSync";
 import {
   getAdminRouteContext,

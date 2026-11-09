@@ -10,7 +10,6 @@ import {
   analyticsPresetFor,
   analyticsPresetRange,
   analyticsToday,
-  isAnalyticsDateKey,
   resolveAnalyticsGranularity,
   validateAnalyticsRange,
   type AnalyticsComparison,
@@ -19,6 +18,10 @@ import {
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
 import { getStoreTimeZone } from "~/lib/store-time-zone";
+import type { AnalyticsSearch } from "./analytics-search";
+
+// The URL's own part (always loaded with the route tree) lives in ./analytics-search.
+export { validateAnalyticsSearch, type AnalyticsSearch } from "./analytics-search";
 
 export interface AnalyticsSelection extends AnalyticsRange {
   comparison: AnalyticsComparison;
@@ -26,13 +29,6 @@ export interface AnalyticsSelection extends AnalyticsRange {
   granularity: AnalyticsGranularity | null;
 }
 
-/** The URL search of an analytics page (all optional). */
-export interface AnalyticsSearch {
-  from?: string;
-  to?: string;
-  comparison?: AnalyticsComparison;
-  granularity?: AnalyticsGranularity;
-}
 
 interface SavedSelection {
   preset: AnalyticsPreset | null;
@@ -48,21 +44,6 @@ export const DEFAULT_ANALYTICS_PRESET: AnalyticsPreset = "last_30_days";
 const isOneOf = <T extends string>(values: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (values as readonly string[]).includes(value);
 
-export function validateAnalyticsSearch(search: Record<string, unknown>): AnalyticsSearch {
-  const result: AnalyticsSearch = {};
-  if (isAnalyticsDateKey(search.from) && isAnalyticsDateKey(search.to)) {
-    try {
-      const range = validateAnalyticsRange({ from: search.from, to: search.to });
-      result.from = range.from;
-      result.to = range.to;
-    } catch {
-      // An impossible range in a shared link falls back to the saved one.
-    }
-  }
-  if (isOneOf(ANALYTICS_COMPARISONS, search.comparison)) result.comparison = search.comparison;
-  if (isOneOf(ANALYTICS_GRANULARITIES, search.granularity)) result.granularity = search.granularity;
-  return result;
-}
 
 function storageKey(userId: string | null | undefined): string {
   return `${STORAGE_PREFIX}${userId || "anonymous"}`;
