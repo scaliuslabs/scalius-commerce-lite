@@ -642,6 +642,10 @@
                         "type": "string",
                         "nullable": true
                       },
+                      "imageAspect": {
+                        "type": "number",
+                        "nullable": true
+                      },
                       "rating": {
                         "type": "object",
                         "nullable": true,
@@ -687,6 +691,7 @@
                       "imageMediaId",
                       "imageAlt",
                       "secondaryImageUrl",
+                      "imageAspect",
                       "rating"
                     ]
                   },
@@ -1022,6 +1027,10 @@
                         "type": "string",
                         "nullable": true
                       },
+                      "imageAspect": {
+                        "type": "number",
+                        "nullable": true
+                      },
                       "rating": {
                         "type": "object",
                         "nullable": true,
@@ -1067,6 +1076,7 @@
                       "imageMediaId",
                       "imageAlt",
                       "secondaryImageUrl",
+                      "imageAspect",
                       "rating"
                     ]
                   },
@@ -1138,6 +1148,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "imageAspect": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "rating": {
                       "type": "object",
                       "nullable": true,
@@ -1183,6 +1197,7 @@
                     "imageMediaId",
                     "imageAlt",
                     "secondaryImageUrl",
+                    "imageAspect",
                     "rating"
                   ]
                 }
@@ -32826,6 +32841,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -32891,6 +32910,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "discountedPrice",
                               "priceVaries",
                               "availableForSale",
@@ -32943,6 +32963,10 @@
                             },
                             "secondaryImageUrl": {
                               "type": "string",
+                              "nullable": true
+                            },
+                            "imageAspect": {
+                              "type": "number",
                               "nullable": true
                             },
                             "cardFacts": {
@@ -33010,6 +33034,7 @@
                             "imageMediaId",
                             "imageAlt",
                             "secondaryImageUrl",
+                            "imageAspect",
                             "discountedPrice",
                             "priceVaries",
                             "availableForSale",
@@ -34133,6 +34158,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -34207,6 +34236,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -71910,6 +71940,11 @@
                                 "nullable": true,
                                 "description": "The next photo in gallery order, for a card's hover swap. Never a video."
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true,
+                                "description": "The card photo's width over its height; null when unknown (a video poster, a file without dimensions)."
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -71989,6 +72024,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "discountedPrice",
@@ -73490,6 +73526,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -73536,6 +73576,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "createdAt",
                               "rating"
                             ]
@@ -74910,6 +74951,10 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "imageAspect": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -74956,6 +75001,7 @@
                                   "imageMediaId",
                                   "imageAlt",
                                   "secondaryImageUrl",
+                                  "imageAspect",
                                   "createdAt",
                                   "rating"
                                 ]
@@ -76186,6 +76232,10 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "imageAspect": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -76232,6 +76282,7 @@
                                   "imageMediaId",
                                   "imageAlt",
                                   "secondaryImageUrl",
+                                  "imageAspect",
                                   "createdAt",
                                   "rating"
                                 ]
@@ -78382,6 +78433,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -78461,6 +78516,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -78534,6 +78590,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -78613,6 +78673,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -79203,6 +79264,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -79282,6 +79347,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"

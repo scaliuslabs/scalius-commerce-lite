@@ -201,6 +201,7 @@ export type StorefrontHomepageSections = {
             imageMediaId: string | null;
             imageAlt: string | null;
             secondaryImageUrl: string | null;
+            imageAspect: number | null;
             /**
              * Published-review average and count; null without a published review.
              */
@@ -294,6 +295,7 @@ export type StorefrontHomepageSections = {
             imageMediaId: string | null;
             imageAlt: string | null;
             secondaryImageUrl: string | null;
+            imageAspect: number | null;
             /**
              * Published-review average and count; null without a published review.
              */
@@ -328,6 +330,7 @@ export type StorefrontHomepageSections = {
             imageMediaId: string | null;
             imageAlt: string | null;
             secondaryImageUrl: string | null;
+            imageAspect: number | null;
             /**
              * Published-review average and count; null without a published review.
              */
@@ -7708,6 +7711,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
@@ -7748,6 +7752,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
@@ -8137,6 +8142,7 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
@@ -19123,6 +19129,10 @@ export type GetApiV1ProductsResponses = {
                  * The next photo in gallery order, for a card's hover swap. Never a video.
                  */
                 secondaryImageUrl: string | null;
+                /**
+                 * The card photo's width over its height; null when unknown (a video poster, a file without dimensions).
+                 */
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
@@ -19592,6 +19602,7 @@ export type GetApiV1ProductsRecommendationsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 createdAt: string | null;
                 /**
                  * Published-review rating; null when the product has no published review.
@@ -19919,6 +19930,7 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 createdAt: string | null;
                 /**
                  * Published-review rating; null when the product has no published review.
@@ -20252,6 +20264,7 @@ export type GetApiV1ProductsBySlugResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    imageAspect: number | null;
                     createdAt: string | null;
                     /**
                      * Published-review rating; null when the product has no published review.
@@ -20915,6 +20928,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
@@ -20965,6 +20979,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
@@ -21152,6 +21167,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                imageAspect: number | null;
                 cardFacts?: ProductCardFacts;
                 /**
                  * Requested storefront-visible card fields, keyed by namespace.key.
