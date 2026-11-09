@@ -38,6 +38,8 @@
     "dist",
     "README.md",
     "docs",
+    "examples",
+    "!examples/*/dist",
     "LICENSE",
     "PLUGIN-EXCEPTION"
   ],

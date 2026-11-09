@@ -62,17 +62,17 @@ import { manifest as wholesaleManifest } from "./apps/wholesale/src/index";
 import { manifest as riskGuardManifest } from "./apps/risk-guard/src/index";
 import { manifest as membersManifest } from "./apps/members/src/index";
 import { manifest as builderManifest } from "./apps/builder/src/index";
-import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
+import { manifest as marketplaceManifest } from "../../../../../packages/plugin-sdk/examples/marketplace/src/index";
 import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
-import { manifest as deliverySlotsManifest } from "./apps/delivery-slots/src/index";
+import { manifest as deliverySlotsManifest } from "../../../../../packages/plugin-sdk/examples/delivery-slots/src/index";
 import { manifest as fraudScreenManifest } from "./apps/fraud-screen/src/index";
 import { manifest as personaliseManifest } from "./apps/personalise/src/index";
-import { manifest as chatManifest } from "./apps/chat/src/index";
+import { manifest as chatManifest } from "../../../../../packages/plugin-sdk/examples/chat/src/index";
 import { manifest as qaManifest } from "./apps/qa/src/index";
-import { manifest as cartRecoveryManifest } from "./apps/cart-recovery/src/index";
-import { manifest as reviewsManifest } from "./apps/reviews/src/index";
+import { manifest as cartRecoveryManifest } from "../../../../../packages/plugin-sdk/examples/cart-recovery/src/index";
+import { manifest as reviewsManifest } from "../../../../../packages/plugin-sdk/examples/reviews/src/index";
 import { manifest as affiliatesManifest } from "./apps/affiliates/src/index";
-import { manifest as posManifest } from "./apps/pos/src/index";
+import { manifest as posManifest } from "../../../../../packages/plugin-sdk/examples/pos/src/index";
 import type { BundledPluginEntry } from "../loaders/bundled";
 
 /** Directories of the fixture apps, for `packPlugin` (sandbox tests). */
@@ -87,17 +87,17 @@ export const FIXTURE_APP_SOURCES = {
   "acme.risk-guard": "./apps/api/src/plugins/testing/apps/risk-guard",
   "acme.members": "./apps/api/src/plugins/testing/apps/members",
   "acme.builder": "./apps/api/src/plugins/testing/apps/builder",
-  "acme.marketplace": "./apps/api/src/plugins/testing/apps/marketplace",
+  "acme.marketplace": "./packages/plugin-sdk/examples/marketplace",
   "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
-  "acme.delivery-slots": "./apps/api/src/plugins/testing/apps/delivery-slots",
+  "acme.delivery-slots": "./packages/plugin-sdk/examples/delivery-slots",
   "acme.fraud-screen": "./apps/api/src/plugins/testing/apps/fraud-screen",
   "acme.personalise": "./apps/api/src/plugins/testing/apps/personalise",
-  "acme.chat": "./apps/api/src/plugins/testing/apps/chat",
+  "acme.chat": "./packages/plugin-sdk/examples/chat",
   "acme.qa": "./apps/api/src/plugins/testing/apps/qa",
-  "acme.cart-recovery": "./apps/api/src/plugins/testing/apps/cart-recovery",
-  "acme.reviews": "./apps/api/src/plugins/testing/apps/reviews",
+  "acme.cart-recovery": "./packages/plugin-sdk/examples/cart-recovery",
+  "acme.reviews": "./packages/plugin-sdk/examples/reviews",
   "acme.affiliates": "./apps/api/src/plugins/testing/apps/affiliates",
-  "acme.pos": "./apps/api/src/plugins/testing/apps/pos",
+  "acme.pos": "./packages/plugin-sdk/examples/pos",
 } as const;
 
 export const HELLO_BUNDLED: BundledPluginEntry = {
@@ -117,17 +117,17 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.risk-guard": { version: riskGuardManifest.version, sha256: "715c".repeat(16), load: () => import("./apps/risk-guard/src/index") },
   "acme.members": { version: membersManifest.version, sha256: "3e3b".repeat(16), load: () => import("./apps/members/src/index") },
   "acme.builder": { version: builderManifest.version, sha256: "b11d".repeat(16), load: () => import("./apps/builder/src/index") },
-  "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("./apps/marketplace/src/index") },
+  "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/marketplace/src/index") },
   "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
-  "acme.delivery-slots": { version: deliverySlotsManifest.version, sha256: "d51a".repeat(16), load: () => import("./apps/delivery-slots/src/index") },
+  "acme.delivery-slots": { version: deliverySlotsManifest.version, sha256: "d51a".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/delivery-slots/src/index") },
   "acme.fraud-screen": { version: fraudScreenManifest.version, sha256: "f7a0".repeat(16), load: () => import("./apps/fraud-screen/src/index") },
   "acme.personalise": { version: personaliseManifest.version, sha256: "f070".repeat(16), load: () => import("./apps/personalise/src/index") },
-  "acme.chat": { version: chatManifest.version, sha256: "c4a7".repeat(16), load: () => import("./apps/chat/src/index") },
+  "acme.chat": { version: chatManifest.version, sha256: "c4a7".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/chat/src/index") },
   "acme.qa": { version: qaManifest.version, sha256: "0a0a".repeat(16), load: () => import("./apps/qa/src/index") },
-  "acme.cart-recovery": { version: cartRecoveryManifest.version, sha256: "ca27".repeat(16), load: () => import("./apps/cart-recovery/src/index") },
-  "acme.reviews": { version: reviewsManifest.version, sha256: "4e71".repeat(16), load: () => import("./apps/reviews/src/index") },
+  "acme.cart-recovery": { version: cartRecoveryManifest.version, sha256: "ca27".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/cart-recovery/src/index") },
+  "acme.reviews": { version: reviewsManifest.version, sha256: "4e71".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/reviews/src/index") },
   "acme.affiliates": { version: affiliatesManifest.version, sha256: "af11".repeat(16), load: () => import("./apps/affiliates/src/index") },
-  "acme.pos": { version: posManifest.version, sha256: "9050".repeat(16), load: () => import("./apps/pos/src/index") },
+  "acme.pos": { version: posManifest.version, sha256: "9050".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/pos/src/index") },
 };
 
 /** The bundled registry with every fixture app added. */

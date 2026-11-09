@@ -4,6 +4,7 @@ import { getBuyerConversationView } from "../../utils/conversation-view";
 // order threads, reads, posts and private image attachments. Message
 // endpoints accept no contact fields; bodies never enter URLs or logs.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { characterText } from "../../schemas/text";
 import type { Context } from "hono";
 import {
   assertBuyerOrderAccess,
@@ -126,8 +127,8 @@ app.openapi(createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            subject: z.string().max(CONVERSATION_LIMITS.subjectLength * 2),
-            body: z.string().max(CONVERSATION_LIMITS.bodyLength * 2),
+            subject: characterText(CONVERSATION_LIMITS.subjectLength),
+            body: characterText(CONVERSATION_LIMITS.bodyLength),
             clientMessageKey: clientMessageKeySchema,
           }).strict(),
         },

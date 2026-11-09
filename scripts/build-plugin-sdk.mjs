@@ -5,7 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
-import { loadEsbuild, root } from "./plugin-build.mjs";
+import { loadEsbuild, root, sdkSourceDigest } from "./plugin-build.mjs";
 
 const directory = join(root, "packages/plugin-sdk");
 const packages = join(root, "packages");
@@ -92,4 +92,6 @@ for (const entry of Object.values(metadata.publishConfig.exports)) {
   await import(pathToFileURL(resolve(directory, entry.import)).href);
 }
 copyFileSync(join(root, "LICENSE"), join(directory, "LICENSE"));
+// Which sources this build is: `pnpm plugin validate` warns when an app's installed build differs from the checkout's.
+writeFileSync(join(dist, "build.json"), `${JSON.stringify({ name: metadata.name, version: metadata.version, sourceDigest: sdkSourceDigest() }, null, 2)}\n`);
 console.log(`Built ${metadata.name}@${metadata.version}: ${entries.length} ESM entries with portable declarations.`);

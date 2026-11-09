@@ -13,7 +13,7 @@
 //   pnpm plugin pack <path> [--key <pem | folder>] [--developer <name>]   pack, sign and zip a plugin for upload or a registry
 //   pnpm plugin keygen <out-dir>                               make an Ed25519 signing key
 //   pnpm plugin index <dist-dir> ... --out <dir> --name <name> [--base-url <url>]   build a static registry
-//   pnpm plugin add <path | package>                           pack, check and bundle a plugin
+//   pnpm plugin add <path | zip | package>                     pack, check and bundle an app: a folder anywhere, the upload ZIP or a dist folder
 //   pnpm plugin add <vendor.name> --registry <index url> [--version <v>]   install a signed release from a registry
 //   pnpm plugin trust <name> <public key>                      trust a developer's signing key
 //   pnpm plugin remove <plugin id>                             stop bundling a plugin
@@ -23,7 +23,7 @@
 //   pnpm plugin wrangler-config [--local] [--plan paid]        print the API Wrangler config to use
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -52,6 +52,8 @@ import {
   buildRegistry,
   generateSigningKey,
   installFromRegistry,
+  installLocalRelease,
+  isPackedRelease,
   loadRegistryContract,
   packSigned,
   parseCommandArgs,
@@ -75,6 +77,7 @@ import { resolvePlan, withPlanProfile } from "./plan.mjs";
 
 export { pluginSandboxEnabled, scaffoldFiles };
 
+const HELP = new Set(["help", "--help", "-h"]);
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const API_DIR = join(root, "apps/api");
 
@@ -120,22 +123,46 @@ async function regenerate(lockfile) {
   if (catalog) console.log(`Updated ${relative(root, CATALOG_GEN)}`);
 }
 
+/** A path source as the lockfile keeps it: `plugins/<dir>`, or `./<path>` for another folder of this repository. */
 function normalizeSource(source) {
   if (!isPathSource(source)) return source;
   const path = relative(root, resolve(root, source)).split("\\").join("/");
-  if (path.startsWith("..")) throw new Error(`${source} is outside the repository; publish it as a package instead.`);
-  return path;
+  return path.startsWith("plugins/") ? path : `./${path}`;
+}
+
+/**
+ * A path `add` installs as a packed release first: anything outside this
+ * repository (an app folder, packed here, or what `pnpm plugin pack` wrote)
+ * and an upload ZIP anywhere. It becomes `plugins/<vendor>-<name>/`.
+ */
+function installsAsRelease(path) {
+  return relative(root, path).startsWith("..") || isPackedRelease(path) && statSync(path).isFile();
 }
 
 async function add(source) {
-  if (!source) throw new Error("Usage: pnpm plugin add <path | package>");
+  if (!source) throw new Error("Usage: pnpm plugin add <path | zip | package>");
+  // A path as typed where the command ran, else as the repository has it (`plugins/<dir>`).
+  const path = [userPath(source), resolve(root, source)].find((candidate) => existsSync(candidate));
+  if (path) {
+    if (installsAsRelease(path)) {
+      const installed = await installLocalRelease({ source: path, pluginsDir: join(root, "plugins") });
+      console.log(`Installed ${installed.id}@${installed.version} from ${shownPath(path)} as ${relative(root, installed.directory)}${installed.signer ? ` (signed by "${installed.signer.name}", key ${installed.signer.fingerprint})` : " (unsigned)"}.`);
+      return bundle(installed.directory);
+    }
+    return bundle(path);
+  }
+  return bundle(source);
+}
+
+async function bundle(source) {
   const normalized = normalizeSource(source);
   const packed = await packPlugin(normalized);
   const lockfile = readLockfile();
   const entry = { id: packed.id, version: packed.version, source: normalized, sha256: packed.sha256 };
   lockfile.plugins = [...lockfile.plugins.filter((plugin) => plugin.id !== packed.id), entry];
   await regenerate(lockfile);
-  console.log(`Bundled ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}). Deploy, then update its installation in the dashboard.`);
+  console.log(`Bundled ${packed.id}@${packed.version} (${packed.sha256.slice(0, 12)}).
+A running pnpm dev reloads both Workers by itself: open Apps in the dashboard, then activate it. On a deployed store: pnpm run deploy.`);
 }
 
 async function remove(id) {
@@ -336,7 +363,7 @@ async function addFromRegistry(id, flags) {
     lockfilePath: LOCKFILE,
   });
   console.log(`Downloaded ${installed.id}@${installed.version} from "${installed.registryName}"; signature by ${installed.signer.name} (key ${installed.signer.id}) verified.`);
-  await add(relative(root, installed.directory));
+  await bundle(relative(root, installed.directory));
 }
 
 async function trust(name, publicKey) {
@@ -412,7 +439,10 @@ async function main(argv) {
     }
     default:
       console.log(readFileSync(new URL(import.meta.url), "utf8").split("\n").filter((line) => line.startsWith("//   pnpm plugin")).map((line) => line.slice(3)).join("\n"));
-      if (command && command !== "help") process.exitCode = 1;
+      if (command && !HELP.has(command)) {
+        console.error(`✗ Unknown command: ${command}`);
+        process.exitCode = 1;
+      }
       return undefined;
   }
 }

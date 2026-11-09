@@ -17,6 +17,8 @@ packages/cli/src/generated/** merge=scalius-generated linguist-generated=true
 packages/cli/skills/*/references/recipes.md merge=scalius-generated linguist-generated=true
 packages/cli/skills/*/references/workflows*.md merge=scalius-generated linguist-generated=true
 packages/shared/src/plugins/abi.sdk.snapshot.txt merge=scalius-generated linguist-generated=true
+packages/plugin-sdk/docs/operations.md merge=scalius-generated linguist-generated=true
+packages/plugin-sdk/docs/events.md merge=scalius-generated linguist-generated=true
 packages/shared/src/address-metadata.data.ts merge=scalius-generated linguist-generated=true
 *.gen.ts merge=scalius-generated linguist-generated=true
 *.gen.d.ts merge=scalius-generated linguist-generated=true

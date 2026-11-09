@@ -10,6 +10,7 @@
 import type { EventTopic } from "@scalius/shared/events";
 import { STOREFRONT_UI_SLOT_PAGES, type StorefrontUiSlot } from "@scalius/shared/plugins/storefront-protocol";
 import type { BuyerUiInput, FunctionCart, FunctionReads, PluginFunctionInput } from "@scalius/shared/plugins";
+import type { BuyerEvent, BuyerEventData, BuyerLine, BuyerMerchandise, PixelEventName } from "@scalius/shared/plugins/buyer-events";
 import type { PluginEvent, PluginMoney, PluginRouteRequest } from "./context";
 
 let eventCounter = 0;
@@ -142,4 +143,60 @@ function storefrontExtensionInput(target: StorefrontUiSlot, overrides: Storefron
   };
 }
 
-export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, storefrontExtensionInput, money, readRecord, adminRouteRequest };
+// ── Buyer events (pixels) ────────────────────────────────────────────────
+
+type DeepPartial<T> = T extends readonly (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> | null } : T;
+
+const merchandise = (): BuyerMerchandise => ({ productId: "prod_1", variantId: "var_1", title: "T-shirt", price: { amountMinor: 50_000, currency: "BDT" } });
+const buyerLine = (): BuyerLine => ({ merchandise: merchandise(), quantity: 2 });
+const checkoutOf = () => ({ id: "chk_test_1", lines: [buyerLine()], itemCount: 2, total: { amountMinor: 100_000, currency: "BDT" } });
+
+/** Each buyer event's data as a store sends it: a 2 x 500.00 BDT T-shirt, a checkout quoted at 1,000.00 BDT. */
+const BUYER_EVENT_DATA: { [N in PixelEventName]: () => BuyerEventData[N] } = {
+  page_viewed: () => ({}),
+  product_viewed: () => ({ merchandise: { ...merchandise(), variantId: null }, category: "Clothing" }),
+  collection_viewed: () => ({ collection: { kind: "category", id: "cat_1", title: "Clothing" }, products: [merchandise()] }),
+  search_submitted: () => ({ query: "t-shirt", results: [merchandise()] }),
+  product_added_to_cart: () => ({ line: buyerLine() }),
+  product_removed_from_cart: () => ({ line: { ...buyerLine(), quantity: 1 } }),
+  cart_viewed: () => ({ lines: [buyerLine()], total: { amountMinor: 100_000, currency: "BDT" } }),
+  checkout_started: () => ({ checkout: checkoutOf() }),
+  checkout_contact_submitted: () => ({ checkout: checkoutOf(), contact: { email: "buyer@example.com", phone: "+8801700000000" } }),
+  checkout_address_submitted: () => ({
+    checkout: checkoutOf(),
+    address: { name: "Test Buyer", line1: "House 1, Road 2", line2: null, locality: "Dhanmondi", adminArea: "Dhaka", postalCode: "1209", countryCode: "BD" },
+  }),
+  checkout_shipping_submitted: () => ({ checkout: checkoutOf(), shipping: { kind: "delivery", methodId: "ship_1", title: "Inside Dhaka", cost: { amountMinor: 6_000, currency: "BDT" } } }),
+  checkout_payment_submitted: () => ({ checkout: checkoutOf(), payment: { method: "cod" } }),
+  checkout_completed: () => ({ checkout: checkoutOf(), order: { id: "order_test_1" } }),
+  app_event: () => ({ app: "acme.test", name: "quiz_finished", payload: {} }),
+};
+
+function mergeInto(base: unknown, overrides: unknown): unknown {
+  if (overrides === undefined) return base;
+  if (overrides === null || typeof overrides !== "object" || Array.isArray(overrides) || base === null || typeof base !== "object" || Array.isArray(base)) return overrides;
+  const merged: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) merged[key] = mergeInto(merged[key], value);
+  return merged;
+}
+
+/**
+ * One buyer event as the store's bus carries it, for a pixel test
+ * (`createPixelTestHarness`). `data` overrides merge into the defaults
+ * (`{ checkout: { total: null } }`); a list replaces the default list.
+ * Money is `{ amountMinor, currency }`, and it can be null: a product with no
+ * price shown (`merchandise.price`), a cart or checkout before a quote
+ * (`total`), a delivery not yet priced (`shipping.cost`). Handle null.
+ */
+function buyerEvent<N extends PixelEventName>(name: N, data: DeepPartial<BuyerEventData[N]> = {} as DeepPartial<BuyerEventData[N]>, overrides: Partial<Omit<BuyerEvent<N>, "name" | "data">> = {}): BuyerEvent<N> {
+  eventCounter += 1;
+  return {
+    id: `bev_test_${eventCounter}`,
+    name,
+    timestamp: new Date().toISOString(),
+    data: mergeInto(BUYER_EVENT_DATA[name](), data) as BuyerEventData[N],
+    ...overrides,
+  };
+}
+
+export const fixtures = { event, cartLine, cart, checkoutDiscountsInput, storefrontExtensionInput, money, readRecord, adminRouteRequest, buyerEvent };

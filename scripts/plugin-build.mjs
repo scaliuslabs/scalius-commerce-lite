@@ -204,6 +204,38 @@ export function sdkResolution() {
   };
 }
 
+/**
+ * A fingerprint of the sources an SDK build is made from (the SDK and the
+ * shared contract it re-exports, tests left out). The build stamps it into
+ * `dist/build.json`; `validate` compares an app's installed build with this
+ * checkout's, so a tarball packed before a change (a new scope, a new
+ * operation) is named instead of silently typing an older platform.
+ */
+export function sdkSourceDigest() {
+  const hash = createHash("sha256");
+  const files = [join(SDK_DIR, "package.json"), ...[join(SDK_DIR, "src"), join(root, "packages/shared/src")].flatMap(listSourceFiles)]
+    .filter((file) => !/\.test\.[cm]?[jt]sx?$/u.test(file))
+    .sort();
+  for (const file of files) hash.update(relative(root, file)).update("\0").update(readFileSync(file)).update("\0");
+  return hash.digest("hex");
+}
+
+function listSourceFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? listSourceFiles(path) : [path];
+  });
+}
+
+/** An installed SDK build's stamp (`dist/build.json`), or null for a build from before stamps or the workspace source. */
+export function sdkBuildStamp(sdkPath) {
+  try {
+    return JSON.parse(readFileSync(join(sdkPath, "dist/build.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /** The SDK an app at `directory` installed (`{ version, path }`), or null when it would use this repository's. */
 export function installedSdk(directory) {
   for (let current = resolve(directory); ; current = dirname(current)) {

@@ -1036,5 +1036,11 @@
   "from": "94eabe1f1f10f754",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiInput: an existing signature changed or gained a required member.",
   "reason": "Additive (Nov 9 capabilities): the admin file-field input joins the input union (appended after the sealed nodes)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8e4fbaa399d307c3",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Additive for test authors (clean-room app builder, Nov 9): the harness's return gained commit (checkout holds at the revision read, app_offer_changed for the loser of a race) and its options gained subscribed (marketing consent per channel), and fn and extension resolve list reads, composite keys and the run's clock (now) from the harness's records; records now hold the wire form (money as { amountMinor, currency }), the shape ctx.objects reads."
  }
 ]

@@ -15,6 +15,7 @@
 // name is protected (`read_customer_names`). The dashboard's moderation
 // queue and bulk moderation stay `dashboard.reviews.*` (beta).
 import { createRoute, z } from "@hono/zod-openapi";
+import { characterText } from "../../schemas/text";
 import { adminRouter } from "./admin-router";
 import type { MiddlewareHandler } from "hono";
 import { eq, gte, type SQL } from "drizzle-orm";
@@ -114,7 +115,7 @@ app.openapi(createRoute({
   },
 }), async (c) => ok(c, { review: await readReview(c.get("db"), c.req.valid("param").id) }));
 
-const textInput = (max: number) => z.string().max(max * 2).nullable().optional();
+const textInput = (max: number) => characterText(max).nullable().optional();
 
 app.openapi(createRoute({
   operationId: CREATE_OPERATION,

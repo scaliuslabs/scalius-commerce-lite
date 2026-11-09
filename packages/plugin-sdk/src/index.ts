@@ -53,6 +53,8 @@ export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
 export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
 /** The sealed app-facing error codes: `PluginPlatformError.code` and a refused `ctx.api.call`'s `error.code`, each with its status. */
 export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEntry } from "@scalius/shared/plugins/app-errors";
+/** Every access scope an app may ask for in `manifest.scopes` (`PLUGIN_SCOPES` maps each to what it grants). */
+export { PLUGIN_SCOPES, PLUGIN_SCOPE_NAMES, isPluginScope, type PluginScope } from "@scalius/shared/plugins/scopes";
 export type {
   CourierFind,
   CourierRecipient,

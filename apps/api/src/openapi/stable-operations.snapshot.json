@@ -20053,19 +20053,19 @@
          "title": {
           "type": "string",
           "nullable": true,
-          "maxLength": 240,
+          "maxLength": 120,
           "description": "At most 120 characters."
          },
          "body": {
           "type": "string",
           "nullable": true,
-          "maxLength": 10000,
+          "maxLength": 5000,
           "description": "At most 5000 characters."
          },
          "authorDisplayName": {
           "type": "string",
           "nullable": true,
-          "maxLength": 120,
+          "maxLength": 60,
           "description": "The name it is shown under (at most 60 characters); defaults to the customer's (\"First L.\"). Required with no customer."
          },
          "status": {

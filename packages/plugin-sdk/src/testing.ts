@@ -1,4 +1,5 @@
 import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scalius/shared/plugins/objects";
+import { customFieldsReadFields, FUNCTION_READ_JOIN_SEPARATOR, functionClock, functionReadHop, functionReadJoin, functionReadKey, isCustomFieldsRead, isListRead, isPerLineRead, type FunctionReadDeclaration, type FunctionReadRecord, type FunctionReads } from "@scalius/shared/plugins/function-reads";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
 import { customFieldWireValue, isCustomFieldMoney, parseCustomFieldValidations, parseCustomFieldValue, type CustomFieldType } from "@scalius/shared/custom-fields";
 // `@scalius/plugin-sdk/testing`: run a plugin's handlers in a unit test with
@@ -87,6 +88,7 @@ export {
   sanitizePluginHead,
 } from "@scalius/shared/plugins";
 export { fixtures } from "./fixtures";
+export { createPixelTestHarness, type PixelTestHarnessOptions, type PixelTestRequest } from "./pixel-testing";
 export {
   contractSchemaIssue,
   createContractApi,
@@ -143,6 +145,13 @@ export interface PluginTestHarnessOptions {
    * customer on the platform. By default every id is a live customer.
    */
   customers?: string[];
+  /**
+   * The customers subscribed to marketing, by channel. A `marketing: true`
+   * email or SMS to anyone else answers `{ queued: false }` and sends
+   * nothing, as on the platform (consent is per customer and channel). By
+   * default every customer is subscribed on both channels.
+   */
+  subscribed?: { email?: string[]; sms?: string[] };
 }
 
 /** One `harness.runJob` / `harness.jobStep` step: the run and the job after it. */
@@ -178,7 +187,8 @@ function compare(left: Scalar, right: Scalar): number {
   return leftValue === rightValue ? 0 : (leftValue as never) < (rightValue as never) ? -1 : 1;
 }
 
-const scalar = (value: unknown): Scalar => (value === undefined ? null : value as Scalar);
+/** A stored value as the platform's index compares it: money by its minor units. */
+const scalar = (value: unknown): Scalar => (value === undefined ? null : isCustomFieldMoney(value) ? value.amountMinor : value as Scalar);
 const fieldsOf = (entry: string | readonly string[]) => (typeof entry === "string" ? [entry] : [...entry]);
 const copy = <T>(value: T): T => (value === undefined ? value : structuredClone(value));
 
@@ -195,6 +205,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const metadata = new Map<string, { handle: string | null; status: "active" | "draft" | "published" }>();
   const codec = { decimalPlaces: options.store?.decimalPlaces ?? 2, currencyCode: options.store?.currency ?? "BDT" };
   const defaultStatus = (name: string) => manifest.objects[name]!.storefront ? "draft" as const : "active" as const;
+  // Records are kept in the wire form every read returns (money as `{ amountMinor, currency }`), so `harness.records` shows what `ctx.objects` reads.
   const wire = (name: string, data: Record<string, unknown>) => objectDataWire(manifest.objects[name]!, data, codec);
   // A money filter matches the stored minor units, as the platform's index does.
   const storedWhere = (name: string, where: Record<string, unknown>): Record<string, Scalar> => Object.fromEntries(Object.entries(where).map(([key, value]) => {
@@ -208,7 +219,8 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const revisionKey = (name: string, id: string) => `${name}\u0000${id}`;
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
-  const emailKeys = new Set<string>();
+  /** Email idempotency keys and whether their first send was queued (the platform keeps them 24 hours). */
+  const emailKeys = new Map<string, boolean>();
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[], pushes: [] as unknown[], timeline: [] as unknown[], holds: [] as unknown[], releases: [] as unknown[], risks: [] as unknown[] };
   /** Customer roles the app granted, by customer id then role (the platform keeps them per app). */
   const roles = new Map<string, Map<string, { ref: string | null; grantedAt: string }>>();
@@ -354,18 +366,26 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     }
   };
 
+  /** A marketing message goes out only to a customer subscribed on its channel (apps/api/src/plugins/messaging.ts). */
+  const consented = (input: unknown, channel: "email" | "sms") => {
+    const message = input as { marketing?: unknown; customerId?: unknown };
+    if (message.marketing !== true) return true;
+    const list = options.subscribed?.[channel];
+    return list === undefined || list.includes(message.customerId as string);
+  };
+
   const bridge: PluginRuntimeBridge = {
     apiCall: async (operationId, input) => copy(options.api
       ? await options.api(operationId, input as PluginApiCallInput | undefined, { scopes: [...manifest.scopes] })
       : { ok: false, status: 404, data: null, error: { code: "api_unknown_operation", message: `Unknown operation ${operationId}.` } }),
     objectsGet: async (name, id) => {
       const data = object(name).get(id);
-      return data ? copy({ data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) }) : null;
+      return data ? copy({ data, revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) }) : null;
     },
     objectsGetByHandle: async (name, handle) => {
       for (const [id, data] of object(name)) {
         if (metadata.get(revisionKey(name, id))?.handle === handle) {
-          return copy({ id, data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...metadata.get(revisionKey(name, id))! });
+          return copy({ id, data, revision: revisions.get(revisionKey(name, id)) ?? 1, ...metadata.get(revisionKey(name, id))! });
         }
       }
       return null;
@@ -377,7 +397,8 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const staged = new Map([...records].map(([name, store]) => [name, new Map(store)]));
       const stagedMetadata = new Map(metadata);
       const seen = new Set<string>();
-      const touched: Array<{ name: string; id: string; written: boolean }> = [];
+      // Whether each record existed before the batch: a record a test set directly reads as revision 1.
+      const touched: Array<{ name: string; id: string; written: boolean; existed: boolean }> = [];
       for (const operation of operations as Array<Record<string, unknown>>) {
         const { op, object: name, id, expectedRevision } = operation as { op?: unknown; object: string; id: string; expectedRevision?: unknown };
         if (op !== "put" && op !== "delete" && op !== "check") refuse("object_invalid_batch", "Each operation is a put, delete or check.");
@@ -393,11 +414,11 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           if (current !== expectedRevision) refuse("object_conflict", `${name}/${id} changed since it was read (or exists when it must not): read it again and retry.`);
         }
         if (op === "check") {
-          touched.push({ name, id, written: false });
+          touched.push({ name, id, written: false, existed: records.get(name)!.has(id) });
         } else if (op === "delete") {
           store.delete(id);
           stagedMetadata.delete(revisionKey(name, id));
-          touched.push({ name, id, written: false });
+          touched.push({ name, id, written: false, existed: records.get(name)!.has(id) });
         } else {
           const record = operation.record;
           if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("object_invalid", "A record is a plain JSON object.");
@@ -410,8 +431,8 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
           stagedMetadata.set(revisionKey(name, id), { handle, status } as { handle: string | null; status: "active" | "draft" | "published" });
           const checked = prepareObjectData(manifest.objects[name]!, record as Record<string, unknown>, codec, status as "active" | "draft" | "published");
           if (!checked.ok) refuse("object_invalid", checked.issues.map((issue) => `${issue.key}: ${issue.message}`).join("; "));
-          store.set(id, copy(checked.data));
-          touched.push({ name, id, written: true });
+          store.set(id, wire(name, checked.data));
+          touched.push({ name, id, written: true, existed: records.get(name)!.has(id) });
         }
       }
       for (const [name, store] of staged) {
@@ -435,13 +456,13 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       for (const [name, store] of staged) records.set(name, store);
       metadata.clear();
       for (const [key, value] of stagedMetadata) metadata.set(key, value);
-      return touched.map(({ name, id, written }) => {
+      return touched.map(({ name, id, written, existed }) => {
         const key = revisionKey(name, id);
         if (!written) {
           if (!records.get(name)!.has(id)) revisions.delete(key);
           return null;
         }
-        const revision = (records.get(name)!.has(id) && revisions.has(key) ? revisions.get(key)! : 0) + 1;
+        const revision = (existed ? revisions.get(key) ?? 1 : 0) + 1;
         revisions.set(key, revision);
         return revision;
       });
@@ -458,7 +479,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const offset = cursor ? Number(atob(cursor)) : 0;
       const page = matches.slice(offset, offset + Math.min(Math.max(1, limit), 100));
       return copy({
-        records: page.map(([id, data]) => ({ id, data: wire(name, data), revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) })),
+        records: page.map(([id, data]) => ({ id, data, revision: revisions.get(revisionKey(name, id)) ?? 1, ...(metadata.get(revisionKey(name, id)) ?? { handle: null, status: defaultStatus(name) }) })),
         nextCursor: offset + page.length < matches.length ? btoa(String(offset + page.length)) : null,
       });
     },
@@ -536,16 +557,19 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const key = (input as { idempotencyKey?: unknown }).idempotencyKey;
       if (key !== undefined) {
         if (typeof key !== "string" || !/^[\x20-\x7E]{8,200}$/u.test(key)) refuse("messaging_invalid", "idempotencyKey is 8 to 200 printable characters.");
-        if (emailKeys.has(key)) return { queued: true, duplicate: true };
-        emailKeys.add(key);
+        // A repeat answers the first outcome and sends nothing.
+        if (emailKeys.has(key)) return { queued: emailKeys.get(key)!, duplicate: true };
       }
-      sent.emails.push(copy(input));
-      return { queued: true };
+      const queued = consented(input, "email");
+      if (typeof key === "string") emailKeys.set(key, queued);
+      if (queued) sent.emails.push(copy(input));
+      return { queued };
     },
     messagingSms: async (input) => {
       checkMessage(input, "sms");
-      sent.sms.push(copy(input));
-      return { queued: true };
+      const queued = consented(input, "sms");
+      if (queued) sent.sms.push(copy(input));
+      return { queued };
     },
     messagingNotifyStaff: async (input) => void sent.notices.push(copy(input)),
     messagingPush: async (input) => {
@@ -720,6 +744,96 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   /** A function input's signed-in buyer gets the roles the app granted, as the platform fills them per app. */
   // As the host sends it: the cart's customer carries this app's roles, and
   // `cart.attributes` only this app's own answers (`<app id>.<key>`).
+  /** Where a single-key read's record is (`object`, `id`) and the revision checkout read, for a commit. */
+  type CommitTarget = { object: string; id: string; revision: number | null };
+  /** Results of `fn` whose answer may commit holds, with the records their reads named. */
+  const commitTargets = new WeakMap<object, { point: PluginFunctionPoint; targets: Record<string, CommitTarget> }>();
+  const readRecordId = (value: unknown): string | null =>
+    typeof value === "string" && value.length >= 1 && value.length <= 128 && !/\p{Cc}/u.test(value) ? value : null;
+  /**
+   * The function's declared reads as the host resolves them
+   * (packages/core/src/modules/checkout/app-reads.ts), from the harness's own
+   * records and custom fields: keyed by the buyer, the cart's SKUs or
+   * products, one of the app's checkout attributes, or one hop. `given` are
+   * reads the test passed itself; the targets then take their revisions.
+   */
+  const resolveReads = (declarations: readonly FunctionReadDeclaration[], input: unknown, given: FunctionReads | undefined) => {
+    const value = input as { cart?: { customer?: { id?: string } | null; lines?: Array<{ variantId: string; productId: string }>; attributes?: Record<string, string> } | null; customer?: { id?: string } | null; attributes?: Record<string, string> };
+    const customerId = value.cart?.customer?.id ?? value.customer?.id ?? null;
+    const lines = value.cart?.lines ?? [];
+    // A checkout attribute's answer: `cart.attributes` by `<app id>.<key>`, a Buyer UI input's own `attributes` by bare key.
+    const attribute = (key: string) => value.cart?.attributes?.[`${manifest.id}.${key}`] ?? value.attributes?.[key];
+    const now = (input as { now?: string }).now ?? functionClock(clock());
+    const reads: FunctionReads = {};
+    const targets: Record<string, CommitTarget> = {};
+    const recordOf = (object: string, id: string): FunctionReadRecord | null => {
+      const data = records.get(object)?.get(id);
+      return data ? copy({ revision: revisions.get(revisionKey(object, id)) ?? 1, data }) : null;
+    };
+    const unique = (ids: string[]) => [...new Set(ids)];
+    for (const read of declarations) {
+      const key = functionReadKey(read);
+      const ids = key === "line.variantId" ? unique(lines.map((line) => line.variantId))
+        : key === "line.productId" ? unique(lines.map((line) => line.productId))
+          : key === "customer" ? (customerId ? [customerId] : [])
+            : typeof key === "string" ? [readRecordId(attribute(key.slice("attribute.".length)))].filter((id): id is string => id !== null)
+              : [];
+      // A composite key: every part answered, joined (a day and a window name one slot).
+      const join = functionReadJoin(key);
+      if (join) {
+        const parts = join.map((part) => attribute(part)?.trim() ?? "");
+        const id = parts.every((part) => part.length > 0) ? readRecordId(parts.join(FUNCTION_READ_JOIN_SEPARATOR)) : null;
+        if (id) ids.push(id);
+      }
+      if (isListRead(read)) {
+        // A list read, as the host reads it: one declared index, equality on its leading fields, from the run's clock.
+        const { where = {}, orderBy, direction = "asc", from, limit } = read.list;
+        const type = manifest.objects[read.object]?.fields.find((field) => field.key === orderBy)?.type;
+        const at = orderBy && from === "now" ? (type === "integer" ? Date.parse(now) : now) : null;
+        const sign = direction === "desc" ? -1 : 1;
+        const order = (data: Record<string, unknown>) => (orderBy && type === "date_time" && typeof data[orderBy] === "string" ? Date.parse(data[orderBy] as string) : scalar(orderBy ? data[orderBy] : null));
+        const bound = at === null ? null : typeof at === "string" ? Date.parse(at) : at;
+        reads[read.as] = [...(records.get(read.object) ?? new Map())]
+          .filter(([, data]) => Object.entries(where).every(([field, expected]) => compare(scalar(data[field]), scalar(expected)) === 0))
+          .filter(([, data]) => bound === null || sign * compare(order(data), bound) >= 0)
+          .sort(([leftId, left], [rightId, right]) => sign * ((orderBy ? compare(order(left), order(right)) : 0) || (leftId < rightId ? -1 : leftId > rightId ? 1 : 0)))
+          .slice(0, limit)
+          .map(([id, data]) => copy({ id, revision: revisions.get(revisionKey(read.object, id)) ?? 1, data }));
+        continue;
+      }
+      if (isCustomFieldsRead(read)) {
+        const fields = customFieldsReadFields(read);
+        const pick = (ownerId: string): FunctionReadRecord | null => {
+          const all = customFields.get(`${fields[0]!.ownerType}:${ownerId}`) ?? {};
+          const data = Object.fromEntries(fields.filter((field) => field.key in all).map((field) => [field.key, all[field.key]]));
+          return Object.keys(data).length > 0 ? { revision: 0, data: copy(data) } : null;
+        };
+        reads[read.as] = isPerLineRead(read)
+          ? Object.fromEntries(ids.flatMap((id) => { const record = pick(id); return record ? [[id, record]] : []; }))
+          : ids[0] ? pick(ids[0]) : null;
+        continue;
+      }
+      const hop = functionReadHop(read.key);
+      if (hop) {
+        const source = given?.[hop.as] ?? reads[hop.as];
+        const id = source && "data" in source ? readRecordId((source as FunctionReadRecord).data[hop.field]) : null;
+        reads[read.as] = id ? recordOf(read.object, id) : null;
+        if (id) targets[read.as] = { object: read.object, id, revision: null };
+      } else if (isPerLineRead(read)) {
+        reads[read.as] = Object.fromEntries(ids.flatMap((id) => { const record = recordOf(read.object, id); return record ? [[id, record]] : []; }));
+      } else {
+        reads[read.as] = ids[0] ? recordOf(read.object, ids[0]) : null;
+        if (ids[0]) targets[read.as] = { object: read.object, id: ids[0], revision: null };
+      }
+    }
+    const used = given ?? reads;
+    for (const [as, target] of Object.entries(targets)) {
+      const record = used[as] as FunctionReadRecord | null | undefined;
+      target.revision = record && typeof record.revision === "number" ? record.revision : null;
+    }
+    return { reads, targets };
+  };
+
   const withRoles = <T,>(input: T): T => {
     const cart = (input as { cart?: { customer?: { id?: unknown; roles?: unknown } | null; attributes?: unknown } | null } | null)?.cart;
     if (!cart) return input;
@@ -799,17 +913,52 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
      * Pass `reads` as the host resolves the function's declared reads.
      */
     fn: async <P extends PluginFunctionPoint>(point: P, input: PluginFunctionInputDraft<P>): Promise<PluginFunctionTestResult<P>> => {
-      if (!manifest.functions.some((fn) => fn.point === point)) throw new Error(`The manifest declares no ${point} function.`);
-      const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(withRoles(input));
+      const declaration = manifest.functions.find((fn) => fn.point === point);
+      if (!declaration) throw new Error(`The manifest declares no ${point} function.`);
+      const scoped = withRoles(input);
+      const given = (input as { reads?: FunctionReads }).reads;
+      const timed = { now: functionClock(clock()), ...scoped };
+      const { reads, targets } = resolveReads(declaration.reads ?? [], timed, given);
+      const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(given === undefined ? { ...timed, reads } : timed);
       if (!checked.success) {
         const issue = checked.error.issues[0];
         throw new TypeError(`Invalid ${point} input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
       }
       const result = await run({ kind: "function", point, input: checked.data });
-      if (!result.ok) return { ...result, value: null };
-      const answer = checkPluginFunctionOutput(point, result.value);
-      if (answer.ok) return { ...result, value: answer.value };
-      return { ...result, ok: false, value: null, error: { code: answer.code, message: answer.message } };
+      const answer = result.ok ? checkPluginFunctionOutput(point, result.value) : null;
+      const tested: PluginFunctionTestResult<P> = !answer ? { ...result, value: null }
+        : answer.ok ? { ...result, value: answer.value }
+          : { ...result, ok: false, value: null, error: { code: answer.code, message: answer.message } };
+      commitTargets.set(tested, { point, targets });
+      return tested;
+    },
+    /**
+     * Places the order a `cart.validate` or `checkout.discounts` answer was
+     * given for: its `commit` holds are written as the platform writes them
+     * with the order, each at the revision the function read, all or nothing
+     * (a discount's only when one of its discounts applied). A record that
+     * changed since, or exists where the read found none, refuses the order
+     * with `app_offer_changed` and writes nothing: run the function twice on
+     * the same records, commit both, and the second loses the last place.
+     */
+    commit: async (result: PluginFunctionTestResult<PluginFunctionPoint>): Promise<{ ok: true; written: number } | { ok: false; code: "app_offer_changed" }> => {
+      const entry = commitTargets.get(result);
+      if (!entry) throw new Error("harness.commit takes a result harness.fn returned.");
+      const value = result.value as { commit?: Array<{ as: string; record: Record<string, unknown> }>; discounts?: unknown[] } | null;
+      const holds = result.ok && value?.commit ? value.commit : [];
+      if (holds.length === 0 || (entry.point === "checkout.discounts" && (value?.discounts?.length ?? 0) === 0)) return { ok: true, written: 0 };
+      const operations = holds.map(({ as, record }) => {
+        const target = entry.targets[as];
+        if (!target) throw new Error(`commit names ${as}, which is not a single-key read that found an id.`);
+        return { op: "put", object: target.object, id: target.id, record, expectedRevision: target.revision };
+      });
+      try {
+        await bridge.objectsWrite(operations as never);
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("[object_conflict]")) return { ok: false, code: "app_offer_changed" };
+        throw error;
+      }
+      return { ok: true, written: operations.length };
     },
     /**
      * Renders one storefront extension the way the host does for its UI slot
@@ -820,8 +969,13 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
      */
     extension: async (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>): Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>> => {
       const target: StorefrontUiSlot = input.target;
-      if (!manifest.storefront.extensions.some((extension) => extension.target === target)) throw new Error(`The manifest declares no ${target} extension.`);
-      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(withRoles(input));
+      const declared = manifest.storefront.extensions.find((extension) => extension.target === target);
+      if (!declared) throw new Error(`The manifest declares no ${target} extension.`);
+      // The slot's declared reads come from the harness's records, as the host resolves them, unless the input passes its own.
+      const timed = { now: functionClock(clock()), ...withRoles(input) };
+      const given = (input as { reads?: FunctionReads }).reads;
+      const passed = given !== undefined && Object.keys(given).length > 0;
+      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(passed ? timed : { ...timed, reads: resolveReads(declared.reads ?? [], timed, undefined).reads });
       if (!checked.success) {
         const issue = checked.error.issues[0];
         throw new TypeError(`Invalid ${target} extension input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
