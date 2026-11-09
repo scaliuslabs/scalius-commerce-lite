@@ -13,6 +13,7 @@ import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { AppHomeWidgets } from "~/components/admin/apps/ui/AppResourceCards";
+import { useAppTexts } from "~/components/admin/apps/app-owner";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
@@ -136,6 +137,8 @@ function HomePage() {
   const onlinePaymentBlocked = setupGuide.data?.onlinePayment?.blockedProducts ?? 0;
   // An active app whose cart rule refuses every recent checkout: the store sells nothing until it is fixed.
   const refusingApps = setupGuide.data?.refusingApps ?? [];
+  // Each app by its name in the dashboard's language (the apps list is read only when one refuses).
+  const appText = useAppTexts(refusingApps.length > 0);
   const caughtUp = openCount === 0 && overdueCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu && !smsBlocked && onlinePaymentBlocked === 0 && refusingApps.length === 0;
 
   return (
@@ -258,8 +261,8 @@ function HomePage() {
             {refusingApps.map((app) => (
               <TodoLink key={app.appId} to={`/admin/apps/${encodeURIComponent(app.appId)}`} icon={<TriangleAlert className="h-4 w-4" />}>
                 {app.reason
-                  ? t("appRefusingCheckout", { app: app.name, reason: app.reason })
-                  : t("appRefusingCheckoutNoReason", { app: app.name })}
+                  ? t("appRefusingCheckout", { app: appText(app.appId)?.name ?? app.name, reason: app.reason })
+                  : t("appRefusingCheckoutNoReason", { app: appText(app.appId)?.name ?? app.name })}
               </TodoLink>
             ))}
             {smsBlocked ? (
