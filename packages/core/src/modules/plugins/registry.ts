@@ -11,7 +11,7 @@
 // priority, as before.
 
 import type { Database } from "@scalius/database/client";
-import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
+import { marketPresences, pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
 import type { PluginFunctionPoint, PluginRunPoint } from "@scalius/shared/plugins";
 import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
@@ -25,6 +25,15 @@ const circuitColumns = {
   circuitOpenUntil: pluginRegistrations.circuitOpenUntil,
   circuitInflightAt: pluginRegistrations.circuitInflightAt,
   circuitInflightShared: pluginRegistrations.circuitInflightShared,
+};
+/**
+ * The store's default language (the root presence's locale), selected beside
+ * checkout's registrations: an app's buyer words fall back to it
+ * (`translationChain()`), and a request that names no page language runs the
+ * apps in it. No app, no row, no cost.
+ */
+const storeLocaleColumns = {
+  storeLocale: sql<string | null>`(SELECT ${marketPresences.locale} FROM ${marketPresences} WHERE ${marketPresences.kind} = 'subfolder' AND ${marketPresences.value} = '' LIMIT 1)`,
 };
 const seconds = (value: number | null | undefined): number | null => (value === null || value === undefined ? null : Number(value));
 const circuitOf = (row: { circuitFailures?: number | null; circuitOpenUntil?: number | null; circuitInflightAt?: number | null; circuitInflightShared?: number | null }): FunctionCircuitState => ({
@@ -43,6 +52,8 @@ export interface RegisteredPlugin {
   kind?: "event" | "function" | "cron" | "provider";
   /** A function registration's circuit (function-circuit.ts), read with it. */
   circuit?: FunctionCircuitState;
+  /** The store's default language, read with checkout's registrations (`selectActiveCheckoutRegistrations`); absent elsewhere. */
+  storeLocale?: string | null;
 }
 
 /** The merchant's rank for a registration's app at its function point; null when it has none there. */
@@ -103,7 +114,7 @@ export function listActiveFunctionPlugins(db: Database, point: PluginRunPoint): 
  * active implementation: no rows, and checkout does no plugin work at all.
  */
 export function selectActiveFunctionRegistrations(db: Database) {
-  return db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, ...circuitColumns, installation: pluginInstallations })
+  return db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, ...circuitColumns, ...storeLocaleColumns, installation: pluginInstallations })
     .from(pluginRegistrations)
     .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
     .where(and(eq(pluginRegistrations.kind, "function"), eq(pluginInstallations.status, "active")))
@@ -118,6 +129,7 @@ export interface ActiveFunctionRegistrationRow {
   circuitOpenUntil?: number | null;
   circuitInflightAt?: number | null;
   circuitInflightShared?: number | null;
+  storeLocale?: string | null;
   installation: typeof pluginInstallations.$inferSelect;
 }
 
@@ -126,7 +138,7 @@ export function resolveActiveFunctionRegistrations(rows: readonly ActiveFunction
   const result: RegisteredPlugin[] = [];
   for (const row of rows) {
     const installation = toPluginInstallation(row.installation);
-    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}), circuit: circuitOf(row) });
+    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}), circuit: circuitOf(row), ...(row.storeLocale !== undefined ? { storeLocale: row.storeLocale } : {}) });
   }
   // Function registrations in the merchant's order (provider rows have no rank: priority, then id).
   return orderFunctionRegistrations(result);
@@ -143,6 +155,7 @@ export function selectActiveCheckoutRegistrations(db: Database) {
     priority: pluginRegistrations.priority,
     name: pluginRegistrations.name,
     ...circuitColumns,
+    ...storeLocaleColumns,
     installation: pluginInstallations,
   })
     .from(pluginRegistrations)

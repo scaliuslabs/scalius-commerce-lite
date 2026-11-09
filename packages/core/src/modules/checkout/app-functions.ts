@@ -103,6 +103,12 @@ export interface CheckoutAppFunctions {
   readonly purchaseOptions?: ReadonlyArray<{ appId: string; options: ReadonlyArray<PurchaseOptionDeclaration> }>;
   /** The line inputs each active app declares (manifest `checkout.lineInputs`). */
   readonly lineInputs?: ReadonlyArray<AppLineInputs>;
+  /**
+   * The buyer's language: the attributes, line inputs and purchase options
+   * above speak it (each app's `translations` through `translationChain()`),
+   * and every run hears it (`input.language`).
+   */
+  readonly language?: string;
   buyerUi?(input: Partial<Omit<BuyerUiInput, "target">> & { targets: readonly StorefrontUiSlot[]; currency: string }): Promise<BuyerUiBlock[]>;
   /** `reads` is the platform's: each app gets its own declared reads. */
   run<P extends PluginRunPoint>(point: P, input: Omit<PluginFunctionInput<P>, "reads">): Promise<Array<CheckoutAppFunctionResult<P>>>;

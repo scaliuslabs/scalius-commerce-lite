@@ -33,7 +33,7 @@ import { ok } from "../../utils/api-response";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enforceCheckoutPreparationLimit } from "../../utils/checkout-rate-limit";
 import { getCustomerSessionHashKey } from "../../utils/encryption-key";
-import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/checkout-functions";
 import { checkoutPaymentMethods } from "../../plugins/providers/payment";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
@@ -294,6 +294,8 @@ app.openapi(cartValidationRoute, async (c) => {
   const { providers: paymentProviders, paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
   const apps = createCheckoutAppFunctions({
     env: c.env,
+    // The buyer's language: every app word and function run speaks it.
+    language: requestBuyerLanguage(data.presence, c.req.header("x-storefront-language")),
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,

@@ -64,7 +64,7 @@ import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
 import { ValidationError } from "../../utils/api-error";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enforceCheckoutPreparationLimit } from "../../utils/checkout-rate-limit";
-import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/checkout-functions";
 import { checkoutPaymentMethods } from "../../plugins/providers/payment";
 import { getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";
@@ -278,6 +278,8 @@ app.openapi(taxQuoteRoute, async (c) => {
   ]);
   const apps = createCheckoutAppFunctions({
     env: c.env,
+    // The buyer's language: every app word and function run speaks it.
+    language: requestBuyerLanguage(null, c.req.header("x-storefront-language")),
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations,

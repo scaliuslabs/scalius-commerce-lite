@@ -11,7 +11,7 @@ import { countActiveBuyerWarranties } from "@scalius/core/modules/warranty";
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buyerUiBlockSchema, PLUGIN_EXTENSION_RUN } from "@scalius/shared/plugins";
-import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/checkout-functions";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
@@ -64,6 +64,8 @@ app.openapi(createRoute({
   const activeWarranties = await countActiveBuyerWarranties(db, customerId);
   const apps = createCheckoutAppFunctions({
     env: c.env,
+    // The buyer's language: every app word and function run speaks it.
+    language: requestBuyerLanguage(null, c.req.header("x-storefront-language")),
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
     db,
     registrations: await listActiveCheckoutRegistrations(db),

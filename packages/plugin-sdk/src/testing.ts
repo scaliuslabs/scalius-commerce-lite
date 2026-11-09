@@ -117,6 +117,12 @@ export interface PluginTestHarnessOptions {
   /** The harness's clock in milliseconds, for the per-minute limits (default `Date.now`): advance it to let a minute pass. */
   clock?: () => number;
   /**
+   * The buyer's language every function run hears (`input.language`, a BCP
+   * 47 tag), as the platform sends the order's or quote's presence language:
+   * default `en`. An input's own `language` wins.
+   */
+  language?: string;
+  /**
    * The app's features that are on (`manifest.features`); by default every
    * declared one. An off feature's providers, routes, jobs, events, settings,
    * scopes and hosts do not exist, as on the platform.
@@ -917,7 +923,7 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (!declaration) throw new Error(`The manifest declares no ${point} function.`);
       const scoped = withRoles(input);
       const given = (input as { reads?: FunctionReads }).reads;
-      const timed = { now: functionClock(clock()), ...scoped };
+      const timed = { now: functionClock(clock()), language: options.language ?? "en", ...scoped };
       const { reads, targets } = resolveReads(declaration.reads ?? [], timed, given);
       const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(given === undefined ? { ...timed, reads } : timed);
       if (!checked.success) {

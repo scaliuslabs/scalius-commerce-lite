@@ -41,7 +41,7 @@ import {
     type StorefrontCheckoutAuthoritySnapshot,
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
-import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { createCheckoutAppFunctions, requestBuyerLanguage } from "../../plugins/checkout-functions";
 import { paymentProvidersFromRegistrations } from "../../plugins/providers/payment";
 import { requestProviderRuntime } from "../../plugins/providers/runtime";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
@@ -549,6 +549,8 @@ app.openapi(createOrderRoute, async (c) => {
         // trusts the quote's app outcome; the fingerprint compares the totals).
         apps: (registrations) => createCheckoutAppFunctions({
           env: c.env,
+          // The buyer's language: every app word and function run speaks it.
+          language: requestBuyerLanguage(data.presence),
           ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
           db,
           registrations,
