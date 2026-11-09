@@ -156,6 +156,10 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
    * otherwise both send the same revision and the second would answer 409.
    */
   const inFlight = useRef(false);
+  /** The save under way, so an action that needs the draft saved waits for it instead of acting on the old revision. */
+  const saveRun = useRef<Promise<boolean> | null>(null);
+  /** The document last sent, as soon as its save answers (state reaches `lastSent` only on the next render). */
+  const sentRef = useRef<Theme>(lastSent);
   /** Takes the server's newer draft without asking (set below, once `reload` exists). */
   const adoptNewer = useRef<(() => void) | null>(null);
 
@@ -189,11 +193,14 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
     inFlight.current = true;
     setSaving(true);
     setUrgent(false);
-    try {
+    const run = (async () => { try {
       const result = await apiData(postApiV1AdminSettingsThemeDraft({
         body: { expectedDraftRevision: base.revision, basePublishedRevision: base.basePublishedRevision, theme: sending },
       }));
       const next = { theme: sending, revision: result.revision, basePublishedRevision: result.basePublishedRevision };
+      // What waits on this save reads the new revision before React re-renders.
+      latest.current = { ...latest.current, saved: next };
+      sentRef.current = sending;
       setSaved(next);
       rememberSaved(next);
       setLastSent(sending);
@@ -212,9 +219,25 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
       return false;
     } finally {
       inFlight.current = false;
+      saveRun.current = null;
       setSaving(false);
-    }
+    } })();
+    saveRun.current = run;
+    return run;
   }, [noteConflict, rememberSaved]);
+
+  /**
+   * Before publishing or replacing the draft: waits for a save already under
+   * way (an autosave the merchant didn't wait for), then saves what is still
+   * unsaved. False when a save failed: acting then would use an older revision.
+   */
+  const settle = useCallback(async () => {
+    while (saveRun.current) {
+      if (!(await saveRun.current)) return false;
+    }
+    const { pending: now } = latest.current;
+    return now && !sameFormValue(now, sentRef.current) ? save() : true;
+  }, [save]);
 
   // Edits save themselves a moment after the last one (at once when the preview needs them saved).
   useEffect(() => {
@@ -250,6 +273,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
     const newer: SavedDraft = { theme: data.draft.theme as Theme, revision: data.draft.revision, basePublishedRevision: data.draft.basePublishedRevision };
     setSaved(newer);
     setLastSent(newer.theme);
+    sentRef.current = newer.theme;
     setPublished({ theme: data.published.theme as Theme, revision: data.published.revision });
     setLastPublished(data.lastPublished);
     if (!keepEdits) dispatchHistory({ type: "replace", theme: newer.theme });
@@ -288,7 +312,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
    * restore point the server keeps holds them.
    */
   const replaceDraft = useCallback(async (source: { version: number } | { point: string } | null, withoutMissingImages = false): Promise<{ missingImages: number } | null> => {
-    if (latest.current.pending && dirty) await save();
+    await settle();
     setBusy(true);
     try {
       const { saved: base } = latest.current;
@@ -311,7 +335,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
     setBusy(false);
     await reload();
     return null;
-  }, [dirty, save, noteConflict, reload, queryClient, t]);
+  }, [settle, noteConflict, reload, queryClient, t]);
 
   /** Publishes: unsaved edits are saved first, then the exact saved revision goes live. */
   const publish = useCallback(async (note: string) => {
@@ -319,7 +343,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
     setAppsProblem(null);
     setSettingsMissing(null);
     try {
-      if (dirty && !(await save())) return false;
+      if (!(await settle())) return false;
       const { saved: base } = latest.current;
       const result = await apiData(postApiV1AdminSettingsThemePublish({
         body: { expectedPublishedRevision: published.revision, expectedDraftRevision: base.revision, ...(note ? { note } : {}) },
@@ -343,7 +367,7 @@ export function useThemeDraft({ workspace, refetch, canEdit, apps, staffId = nul
     } finally {
       setPublishing(false);
     }
-  }, [dirty, save, published.revision, noteConflict, queryClient, t]);
+  }, [settle, published.revision, noteConflict, queryClient, t]);
 
   const status: SaveStatus = !canEdit ? "readOnly"
     : conflict ? "conflict"

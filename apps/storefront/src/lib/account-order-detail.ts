@@ -30,7 +30,8 @@ import {
   presentOrderTracking,
 } from "@/lib/account-format";
 import { accountCopy } from "@/lib/account-copy";
-import { formatCount, formatStoreDateTime, pageLanguage } from "@/lib/store-time-zone";
+import { formatCount, formatStoreDateTime, pageLanguage, storeRegion } from "@/lib/store-time-zone";
+import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { buyAgain as putOrderInCart } from "@/lib/account-buy-again";
 import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -712,6 +713,15 @@ function renderDelivery(detail: AccountOrderDetail): void {
     note.innerHTML = order.notes
       ? `<p class="font-medium text-foreground">${escapeHtml(copy.orderReceiptNoteText)}</p><p class="whitespace-pre-line break-words text-muted-foreground">${escapeHtml(order.notes)}</p>`
       : "";
+  }
+  // The apps' answers the buyer gave (a delivery day and window), under the apps' words, in the page's language.
+  const answers = byId("orderAppAnswers");
+  if (answers) {
+    const language = pageLanguage();
+    answers.innerHTML = presentCheckoutAttributes(detail.appAnswers ?? {}, detail.attributeApps ?? [], {
+      locale: language, defaultLocale: language, words: copy, region: storeRegion(),
+    }).map((group) => `<div class="mt-3 border-t border-border pt-3"><p class="font-medium text-foreground">${escapeHtml(group.appName)}</p>${group.entries
+      .map((entry) => `<p class="break-words text-muted-foreground">${escapeHtml(entry.label)}: <span class="text-foreground">${escapeHtml(entry.value)}</span></p>`).join("")}</div>`).join("");
   }
   const shipments = byId("orderShipments");
   if (shipments) {

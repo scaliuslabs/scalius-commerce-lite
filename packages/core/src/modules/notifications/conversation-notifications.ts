@@ -27,7 +27,8 @@ import {
 } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { conversationProductSnapshots } from "@scalius/shared/conversation";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber, orderNumberTextIn } from "@scalius/shared/order-utils";
+import { numberLocale } from "@scalius/shared/locale-format";
 import { isReady } from "@scalius/shared/readiness";
 import { and, eq, gt } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
@@ -324,7 +325,8 @@ async function sendReplyToBuyer(
   // The buyer's language: the presence of the thread's order, else the store's.
   const { language } = buyerMessageScope(store, party?.presence);
   const copy = MESSAGE_COPY[language].conversation;
-  const order = party?.orderNumber ?? null;
+  // The order number in the buyer's digits, as the storefront writes it.
+  const order = party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(language)) : null;
   const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
   if (channels.includes("email")) {
@@ -548,7 +550,7 @@ async function sendMessageToStaff(
 
   const [party, store] = await Promise.all([readThreadParty(db, thread), readStoreIdentity(db)]);
   const copy = MESSAGE_COPY[store.language].conversation;
-  const order = party?.orderNumber ?? null;
+  const order = party?.orderNumber ? orderNumberTextIn(party.orderNumber, numberLocale(store.language)) : null;
   const link = dashboardInboxLink(options.env, thread.id);
 
   if (channels.includes("push")) {

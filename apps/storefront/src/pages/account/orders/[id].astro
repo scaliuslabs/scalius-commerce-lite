@@ -11,7 +11,8 @@ import OrderConversationPanel from "@/components/conversation/OrderConversationP
 import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
 import { accountCopy } from "@/lib/account-copy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import { checkoutLanguageBaseCode, getCheckoutLanguagePreset, resolveCheckoutLanguageData } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { getCheckoutLanguagePreset, resolveCheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { storefrontLanguage } from "@/lib/storefront-language";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
@@ -136,6 +137,7 @@ const skeleton = "theme-skeleton block";
               <h2 id="deliveryHeading" class={heading}>{orderWords.shippingAddress}</h2>
               <div id="orderAddress" class="space-y-0.5 break-words text-sm text-muted-foreground"></div>
               <div id="orderNote" class="mt-3 hidden border-t border-border pt-3 text-sm"></div>
+              <div id="orderAppAnswers" class="text-sm empty:hidden"></div>
               <div id="orderShipments" class="mt-4 space-y-3 empty:hidden"></div>
             </section>
 

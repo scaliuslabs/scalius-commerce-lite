@@ -1,4 +1,6 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
+import { checkoutAttributeAppsSchema } from "../../../schemas/checkout-attribute-apps";
+import { readCheckoutAttributeApps } from "@scalius/core/modules/order-kernel";
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "../admin-router";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "../idempotency";
@@ -504,6 +506,7 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
 /** Order detail whose items may carry per-line extras (downloads, gift cards, warranty, review). */
 const orderDetailWithLineExtrasSchema = orderDetailSchema.extend({
     relatedObjects: z.array(relatedObjectRecordSchema),
+    attributeApps: checkoutAttributeAppsSchema,
     items: z.array(orderItemSchema.extend(orderLineExtrasShape)),
 });
 
@@ -530,13 +533,17 @@ app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) =
     const orderId = c.req.valid("param").id;
     const result = await getOrderDetails(db, orderId, relatedObjectsProjection(c, "order", orderId));
     if (!result) throw new NotFoundError("Order not found");
-    const lineExtras = await composeOrderLineExtras(db, {
-        orderId,
-        orderItemIds: result.items.map((item) => item.id),
-        audience: "staff",
-        currencyDecimalPlaces: result.currencyDecimalPlaces ?? 2,
-    });
-    return ok(c, { ...withRelatedObjects(result), items: result.items.map((item) => withOrderLineExtras(item, lineExtras)) });
+    const [lineExtras, attributeApps] = await Promise.all([
+        composeOrderLineExtras(db, {
+            orderId,
+            orderItemIds: result.items.map((item) => item.id),
+            audience: "staff",
+            currencyDecimalPlaces: result.currencyDecimalPlaces ?? 2,
+        }),
+        // The words of its app checkout answers (none: no read).
+        readCheckoutAttributeApps(db, result.attributes ?? {}),
+    ]);
+    return ok(c, { ...withRelatedObjects(result), attributeApps, items: result.items.map((item) => withOrderLineExtras(item, lineExtras)) });
 }) as unknown as AdminRouteHandler<typeof getOrderRoute>);
 
 // ─── PUT /:id/details ───────────────────────────────────────────────────────

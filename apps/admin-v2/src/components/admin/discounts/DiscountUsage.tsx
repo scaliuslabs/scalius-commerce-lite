@@ -1,3 +1,4 @@
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { Link } from "@tanstack/react-router";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
@@ -17,7 +18,7 @@ export function DiscountUsage({ code, count }: { code: string | null; count: num
   const linkable = code !== null && code.trim() !== "" && count > 0 && hasPermission(ADMIN_PERMISSIONS.ORDERS_VIEW);
   if (!linkable) return <>{text}</>;
   return (
-    <Link to="/admin/orders" search={{ discountCode: code.trim().toUpperCase() } as never} className="text-link hover:underline">
+    <Link to="/admin/orders" search={{ discountCode: normalizeDiscountCode(code) } as never} className="text-link hover:underline">
       {text}
     </Link>
   );

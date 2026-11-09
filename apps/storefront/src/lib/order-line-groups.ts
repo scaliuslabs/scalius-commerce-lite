@@ -6,7 +6,7 @@
 // URLs, analytics payloads, logs or data attributes.
 import { checkoutText, pageOrderNumber } from "@/lib/checkout-text";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
-import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { presentLineEntry } from "@scalius/shared/line-entry-words";
 
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./api/customer-auth";

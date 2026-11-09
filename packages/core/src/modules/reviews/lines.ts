@@ -12,7 +12,6 @@ import {
   products,
 } from "@scalius/database/schema";
 import { LIVE_REVIEW_STATUSES } from "@scalius/shared/reviews";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatList } from "@scalius/shared/locale-words";
 import { publishedMediaObjectKey } from "../media-references";
 import type { LineExtrasInput } from "../../utils/line-extras";
@@ -152,7 +151,8 @@ export async function countReviewableLinesForCustomer(db: Database, customerId: 
 
 export interface ReviewableLine {
   orderId: string;
-  orderNumber: string;
+  /** Unformatted: the reader writes it in its own digits. */
+  orderNumber: number | null;
   orderItemId: string;
   productId: string;
   productName: string;
@@ -208,7 +208,7 @@ export async function listReviewableLines(db: Database, buyer: ReviewBuyer): Pro
     seen.add(row.productId);
     lines.push({
       ...row,
-      orderNumber: formatOrderNumber(row.orderNumber, row.orderId),
+      orderNumber: row.orderNumber ?? null,
       variantLabel: purchasedVariantLabel(labels.get(`${row.orderId}\u0000${row.productId}`) ?? [row.variantLabel]),
       fulfilledAt: isoFromSeconds(row.fulfilledAt),
     });

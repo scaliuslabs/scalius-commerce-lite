@@ -37,7 +37,8 @@ const timelineCopy = defineMessages({
     "timeline.codCollected": "{amount} cash collected",
     "timeline.codFailed": "Delivery failed: {reason}",
     "timeline.codReturned": "Returned by the courier",
-    "timeline.paymentRecorded": "{amount} received by {via}",
+    // "via" is how the money came (Cash, Bank transfer, Card terminal), never who took it.
+    "timeline.paymentRecorded": "Payment of {amount} recorded · {via}",
     "timeline.paymentReference": "Reference {reference}",
     "timeline.refunded": "{amount} refunded",
     "timeline.returnCreated": "Return requested (quantity {count})",
@@ -103,7 +104,7 @@ const timelineCopy = defineMessages({
     "timeline.codCollected": "{amount} ক্যাশ পাওয়া গেছে",
     "timeline.codFailed": "ডেলিভারি ব্যর্থ: {reason}",
     "timeline.codReturned": "কুরিয়ার ফেরত দিয়েছে",
-    "timeline.paymentRecorded": "{via}-এ {amount} পাওয়া গেছে",
+    "timeline.paymentRecorded": "{amount} পেমেন্ট রেকর্ড হয়েছে · {via}",
     "timeline.paymentReference": "রেফারেন্স {reference}",
     "timeline.refunded": "{amount} রিফান্ড করা হয়েছে",
     "timeline.returnCreated": "রিটার্ন অনুরোধ (পরিমাণ {count})",

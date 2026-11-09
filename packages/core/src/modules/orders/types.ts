@@ -628,6 +628,8 @@ export type OrderFacts = OrderShippingAddressFields & Partial<OrderBillingAddres
     pricesIncludeTax: boolean;
     status: string;
     paymentMethod: string;
+    /** An app method's kind as its provider declared it (`orders.payment_kind`); absent for the platform's own. */
+    paymentKind?: string | null;
     paymentStatus: string;
     paidAmountMinor: number;
     balanceDueMinor: number;

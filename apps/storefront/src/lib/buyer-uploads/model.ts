@@ -17,7 +17,7 @@ import {
   formatBuyerUploadValue,
   parseBuyerUploadValue,
   type BuyerUploadType,
-} from "@scalius/shared/buyer-uploads";
+} from "@scalius/shared/buyer-upload-value";
 import type { BuyerUploadCopy } from "@/lib/buyer-upload-copy";
 import { formatPageNumber } from "@/lib/store-time-zone";
 

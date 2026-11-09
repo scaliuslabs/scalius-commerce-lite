@@ -39,7 +39,7 @@ import type {
   FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import type { LineInputFieldType } from "@scalius/shared/line-properties";
-import type { BuyerUploadType } from "@scalius/shared/buyer-uploads";
+import type { BuyerUploadType } from "@scalius/shared/buyer-upload-value";
 import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
 import type { OrderLineExtras } from "../order-line-extras";
 
@@ -818,6 +818,9 @@ export interface OrderReceiptDiscount {
 
 export interface OrderReceipt extends OrderFulfilmentFacts {
   id: string;
+  /** The apps' checkout answers the buyer gave (`<app id>.<key>`), worded with `attributeApps`. */
+  appAnswers?: Record<string, string>;
+  attributeApps?: import("@scalius/shared/plugins/checkout-attribute-text").CheckoutAttributeApp[];
   /** Short per-store number ("#1001"); absent until every order has one. */
   orderNumber?: number | null;
   customerName: string;

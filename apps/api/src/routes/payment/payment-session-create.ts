@@ -1,3 +1,4 @@
+import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
 import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 import type { Context } from "hono";
 import { and, eq, sql } from "drizzle-orm";
@@ -733,6 +734,7 @@ async function ensureOrderCanUseGateway(
         )),
         db.update(orders).set({
           paymentMethod: expectedGateway,
+          paymentKind: gatewayPaymentKind(expectedGateway),
           paymentStatus: PaymentStatus.FAILED,
           paymentIntentId: null,
           version: order.version + 1,
@@ -780,6 +782,7 @@ async function ensureOrderCanUseGateway(
     .update(orders)
     .set({
       paymentMethod: expectedGateway,
+      paymentKind: gatewayPaymentKind(expectedGateway),
       version: order.version + 1,
       updatedAt: sql`unixepoch()`,
     })

@@ -1,7 +1,7 @@
 // Staff-created (manual) orders: staff, app and agent policy (the actor's
 // idempotency claim, hand-set prices, the named customer) around the one
 // order commit (../commit-order.ts).
-import { resolveStaffOrderSalesChannel } from "../../sales-channels";
+import { assertChannelSellsProducts, resolveStaffOrderSalesChannel } from "../../sales-channels";
 import type { Database } from "@scalius/database/client";
 import {
     customers,
@@ -177,6 +177,8 @@ async function priceManualOrder(
         throw new ValidationError("An in-person sale is handed over at the counter: send no delivery method or address.");
     }
     const saleLocation = sale ? await resolvePointOfSaleLocation(db, sale, salesChannelId) : null;
+    // An app's channel sells only what is published to it, on a sale and on its quote alike.
+    await assertChannelSellsProducts(db, salesChannelId, data.items.map((item) => item.productId));
     const prepared = await prepareManualOrderQuote(db, { ...data, paymentMethod }, undefined, undefined, {
         apps: options.apps,
         appProviders: options.appProviders,
@@ -343,8 +345,13 @@ export async function createManualOrder(
                 deliveryMethodKind,
                 deliveryMethod: shippingMethod,
                 appDiscounts,
+                appObjectCommits,
             },
         } = await priceManualOrder(db, data, paymentMethod, options);
+        // The apps' holds (a delivery slot's place) commit with the order, as at checkout.
+        const appCommitStatements = appObjectCommits.length > 0 && options.apps?.commitStatements
+            ? options.apps.commitStatements(appObjectCommits) as SQLiteBatchItem[]
+            : [];
         if (data.expectedTotal !== undefined && toMinor(data.expectedTotal, taxQuote.decimalPlaces) !== taxQuote.totalMinor) {
             throw new ManualOrderTotalChangedError(fromMinor(taxQuote.totalMinor, taxQuote.decimalPlaces));
         }
@@ -484,6 +491,7 @@ export async function createManualOrder(
                         }, sql`1`) as unknown as SQLiteBatchItem] : []),
                         // A sale's counter covers its units, every other reservation there included.
                         ...(saleLocation && order.inventoryAction === "reserved" ? [buildPointOfSaleStockGuard(db, orderId, saleLocation.id)] : []),
+                        ...appCommitStatements,
                         buildAdminOrderCreateAttemptCommit(db, attempt, response),
                     ],
                 };
@@ -491,7 +499,10 @@ export async function createManualOrder(
             stockUnavailable: (reservation) => new ValidationError(
                 reservation.error ?? "Insufficient stock for one or more items",
             ),
-            mapError(error) {
+            async mapError(error) {
+                // A hold another order took since the quote: the app's refusal, as at checkout.
+                const held = appCommitStatements.length > 0 ? await options.apps?.commitConflict?.(error) : null;
+                if (held) return held;
                 const short = saleLocation ? pointOfSaleStockShortfall(error, saleLocation) : null;
                 if (short) return short;
                 if (!isAdminOrderCreateAttemptGuardError(error)) return null;

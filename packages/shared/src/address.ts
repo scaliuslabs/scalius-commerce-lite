@@ -300,3 +300,33 @@ export function countryDisplayName(code: string, locale = "en"): string {
     return code;
   }
 }
+
+let englishCountryCodes: Map<string, string> | null = null;
+
+/** Every region code by its English name (lower case), built once from `Intl.DisplayNames`. */
+function countryCodeByEnglishName(name: string): string | null {
+  if (!englishCountryCodes) {
+    englishCountryCodes = new Map();
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (const first of letters) {
+      for (const second of letters) {
+        const code = `${first}${second}`;
+        const english = countryDisplayName(code, "en");
+        if (english !== code && !englishCountryCodes.has(english.toLowerCase())) englishCountryCodes.set(english.toLowerCase(), code);
+      }
+    }
+  }
+  return englishCountryCodes.get(name.trim().toLowerCase()) ?? null;
+}
+
+/**
+ * A country a merchant saved as text (the business country: "Bangladesh",
+ * or a code "BD") in the reader's language ("বাংলাদেশ" in Bangla). A name
+ * no country goes by stays as it was typed.
+ */
+export function storedCountryNameIn(value: string | null | undefined, locale: string): string {
+  const text = value?.trim() ?? "";
+  if (!text) return "";
+  const code = /^[A-Za-z]{2}$/.test(text) ? text.toUpperCase() : countryCodeByEnglishName(text);
+  return code ? countryDisplayName(code, locale) : text;
+}

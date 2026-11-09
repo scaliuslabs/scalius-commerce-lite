@@ -3,7 +3,9 @@
 // its `field` nodes draw. App output is data; text, fields and actions stay in core.
 import { z } from "zod";
 import { STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
-import { pluginUiDocumentSchema, pluginUiTreeSchema, type PluginUiNode } from "./ui";
+import { pluginUiDocumentSchema, pluginUiNodes, pluginUiTreeSchema, type PluginUiNode } from "./ui";
+import { computedChoicesFit } from "./checkout-attribute-values";
+export { computedChoicesFit, isAttributeDate } from "./checkout-attribute-values";
 import { pluginKeySchema } from "./manifest-patterns";
 import { CUSTOMIZATION_LIMITS, LINE_INPUT_FIELD_TYPES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
@@ -141,4 +143,44 @@ export function groupCheckoutAttributes(serialized: string | null | undefined): 
     fields.push({ key: key.slice(boundary + 1), value }); groups.set(appId, fields);
   }
   return [...groups].map(([appId, attributes]) => ({ appId, attributes }));
+}
+
+/** One checkout question to draw: an app's attribute under `<app id>.<key>`, with the choices its extension computed. */
+export interface CheckoutAttributeField {
+  appId: string;
+  /** `<app id>.<key>`: the answer's name. */
+  key: string;
+  attribute: CheckoutAttribute;
+  choices?: ReadonlyArray<{ value: string; label: string }>;
+}
+
+/**
+ * The questions a page without the buyer-UI script (the no-script checkout)
+ * or the staff order form draws, consistent with the script's checkout: every
+ * attribute an app's block draws (`ui.field`, with its computed choices),
+ * then every required attribute an app declares that no block draws. In the
+ * blocks' order, each question once.
+ */
+export function checkoutAttributeFields(
+  blocks: ReadonlyArray<Pick<BuyerUiBlock, "appId" | "ui" | "attributes">>,
+  declared: ReadonlyArray<{ appId: string; fields: readonly CheckoutAttribute[] }> = [],
+): CheckoutAttributeField[] {
+  const fields = new Map<string, CheckoutAttributeField>();
+  for (const block of blocks) {
+    for (const node of pluginUiNodes(block.ui)) {
+      if (node.type !== "field") continue;
+      const attribute = block.attributes.find((field) => field.key === node.attribute);
+      const key = `${block.appId}.${node.attribute}`;
+      if (!attribute || fields.has(key)) continue;
+      const choices = node.choices && computedChoicesFit(attribute, node.choices) ? node.choices : undefined;
+      fields.set(key, { appId: block.appId, key, attribute, ...(choices ? { choices } : {}) });
+    }
+  }
+  for (const app of [...blocks.map((block) => ({ appId: block.appId, fields: block.attributes })), ...declared]) {
+    for (const attribute of app.fields) {
+      const key = `${app.appId}.${attribute.key}`;
+      if (attribute.required && !fields.has(key)) fields.set(key, { appId: app.appId, key, attribute });
+    }
+  }
+  return [...fields.values()];
 }

@@ -152,6 +152,18 @@ export const pluginRegistrations = sqliteTable("plugin_registrations", {
      * that app hung.
      */
     circuitInflightShared: integer("circuit_inflight_shared").notNull().default(0),
+    /**
+     * A `cart.validate` app refusing checkouts (migration 0211,
+     * `function-circuit.ts`): refused checkouts counted since its last
+     * accepted one (at most one every few minutes), when the streak began
+     * and was last counted, and the app's words for the latest refusal. An
+     * accepted checkout clears them. Home and the app's page warn once the
+     * count shows the app refusing every recent checkout.
+     */
+    refusalCount: integer("refusal_count").notNull().default(0),
+    refusingSince: integer("refusing_since"),
+    lastRefusalAt: integer("last_refusal_at"),
+    lastRefusal: text("last_refusal"),
 }, (table) => [
     primaryKey({ columns: [table.kind, table.name, table.pluginId] }),
     index("plugin_registrations_plugin_idx").on(table.pluginId),

@@ -29,7 +29,7 @@ const {
   orderNumber, orderPlacedAt, receiptPaymentTerms, receiptMoney, receiptDiscounts, formatReceiptAmount, formatReceiptMinor,
   showsReceiptDeliveryRow, receiptDeliveryRow, receiptDeliveryDetails, savedMoneySummary, receiptGiftCardTenders,
   visibleBalanceDue, receiptPayment, deliveryBlock, deliveryLocality, showOrderLineGroupHeadings, orderLineGroups, showsLineDiscounts,
-  customerPhone, quantityText,
+  customerPhone, quantityText, appAnswers,
 } = view;
 ---
 
@@ -188,6 +188,14 @@ const {
         <p class="whitespace-pre-line break-words text-muted-foreground">{order.notes}</p>
       </div>
     )}
+    {appAnswers.map((group) => (
+      <div class="mt-3 border-t border-border pt-3 text-sm" data-receipt-app-answers={group.appId}>
+        <p class="font-medium text-foreground">{group.appName}</p>
+        {group.entries.map((entry) => (
+          <p class="break-words text-muted-foreground"><span>{entry.label}</span>: <span class="text-foreground">{entry.value}</span></p>
+        ))}
+      </div>
+    ))}
   </div>
 ) : (
   <div

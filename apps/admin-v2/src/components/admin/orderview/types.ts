@@ -188,6 +188,8 @@ export interface Order {
   /** An invoice's terms (pay later): due `dueAt`; null when the order is not paid by invoice. */
   paymentTerms?: { kind: "net"; days: number; dueAt: string; overdue: boolean } | null;
   attributes?: Record<string, string>;
+  /** The words of the apps the answers belong to (`presentCheckoutAttributes`). */
+  attributeApps?: import("@scalius/shared/plugins/checkout-attribute-text").CheckoutAttributeApp[];
   id: string;
   version: number;
   customerName: string;

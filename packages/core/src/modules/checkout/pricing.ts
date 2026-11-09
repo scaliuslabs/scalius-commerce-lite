@@ -515,13 +515,13 @@ export async function priceStorefrontCheckout(
 }
 
 /** The refusal when app rules block checkout (quote and order alike). */
-export function assertNoCheckoutRuleErrors(ruleErrors: readonly CheckoutRuleError[]): void {
+export function assertNoCheckoutRuleErrors(ruleErrors: readonly CheckoutRuleError[], details: Record<string, unknown> = {}): void {
   if (ruleErrors.length === 0) return;
   throw new ValidationError(
     ruleErrors.length === 1 && ruleErrors[0]!.index === null
       ? ruleErrors[0]!.message
       : "Some items in your cart need attention.",
-    { reason: CHECKOUT_RULES_FAILED_REASON, ruleErrors },
+    { ...details, reason: CHECKOUT_RULES_FAILED_REASON, ruleErrors },
   );
 }
 

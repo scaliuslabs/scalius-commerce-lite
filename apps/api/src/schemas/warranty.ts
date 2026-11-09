@@ -94,7 +94,7 @@ export const staffWarrantyClaimSchema = z.object({
   updatedAt: isoTimestamp,
   closedAt: isoTimestamp.nullable(),
   conversationId: z.string(),
-  order: z.object({ id: z.string(), orderNumber: z.string() }),
+  order: z.object({ id: z.string(), orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }) }),
   item: z.object({
     id: z.string(),
     productId: z.string().nullable(),
@@ -170,7 +170,7 @@ const lineClaimSchema = z.object({
 export const buyerWarrantySchema = z.object({
   warrantyId: z.string(),
   orderId: z.string(),
-  orderNumber: z.string(),
+  orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   orderItemId: z.string(),
   productId: z.string().nullable(),
   productName: z.string().nullable(),

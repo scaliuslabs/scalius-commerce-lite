@@ -1,6 +1,7 @@
 // src/modules/payments/process-payment.ts
 // Applies provider-authenticated payment events to orders, for every gateway.
 
+import { gatewayPaymentKind } from "@scalius/shared/order-payment-methods";
 import { and, desc, eq, inArray, isNull, notInArray, sql, type SQL } from "drizzle-orm";
 import {
   orders,
@@ -742,6 +743,8 @@ export async function processPaymentConfirmed(
         db.update(orders).set({
           status: newStatus,
           paymentMethod: params.provider,
+          // A gateway that takes the order over records its kind; the order's own keeps it.
+          ...(order.paymentMethod !== params.provider ? { paymentKind: gatewayPaymentKind(params.provider) } : {}),
           paidAmountMinor: newPaidAmountMinor,
           balanceDueMinor: newBalanceDueMinor,
           paymentStatus: newPaymentStatus,
@@ -1387,6 +1390,7 @@ export async function processPaymentAuthorized(
       db.update(orders).set({
         status: newStatus,
         paymentMethod: params.provider,
+        ...(order.paymentMethod !== params.provider ? { paymentKind: gatewayPaymentKind(params.provider) } : {}),
         version: nextVersion,
         updatedAt: sql`unixepoch()`,
       }).where(and(

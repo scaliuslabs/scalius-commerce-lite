@@ -40,7 +40,6 @@ import {
   type WarrantyProvider,
 } from "@scalius/shared/warranty";
 import { CONVERSATION_LIMITS, normalizeConversationBody } from "@scalius/shared/conversation";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
@@ -546,7 +545,7 @@ export interface StaffWarrantyClaim {
   updatedAt: number;
   closedAt: number | null;
   conversationId: string;
-  order: { id: string; orderNumber: string };
+  order: { id: string; orderNumber: number | null };
   item: { id: string; productId: string | null; productName: string | null; variantLabel: string | null; productSlug: string | null };
   warranty: {
     id: string;
@@ -621,7 +620,7 @@ function presentStaffClaim(row: StaffClaimRow): StaffWarrantyClaim {
     updatedAt: claim.updatedAt,
     closedAt: claim.closedAt ?? null,
     conversationId: claim.conversationId,
-    order: { id: claim.orderId, orderNumber: formatOrderNumber(row.orderNumber, claim.orderId) },
+    order: { id: claim.orderId, orderNumber: row.orderNumber ?? null },
     item: {
       id: claim.orderItemId,
       productId: row.productId ?? null,

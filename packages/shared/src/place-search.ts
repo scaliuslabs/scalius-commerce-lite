@@ -30,21 +30,37 @@ const BANGLA_NUKTA_LATIN: Record<string, string> = {
 /** Lower-case Latin letters and digits only; Bangla transliterated, accents dropped. */
 export function placeSearchText(value: string): string {
   const plain = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").normalize("NFC")
-    .replace(/[\u09A1\u09A2\u09AF]\u09BC/gu, (pair) => BANGLA_NUKTA_LATIN[pair] ?? pair);
+    .replace(/[\u09A1\u09A2\u09AF]\u09BC/gu, (pair) => BANGLA_NUKTA_LATIN[pair] ?? pair)
+    // ক্ষ reads "kh" (সাতক্ষীরা is Satkhira, লক্ষ্মীপুর Lakshmipur), not "ksh".
+    .replace(/\u0995\u09CD\u09B7/gu, "kh");
   const latin = Array.from(toLatinDigits(plain))
     .map((character) => BANGLA_LATIN[character] ?? character)
     .join("");
   return latin.toLocaleLowerCase("en-US").replace(/[^a-z0-9]/g, "");
 }
 
-/** Consonants and digits, doubled letters collapsed: spelling-tolerant. */
+/**
+ * Consonants and digits, read the way Bangla typing and the everyday English
+ * spellings agree: c/k, x/ks, ph/f, z/j and v/b are one sound; an h or an n
+ * after the first letter is not written alike ("sh", "bh", "lh"; the nasal
+ * Bangla writes as ং or ঁ or drops: চাঁদপুর "chadpur", মুন্সীগঞ্জ), so
+ * neither counts; vowels never do (Bangla typing leaves out the inherent
+ * one); doubled letters collapse. "kksbajar", "coxsbazar" and "Cox's Bazar"
+ * all read "kbjr"; "silet" and "sylhet" read "slt".
+ */
 function skeleton(text: string): string {
-  return text
+  const sounds = text
+    .replace(/x/g, "ks")
+    .replace(/q/g, "k")
+    .replace(/c(?!h)/g, "k")
+    .replace(/ph/g, "f")
     .replace(/z/g, "j")
-    .replace(/v/g, "b")
+    .replace(/v/g, "b");
+  return (sounds.slice(0, 1) + sounds.slice(1).replace(/[hn]/g, ""))
     .replace(/[aeiouyw]/g, "")
     .replace(/(.)\1+/g, "$1")
-    .replace(/(?<=[bcdgjkpt])h/g, "");
+    .replace(/ks/g, "k")
+    .replace(/(.)\1+/g, "$1");
 }
 
 /** Each word's search text; a word runs to the next space or punctuation. */
@@ -112,16 +128,19 @@ export function placeDisplayName(name: string): string {
  * How well `name` answers `query`: 0 the name starts with it, 1 a word
  * starts with it, 2 it appears inside the name, 3 a word starts with it
  * spelled differently. `null` when it doesn't match. Another spelling of
- * the same place ("Chattogram" for "Chittagong") answers as well.
+ * the same place ("Chattogram" for "Chittagong") answers as well, half a
+ * step after a match of the text as typed.
  */
 export function placeRank(name: string, query: string): number | null {
   const typed = placeSearchText(query);
   if (!typed) return 0;
   let best: number | null = null;
-  for (const wanted of searchSpellings(typed)) {
-    const rank = rankSpelling(name, wanted);
+  searchSpellings(typed).forEach((wanted, index) => {
+    const found = rankSpelling(name, wanted);
+    // A match through another spelling ranks just after the same match as typed.
+    const rank = found === null ? null : found + (index > 0 ? 0.5 : 0);
     if (rank !== null && (best === null || rank < best)) best = rank;
-  }
+  });
   return best;
 }
 
@@ -133,7 +152,9 @@ function rankSpelling(name: string, wanted: string): number | null {
   if (tails.some((tail) => tail.startsWith(wanted))) return 1;
   if (tails[0]?.includes(wanted)) return 2;
   const wantedSkeleton = skeleton(wanted);
-  if (wantedSkeleton.length >= 2 && tails.some((tail) => skeleton(tail).startsWith(wantedSkeleton))) return 3;
+  // Two typed consonants at least ("ঝিনাই" reads "jhinai": j, h, n), though h and n do not count.
+  const typedConsonants = wanted.replace(/[^a-z]|[aeiouyw]/g, "").length;
+  if (wantedSkeleton.length >= 1 && typedConsonants >= 2 && tails.some((tail) => skeleton(tail).startsWith(wantedSkeleton))) return 3;
   return null;
 }
 

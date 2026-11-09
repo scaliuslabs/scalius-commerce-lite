@@ -391,8 +391,9 @@ export function SaveScope({
     async saveAll(options) {
       const all = options?.all === true;
       if (list.some((entry) => (all || entry.dirty) && isInvalid(entry))) {
-        // Shopify: Save stays pressable; it shows what to fix instead of saving.
-        setFailure((previous) => ({ ...previous, reveal: previous.reveal + 1 }));
+        // Shopify: Save stays pressable; it shows what to fix instead of saving. This attempt is
+        // about the fields now: what an earlier attempt failed with (a 500, a conflict) no longer speaks.
+        setFailure((previous) => ({ ...NO_FAILURE, attempt: previous.attempt, reveal: previous.reveal + 1 }));
         return false;
       }
       setSaving(true);

@@ -453,8 +453,10 @@ const nodeUnion = z.discriminatedUnion("type", [
     attribute: attributeKey,
     /**
      * Choices the extension computed for this render (open delivery slots
-     * from its records and `input.now`), drawn as a select over a `text`
-     * attribute; the answer is still text the app's `cart.validate` checks.
+     * from its records and `input.now`), drawn as a select: over a `text`
+     * attribute (the answer is text the app's `cart.validate` checks), a
+     * `date` (valid days, written in the reader's language) or a `choice`
+     * (some of its declared values; the order keeps the declared label).
      */
     choices: z.array(z.object({ value: z.string().min(1).max(500), label: z.string().trim().min(1).max(120) }).strict()).min(1).max(50).optional(),
   }).strict(),

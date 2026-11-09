@@ -19,6 +19,7 @@
 // `customerPhone` input (also exposed as `data-e164-value`); it stays empty
 // until the visible number validates.
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import { whenPressEnds } from "./field-validation";
 import type { PhoneCountryMeta } from "@scalius/shared/phone-example";
 import { compactPhone } from "@scalius/shared/phone-input";
 import { phoneHints, type PhoneHintCopy } from "./phone-hint";
@@ -312,7 +313,8 @@ export function initCheckoutPhoneField(signal?: AbortSignal, options: CheckoutPh
     },
     { signal },
   );
-  input.addEventListener("blur", validate, { signal });
+  // Its error waits for the press that left the field, so the next control does not move under it.
+  input.addEventListener("blur", () => whenPressEnds(validate, input.ownerDocument), { signal });
 
   window.addEventListener(
     "phone-prefill",

@@ -16253,6 +16253,10 @@
    "status": 422,
    "meaning": "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up."
   },
+  "sales_channel_product_unpublished": {
+   "status": 422,
+   "meaning": "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written."
+  },
   "pos_sales_channel_not_owned": {
    "status": 403,
    "meaning": "An app sells in person only from its own sales channel (`<app id>:<channel>`, declared in its manifest)."

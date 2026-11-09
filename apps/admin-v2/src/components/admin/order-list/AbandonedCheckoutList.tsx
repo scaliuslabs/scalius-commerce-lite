@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { productQueryOptions } from "@/lib/api-query-options/products";
+import { storedLineVariantLabel } from "~/components/admin/order-form/order-line";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import { ExternalLink, ShoppingBag, Trash2 } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -96,7 +97,7 @@ function CustomerCell({ checkout }: { checkout: AbandonedCheckout }) {
     <div className="min-w-0">
       <p className="line-clamp-2 break-words font-medium">{customerInfo.name || t("noName")}</p>
       <p className={customerInfo.phone ? "whitespace-nowrap font-mono text-body text-muted-foreground" : "text-body text-muted-foreground"}>
-        {customerInfo.phone ? formatPhoneForDisplay(customerInfo.phone, getStoreRegion()) : t("noPhone")}
+        {customerInfo.phone ? formatPhone(customerInfo.phone) : t("noPhone")}
       </p>
     </div>
   );
@@ -147,6 +148,18 @@ function CheckoutRowActions({
   );
 }
 
+/**
+ * Each line's variant in words when the checkout kept no option labels for
+ * it: read from its product (the order form's own read), null otherwise.
+ */
+function useLineVariantLabels(items: ParsedAbandonedCheckoutDisplay["items"]): Array<string | null> {
+  const unlabelled = items.map((item) => !item.options?.length && item.variantId ? item.id : null);
+  const productIds = [...new Set(unlabelled.filter((id): id is string => id !== null))];
+  const reads = useQueries({ queries: productIds.map((id) => ({ ...productQueryOptions(id), staleTime: 60_000 })) });
+  const byProduct = new Map(productIds.map((id, index) => [id, reads[index]?.data]));
+  return items.map((item, index) => unlabelled[index] ? storedLineVariantLabel(byProduct.get(item.id), item.variantId) : item.variantLabel);
+}
+
 /** The checkout a customer left: who, where to, the cart, and one-tap ways to follow up. */
 function CheckoutSheet({
   checkout,
@@ -167,6 +180,7 @@ function CheckoutSheet({
   const { fmt } = useCurrency();
   const navigate = useNavigate();
   const display = checkout ? displayOf(checkout) : null;
+  const variantLabels = useLineVariantLabels(display?.items ?? []);
   const info: AbandonedCheckoutCustomerInfo = display?.customerInfo ?? {};
   const name = info.name || t("noName");
   const contact = info.phone ? customerContactLinks(info.phone) : null;
@@ -206,7 +220,7 @@ function CheckoutSheet({
               ) : null}
               <section className="space-y-1 text-body">
                 <p className={info.phone ? "font-mono" : "text-muted-foreground"}>
-                  {info.phone ? formatPhoneForDisplay(info.phone, getStoreRegion()) : t("noPhone")}
+                  {info.phone ? formatPhone(info.phone) : t("noPhone")}
                 </p>
                 {info.email ? <p className="break-all text-muted-foreground">{info.email}</p> : null}
                 {contact ? (
@@ -240,7 +254,10 @@ function CheckoutSheet({
                         <p className="font-medium">{item.name}</p>
                         <p className="text-muted-foreground">
                           {[
-                            ...(item.options ?? []).map((option) => `${option.name}: ${option.value}`),
+                            ...(item.options?.length
+                              ? item.options.map((option) => `${option.name}: ${option.value}`)
+                              // A line saved without its option labels: its SKU's, as the order form reads them.
+                              : [variantLabels[index]].filter((label): label is string => Boolean(label))),
                             t("qtyTimesPrice", { qty: item.quantity, price: fmt(item.price) }),
                           ].join(" · ")}
                         </p>

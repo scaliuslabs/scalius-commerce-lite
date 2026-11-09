@@ -26,6 +26,7 @@ import { courierBookingOptionKeySchema, type CourierBookingOptionValue } from ".
 import { CUSTOM_MESSAGING_CHANNELS_MAX, customMessagingChannelSchema, MESSAGING_CHANNELS } from "./channels";
 import { pluginKeySchema, pluginUrlNameSchema } from "../manifest-patterns";
 import { PAYMENT_TERMS_MAX_DAYS } from "../../payment-terms";
+import { DEFERRED_PAYMENT_KINDS, PROVIDER_PAYMENT_KINDS } from "../../order-payment-methods";
 
 /** A URL path segment (`/webhooks/couriers/<plugin id>:<provider id>`): snake_case or kebab-case. */
 const providerId = pluginUrlNameSchema();
@@ -92,6 +93,13 @@ export const paymentProviderDescriptorSchema = z.object({
    * leaves it hidden. The manifest declares that function.
    */
   flow: z.enum(["hosted", "deferred"]).default("hosted"),
+  /**
+   * How the method is paid, for the merchant's reports and the order
+   * (`orders.payment_kind`): a `hosted` method is `online` (the default); a
+   * `deferred` one is `invoice` (the default), `cash_on_delivery` (collected
+   * at the door) or `paid_to_store` (received by the store directly).
+   */
+  paymentKind: z.enum(PROVIDER_PAYMENT_KINDS).optional(),
   /** A `deferred` method's terms: the order is due this many days after placement. */
   dueInDays: z.number().int().min(1).max(PAYMENT_TERMS_MAX_DAYS).optional(),
   /** The currencies the provider can charge; checkout offers it in no other. */
@@ -144,6 +152,14 @@ export const paymentProviderDescriptorSchema = z.object({
   // A hosted page returns the buyer, and a buyer may ask whether it went through.
   if (descriptor.flow === "hosted" && (!has("verifyReturn") || !has("queryPayment"))) {
     context.addIssue({ code: "custom", path: ["operations"], message: "A hosted payment provider implements verifyReturn and queryPayment." });
+  }
+  // A hosted page takes the money online; a deferred method is paid later, some other way.
+  if (descriptor.paymentKind !== undefined && (descriptor.flow === "deferred"
+    ? !(DEFERRED_PAYMENT_KINDS as readonly string[]).includes(descriptor.paymentKind)
+    : descriptor.paymentKind !== "online")) {
+    context.addIssue({ code: "custom", path: ["paymentKind"], message: descriptor.flow === "deferred"
+      ? "A deferred payment provider is paid by invoice, cash_on_delivery or paid_to_store."
+      : "A hosted payment provider is paid online." });
   }
   // A deferred method names its terms; any other flow has none.
   if (descriptor.flow === "deferred" && descriptor.dueInDays === undefined) {

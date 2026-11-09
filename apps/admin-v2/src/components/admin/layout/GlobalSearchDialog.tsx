@@ -1,3 +1,4 @@
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { useMemo, useState, type ComponentType } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -22,9 +23,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { getApiV1AdminSearchGlobal } from "@scalius/api-client/sdk";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatPhone } from "~/lib/phone-display";
+import { formatOrderNumber } from "~/lib/order-number";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -270,7 +270,7 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
           detail: detail ?? undefined,
           to: `/admin/customers/${customer.id}/edit`,
           icon: UserRound,
-          titledByPhone: customer.phone !== null && title === formatPhoneForDisplay(customer.phone, getStoreRegion()),
+          titledByPhone: customer.phone !== null && title === formatPhone(customer.phone),
         };
       }), all("customers", "/admin/customers", s("list.customer"))),
       ...group("products", t("products"), data.products.map((item) => ({
@@ -283,7 +283,8 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
       ...group("discounts", t("discounts"), data.discounts.map((discount) => ({
         id: `d:${discount.id}`,
         label: discount.code ?? discount.name,
-        detail: discount.code ? discount.name : undefined,
+        // A code discount is often named by its code: say it once.
+        detail: discount.code && normalizeDiscountCode(discount.name) !== normalizeDiscountCode(discount.code) ? discount.name : undefined,
         to: `/admin/discounts/${discount.id}`,
         icon: BadgePercent,
       })), all("discounts", "/admin/discounts", s("list.discount"))),

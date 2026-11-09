@@ -13,7 +13,7 @@ import {
   formatBuyerUploadValue,
   parseBuyerUploadValue,
   type BuyerUploadType,
-} from "./buyer-uploads";
+} from "./buyer-upload-value";
 /**
  * Line-item properties: the buyer inputs a product asks for (engraving text,
  * gift wrap, a fit choice) and what they add to the line price (Wave A §3).

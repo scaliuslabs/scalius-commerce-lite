@@ -32,6 +32,40 @@ export const FORBIDDEN_RUNTIMES = {
   "generated SDK client": (name, code) => /\bserializedBody\b/.test(code),
 };
 
+/**
+ * Server-side tables a buyer page's first paint must never carry, found by a
+ * value only they hold. Each came in once through a small import of something
+ * else from their module: the plan profile table through the cart store's
+ * line-entry words (buyer-uploads.ts bounds a declaration by the plan), the
+ * English checkout catalogue through a bare type import. The problem names
+ * the import chain that brought it, from the page's script.
+ */
+export const HEAVY_TABLES = {
+  "the plan profile table (@scalius/shared/plan-limits)": (code) => /algorithm:`pbkdf2-sha256`/.test(code) || /sameOriginMedia:!?[01]/.test(code),
+  "the English checkout catalogue (@scalius/shared/checkout-language)": (code) => /checkoutSectionTitle:`Checkout information`/.test(code),
+};
+
+/** The static import chain from `roots` to `target`, as chunk names (shortest). */
+export function importChain(graph, roots, target) {
+  const previous = new Map(roots.map((root) => [root, null]));
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (id === target) {
+      const chain = [];
+      for (let at = id; at; at = previous.get(at)) chain.unshift(graph.chunk(at).name);
+      return chain;
+    }
+    for (const next of graph.chunk(id).imports) {
+      if (!previous.has(next)) {
+        previous.set(next, id);
+        queue.push(next);
+      }
+    }
+  }
+  return [graph.chunk(target).name];
+}
+
 /** The script entries of a default product page (layout, header, gallery, buy box, reviews, related cards). */
 export const PRODUCT_PAGE_SCRIPTS = [
   "src/layouts/Layout.astro",
@@ -378,7 +412,15 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
   }
 
   for (const [page, scripts] of Object.entries(BUYER_PAGE_SCRIPTS)) {
-    const firstPaint = graph.closure(pageEntries(graph, scripts));
+    const entries = pageEntries(graph, scripts);
+    const firstPaint = graph.closure(entries);
+    for (const id of firstPaint) {
+      for (const [table, holds] of Object.entries(HEAVY_TABLES)) {
+        if (holds(graph.chunk(id).code)) {
+          fail(`heavy:${page}`, `the ${page} page's first paint downloads ${table}, through ${importChain(graph, entries, id).join(" -> ")}: import what the page needs from a module that does not load it`);
+        }
+      }
+    }
     const { chunks: afterAdd } = graph.withLazy(firstPaint, ADD_TO_CART_LAZY_CHUNKS);
     for (const found of forbiddenRuntimes(graph, afterAdd)) fail(`runtimes:${page}`, `first paint or the first add to cart downloads ${found}`);
     const others = [...graph.lazyLoads(afterAdd)].filter(([target]) =>

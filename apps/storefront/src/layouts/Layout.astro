@@ -13,7 +13,7 @@ import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
-import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { themePaint } from "@/lib/theme-paint";
 import type { AnalyticsConfig } from "@/lib/api";
 import { getCdnOrigin, getSameOriginMediaSource, mediaImageUrl } from "@/lib/media-url";
@@ -550,7 +550,7 @@ const pageStoreTimeZone = storeTimeZone();
 
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:fixed focus:inset-s-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
+      class="sr-only focus:not-sr-only focus:fixed focus:inset-s-4 focus:top-4 focus:z-[var(--scalius-z-blocking,100)] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
     >
       {chromeCopy.skipToContent}
     </a>

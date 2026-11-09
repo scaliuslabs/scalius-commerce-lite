@@ -1190,6 +1190,8 @@ export interface PluginGrantRequest {
   features: string[];
   /** Object fields whose addresses the app may email or text (`messaging.recipients`, `<object>.<field>`). */
   messageRecipients: string[];
+  /** Asks buyers to upload files (a checkout attribute or line input of type `file`): it receives their files. */
+  buyerFiles: boolean;
 }
 
 /** The list dimensions of a grant request, in key order. */
@@ -1198,7 +1200,7 @@ export const PLUGIN_GRANT_LIST_DIMENSIONS = [
   "messageRecipients", "providers", "scopes", "storefrontConnect", "storefrontScripts",
 ] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 /** The flag dimensions of a grant request, in key order. */
-export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["publicRoutes", "storefrontCode", "storefrontPixel", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
+export const PLUGIN_GRANT_FLAG_DIMENSIONS = ["buyerFiles", "publicRoutes", "storefrontCode", "storefrontPixel", "storefrontSurfaces"] as const satisfies ReadonlyArray<keyof PluginGrantRequest>;
 
 /** A grant request with every dimension at its default (asks for nothing). */
 export function emptyPluginGrantRequest(): PluginGrantRequest {
@@ -1206,6 +1208,7 @@ export function emptyPluginGrantRequest(): PluginGrantRequest {
     scopes: [], allowedHosts: [], events: [], functions: [], extensions: [], blockingFunctions: [], providers: [],
     publicRoutes: false, storefrontScripts: [], storefrontSurfaces: false, customFieldOwners: [],
     storefrontCode: false, storefrontConnect: [], storefrontPixel: false, features: [], messageRecipients: [],
+    buyerFiles: false,
   };
 }
 
@@ -1238,6 +1241,8 @@ export function pluginGrantRequest(declared: PluginManifest, features: Iterable<
     storefrontPixel: manifest.storefront.pixel !== undefined,
     features: enabled,
     messageRecipients: sorted(manifest.messaging.recipients.map(pluginMessageRecipientKey)),
+    buyerFiles: (manifest.checkout?.attributes ?? []).some((field) => field.type === "file")
+      || (manifest.checkout?.lineInputs ?? []).some((input) => input.type === "file"),
   };
 }
 
@@ -1297,6 +1302,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     storefrontPixel: next.storefrontPixel && !granted.storefrontPixel,
     features: added(granted.features, next.features),
     messageRecipients: added(granted.messageRecipients, next.messageRecipients),
+    buyerFiles: next.buyerFiles && !granted.buyerFiles,
   };
 }
 

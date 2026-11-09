@@ -24,7 +24,6 @@ import {
   normalizeReviewText,
   REVIEW_RATINGS,
 } from "@scalius/shared/reviews";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../../errors";
 import { publishedMediaObjectKey } from "../media-references";
 import { reviewsDocument, type ReviewSettings } from "../settings";
@@ -55,7 +54,7 @@ export interface AdminReview {
   variantLabel: string | null;
   product: { id: string; name: string; slug: string | null; imageObjectKey: string | null };
   /** The order line's order: null for an app's review that names no line (not a verified purchase). */
-  order: { id: string; orderNumber: string } | null;
+  order: { id: string; orderNumber: number | null } | null;
   /** A verified purchase: on a delivered order line. */
   verified: boolean;
   /** The app that wrote it (an import or a reviews app). */
@@ -168,7 +167,7 @@ function presentAdminReview(row: AdminReviewRow): AdminReview {
     authorType: row.authorType,
     variantLabel: row.variantLabel,
     product: { id: row.productId, name: row.productName, slug: row.productSlug, imageObjectKey: row.productImageObjectKey },
-    order: row.orderId ? { id: row.orderId, orderNumber: formatOrderNumber(row.orderNumber, row.orderId) } : null,
+    order: row.orderId ? { id: row.orderId, orderNumber: row.orderNumber ?? null } : null,
     verified: row.orderId !== null,
     appId: row.appId,
     checkFlags: decodeCheckFlags(row.checkFlags),

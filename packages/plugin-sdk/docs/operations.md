@@ -2,7 +2,7 @@
 
 # Stable app API reference
 
-Every operation an app may call with `ctx.api.call(name, { path, query, body, idempotencyKey })`: 204 operations in 50 areas, generated from the contract this SDK release is sealed with (`stableContract` in `@scalius/plugin-sdk/testing`, which `createContractApi` checks calls against). Each answers `{ ok, status, data, error }`; `data` is the response below. A scope listed is enough on its own: a `write_*` scope includes its `read_*`. Money is integer minor units beside a `currency`; every list takes `cursor` and `limit` and answers `nextCursor`.
+Every operation an app may call with `ctx.api.call(name, { path, query, body, idempotencyKey })`: 205 operations in 50 areas, generated from the contract this SDK release is sealed with (`stableContract` in `@scalius/plugin-sdk/testing`, which `createContractApi` checks calls against). Each answers `{ ok, status, data, error }`; `data` is the response below. A scope listed is enough on its own: a `write_*` scope includes its `read_*`. Money is integer minor units beside a `currency`; every list takes `cursor` and `limit` and answers `nextCursor`.
 
 ## Operations
 
@@ -48,7 +48,7 @@ Every operation an app may call with `ctx.api.call(name, { path, query, body, id
 | purchase_orders | [`cancel`](#purchase-orders-cancel), [`create`](#purchase-orders-create), [`get`](#purchase-orders-get), [`list`](#purchase-orders-list), [`mark_ordered`](#purchase-orders-mark-ordered), [`receive`](#purchase-orders-receive), [`update`](#purchase-orders-update) |
 | refunds | [`create`](#refunds-create), [`list`](#refunds-list) |
 | returns | [`approve`](#returns-approve), [`cancel`](#returns-cancel), [`create`](#returns-create), [`get`](#returns-get), [`list`](#returns-list), [`receive`](#returns-receive) |
-| reviews | [`create`](#reviews-create), [`get`](#reviews-get), [`list`](#reviews-list), [`set_status`](#reviews-set-status) |
+| reviews | [`create`](#reviews-create), [`get`](#reviews-get), [`list`](#reviews-list), [`reply`](#reviews-reply), [`set_status`](#reviews-set-status) |
 | sales_channels | [`list_products`](#sales-channels-list-products) |
 | shipments | [`create`](#shipments-create), [`get`](#shipments-get), [`list`](#shipments-list) |
 | shipping_zones | [`get`](#shipping-zones-get), [`list`](#shipping-zones-list) |
@@ -4340,6 +4340,32 @@ Response `data`:
 | `reviews` | [ReviewResource](#reviewresource)[] | yes |  |
 | `nextCursor` | string \| null | yes | Pass it as `cursor` for the next page; null on the last page |
 
+### reviews.reply
+
+`POST /api/v1/admin/resources/reviews/{id}/reply`. Scopes: any one of `write_reviews`. Risk: write.
+
+- Idempotency: supported: pass `idempotencyKey` to make a retry safe.
+- Revision: required: pass the `revision` you read as `expectedRevision`; a changed resource answers 409.
+
+Parameters:
+
+| Name | In | Type | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | path | string | yes | 1 to 80 characters |
+
+Body:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `body` | string \| null | yes | The reply (at most 2000 characters), or null to take it down |
+| `expectedRevision` | integer | yes | The review's `revision` you read; at least 1 |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `review` | [ReviewResource](#reviewresource) | yes |  |
+
 ### reviews.set_status
 
 `POST /api/v1/admin/resources/reviews/{id}/status`. Scopes: any one of `write_reviews`. Risk: write.
@@ -5928,6 +5954,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `verified` | boolean | yes |  |
 | `appId` | string \| null | yes | 1 to 128 characters |
 | `moderationReason` | "spam" \| "abusive" \| "personal_info" \| "off_topic" \| "not_about_product" \| null \| null | yes |  |
+| `reply` | string \| null | yes | at most 2000 characters |
 
 ### ShipmentResource
 

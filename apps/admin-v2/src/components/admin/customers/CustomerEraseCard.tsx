@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminCustomersByIdErase } from "@scalius/api-client/sdk";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import {
   AlertDialog,

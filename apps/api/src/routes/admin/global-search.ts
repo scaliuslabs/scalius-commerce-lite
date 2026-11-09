@@ -5,6 +5,7 @@
 // GLOBAL_SEARCH_LIMIT rows. Nothing counts, and nothing scans a large table
 // with LIKE or instr (PostgreSQL, which has no FTS5, uses the bounded
 // fallback the list searches use).
+import { normalizeDiscountCode } from "@scalius/shared/discount-code";
 import { isEmailAddress } from "@scalius/shared/text-scan";
 import { and, desc, eq, inArray, isNull, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
@@ -198,7 +199,7 @@ function prefixEnd(prefix: string): string {
 
 async function searchDiscounts(db: Database, term: string): Promise<GlobalSearchResult["discounts"]> {
     // Codes are stored upper-case: a prefix is an index range on the unique code index.
-    const code = term.trim().toUpperCase();
+    const code = normalizeDiscountCode(term);
     const codeRows = /^[A-Z0-9_-]{2,50}$/.test(code)
         ? await db.select({ promotionId: promotionCodes.promotionId, code: promotionCodes.code })
             .from(promotionCodes)

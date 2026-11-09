@@ -13,6 +13,9 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/quote": {
     POST: { permission: PERMISSIONS.ORDERS_CREATE },
   },
+  "/api/v1/admin/orders/app-fields": {
+    POST: { permission: PERMISSIONS.ORDERS_CREATE },
+  },
   "/api/v1/admin/orders/archive": {
     POST: { permission: PERMISSIONS.ORDERS_DELETE },
   },

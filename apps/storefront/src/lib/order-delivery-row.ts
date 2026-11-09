@@ -2,7 +2,7 @@
 // the account order page. A free pickup reads "Pickup · <location>", never
 // "Delivery Free" or "Shipping Free": nothing was shipped and nothing waived.
 import { checkoutText } from "@/lib/checkout-text";
-import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 export interface OrderDeliveryRowInput {
   mode: "ship" | "pickup" | "none";

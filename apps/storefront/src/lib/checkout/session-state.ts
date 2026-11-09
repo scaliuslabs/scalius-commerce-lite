@@ -3,6 +3,7 @@ import { isPaymentMethodIdShape } from "../payment-method-id";
 import { logicalPathname } from "@/lib/presence-url";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { CHECKOUT_FORM_DRAFT_IDLE_MS, CHECKOUT_FORM_DRAFT_KEY, dropCheckoutFormDraft } from "./draft-lifetime";
+import { CART_STORAGE_KEY } from "@/store/cart";
 
 /** The quote the cart page last showed: the payment page draws its summary from it at once. */
 const REVIEWED_QUOTE_KEY = "scalius_checkout_quote";
@@ -137,7 +138,30 @@ export function clearCheckoutTransferSession(): void {
   }
 }
 
+/**
+ * The cart this browser holds has a line. Read from storage, so a cart
+ * another tab emptied counts as empty here too.
+ */
+function cartHoldsLines(): boolean {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) ?? "null") as { items?: unknown } | null;
+    return Boolean(stored?.items && typeof stored.items === "object" && Object.keys(stored.items).length > 0);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keeps what the buyer typed, only while there is a cart to check out: a
+ * write after the cart emptied (a debounced save, another tab's form, the
+ * phone field) is dropped instead, so emptying the cart by any path never
+ * leaves the details behind (the cart store drops the stored copy).
+ */
 export function writeCheckoutFormDraft(values: CheckoutFormDraft): void {
+  if (!cartHoldsLines()) {
+    dropCheckoutFormDraft();
+    return;
+  }
   const safeValues: CheckoutFormDraft = {};
   for (const field of CHECKOUT_FORM_DRAFT_FIELDS) {
     const value = values[field];

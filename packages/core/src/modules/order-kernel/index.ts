@@ -11,3 +11,4 @@ export * from "./payment-session-guard";
 export * from "./refund-attempt-guard";
 export * from "./app-facts";
 export * from "./stock-held";
+export * from "./attribute-apps";

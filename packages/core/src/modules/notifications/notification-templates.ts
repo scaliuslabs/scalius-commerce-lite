@@ -566,6 +566,12 @@ export interface OrderEmailFacts {
     subtotal: string | null;
     properties?: readonly string[];
   }>;
+  /**
+   * The apps' checkout answers the buyer gave (a delivery day and window), by
+   * app, each "Label: value" in the message's language
+   * (`presentCheckoutAttributes`); email only. Absent without answers.
+   */
+  appAnswers?: ReadonlyArray<{ appName: string; lines: readonly string[] }>;
   /** Null when the saved currency can't be shown truthfully. */
   amounts: {
     subtotal: string;
@@ -689,6 +695,7 @@ export function renderOrderEmail(input: {
     `${copy.payment}: ${payment}`,
     facts.address.length ? `${copy.deliveryAddress}\n${facts.address.join("\n")}` : "",
     facts.method.length ? `${copy.deliveryMethod}\n${facts.method.join("\n")}` : "",
+    ...(facts.appAnswers ?? []).map((group) => `${group.appName}\n${group.lines.join("\n")}`),
     origin ? `${copy.visitStore}: ${origin}/` : "",
     support.length ? `${copy.needHelp}\n${support.map((contact) => contact.label).join("\n")}` : "",
   ].filter(Boolean).join("\n\n");
@@ -710,6 +717,7 @@ ${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="
 <p style="margin:16px 0 0;"><strong>${escapeHtml(copy.payment)}:</strong> ${escapeHtml(payment)}</p>
 ${facts.address.length ? `<h2 style="${SECTION}">${escapeHtml(copy.deliveryAddress)}</h2><p style="margin:0;">${facts.address.map((line) => escapeHtml(line)).join("<br>")}</p>` : ""}
 ${facts.method.length ? `<h2 style="${SECTION}">${escapeHtml(copy.deliveryMethod)}</h2><p style="margin:0;">${escapeHtml(facts.method[0]!)}${facts.method[1] ? `<br><span style="${MUTED}">${escapeHtml(facts.method[1])}</span>` : ""}</p>` : ""}
+${(facts.appAnswers ?? []).map((group) => `<h2 style="${SECTION}">${escapeHtml(group.appName)}</h2><p style="margin:0;">${group.lines.map((line) => escapeHtml(line)).join("<br>")}</p>`).join("")}
 ${support.length ? `<div style="margin-top:24px;border-top:1px solid #dadce0;padding-top:16px;"><p style="margin:0 0 8px;">${escapeHtml(copy.needHelp)}</p>${support.map((contact) => `<p style="margin:4px 0;"><a href="${escapeHtml(contact.href)}" style="${LINK}">${escapeHtml(contact.label)}</a></p>`).join("")}</div>` : ""}
 </div></body></html>`;
   return { subject, html, text };

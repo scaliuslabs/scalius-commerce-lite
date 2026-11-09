@@ -57,6 +57,10 @@ import {
   PluginError,
   recordFunctionFailure,
   recordFunctionSuccess,
+  recordFunctionRefusal,
+  clearFunctionRefusals,
+  functionRefusalDue,
+  functionRefusalDirty,
   stopPlugin,
   type RegisteredPlugin,
 } from "@scalius/core/modules/plugins";
@@ -280,6 +284,8 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
     roles?: FunctionCustomerRoles;
     /** The request's sandboxed runs, shared by every point it runs (absent: its own for this call). */
     sandboxRuns?: SandboxRuns;
+    /** A buyer's checkout: `cart.validate` answers count toward the app's refusal streak (function-circuit.ts). */
+    countRefusals?: boolean;
   } = {},
 ): Promise<Array<PluginFunctionResult<P>>> {
   const db = options.db ?? getDb(env);
@@ -400,6 +406,17 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         continue;
       }
       if (functionCircuitDirty(registration.circuit)) settle(recordFunctionSuccess(db, { pluginId: installation.pluginId, point }));
+      // A buyer's checkout the app refused counts (at most once every few minutes); one it accepted ends the streak.
+      if (options.countRefusals && point === "cart.validate") {
+        const refusal = (outcome.value as { errors?: Array<{ message?: unknown }> }).errors?.[0];
+        if (refusal) {
+          if (functionRefusalDue(registration.refusals, nowSeconds)) {
+            settle(recordFunctionRefusal(db, { pluginId: installation.pluginId, point, reason: typeof refusal.message === "string" ? refusal.message : "" }));
+          }
+        } else if (functionRefusalDirty(registration.refusals)) {
+          settle(clearFunctionRefusals(db, { pluginId: installation.pluginId, point }));
+        }
+      }
       const result: PluginFunctionResult<P> = { pluginId: installation.pluginId, priority, output: outcome.value };
       const commit = (outcome.value as { commit?: Array<{ as: string; record: unknown }> }).commit;
       if (commit?.length) {

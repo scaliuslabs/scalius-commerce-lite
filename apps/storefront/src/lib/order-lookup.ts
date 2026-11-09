@@ -3,7 +3,7 @@
 // (payment-recovery link).
 // Browser-safe: no transport imports.
 import { checkoutText } from "@/lib/checkout-text";
-import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { isCodeStillValidRefusal } from "@scalius/shared/customer-auth-policy";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { checkoutRateLimitedText, pageWait, positiveSeconds } from "@/lib/rate-limit-wait";

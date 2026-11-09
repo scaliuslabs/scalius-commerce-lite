@@ -1,12 +1,15 @@
 import type { CheckoutAttribute } from "@scalius/shared/plugins/buyer-ui";
+import { offeredChoices } from "@scalius/shared/plugins/checkout-attribute-values";
 
 /**
  * One host-owned field description for server forms and private buyer UI.
- * `computed` are the choices an extension offered for a `text` attribute this
- * render (a select of them; the answer stays text the app checks).
+ * `computed` are the choices an extension offered this render (a select of
+ * them): over a `text` attribute (the answer stays text the app checks), a
+ * `date` (each day written in `language`) or a `choice` (some of its values),
+ * as `offeredChoices` words them.
  */
-export function buyerFieldModel(attribute: CheckoutAttribute, name = attribute.key, value = "", computed?: ReadonlyArray<{ value: string; label: string }>) {
-  const offered = attribute.type === "text" && computed?.length ? computed : null;
+export function buyerFieldModel(attribute: CheckoutAttribute, name = attribute.key, value = "", computed?: ReadonlyArray<{ value: string; label: string }>, language = "en") {
+  const offered = offeredChoices(attribute, computed, language);
   const tag = attribute.type === "multiline" ? "textarea" : offered || attribute.type === "choice" || (attribute.type === "boolean" && attribute.required) ? "select" : "input";
   const inputType: "checkbox" | "number" | "date" | "text" = attribute.type === "boolean" ? "checkbox" : attribute.type === "number" || attribute.type === "date" ? attribute.type : "text";
   return {

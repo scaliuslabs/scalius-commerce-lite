@@ -2,7 +2,7 @@ import { media } from "@scalius/database/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { resolveMediaUrl } from "@scalius/shared/media-url";
-import type { BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { computedChoicesFit, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
 import { pluginUiNodes } from "@scalius/shared/plugins/ui";
 import { purchaseOptionId } from "@scalius/shared/plugins/ids";
 import type { RegisteredPlugin } from "@scalius/core/modules/plugins";
@@ -15,11 +15,13 @@ export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[],
     const installation = installations.get(block.appId);
     if (!installation) return false;
     const fields = new Set(block.attributes.map((field) => field.key));
-    // Computed choices draw over free text only: a declared choice keeps its own list, which the host checks.
-    const textFields = new Set(block.attributes.filter((field) => field.type === "text").map((field) => field.key));
     const { proxy } = installation.manifest.storefront;
     for (const node of pluginUiNodes(block.ui)) {
-      if (node.type === "field" && (!fields.has(node.attribute) || (node.choices && !textFields.has(node.attribute)))) return false;
+      // Computed choices: over free text, over a date (valid days) or over a declared choice (its own values only).
+      if (node.type === "field") {
+        const attribute = block.attributes.find((field) => field.key === node.attribute);
+        if (!attribute || (node.choices && !computedChoicesFit(attribute, node.choices))) return false;
+      }
       if (node.type === "button") {
         const action = node.action;
         if (action.kind === "cart" && action.op === "set_attribute" && !fields.has(action.key)) return false;

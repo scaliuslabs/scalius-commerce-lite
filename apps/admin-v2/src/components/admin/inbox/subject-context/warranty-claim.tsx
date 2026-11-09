@@ -3,6 +3,7 @@
 // claim status and the status actions (with an optional reply to the buyer).
 // Claims are records: resolving one never moves money, stock or the order;
 // a replacement or refund is done from the order page, linked here.
+import { formatOrderNumber } from "~/lib/order-number";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -83,7 +84,7 @@ function ClaimFacts({ claim }: { claim: WarrantyClaim }) {
       ) : null}
       {claim.openedBy === "staff" && !warranty.active ? <p className="text-muted-foreground">{t("goodwill")}</p> : null}
       <Link to="/admin/orders/$orderId" params={{ orderId: claim.order.id }} className="text-link hover:underline">
-        {t("order", { number: claim.order.orderNumber })}
+        {t("order", { number: formatOrderNumber(claim.order.orderNumber, claim.order.id) })}
       </Link>
     </div>
   );

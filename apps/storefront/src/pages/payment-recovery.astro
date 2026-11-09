@@ -26,7 +26,8 @@ import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 const isPost = Astro.request.method === "POST";
 if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {

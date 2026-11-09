@@ -1,6 +1,5 @@
 import { isErasedText } from "@scalius/shared/customer-erasure";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import type { customersMessages } from "~/i18n/customers";
 
 export type CustomerKind = "account" | "guest" | "merchant";
@@ -32,7 +31,7 @@ export function customerTitle(
   t: Translate,
 ): { title: string; detail: string | null; detailIsPhone: boolean } {
   if (isErasedText(customer.name)) return { title: t("erasedCustomer"), detail: null, detailIsPhone: false };
-  const phone = customer.phone ? formatPhoneForDisplay(customer.phone, getStoreRegion()) : null;
+  const phone = customer.phone ? formatPhone(customer.phone) : null;
   const email = customer.email?.trim() || null;
   if (customer.kind === "guest") {
     // An erased order name is no one's name: the record falls back to its contact.

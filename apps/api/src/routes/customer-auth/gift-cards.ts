@@ -11,7 +11,6 @@ import {
 } from "@scalius/core/modules/gift-cards";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { ok } from "../../utils/api-response";
 import { RateLimitError, UnauthorizedError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -32,7 +31,7 @@ const buyerGiftCardTransactionSchema = z.object({
   balanceAfter: z.number(),
   balanceAfterMinor: z.number().int(),
   orderId: z.string().nullable(),
-  orderNumber: z.string().nullable(),
+  orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   createdAt: isoTimestamp,
 }).openapi("BuyerGiftCardTransaction");
 
@@ -75,7 +74,7 @@ function presentBuyerGiftCard(card: BuyerGiftCard) {
       balanceAfter: fromMinor(transaction.balanceAfterMinor, places),
       balanceAfterMinor: transaction.balanceAfterMinor,
       orderId: transaction.orderId,
-      orderNumber: transaction.orderId ? formatOrderNumber(transaction.orderNumber, transaction.orderId) : null,
+      orderNumber: transaction.orderId ? transaction.orderNumber ?? null : null,
       createdAt: iso(transaction.createdAt),
     })),
   };

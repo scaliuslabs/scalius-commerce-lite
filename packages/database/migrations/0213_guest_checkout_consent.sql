@@ -89,4 +89,4 @@ BEGIN
   SELECT RAISE(ABORT, 'CUSTOMER_ERASED');
 END;
 --> statement-breakpoint
-INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (211, '0211_guest_checkout_consent', 'c31089b2cc7c0b3c0c0f1e5c8377f133b0fcd6ffc85f09af606b2e9709f46fad');
+INSERT INTO scalius_schema_migrations (version, name, source_sha256) VALUES (213, '0213_guest_checkout_consent', 'c31089b2cc7c0b3c0c0f1e5c8377f133b0fcd6ffc85f09af606b2e9709f46fad');

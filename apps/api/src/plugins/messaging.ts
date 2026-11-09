@@ -176,7 +176,7 @@ function requireOneRecipient(input: { customerId?: unknown; to?: unknown }): voi
   }
 }
 
-/** How long a sent email's key is remembered: a repeat within it sends nothing. */
+/** How long a sent email's or SMS's key is remembered: a repeat within it sends nothing. */
 export const PLUGIN_EMAIL_IDEMPOTENCY_SECONDS = 24 * 60 * 60;
 /** A send claim older than this (a run that died mid-send) may be taken again. */
 const PLUGIN_EMAIL_SEND_CLAIM_SECONDS = 120;
@@ -193,12 +193,14 @@ const IDEMPOTENCY_KEY = /^[\x20-\x7E]{8,200}$/u;
 async function sendOnce(
   context: PluginMessagingContext,
   key: unknown,
-  send: () => Promise<{ queued: boolean }>,
+  send: (providerKey: string | undefined) => Promise<{ queued: boolean }>,
+  channel: "email" | "sms" = "email",
 ): Promise<{ queued: boolean; duplicate?: boolean }> {
-  if (key === undefined) return send();
+  if (key === undefined) return send(undefined);
   if (typeof key !== "string" || !IDEMPOTENCY_KEY.test(key)) throw new PluginError("messaging_invalid", "idempotencyKey is 8 to 200 printable characters.");
   const db = context.runtime.db();
-  const storeKey = `app-email:${context.pluginId}:${await sha256Hex(key)}`;
+  const digest = await sha256Hex(key);
+  const storeKey = `app-${channel}:${context.pluginId}:${digest}`;
   const now = Math.floor(Date.now() / 1000);
   const won = await db.insert(systemKv)
     .values({ key: storeKey, value: "sending", expiresAt: now + PLUGIN_EMAIL_SEND_CLAIM_SECONDS })
@@ -214,7 +216,8 @@ async function sendOnce(
   }
   let result: { queued: boolean };
   try {
-    result = await send();
+    // The provider gets a key of its own, scoped to the app, so a gateway that dedupes never mixes two apps' messages.
+    result = await send(`app-${channel}-${digest.slice(0, 48)}`);
   } catch (error) {
     await db.delete(systemKv).where(eq(systemKv.key, storeKey)).run().catch(() => undefined);
     throw error;
@@ -283,8 +286,8 @@ function smsNumber(raw: string | null | undefined): string | null {
 
 export async function sendPluginSms(
   context: PluginMessagingContext,
-  input: { customerId?: string; to?: string; text: string; marketing?: boolean },
-): Promise<{ queued: boolean }> {
+  input: { customerId?: string; to?: string; text: string; marketing?: boolean; idempotencyKey?: string },
+): Promise<{ queued: boolean; duplicate?: boolean }> {
   const message = text(input?.text, "text", { chars: PLUGIN_MESSAGE_LIMITS.smsChars })!;
   const marketing = input?.marketing === true ? await marketingPermission(context, input.customerId, "sms") : undefined;
   if (marketing === null) return { queued: false };
@@ -310,8 +313,12 @@ export async function sendPluginSms(
   const provider = await getActiveSmsProvider(db, encryptionKey, appProviders);
   if (!provider) throw new PluginError("messaging_unavailable", "No SMS provider is configured.");
   const finalMessage = marketing ? `${message}\n\n${marketing.footer.text}\n${marketing.footer.unsubscribeLabel}: ${marketing.unsubscribeUrl}` : message;
-  const send = async () => ({ queued: (await provider.send({ to: phone!, text: finalMessage }, {})).success });
-  return marketing ? withinConsentLimit(context, input.customerId, "sms", marketing, send) : send();
+  const send = async (providerKey: string | undefined) => ({
+    queued: (await provider.send({ to: phone!, text: finalMessage, ...(providerKey ? { idempotencyKey: providerKey } : {}) }, {})).success,
+  });
+  return sendOnce(context, input.idempotencyKey, (providerKey) => marketing
+    ? withinConsentLimit(context, input.customerId, "sms", marketing, () => send(providerKey))
+    : send(providerKey), "sms");
 }
 
 export async function notifyPluginStaff(

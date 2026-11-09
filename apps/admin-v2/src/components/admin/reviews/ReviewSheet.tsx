@@ -1,3 +1,4 @@
+import { formatOrderNumber } from "~/lib/order-number";
 import { useEffect, useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -131,7 +132,7 @@ function ReviewDetail({ review }: { review: AdminReview }) {
           <p className="text-body">
             {t("order")}{" "}
             <Link to="/admin/orders/$orderId" params={{ orderId: review.order.id }} className="text-link hover:underline">
-              <code>{review.order.orderNumber}</code>
+              <code>{formatOrderNumber(review.order.orderNumber, review.order.id)}</code>
             </Link>
           </p>
         ) : (

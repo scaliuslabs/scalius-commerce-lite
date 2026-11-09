@@ -3,9 +3,8 @@ import { useActorText } from "~/components/admin/shared/ActorName";
 import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatPhone } from "~/lib/phone-display";
+import { formatOrderNumber } from "~/lib/order-number";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -46,7 +45,7 @@ const FIELD_LABEL = {
 function snapshot(change: { name: string | null; phone: string | null; email: string | null }, erased: string): Snapshot {
   return {
     name: shownText(change.name, erased) ?? "",
-    phone: change.phone ? formatPhoneForDisplay(change.phone, getStoreRegion()) : "",
+    phone: change.phone ? formatPhone(change.phone) : "",
     email: change.email ?? "",
   };
 }

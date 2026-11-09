@@ -1,8 +1,10 @@
 /* eslint-disable shadcn/no-unknown-classes -- the invoice is a white paper document (screen and
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
+import { formatOrderNumberIn } from "@scalius/shared/order-utils";
+import { localeDigits, numberLocale } from "@scalius/shared/locale-format";
+import { storedCountryNameIn } from "@scalius/shared/address";
+import { formatPhoneIn } from "@scalius/shared/phone-input";
 import { invoiceRefundSummary } from "@scalius/shared/invoice-refunds";
 import { fromMinor } from "@scalius/shared/money";
 import { getStoreRegion } from "~/lib/store-time-zone";
@@ -10,6 +12,7 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { useLocaleFormat, useMessages } from "~/i18n";
 import { lineEntryWords, presentLineEntry } from "@scalius/shared/line-entry-words";
+import { presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { orderMessages, paymentMethodLabel, paymentStatusLabel } from "~/i18n/orders";
 import type { ApiResult } from "~/lib/api";
@@ -32,10 +35,9 @@ export function invoiceBusinessName(document: Pick<InvoiceDocument, "businessInf
   return document.businessInfo.companyName || document.businessInfo.legalName;
 }
 
-/** The number a courier dials: "01712345678" for a Bangladesh mobile, else as stored. */
-/** The store country's national format ("01712-345678"), as every other dashboard view shows it. */
-function localPhone(phone: string): string {
-  return formatPhoneForDisplay(phone, getStoreRegion());
+/** The store country's national format ("01712-345678") in the invoice's digits (`formatPhoneIn`). */
+function localPhone(phone: string, locale: string): string {
+  return formatPhoneIn(phone, getStoreRegion(), numberLocale(locale, getStoreRegion()));
 }
 
 /** One printable invoice sheet (A4). Several stack with page breaks for bulk printing. */
@@ -68,8 +70,10 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
     businessInfo.addressLine1,
     businessInfo.addressLine2,
     [businessInfo.city, businessInfo.stateRegion, businessInfo.postalCode].filter(Boolean).join(", "),
-    businessInfo.country,
-    businessInfo.phone,
+    // The country as saved ("Bangladesh"), in the invoice's language.
+    storedCountryNameIn(businessInfo.country, locale),
+    // The store's phone as typed, in the invoice's digits.
+    businessInfo.phone ? localeDigits(businessInfo.phone, numberLocale(locale, getStoreRegion())) : null,
     businessInfo.email,
     businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
   ].filter(Boolean);
@@ -116,6 +120,13 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
       : []),
   ];
 
+  const appAnswers = presentCheckoutAttributes(order.appAnswers ?? {}, order.attributeApps ?? [], {
+    locale,
+    defaultLocale: locale,
+    words: lineWords,
+    region: getStoreRegion(),
+  }).flatMap((group) => group.entries.map((entry) => ({ id: `${group.appId}.${entry.key}`, label: entry.label, value: entry.value })));
+
   return (
     <article className="invoice">
       <header className="invoice-header">
@@ -133,7 +144,7 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
           <h2>{t(packingSlip ? "invoice.packingSlip" : "invoice.title")}</h2>
           {!packingSlip && document.status === "issued" && document.invoiceNumber ? <p className="strong">{document.invoiceNumber}</p> : null}
           {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
-          <p>{o("order", { number: formatOrderNumber(order.orderNumber, order.id) })}</p>
+          <p>{o("order", { number: formatOrderNumberIn(order.orderNumber, order.id, numberLocale(locale, getStoreRegion())) })}</p>
           <p>
             {paymentMethodLabel(o, order.paymentMethod ?? "cod")}
             {order.paymentStatus ? ` · ${paymentStatusLabel(o, order.paymentStatus, order.paymentMethod ?? "cod")}` : ""}
@@ -145,13 +156,15 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
               {dueAt ? <> · <span className="strong">{t("netTerms.due")} {formatDateTime(dueAt, { dateStyle: "medium" })}</span></> : null}
             </p>
           ) : null}
+          {/* The apps' checkout answers (a delivery day and window), in the sheet's language. */}
+          {appAnswers.map((entry) => <p key={entry.id}>{entry.label}: {entry.value}</p>)}
         </div>
         <div>
           <h2>{t("invoice.billTo")}</h2>
           <p className="strong">{billingLines ? order.billingName || order.customerName : order.customerName}</p>
           {billingLines && order.billingCompany ? <p>{order.billingCompany}</p> : null}
           {/* Local format, as the customer writes it: 01712345678. */}
-          {order.customerPhone ? <p>{localPhone(order.customerPhone)}</p> : null}
+          {order.customerPhone ? <p>{localPhone(order.customerPhone, locale)}</p> : null}
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
           {/* The order's own billing address; else the delivery address bills (or, before 0119, stood here). */}
           <p>{billingLines ? billingLines.join(", ") : formatShippingAddress(order, countryName)}</p>

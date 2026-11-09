@@ -4,7 +4,7 @@
 // body and is never written back into the page, a URL or a log. The one code
 // a page shows is the buyer's own card after "Show code" (POST, no-store).
 
-import { pageDigits } from "@/lib/checkout-text";
+import { pageDigits, pageOrderNumber } from "@/lib/checkout-text";
 import { accountMoney, formatAccountDate } from "@/lib/account-format";
 import type {
   AccountGiftCard,
@@ -158,8 +158,8 @@ export function giftCardRevealFailureText(failure: Pick<GiftCardFailure, "reason
 }
 
 /** "Used on order #1042", "Issued", … */
-export function giftCardTransactionText(transaction: Pick<AccountGiftCardTransaction, "kind" | "orderNumber">): string {
-  const order = transaction.orderNumber ? `${transaction.orderNumber.startsWith("#") ? "" : "#"}${transaction.orderNumber}` : "";
+export function giftCardTransactionText(transaction: Pick<AccountGiftCardTransaction, "kind" | "orderNumber" | "orderId">): string {
+  const order = transaction.orderNumber !== null ? pageOrderNumber(transaction.orderNumber, transaction.orderId ?? "") : "";
   const copy = giftCardPageCopy();
   const withOrder = (template: string) => template.replace("{order}", order);
   switch (transaction.kind) {

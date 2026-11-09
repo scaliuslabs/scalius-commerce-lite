@@ -96,7 +96,7 @@ export const buyerReviewSchema = z.object({
 
 export const reviewableLineSchema = z.object({
   orderId: z.string(),
-  orderNumber: z.string(),
+  orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }),
   orderItemId: z.string(),
   productId: z.string(),
   productName: z.string(),
@@ -162,7 +162,7 @@ export const adminReviewSchema = z.object({
   authorType: z.enum(REVIEW_AUTHOR_TYPES),
   variantLabel: z.string().nullable(),
   product: z.object({ id: z.string(), name: z.string(), slug: z.string().nullable(), imageUrl: z.string().nullable() }),
-  order: z.object({ id: z.string(), orderNumber: z.string() }).nullable()
+  order: z.object({ id: z.string(), orderNumber: z.number().int().nullable().openapi({ description: "The order's number, unformatted: the reader writes it (#1001, #১০০১ in Bangla)." }) }).nullable()
     .openapi({ description: "The reviewed line's order; null for an app's review that names no line (an import)." }),
   verified: z.boolean().openapi({ description: "A verified purchase: the review is on a delivered order line." }),
   appId: z.string().nullable().openapi({ description: "The app that wrote it (an import or a reviews app); null for a buyer's own review." }),

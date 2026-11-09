@@ -3,8 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import type { RealtimePresence } from "@scalius/shared/realtime";
 import { RowPresence } from "~/components/admin/realtime/RowPresence";
-import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
-import { getStoreRegion } from "~/lib/store-time-zone";
+import { formatPhone } from "~/lib/phone-display";
 import { cn } from "@scalius/shared/utils";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";
@@ -91,8 +90,8 @@ export const OrderMobileCard = memo(function OrderMobileCard({
         <span className="flex items-center justify-between gap-3 text-body">
           <span title={customerName} className="max-w-full shrink-0 truncate">{customerName}</span>
           {order.customerPhone ? (
-            <span title={formatPhoneForDisplay(order.customerPhone, getStoreRegion())} className="min-w-0 truncate font-mono text-muted-foreground">
-              {formatPhoneForDisplay(order.customerPhone, getStoreRegion())}
+            <span title={formatPhone(order.customerPhone)} className="min-w-0 truncate font-mono text-muted-foreground">
+              {formatPhone(order.customerPhone)}
             </span>
           ) : null}
         </span>

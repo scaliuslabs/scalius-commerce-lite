@@ -11,6 +11,7 @@
 // method deletes raise the port's `ProviderError`, which the kernel reads
 // (uncertain: kept for reconciliation, never sent twice).
 
+import { providerPaymentKind } from "@scalius/shared/order-payment-methods";
 import type { Database } from "@scalius/database/client";
 import {
   BUILT_IN_PAYMENT_PROVIDERS,
@@ -92,6 +93,7 @@ export function appPaymentGateway(
     checkoutName: declaration.checkoutName ?? declaration.name,
     flow: declaration.flow,
     ...(declaration.dueInDays !== undefined ? { dueInDays: declaration.dueInDays } : {}),
+    paymentKind: providerPaymentKind(declaration),
     chargeCurrencies: declaration.chargeCurrencies,
     countries: declaration.countries,
     ...(declaration.amountLimits ? { amountLimits: declaration.amountLimits } : {}),

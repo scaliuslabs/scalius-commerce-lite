@@ -1,3 +1,4 @@
+import { ORDER_PAYMENT_METHOD_LABELS_EN } from "@scalius/shared/order-payment-methods";
 import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import { orderBillingDisplayAddress } from "./billing-display";
 import type { OrderBillingAddressFields } from "./types";
@@ -144,11 +145,8 @@ const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
   partial: "Partly fulfilled",
   complete: "Fulfilled",
 };
-/** The export's words for cash and cards; any other method is named by its provider. */
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cod: "Cash on delivery",
-  stripe: "Card (Stripe)",
-};
+/** The export's words for the platform's methods; an app's method is named by its provider. */
+const PAYMENT_METHOD_LABELS: Record<string, string> = ORDER_PAYMENT_METHOD_LABELS_EN;
 const CHANNEL_LABELS: Record<OrderChannel, string> = {
   online_store: "Online store",
   admin: "Dashboard",

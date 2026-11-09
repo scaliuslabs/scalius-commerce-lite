@@ -5,6 +5,8 @@
 // One read finds the sealed days of both periods; each period is then one
 // statement (at most two of D1's six connections). Labels and merchant days
 // follow the store's current settings.
+import { orderPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { sql, type SQL } from "drizzle-orm";
 import {
   analyticsBuckets,
@@ -55,7 +57,16 @@ export interface OverviewPeriod {
   };
   payments: {
     codOrders: number;
-    prepaidOrders: number;
+    /**
+     * Sales orders by how the rest were paid (`orderPaymentKind`): an online
+     * gateway; to the store directly, in person or by transfer (`manual`);
+     * by invoice; entirely by gift cards. A method of no known kind counts in
+     * none.
+     */
+    onlineOrders: number;
+    paidToStoreOrders: number;
+    invoiceOrders: number;
+    giftCardOrders: number;
     /** % of sales orders paid cash on delivery. */
     codShare: number | null;
     /** COD orders that came back uncollected. */
@@ -371,7 +382,10 @@ function emptyPeriod(range: AnalyticsRange): OverviewPeriod {
     customers: { customers: 0, newCustomers: 0, returningCustomers: 0, repeatPurchaseRate: null },
     payments: {
       codOrders: 0,
-      prepaidOrders: 0,
+      onlineOrders: 0,
+      paidToStoreOrders: 0,
+      invoiceOrders: 0,
+      giftCardOrders: 0,
       codShare: null,
       returnedToSender: 0,
       codDelivered: 0,
@@ -390,7 +404,12 @@ function sortBreakdown(rows: OverviewBreakdownRow[]): OverviewBreakdownRow[] {
   return rows.sort((left, right) => right.totalSales - left.totalSales || left.key.localeCompare(right.key));
 }
 
-export function mapOverviewPeriod(range: AnalyticsRange, rows: readonly Record<string, unknown>[]): OverviewPeriod {
+export function mapOverviewPeriod(
+  range: AnalyticsRange,
+  rows: readonly Record<string, unknown>[],
+  /** An app method's kind as its orders recorded it (`readRecordedPaymentKinds`). */
+  recordedKinds: ReadonlyMap<string, string> = new Map(),
+): OverviewPeriod {
   const period = emptyPeriod(range);
   const dayRows = new Map<string, SalesMeasures>();
   for (const row of rows) {
@@ -404,8 +423,8 @@ export function mapOverviewPeriod(range: AnalyticsRange, rows: readonly Record<s
         const rts = num(row.x2);
         const delivered = num(row.x3);
         period.payments = {
+          ...period.payments,
           codOrders,
-          prepaidOrders: period.totals.orders - codOrders,
           codShare: percentOf(codOrders, period.totals.orders),
           returnedToSender: rts,
           codDelivered: delivered,
@@ -456,6 +475,16 @@ export function mapOverviewPeriod(range: AnalyticsRange, rows: readonly Record<s
     ...(dayRows.get(bucket.key) ?? EMPTY_MEASURES),
   }));
   for (const list of Object.values(period.breakdowns)) sortBreakdown(list);
+  // How the orders that are not cash on delivery were paid, by the kind of their method.
+  const byKind = new Map<OrderPaymentKind | null, number>();
+  for (const row of period.breakdowns.paymentMethod) {
+    const kind = orderPaymentKind(row.key, recordedKinds.get(row.key));
+    byKind.set(kind, (byKind.get(kind) ?? 0) + row.orders);
+  }
+  period.payments.onlineOrders = byKind.get("online") ?? 0;
+  period.payments.paidToStoreOrders = byKind.get("paid_to_store") ?? 0;
+  period.payments.invoiceOrders = byKind.get("invoice") ?? 0;
+  period.payments.giftCardOrders = byKind.get("gift_card") ?? 0;
   return period;
 }
 
@@ -477,6 +506,23 @@ export function rollUpDays(
   return buckets;
 }
 
+/**
+ * How the apps' methods in a breakdown are paid, as their orders recorded it
+ * (`orders.payment_kind`, the provider's `paymentKind` at placement): one
+ * statement, one index seek per app method, none when the period has none.
+ */
+async function readRecordedPaymentKinds(ctx: AnalyticsContext, rows: readonly Record<string, unknown>[]): Promise<Map<string, string>> {
+  const methods = [...new Set(rows.filter((row) => text(row.kind) === "payment").map((row) => text(row.k1)).filter(isQualifiedProviderId))];
+  if (methods.length === 0) return new Map();
+  const found = await ctx.db.all<{ method: unknown; kind: unknown }>(sql`select m.value as method, (
+      select o.payment_kind from orders o
+      where o.deleted_at is null and o.payment_method = m.value and o.payment_kind is not null
+      limit 1
+    ) as kind
+    from json_each(${JSON.stringify(methods)}) m`);
+  return new Map(found.flatMap((row) => typeof row.kind === "string" ? [[text(row.method), row.kind] as const] : []));
+}
+
 export async function getAnalyticsOverview(ctx: AnalyticsContext, input: OverviewInput): Promise<AnalyticsOverview> {
   const previousRange = analyticsComparisonRange(input.range, input.comparison);
   const [currentRows, previousRows] = await runAnalyticsQuery("overview", async () => {
@@ -487,9 +533,10 @@ export async function getAnalyticsOverview(ctx: AnalyticsContext, input: Overvie
       previousRange ? overviewQuery(ctx, previousRange, sealed) : Promise.resolve(null),
     ]);
   });
-  const current = mapOverviewPeriod(input.range, currentRows);
+  const recordedKinds = await readRecordedPaymentKinds(ctx, [...currentRows, ...(previousRows ?? [])]);
+  const current = mapOverviewPeriod(input.range, currentRows, recordedKinds);
   const previous = previousRange && previousRows
-    ? mapOverviewPeriod(previousRange, previousRows)
+    ? mapOverviewPeriod(previousRange, previousRows, recordedKinds)
     : null;
 
   const currentBuckets = rollUpDays(input.range, current.days, input.granularity, ctx.weekStart);

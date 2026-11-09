@@ -6,10 +6,10 @@ import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from 
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { dateLocale, formatDateTime, formatNumber } from "@scalius/shared/locale-format";
+import { dateLocale, formatDateTime, formatNumber, localeDigits, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
@@ -26,6 +26,9 @@ import {
 import { buyerMessageScope, buyerStorefrontLink, resolveStoreIdentity, storeIdentityStatements } from "./store-messages";
 import { notificationsDocument, notificationTemplatesDocument } from "./documents";
 import { messageLineCopyColumns, messageLineWords } from "./line-words";
+import { checkoutAttributeAppsFromJson, orderAttributeAppsColumn } from "../order-kernel";
+import { readCheckoutAttributes } from "@scalius/shared/plugins/buyer-ui";
+import { checkoutAttributeLines, presentCheckoutAttributes } from "@scalius/shared/plugins/checkout-attribute-text";
 import { emailDocument } from "../settings";
 import { rememberSettingsDocuments, selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 
@@ -71,9 +74,10 @@ function shippingAddressLines(order: {
     shippingDependentLocality: string | null; shippingLocality: string | null; shippingAdminArea: string | null;
     shippingPostalCode: string | null; shippingCompany: string | null;
     areaName: string | null; zoneName: string | null; cityName: string | null;
-}): string[] {
+}, digitsLocale: string): string[] {
     const phone = order.shippingPhone ?? order.customerPhone;
-    const head = [order.shippingName ?? order.customerName, phone ? formatBdMobile(phone) : null];
+    // A phone is read aloud: in the message's digits ("০১৭১২-৩৪৫৬৭৮" in Bangla).
+    const head = [order.shippingName ?? order.customerName, phone ? localeDigits(formatBdMobile(phone), digitsLocale) : null];
     const rules = usesDeliveryHierarchy(order.shippingCountryCode) ? null : addressRulesFor(order.shippingCountryCode);
     const body = rules
         ? [
@@ -140,6 +144,9 @@ function orderFactStatements(db: Database, orderId: string) {
     pricesIncludeTax: orders.pricesIncludeTax,
     pickupAddress: orders.pickupAddress,
     pickupHours: orders.pickupHours,
+    attributes: orders.attributes,
+    // The words of the apps those answers name (`[]` without answers).
+    attributeApps: orderAttributeAppsColumn(),
     // The merchant's checkout copies: a line's own words ("Yes", "Add-on") in the message's language.
     ...messageLineCopyColumns(),
   }, item: {
@@ -362,6 +369,9 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
   const shipmentRows = results[documentsAt + 1] as Awaited<ReturnType<typeof shipmentStatement>> | undefined;
   const shipment = shipmentRows ? resolveShipment(shipmentRows, queuedTrackingId) : null;
   const { order, items } = facts;
+  // The apps' answers, worded from the installations read with the order (no statement more).
+  const appAnswerValues = readCheckoutAttributes(order.attributes);
+  const attributeApps = checkoutAttributeAppsFromJson(order.attributeApps);
   // The buyer's language and links: the presence the order was placed on (B5).
   const scope = buyerMessageScope(store, order.presence);
   const { language } = scope;
@@ -416,7 +426,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
     return {
       variables: {
         customer_name: order.customerName?.trim() || input.name?.trim() || "",
-        order_number: formatOrderNumber(order.orderNumber, input.orderId),
+        order_number: formatOrderNumberIn(order.orderNumber, input.orderId, numberLocale(lang)),
         order_total: money ? money(order.totalAmountMinor) : "",
         cod_amount: codDue ?? "",
         store_name: store.name ?? "",
@@ -440,6 +450,9 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           subtotal: money ? money(item.lineSubtotalMinor) : null,
           properties: linePropertiesText(item.properties, money, messageLineWords(order, lang), (value) => formatNumber(value, lang === "bn" ? "bn-BD" : "en-US")),
         })),
+        appAnswers: presentCheckoutAttributes(appAnswerValues, attributeApps, {
+          locale: lang, defaultLocale: store.language, words: messageLineWords(order, lang),
+        }).map((group) => ({ appName: group.appName, lines: checkoutAttributeLines([group]) })),
         amounts: money ? {
           subtotal: money(order.subtotalAmountMinor),
           ...discountAndDelivery(facts, money),
@@ -449,7 +462,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
           total: money(order.totalAmountMinor),
         } : null,
         payment,
-        address: shippingAddressLines(order),
+        address: shippingAddressLines(order, numberLocale(lang)),
         method: [order.shippingMethodName, order.shippingMethodDescription]
           .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
         // "Visit the store" opens the buyer's presence too.

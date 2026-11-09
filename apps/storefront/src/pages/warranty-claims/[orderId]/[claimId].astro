@@ -7,7 +7,8 @@
 import Layout from "@/layouts/Layout.astro";
 import ConversationReplyForm from "@/components/conversation/ConversationReplyForm.astro";
 import { getActiveCheckoutLanguage, getLayoutData } from "@/lib/api";
-import { checkoutLanguageBaseCode, getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
 import {
   conversationCopy,
   conversationStatusLabel,

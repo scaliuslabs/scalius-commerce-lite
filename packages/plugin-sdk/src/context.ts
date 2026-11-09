@@ -207,7 +207,14 @@ export interface PluginMessaging {
      */
     idempotencyKey?: string;
   }): Promise<{ queued: boolean; duplicate?: boolean }>;
-  sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  /**
+   * A text message, by the same recipient rules as `email`.
+   * `idempotencyKey` (8-200 printable characters) sends it at most once in 24
+   * hours: a repeat answers `duplicate: true` and sends nothing, and the
+   * store's SMS gateway gets a key of its own for it. A failed send releases
+   * the key. Derive it from what the message is about (`pickup-ready-${orderId}`).
+   */
+  sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean; idempotencyKey?: string }): Promise<{ queued: boolean; duplicate?: boolean }>;
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
   /**

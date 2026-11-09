@@ -194,6 +194,12 @@ export function cartRuleRefusal(payload: unknown): CartRuleError[] | null {
     : [{ code: CART_RULES_REASON, message: "", index: null, cartKey: null }];
 }
 
+/** The apps' blocks a rules refusal carries (unchecked: the caller checks them before drawing). */
+export function cartRuleRefusalBuyerUi(payload: unknown): unknown[] {
+  const details = issueDetails(payload);
+  return details?.reason === CART_RULES_REASON && Array.isArray(details.buyerUi) ? details.buyerUi : [];
+}
+
 /** The order refused the chosen payment method (a store app hid it for this order). */
 export function isPaymentMethodUnavailable(payload: unknown): boolean {
   return issueDetails(payload)?.reason === PAYMENT_METHOD_UNAVAILABLE_REASON;

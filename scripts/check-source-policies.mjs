@@ -117,6 +117,37 @@ export const policies = [
     sample: 'badge.textContent = String(count);',
   },
   {
+    rule: "the API sends order numbers unformatted; the reader writes them in its digits",
+    why: "gift cards, inbox threads, reviews, warranties and staff alerts sent '#1234' already formatted, so the Bangla dashboard and storefront showed Latin digits beside #১২৩৪ elsewhere (formatOrderNumberIn)",
+    paths: ["apps/api/src", "packages/core/src"],
+    allow: {
+      "apps/api/src/agent-access/approvals.ts": "an approval's target names are written for the agent too; the dashboard rewrites an order's in its digits (orderNumberText)",
+      "apps/api/src/background/notifications.ts": "a message's order number, put in the buyer's digits when the template fills (orderNumberTextIn)",
+      "apps/api/src/notification-content/gift-card.ts": "a message's order number, put in the buyer's digits when the template fills",
+      "packages/core/src/modules/notifications/conversation-notifications.ts": "a message's order number, put in the reader's digits before it is written",
+      "packages/core/src/modules/orders/csv-export.ts": "an export keeps Latin digits for other systems",
+      "packages/core/src/modules/inventory/inventory-movement-artifacts.ts": "an export keeps Latin digits for other systems",
+    },
+    forbid: [/import\s*\{[^}]*\bformatOrderNumber\b[^}]*\}\s*from\s*["']@scalius\/shared\/order-utils["']/],
+    sample: 'import { formatOrderNumber } from "@scalius/shared/order-utils";',
+  },
+  {
+    rule: "the dashboard shows phones in its own digits through ~/lib/phone-display",
+    why: "a phone is read aloud, so it takes the reader's digits like the storefront's (formatPhoneIn); the Bangla dashboard and invoice once showed 01711-000111 beside Bangla digits everywhere else. Links and fields keep Latin",
+    paths: ["apps/admin-v2/src"],
+    allow: { "apps/admin-v2/src/lib/phone-display.ts": "the wrapper itself" },
+    forbid: [/import\s*\{[^}]*\bformatPhoneForDisplay\b[^}]*\}\s*from\s*["']@scalius\/shared\/phone-input["']/],
+    sample: 'import { formatPhoneForDisplay } from "@scalius/shared/phone-input";',
+  },
+  {
+    rule: "the dashboard writes order numbers in its own digits through ~/lib/order-number",
+    why: "the shared formatOrderNumber is Latin, so the Bangla dashboard and its invoice read 'অর্ডার #1017' while the storefront read '#১০১৭'; an order number takes the reader's digits on every surface written in a language (formatOrderNumberIn)",
+    paths: ["apps/admin-v2/src"],
+    allow: { "apps/admin-v2/src/lib/order-number.ts": "the wrapper itself" },
+    forbid: [/import\s*\{[^}]*\bformatOrderNumber\b[^}]*\}\s*from\s*["']@scalius\/shared\/order-utils["']/],
+    sample: 'import { formatOrderNumber } from "@scalius/shared/order-utils";',
+  },
+  {
     rule: "every order-status surface words its tracker, updates and shipments through presentOrderTracking",
     why: "order success relabelled the API's English steps without wording them by key, so a Bangla receipt read 'Order placed / Confirmed / On its way' while /track-order read Bangla (apps/storefront/src/lib/account-format.ts)",
     paths: [storefront],
@@ -485,6 +516,24 @@ export const policies = [
     sample: '<a href="/x">View all<span class="sr-only">: New arrivals</span></a>',
   },
   {
+    rule: "a fixed storefront layer takes its z-index from the one layering (--scalius-z-*), never a number of its own",
+    why: "the consent banner (70) drew over the open city picker (50) and the buy bar, and a drawer set z-100 to win: theme-foundation.css orders content bars, header, menus, the consent banner, opened overlays and a blocking overlay once (RB5)",
+    paths: [storefront],
+    forbid: [/\bfixed\b[^"'`\n]*\bz-(?:\d+|\[\d+\])/, /\bz-(?:\d+|\[\d+\])\b[^"'`\n]*\bfixed\b/],
+    sample: '<div class="fixed inset-0 z-50 bg-black/50"></div>',
+  },
+  {
+    rule: "an import of types only is written `import type`, never `import { type X }`; language-format helpers come from checkout-language-format, not the catalogue",
+    why: "`import { type CheckoutLanguageData }` compiles to a bare `import \"...\"` that still runs the module: the payment step downloaded the whole English checkout catalogue (11.5 KiB gzip) through one such type import (rules/platform/storefront-buyer-javascript-budget.md)",
+    paths: [storefront, "packages/shared/src"],
+    forbid: [
+      /^import \{(?:\s*type\s+[A-Za-z_$][\w$]*\s*,?)+\s*\} from /m,
+      // The catalogue module re-exports these from checkout-language-format.ts: import them from there.
+      /import \{[^}]*\b(?:checkoutLanguageBaseCode|formatCheckoutLanguageText)\b[^}]*\} from "(?:@scalius\/shared|\.)\/checkout-language"/,
+    ],
+    sample: 'import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";',
+  },
+  {
     rule: "gift-card, digital-goods and review code never logs codes, keys or review text",
     why: "gift-card codes and licence keys are bearer value, and review text is buyer content; logs carry ids, last4 and masked contacts only (Wave B R6, D7, G6)",
     paths: [
@@ -648,6 +697,79 @@ function mutableModuleVariables() {
     }
   }
   return violations;
+}
+
+// ---------------------------------------------------------------------------
+// Test mocks of internal modules keep the module's other exports
+// ---------------------------------------------------------------------------
+
+/** A module of this repository (relative, an app alias or a workspace package), not a third-party one. */
+const INTERNAL_MODULE = /^(?:\.|@\/|~\/|@scalius\/|#)/;
+const MOCK_TEST_ROOTS = ["apps", "packages", "plugins", "scripts", "tests", "internal", "rules"];
+
+/**
+ * I/O boundaries a test replaces whole on purpose: every export performs a
+ * request or reaches a provider, so a spread of the real module would turn an
+ * unlisted call into a real request instead of a loud "not a function".
+ */
+export const WHOLE_MOCK_BOUNDARIES = Object.freeze([
+  [/^@scalius\/api-client\/sdk$/, "the generated API client: each export is an HTTP request"],
+  [/^~\/lib\/api(?:-query-options|-mutations)?(?:\/|$)/, "the dashboard's API layer over that client"],
+  [/^@\/lib\/api(?:\/(?!runtime$)|$)/, "the storefront's API transport and reads"],
+  [/^@\/lib\/cart\/browser-api$/, "the storefront cart's API calls"],
+  [/(?:^|\/)integrations\/(?:email|sms|firebase|storage)(?:\/|$)/, "an external provider"],
+  [/^@scalius\/database\/client$/, "the database connection"],
+]);
+
+/**
+ * `vi.mock("<internal module>", () => ({ ... }))` replaces the whole module:
+ * every export the factory does not list is undefined, so the test breaks
+ * (or, worse, passes on a path it never meant) as soon as the module gains an
+ * export its importer uses. Spread the real module first
+ * (`async (importOriginal) => ({ ...(await importOriginal()), ... })`), or say
+ * why the whole module must go on the line before: `// whole-module mock: <reason>`.
+ */
+export function wholeModuleMockViolations(files) {
+  const violations = [];
+  for (const { name, text } of files) {
+    if (!/vi\.(?:mock|doMock)\(/.test(text)) continue;
+    const source = ts.createSourceFile(name, text, ts.ScriptTarget.Latest, true, name.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const visit = (node) => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && node.expression.expression.getText(source) === "vi" && ["mock", "doMock"].includes(node.expression.name.text)) {
+        const [specifier, factory] = node.arguments;
+        if (specifier && ts.isStringLiteralLike(specifier) && INTERNAL_MODULE.test(specifier.text)
+          && !WHOLE_MOCK_BOUNDARIES.some(([pattern]) => pattern.test(specifier.text))
+          && factory && (ts.isArrowFunction(factory) || ts.isFunctionExpression(factory)) && factory.parameters.length === 0) {
+          const start = node.getStart(source);
+          const lineStart = text.lastIndexOf("\n", start - 1);
+          const previousLine = text.slice(text.lastIndexOf("\n", lineStart - 1) + 1, Math.max(lineStart, 0));
+          if (!/\/\/\s*whole-module mock: \S/.test(previousLine)) {
+            violations.push(`${name}:${source.getLineAndCharacterOfPosition(start).line + 1}: vi.${node.expression.name.text}("${specifier.text}") replaces the whole module`);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return violations;
+}
+
+function testSourceFiles(path) {
+  const absolute = resolve(root, path);
+  if (!existsSync(absolute)) return [];
+  return readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+    if (["node_modules", "dist", ".astro", ".wrangler", ".turbo"].includes(entry.name)) return [];
+    const child = resolve(absolute, entry.name);
+    if (entry.isDirectory()) return testSourceFiles(child);
+    return /\.(?:[cm]?[jt]sx?)$/.test(entry.name) && !entry.name.endsWith(".d.ts") ? [child] : [];
+  });
+}
+
+function collectWholeModuleMockViolations() {
+  return wholeModuleMockViolations(MOCK_TEST_ROOTS.flatMap(testSourceFiles)
+    .map((file) => ({ name: relative(root, file), text: readFileSync(file, "utf8") })));
 }
 
 /** Violations of one policy for the given file texts ({ name, text }). */
@@ -902,6 +1024,7 @@ export function collectSourcePolicyViolations() {
     ...collectBuyerEnglishViolations().map((v) => `storefront buyer words come from the en + bn catalogues (apps/storefront/src/lib/*-copy.ts), so a Bangla store never shows English\n    ${v}`),
     ...collectPhysicalUtilityViolations().map((v) => `dashboard and storefront classes use logical sides (ms-, pe-, inset-s-, text-start), so right-to-left pages mirror\n    ${v}`),
     ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`),
+    ...collectWholeModuleMockViolations().map((v) => `a test mock of an internal module spreads the real module (async (importOriginal) => ({ ...(await importOriginal()), ... })) or says why it replaces it (// whole-module mock: <reason>)\n    ${v}`),
     ...collectCoreBoundaryViolations().map((v) => `core domain boundaries (scripts/core-boundaries.mjs)\n    ${v}`),
   ];
 }
@@ -913,6 +1036,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
   } else {
-    console.log(`Source policy check: OK (${policies.length + 4} policies)`);
+    console.log(`Source policy check: OK (${policies.length + 5} policies)`);
   }
 }

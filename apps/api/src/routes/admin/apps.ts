@@ -21,6 +21,7 @@ import {
   effectivePluginPermissions,
   functionCircuitOpen,
   listFunctionCircuits,
+  listRefusingFunctions,
   isFirstPartyBundledPlugin,
   isOfficialPluginKey,
   isThirdPartyPlugin,
@@ -155,6 +156,7 @@ const grantSchema = z.object({
   storefrontCode: z.boolean().openapi({ description: "Draws on the storefront with its own code: components, client islands or a stylesheet." }),
   storefrontConnect: z.array(z.string()).openapi({ description: "Hosts the app's storefront islands and pixel reach from the buyer's browser." }),
   storefrontPixel: z.boolean().openapi({ description: "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it." }),
+  buyerFiles: z.boolean().openapi({ description: "Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files." }),
   features: z.array(z.string()).openapi({ description: "The app's features that are on (empty for apps that declare none)." }),
   messageRecipients: z.array(z.string()).openapi({ description: "Fields of the app's own records (<object>.<field>) whose email addresses or phone numbers it may message." }),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });
@@ -343,6 +345,12 @@ const appDetailSchema = appSummarySchema.extend({
     openUntil: z.string().nullable().openapi({ description: "When checkout tries the function again (ISO 8601); null when closed." }),
     blocking: z.boolean().openapi({ description: "Approved as blocking: while open, checkout refuses orders." }),
   })).openapi({ description: "Checkout functions that failed recently (circuit breaker); empty when every function answers." }),
+  refusing: z.object({
+    refusals: z.number().int().openapi({ description: "Buyers' checkouts the app refused with none accepted between, counted at most once every five minutes." }),
+    since: z.string().openapi({ description: "The first of them (ISO 8601)." }),
+    lastAt: z.string().openapi({ description: "The latest (ISO 8601)." }),
+    reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal." }),
+  }).nullable().openapi({ description: "The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it." }),
   settings: z.object({
     fields: z.array(settingFieldSchema),
     values: z.record(z.string(), settingValueSchema),
@@ -611,7 +619,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const request = pluginGrantRequest(installation.declaredManifest, installation.features);
   const described = describePluginSettings(installation);
   const caps = planLimits().plugins;
-  const [approver, lastRuns, scopes, registrySettings, features, uses, connections, usage, circuits] = await Promise.all([
+  const [approver, lastRuns, scopes, registrySettings, features, uses, connections, usage, circuits, refusing] = await Promise.all([
     installation.activatedBy
       ? db.select({ id: userTable.id, name: userTable.name }).from(userTable).where(eq(userTable.id, installation.activatedBy)).get()
       : Promise.resolve(undefined),
@@ -623,6 +631,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
     providerConnections(db, installation, manifest.providers),
     themeUsage(db, installation),
     listFunctionCircuits(db, installation.pluginId),
+    listRefusingFunctions(db, installation.pluginId),
   ]);
   const available = runtimeAvailable(c, installation);
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -647,6 +656,14 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
       blocking: manifest.functions.some((fn) => fn.point === circuit.point && fn.onError === "block")
         && Boolean(installation.grant?.blockingFunctions.some((point) => point === circuit.point)),
     })),
+    refusing: refusing[0]
+      ? {
+        refusals: refusing[0].refusals,
+        since: new Date(refusing[0].since * 1000).toISOString(),
+        lastAt: new Date(refusing[0].lastAt * 1000).toISOString(),
+        reason: refusing[0].reason,
+      }
+      : null,
     settings: {
       fields: manifest.settings.map(settingField),
       values: described.values,

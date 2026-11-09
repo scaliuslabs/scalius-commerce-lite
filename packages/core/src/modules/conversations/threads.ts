@@ -32,7 +32,7 @@ import {
   type ConversationStatus,
   type ConversationSubjectType,
 } from "@scalius/shared/conversation";
-import { formatOrderNumber, parseOrderNumberSearch } from "@scalius/shared/order-utils";
+import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { staffPermissionSql } from "../../auth/rbac/helpers";
@@ -820,13 +820,14 @@ async function buyerUnreadCounts(db: Database, threadIds: readonly string[]): Pr
   return counts;
 }
 
-async function orderNumbersById(db: Database, orderIds: readonly string[]): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
+/** Each order's number (null for an order without one): the reader formats it in its own digits. */
+async function orderNumbersById(db: Database, orderIds: readonly string[]): Promise<Map<string, number | null>> {
+  const result = new Map<string, number | null>();
   const ids = [...new Set(orderIds)];
   for (const chunk of chunkForD1(ids)) {
     const rows = await db.select({ id: orders.id, orderNumber: orders.orderNumber }).from(orders)
       .where(inArray(orders.id, chunk)).all();
-    for (const row of rows) result.set(row.id, formatOrderNumber(row.orderNumber, row.id));
+    for (const row of rows) result.set(row.id, row.orderNumber ?? null);
   }
   return result;
 }
@@ -1051,7 +1052,7 @@ async function staffSummaries(db: Database, rows: Array<{
     subject: thread.subject,
     status: thread.status,
     orderId: thread.orderId,
-    orderNumber: thread.orderId ? formatOrderNumber(orderNumber, thread.orderId) : null,
+    orderNumber: thread.orderId ? orderNumber ?? null : null,
     customerId: thread.customerId,
     customerName: customerName ?? orderCustomerName ?? null,
     assigneeUserId: thread.assigneeUserId,
@@ -1276,7 +1277,7 @@ async function buildStaffThread(
     order: order
       ? {
         id: order.id,
-        orderNumber: formatOrderNumber(order.orderNumber, order.id),
+        orderNumber: order.orderNumber ?? null,
         status: order.status,
         paymentStatus: order.paymentStatus,
         totalAmountMinor: order.totalAmountMinor,

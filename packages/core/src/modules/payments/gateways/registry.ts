@@ -7,6 +7,7 @@
 // gateway: the kernel records it without a provider.
 //
 
+import { providerPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { cashOnDeliveryIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
@@ -149,6 +150,12 @@ export interface PaymentProviders {
   isDeferred(id: string): boolean;
   /** A deferred app method's declared terms (days); null for net terms (the merchant's setting) and every other method. */
   declaredTermsDays(id: string): number | null;
+  /**
+   * The kind an order records for an app's method (`orders.payment_kind`):
+   * what its provider declared, by flow by default. Null for the platform's
+   * own methods (their id says it) and an id no installed app provides.
+   */
+  recordedPaymentKind(id: string): OrderPaymentKind | null;
   /** Merchant-facing name of a payment method or tender. */
   label(id: string): string;
   /** Store-currency eligibility shared by every checkout surface; credential readiness is separate. */
@@ -254,6 +261,10 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     declaredTermsDays: (id) => {
       const gateway = get(id);
       return gateway?.flow === "deferred" ? gateway.dueInDays ?? null : null;
+    },
+    recordedPaymentKind: (id) => {
+      const gateway = isQualifiedProviderId(id) ? get(id) : undefined;
+      return gateway ? providerPaymentKind(gateway) : null;
     },
     label,
     currencyIssue,

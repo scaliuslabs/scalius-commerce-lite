@@ -408,6 +408,8 @@ function removeEntry(state: UploadState, entry: Entry): void {
   const index = state.entries.indexOf(entry);
   if (index < 0) return;
   state.entries.splice(index, 1);
+  // "Up to N files" was about the files held then: with one removed it no longer holds, so those notes go.
+  state.entries = state.entries.filter((other) => !(other.status === "error" && other.problem === "count"));
   entry.xhr?.abort();
   if (entry.status === "done" && entry.id) {
     const id = entry.id;

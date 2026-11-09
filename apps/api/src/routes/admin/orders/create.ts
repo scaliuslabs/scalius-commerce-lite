@@ -32,6 +32,11 @@ import {
 
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { createManualOrderAppFunctions, validateCheckoutAttributes } from "@scalius/core/modules/checkout";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { CHECKOUT_ATTRIBUTE_TYPES, checkoutAttributeFields } from "@scalius/shared/plugins/buyer-ui";
+import { offeredChoices } from "@scalius/shared/plugins/checkout-attribute-values";
+import { localizedAppName, pluginTextChain } from "@scalius/shared/plugins/manifest-text";
+import { storefrontUiSlotsOn } from "@scalius/shared/plugins/storefront-protocol";
 import type { Database } from "@scalius/database/client";
 import { orderItems, orders } from "@scalius/database/schema";
 import type { RecordedPaymentVia } from "@scalius/shared/payment-terms";
@@ -58,8 +63,8 @@ const app = adminRouter();
  * app's purchase options are offered as at checkout); none active means no
  * app work.
  */
-async function manualOrderApps(env: Env, ctx: ExecutionContext | undefined, db: Database) {
-    return createCheckoutAppFunctions({ env, ctx, db, registrations: await listActiveCheckoutRegistrations(db) });
+async function manualOrderApps(env: Env, ctx: ExecutionContext | undefined, db: Database, language?: string | null, registrations?: Awaited<ReturnType<typeof listActiveCheckoutRegistrations>>) {
+    return createCheckoutAppFunctions({ env, ctx, db, registrations: registrations ?? await listActiveCheckoutRegistrations(db), ...(language ? { language } : {}) });
 }
 
 const manualOrderRequestKeySchema = z.uuid("A valid manual-order request key is required");
@@ -145,11 +150,79 @@ const quoteManualOrderRoute = createRoute({
 app.openapi(quoteManualOrderRoute, async (c) => {
     const db = c.get("db");
     const apps = await manualOrderApps(c.env, getOptionalExecutionContext(c) as ExecutionContext | undefined, db);
-    const quote = await quoteManualOrder(db, c.req.valid("json"), {
+    const data = c.req.valid("json");
+    // The apps' answers staff gave, checked against their declarations; the apps' functions see them.
+    const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
+    const quote = await quoteManualOrder(db, { ...data, ...(attributes ? { attributes } : {}) }, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
     });
     return ok(c, quote);
+});
+
+const appFieldsRoute = createRoute({
+    operationId: "dashboard.orders.app_fields",
+    method: "post",
+    path: "/app-fields",
+    tags: ["Admin - Orders"],
+    summary: "The active apps' checkout questions for a staff order",
+    description: "What the order form asks so the apps' checkout rules can pass on a staff order (their `cart.validate` runs on it, as at checkout): every question an app's checkout block draws, with the choices it computes now (open delivery days and windows), then every required one it declares. Labels in `language`. Reads only.",
+    request: {
+        body: { content: { "application/json": { schema: z.object({
+            attributes: z.record(z.string().max(160), z.string().max(500)).optional().openapi({ description: "The answers so far (`<app id>.<key>`): a later question's choices may follow an earlier answer." }),
+            language: z.enum(["en", "bn"]).optional().openapi({ description: "The staff member's dashboard language." }),
+        }).strict() } } },
+    },
+    responses: {
+        200: {
+            description: "The apps' questions, in the order checkout draws them",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                fields: z.array(z.object({
+                    appId: z.string(),
+                    appName: z.string(),
+                    key: z.string().openapi({ description: "`<app id>.<key>`: the answer's name in `attributes`." }),
+                    label: z.string(),
+                    help: z.string().nullable(),
+                    type: z.enum(CHECKOUT_ATTRIBUTE_TYPES),
+                    required: z.boolean(),
+                    maxLength: z.number().int().nullable(),
+                    choices: z.array(z.object({ value: z.string(), label: z.string() })).openapi({ description: "Declared choices, or those the app computed now; empty for free text." }),
+                })),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(appFieldsRoute, async (c) => {
+    const db = c.get("db");
+    const { attributes = {}, language } = c.req.valid("json");
+    const registrations = await listActiveCheckoutRegistrations(db);
+    const apps = await manualOrderApps(c.env, getOptionalExecutionContext(c) as ExecutionContext | undefined, db, language ?? null, registrations);
+    const declared = apps.attributes ?? [];
+    if (declared.every((app) => app.fields.length === 0)) return ok(c, { fields: [] });
+    const store = await readStoreCurrency(db);
+    // The checkout slots' blocks, run as the buyer's checkout runs them, without a cart: the app computes its choices.
+    const blocks = await apps.buyerUi?.({ targets: storefrontUiSlotsOn("checkout"), currency: store.code, cart: null, attributes, ...(language ? { language } : {}) }) ?? [];
+    // Each app's name in the staff member's language, as its questions are.
+    const words = { locale: apps.language ?? language ?? "en", defaultLocale: registrations[0]?.storeLocale ?? "en" };
+    const names = new Map(registrations.map(({ installation }) => [
+        installation.pluginId,
+        localizedAppName(installation.manifest.name, pluginTextChain(installation.manifest.translations, words)),
+    ]));
+    const fields = checkoutAttributeFields(blocks, declared).map(({ appId, key, attribute, choices }) => ({
+        appId,
+        appName: names.get(appId) ?? appId,
+        key,
+        label: attribute.label,
+        help: attribute.help ?? null,
+        type: attribute.type,
+        required: attribute.required === true,
+        maxLength: attribute.maxLength ?? null,
+        // Computed days in the staff member's language, a computed choice under its declared label (as at checkout).
+        choices: offeredChoices(attribute, choices, apps.language ?? language ?? "en") ?? [...(attribute.choices ?? [])],
+    }));
+    return ok(c, { fields });
 });
 
 const previewManualOrderAmendmentRoute = createRoute({

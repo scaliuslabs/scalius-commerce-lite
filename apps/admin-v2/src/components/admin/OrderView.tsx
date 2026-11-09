@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronDown, ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumber } from "~/lib/order-number";
 import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -288,7 +288,7 @@ export function OrderView({ order }: { order: Order }) {
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} request={request} /></div>
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
               <div className="order-7 empty:hidden lg:order-none"><LazyCustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
-              <div className="order-7 empty:hidden lg:order-none"><OrderAttributesCard attributes={order.attributes} /></div>
+              <div className="order-7 empty:hidden lg:order-none"><OrderAttributesCard attributes={order.attributes} apps={order.attributeApps} /></div>
               <div className="order-7 empty:hidden lg:order-none"><RelatedObjectsCard records={order.relatedObjects} /></div>
               {order.notes ? <div className="order-7 lg:order-none"><OrderNotesCard notes={order.notes} /></div> : null}
               <AppResourceCards target="order" id={order.id} className="order-7 space-y-4 lg:order-none" />

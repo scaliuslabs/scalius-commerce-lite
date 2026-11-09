@@ -192,6 +192,7 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     storefrontCode: raw.storefrontCode === true,
     storefrontConnect: connect,
     storefrontPixel: raw.storefrontPixel === true,
+    buyerFiles: raw.buyerFiles === true,
     features,
     messageRecipients,
     extensions,

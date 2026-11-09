@@ -3,6 +3,8 @@
  * libphonenumber here, so browser bundles can import it on the critical path.
  */
 
+import { localeDigits } from "./locale-format";
+
 const LOCAL_DIGIT_RANGES = [0x09e6, 0x0660, 0x06f0] as const; // Bengali, Arabic-Indic, Persian
 
 /** Bengali (০-৯) and Arabic-Indic digits to 0-9; everything else unchanged. */
@@ -59,6 +61,17 @@ export function formatPhoneForDisplay(e164: string, home?: string | null): strin
   if (!digits) return e164;
   const codeLength = /^[17]/.test(digits) ? 1 : TWO_DIGIT_CALLING_CODE.test(digits) ? 2 : 3;
   return `+${digits.slice(0, codeLength)} ${digits.slice(codeLength)}`;
+}
+
+/**
+ * A phone as a reader reads it: `formatPhoneForDisplay` in `locale`'s digits
+ * ("০১৭১২-৩৪৫৬৭৮" in Bangla). A phone is read aloud and dialled by people, so
+ * every surface written in a language shows it in the reader's digits; the
+ * values a device or another system takes keep Latin digits: `tel:`,
+ * `wa.me` and SMS links, form fields, copy buttons, exports and the API.
+ */
+export function formatPhoneIn(e164: string, home: string | null | undefined, locale: string): string {
+  return localeDigits(formatPhoneForDisplay(e164, home), locale);
 }
 
 /** "01712-345678" for a Bangladesh mobile number; any other value unchanged. */

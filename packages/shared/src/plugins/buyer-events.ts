@@ -305,8 +305,13 @@ export type PixelHostMessage =
   }
   | { type: "event"; event: AnyPixelEvent };
 
-/** `/_x/<plugin id>/<release>/pixel.html?connect=<hosts>`: an app release's pixel frame (served by the storefront, never by the app). */
-export const STOREFRONT_PIXEL_FRAME = "pixel.html";
+/**
+ * `/_x/<plugin id>/<release>/frame.html?connect=<hosts>`: an app release's
+ * pixel frame (served by the storefront, never by the app). A neutral name:
+ * blocker lists match paths like `/pixel.` and would drop the frame, and with
+ * it every event the app was allowed to hear.
+ */
+export const STOREFRONT_PIXEL_FRAME = "frame.html";
 /** The pixel's file in an app release's storefront files (`src/pixel.ts`, built). */
 export const STOREFRONT_PIXEL_FILE = "pixel.js";
 

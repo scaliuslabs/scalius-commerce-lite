@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c606026c-5108-4568-95b6-65f651a3c86c",
-  "prevId": "9043c527-e7a9-436b-8db8-c80cc68dcad6",
+  "id": "5a81acc2-df56-447e-ab96-253d11379475",
+  "prevId": "d2c6286c-4d2b-4f01-a0ca-b6d15841e69e",
   "tables": {
     "account": {
       "name": "account",
@@ -13291,6 +13291,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'cod'"
+        },
+        "payment_kind": {
+          "name": "payment_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "payment_status": {
           "name": "payment_status",
@@ -32524,6 +32531,35 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "refusal_count": {
+          "name": "refusal_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "refusing_since": {
+          "name": "refusing_since",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_refusal_at": {
+          "name": "last_refusal_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_refusal": {
+          "name": "last_refusal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
