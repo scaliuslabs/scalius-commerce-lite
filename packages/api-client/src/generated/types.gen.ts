@@ -6791,6 +6791,10 @@ export type AppFunctionPointOrder = {
      */
     ordered: boolean;
     /**
+     * This order as read: send it back as expectedRevision when saving the point. It changes with every save, install or removal at the point.
+     */
+    revision: string;
+    /**
      * Where the first app wins (composition first) and more than one app runs: the app whose decision wins when apps overlap. null otherwise.
      */
     winner: string | null;
@@ -78207,6 +78211,10 @@ export type PutApiV1AdminAppsFunctionOrderData = {
     body: {
         point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
         appIds: Array<string> | null;
+        /**
+         * The point's revision as read (GET /function-order).
+         */
+        expectedRevision: string;
     };
     path?: never;
     query?: never;
