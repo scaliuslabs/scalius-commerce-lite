@@ -2,6 +2,7 @@ import { clearBuyerAttributes } from "../buyer-ui/state";
 import { isPaymentMethodIdShape } from "../payment-method-id";
 import { logicalPathname } from "@/lib/presence-url";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
+import { CHECKOUT_FORM_DRAFT_IDLE_MS, CHECKOUT_FORM_DRAFT_KEY, dropCheckoutFormDraft } from "./draft-lifetime";
 
 /** The quote the cart page last showed: the payment page draws its summary from it at once. */
 const REVIEWED_QUOTE_KEY = "scalius_checkout_quote";
@@ -20,15 +21,17 @@ const CHECKOUT_TRANSFER_KEYS = [
  * id), whose details these are, and the form draft follow the cart, which
  * lives in localStorage: a checkout reopened in another tab is the same
  * checkout, with the same details and the same snapshot, so the order placed
- * from either tab ends it. The draft keeps a day; placing the order, an
- * account switch and signing out clear all three. The hand-off to the payment
- * page (`scalius_checkout_data` and the rest) stays the tab's own.
+ * from either tab ends it. The draft (the buyer's name, phone and address)
+ * lives only while that checkout is active (draft-lifetime.ts): it goes when
+ * the cart empties, when the order is placed, on sign-out or an account
+ * switch, and after two hours without checkout activity. The hand-off to the
+ * payment page (`scalius_checkout_data` and the rest) stays the tab's own.
  */
 const CHECKOUT_ID_KEY = "checkoutId";
 const CHECKOUT_OWNER_KEY = "scalius_checkout_owner";
 const CHECKOUT_RUNTIME_KEYS = [CHECKOUT_ID_KEY, CHECKOUT_OWNER_KEY] as const;
-const CHECKOUT_FORM_DRAFT_KEY = "scalius_checkout_form_draft";
-const CHECKOUT_FORM_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+/** A read keeps the draft alive (sliding), refreshed at most once a minute. */
+const DRAFT_TOUCH_MS = 60 * 1000;
 const CHECKOUT_FORM_DRAFT_FIELDS = [
   "customerName",
   "customerPhone",
@@ -165,7 +168,7 @@ function readStoredDraft(): { values: CheckoutFormDraft; owner?: string } | null
     if (
       parsed.version !== 1 ||
       typeof parsed.updatedAt !== "number" ||
-      Date.now() - parsed.updatedAt > CHECKOUT_FORM_DRAFT_TTL_MS ||
+      Date.now() - parsed.updatedAt > CHECKOUT_FORM_DRAFT_IDLE_MS ||
       !parsed.values ||
       typeof parsed.values !== "object" ||
       Array.isArray(parsed.values)
@@ -178,6 +181,10 @@ function readStoredDraft(): { values: CheckoutFormDraft; owner?: string } | null
     for (const field of CHECKOUT_FORM_DRAFT_FIELDS) {
       const value = parsed.values[field];
       if (typeof value === "string") safeValues[field] = value.slice(0, 5000);
+    }
+    // The checkout read it: the buyer is still here, so the idle clock starts again.
+    if (Date.now() - parsed.updatedAt > DRAFT_TOUCH_MS) {
+      localStorage.setItem(CHECKOUT_FORM_DRAFT_KEY, JSON.stringify({ ...parsed, updatedAt: Date.now() }));
     }
     return {
       values: safeValues,
@@ -249,11 +256,7 @@ export function reconcileCheckoutAfterSignIn(customerId: string): boolean {
 }
 
 export function clearCheckoutFormDraft(): void {
-  try {
-    localStorage.removeItem(CHECKOUT_FORM_DRAFT_KEY);
-  } catch {
-    // ignore storage access errors
-  }
+  dropCheckoutFormDraft();
 }
 
 export function writeCheckoutPaymentSelection(methodId: string): void {

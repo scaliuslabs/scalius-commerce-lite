@@ -20,6 +20,7 @@ import {
 } from "@/lib/cart/purchase-option";
 import { isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { emitBuyerEvent } from "@/lib/buyer-events/bus";
+import { dropCheckoutFormDraft } from "@/lib/checkout/draft-lifetime";
 import { cartLine } from "@/lib/buyer-events/lines";
 
 export type { CartItemOption } from "@/lib/cart/item-options";
@@ -181,6 +182,13 @@ let hasHydratedFromStorage = false;
 let canPersistToStorage = false;
 
 export const cartStore = map<CartStore>({ ...EMPTY_CART_STATE });
+
+// The buyer's typed checkout details live only while the cart has something
+// to check out: a cart that empties (the last line removed, the order placed,
+// another tab emptying it) takes them with it (lib/checkout/draft-lifetime.ts).
+cartStore.listen((state) => {
+  if (Object.keys(state.items).length === 0) dropCheckoutFormDraft();
+});
 
 type ShippingFeeCartItem = Pick<CartItem, "freeDelivery"> & Partial<Pick<CartItem, "price" | "quantity" | "fulfillmentKind">>;
 
