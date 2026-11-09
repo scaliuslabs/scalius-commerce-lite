@@ -9,7 +9,7 @@ const { title, message } = Astro.props;
 
 <div
   id="loadingOverlay"
-  class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-sm focus:outline-none"
+  class="fixed inset-0 z-[var(--scalius-z-blocking,100)] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-sm focus:outline-none"
   role="status"
   aria-live="polite"
   aria-atomic="true"

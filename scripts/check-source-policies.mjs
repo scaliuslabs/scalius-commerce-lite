@@ -493,6 +493,13 @@ export const policies = [
     sample: '<a href="/x">View all<span class="sr-only">: New arrivals</span></a>',
   },
   {
+    rule: "a fixed storefront layer takes its z-index from the one layering (--scalius-z-*), never a number of its own",
+    why: "the consent banner (70) drew over the open city picker (50) and the buy bar, and a drawer set z-100 to win: theme-foundation.css orders content bars, header, menus, the consent banner, opened overlays and a blocking overlay once (RB5)",
+    paths: [storefront],
+    forbid: [/\bfixed\b[^"'`\n]*\bz-(?:\d+|\[\d+\])/, /\bz-(?:\d+|\[\d+\])\b[^"'`\n]*\bfixed\b/],
+    sample: '<div class="fixed inset-0 z-50 bg-black/50"></div>',
+  },
+  {
     rule: "gift-card, digital-goods and review code never logs codes, keys or review text",
     why: "gift-card codes and licence keys are bearer value, and review text is buyer content; logs carry ids, last4 and masked contacts only (Wave B R6, D7, G6)",
     paths: [

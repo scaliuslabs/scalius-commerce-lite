@@ -285,7 +285,7 @@ export default function CommandPalette() {
         : "";
 
   return createPortal(
-    <div className="fixed inset-0 z-100 flex items-start justify-center sm:pt-[10vh]">
+    <div className="fixed inset-0 z-[var(--scalius-z-overlay,70)] flex items-start justify-center sm:pt-[10vh]">
       <div
         aria-hidden="true"
         className="fixed inset-0 bg-background/80 backdrop-blur-md transition-opacity animate-in fade-in duration-200 sm:bg-black/40"

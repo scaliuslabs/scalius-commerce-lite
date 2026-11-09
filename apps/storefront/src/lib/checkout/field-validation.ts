@@ -175,6 +175,38 @@ function billingFields(
 }
 
 /**
+ * Runs `show` once no press is in progress. Leaving a field by pressing
+ * another control fires blur on the press, before its click: an error drawn
+ * then moves the control under the pointer (the address's "too short" pushed
+ * City down, and the press missed it). The error waits for the press to end
+ * (its click has landed); a keyboard move shows it at once.
+ */
+let pressing = false;
+const afterPress: Array<() => void> = [];
+export function whenPressEnds(show: () => void, doc: Document = document): void {
+  watchPresses(doc);
+  if (!pressing) {
+    show();
+    return;
+  }
+  afterPress.push(show);
+}
+let pressWatched: Document | null = null;
+function watchPresses(doc: Document): void {
+  if (pressWatched === doc) return;
+  pressWatched = doc;
+  doc.addEventListener("pointerdown", () => { pressing = true; }, true);
+  const release = () => {
+    if (!pressing) return;
+    pressing = false;
+    // After the press's own click event.
+    setTimeout(() => { for (const show of afterPress.splice(0)) show(); }, 0);
+  };
+  doc.addEventListener("pointerup", release, true);
+  doc.addEventListener("pointercancel", release, true);
+}
+
+/**
  * Wires blur and correction handling. Returns `validateAll`, which marks every
  * invalid field and returns the first invalid control (or null).
  */
@@ -193,9 +225,10 @@ export function enhanceCheckoutFields(
       ? field.control
       : field.control.closest("[data-location-fields]") ?? field.control;
     // Leaving a field with something typed checks it; an empty untouched field stays quiet.
+    watchPresses(field.control.ownerDocument);
     field.control.addEventListener("blur", () => {
       const current = field.control as HTMLInputElement;
-      if ("value" in current && current.value.trim()) setFieldError(field, field.check());
+      if ("value" in current && current.value.trim()) whenPressEnds(() => setFieldError(field, field.check()), field.control.ownerDocument);
     }, { signal });
     // Once flagged, a field clears the moment it is fixed.
     const recheck = () => {

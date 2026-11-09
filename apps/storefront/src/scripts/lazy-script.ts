@@ -76,7 +76,7 @@ export function showStalePageNotice(options: { draftRestores?: boolean } = {}, d
   const copy = stalePageCopy(doc.documentElement.lang);
   const notice = doc.createElement("div");
   notice.setAttribute("data-stale-page-notice", "");
-  notice.className = "fixed inset-x-3 z-[80] mx-auto flex max-w-md flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground shadow-lg";
+  notice.className = "fixed inset-x-3 z-[var(--scalius-z-blocking,100)] mx-auto flex max-w-md flex-wrap items-center gap-3 rounded-lg border border-border bg-background p-3 text-sm text-foreground shadow-lg";
   const status = doc.createElement("div");
   status.setAttribute("role", "status");
   status.className = "min-w-0 flex-1";

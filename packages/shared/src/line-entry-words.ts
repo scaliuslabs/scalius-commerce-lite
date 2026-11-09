@@ -7,12 +7,10 @@
 // language: the buyer's surfaces in the order's language (the checkout
 // language catalogue carries these keys), the dashboard in the staff
 // member's. Browser-safe and free of the checkout presets.
-import { parseBuyerUploadValue } from "./buyer-uploads";
-import { LINE_PURCHASE_OPTION_PROPERTY_KEY } from "./line-identity";
+import { parseBuyerUploadValue } from "./buyer-upload-value";
+import { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY, LINE_PURCHASE_OPTION_PROPERTY_KEY } from "./line-identity";
 
-/** The entry keys the platform freezes beside the buyer's inputs: an app's add-on and a bundle (line-properties.ts names them). */
-export const LINE_ADJUSTMENT_KEY = "_adjustment";
-export const LINE_BUNDLE_KEY = "_bundle";
+export { LINE_ADJUSTMENT_KEY, LINE_BUNDLE_KEY } from "./line-identity";
 const CHECKED_VALUE = "true";
 /** An upload's file count as the line froze it (`buyerUploadDisplayValue`). */
 const FROZEN_FILE_COUNT = /^\d+ files?$/;

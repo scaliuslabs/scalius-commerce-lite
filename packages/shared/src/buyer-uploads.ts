@@ -16,9 +16,6 @@
  */
 import { planLimits, type PlanLimits } from "./plan-limits";
 
-/** What a `file` input may accept: still images and PDF documents. */
-export const BUYER_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
-export type BuyerUploadType = (typeof BUYER_UPLOAD_TYPES)[number];
 
 /**
  * What an app's admin `file-field` may accept (staff uploading for one of the
@@ -39,21 +36,17 @@ export const BUYER_UPLOAD_EXTENSIONS: Readonly<Record<StoredUploadType, string>>
 
 /** The R2 prefix; the media hostname never serves `private/`. */
 export const BUYER_UPLOAD_R2_PREFIX = "private/buyer-uploads/";
-/** Upload ids: `bup_` and 24 URL-safe characters (144 random bits). */
-export const BUYER_UPLOAD_ID_PATTERN = /^bup_[A-Za-z0-9_-]{24}$/u;
-/** The separator of a `file` answer's ids. */
-export const BUYER_UPLOAD_VALUE_SEPARATOR = ",";
-
-/**
- * The absolute ceilings a manifest may declare (the Paid plan's). The
- * deployment's plan bounds them again at run time (`buyerUploadBounds`): the
- * platform takes the lower value, as it does for an app's `limits`.
- */
-export const BUYER_UPLOAD_DECLARATION_LIMITS = {
-  maxBytes: 20 * 1024 * 1024,
-  maxFiles: 10,
-  filenameLength: 120,
-} as const;
+export {
+  BUYER_UPLOAD_TYPES,
+  buyerUploadDisplayValue,
+  type BuyerUploadType,
+  BUYER_UPLOAD_DECLARATION_LIMITS,
+  BUYER_UPLOAD_ID_PATTERN,
+  BUYER_UPLOAD_VALUE_SEPARATOR,
+  formatBuyerUploadValue,
+  parseBuyerUploadValue,
+} from "./buyer-upload-value";
+import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES, type BuyerUploadType } from "./buyer-upload-value";
 
 /**
  * How long an upload waits to be attached to an order before the sweep
@@ -123,26 +116,8 @@ export function withBuyerUploadBounds<T extends { type: string } & BuyerFileInpu
   return { ...declaration, ...buyerUploadBounds(declaration, limits) };
 }
 
-/**
- * The upload ids of a `file` answer, or null when it is not one: one to
- * `maxFiles` distinct ids joined by commas.
- */
-export function parseBuyerUploadValue(value: string, maxFiles: number = BUYER_UPLOAD_DECLARATION_LIMITS.maxFiles): string[] | null {
-  const ids = value.split(BUYER_UPLOAD_VALUE_SEPARATOR).map((id) => id.trim());
-  if (ids.length < 1 || ids.length > maxFiles) return null;
-  if (!ids.every((id) => BUYER_UPLOAD_ID_PATTERN.test(id))) return null;
-  if (new Set(ids).size !== ids.length) return null;
-  return ids;
-}
 
-export function formatBuyerUploadValue(ids: readonly string[]): string {
-  return ids.join(BUYER_UPLOAD_VALUE_SEPARATOR);
-}
 
-/** What the order line shows for a `file` answer until the file names are read. */
-export function buyerUploadDisplayValue(count: number): string {
-  return count === 1 ? "1 file" : `${count} files`;
-}
 
 function startsWith(bytes: Uint8Array, signature: readonly number[], offset = 0): boolean {
   if (bytes.byteLength < offset + signature.length) return false;

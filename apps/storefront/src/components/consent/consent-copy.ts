@@ -31,7 +31,8 @@ const EN: ConsentCopy = {
   noticeText: "We use cookies to measure visits and show you relevant ads. You can change this any time.",
   accept: "Accept all",
   reject: "Reject all",
-  ok: "OK",
+  // Notice: the button keeps every category on, and says so (it once read "OK").
+  ok: "Allow all",
   manage: "Choose",
   choices: "What you allow",
   necessary: "Necessary",
@@ -52,7 +53,7 @@ const BN: ConsentCopy = {
   noticeText: "ভিজিট পরিমাপ করতে এবং প্রাসঙ্গিক বিজ্ঞাপন দেখাতে আমরা কুকি ব্যবহার করি। যেকোনো সময় এটি বদলাতে পারবেন।",
   accept: "সব মেনে নিন",
   reject: "সব বাতিল করুন",
-  ok: "ঠিক আছে",
+  ok: "সব চালু রাখুন",
   manage: "বেছে নিন",
   choices: "আপনি যা চালু রাখবেন",
   necessary: "প্রয়োজনীয়",

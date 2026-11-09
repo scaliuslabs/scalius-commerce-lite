@@ -40,6 +40,14 @@ export interface CanonicalLineProperty {
 
 /** The key of a purchase option's entry on an order line (`linePurchaseOptionProperty` in line-properties.ts). */
 export const LINE_PURCHASE_OPTION_PROPERTY_KEY = "_purchase_option";
+/**
+ * The entry keys the platform freezes beside the buyer's inputs: an app's
+ * add-on and a bundle. Here, in a module that imports nothing heavy, because
+ * the cart store (on every buyer page's first paint) names the add-on's key;
+ * line-entry-words.ts, which words them, pulls in the upload parser.
+ */
+export const LINE_ADJUSTMENT_KEY = "_adjustment";
+export const LINE_BUNDLE_KEY = "_bundle";
 /** The most purchase options one line carries (one per app). */
 export const LINE_PURCHASE_OPTIONS_MAX = 5;
 

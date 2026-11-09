@@ -63,7 +63,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 <div
   id={`${id}-overlay`}
   class:list={[
-    "pointer-events-none invisible fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300",
+    "pointer-events-none invisible fixed inset-0 z-[var(--scalius-z-overlay,70)] bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300",
     phoneOnly && "lg:hidden",
   ]}
   aria-hidden="true"
@@ -74,7 +74,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 <div
   id={`${id}-panel`}
   class:list={[
-    "nav-drawer invisible fixed inset-s-0 top-0 z-70 flex h-dvh max-w-[365px] -translate-x-full rtl:translate-x-full transform flex-col border-e border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
+    "nav-drawer invisible fixed inset-s-0 top-0 z-[var(--scalius-z-overlay,70)] flex h-dvh max-w-[365px] -translate-x-full rtl:translate-x-full transform flex-col border-e border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
     "w-[90vw]",
     phoneOnly && "lg:hidden",
   ]}

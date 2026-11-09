@@ -27,7 +27,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { getCheckoutLanguagePreset, type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { localizedGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
-import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-uploads";
+import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "@scalius/shared/buyer-upload-value";
 
 import { fromMinor } from "@scalius/shared/money";
 import { isPurchaseOptionId, purchaseOptionAppId } from "@scalius/shared/plugins/ids";
