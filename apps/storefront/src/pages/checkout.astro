@@ -21,10 +21,8 @@ import { markRenderUncacheable } from "@/lib/cache-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { giftCardCheckoutCopy } from "@/lib/checkout/gift-cards";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  checkoutLanguageBaseCode,
-} from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
 const [layoutData, checkoutConfig, checkoutLanguageResponse] = await Promise.all([
   getLayoutData(),

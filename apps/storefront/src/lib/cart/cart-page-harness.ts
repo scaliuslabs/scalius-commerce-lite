@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 
 import { formatMoney } from "@/lib/currency";
-import { getCustomerSession } from "../api/customer-auth";
+import { getCustomerSession } from "../api/customer-session-later";
 import { browserApiUrl } from "../api/browser-url";
 import { readBuyerAttributes } from "../buyer-ui/state";
 import { buyerUiDrawn, buyerUiPending } from "../buyer-ui/lazy";
@@ -71,7 +71,7 @@ import {
   writeCheckoutTransferSession,
 } from "../checkout/session-state";
 import { rememberSubmittedCart } from "../checkout/receipt-finalization";
-import { readStoredGiftCards } from "../checkout/gift-cards";
+import { readStoredGiftCards } from "../checkout/gift-card-storage";
 import { codPaymentStep } from "../checkout/payment-step";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
 import { shippingCountryName } from "../checkout/shipping-country";

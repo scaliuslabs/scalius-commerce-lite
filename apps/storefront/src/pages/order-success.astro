@@ -54,7 +54,8 @@ import { formatOrderReceiptDate } from "@/lib/order-success-localization";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 
-import { ENGLISH_CHECKOUT_LANGUAGE_DATA, checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
 import {
   orderProgressMarkup,

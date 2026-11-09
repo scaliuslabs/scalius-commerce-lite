@@ -7,7 +7,7 @@
 // customer identity in Bangladesh), so a newsletter signup always carries a
 // phone and may add an e-mail; there is no separate subscriber identity.
 
-import { checkoutLanguageBaseCode } from "./checkout-language";
+import { checkoutLanguageBaseCode } from "./checkout-language-format";
 import { phoneOrNull } from "./customer-auth-policy";
 import { z } from "zod";
 import { sha256Hex } from "./hash";

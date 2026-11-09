@@ -6,7 +6,7 @@ import { pageLanguage } from "./store-time-zone";
 // same form talks to the JSON proxies, keeps what the buyer typed, says where
 // the code went, and counts down resend and rate-limit waits. The code field
 // appears only once a code was actually sent.
-import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
 import {
   DEFAULT_RESEND_AFTER_SECONDS,

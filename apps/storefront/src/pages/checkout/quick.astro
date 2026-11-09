@@ -75,10 +75,8 @@ import { phoneHintCopy, phoneHints } from "@/lib/checkout/phone-hint";
 import { phoneCountryMeta } from "@scalius/shared/phone-example";
 import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import {
-  ENGLISH_CHECKOUT_LANGUAGE_DATA,
-  checkoutLanguageBaseCode,
-} from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 
 export const prerender = false;

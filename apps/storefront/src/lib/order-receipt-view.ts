@@ -22,7 +22,7 @@ import {
 } from "@/lib/order-success-state";
 import { formatOrderReceiptDate, formatOrderReceiptDay } from "@/lib/order-success-localization";
 import { formatPageNumber } from "@/lib/store-time-zone";
-import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
+import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language-format";
 import { fromMinor } from "@scalius/shared/money";
 import { resolveSavedOrderMoneySummary } from "@scalius/shared/order-money-presentation";
 

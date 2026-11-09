@@ -12,7 +12,7 @@ import {
 import { cartItemVariantLabel } from "../cart/item-options";
 import { purchaseOptionsField } from "../cart/purchase-option";
 import { isCheckoutDeliveryMode } from "./delivery-mode";
-import { giftCardRequestFields } from "./gift-cards";
+import { giftCardRequestFields } from "./gift-card-storage";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
 import {
   cartRuleRefusal,
