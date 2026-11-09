@@ -109,6 +109,7 @@ export interface ProductRecommendationItem {
     imageMediaId: string | null;
     imageAlt: string | null;
     secondaryImageUrl: string | null;
+    imageAspect: number | null;
     createdAt: string | null;
     /** Published-review average and count; null without a published review. */
     rating: CardRating;

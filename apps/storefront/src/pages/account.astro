@@ -89,9 +89,10 @@ const cards = accountOrderCards(orders, copy, checkoutCopy);
   import { buyAgain, type BuyAgainOrder } from "@/lib/account-buy-again";
   import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
-  import { enhanceBuyerUi } from "@/lib/buyer-ui";
+  import { accountCopy } from "@/lib/account-copy";
+  import { enhanceBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 
-  enhanceBuyerUi();
+  void enhanceBuyerUiWhenNeeded();
 
   // Buy again: the lines still sold go back in the cart at today's price.
   // Without JavaScript (or before this script) the link opens the order, which adds the lines.

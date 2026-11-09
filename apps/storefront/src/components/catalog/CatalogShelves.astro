@@ -2,6 +2,7 @@
 // Shelves (Aarong): one horizontal row per sub-listing with "View all" to
 // its own indexable page. CSS scroll-snap only (catalog-listing.css); the
 // first shelf's opening cards load eagerly.
+import { namedActionLabel } from "@/lib/action-label";
 import type { Product } from "@/lib/api";
 import type { CatalogShelf } from "@/lib/catalog-listing";
 import ProductCard from "@/components/cards/ProductCard.astro";
@@ -33,8 +34,8 @@ const SHELF_IMAGE_SIZES = "(max-width: 639px) 46vw, (max-width: 1023px) 32vw, (m
           {shelf.title}
         </h2>
         {shelf.href && (
-          <a href={shelf.href} class="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-primary hover:underline">
-            {copy.viewAll}<span class="sr-only">: {shelf.title}</span>
+          <a href={shelf.href} class="inline-flex min-h-11 shrink-0 items-center text-sm font-semibold text-primary hover:underline" aria-label={namedActionLabel(copy.viewAll, shelf.title)}>
+            {copy.viewAll}
           </a>
         )}
       </div>

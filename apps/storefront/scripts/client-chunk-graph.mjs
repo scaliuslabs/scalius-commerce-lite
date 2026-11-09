@@ -79,6 +79,10 @@ export const BUYER_PAGE_SCRIPTS = {
     "src/components/catalog/CatalogEmbed.astro",
     "src/components/catalog/CatalogListingPage.astro",
   ],
+  // The checkout form (the cart page) and the payment step: their own script draws the lines, so
+  // every file it loads statically is on the way to the buyer seeing their order.
+  cart: ["src/layouts/Layout.astro", ["src/pages/cart.astro", 0]],
+  checkout: ["src/layouts/Layout.astro", ["src/pages/checkout.astro", 0]],
 };
 
 /**
@@ -315,6 +319,14 @@ export function productPageBudget(graph) {
 export const BUDGET_GZIP_KIB = {
   firstPaint: 60,
   addedByFirstAddToCart: 111,
+  /**
+   * The cart page's and the payment step's first paint, measured on
+   * 2026-11-09 (89.4 and 77.5) plus about 3 KiB. Before, they were 135.8 and
+   * 117.0: the app blocks' renderer (zod) and the generated SDK client loaded
+   * with every checkout, app blocks or not.
+   */
+  cartFirstPaint: 93,
+  checkoutFirstPaint: 81,
 };
 
 const chunkName = (id) => id.split("/").pop();
@@ -331,7 +343,8 @@ export function gzipKib(graph, ids) {
  * scripts and the add's lazy loads), `runtimes:<page>` (no zod or generated
  * SDK on first paint, the first add to cart, sign-in, search or zoom),
  * `deferred:<page>` (optional validation off first paint, unrelated
- * catalogues off the first add) and `gzip` (the product page's budgets).
+ * catalogues off the first add) and `gzip` (the product page's budgets, and
+ * the cart page's and the payment step's first paint).
  * The deploy runs it on the build it ships (`--check`); the test runs it on a
  * local build.
  */
@@ -387,6 +400,10 @@ export function buyerPageProblems(graph, budgets = BUDGET_GZIP_KIB) {
   if (addedKib > budgets.addedByFirstAddToCart) {
     fail("gzip", `the first add to cart adds ${addedKib} KiB gzip, over its ${budgets.addedByFirstAddToCart} KiB budget`);
   }
+  for (const [page, budget] of [["cart", budgets.cartFirstPaint], ["checkout", budgets.checkoutFirstPaint]]) {
+    const kib = gzipKib(graph, graph.closure(pageEntries(graph, BUYER_PAGE_SCRIPTS[page])));
+    if (kib > budget) fail("gzip", `the ${page} page's first paint is ${kib} KiB gzip, over its ${budget} KiB budget`);
+  }
   return problems;
 }
 
@@ -439,7 +456,7 @@ function main(cliArgs) {
       for (const { check: name, message } of problems) console.error(`  [${name}] ${message}`);
       return 1;
     }
-    console.log(`\n✓ Buyer pages within their JavaScript budgets (${BUDGET_GZIP_KIB.firstPaint} KiB first paint, ${BUDGET_GZIP_KIB.addedByFirstAddToCart} KiB added by the first add to cart; no zod or generated SDK)`);
+    console.log(`\n✓ Buyer pages within their JavaScript budgets (product: ${BUDGET_GZIP_KIB.firstPaint} KiB first paint, ${BUDGET_GZIP_KIB.addedByFirstAddToCart} KiB added by the first add to cart; cart ${BUDGET_GZIP_KIB.cartFirstPaint} KiB and payment step ${BUDGET_GZIP_KIB.checkoutFirstPaint} KiB first paint; no zod or generated SDK)`);
     return 0;
   } catch (error) {
     if (!(error instanceof ClientBuildError)) throw error;

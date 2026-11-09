@@ -117,6 +117,7 @@ const brandProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  imageAspect: z.number().nullable(),
   cardFacts: optionalProductCardFacts,
   fields: storefrontCardFieldsSchema.optional(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),

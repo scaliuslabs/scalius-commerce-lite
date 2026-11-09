@@ -6,6 +6,7 @@
 // storefront batch. The page is a tool, not content: noindex,follow, never
 // in a sitemap, and canonical to /compare without the ids.
 import { priceLineClaim } from "@scalius/shared/money";
+import { namedActionLabel } from "@/lib/action-label";
 import Layout from "@/layouts/Layout.astro";
 import CompareTray from "@/components/compare/CompareTray.astro";
 import {
@@ -110,16 +111,16 @@ const photo = (product: CompareProduct) =>
                       {!product.availableForSale ? (
                         <span class="compare-action compare-action-muted">{words.stock.soldOut}</span>
                       ) : product.hasVariants ? (
-                        <a href={`/products/${product.slug}`} class="compare-action compare-action-outline">
-                          {words.card.chooseOptions}<span class="sr-only">: {product.name}</span>
+                        <a href={`/products/${product.slug}`} class="compare-action compare-action-outline" aria-label={namedActionLabel(words.card.chooseOptions, product.name)}>
+                          {words.card.chooseOptions}
                         </a>
                       ) : (
-                        <a href={`/buy/${encodeURIComponent(product.slug)}`} rel="nofollow" data-astro-prefetch="false" class="compare-action">
-                          {words.productEmbed.buyNow}<span class="sr-only">: {product.name}</span>
+                        <a href={`/buy/${encodeURIComponent(product.slug)}`} rel="nofollow" data-astro-prefetch="false" class="compare-action" aria-label={namedActionLabel(words.productEmbed.buyNow, product.name)}>
+                          {words.productEmbed.buyNow}
                         </a>
                       )}
-                      <a href={withoutProduct(product.id)} rel="nofollow" class="compare-remove">
-                        {copy.remove}<span class="sr-only">: {product.name}</span>
+                      <a href={withoutProduct(product.id)} rel="nofollow" class="compare-remove" aria-label={namedActionLabel(copy.remove, product.name)}>
+                        {copy.remove}
                       </a>
                     </th>
                   );

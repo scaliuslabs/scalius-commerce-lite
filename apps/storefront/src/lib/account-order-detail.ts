@@ -69,7 +69,7 @@ import {
 } from "@/lib/order-line-groups";
 import { pagePath } from "@/lib/presence-url";
 import { getOrderReceiptSupportActionLabel } from "@/lib/order-success-localization";
-import { renderBuyerUi } from "@/lib/buyer-ui";
+import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
@@ -803,7 +803,7 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   renderPayment(detail);
   renderSupport(detail);
   renderPaymentRecovery(detail);
-  renderBuyerUi(detail.buyerUi ?? [], { root: document, onChange: loadOrderDetail });
+  void renderBuyerUiWhenNeeded(detail.buyerUi ?? [], { root: document, onChange: loadOrderDetail });
 }
 
 function showOnly(state: "loading" | "unauth" | "error" | "content"): void {

@@ -1,6 +1,7 @@
 ---
-// The buy bar (theme `product.sticky`): once the buy buttons scroll out of
-// view, a bar keeps the price and "Add to cart" in reach. On phones it is
+// The buy bar (theme `product.sticky`): while the buy buttons are out of
+// view (on a phone, below the fold too), a bar keeps the price and "Add to
+// cart" in reach. On phones it is
 // pinned to the bottom (`phoneBottom: buy-bar`, thumb reach); on computers
 // it is Target's product bar pinned under the header (`desktop:
 // product-bar`). It drives the real buttons, so options, stock and cart
@@ -56,17 +57,25 @@ const screens = phone && desktop ? "all" : desktop ? "desktop" : "phone";
 
 <style is:global>
   /*
-   * While the phone bar shows, the page ends above it and focus scrolls clear
-   * of it. The reserve is the bar's own height: 1px border, 0.5rem top
-   * padding, a 2.75rem row, and max(0.5rem, safe-area inset) bottom padding.
+   * While a phone bar is on the page, the page ends above it and focus
+   * scrolls clear of it, shown or not (a reserve that arrived with the bar
+   * grew the page under a buyer already at its end). The script writes the
+   * bar's measured height to --sticky-buy-reserve; the fallback is its
+   * drawn height: 1px border, 0.5rem top padding, a 2.75rem row, and
+   * max(0.5rem, safe-area inset) bottom padding. The phone tab bar, when the
+   * store draws one, takes the bar's place while it hides: the larger wins.
    */
   @media (max-width: 63.999rem) {
-    html[data-sticky-buy-visible] {
-      --sticky-buy-reserve: calc(1px + 3.25rem + max(0.5rem, env(safe-area-inset-bottom, 0px)));
-      scroll-padding-bottom: calc(var(--sticky-buy-reserve) + 0.5rem);
+    html[data-sticky-buy-reserve] {
+      --sticky-buy-bar: var(--sticky-buy-reserve, calc(1px + 3.25rem + max(0.5rem, env(safe-area-inset-bottom, 0px))));
+      --sticky-buy-room: var(--sticky-buy-bar);
+      scroll-padding-bottom: calc(var(--sticky-buy-room) + 0.5rem);
     }
-    html[data-sticky-buy-visible] body {
-      padding-bottom: var(--sticky-buy-reserve);
+    html[data-sticky-buy-reserve][data-mobile-nav="tabs"]:has(#mobile-tab-bar) {
+      --sticky-buy-room: max(var(--sticky-buy-bar), var(--mobile-tabs-reserve));
+    }
+    html[data-sticky-buy-reserve] body {
+      padding-bottom: var(--sticky-buy-room);
     }
   }
 </style>

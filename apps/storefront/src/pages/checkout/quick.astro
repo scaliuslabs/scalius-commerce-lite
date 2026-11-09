@@ -6,6 +6,7 @@
 import { checkoutText } from "@/lib/checkout-text";
 import { serverPagePath } from "@/lib/server-presence";
 import { bangladeshAddressesOffered, physicalDeliveryOffered } from "@/lib/delivery-facts";
+import { buyerUiBlockSchema } from "@scalius/shared/plugins/buyer-ui";
 import { DEFAULT_CUSTOMER_IDENTITY, checkoutContactFields } from "@scalius/shared/customer-auth-policy";
 import BuyerField from "@/components/apps/BuyerField.astro";
 import Layout from "@/layouts/Layout.astro";
@@ -203,7 +204,9 @@ const quote = quoteResult?.ok ? quoteResult.quote : null;
 // in person. This page places cash orders, so without cash it sends the buyer
 // to the cart.
 const codFitsOrder = quote === null || quote.allowedPaymentMethods.includes("cod");
-const buyerFields = [...new Map((quote?.buyerUi ?? []).flatMap((block) =>
+// The quote carries the apps' blocks unchecked (the cart page draws them lazily); this page checks them here, on the server.
+const quoteBlocks = buyerUiBlockSchema.array().safeParse(quote?.buyerUi ?? []);
+const buyerFields = [...new Map((quoteBlocks.success ? quoteBlocks.data : []).flatMap((block) =>
   block.attributes.filter((attribute) => attribute.required).map((attribute) => {
     const key = `${block.appId}.${attribute.key}`;
     return [key, { key, attribute, value: form.attributes?.[key] ?? block.values[attribute.key] ?? "" }] as const;

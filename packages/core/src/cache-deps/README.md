@@ -116,6 +116,7 @@ Inside core, import `deps` from the `cache-deps` folder (`../../cache-deps` in a
    | Sitemap or feed | `deps.listMembership("all")`, `deps.discoveryMembership()`, `deps.products(rowIds)` |
    | Any availability band | `deps.inventoryBands()` (`set:inventory:document`) as well as the product keys |
    | A manual collection | `deps.collection(id)` plus `deps.products(memberIds)` |
+   | A list or search that found no product | its membership or order key; `declareProductCards([])` (or `declareNoProductRow()`) adds `p:~`, `m:~` and `sold:~`, keys no row advances, for the card tables its statements still name |
    | A dynamic collection | `deps.collection(id)` plus `deps.listMembership(categoryScope(...))`, plus `deps.listOrder(...)` when sorted |
    | Custom field values | `deps.customFieldDefinitions(ownerType)` plus the owner's own keys |
    | The store-shape counts | `deps.key(cacheDep.storeShape())` (`lm:shape`) plus the "any row" keys the read uses |
