@@ -5,6 +5,7 @@
 // One read finds the sealed days of both periods; each period is then one
 // statement (at most two of D1's six connections). Labels and merchant days
 // follow the store's current settings.
+import { orderPaymentKind, type OrderPaymentKind } from "@scalius/shared/order-payment-methods";
 import { sql, type SQL } from "drizzle-orm";
 import {
   analyticsBuckets,
@@ -55,7 +56,16 @@ export interface OverviewPeriod {
   };
   payments: {
     codOrders: number;
-    prepaidOrders: number;
+    /**
+     * Sales orders by how the rest were paid (`orderPaymentKind`): an online
+     * gateway; to the store directly, in person or by transfer (`manual`);
+     * by invoice; entirely by gift cards. A method of no known kind counts in
+     * none.
+     */
+    onlineOrders: number;
+    paidToStoreOrders: number;
+    invoiceOrders: number;
+    giftCardOrders: number;
     /** % of sales orders paid cash on delivery. */
     codShare: number | null;
     /** COD orders that came back uncollected. */
@@ -371,7 +381,10 @@ function emptyPeriod(range: AnalyticsRange): OverviewPeriod {
     customers: { customers: 0, newCustomers: 0, returningCustomers: 0, repeatPurchaseRate: null },
     payments: {
       codOrders: 0,
-      prepaidOrders: 0,
+      onlineOrders: 0,
+      paidToStoreOrders: 0,
+      invoiceOrders: 0,
+      giftCardOrders: 0,
       codShare: null,
       returnedToSender: 0,
       codDelivered: 0,
@@ -404,8 +417,8 @@ export function mapOverviewPeriod(range: AnalyticsRange, rows: readonly Record<s
         const rts = num(row.x2);
         const delivered = num(row.x3);
         period.payments = {
+          ...period.payments,
           codOrders,
-          prepaidOrders: period.totals.orders - codOrders,
           codShare: percentOf(codOrders, period.totals.orders),
           returnedToSender: rts,
           codDelivered: delivered,
@@ -456,6 +469,16 @@ export function mapOverviewPeriod(range: AnalyticsRange, rows: readonly Record<s
     ...(dayRows.get(bucket.key) ?? EMPTY_MEASURES),
   }));
   for (const list of Object.values(period.breakdowns)) sortBreakdown(list);
+  // How the orders that are not cash on delivery were paid, by the kind of their method.
+  const byKind = new Map<OrderPaymentKind | null, number>();
+  for (const row of period.breakdowns.paymentMethod) {
+    const kind = orderPaymentKind(row.key);
+    byKind.set(kind, (byKind.get(kind) ?? 0) + row.orders);
+  }
+  period.payments.onlineOrders = byKind.get("online") ?? 0;
+  period.payments.paidToStoreOrders = byKind.get("paid_to_store") ?? 0;
+  period.payments.invoiceOrders = byKind.get("invoice") ?? 0;
+  period.payments.giftCardOrders = byKind.get("gift_card") ?? 0;
   return period;
 }
 

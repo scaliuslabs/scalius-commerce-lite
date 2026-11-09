@@ -1,6 +1,7 @@
 // Report CSV exports: English headings with the currency on money columns,
 // decimal major units, readable enum words, and the shared spreadsheet-safe
 // byte-capped artifact builder used by the order exports.
+import { ORDER_PAYMENT_METHOD_LABELS_EN } from "@scalius/shared/order-payment-methods";
 import { fromMinor } from "@scalius/shared/money";
 import type {
   AnalyticsColumn,
@@ -99,7 +100,7 @@ export const REPORT_COLUMN_LABELS_EN: Record<string, string> = {
 
 const ENUM_LABELS_EN: Record<AnalyticsEnumVocabulary, Record<string, string>> = {
   channel: { online_store: "Online store", admin: "Dashboard", pos: "Point of sale", agent: "AI agent", app: "App" },
-  paymentMethod: { cod: "Cash on delivery", stripe: "Card (Stripe)", gift_card: "Gift card", other: "Other" },
+  paymentMethod: { ...ORDER_PAYMENT_METHOD_LABELS_EN, other: "Other" },
   paymentKind: { payment: "Payment", refund: "Refund" },
   paymentStatus: {
     pending: "Pending",
