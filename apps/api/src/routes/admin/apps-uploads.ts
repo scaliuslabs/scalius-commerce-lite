@@ -24,6 +24,7 @@ import { created } from "../../utils/api-response";
 import { ForbiddenError, NotFoundError, RateLimitError, ValidationError } from "../../utils/api-error";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import { errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
+import { requireStaffId } from "./request-actor";
 
 /** Multipart framing on top of the file. */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
@@ -69,10 +70,10 @@ export function registerAppUploadRoutes(app: OpenAPIHono<{ Bindings: Env }>): vo
   app.openapi(uploadRoute, async (c) => {
     c.header("Cache-Control", "private, no-store");
     const pluginId = c.req.valid("param").id;
-    const actor = c.get("user") as { id?: string } | undefined;
     // A person in the dashboard: agents and apps never upload for an app's form.
-    if (!actor?.id || c.get("agentPrincipal") || c.get("pluginPrincipal")) throw new ForbiddenError("Only staff in the dashboard upload files for an app.");
-    if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "app-upload", actor.id))) {
+    if (c.get("agentPrincipal") || c.get("pluginPrincipal")) throw new ForbiddenError("Only staff in the dashboard upload files for an app.");
+    const staffId = requireStaffId(c, "Sign in again to upload a file.");
+    if (!(await isWithinRateLimit(c.env, "RL_STANDARD", "app-upload", staffId))) {
       throw new RateLimitError("You're uploading too quickly. Please wait a moment and try again.");
     }
     const maxBytes = planLimits().uploads.maxBytes;
@@ -109,7 +110,7 @@ export function registerAppUploadRoutes(app: OpenAPIHono<{ Bindings: Env }>): vo
       maxBytes,
       filename: file.name,
       bytes: new Uint8Array(await file.arrayBuffer()),
-      uploaderKey: await appUploadStaffKey(c.env, actor.id),
+      uploaderKey: await appUploadStaffKey(c.env, staffId),
     });
     return created(c, { upload });
   });
