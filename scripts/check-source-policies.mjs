@@ -117,6 +117,14 @@ export const policies = [
     sample: 'badge.textContent = String(count);',
   },
   {
+    rule: "the dashboard writes order numbers in its own digits through ~/lib/order-number",
+    why: "the shared formatOrderNumber is Latin, so the Bangla dashboard and its invoice read 'অর্ডার #1017' while the storefront read '#১০১৭'; an order number takes the reader's digits on every surface written in a language (formatOrderNumberIn)",
+    paths: ["apps/admin-v2/src"],
+    allow: { "apps/admin-v2/src/lib/order-number.ts": "the wrapper itself" },
+    forbid: [/import\s*\{[^}]*\bformatOrderNumber\b[^}]*\}\s*from\s*["']@scalius\/shared\/order-utils["']/],
+    sample: 'import { formatOrderNumber } from "@scalius/shared/order-utils";',
+  },
+  {
     rule: "every order-status surface words its tracker, updates and shipments through presentOrderTracking",
     why: "order success relabelled the API's English steps without wording them by key, so a Bangla receipt read 'Order placed / Confirmed / On its way' while /track-order read Bangla (apps/storefront/src/lib/account-format.ts)",
     paths: [storefront],

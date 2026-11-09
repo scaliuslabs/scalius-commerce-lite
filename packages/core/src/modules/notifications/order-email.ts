@@ -6,10 +6,10 @@ import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from 
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { dateLocale, formatDateTime, formatNumber } from "@scalius/shared/locale-format";
+import { dateLocale, formatDateTime, formatNumber, numberLocale } from "@scalius/shared/locale-format";
 import { presentLineEntry, type LineEntryWords } from "@scalius/shared/line-entry-words";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
-import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatOrderNumberIn } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
@@ -416,7 +416,7 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
     return {
       variables: {
         customer_name: order.customerName?.trim() || input.name?.trim() || "",
-        order_number: formatOrderNumber(order.orderNumber, input.orderId),
+        order_number: formatOrderNumberIn(order.orderNumber, input.orderId, numberLocale(lang)),
         order_total: money ? money(order.totalAmountMinor) : "",
         cod_amount: codDue ?? "",
         store_name: store.name ?? "",
