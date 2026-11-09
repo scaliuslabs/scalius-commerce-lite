@@ -385,13 +385,14 @@ const inputSchemas = [
   }).strict(),
   z.object({ ...inputBase, type: z.literal("checkbox"), value: z.boolean().optional() }).strict(),
   z.object({ ...inputBase, type: z.literal("date-field"), value: isoDate.nullable().optional(), min: isoDate.optional(), max: isoDate.optional() }).strict(),
-  z.object({
-    ...inputBase,
-    type: z.literal("file-field"),
-    accept: z.array(z.enum(ADMIN_UPLOAD_TYPES)).min(1).max(ADMIN_UPLOAD_TYPES.length).optional(),
-    maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
-  }).strict(),
 ] as const;
+/** Added after the sealed nodes (the union's positions stay): an admin form's file. */
+const fileFieldSchema = z.object({
+  ...inputBase,
+  type: z.literal("file-field"),
+  accept: z.array(z.enum(ADMIN_UPLOAD_TYPES)).min(1).max(ADMIN_UPLOAD_TYPES.length).optional(),
+  maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
+}).strict();
 
 const children = z.array(z.lazy(() => pluginUiNodeSchema)).max(PLUGIN_UI_LIMITS.maxChildren);
 /** An app's public file (`public/…`, served under its release). */
@@ -465,6 +466,7 @@ const nodeUnion = z.discriminatedUnion("type", [
     help: optionalLabel.optional(),
     live: z.boolean().optional(),
   }).strict(),
+  fileFieldSchema,
 ]);
 
 /**

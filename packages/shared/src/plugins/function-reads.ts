@@ -99,7 +99,6 @@ export type FunctionListRead = z.infer<typeof functionListReadSchema>;
 
 export const functionReadDeclarationSchema = z.union([
   z.object({ as, object: z.string().regex(OBJECT_TYPE_PATTERN), key: functionReadKeySchema, max: max.optional() }).strict(),
-  z.object({ as, object: z.string().regex(OBJECT_TYPE_PATTERN), list: functionListReadSchema }).strict(),
   z.object({
     as,
     /** The app's own custom fields, `<owner>:<key>`, all on one owner type (product, variant or customer). */
@@ -108,6 +107,8 @@ export const functionReadDeclarationSchema = z.union([
     key: functionReadKeySchema.optional(),
     max: max.optional(),
   }).strict(),
+  // Added after the sealed variants: a list of the app's records.
+  z.object({ as, object: z.string().regex(OBJECT_TYPE_PATTERN), list: functionListReadSchema }).strict(),
 ]);
 export type FunctionReadDeclaration = z.infer<typeof functionReadDeclarationSchema>;
 export type FunctionObjectRead = Extract<FunctionReadDeclaration, { object: string; key: unknown }>;
