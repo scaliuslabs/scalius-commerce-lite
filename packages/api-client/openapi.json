@@ -642,6 +642,10 @@
                         "type": "string",
                         "nullable": true
                       },
+                      "imageAspect": {
+                        "type": "number",
+                        "nullable": true
+                      },
                       "rating": {
                         "type": "object",
                         "nullable": true,
@@ -687,6 +691,7 @@
                       "imageMediaId",
                       "imageAlt",
                       "secondaryImageUrl",
+                      "imageAspect",
                       "rating"
                     ]
                   },
@@ -1022,6 +1027,10 @@
                         "type": "string",
                         "nullable": true
                       },
+                      "imageAspect": {
+                        "type": "number",
+                        "nullable": true
+                      },
                       "rating": {
                         "type": "object",
                         "nullable": true,
@@ -1067,6 +1076,7 @@
                       "imageMediaId",
                       "imageAlt",
                       "secondaryImageUrl",
+                      "imageAspect",
                       "rating"
                     ]
                   },
@@ -1138,6 +1148,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "imageAspect": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "rating": {
                       "type": "object",
                       "nullable": true,
@@ -1183,6 +1197,7 @@
                     "imageMediaId",
                     "imageAlt",
                     "secondaryImageUrl",
+                    "imageAspect",
                     "rating"
                   ]
                 }
@@ -32831,6 +32846,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -32896,6 +32915,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "discountedPrice",
                               "priceVaries",
                               "availableForSale",
@@ -32948,6 +32968,10 @@
                             },
                             "secondaryImageUrl": {
                               "type": "string",
+                              "nullable": true
+                            },
+                            "imageAspect": {
+                              "type": "number",
                               "nullable": true
                             },
                             "cardFacts": {
@@ -33015,6 +33039,7 @@
                             "imageMediaId",
                             "imageAlt",
                             "secondaryImageUrl",
+                            "imageAspect",
                             "discountedPrice",
                             "priceVaries",
                             "availableForSale",
@@ -34138,6 +34163,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -34212,6 +34241,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -39667,6 +39697,9 @@
                             "onlinePaymentRequiredText": {
                               "type": "string"
                             },
+                            "deliveryUnavailableText": {
+                              "type": "string"
+                            },
                             "customizationNeededText": {
                               "type": "string"
                             },
@@ -39718,6 +39751,7 @@
                             "customizationChoosePlaceholderText",
                             "customizationUnavailableText",
                             "onlinePaymentRequiredText",
+                            "deliveryUnavailableText",
                             "customizationNeededText",
                             "customizationInvalidText",
                             "updateCartItemText",
@@ -71915,6 +71949,11 @@
                                 "nullable": true,
                                 "description": "The next photo in gallery order, for a card's hover swap. Never a video."
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true,
+                                "description": "The card photo's width over its height; null when unknown (a video poster, a file without dimensions)."
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -71994,6 +72033,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "discountedPrice",
@@ -73495,6 +73535,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -73541,6 +73585,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "createdAt",
                               "rating"
                             ]
@@ -74915,6 +74960,10 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "imageAspect": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -74961,6 +75010,7 @@
                                   "imageMediaId",
                                   "imageAlt",
                                   "secondaryImageUrl",
+                                  "imageAspect",
                                   "createdAt",
                                   "rating"
                                 ]
@@ -76191,6 +76241,10 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "imageAspect": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -76237,6 +76291,7 @@
                                   "imageMediaId",
                                   "imageAlt",
                                   "secondaryImageUrl",
+                                  "imageAspect",
                                   "createdAt",
                                   "rating"
                                 ]
@@ -78387,6 +78442,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -78466,6 +78525,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -78539,6 +78599,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -78618,6 +78682,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -79208,6 +79273,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageAspect": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "cardFacts": {
                                 "$ref": "#/components/schemas/ProductCardFacts"
                               },
@@ -79287,6 +79356,7 @@
                               "imageMediaId",
                               "imageAlt",
                               "secondaryImageUrl",
+                              "imageAspect",
                               "category",
                               "createdAt",
                               "rating"
@@ -94774,6 +94844,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "presence": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z]{2}(?:-[a-z]{2})?$",
+                    "description": "The storefront presence the buyer orders on (`bn`, `en-in`); omit at the root. The order keeps it: the buyer's emails and SMS speak its language and link into it."
+                  },
                   "checkoutRequestId": {
                     "type": "string",
                     "minLength": 16,
@@ -179437,7 +179513,8 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "dashboard.view"
         }
       }
     },
@@ -272610,7 +272687,8 @@
           "confirmation": "none"
         },
         "x-scalius-rbac": {
-          "type": "unmapped"
+          "type": "permission",
+          "permission": "apps.manage"
         }
       }
     },
