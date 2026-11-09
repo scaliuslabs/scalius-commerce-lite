@@ -174,7 +174,19 @@ const appTranslationsSchema = z.record(z.string(), z.object({
     settingsGroups: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
     settings: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional(), options: z.record(z.string(), z.string()).optional() })).optional(),
     features: z.record(z.string(), z.object({ name: z.string().optional(), description: z.string().optional() })).optional(),
-  })).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles by BCP 47 language tag (null: English only)." });
+    checkout: z.object({
+      attributes: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional(), choices: z.record(z.string(), z.string()).optional() })).optional(),
+      lineInputs: z.record(z.string(), z.object({ label: z.string().optional(), help: z.string().optional(), options: z.record(z.string(), z.string()).optional() })).optional(),
+      purchaseOptions: z.record(z.string(), z.object({ title: z.string().optional(), description: z.string().optional() })).optional(),
+    }).optional().openapi({ description: "What a buyer sees at checkout, in that language (the storefront and checkout draw it)." }),
+    objects: z.record(z.string(), z.object({
+      name: z.string().optional(),
+      description: z.string().optional(),
+      fields: z.record(z.string(), z.object({ name: z.string().optional(), description: z.string().optional() })).optional(),
+    })).optional(),
+    customFields: z.record(z.string(), z.record(z.string(), z.object({ name: z.string().optional(), description: z.string().optional() }))).optional(),
+    jobs: z.record(z.string(), z.string()).optional(),
+  })).nullable().openapi("AppTranslations", { description: "Name, tagline, description, surface titles, objects, custom fields, jobs and checkout words by BCP 47 language tag (null: English only)." });
 
 /** What every app card shows besides its name, before and after install. */
 const listingSummaryFields = {

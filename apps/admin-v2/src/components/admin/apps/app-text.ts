@@ -4,6 +4,7 @@
 // in the dashboard's language from the app (`adminContext().locale`).
 import type { Locale } from "~/i18n";
 import type { AppAdminSurfaces, AppSummary } from "~/lib/api-query-options/apps";
+import { pluginTranslationFor, type PluginTranslations } from "@scalius/shared/plugins/manifest-text";
 
 type Translations = AppSummary["translations"];
 type Translation = NonNullable<Translations>[string];
@@ -13,14 +14,7 @@ type Translation = NonNullable<Translations>[string];
  * its language (`pt`). English is the manifest itself, so it has no entry.
  */
 export function translationFor(translations: Translations | undefined, locale: string): Translation | null {
-  if (!translations || locale === "en") return null;
-  const wanted = locale.toLowerCase();
-  const tags = Object.keys(translations);
-  const exact = tags.find((tag) => tag.toLowerCase() === wanted);
-  if (exact) return translations[exact] ?? null;
-  const language = wanted.split("-")[0]!;
-  const base = tags.find((tag) => tag.toLowerCase() === language);
-  return base ? translations[base] ?? null : null;
+  return locale === "en" ? null : pluginTranslationFor(translations as PluginTranslations, locale) as Translation | null;
 }
 
 /** An app's name, tagline and description (the Apps list, its page). */

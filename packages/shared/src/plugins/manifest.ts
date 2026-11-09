@@ -21,6 +21,7 @@ import { STOREFRONT_OBJECT_READS_MAX, storefrontComponentsManifestSchema, storef
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { MESSAGING_CHANNEL_ID_MAX } from "./providers/channels";
+import { CUSTOMIZATION_LIMITS } from "../line-properties";
 import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
@@ -502,11 +503,23 @@ export const PLUGIN_TRANSLATION_LOCALE_PATTERN = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?
 /** Languages one app may translate into. */
 export const PLUGIN_TRANSLATIONS_MAX = 20;
 
+/** One buyer input's words in another language: its label, help and choice labels by stored value. */
+const inputText = (label: number, help: number) => ({
+  label: z.string().trim().min(1).max(label).optional(),
+  help: z.string().trim().min(1).max(help).optional(),
+});
+const choiceLabels = (value: number, label: number) => z.record(z.string().min(1).max(value), z.string().trim().min(1).max(label)).optional();
+const nameTranslation = z.object({ name: title.optional(), description: z.string().trim().min(1).max(300).optional() }).strict();
+
 /**
- * The manifest's merchant-facing text in another dashboard language: the
- * app's name, tagline and description, and its pages', cards', actions' and
- * widgets' titles by id. Anything left out shows in English. An app's own screens
- * pick their language from `adminContext(request).locale`.
+ * The manifest's text in another language: the app's name, tagline and
+ * description, its pages', cards', actions' and widgets' titles by id, its
+ * settings, its objects, custom fields and jobs (the dashboard's language),
+ * and its checkout attributes, line inputs and purchase options (the buyer's
+ * page language). Anything left out shows in English; a buyer's page falls
+ * back through `translationChain()` (its language, then the store's).
+ * An app's own screens pick their language from `adminContext(request).locale`,
+ * its checkout functions from `input.language`.
  */
 const pluginTranslationSchema = z.object({
   name: title.optional(),
@@ -533,8 +546,71 @@ const pluginTranslationSchema = z.object({
   }).strict()).optional(),
   /** Feature names and descriptions by feature id. */
   features: z.record(urlName, pluginFeatureTranslationSchema).optional(),
+  /** What a buyer sees at checkout, by key: attributes and line inputs (label, help, choice labels by value) and purchase options (title, description). */
+  checkout: z.object({
+    attributes: z.record(key, z.object({ ...inputText(120, 500), choices: choiceLabels(500, 120) }).strict()).optional(),
+    lineInputs: z.record(key, z.object({
+      ...inputText(CUSTOMIZATION_LIMITS.labelLength, CUSTOMIZATION_LIMITS.helpLength),
+      options: choiceLabels(CUSTOMIZATION_LIMITS.optionValueLength, CUSTOMIZATION_LIMITS.labelLength),
+    }).strict()).optional(),
+    purchaseOptions: z.record(key, z.object({ title: title.optional(), description: z.string().trim().min(1).max(300).optional() }).strict()).optional(),
+  }).strict().optional(),
+  /** Object types by type: their name and description, and their fields' by field key. */
+  objects: z.record(z.string().max(64), nameTranslation.extend({ fields: z.record(z.string().max(64), nameTranslation).optional() }).strict()).optional(),
+  /** Custom field names and descriptions: owner type → field key → text. */
+  customFields: z.record(z.string().max(32), z.record(z.string().max(64), nameTranslation)).optional(),
+  /** Background job titles by job name. */
+  jobs: z.record(key, title).optional(),
 }).strict();
 export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
+
+/** What `pluginTranslationIssues` checks a translation against. */
+interface TranslatedSurfaces {
+  checkout?: {
+    attributes: ReadonlyArray<{ key: string; choices?: ReadonlyArray<{ value: string }> }>;
+    lineInputs: ReadonlyArray<{ key: string; options?: ReadonlyArray<{ value: string }> }>;
+    purchaseOptions: ReadonlyArray<{ key: string }>;
+  } | undefined;
+  objects: Readonly<Record<string, { fields: ReadonlyArray<{ key: string }> }>>;
+  customFields: ReadonlyArray<{ ownerType: string; key: string }>;
+  jobs: ReadonlyArray<{ name: string }>;
+}
+
+/** A translation names only the checkout inputs, choices, objects, fields, custom fields and jobs the manifest declares. */
+function pluginTranslationIssues(manifest: TranslatedSurfaces, locale: string, translation: PluginTranslation, context: z.RefinementCtx): void {
+  const issue = (path: (string | number)[], message: string) => context.addIssue({ code: "custom", path: ["translations", locale, ...path], message });
+  const inputs = (kind: "attributes" | "lineInputs", choices: "choices" | "options") => {
+    const declared = manifest.checkout?.[kind] ?? [];
+    for (const [inputKey, text] of Object.entries(translation.checkout?.[kind] ?? {})) {
+      const input = declared.find((entry) => entry.key === inputKey) as { choices?: ReadonlyArray<{ value: string }>; options?: ReadonlyArray<{ value: string }> } | undefined;
+      if (!input) { issue(["checkout", kind, inputKey], `No checkout ${kind === "attributes" ? "attribute" : "line input"} ${inputKey} to translate.`); continue; }
+      const values = new Set((input[choices] ?? []).map((choice) => choice.value));
+      for (const value of Object.keys((text as Record<string, Record<string, string> | undefined>)[choices] ?? {})) {
+        if (!values.has(value)) issue(["checkout", kind, inputKey, choices, value], `No ${choices === "choices" ? "choice" : "option"} ${value} on ${inputKey} to translate.`);
+      }
+    }
+  };
+  inputs("attributes", "choices");
+  inputs("lineInputs", "options");
+  for (const optionKey of Object.keys(translation.checkout?.purchaseOptions ?? {})) {
+    if (!manifest.checkout?.purchaseOptions.some((option) => option.key === optionKey)) issue(["checkout", "purchaseOptions", optionKey], `No purchase option ${optionKey} to translate.`);
+  }
+  for (const [type, text] of Object.entries(translation.objects ?? {})) {
+    const object = manifest.objects[type];
+    if (!object) { issue(["objects", type], `No object type ${type} to translate.`); continue; }
+    for (const field of Object.keys(text.fields ?? {})) {
+      if (!object.fields.some((entry) => entry.key === field)) issue(["objects", type, "fields", field], `No field ${field} on ${type} to translate.`);
+    }
+  }
+  for (const [ownerType, fields] of Object.entries(translation.customFields ?? {})) {
+    for (const field of Object.keys(fields)) {
+      if (!manifest.customFields.some((entry) => entry.ownerType === ownerType && entry.key === field)) issue(["customFields", ownerType, field], `No ${ownerType} custom field ${field} to translate.`);
+    }
+  }
+  for (const name of Object.keys(translation.jobs ?? {})) {
+    if (!manifest.jobs.some((job) => job.name === name)) issue(["jobs", name], `No job ${name} to translate.`);
+  }
+}
 
 // ── Manifest ──────────────────────────────────────────────────────────────
 
@@ -816,6 +892,7 @@ export const pluginManifestSchema = z.object({
     for (const id of Object.keys(translation.settingsGroups ?? {})) {
       if (!groups.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "settingsGroups", id], message: `No settings group ${id} to translate.` });
     }
+    pluginTranslationIssues(manifest, locale, translation, context);
     for (const [key, text] of Object.entries(translation.settings ?? {})) {
       const field = manifest.settings.find((entry) => entry.key === key);
       const path = ["translations", locale, "settings", key];

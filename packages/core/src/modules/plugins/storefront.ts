@@ -16,6 +16,7 @@ import { grantedProtectedData } from "@scalius/shared/plugins/protected-data";
 import { resolvePluginSettingValues } from "@scalius/shared/plugins/settings-schema";
 import type { AppLineInputs } from "@scalius/shared/line-properties";
 import { withBuyerUploadBounds } from "@scalius/shared/buyer-uploads";
+import { localizedAppName, localizedLineInputs, localizedPurchaseOptions, pluginTextChain, type PluginTextContext } from "@scalius/shared/plugins/manifest-text";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 /**
@@ -62,15 +63,16 @@ export interface PluginStorefrontPurchaseOption {
  * storefront extension or a payment provider registered). Plugin id, then
  * manifest order.
  */
-export function activePluginPurchaseOptions(installations: Iterable<PluginInstallation>): PluginStorefrontPurchaseOption[] {
+export function activePluginPurchaseOptions(installations: Iterable<PluginInstallation>, language: PluginTextContext | null = null): PluginStorefrontPurchaseOption[] {
   const options: PluginStorefrontPurchaseOption[] = [];
   const sorted = [...installations].sort((left, right) => left.pluginId.localeCompare(right.pluginId));
   for (const { pluginId, manifest } of sorted) {
     const readByCheckout = manifest.functions.length > 0 || manifest.storefront.extensions.length > 0
       || manifest.providers.some((provider) => provider.kind === "payment");
     if (!readByCheckout) continue;
-    for (const option of manifest.checkout?.purchaseOptions ?? []) {
-      options.push({ id: purchaseOptionId(pluginId, option.key), title: option.title, description: option.description ?? null, appName: manifest.name });
+    const chain = language ? pluginTextChain(manifest.translations, language) : [];
+    for (const option of localizedPurchaseOptions(manifest.checkout?.purchaseOptions ?? [], chain)) {
+      options.push({ id: purchaseOptionId(pluginId, option.key), title: option.title, description: option.description ?? null, appName: localizedAppName(manifest.name, chain) });
     }
   }
   return options;
@@ -79,16 +81,19 @@ export function activePluginPurchaseOptions(installations: Iterable<PluginInstal
 /**
  * The line inputs the product page draws beside the product's own buyer
  * inputs (`checkout.lineInputs`): those checkout accepts (`checkoutLineInputs`),
- * from the same apps as the purchase options. Plugin id order.
+ * from the same apps as the purchase options, in the page's language
+ * (`language`: absent, the manifest's words). Plugin id order.
  */
-export function activePluginLineInputs(installations: Iterable<PluginInstallation>): AppLineInputs[] {
+export function activePluginLineInputs(installations: Iterable<PluginInstallation>, language: PluginTextContext | null = null): AppLineInputs[] {
   const apps: AppLineInputs[] = [];
   const sorted = [...installations].sort((left, right) => left.pluginId.localeCompare(right.pluginId));
   for (const { pluginId, manifest } of sorted) {
     const readByCheckout = manifest.functions.length > 0 || manifest.storefront.extensions.length > 0
       || manifest.providers.some((provider) => provider.kind === "payment");
     // A file input carries the plan's bounds, so the buy form draws what checkout enforces.
-    const inputs = (manifest.checkout?.lineInputs ?? []).map((input) => withBuyerUploadBounds(input));
+    // In the page's language (`translations`, through `translationChain()`), as checkout freezes them.
+    const chain = language ? pluginTextChain(manifest.translations, language) : [];
+    const inputs = localizedLineInputs(manifest.checkout?.lineInputs ?? [], chain).map((input) => withBuyerUploadBounds(input));
     if (readByCheckout && inputs.length > 0) apps.push({ appId: pluginId, inputs });
   }
   return apps;

@@ -67,7 +67,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { currencySymbol } from "@scalius/shared/money-format";
-import { marketOfPresence } from "@scalius/shared/markets";
+import { defaultLocale, marketOfPresence } from "@scalius/shared/markets";
 import { marketCurrencyIncrementMinor } from "@scalius/shared/presentment";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
@@ -823,6 +823,9 @@ export async function getLayoutData(
     navigationData,
   );
   const metaCapi = { browserEventsEnabled };
+  // The apps' buyer words in the page's language, falling back to the store's (`translationChain()`).
+  const storeLocale = defaultLocale(marketMatrix) ?? "en";
+  const appLanguage = { locale: translation?.locale ?? storeLocale, defaultLocale: storeLocale };
   const tracking = await layoutTracking(rows, ctx, browserEventsEnabled);
   const publicBusiness = {
     companyName: business.value.companyName,
@@ -876,9 +879,9 @@ export async function getLayoutData(
     appPixels: activePluginPixels(activeApps.values()),
     appExtensions,
     // Ways to buy a line the active apps offer (a subscription): the buy form lists them.
-    purchaseOptions: activePluginPurchaseOptions(activeApps.values()),
+    purchaseOptions: activePluginPurchaseOptions(activeApps.values(), appLanguage),
     // Per-line inputs the active apps ask for (a gift message, a protection plan): the buy form draws them.
-    lineInputs: activePluginLineInputs(activeApps.values()),
+    lineInputs: activePluginLineInputs(activeApps.values(), appLanguage),
     // The page groups where an active app draws a checkout or account block:
     // only those pages read their blocks part (none: no read at all).
     // Buyer services apps provide (search, address autocomplete, sign-in): the pages call them only when named.

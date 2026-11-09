@@ -23,7 +23,7 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useMessages, formatNumber } from "~/i18n";
 import { objectMessages } from "~/i18n/objects";
 import { OBJECT_RECORD_PAGE_SIZE, objectRecordsQueryOptions, objectTypeQueryOptions } from "~/lib/api-query-options/objects";
-import { AppOwnerBadge } from "~/components/admin/apps/app-owner";
+import { AppOwnerBadge, useLocalizedObjectTypes } from "~/components/admin/apps/app-owner";
 import { moneyMajor } from "~/components/admin/custom-fields/custom-field-draft";
 
 export function ObjectRecordsList({ type }: { type: string }) {
@@ -36,7 +36,8 @@ export function ObjectRecordsList({ type }: { type: string }) {
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const entries = useQuery({ ...objectRecordsQueryOptions(type, cursors[page - 1], where), placeholderData: keepPreviousData });
   const definitionQuery = useQuery(objectTypeQueryOptions(type));
-  const definition = definitionQuery.data;
+  const localized = useLocalizedObjectTypes();
+  const definition = useMemo(() => (definitionQuery.data ? localized(definitionQuery.data) : undefined), [definitionQuery.data, localized]);
   const canEdit = permissions.hasPermission(PERMISSIONS.OBJECTS_EDIT) && definition?.admin === "edit";
   const rows = useMemo(() => entries.data?.records ?? [], [entries.data]);
   // The type counts its records; a filtered page has no count (the list reads none).
