@@ -17,7 +17,7 @@
  * `locale-words`) for the dashboard language in the store's country
  * (`formatNumber`, `formatDateTime`, `dashboardNumberLocale`).
  */
-import { useCallback, useSyncExternalStore } from "react";
+import { createContext, createElement, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import { pluralCategory } from "@scalius/shared/locale-words";
 import {
   dateLocale,
@@ -78,8 +78,23 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+/** A document written in another language than the dashboard's (a buyer's invoice): `LocaleScope`. */
+const LocaleScopeContext = createContext<Locale | null>(null);
+
+/**
+ * Renders its children in `locale` whatever the dashboard's language: their
+ * `useMessages` words, and the numbers and dates of `useLocaleFormat`. For a
+ * document someone else reads, such as an invoice in the order's language.
+ */
+export function LocaleScope({ locale, children }: { locale: Locale; children: ReactNode }) {
+  return createElement(LocaleScopeContext.Provider, { value: locale }, children);
+}
+
+/** The language to write in: a `LocaleScope`'s, else the dashboard's. */
 export function useLocale(): Locale {
-  return useSyncExternalStore(subscribe, getLocale, () => "en" as Locale);
+  const scoped = useContext(LocaleScopeContext);
+  const dashboard = useSyncExternalStore(subscribe, getLocale, () => "en" as Locale);
+  return scoped ?? dashboard;
 }
 
 type Vars = Record<string, string | number>;
@@ -107,34 +122,33 @@ export function defineMessages<K extends string>(catalog: MessageCatalog<K>): Me
 const PLURAL = /\{(\w+), plural, ((?:=?\w+ \{(?:[^{}]|\{\w+\})*\} ?)+)\}/g;
 const CHOICE = /(=?\w+) \{((?:[^{}]|\{\w+\})*)\}/g;
 
-function expandPlurals(template: string, vars: Vars): string {
+function expandPlurals(template: string, vars: Vars, locale: Locale = current): string {
   return template.replace(PLURAL, (match, name: string, body: string) => {
     const value = vars[name];
     if (value === undefined) return match;
     const count = typeof value === "number" ? value : /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : null;
     const choices = new Map(Array.from(body.matchAll(CHOICE), (choice) => [choice[1], choice[2]]));
     const chosen =
-      (count === null ? undefined : choices.get(`=${count}`) ?? choices.get(pluralCategory(count, current))) ??
+      (count === null ? undefined : choices.get(`=${count}`) ?? choices.get(pluralCategory(count, locale))) ??
       choices.get("other") ??
       "";
     return chosen.replaceAll("#", `{${name}}`);
   });
 }
 
-function interpolate(template: string, vars?: Vars): string {
+function interpolate(template: string, vars?: Vars, locale: Locale = current): string {
   if (!vars) return template;
-  const expanded = template.includes(", plural,") ? expandPlurals(template, vars) : template;
-  return expanded.replace(/\{(\w+)\}/g, (match, name: string) =>
-    name in vars ? formatNumberForLocale(vars[name]!) : match,
-  );
+  const expanded = template.includes(", plural,") ? expandPlurals(template, vars, locale) : template;
+  return expanded.replace(/\{(\w+)\}/g, (match, name: string) => {
+    if (!(name in vars)) return match;
+    const value = vars[name]!;
+    return typeof value === "number" ? formatNumberIn(value, numberLocale(locale, getStoreRegion())) : value;
+  });
 }
 
-function formatNumberForLocale(value: string | number): string {
-  return typeof value === "number" ? formatNumber(value) : value;
-}
-
-export function translate<K extends string>(catalog: MessageCatalog<K>, key: K, vars?: Vars): string {
-  return interpolate(catalog[current][key] ?? catalog.en[key], vars);
+/** One word outside a component: in the dashboard's language, or `locale`'s (a `LocaleScope`'s document). */
+export function translate<K extends string>(catalog: MessageCatalog<K>, key: K, vars?: Vars, locale: Locale = current): string {
+  return interpolate(catalog[locale][key] ?? catalog.en[key], vars, locale);
 }
 
 /** Catalog label for `${prefix}${value}`, or the raw value made readable ("dead_lettered" → "Dead lettered"). */
@@ -160,7 +174,7 @@ export function useMessages<K extends string>(catalog: MessageCatalog<K>): (key:
   // Stable per catalog, language, zone and country, so memoised columns and
   // callbacks that use it survive re-renders.
   return useCallback(
-    (key: K, vars?: Vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars),
+    (key: K, vars?: Vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars, locale),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [catalog, locale, storeDefaults],
   );
@@ -186,4 +200,21 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
  */
 export function formatDateTime(date: Date, options?: Intl.DateTimeFormatOptions): string {
   return formatDateTimeIn(date, dashboardDateLocale(), { timeZone: getStoreTimeZone(), ...(current === "bn" && { hourCycle: "h23" }), ...options });
+}
+
+/**
+ * `formatNumber` and `formatDateTime` in the language being written
+ * (`useLocale`: a `LocaleScope`'s, else the dashboard's), in store time and
+ * the store country's format.
+ */
+export function useLocaleFormat() {
+  const locale = useLocale();
+  const storeDefaults = useStoreDefaultsVersion();
+  return useMemo(() => ({
+    locale,
+    formatNumber: (value: number, options?: Intl.NumberFormatOptions) => formatNumberIn(value, numberLocale(locale, getStoreRegion()), options),
+    formatDateTime: (date: Date, options?: Intl.DateTimeFormatOptions) =>
+      formatDateTimeIn(date, dateLocale(locale, getStoreRegion()), { timeZone: getStoreTimeZone(), ...(locale === "bn" && { hourCycle: "h23" }), ...options }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [locale, storeDefaults]);
 }

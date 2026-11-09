@@ -6,6 +6,7 @@ import {
   issueInvoice,
   renderPrintableInvoice,
 } from "@scalius/core/modules/orders";
+import { readOrderMessageScope } from "@scalius/core/modules/notifications";
 import { NotFoundError } from "../../utils/api-error";
 import { protectedField as pii } from "../../schemas/protected";
 import { ok } from "../../utils/api-response";
@@ -42,6 +43,10 @@ const orderItemSchema = z.object({
 const invoiceItemSchema = orderItemSchema.extend({
   /** Buyer inputs printed under the line; absent on invoices issued before Wave A. */
   properties: z.array(z.object({
+    /** The entry's key, type and stored value (`presentLineEntry` writes the platform's words from them); absent on older invoices. */
+    key: z.string().optional(),
+    type: z.string().optional(),
+    value: z.string().optional(),
     label: z.string(),
     displayValue: z.string(),
     /** Surcharge per unit in minor units; 0 when free. */
@@ -159,6 +164,9 @@ const invoiceDataSchema = z.object({
   orderVersion: z.number().int().positive(),
   /** Refunds made after the invoice was issued; the issued invoice itself never changes. */
   refundedSinceIssue: z.number().optional(),
+  buyerLanguage: z.enum(["en", "bn"]).openapi({
+    description: "The language the buyer's copy prints in: the order's presence's, else the store's (as the buyer's emails speak it). A staff copy prints in the staff member's.",
+  }),
 });
 
 const paramsSchema = z.object({
@@ -227,7 +235,14 @@ const printInvoiceRoute = createRoute({
   path: "/{id}/invoice/print",
   tags: ["Admin - Orders"],
   summary: "Render a bounded self-contained printable invoice artifact",
-  request: { params: paramsSchema },
+  request: {
+    params: paramsSchema,
+    query: z.object({
+      language: z.enum(["en", "bn"]).optional().openapi({
+        description: "The language to print in: the staff member's for a staff copy. Absent: the buyer's copy, in the order's language (`buyerLanguage`).",
+      }),
+    }),
+  },
   responses: {
     200: {
       description: "Private printable HTML invoice",
@@ -239,10 +254,16 @@ const printInvoiceRoute = createRoute({
   },
 });
 
+/** The order's buyer language (`readOrderMessageScope`): the language its buyer's invoice prints in. */
+async function buyerLanguageOf(db: Parameters<typeof readOrderMessageScope>[0], orderId: string) {
+  return (await readOrderMessageScope(db, orderId)).language;
+}
+
 app.openapi(getInvoiceRoute, async (c) => {
-  const document = await getInvoiceDocument(c.get("db"), c.req.valid("param").id);
+  const id = c.req.valid("param").id;
+  const [document, buyerLanguage] = await Promise.all([getInvoiceDocument(c.get("db"), id), buyerLanguageOf(c.get("db"), id)]);
   if (!document) throw new NotFoundError("Order not found");
-  return ok(c, document);
+  return ok(c, { ...document, buyerLanguage });
 });
 
 app.openapi(issueInvoiceRoute, async (c) => {
@@ -267,16 +288,18 @@ app.openapi(issueInvoiceRoute, async (c) => {
     actorId: actingStaffId,
     data: { number: document.invoiceNumber },
   });
-  return ok(c, document);
+  return ok(c, { ...document, buyerLanguage: await buyerLanguageOf(c.get("db"), c.req.valid("param").id) });
 });
 
 app.openapi(printInvoiceRoute, async (c) => {
-  const document = await getInvoiceDocument(c.get("db"), c.req.valid("param").id);
+  const id = c.req.valid("param").id;
+  const requested = c.req.valid("query").language;
+  const [document, language] = await Promise.all([getInvoiceDocument(c.get("db"), id), requested ?? buyerLanguageOf(c.get("db"), id)]);
   if (!document) throw new NotFoundError("Order not found");
   const basename = (document.invoiceNumber ?? `draft-${document.order.id}`)
     .replace(/[^a-zA-Z0-9._-]/g, "-")
     .slice(0, 100);
-  const artifact = renderPrintableInvoice(document, storeTimeZoneOf(c.env));
+  const artifact = renderPrintableInvoice(document, storeTimeZoneOf(c.env), language);
   const artifactBytes = new TextEncoder().encode(artifact).byteLength;
   return c.html(artifact, 200, {
     "Cache-Control": "private, no-store",

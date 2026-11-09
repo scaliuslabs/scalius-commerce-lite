@@ -13,7 +13,8 @@ import {
   invoiceBusinessName,
   type InvoiceDocument,
 } from "~/components/admin/orderview/InvoiceSheet";
-import { translate, useMessages } from "~/i18n";
+import { LocaleScope, translate, useLocale, useMessages } from "~/i18n";
+import { InvoiceCopyToggle, invoiceLanguage, parseInvoiceCopy, type InvoiceCopySearch } from "~/components/admin/invoice-copy-language";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { apiData } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";
@@ -21,7 +22,11 @@ import { pageTitleMessages } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/invoice/$orderId")({
   // `?slip=1`: the packing slip (no prices) instead of the invoice.
-  validateSearch: (search: Record<string, unknown>): { slip?: "1" } => (search.slip === "1" || search.slip === 1 ? { slip: "1" } : {}),
+  // `?copy=staff`: the staff member's copy; otherwise the buyer's, in the order's language.
+  validateSearch: (search: Record<string, unknown>): { slip?: "1" } & InvoiceCopySearch => ({
+    ...(search.slip === "1" || search.slip === 1 ? { slip: "1" as const } : {}),
+    ...parseInvoiceCopy(search),
+  }),
   // Same sign-in gates as the admin shell; the invoice API enforces RBAC.
   beforeLoad: async () => {
     await getAdminRouteContext();
@@ -45,7 +50,10 @@ export const Route = createFileRoute("/invoice/$orderId")({
 
 function InvoicePage() {
   const [document, setDocument] = useState<InvoiceDocument>(Route.useLoaderData());
-  const packingSlip = Route.useSearch().slip === "1";
+  const search = Route.useSearch();
+  const packingSlip = search.slip === "1";
+  const staffCopy = search.copy === "staff";
+  const dashboard = useLocale();
 
   return (
     <div className="invoice-page">
@@ -57,8 +65,11 @@ function InvoicePage() {
         expectedOrderVersion={document.orderVersion}
         onIssued={setDocument}
         packingSlip={packingSlip}
+        languageToggle={<InvoiceCopyToggle staffCopy={staffCopy} buyerLanguages={[document.buyerLanguage]} dashboard={dashboard} search={packingSlip ? { slip: "1" } : {}} />}
       />
-      <InvoiceSheet document={document} packingSlip={packingSlip} />
+      <LocaleScope locale={invoiceLanguage(document.buyerLanguage, staffCopy, dashboard)}>
+        <InvoiceSheet document={document} packingSlip={packingSlip} />
+      </LocaleScope>
     </div>
   );
 }

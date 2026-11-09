@@ -8,7 +8,8 @@ import { fromMinor } from "@scalius/shared/money";
 import { getStoreRegion } from "~/lib/store-time-zone";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
-import { formatDateTime, formatNumber, useMessages } from "~/i18n";
+import { useLocaleFormat, useMessages } from "~/i18n";
+import { lineEntryWords, presentLineEntry } from "@scalius/shared/line-entry-words";
 import { orderInvoiceMessages as orderDetailMessages } from "~/i18n/order-invoice";
 import { orderMessages, paymentMethodLabel, paymentStatusLabel } from "~/i18n/orders";
 import type { ApiResult } from "~/lib/api";
@@ -21,7 +22,7 @@ import { formatSavedMajorAmount, formatSavedMinorAmount } from "~/lib/order-mone
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
 import { formatBillingAddressLines, formatShippingAddress } from "~/lib/location-presentation";
-import { countryName } from "~/lib/country-name";
+import { countryNameIn } from "~/lib/country-name";
 import { taxLabelText } from "./OrderItemsCard";
 
 export type InvoiceDocument = ApiResult<typeof getApiV1AdminOrdersByIdInvoice>;
@@ -43,15 +44,20 @@ function localPhone(phone: string): string {
  * in the parcel (items, quantities and where it goes; no prices).
  */
 export function InvoiceSheet({ document, packingSlip = false }: { document: InvoiceDocument; packingSlip?: boolean }) {
+  // Written in its `LocaleScope`'s language: the buyer's on a buyer's invoice, the dashboard's on a staff copy.
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
+  const format = useLocaleFormat();
+  const { locale, formatNumber, formatDateTime } = format;
+  const countryName = (code: string) => countryNameIn(code, locale);
+  const lineWords = lineEntryWords(locale);
   const { order, businessInfo } = document;
   const saved = resolveSavedOrderMoneySummary(order);
   const refunds = invoiceRefundSummary(document);
   const decimals = refunds.decimalPlaces;
-  const money = (major: number) => (saved ? formatSavedMajorAmount(major, saved) : formatNumber(major, { maximumFractionDigits: decimals }));
-  const minor = (amount: number) => formatSavedMinorAmount(amount, saved!);
-  const delivery = resolveDeliveryMethodPresentation(order, saved);
+  const money = (major: number) => (saved ? formatSavedMajorAmount(major, saved, formatNumber) : formatNumber(major, { maximumFractionDigits: decimals }));
+  const minor = (amount: number) => formatSavedMinorAmount(amount, saved!, formatNumber);
+  const delivery = resolveDeliveryMethodPresentation(order, saved, format);
   const discount = order.discountAmount ?? 0;
   const issuedAt = unixToDate(document.issuedAt ?? order.createdAt);
   const paymentTerms = order.paymentTerms ?? null;
@@ -178,7 +184,7 @@ export function InvoiceSheet({ document, packingSlip = false }: { document: Invo
                   {item.productName || t("items.unnamed")}
                   {item.variantLabel ? <small>{item.variantLabel}</small> : null}
                   {/* Buyer inputs as the order froze them: "Engraving: Rahim (+৳200)". */}
-                  {(item.properties ?? []).map((property, index) => (
+                  {(item.properties ?? []).map((frozen) => presentLineEntry({ ...frozen, key: frozen.key ?? "" }, lineWords, formatNumber)).map((property, index) => (
                     <small key={`${property.label}-${index}`}>
                       {property.label}: {property.displayValue}
                       {property.priceMinor > 0 && saved ? ` (+${minor(property.priceMinor)})` : ""}
