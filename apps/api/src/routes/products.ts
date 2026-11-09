@@ -192,6 +192,9 @@ const storefrontProductSchema = z.object({
   secondaryImageUrl: z.string().nullable().openapi({
     description: "The next photo in gallery order, for a card's hover swap. Never a video.",
   }),
+  imageAspect: z.number().nullable().openapi({
+    description: "The card photo's width over its height; null when unknown (a video poster, a file without dimensions).",
+  }),
   cardFacts: optionalProductCardFacts,
   fields: storefrontCardFieldsSchema.optional(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
@@ -445,6 +448,7 @@ const recommendedProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  imageAspect: z.number().nullable(),
   createdAt: z.string().nullable(),
   rating: cardRatingSchema,
 });

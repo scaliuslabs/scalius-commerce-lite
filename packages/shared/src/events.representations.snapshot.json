@@ -3335,6 +3335,97 @@
      "type": "string",
      "maxLength": 4000
     },
+    "reversedMinor": {
+     "type": "integer",
+     "minimum": -9007199254740991,
+     "maximum": 9007199254740991
+    },
+    "reversals": {
+     "maxItems": 20,
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+       },
+       "amountMinor": {
+        "type": "integer",
+        "minimum": -9007199254740991,
+        "maximum": 9007199254740991
+       },
+       "currency": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 3
+       },
+       "reason": {
+        "nullable": true,
+        "type": "string",
+        "maxLength": 4000
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "pending",
+         "processing",
+         "reversed",
+         "failed"
+        ]
+       },
+       "providerRef": {
+        "nullable": true,
+        "type": "string",
+        "maxLength": 4000
+       },
+       "failureCode": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+       },
+       "failureMessage": {
+        "nullable": true,
+        "type": "string",
+        "maxLength": 4000
+       },
+       "createdAt": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       },
+       "updatedAt": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       },
+       "settledAt": {
+        "nullable": true,
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40,
+        "format": "date-time"
+       }
+      },
+      "required": [
+       "id",
+       "amountMinor",
+       "currency",
+       "reason",
+       "status",
+       "providerRef",
+       "failureCode",
+       "failureMessage",
+       "createdAt",
+       "updatedAt",
+       "settledAt"
+      ]
+     }
+    },
     "revision": {
      "type": "integer",
      "minimum": -9007199254740991,
@@ -3373,6 +3464,8 @@
     "providerRef",
     "failureCode",
     "failureMessage",
+    "reversedMinor",
+    "reversals",
     "revision",
     "createdAt",
     "updatedAt",

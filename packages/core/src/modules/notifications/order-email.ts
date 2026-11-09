@@ -10,7 +10,6 @@ import { dateLocale, formatDateTime } from "@scalius/shared/locale-format";
 import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
-import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
 import type { OrderNotificationType } from "./notification-types";
@@ -23,7 +22,7 @@ import {
   type NotificationVariableValues,
   type OrderEmailFacts,
 } from "./notification-templates";
-import { resolveStoreIdentity, storeIdentityStatements } from "./store-messages";
+import { buyerMessageScope, buyerStorefrontLink, resolveStoreIdentity, storeIdentityStatements } from "./store-messages";
 import { notificationsDocument, notificationTemplatesDocument } from "./documents";
 import { emailDocument } from "../settings";
 import { rememberSettingsDocuments, selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
@@ -43,7 +42,12 @@ export interface OrderMessageInput {
 /** Everything a customer or staff message can say about one order. */
 export interface OrderMessageContext {
   event: OrderNotificationType;
+  /** The buyer's language: the order's presence's, else the store's (`buyerMessageScope`). */
   language: MessageLanguage;
+  /** The store's default language: the merchant's own template wording is in it, and staff read it. */
+  storeLanguage: MessageLanguage;
+  /** The storefront path of the buyer's presence (`/bn`), or "" at the root. */
+  path: string;
   /** Where the buyer is reached: the order's saved contact and account. */
   contact: { email: string | null; phone: string | null; customerId: string | null };
   variables: NotificationVariableValues;
@@ -111,6 +115,7 @@ function orderFactStatements(db: Database, orderId: string) {
     shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
     shippingFeeWaived: orders.shippingFeeWaived,
     accountOwnerCustomerId: orders.accountOwnerCustomerId,
+    presence: orders.presence,
     orderNumber: orders.orderNumber,
     status: orders.status,
     paymentMethod: orders.paymentMethod,
@@ -344,7 +349,9 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
   const shipmentRows = results[documentsAt + 1] as Awaited<ReturnType<typeof shipmentStatement>> | undefined;
   const shipment = shipmentRows ? resolveShipment(shipmentRows, queuedTrackingId) : null;
   const { order, items } = facts;
-  const { language } = store;
+  // The buyer's language and links: the presence the order was placed on (B5).
+  const scope = buyerMessageScope(store, order.presence);
+  const { language } = scope;
 
   const currency = normalizeSupportedCurrencyCode(order.currencyCode);
   const decimals = order.currencyDecimalPlaces;
@@ -372,10 +379,12 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
 
   // Account orders open in the account; guests verify on the public order page.
   // Phone and email never go into these URLs.
-  const origin = normalizeStorefrontOrigin(input.storefrontUrl);
-  const orderLink = !origin ? null : order.accountOwnerCustomerId
-    ? { kind: "account" as const, href: `${origin}/account/orders/${encodeURIComponent(input.orderId)}` }
-    : { kind: "track" as const, href: `${origin}/track-order?order=${encodeURIComponent(String(order.orderNumber ?? input.orderId))}` };
+  // Links open in the presence the buyer ordered on (`/bn/...`), so its pages speak the email's language.
+  const link = (path: string) => buyerStorefrontLink(input.storefrontUrl, order.presence, path);
+  const base = link("")?.replace(/\/$/, "") ?? null;
+  const orderLink = !base ? null : order.accountOwnerCustomerId
+    ? { kind: "account" as const, href: link(`/account/orders/${encodeURIComponent(input.orderId)}`)! }
+    : { kind: "track" as const, href: link(`/track-order?order=${encodeURIComponent(String(order.orderNumber ?? input.orderId))}`)! };
 
   const support: Array<{ label: string; href: string }> = [];
   const email = store.business.email.trim();
@@ -392,6 +401,8 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
   return {
     event: input.type,
     language,
+    storeLanguage: store.language,
+    path: scope.path,
     contact: { email: order.customerEmail, phone: order.customerPhone, customerId: order.customerId },
     variables: {
       customer_name: order.customerName?.trim() || input.name?.trim() || "",
@@ -431,7 +442,8 @@ export async function findOrderMessageContext(input: OrderMessageInput, db: Data
       address: shippingAddressLines(order),
       method: [order.shippingMethodName, order.shippingMethodDescription]
         .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
-      origin,
+      // "Visit the store" opens the buyer's presence too.
+      origin: base,
       orderLink,
       support,
     },
@@ -455,10 +467,11 @@ export function composeOrderSms(context: OrderMessageContext, body: string): str
 
 /** The staff "new order" email: the same order facts, linked to the dashboard. */
 export function composeStaffOrderEmail(context: OrderMessageContext, dashboardOrderUrl: string | null) {
-  const copy = MESSAGE_COPY[context.language].staffOrder;
+  // Staff read the store's language, whatever the buyer's.
+  const copy = MESSAGE_COPY[context.storeLanguage].staffOrder;
   const { customer_name: customer = "", order_number: order = "", order_total: total = "" } = context.variables;
   const email = renderOrderEmail({
-    language: context.language,
+    language: context.storeLanguage,
     // Staff never get the buyer's links or the store's own support contacts.
     facts: { ...context.facts, origin: null, orderLink: null, support: [] },
     subject: copy.subject(context.facts.store.name, order, customer),

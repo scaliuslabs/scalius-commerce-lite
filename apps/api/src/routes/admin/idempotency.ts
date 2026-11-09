@@ -124,6 +124,7 @@ const RERUN_SAFE_POSTS: ReadonlySet<string> = new Set([
   "dashboard.resources.payments.create",
   "dashboard.resources.payments.void",
   "dashboard.resources.payouts.create",
+  "dashboard.resources.payouts.reverse",
   "dashboard.resources.products.batch_create",
   "dashboard.resources.products.bulk_publish",
   "dashboard.resources.products.bulk_set_status",

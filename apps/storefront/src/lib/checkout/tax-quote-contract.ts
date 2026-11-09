@@ -4,7 +4,7 @@ import {
   type DeliveryMethodKind,
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
-import { buyerUiBlockSchema, checkoutAttributesSchema, type BuyerUiBlock } from "@scalius/shared/plugins/buyer-ui";
+import { parseCheckoutAttributeValues } from "@/lib/buyer-ui/checkout-attributes";
 import { LINE_PROPERTY_INPUT_LIMITS, normalizeLinePurchaseOptions } from "@scalius/shared/line-identity";
 import { APP_SCOPED_KEY_MAX_LENGTH, isAppScopedKey } from "@scalius/shared/plugins/ids";
 import { normalizeCartLinePurchaseOptions, type CartLinePurchaseOption } from "../cart/purchase-option";
@@ -195,7 +195,13 @@ export interface CheckoutGiftCardQuoteFacts {
 }
 
 export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCardQuoteFacts {
-  buyerUi?: BuyerUiBlock[];
+  /**
+   * The store apps' blocks as the API sent them (objects, at most 40), not yet
+   * checked: whatever draws them checks each one (`renderBuyerUi`, loaded only
+   * when there is one; the quick checkout parses them on the server), so the
+   * block schema and zod stay off the cart page's first paint.
+   */
+  buyerUi?: UncheckedBuyerUi;
   valid: true;
   quoteFingerprint: string;
   displayLabel: string;
@@ -321,9 +327,10 @@ export function parseCheckoutAttributes(value: unknown): Record<string, string> 
   if (typeof value === "string") {
     try { value = JSON.parse(value); } catch { fail(); }
   }
-  const parsed = checkoutAttributesSchema.safeParse(value);
-  if (!parsed.success) fail();
-  return Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
+  // The schema's own checks without zod (checkout-attributes.test.ts holds them equal): this module runs on the cart page.
+  const parsed = parseCheckoutAttributeValues(value);
+  if (parsed === null) fail();
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
 }
 
 export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
@@ -467,6 +474,17 @@ function parseQuoteItem(value: unknown): TaxQuoteItem {
 }
 
 
+/** App blocks a quote carries, checked by whatever draws them. */
+export type UncheckedBuyerUi = readonly Record<string, unknown>[];
+
+const MAX_QUOTE_BUYER_UI_BLOCKS = 40;
+
+/** A list of at most 40 plain objects, or undefined: the shape the renderer and the quick checkout parse further. */
+function uncheckedBuyerUi(value: unknown): UncheckedBuyerUi | undefined {
+  if (!Array.isArray(value) || value.length > MAX_QUOTE_BUYER_UI_BLOCKS) return undefined;
+  return value.every((block) => isRecord(block)) ? value as Record<string, unknown>[] : undefined;
+}
+
 export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
   if (!isRecord(value) || value.success !== true || !isRecord(value.data)) fail();
   const data = value.data;
@@ -583,12 +601,12 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     return sum + lineSubtotalMinor;
   }, 0);
   if (itemSubtotalMinor !== subtotalMinor) fail();
-  const buyerUi = buyerUiBlockSchema.array().max(40).safeParse(data.buyerUi);
+  const buyerUi = uncheckedBuyerUi(data.buyerUi);
 
   return {
     valid: true,
     quoteFingerprint,
-    ...(buyerUi.success ? { buyerUi: buyerUi.data } : {}),
+    ...(buyerUi ? { buyerUi } : {}),
     displayLabel,
     pricesIncludeTax: data.pricesIncludeTax,
     shippingTaxed: data.shippingTaxed,

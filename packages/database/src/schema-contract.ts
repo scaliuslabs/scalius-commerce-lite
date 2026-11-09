@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 205,
-  name: "0205_digital_access_permission",
+  version: 210,
+  name: "0210_admin_uploads",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -806,6 +806,31 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 205,
     name: "0205_digital_access_permission",
     sourceSha256: "12f14d883ebc921c40951c124153868558f2416b256bde5549589db7e8458a89",
+  },
+  {
+    version: 206,
+    name: "0206_analytics_net_of_refunds",
+    sourceSha256: "2ceb3a450e0591b4411b3b1df59db96fb75418d165f6f14bf75380d096c634a3",
+  },
+  {
+    version: 207,
+    name: "0207_paid_on_placement_orders",
+    sourceSha256: "e9236af2e594c8f1f5408cb97648236dde46275ff450dcdfe1bdbd7345b14630",
+  },
+  {
+    version: 208,
+    name: "0208_order_presence",
+    sourceSha256: "05c20be68946ec9d39b9bd10f14a85a9e8556587a18ceb8eacf9f09bb48d0d69",
+  },
+  {
+    version: 209,
+    name: "0209_payout_reversals_custom_channels",
+    sourceSha256: "62d7be2d72b1bdd668459884a87136939f5c59eb2778581ce08757f380bfd233",
+  },
+  {
+    version: 210,
+    name: "0210_admin_uploads",
+    sourceSha256: "c75cc8d70bde716f0ed3ff2ad77a2981c9b9df7403c4cc1e7799a2e7c657ba4f",
   },
 ] as const;
 

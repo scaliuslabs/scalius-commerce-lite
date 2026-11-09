@@ -155,11 +155,14 @@ export interface AppNavPage {
  * permission context, so it takes the apps.view decision itself.
  */
 export function useAppNavPages(canView: boolean): readonly AppNavPage[] {
+  const locale = useLocale();
   const { data } = useQuery({ ...appSurfacesQueryOptions(), enabled: canView });
+  // Titled in the dashboard's language, as every other app surface is (the app's own translations).
   return useMemo(
     () => (canView && data
-      ? data.flatMap((app) => app.pages.map((page) => ({ placement: page.placement, title: page.title, to: appPagePath(app.id, page.id) })))
+      ? data.map((app) => localizedSurfaces(app, locale))
+        .flatMap((app) => app.pages.map((page) => ({ placement: page.placement, title: page.title, to: appPagePath(app.id, page.id) })))
       : []),
-    [canView, data],
+    [canView, data, locale],
   );
 }

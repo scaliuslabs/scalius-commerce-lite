@@ -1,4 +1,5 @@
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { seededName } from "~/lib/seeded-names";
 import { ReadOnlyNotice } from "~/components/admin/states/ReadOnlyNotice";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -249,7 +250,7 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
             </CardHeader>
             <CardContent>
               <dl className="space-y-3">
-                <Fact label={t("destination")}>{order.destination.name}</Fact>
+                <Fact label={t("destination")}>{seededName(order.destination)}</Fact>
                 <Fact label={t("expectedArrival")}>{formatDay(order.expectedOn) ?? t("notSet")}</Fact>
                 <Fact label={t("reference")}>{order.reference ?? t("none")}</Fact>
                 <Fact label={t("createdOn")}>{formatMoment(order.createdAt) ?? "—"}</Fact>

@@ -377,7 +377,7 @@ Then \`${scalius} pack ${app} --key <folder>\`. Verify the composed pages in a l
 - Commerce hooks (scopes, events, checkout functions, the stable API): ${docs}/commerce-hooks.md
 - Every stable API operation with its scopes, request and response: ${docs}/operations.md
 - Every event topic and its facts: ${docs}/events.md
-- Complete example apps with their tests (point of sale, reviews, cart recovery, delivery slots, a pixel, a chat provider): ${examples}
+- Complete example apps with their tests (point of sale, reviews, cart recovery, delivery slots, a pixel, a chat provider, a marketplace with payouts): ${examples}
 - One-page index for AI tools: ${docs}/llms.txt
 - Online: ${SDK_DOCS_URL}
 `;

@@ -30,6 +30,9 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/*/settings": { PUT: manage },
   "/api/v1/admin/apps/*/uninstall": { POST: manage },
   "/api/v1/admin/apps/*/logs": { GET: view },
+  // A file for one of an app's admin forms: what the form's own (mutating)
+  // route needs; the route also checks that route's scope.
+  "/api/v1/admin/apps/*/uploads": { POST: use },
   // An app's icon and screenshots: any staff member, since Settings pages
   // (payments, shipping) show the icon of the app behind a method.
   "/api/v1/admin/apps/*/assets/*": { GET: { anyOf: ANY_STAFF } },
@@ -49,6 +52,7 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // deleting it is also Super Admin only (enforced by the route).
   "/api/v1/admin/apps/removed-data": { GET: view },
   "/api/v1/admin/apps/removed-data/*/delete": { POST: manage },
+  "/api/v1/admin/apps/removed-data/*/hand-over": { POST: manage },
   // Which apps' storefront parts the store recently drew without: the app
   // pages and the theme editor (where those parts are placed) both show it.
   "/api/v1/admin/apps/storefront-problems": { GET: { anyOf: [PERMISSIONS.APPS_VIEW, PERMISSIONS.SETTINGS_THEME_EDIT] } },

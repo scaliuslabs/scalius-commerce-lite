@@ -1063,6 +1063,7 @@ async function staffSummaries(db: Database, rows: Array<{
     lastMessageVisibility: previewById.get(thread.id)?.visibility ?? null,
     unread: previewById.get(thread.id)?.unread ?? 0,
     version: thread.version,
+    channel: thread.channel,
   }));
 }
 

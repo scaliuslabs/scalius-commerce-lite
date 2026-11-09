@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { seededName } from "~/lib/seeded-names";
 import {
   X,
   Check,
@@ -164,7 +165,7 @@ export function ManualSheet({
                 {product.location ? (
                   <span className="flex items-center gap-1">
                     <MapPin className="size-3" />
-                    {product.location.name}
+                    {seededName(product.location)}
                   </span>
                 ) : null}
               </div>

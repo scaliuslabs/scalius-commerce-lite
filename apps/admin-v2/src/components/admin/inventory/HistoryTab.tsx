@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -69,7 +70,7 @@ export function counterChanges(movement: InventoryMovement, severalLocations = f
     if (severalLocations && movement.locationName) {
       changes.push({
         label: "onHandAtLocation",
-        location: movement.locationName,
+        location: seededName({ name: movement.locationName }),
         previous: movement.locationPreviousStock ?? null,
         next: movement.locationNewStock ?? null,
         delta: movement.stockDelta,
@@ -364,7 +365,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                       // Archived locations keep their history.
                       ...(locations ?? []).map((location) => ({
                         value: location.id,
-                        label: location.status === "archived" ? t("locationArchived", { name: location.name }) : location.name,
+                        label: location.status === "archived" ? t("locationArchived", { name: seededName(location) }) : seededName(location),
                       })),
                     ]}
                   />

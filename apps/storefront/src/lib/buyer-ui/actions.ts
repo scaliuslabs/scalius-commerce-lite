@@ -91,7 +91,7 @@ export async function addVariantLine(
   if (action.purchaseOption || properties.length > 0) {
     // The app prices its option and inputs: the line takes the store's price for them.
     const checked = acceptedNewCartLine(await validateNewCartLine(validateCartLinesInBrowser, {
-      cartKey: "new", productId: product.id, variantId: variant.id, quantity: action.quantity, price,
+      cartKey: "new", productId: product.id, variantId: variant.id, quantity: action.quantity,
       productName: product.name, variantLabel: options.map((option) => option.label).join(" / ") || null,
       ...(properties.length > 0 ? { properties: resolved.canonical } : {}),
       ...(action.purchaseOption ? { purchaseOptions: [action.purchaseOption] } : {}),

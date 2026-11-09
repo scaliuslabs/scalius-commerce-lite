@@ -72,3 +72,14 @@ export function applyCheckoutButtonState(
   if (describedBy.size > 0) submitButton.setAttribute("aria-describedby", [...describedBy].join(" "));
   else submitButton.removeAttribute("aria-describedby");
 }
+
+/**
+ * The cart needs delivery and no delivery or pickup option reaches the page's
+ * buyers (the shell's `physicalDeliveryOffered`): the note's words, else "".
+ */
+export function storeNotDeliveringMessage(root: ParentNode = document): string {
+  const page = root.querySelector<HTMLElement>("#cartPageRoot");
+  if (page?.dataset.physicalDelivery !== "none" || page.dataset.deliveryNeed === "none") return "";
+  const note = root.querySelector<HTMLElement>("[data-store-not-delivering]");
+  return note?.dataset.message?.trim() || "";
+}

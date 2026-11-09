@@ -11,6 +11,13 @@
 //   lost response sells nothing twice. The answer is the receipt: the order
 //   number, the lines, the total and tax, each tender, the change and the
 //   cashier's name.
+// - `counters` (GET) lists the shops the till sells from: `inventory_locations.list`
+//   filtered to the app's channel, active only.
+// - `quote` (POST) prices the basket before money changes hands
+//   (`orders.quote`: the same pricing path as the sale, nothing written), with
+//   the tenders taken so far: the total, tax, discounts, what is still due and
+//   the change. `sell` sends the quoted total as `expectedTotalMinor`, so a
+//   price that moved in between is refused rather than charged.
 
 import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 
@@ -26,6 +33,8 @@ export const manifest = {
   routes: {
     admin: [
       { name: "cashiers", methods: ["GET"], description: "Who can ring up a sale." },
+      { name: "counters", methods: ["GET"], description: "The shops this till sells from." },
+      { name: "quote", methods: ["POST"], description: "Price a basket before taking money." },
       { name: "sell", methods: ["POST"], description: "Ring up an in-person sale and print its receipt." },
     ],
   },
@@ -43,6 +52,20 @@ export type SaleInput = {
   buyer: { name: string; phone: string };
   items: Array<{ productId: string; variantId: string; quantity: number }>;
   tenders: Tender[];
+  /** The total the cashier was quoted: another total now is refused (`manual_order_total_changed`). */
+  expectedTotalMinor?: number;
+};
+/** A basket to price: a sale without its id or buyer, tenders so far optional. */
+export type QuoteInput = Pick<SaleInput, "locationId" | "items"> & { cashierId?: string; tenders?: Tender[] };
+/** `orders.quote`'s answer. */
+export type SaleQuote = {
+  currency: string;
+  lines: Array<{ productId: string; variantId: string; title: string; quantity: number; unitPriceMinor: number; totalMinor: number }>;
+  subtotalMinor: number;
+  discountMinor: number;
+  taxMinor: number;
+  totalMinor: number;
+  pointOfSale: { locationId: string; tenderedMinor: number; changeMinor: number; dueMinor: number } | null;
 };
 
 type StaffMember = { id: string; name: string; active: boolean; roles: Array<{ displayName: string }> };
@@ -71,6 +94,27 @@ async function cashiers(ctx: PluginContext) {
   return { error: null, cashiers: page.data.staffMembers.map((member) => ({ id: member.id, name: member.name, roles: member.roles.map((role) => role.displayName) })) };
 }
 
+async function counters(ctx: PluginContext) {
+  const page = await ctx.api.call<{ locations: Array<{ id: string; name: string }>; nextCursor: string | null }>("inventory_locations.list", {
+    query: { salesChannelId: POS_SALES_CHANNEL_ID, status: "active", limit: 100 },
+  });
+  if (!page.ok || !page.data) return { error: page.error?.code ?? `http_${page.status}`, counters: [] };
+  return { error: null, counters: page.data.locations.map((location) => ({ id: location.id, name: location.name })) };
+}
+
+async function quote(ctx: PluginContext, basket: QuoteInput) {
+  const priced = await ctx.api.call<{ quote: SaleQuote }>("orders.quote", {
+    body: {
+      items: basket.items,
+      shippingMinor: 0,
+      salesChannelId: POS_SALES_CHANNEL_ID,
+      pointOfSale: { locationId: basket.locationId, staffMemberId: basket.cashierId ?? null, tenders: basket.tenders ?? [] },
+    },
+  });
+  if (!priced.ok || !priced.data) return { error: priced.error?.code ?? `http_${priced.status}`, quote: null };
+  return { error: null, quote: priced.data.quote };
+}
+
 async function sell(ctx: PluginContext, sale: SaleInput) {
   const placed = await ctx.api.call<{ order: SaleOrder }>("orders.create", {
     body: {
@@ -79,6 +123,7 @@ async function sell(ctx: PluginContext, sale: SaleInput) {
       shippingMinor: 0,
       salesChannelId: POS_SALES_CHANNEL_ID,
       pointOfSale: { locationId: sale.locationId, staffMemberId: sale.cashierId ?? null, tenders: sale.tenders },
+      ...(sale.expectedTotalMinor !== undefined ? { expectedTotalMinor: sale.expectedTotalMinor } : {}),
     },
     idempotencyKey: `acme-pos-sale-${sale.saleId}`,
   });
@@ -110,6 +155,12 @@ export default definePlugin({
   routes: {
     admin: {
       cashiers: async (_request, ctx) => ({ body: await cashiers(ctx) }),
+      counters: async (_request, ctx) => ({ body: await counters(ctx) }),
+      quote: async (request, ctx) => {
+        const body = (request.body ?? {}) as Partial<QuoteInput>;
+        if (!body.locationId || !body.items?.length) return { status: 400, body: { error: "locationId and items are required" } };
+        return { body: await quote(ctx, body as QuoteInput) };
+      },
       sell: async (request, ctx) => {
         const body = (request.body ?? {}) as Partial<SaleInput>;
         if (!body.saleId || !body.locationId || !body.buyer || !body.items?.length || !body.tenders?.length) {

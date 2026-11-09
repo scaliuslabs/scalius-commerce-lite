@@ -59,6 +59,8 @@ export const APP_OPERATION_VERBS = [
   "approve",
   "grant",
   "revoke",
+  "quote",
+  "reverse",
 ] as const;
 
 /** A stable name: `<resource>.<verb phrase>`, the phrase starting with a verb from {@link APP_OPERATION_VERBS}. */
@@ -76,6 +78,7 @@ export const STABLE_APP_OPERATIONS = {
   "orders.list": "dashboard.resources.orders.list",
   "orders.get": "dashboard.resources.orders.get",
   "orders.create": "dashboard.resources.orders.create",
+  "orders.quote": "dashboard.resources.orders.quote",
   "orders.set_status": "dashboard.orders.update_status",
   "orders.mark_delivered": "dashboard.orders.mark_delivered",
   "orders.mark_pickup_ready": "dashboard.orders.pickup_ready",
@@ -246,6 +249,7 @@ export const STABLE_APP_OPERATIONS = {
   "payouts.list": "dashboard.resources.payouts.list",
   "payouts.get": "dashboard.resources.payouts.get",
   "payouts.create": "dashboard.resources.payouts.create",
+  "payouts.reverse": "dashboard.resources.payouts.reverse",
   // ── Digital goods ──
   "digital_assets.list": "dashboard.resources.digital_assets.list",
   "digital_assets.get": "dashboard.resources.digital_assets.get",

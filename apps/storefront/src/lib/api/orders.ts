@@ -84,8 +84,12 @@ export type CartValidationRequestItem = {
   productId: string;
   variantId: string;
   quantity: number;
-  /** The unit price the buyer saw: base plus the surcharges of its buyer inputs. */
-  price: number;
+  /**
+   * The unit price the buyer saw: base plus the surcharges of its buyer inputs.
+   * Absent: the store answers today's price and never says it changed (a line
+   * put back from an order or a recovery link, lib/cart/restore-lines.ts).
+   */
+  price?: number;
   productName?: string | null;
   variantLabel?: string | null;
   /** Buyer inputs, body only (never a URL). */
@@ -227,7 +231,9 @@ export async function createOrder(
             ? { "X-Customer-Session": options.customerSessionToken }
             : {}),
         },
-        body: JSON.stringify(payload),
+        // The page's presence (the browser's, else the render's): the order's
+        // messages speak its language and link into it.
+        body: JSON.stringify({ ...payload, ...cartPresence(payload.presence) }),
         cache: "no-store",
       },
       // Do not retry the actual creation to prevent double ingestion

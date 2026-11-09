@@ -1,4 +1,5 @@
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { seededName } from "~/lib/seeded-names";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -104,7 +105,7 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
         ) : null}
       />
       <div className="space-y-4">
-        <p className="text-body text-muted-foreground">{t("receivingAt", { location: order.destination.name })}</p>
+        <p className="text-body text-muted-foreground">{t("receivingAt", { location: seededName(order.destination) })}</p>
         <PurchasingProblemBanner
           problem={problem}
           staleText={t("purchaseOrderChanged")}

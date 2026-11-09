@@ -9,8 +9,9 @@
 // CONSENT RUNTIME (after the banner): the buttons, the stored choice, Consent
 // Mode updates, and the marketing tags. Meta and TikTok snippets are rendered
 // inert (`type="text/plain" data-scalius-consent="marketing"`) and start only
-// once marketing is granted. Revoking stops them (`fbq('consent','revoke')`,
-// `ttq.revokeConsent()`); the next page never loads them.
+// once marketing is granted. Revoking stops the ones this page started
+// (`fbq('consent','revoke')`, `ttq.revokeConsent()`); a page that never
+// started them calls nothing, and the next page never loads them.
 //
 // Both are cached per market: the HTML never depends on the cookie.
 import {
@@ -70,7 +71,9 @@ export const CONSENT_RUNTIME_SCRIPT =
   'var p=function(v){return v?"granted":"denied"};' +
   'if(typeof w.gtag==="function")w.gtag("consent","update",{ad_storage:p(c.marketing),analytics_storage:p(c.analytics),ad_user_data:p(c.marketing),ad_personalization:p(c.marketing)});' +
   'if(c.marketing){start();try{typeof w.fbq==="function"&&w.fbq("consent","grant");w.ttq&&w.ttq.grantConsent&&w.ttq.grantConsent()}catch(e){}}' +
-  'else{try{typeof w.fbq==="function"&&w.fbq("consent","revoke");w.ttq&&w.ttq.revokeConsent&&w.ttq.revokeConsent()}catch(e){}}' +
+  // Revoke only tags this page started: under Partytown `fbq` is a forwarding stub even while the
+  // pixel never ran, and a call it forwards reaches a worker with no `fbq` (a TypeError there).
+  'else if(started){try{typeof w.fbq==="function"&&w.fbq("consent","revoke");w.ttq&&w.ttq.revokeConsent&&w.ttq.revokeConsent()}catch(e){}}' +
   'd.documentElement.removeAttribute("data-consent-banner");' +
   'w.dispatchEvent(new CustomEvent("scalius:consent",{detail:c}))};' +
   "var sync=function(){var c=C();if(!P)return;" +

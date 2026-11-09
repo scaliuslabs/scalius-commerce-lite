@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField } from "@/components/ui/form";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { ShippingProfile } from "~/lib/api-query-options/shipping-profiles";
+import { seededName } from "~/lib/seeded-names";
 import { useMessages } from "~/i18n";
 import { giftCardProductSummaryMessages as giftCardProductMessages } from "~/i18n/gift-card-product-summary";
 import { productMessages } from "~/i18n/products";
@@ -47,8 +48,8 @@ export function ShippingCard({ form, hasOptions, weightSlot, readOnly = false, p
   const mode = useWatch({ control: form.control, name: "fulfillmentKind" }) ?? "physical";
   const profileId = useWatch({ control: form.control, name: "shippingProfileId" }) ?? null;
   const profileLabel = (profile: ShippingProfile) => profile.isDefault
-    ? t("shippingProfileDefault", { name: profile.name })
-    : profile.freeDelivery ? t("shippingProfileFree", { name: profile.name }) : profile.name;
+    ? t("shippingProfileDefault", { name: seededName(profile) })
+    : profile.freeDelivery ? t("shippingProfileFree", { name: seededName(profile) }) : seededName(profile);
   const current = profiles.find((profile) => profile.id === (profileId ?? DEFAULT_PROFILE));
   const single: ProductFulfilmentMode[] = ["physical", "digital", "service"];
   const choices: ProductFulfilmentMode[] = hasOptions || mode === "mixed" ? [...single, "mixed"] : single;

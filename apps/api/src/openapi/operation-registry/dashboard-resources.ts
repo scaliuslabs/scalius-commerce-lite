@@ -8,6 +8,8 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.orders.get": { uncurated: true },
   // The manual-order attempt table replays a repeated Idempotency-Key exactly.
   "dashboard.resources.orders.create": { batch: "forbidden", uncurated: true },
+  // Prices an order through the create's own path and writes nothing (a POST for its body).
+  "dashboard.resources.orders.quote": { risk: "read", uncurated: true },
   // An app releases its own hold (staff are refused: app_principal_required)
   // under the order's required revision; a repeat answers the released hold
   // (`replayed`).
@@ -200,6 +202,7 @@ export const DASHBOARD_RESOURCE_OPERATIONS = {
   "dashboard.resources.payouts.list": { uncurated: true },
   "dashboard.resources.payouts.get": { uncurated: true },
   "dashboard.resources.payouts.create": storedValue({ openWorld: true, idempotency: "required" }),
+  "dashboard.resources.payouts.reverse": storedValue({ openWorld: true, idempotency: "required" }),
   // The inbox (routes/admin/resources-conversations.ts): threads and lines
   // (read_conversations); a reply or note (write_conversations) under a
   // required Idempotency-Key, sent on a chat channel through its provider.

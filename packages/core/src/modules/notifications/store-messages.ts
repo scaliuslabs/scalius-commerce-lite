@@ -5,6 +5,9 @@ import { marketPresences, media, themeSettings } from "@scalius/database/schema"
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { isMarketSubfolder } from "@scalius/shared/markets";
+import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
+import { presenceLocale, translationChain } from "@scalius/shared/translations";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { businessDocument, type BusinessInfo, storeDisplayName } from "../settings";
@@ -45,6 +48,48 @@ function languageOf(rows: ReadonlyArray<{ locale: string | null }>): MessageLang
 /** Bangla when the store default language (the root presence's, MARKETS-DESIGN D9) is Bangla, else English. */
 export async function readStoreLanguage(db: Database): Promise<MessageLanguage> {
   return languageOf(await selectStoreLanguage(db));
+}
+
+/** The languages a buyer message is written in (`MESSAGE_COPY`). */
+const MESSAGE_LANGUAGES: readonly MessageLanguage[] = ["en", "bn"];
+
+/** Where a buyer's message speaks from: its language and the storefront path its links start with. */
+export interface BuyerMessageScope {
+  language: MessageLanguage;
+  /** The presence's path (`/bn`), or "" at the root. */
+  path: string;
+}
+
+/**
+ * The language and links of a message to a buyer who ordered (or wrote, or
+ * subscribed) on `presence`: the presence's language through the one
+ * fallback chain (`translationChain`: the page locale, then the store
+ * default), and links into that presence. Without a presence (the root, a
+ * staff order, an older order) it is the store's default language at the root.
+ */
+export function buyerMessageScope(store: Pick<StoreIdentity, "language">, presence: string | null | undefined): BuyerMessageScope {
+  const scoped = isMarketSubfolder(presence) ? presence : null;
+  const chain = translationChain(
+    MESSAGE_LANGUAGES.map((locale) => ({ locale, marketId: null, fields: {} })),
+    { locale: (scoped && presenceLocale(scoped)) || store.language, marketId: null, defaultLocale: store.language },
+  );
+  return {
+    language: (chain[0]?.locale as MessageLanguage | undefined) ?? store.language,
+    path: scoped ? `/${scoped}` : "",
+  };
+}
+
+/**
+ * An absolute storefront link in the buyer's presence: the Store URL's
+ * origin, the presence's path (`/bn`), then `path`. Null when the Store URL
+ * is not an absolute http(s) address. Every buyer message's link (order
+ * pages, downloads, reviews, gift-card balance) is built here.
+ */
+export function buyerStorefrontLink(storefrontUrl: string | null | undefined, presence: string | null | undefined, path: string): string | null {
+  const origin = normalizeStorefrontOrigin(storefrontUrl);
+  if (!origin) return null;
+  const scoped = isMarketSubfolder(presence) ? `/${presence}` : "";
+  return `${origin}${scoped}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 /**

@@ -23,7 +23,7 @@ Rules an AI agent must follow in an app or theme:
 - [Commerce hooks](commerce-hooks.md): scopes, event payloads, provider ports, checkout functions, the stable app API (`ctx.api.call`), payments, discounts.
 - [Stable app API reference](operations.md): every `ctx.api.call` operation with its scopes, request and response (generated from the contract).
 - [Event reference](events.md): every event topic and its facts (generated from the event catalogue).
-- [Examples](../examples/README.md): complete apps on the public SDK (point of sale, reviews import, cart recovery, delivery slots, a pixel, a chat channel provider).
+- [Examples](../examples/README.md): complete apps on the public SDK (point of sale, reviews import, cart recovery, delivery slots, a pixel, a chat channel provider, a marketplace with payouts).
 - [SDK README](../README.md): quick start, a minimal app, the test harness, providers.
 
 ## Commands (from a Scalius checkout)

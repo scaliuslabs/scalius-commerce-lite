@@ -3,6 +3,7 @@ import type { OrderItem, OrderReceipt } from "./api/types";
 import {
   formatOrderSuccessLabel,
   formatOrderSuccessPaymentMethod as formatGatewayPaymentMethod,
+  RECORDED_PAYMENT_METHOD,
 } from "./order-success-localization";
 import { type CheckoutLanguageData } from "@scalius/shared/checkout-language";
 
@@ -17,6 +18,7 @@ export { formatOrderSuccessLabel } from "./order-success-localization";
 
 /** `orders.payment_method` of an order its gift cards paid in full (Wave B §4.3). */
 export const GIFT_CARD_PAYMENT_METHOD = "gift_card";
+export { RECORDED_PAYMENT_METHOD };
 
 /** One gift card that paid part of the order, as the receipt shows it (never a code). */
 export interface ReceiptGiftCardTender {
@@ -130,15 +132,17 @@ function normalize(value: string | null | undefined): string {
 }
 
 /**
- * Every payment method except cash on delivery, the store's invoice and a
- * gift-card-paid order is an online gateway (a gift card settles at commit:
- * nothing to confirm or retry): a built-in id or an app provider's
+ * Every payment method except cash on delivery, the store's invoice, a
+ * gift-card-paid order and one paid as it was placed is an online gateway (a
+ * gift card or a recorded payment settles at commit: nothing to confirm or
+ * retry): a built-in id or an app provider's
  * `<plugin id>:<provider id>`. An app's own invoice is told apart by the
  * order's `paymentTerms` (`isPaidLater`).
  */
 function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
-  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD && method !== "net_terms";
+  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD && method !== "net_terms"
+    && method !== RECORDED_PAYMENT_METHOD;
 }
 
 /** Paid later by invoice: placed now, nothing to confirm or retry online. */
@@ -146,9 +150,10 @@ function isPaidLater(order: { paymentMethod?: string | null; paymentTerms?: Orde
   return normalize(order.paymentMethod) === "net_terms" || Boolean(order.paymentTerms);
 }
 
-/** Paid before anything is handed over: online, or entirely by gift card. */
+/** Paid before anything is handed over: online, entirely by gift card, or as it was placed. */
 function isPrepaidPaymentMethod(paymentMethod: string | null | undefined): boolean {
-  return isOnlinePaymentMethod(paymentMethod) || normalize(paymentMethod) === GIFT_CARD_PAYMENT_METHOD;
+  return isOnlinePaymentMethod(paymentMethod) || normalize(paymentMethod) === GIFT_CARD_PAYMENT_METHOD
+    || normalize(paymentMethod) === RECORDED_PAYMENT_METHOD;
 }
 
 function isAcceptedPayment(order: Pick<OrderReceipt, "paymentStatus" | "paidAmount">): boolean {

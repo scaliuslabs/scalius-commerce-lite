@@ -235,6 +235,8 @@ export interface CatalogCopy {
     pickupFrom: (amount: string) => string;
     pickupPoints: (count: string) => string;
     cashOnDelivery: string;
+    /** Theme editor preview only: the merchant's step when no delivery or pickup option reaches the page's buyers. */
+    setupHint: string;
     payOnService: string;
     payAdvance: string;
     payOnArrival: string;
@@ -447,6 +449,7 @@ const EN: CatalogCopy = {
     pickupFrom: (amount) => `from ${amount}`,
     pickupPoints: (count) => `${count} pickup points`,
     cashOnDelivery: "Cash on delivery",
+    setupHint: "Store setup: add a delivery zone with a rate for this market's countries (Settings › Shipping and delivery), or a pickup location, so buyers can order.",
     payOnService: "Pay on service",
     payAdvance: "Pay a small advance online, the rest on delivery.",
     payOnArrival: "Pay when your order arrives.",
@@ -659,6 +662,7 @@ const BN: CatalogCopy = {
     pickupFrom: (amount) => `${amount} থেকে`,
     pickupPoints: (count) => `${count}টি পিকআপ পয়েন্ট`,
     cashOnDelivery: "ক্যাশ অন ডেলিভারি",
+    setupHint: "স্টোর সেটআপ: এই মার্কেটের দেশগুলোর জন্য রেটসহ একটি ডেলিভারি জোন (সেটিংস › শিপিং ও ডেলিভারি) বা একটি পিকআপ লোকেশন যোগ করুন, যাতে ক্রেতারা অর্ডার করতে পারেন।",
     payOnService: "সেবা শেষে পরিশোধ",
     payAdvance: "অল্প অগ্রিম অনলাইনে দিন, বাকিটা ডেলিভারির সময়।",
     payOnArrival: "অর্ডার হাতে পেয়ে দাম দিন।",

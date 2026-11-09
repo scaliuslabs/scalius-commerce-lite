@@ -49,8 +49,11 @@ export const DASHBOARD_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/dashboard/*": {
     GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
   },
-  // Dismissing the setup guide: one staff member's own preference.
+  // Dismissing or showing the setup guide: one staff member's own preference.
   "/api/v1/admin/dashboard/setup-guide/dismiss": {
+    POST: { permission: PERMISSIONS.DASHBOARD_VIEW },
+  },
+  "/api/v1/admin/dashboard/setup-guide/show": {
     POST: { permission: PERMISSIONS.DASHBOARD_VIEW },
   },
   // =============================================

@@ -28,5 +28,6 @@ export const EVENT_SOURCE_TABLES: ReadonlySet<string> = new Set([
   "gift_card_transactions",
   "conversation_messages",
   "payouts",
+  "payout_reversals",
   "object_records",
 ]);

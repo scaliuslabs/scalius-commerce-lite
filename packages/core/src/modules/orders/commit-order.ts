@@ -15,6 +15,7 @@ import {
     orderTaxSnapshots,
 } from "@scalius/database/schema";
 import { eq, sql } from "drizzle-orm";
+import { isMarketSubfolder } from "@scalius/shared/markets";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import type { AppliedAppDiscount } from "@scalius/shared/checkout-app-facts";
@@ -443,6 +444,8 @@ function orderRowStatements(db: Database, plan: OrderPlan, customer: OrderCustom
         ...orderBillingAddressInsertColumns(od),
         notes: od.notes,
         attributes: od.attributes ?? "{}",
+        // A checked subfolder (`bn`, `en-in`) as an SQL literal: an order without one binds nothing more.
+        ...(isMarketSubfolder(od.presence) ? { presence: sql.raw(`'${od.presence}'`) } : {}),
         currencyCode: od.currencyCode,
         currencyDecimalPlaces: od.currencyDecimalPlaces,
         subtotalAmountMinor: od.subtotalAmountMinor,

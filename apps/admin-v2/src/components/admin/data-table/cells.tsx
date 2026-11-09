@@ -10,15 +10,21 @@ import { dataTableMessages } from "~/i18n/data-table";
  * names take at most two lines with their variant or option text muted.
  */
 
-/** SKU, barcode, order number, code: one line, never split, optional copy button. */
+/**
+ * SKU, barcode, order number, code: one line, never split, optional copy
+ * button. `wrap` shows it whole, broken anywhere, where a row is about that
+ * code (the variant table) and a cut-off SKU can't be told from its siblings.
+ */
 export function IdText({
   value,
   copy = false,
+  wrap = false,
   className,
 }: {
   value: string | null | undefined;
   /** Adds a copy button (shown on row hover and on focus). */
   copy?: boolean;
+  wrap?: boolean;
   className?: string;
 }) {
   const t = useMessages(dataTableMessages);
@@ -26,7 +32,7 @@ export function IdText({
   if (!value) return <span className="text-muted-foreground">—</span>;
   return (
     <span className={cn("group/id inline-flex max-w-full min-w-0 items-center gap-1 align-middle", className)}>
-      <span title={value} className="min-w-0 max-w-48 truncate whitespace-nowrap font-mono">
+      <span title={value} className={cn("min-w-0 font-mono", wrap ? "break-all" : "max-w-48 truncate whitespace-nowrap")}>
         {value}
       </span>
       {/* A 44px target on phones that overlaps the lines around it instead of making this one 44px tall. */}

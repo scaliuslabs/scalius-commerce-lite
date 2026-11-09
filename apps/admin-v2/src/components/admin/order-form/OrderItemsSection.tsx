@@ -11,23 +11,14 @@ import { OrderItemsTable } from "./OrderItemsTable";
 import { productQueryOptions, productVariantsQueryOptions } from "@/lib/api-query-options/products";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { useCurrency } from "@/hooks/use-currency";
-import {
-  checkLineProperties,
-  customizationFromView,
-  type CustomizationView,
-  type LinePropertiesCheck,
-} from "./order-line-properties";
+import { checkLineProperties, customizationFromView, type LinePropertiesCheck } from "./order-line-properties";
+import { normalizeProductRead, normalizeVariants, orderLineFor } from "./order-line";
 import { linePropertyErrors, linePropertyFieldId, type LinePropertyError } from "./LinePropertyFields";
 import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders";
 import type { ApiResult } from "@/lib/api";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { Product } from "./types";
-import {
-  exceededStockMessage,
-  remainingStockForNewOrderLine,
-  trackedAvailableStock,
-} from "./manual-order-stock";
-import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
+import { exceededStockMessage, remainingStockForNewOrderLine } from "./manual-order-stock";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 
@@ -35,45 +26,6 @@ const ORDER_CATALOG_PAGE_SIZE = 10;
 const ORDER_CATALOG_SEARCH_DEBOUNCE_MS = 300;
 type ProductVariant = Product["variants"][number];
 type CatalogProduct = ApiResult<typeof getApiV1AdminOrdersCatalogProducts>["products"][number];
-type RawProductVariant = Omit<ProductVariant, "weight"> & {
-  weight: number | string | null;
-  deletedAt?: unknown;
-};
-
-function normalizeVariant(variant: RawProductVariant): ProductVariant {
-  return {
-    id: variant.id,
-    optionCombinationKey: variant.optionCombinationKey,
-    selectedOptions: variant.selectedOptions ?? [],
-    weight:
-      typeof variant.weight === "string"
-        ? parseFloat(variant.weight) || null
-        : (variant.weight ?? null),
-    sku: variant.sku || "",
-    price: variant.price ?? 0,
-    stock: variant.stock ?? 0,
-    reservedStock: variant.reservedStock ?? 0,
-    isDefault: variant.isDefault ?? false,
-    trackInventory: variant.trackInventory ?? true,
-    discountType: variant.discountType ?? null,
-    discountPercentage: variant.discountPercentage ?? null,
-    discountAmount: variant.discountAmount ?? null,
-    fulfillmentKind: variant.fulfillmentKind ?? "physical",
-  };
-}
-
-function normalizeVariants(result: unknown): ProductVariant[] {
-  const variants = (result as { variants?: RawProductVariant[] } | null)?.variants;
-  if (!Array.isArray(variants)) return [];
-  return variants.filter((variant) => !variant.deletedAt).map(normalizeVariant);
-}
-
-/** A product read: its SKUs plus the buyer inputs it asks for. */
-function normalizeProductRead(result: unknown): { variants: ProductVariant[]; customization: Product["customization"] } {
-  const view = (result as { customizationSchema?: CustomizationView | null } | null)?.customizationSchema;
-  return { variants: normalizeVariants(result), customization: customizationFromView(view) };
-}
-
 function normalizeCatalogProduct(product: CatalogProduct): Product {
   return {
     // Catalog rows carry the buyer inputs, so picking one needs only its SKUs.
@@ -179,20 +131,7 @@ export function OrderItemsSection() {
     setResolvedVariantsById((current) => ({ ...current, [variant.id]: variant }));
     form.setValue("items", [
       ...currentItems,
-      {
-        productId: product.id,
-        variantId: variant.id,
-        quantity: lineQuantity,
-        // The product/variant sale applies to the base; surcharges are added whole (Wave A §3.3).
-        price: discountedUnitPrice(product, variant) + (inputs ? inputs.surchargeMinor / minorFactor : 0),
-        name: product.name,
-        variantLabel: orderItemVariantLabel(variant),
-        available: isEdit ? null : trackedAvailableStock(variant),
-        fulfillmentKind: variant.fulfillmentKind ?? "physical",
-        ...(inputs && inputs.properties.length > 0
-          ? { properties: inputs.properties, propertiesDisplay: inputs.resolved }
-          : {}),
-      },
+      orderLineFor(product, variant, lineQuantity, { isEdit, minorFactor, inputs }),
     ], { shouldDirty: true, shouldValidate: true });
     return true;
   };

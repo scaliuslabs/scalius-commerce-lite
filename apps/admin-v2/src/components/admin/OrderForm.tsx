@@ -1,4 +1,5 @@
 import { Checkbox } from "~/components/ui/checkbox";
+import { useCreateDraft } from "./shared/use-create-draft";
 import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWatch } from "react-hook-form";
@@ -23,6 +24,7 @@ import { PageHeader } from "@/components/admin/resource/PageHeader";
 import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import {
   SaveBarProvider,
+  SaveConflict,
   SaveErrorBanner,
   SaveNotCompleted,
   useSaveBar,
@@ -65,6 +67,7 @@ import {
 } from "./order-form/create-order-request-key";
 import { executeManualOrderCreateWithRecovery } from "./order-form/manual-order-create-recovery";
 import { takeOrderPrefill } from "./order-form/order-prefill";
+import { restoreOrderLines } from "./order-form/order-line";
 import { normalizeAdminPhone } from "./shared/AdminPhoneInput";
 import { describeAmendment } from "./order-form/amendment-summary";
 import { orderItemVariantLabel } from "./order-form/order-item-presentation";
@@ -222,7 +225,7 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string, initial
     ...(values.paymentMethod === "net_terms"
       ? { paymentMethod: "net_terms" as const, ...(values.paymentTermsDays ? { paymentTermsDays: values.paymentTermsDays } : {}) }
       : {}),
-    // Already paid: placed as an invoice and paid in full at once (downloads and gift cards go out).
+    // Already paid: placed as paid by its way of payment (`manual`), never an invoice; downloads and gift cards go out.
     ...(values.paymentMethod === "paid"
       ? { paid: { via: values.paidVia ?? "cash", reference: values.paidReference?.trim() || null } }
       : {}),
@@ -411,9 +414,10 @@ function OrderEditor({
       shippingCharge: Number(quoteShipping) || 0,
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
-      // An invoice need not be a cash amount (cash on delivery collects whole taka).
-      // Paid orders are placed as invoices: priced the same way, and they may hold downloads and gift cards.
-      ...(!isEdit && (quotePaymentMethod === "net_terms" || quotePaymentMethod === "paid") ? { paymentMethod: "net_terms" as const } : {}),
+      // An invoice, or an order already paid (`manual`), need not be a cash amount
+      // (cash on delivery collects whole taka), and may hold downloads and gift cards.
+      ...(!isEdit && quotePaymentMethod === "net_terms" ? { paymentMethod: "net_terms" as const } : {}),
+      ...(!isEdit && quotePaymentMethod === "paid" ? { paymentMethod: "manual" as const } : {}),
       // A new order that ships nothing is taxed in the billing country staff entered.
       ...(!isEdit && !needsAddress && billingDraft && billingEntered(billingDraft, initialBilling) && billingDraft.countryCode
         ? {
@@ -508,12 +512,18 @@ function OrderEditor({
   const isSubmitting = createMutation.isPending || amendMutation.isPending || completed;
   const isInteractionLocked = isSubmitting || confirmOpen;
   // An abandoned checkout's "Create order" hands its details over once.
+  const prefillMoney = React.useRef({ decimalPlaces: currencyDecimalPlaces, fmt });
+  prefillMoney.current = { decimalPlaces: currencyDecimalPlaces, fmt };
   useEffect(() => {
     if (isEdit) return;
     const prefill = takeOrderPrefill();
     if (!prefill) return;
     abandonedCheckoutId.current = prefill.abandonedCheckoutId ?? null;
     const set = { shouldDirty: true };
+    // Names before ids: the place pickers label the buyer's choice with them.
+    if (prefill.cityName) form.setValue("cityName", prefill.cityName);
+    if (prefill.zoneName) form.setValue("zoneName", prefill.zoneName);
+    if (prefill.areaName) form.setValue("areaName", prefill.areaName);
     for (const name of [
       "customerName", "shippingCountryCode", "shippingAddress", "shippingAddressLine2",
       "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode", "city", "zone",
@@ -523,13 +533,23 @@ function OrderEditor({
     if (prefill.customerPhone) form.setValue("customerPhone", normalizeAdminPhone(prefill.customerPhone), set);
     if (prefill.customerEmail) form.setValue("customerEmail", prefill.customerEmail, set);
     if (prefill.area) form.setValue("area", prefill.area, set);
-    if (prefill.items.length > 0) form.setValue("items", prefill.items, set);
     // The delivery the buyer saw at checkout, not a custom ৳0.
     if (prefill.shippingCharge !== null) {
       form.setValue("shippingCharge", prefill.shippingCharge, set);
       form.setValue("shippingMethodId", prefill.shippingMethodId, set);
     }
-  }, [form, isEdit]);
+    if (prefill.items.length === 0) return;
+    // The cart's lines go back as the picker adds them, at today's price: never ৳0, never a silent drop.
+    // Not cancelled on cleanup: the prefill is taken once, so a re-run (Strict Mode) has nothing to restore.
+    const { decimalPlaces, fmt: money } = prefillMoney.current;
+    void restoreOrderLines(queryClient, prefill.items, 10 ** decimalPlaces).then(({ lines, missing, repriced }) => {
+      if (lines.length > 0) form.setValue("items", [...form.getValues("items"), ...lines], { ...set, shouldValidate: true });
+      if (missing.length > 0) toast.warning(t("prefillMissing", { count: missing.length, names: missing.join(", ") }));
+      if (repriced.length > 0) {
+        toast.info(t("prefillRepriced", { lines: repriced.map(({ name, price }) => `${name}: ${money(price)}`).join(", ") }));
+      }
+    });
+  }, [form, isEdit, queryClient, t]);
 
   // --- SUBMIT ---
 
@@ -596,7 +616,7 @@ function OrderEditor({
       // An edit's query previews the amendment (see quoteQuery above).
       const quote = manualQuote.data as ApiResult<typeof postApiV1AdminOrdersByIdAmendmentsPreview> | null;
       if (!id || !values.version || !quote || !("quoteFingerprint" in quote) || !quote.quoteFingerprint) {
-        throw new SaveNotCompleted(t("reloadToSave"));
+        throw new SaveNotCompleted(t("reloadToSave")).as("refused");
       }
       const input = toManualOrderAmendmentInput(enrichedValues, id);
       const payload = JSON.stringify({ ...input, quoteFingerprint: quote.quoteFingerprint });
@@ -638,7 +658,7 @@ function OrderEditor({
       createRequestKey.current = result.requestKey;
       if (result.outcome === "error" && readAdminApiErrorCode(result.error) === "manual_order_total_changed") {
         void quoteQuery.refetch();
-        throw new SaveNotCompleted(t("totalChanged"));
+        throw new SaveConflict(t("totalChanged"));
       }
 
       if (result.outcome === "created" || result.outcome === "open-existing") {
@@ -665,9 +685,10 @@ function OrderEditor({
         setBillingProblems(billingRefusal);
         throw new SaveNotCompleted(r("fixFields"));
       }
-      throw new SaveNotCompleted(result.outcome === "wait"
-        ? t("stillCreating")
-        : getServerFnError(result.error, t("createFailed")));
+      throw result.outcome === "wait"
+        // No answer yet whether the order was made: the same Save checks again, never twice.
+        ? new SaveNotCompleted(t("stillCreating")).as("connection")
+        : new SaveNotCompleted(getServerFnError(result.error, t("createFailed"))).because(result.error);
     } finally {
       submitLock.current = false;
     }
@@ -719,6 +740,12 @@ function OrderEditor({
   };
 
   const formDirty = useFormDirty(form);
+  // A new order's customer, items and addresses survive a reload or a closed tab.
+  useCreateDraft({
+    enabled: !isEdit && canSave,
+    read: () => form.getValues(),
+    restore: (values) => form.reset(values, { keepDefaultValues: true }),
+  });
   useSaveBar({
     // Every value compared with the loaded order (or the empty draft).
     dirty: formDirty,

@@ -64,7 +64,7 @@ export function useEntityFormSubmit<TValues extends Record<string, unknown>>({
       } catch (error: unknown) {
         const explained = onError?.(error, getServerFnError(error, translate(resourceMessages, "saveFailedHelp")));
         // Unexplained failures go to the save bar as they are; it words network and server errors.
-        throw explained ? new SaveNotCompleted(explained) : error;
+        throw explained ? new SaveNotCompleted(explained).because(error) : error;
       } finally {
         setIsSubmitting(false);
       }

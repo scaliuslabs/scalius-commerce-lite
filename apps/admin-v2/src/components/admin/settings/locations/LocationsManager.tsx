@@ -2,6 +2,7 @@
 // each location's stock; add, edit, make default, archive and unarchive.
 // Archiving is refused while a location holds stock or open orders ship from
 // it; the default can't be archived.
+import { seededName } from "~/lib/seeded-names";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal } from "lucide-react";
@@ -69,7 +70,7 @@ export function LocationsManager() {
       onError: (error) => {
         const channels = channelsSellingOnly(error);
         void toast.error(channels
-          ? t("archiveSellsChannels", { channels: formatList(channels, dashboardNumberLocale()), count: channels.length, name: location.name })
+          ? t("archiveSellsChannels", { channels: formatList(channels, dashboardNumberLocale()), count: channels.length, name: seededName(location) })
           : getServerFnError(error, t("actionFailed")));
       },
     });
@@ -91,7 +92,7 @@ export function LocationsManager() {
                 <li key={location.id} className="flex items-start gap-3 border-b border-border px-4 py-3">
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="flex flex-wrap items-center gap-2">
-                      <span className="break-words text-body font-medium">{location.name}</span>
+                      <span className="break-words text-body font-medium">{seededName(location)}</span>
                       <code className="text-muted-foreground">{location.code}</code>
                       {location.isDefault ? <Badge variant="info">{t("default")}</Badge> : null}
                       {location.status === "archived" ? <StatusBadge status="archived">{t("archived")}</StatusBadge> : null}
@@ -106,7 +107,7 @@ export function LocationsManager() {
                   {canEdit ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon" aria-label={t("actionsFor", { name: location.name })}>
+                        <Button type="button" variant="ghost" size="icon" aria-label={t("actionsFor", { name: seededName(location) })}>
                           <MoreHorizontal aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -145,7 +146,7 @@ export function LocationsManager() {
       <ConfirmDialog
         open={archiving !== null}
         onOpenChange={(open) => (open ? undefined : setArchiving(null))}
-        title={t("archiveTitle", { name: archiving?.name ?? "" })}
+        title={t("archiveTitle", { name: (archiving ? seededName(archiving) : "") })}
         description={t("archiveBody")}
         confirmLabel={t("archive")}
         isLoading={action.isPending}

@@ -92,3 +92,38 @@ export async function fetchAppDocument(pluginId: string, route: string, request:
   if (!response.ok) throw new AdminApiResponseError("", response.status, APP_ROUTE_BAD_ANSWER);
   return response.body;
 }
+
+/** A file the dashboard stored for one of an app's admin forms (`file-field`). */
+export interface AppUpload {
+  id: string;
+  filename: string;
+  mediaType: string;
+  sizeBytes: number;
+}
+
+/**
+ * Sends a file staff chose in an app's form to the platform
+ * (`POST /api/v1/admin/apps/<id>/uploads`, apps/api/src/routes/admin/apps-uploads.ts),
+ * which types it from its bytes and keeps it privately for the app; the
+ * form then sends the returned id as the field's value. `route` is the admin
+ * route the form posts to. A refusal throws `AdminApiResponseError` with the
+ * platform's code (`upload_type_not_accepted`, `upload_too_large`).
+ */
+export async function uploadAppFile(pluginId: string, route: string, file: File, signal?: AbortSignal): Promise<AppUpload> {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("route", route);
+  const response = await fetch(withDashboardBasePath(`/api/v1/admin/apps/${encodeURIComponent(pluginId)}/uploads`), {
+    method: "POST",
+    body: form,
+    headers: { Accept: "application/json", "Accept-Language": getLocale() },
+    credentials: "same-origin",
+    cache: "no-store",
+    signal,
+  });
+  if (response.status === 401) void noticeAdminUnauthorized();
+  const body = (await response.json().catch(() => null)) as { success?: boolean; data?: { upload?: AppUpload }; error?: { code?: string; message?: string; details?: unknown } } | null;
+  const upload = response.ok ? body?.data?.upload : undefined;
+  if (!upload) throw new AdminApiResponseError(body?.error?.message ?? "", response.status, body?.error?.code ?? APP_ROUTE_BAD_ANSWER, body?.error?.details);
+  return upload;
+}

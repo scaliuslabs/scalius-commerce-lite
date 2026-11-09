@@ -12,13 +12,14 @@ import type { ProductFormValues } from "./types";
 const ONLINE_PAYMENT_STALE_TIME_MS = 60_000;
 
 /**
- * An active gift card or all-digital product is paid only online: when
- * checkout takes only cash on delivery, buyers can't buy it, so the editor
- * says so beside its status and links to Payments (the same fact Home's
- * to-do counts).
+ * Whether buyers can get the product, the one answer the Status card gives:
+ * a draft only staff see; an active product buyers can buy; or an active
+ * gift card or all-digital product, paid only online, on a checkout that
+ * takes only cash on delivery (the same fact Home's to-do counts).
  */
-export function OnlinePaymentNote({ form }: { form: UseFormReturn<ProductFormValues> }) {
-  const t = useMessages(productMessages);
+export type ProductAvailability = "draft" | "buyable" | "needsOnlinePayment";
+
+export function useProductAvailability(form: UseFormReturn<ProductFormValues>): ProductAvailability {
   const [isActive, isGiftCard, fulfillmentKind] = useWatch({
     control: form.control,
     name: ["isActive", "isGiftCard", "fulfillmentKind"],
@@ -29,7 +30,13 @@ export function OnlinePaymentNote({ form }: { form: UseFormReturn<ProductFormVal
     staleTime: ONLINE_PAYMENT_STALE_TIME_MS,
     enabled: paidOnlyOnline,
   });
-  if (!paidOnlyOnline || checkout.data?.onlinePayment?.ready !== false) return null;
+  if (!isActive) return "draft";
+  return paidOnlyOnline && checkout.data?.onlinePayment?.ready === false ? "needsOnlinePayment" : "buyable";
+}
+
+/** In place of "Customers can find and buy it": why they can't, and the way to Payments. */
+export function OnlinePaymentNote() {
+  const t = useMessages(productMessages);
   return (
     <Alert variant="warning" data-online-payment-note>
       <AlertDescription>

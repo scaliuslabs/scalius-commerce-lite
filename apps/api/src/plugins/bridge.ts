@@ -21,6 +21,7 @@ import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outb
 import { isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import type { PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 import type { PluginJob } from "@scalius/shared/plugins/jobs";
+import type { PluginUpload, PluginUploadSlice } from "@scalius/shared/plugins/uploads";
 import { pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 
 /** What the host lets one installation do, derived from its manifest and approved grant. */
@@ -125,6 +126,12 @@ export interface PluginBridgeApi {
   jobsList(options?: { name?: string; limit?: number }): Promise<PluginJob[]>;
   /** Stops a running job (`cancelled`). */
   jobsCancel(id: string): Promise<PluginJob>;
+  /** One of the app's uploads (a file staff gave its admin form), or null. */
+  uploadsGet(id: string): Promise<PluginUpload | null>;
+  /** One slice of the app's upload: at most 256 KiB from `offset`, ending after its last whole line. */
+  uploadsRead(id: string, options?: { offset?: number; length?: number }): Promise<PluginUploadSlice>;
+  /** Deletes the app's upload; false when there was none. */
+  uploadsDelete(id: string): Promise<boolean>;
 }
 
 /** Where the bridge runs: the Worker env and context of the current request. */
@@ -157,6 +164,7 @@ function fail(code: ConstructorParameters<typeof PluginError>[0], message: strin
 export function toBridgeError(error: unknown, pluginId: string, method: string): Error {
   if (error instanceof ObjectError) return new Error(`[${error.objectCode}] ${error.message}`);
   if (error instanceof PluginError) return new Error(`[${error.pluginCode}] ${error.message}`);
+  if (error instanceof Error && error.name === "AppUploadError" && "uploadCode" in error) return new Error(`[${String(error.uploadCode)}] ${error.message}`);
   // Never forward internals; log masked metadata only.
   const name = error instanceof Error ? error.name : typeof error;
   console.warn(`[plugins] ${pluginId} bridge ${method} failed (${name})`);
@@ -676,6 +684,29 @@ export class PluginBridgeHost implements PluginBridgeApi {
     return this.guard("jobsCancel", async () => {
       const { cancelPluginJob } = await import("./jobs");
       return cancelPluginJob(this.runtime.db(), this.pluginId, id);
+    });
+  }
+
+  // ── uploads (files staff gave the app's admin forms) ───────────────────
+
+  async uploadsGet(id: string): Promise<PluginUpload | null> {
+    return this.guard("uploadsGet", async () => {
+      const { readAppUpload } = await import("@scalius/core/modules/buyer-uploads");
+      return readAppUpload(this.runtime.db(), this.pluginId, id);
+    });
+  }
+
+  async uploadsRead(id: string, options?: { offset?: number; length?: number }): Promise<PluginUploadSlice> {
+    return this.guard("uploadsRead", async () => {
+      const { readAppUploadSlice } = await import("@scalius/core/modules/buyer-uploads");
+      return readAppUploadSlice(this.runtime.db(), this.runtime.env.BUCKET, this.pluginId, id, options ?? {});
+    });
+  }
+
+  async uploadsDelete(id: string): Promise<boolean> {
+    return this.guard("uploadsDelete", async () => {
+      const { deleteAppUpload } = await import("@scalius/core/modules/buyer-uploads");
+      return deleteAppUpload(this.runtime.db(), this.runtime.env.BUCKET, this.pluginId, id);
     });
   }
 

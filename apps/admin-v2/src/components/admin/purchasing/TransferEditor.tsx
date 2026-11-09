@@ -1,4 +1,6 @@
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { seededName } from "~/lib/seeded-names";
+import { useCreateDraft } from "~/components/admin/shared/use-create-draft";
 import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -100,8 +102,8 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
   const effective = { ...draft, originId, destinationId };
   const validation = validateTransferDraft(effective);
   const dirty = transfer ? transferFingerprint(effective) !== savedFingerprint : draft.lines.length > 0 || Boolean(draft.reference || draft.notes || draft.expectedOn);
-  const origin = activeLocations.find((location) => location.id === originId) ?? (transfer ? { id: transfer.origin.id, name: transfer.origin.name } : null);
-  const destination = activeLocations.find((location) => location.id === destinationId) ?? (transfer ? { id: transfer.destination.id, name: transfer.destination.name } : null);
+  const origin = activeLocations.find((location) => location.id === originId) ?? (transfer ? { id: transfer.origin.id, name: seededName(transfer.origin) } : null);
+  const destination = activeLocations.find((location) => location.id === destinationId) ?? (transfer ? { id: transfer.destination.id, name: seededName(transfer.destination) } : null);
   const totalUnits = draft.lines.reduce((sum, line) => sum + (line.quantity !== null && Number.isSafeInteger(line.quantity) && line.quantity > 0 ? line.quantity : 0), 0);
   const notEnoughLocations = locationsQuery.isSuccess && activeLocations.length < 2 && !transfer;
 
@@ -132,10 +134,13 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
   const addedIds = useMemo(() => new Set(draft.lines.map((line) => line.variantId)), [draft.lines]);
 
   const openDetail = (id: string) => navigate({ to: "/admin/inventory/transfers/$transferId", params: { transferId: id }, replace: true });
+  // A new transfer's lines survive a reload (no save bar here: the page clears it).
+  const kept = useCreateDraft({ enabled: !transfer, dirty, read: () => draft, restore: setDraft });
 
   const saveNow = async () => {
     const sent = effective;
     const result = await save.mutateAsync({ id: transfer?.id ?? null, revision, body: transferBody(sent) });
+    if (!transfer) kept.clear();
     setSavedFingerprint(transferFingerprint(sent));
     setRevision(result.revision);
     return result;
@@ -240,7 +245,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
     }
   };
 
-  const locationOptions = activeLocations.map((location) => ({ value: location.id, label: location.name }));
+  const locationOptions = activeLocations.map((location) => ({ value: location.id, label: seededName(location) }));
 
   const lineFields = (line: TransferDraftLine) => {
     const name = lineName(line, t("unknownProduct"));
@@ -264,7 +269,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
       note: invalid ? (
         <p id={errorId} className="text-body text-destructive">{t("quantityInvalid")}</p>
       ) : short && origin ? (
-        <p id={errorId} className="text-body text-warning">{t("shortAtOrigin", { count: available ?? 0, location: origin.name })}</p>
+        <p id={errorId} className="text-body text-warning">{t("shortAtOrigin", { count: available ?? 0, location: seededName(origin) })}</p>
       ) : null,
       remove: (
         <Button type="button" variant="ghost" size="icon-sm" aria-label={t("removeLine", { name })}
@@ -320,6 +325,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
           </Alert>
         </div>
       ) : null}
+      {kept.offer ? <div className="mb-4">{kept.offer}</div> : null}
       {problem ? (
         <div className="mb-4">
           <PurchasingProblemBanner
@@ -411,7 +417,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
                         </div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-body text-muted-foreground">
-                            {origin && onHandAtOrigin(line) !== null ? t("onHandAt", { count: onHandAtOrigin(line) ?? 0, location: origin.name }) : null}
+                            {origin && onHandAtOrigin(line) !== null ? t("onHandAt", { count: onHandAtOrigin(line) ?? 0, location: seededName(origin) }) : null}
                           </span>
                           {field.quantity}
                         </div>
@@ -498,7 +504,7 @@ export function TransferEditor({ transfer, onReload }: { transfer: Transfer | nu
         open={dialog === "ship"}
         onOpenChange={(open) => { if (!open && busy !== "ship") setDialog(null); }}
         title={t("shipTitle", { number: transfer?.displayNumber ?? t("newTransfer") })}
-        description={t("shipBody", { units: unitsText(totalUnits), origin: origin?.name ?? "", destination: destination?.name ?? "" })}
+        description={t("shipBody", { units: unitsText(totalUnits), origin: (origin ? seededName(origin) : ""), destination: (destination ? seededName(destination) : "") })}
         confirmLabel={t("ship")}
         variant="default"
         isLoading={busy === "ship"}

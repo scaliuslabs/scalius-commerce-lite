@@ -103,6 +103,7 @@ import { getThemeSettings } from "@scalius/core/modules/settings";
 import { registerAppLifecycleRoutes } from "./apps-lifecycle";
 import { registerRemovedAppDataRoutes } from "./apps-removed-data";
 import { registerFunctionOrderRoutes } from "./apps-function-order";
+import { registerAppUploadRoutes } from "./apps-uploads";
 
 // The plugin host with its lifecycle hooks and the operation catalogue (risk
 // per permission) load only on the requests that need them, never when this
@@ -483,9 +484,11 @@ function readRow(read: FunctionReadDeclaration) {
   };
 }
 
-/** A read's key as one label: `from:<read>.<field>` for a hop. */
-function readKeyLabel(key: FunctionReadKey): string {
-  return typeof key === "object" ? `from:${key.from}` : key;
+/** A read's key as one label: `from:<read>.<field>` for a hop, the joined attributes, or `list` for a list read. */
+function readKeyLabel(key: FunctionReadKey | null): string {
+  if (key === null) return "list";
+  if (typeof key !== "object") return key;
+  return "from" in key ? `from:${key.from}` : key.join.join("+");
 }
 
 const settingField = appSettingField;
@@ -1075,6 +1078,10 @@ registerRemovedAppDataRoutes(app);
 // ── Checkout order of apps at function points (apps-function-order.ts; before `/{id}`) ──
 
 registerFunctionOrderRoutes(app);
+
+// ── Files staff give an app's admin form (apps-uploads.ts) ──
+
+registerAppUploadRoutes(app);
 
 // ── Get ──
 

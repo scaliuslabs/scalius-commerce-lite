@@ -42,6 +42,7 @@ import {
   type ProductActionPresentation,
 } from "../lib/product-actions";
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/line-price";
+import { priceLineClaim } from "@scalius/shared/money";
 import { BUYER_INPUT_FIELD_PREFIX, SKIN_BUY_CONTROL, SKIN_CHOOSE_CONTROL } from "../lib/buy-form";
 import { buyFormQuery, buyFormQueryAll, buyFormScopes } from "../lib/buy-scope";
 import type { BuyerInputsController } from "./buyer-inputs-controller";
@@ -935,13 +936,15 @@ function updatePrice() {
       ? checkoutText(element.dataset.fromTemplate || "{price}", { price })
       : price;
   });
+  // One rule with the product card: beside a "From" price no struck price or percent.
+  const claim = priceLineClaim({ current: pricing.finalPrice, regular: pricing.originalPrice, from: starting });
   cache.originalPriceElements.forEach((element) => {
     element.textContent = formatPrice(pricing.originalPrice);
-    element.classList.toggle("hidden", !pricing.hasDiscount);
+    element.classList.toggle("hidden", claim.compareAt === null);
   });
-  const badge = pricing.hasDiscount
+  const badge = claim.percentOff !== null
     ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
-    : null;
+    : claim.onSale ? cache.discountBadge?.dataset.saleText || null : null;
   if (cache.discountBadge) {
     cache.discountBadge.textContent = badge ?? "";
     cache.discountBadge.classList.toggle("hidden", !badge);
@@ -1192,7 +1195,6 @@ async function addSelected(redirect: boolean, focusProblem: boolean, selection: 
       productId: cartData.data.id,
       variantId: validation.variant.id,
       quantity,
-      price,
       productName: cartData.data.name,
       variantLabel: selectedCartOptions(validation.variant).map((option) => option.label).join(" / ") || null,
       ...(properties.length > 0 ? { properties: properties.map(({ key, value }) => ({ key, value })) } : {}),

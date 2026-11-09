@@ -5,6 +5,7 @@
 // with a click, a tap or the arrow keys with no script, and every panel is
 // in the HTML (each hidden until its tab is chosen). Only tabs that have
 // products are shown; a single tab is a plain row under its title.
+import { namedActionLabel } from "@/lib/action-label";
 import type { HomepageProductTab } from "@/lib/homepage-sections";
 import ProductRail from "./ProductRail.astro";
 import SectionHeader from "@/components/ui/SectionHeader.astro";
@@ -82,7 +83,7 @@ const labelled = Boolean(heading) || single;
               )}
               {!single && tab.href && (
                 <p class="mt-2 text-end">
-                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline">{copy.viewAll}<span class="sr-only">: {tab.title}</span></a>
+                  <a href={tab.href} class="-my-3 inline-block py-3 text-sm font-semibold text-primary hover:underline" aria-label={namedActionLabel(copy.viewAll, tab.title)}>{copy.viewAll}</a>
                 </p>
               )}
             </div>

@@ -10,6 +10,8 @@ import {
     createManualOrder,
     previewManualOrderAmendment,
     quoteManualOrder,
+    quoteManualOrderPlacement,
+    type ManualOrderPlacementQuoteInput,
     createOrderObjectSchema,
     quoteManualOrderSchema,
     previewManualOrderAmendmentSchema,
@@ -283,10 +285,9 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     const apps = await manualOrderApps(c.env, ctx, db);
     const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
     if (data.paid && data.pointOfSale) throw new ValidationError("An in-person sale is paid by its tenders: send pointOfSale without paid.");
-    // Mark as paid, or an in-person sale: placed as an invoice, then paid in full right after.
-    const placed = data.pointOfSale
-        ? { ...data, paymentMethod: "net_terms" as const, channel: "pos" as const }
-        : data.paid ? { ...data, paymentMethod: "net_terms" as const } : data;
+    // Mark as paid, or an in-person sale: placed with the payment method
+    // `manual` (no invoice, no terms), its payments recorded right after.
+    const placed = data.pointOfSale ? { ...data, channel: "pos" as const } : data;
     const { response, committed } = await createManualOrder(db, { ...placed, ...(attributes ? { attributes } : {}) }, actor, {
         apps: createManualOrderAppFunctions(db, apps),
         appProviders: requestAppProviders(c),
@@ -299,6 +300,20 @@ export async function placeManualOrder(c: Context<{ Bindings: Env }>, data: Crea
     if (data.pointOfSale) await completePointOfSale(c, db, response.id, data.requestKey, data.pointOfSale);
     // Apps' risk checks run from the order.created event (ctx.orders), never on this request.
     return { response, committed };
+}
+
+/**
+ * Prices an order as `placeManualOrder` would place it now, with the same
+ * apps and providers, and writes nothing (the stable `orders.quote`).
+ */
+export async function quoteManualOrderPlacementOfRequest(c: Context<{ Bindings: Env }>, data: ManualOrderPlacementQuoteInput) {
+    const db = c.get("db");
+    const apps = await manualOrderApps(c.env, getOptionalExecutionContext(c) as ExecutionContext | undefined, db);
+    const attributes = data.attributes ? validateCheckoutAttributes(apps, data.attributes) : undefined;
+    return quoteManualOrderPlacement(db, { ...data, ...(attributes ? { attributes } : {}) }, {
+        apps: createManualOrderAppFunctions(db, apps),
+        appProviders: requestAppProviders(c),
+    });
 }
 
 /** Records one payment received as the order was placed, with its timeline line (and an app's review hold) in its batch. */

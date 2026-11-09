@@ -295,6 +295,24 @@
                "from"
               ],
               "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "join": {
+                "minItems": 2,
+                "maxItems": 4,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "pattern": "^attribute\\.[a-z][a-z0-9_-]{0,47}$"
+                }
+               }
+              },
+              "required": [
+               "join"
+              ],
+              "additionalProperties": false
              }
             ]
            },
@@ -353,6 +371,24 @@
                "from"
               ],
               "additionalProperties": false
+             },
+             {
+              "type": "object",
+              "properties": {
+               "join": {
+                "minItems": 2,
+                "maxItems": 4,
+                "type": "array",
+                "items": {
+                 "type": "string",
+                 "pattern": "^attribute\\.[a-z][a-z0-9_-]{0,47}$"
+                }
+               }
+              },
+              "required": [
+               "join"
+              ],
+              "additionalProperties": false
              }
             ]
            },
@@ -365,6 +401,76 @@
           "required": [
            "as",
            "customFields"
+          ],
+          "additionalProperties": false
+         },
+         {
+          "type": "object",
+          "properties": {
+           "as": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+           },
+           "object": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,47}$"
+           },
+           "list": {
+            "type": "object",
+            "properties": {
+             "where": {
+              "type": "object",
+              "propertyNames": {
+               "type": "string",
+               "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              },
+              "additionalProperties": {
+               "anyOf": [
+                {
+                 "type": "string",
+                 "minLength": 1,
+                 "maxLength": 200
+                },
+                {
+                 "type": "number"
+                },
+                {
+                 "type": "boolean"
+                }
+               ]
+              }
+             },
+             "orderBy": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+             },
+             "direction": {
+              "type": "string",
+              "enum": [
+               "asc",
+               "desc"
+              ]
+             },
+             "from": {
+              "type": "string",
+              "const": "now"
+             },
+             "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+             }
+            },
+            "required": [
+             "limit"
+            ],
+            "additionalProperties": false
+           }
+          },
+          "required": [
+           "as",
+           "object",
+           "list"
           ],
           "additionalProperties": false
          }
@@ -1370,7 +1476,7 @@
            "pattern": "^[a-z][a-z0-9_]{0,47}$"
           },
           "channels": {
-           "minItems": 1,
+           "default": [],
            "maxItems": 5,
            "type": "array",
            "items": {
@@ -1384,14 +1490,36 @@
             ]
            }
           },
+          "customChannels": {
+           "maxItems": 5,
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "key": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+             },
+             "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+             }
+            },
+            "required": [
+             "key",
+             "name"
+            ],
+            "additionalProperties": false
+           }
+          },
           "dedupesOnIdempotencyKey": {
            "type": "boolean"
           }
          },
          "required": [
           "id",
-          "name",
-          "channels"
+          "name"
          ],
          "additionalProperties": false
         }
@@ -1674,7 +1802,7 @@
           },
           "operations": {
            "default": [],
-           "maxItems": 2,
+           "maxItems": 4,
            "type": "array",
            "items": {
             "type": "string"
@@ -5517,6 +5645,24 @@
                  "from"
                 ],
                 "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "join": {
+                  "minItems": 2,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                   "type": "string",
+                   "pattern": "^attribute\\.[a-z][a-z0-9_-]{0,47}$"
+                  }
+                 }
+                },
+                "required": [
+                 "join"
+                ],
+                "additionalProperties": false
                }
               ]
              },
@@ -5575,6 +5721,24 @@
                  "from"
                 ],
                 "additionalProperties": false
+               },
+               {
+                "type": "object",
+                "properties": {
+                 "join": {
+                  "minItems": 2,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                   "type": "string",
+                   "pattern": "^attribute\\.[a-z][a-z0-9_-]{0,47}$"
+                  }
+                 }
+                },
+                "required": [
+                 "join"
+                ],
+                "additionalProperties": false
                }
               ]
              },
@@ -5587,6 +5751,76 @@
             "required": [
              "as",
              "customFields"
+            ],
+            "additionalProperties": false
+           },
+           {
+            "type": "object",
+            "properties": {
+             "as": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+             },
+             "object": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,47}$"
+             },
+             "list": {
+              "type": "object",
+              "properties": {
+               "where": {
+                "type": "object",
+                "propertyNames": {
+                 "type": "string",
+                 "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "additionalProperties": {
+                 "anyOf": [
+                  {
+                   "type": "string",
+                   "minLength": 1,
+                   "maxLength": 200
+                  },
+                  {
+                   "type": "number"
+                  },
+                  {
+                   "type": "boolean"
+                  }
+                 ]
+                }
+               },
+               "orderBy": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+               },
+               "direction": {
+                "type": "string",
+                "enum": [
+                 "asc",
+                 "desc"
+                ]
+               },
+               "from": {
+                "type": "string",
+                "const": "now"
+               },
+               "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50
+               }
+              },
+              "required": [
+               "limit"
+              ],
+              "additionalProperties": false
+             }
+            },
+            "required": [
+             "as",
+             "object",
+             "list"
             ],
             "additionalProperties": false
            }

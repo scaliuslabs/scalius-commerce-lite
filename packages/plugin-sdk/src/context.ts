@@ -8,9 +8,11 @@ import type { EventTopic, EventsApiVersion } from "@scalius/shared/events";
 import type { PluginSettingValue } from "@scalius/shared/plugins";
 import type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 import type { PluginJob } from "@scalius/shared/plugins/jobs";
+import type { PluginUpload, PluginUploadSlice } from "@scalius/shared/plugins/uploads";
 
 export type { PluginCustomerRole, PluginCustomerRoleGrant } from "@scalius/shared/plugins/customer-roles";
 export type { PluginJob, PluginJobStatus, PluginJobStepInput, PluginJobStepResult } from "@scalius/shared/plugins/jobs";
+export type { PluginUpload, PluginUploadSlice } from "@scalius/shared/plugins/uploads";
 
 /** Store facts every handler may read. */
 export interface PluginStoreInfo {
@@ -339,6 +341,32 @@ export interface PluginJobs {
   cancel(id: string): Promise<PluginJob>;
 }
 
+/**
+ * Files staff gave the app's admin forms (a `ui.fileField`, e.g. a CSV
+ * import). The form sends the upload id (`bup_…`) as the field's value; the
+ * platform typed the file from its bytes (`text/csv`: UTF-8 text without
+ * control characters or markup) and keeps it privately for this app alone.
+ * Hand the id to a job (`ctx.jobs.start("import", { input: { uploadId } })`,
+ * the input stays small) and read one slice per step. An upload lives until
+ * the app deletes it or 72 hours after it was sent. Another app's id, a
+ * deleted or expired one read as not found (`uploads_not_found`).
+ */
+export interface PluginUploads {
+  /** One of the app's uploads (its name, type, size and admin route), or null. */
+  get(id: string): Promise<PluginUpload | null>;
+  /**
+   * One slice of the upload as text: at most `length` bytes (default and
+   * most 256 KiB, least 4) from `offset` (default 0), ending after its last
+   * line break unless it reaches the end of the file, so each slice holds
+   * whole lines (a quoted CSV field spanning lines is yours to carry over).
+   * Pass `nextOffset` as the next read's `offset` until `done`. One platform
+   * call; keep `nextOffset` in the job's state.
+   */
+  read(id: string, options?: { offset?: number; length?: number }): Promise<PluginUploadSlice>;
+  /** Deletes the upload once the app is done with it (true when there was one). */
+  delete(id: string): Promise<boolean>;
+}
+
 export interface PluginLogger {
   debug(message: string, fields?: Record<string, unknown>): void;
   info(message: string, fields?: Record<string, unknown>): void;
@@ -367,6 +395,7 @@ export interface PluginContext {
   orders: PluginOrders;
   customers: PluginCustomers;
   jobs: PluginJobs;
+  uploads: PluginUploads;
   log: PluginLogger;
 }
 

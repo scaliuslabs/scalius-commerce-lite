@@ -9,6 +9,7 @@ import {
   writePluginSettings,
   type PluginInstallation,
 } from "@scalius/core/modules/plugins";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { BUNDLED_PLUGINS } from "../bundled.gen";
 import { manifest as helloManifest } from "./apps/hello/src/index";
 
@@ -43,6 +44,37 @@ export function pluginTestCtx(): ExecutionContext {
 /** Awaits every task the test contexts handed to `waitUntil`, including tasks those tasks start. */
 export async function settleBackground(): Promise<void> {
   while (backgroundWork.length > 0) await Promise.allSettled(backgroundWork.splice(0));
+}
+
+/**
+ * Loads, before a timed app run, the code the run's stable API calls reach:
+ * the bridge's dispatcher and messaging, and the route group of each named
+ * operation. A test process transforms them on first use (seconds, and more
+ * in a parallel run on a busy host), and that load would otherwise count
+ * against the app's wall-time limit: the run times out only when the suite
+ * is busy. A deployed Worker ships them built, so this is the test
+ * process's cost alone. Call it in `beforeAll` of a test whose app calls the
+ * stable API.
+ */
+export async function loadAppApi(...operationNames: string[]): Promise<void> {
+  const [{ resolveAppOperation }, { fetchRuntimeApiApp }] = await Promise.all([
+    import("../app-operations"),
+    import("../../runtime/fetch-runtime-app"),
+    import("../api-call"),
+    import("../messaging"),
+  ]);
+  const { sqlite, binding } = createSqliteD1Database();
+  try {
+    for (const name of operationNames) {
+      const operation = resolveAppOperation(name);
+      if (!operation) throw new Error(`loadAppApi: no app operation ${name}`);
+      // Unsigned, so refused at once; the family and route group load on the way.
+      const path = operation.pathTemplate.replace(/\{[^}]+\}/g, "warm");
+      await fetchRuntimeApiApp(new Request(`https://api.shop.test${path}`, { method: operation.method }), pluginTestEnv(binding), pluginTestCtx());
+    }
+  } finally {
+    sqlite.close();
+  }
 }
 
 export async function installHello(db: Database, sqlite: DatabaseSync): Promise<PluginInstallation> {

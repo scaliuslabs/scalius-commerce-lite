@@ -3,6 +3,7 @@
 // receive command. Counting is local and instant; only the final tap writes.
 // The session state lives in ScannerApp (`useReceiveSession`), so opening the
 // history or another mode never loses a count.
+import { seededName } from "~/lib/seeded-names";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, Minus, Plus, RefreshCw } from "lucide-react";
 import {
@@ -88,7 +89,7 @@ async function fetchChoices(locationId: string | null): Promise<{ purchaseOrders
         id: order.id,
         number: order.displayNumber,
         title: order.supplier?.name ?? null,
-        destination: order.destination.name,
+        destination: seededName(order.destination),
         open: Math.max(0, order.quantity - order.receivedQuantity),
       }))
       .filter((choice) => choice.open > 0),
@@ -99,8 +100,8 @@ async function fetchChoices(locationId: string | null): Promise<{ purchaseOrders
         kind: "transfer",
         id: transfer.id,
         number: transfer.displayNumber,
-        title: tr("route", { from: transfer.origin.name, to: transfer.destination.name }),
-        destination: transfer.destination.name,
+        title: tr("route", { from: seededName(transfer.origin), to: seededName(transfer.destination) }),
+        destination: seededName(transfer.destination),
         open: transfer.inTransitQuantity,
       }))
       .filter((choice) => choice.open > 0),
@@ -144,7 +145,7 @@ export async function fetchReceiveDocument(kind: ReceiveKind, id: string): Promi
     kind,
     id,
     number: transfer.displayNumber,
-    title: tr("route", { from: transfer.origin.name, to: transfer.destination.name }),
+    title: tr("route", { from: seededName(transfer.origin), to: seededName(transfer.destination) }),
     revision: transfer.revision,
     lines: lines.filter((line) => line.open > 0),
     doneLines: lines.filter((line) => line.open <= 0).length,

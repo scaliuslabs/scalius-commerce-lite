@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { seededName, savedSeededName } from "~/lib/seeded-names";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, X } from "lucide-react";
@@ -764,7 +765,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const wholeTaka = useWholeUnitPrices();
   const countryList = useQuery(addressCountriesQueryOptions()).data;
   const [saved] = useState(() => ({
-    name: zone?.name ?? "",
+    name: zone ? seededName(zone) : "",
     countries: countryDraftsOf(zone),
     places: zone?.locations ?? [],
     rates: zone ? zone.rates.map(toDraft) : [emptyDraft()],
@@ -773,13 +774,13 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const others = zones.filter((other) => other.id !== zone?.id);
   const taken = useMemo(() => {
-    const places = new Map(others.flatMap((other) => other.locations.map((place) => [place.id, other.name] as const)));
+    const places = new Map(others.flatMap((other) => other.locations.map((place) => [place.id, seededName(other)] as const)));
     const whole = new Map<string, string>();
     const areas = new Map<string, string>();
     for (const other of others) {
       for (const region of other.regions as Region[]) {
-        if (region.adminArea) areas.set(`${region.countryCode}|${region.adminArea}`, other.name);
-        else if (!region.postalPrefix) whole.set(region.countryCode, other.name);
+        if (region.adminArea) areas.set(`${region.countryCode}|${region.adminArea}`, seededName(other));
+        else if (!region.postalPrefix) whole.set(region.countryCode, seededName(other));
       }
     }
     return { places, whole, areas };
@@ -789,7 +790,8 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
     [taken.whole, t],
   );
   const body = () => ({
-    name: draft.name.trim(),
+    // The seeded name shown in this language, untouched, stays stored as it was.
+    name: zone ? savedSeededName(zone, draft.name) : draft.name.trim(),
     ...zoneRegionsBody(draft.countries, draft.places),
     rates: draft.rates.map(toRateInput),
   });
@@ -879,7 +881,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
           <ConfirmDialog
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
-            title={common("deleteNamed", { name: zone.name })}
+            title={common("deleteNamed", { name: seededName(zone) })}
             description={t("deleteZoneConfirm")}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
@@ -984,8 +986,8 @@ export function DeliveryZonesCard() {
       rows={
         <>
           {data.zones.map((zone) => (
-            <SettingsDialog layout={settingsSheet} key={zone.id} title={t("editZone", { name: zone.name })} trigger={
-              <SettingsRow disabled={!canEdit} label={zone.name} value={`${regionSummary(zone, t)} · ${summary(zone.rates)}`} />
+            <SettingsDialog layout={settingsSheet} key={zone.id} title={t("editZone", { name: seededName(zone) })} trigger={
+              <SettingsRow disabled={!canEdit} label={seededName(zone)} value={`${regionSummary(zone, t)} · ${summary(zone.rates)}`} />
             }>
               <ZoneForm zone={zone} zones={data.zones} />
             </SettingsDialog>

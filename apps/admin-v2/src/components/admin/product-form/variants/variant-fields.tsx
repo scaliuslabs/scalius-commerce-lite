@@ -111,13 +111,6 @@ export function inheritedMainPhoto(value: string | null | undefined, images: rea
   return value === null ? images.find((image) => image.isPrimary) : undefined;
 }
 
-/** "Main photo", muted beside the SKU: the visible half of a muted inherited thumbnail. */
-export function InheritedPhotoNote({ value, images, className }: { value: string | null | undefined; images: readonly ProductSkuImageChoice[]; className?: string }) {
-  const t = useMessages(productVariantMessages);
-  if (!inheritedMainPhoto(value, images)) return null;
-  return <span aria-hidden="true" data-inherited-photo-note="" className={cn("shrink-0", className)}>{t("mainPhoto")}</span>;
-}
-
 // Variant photo = an exact product image, or null to use the product's main photo.
 export function VariantImagePicker({ readOnly = false, value, images, onChange, label, allowNoChange = false, invalid = false }: {
   readOnly?: boolean;
@@ -161,7 +154,8 @@ export function VariantImagePicker({ readOnly = false, value, images, onChange, 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="icon" className="overflow-hidden" aria-label={triggerLabel} aria-invalid={invalid || undefined}>
+        {/* A faded thumbnail is the main photo: its name and tooltip say so, no note on every row. */}
+        <Button type="button" variant="outline" size="icon" className="overflow-hidden" aria-label={triggerLabel} title={triggerLabel} aria-invalid={invalid || undefined}>
           {selected
             ? <img
                 src={mediaImageUrl(selected.url, 80)}

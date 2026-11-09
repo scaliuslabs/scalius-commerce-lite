@@ -5,7 +5,7 @@ import { getCorsOriginContext } from "@scalius/shared/cors-helper";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { errorResponseFromError, logApiError } from "../utils/api-response";
-import { RateLimitError } from "../utils/api-error";
+import { MethodNotAllowedError, NotFoundError, RateLimitError } from "../utils/api-error";
 import { requestValidationErrorMiddleware } from "../utils/request-validation-error";
 import { withTrackedPlatformEnv } from "./runtime-env";
 import { withStoreTimeZone } from "@scalius/core/utils/store-time-zone";
@@ -35,6 +35,19 @@ function getR2PublicUrl(env: Env, requestUrl: string): string {
   return configured;
 }
 
+const ROUTED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+/**
+ * The methods with a handler of their own at this path. A route registered for
+ * every method (middleware, `app.all`) matches any method name, so it is what
+ * a method no route uses matches, and is left out.
+ */
+export function routedMethods(app: Hono<{ Bindings: Env }>, path: string): string[] {
+  const routesOf = (method: string) => new Set(app.router.match(method, path)[0].map(([[, route]]) => route));
+  const anyMethod = routesOf("SCALIUS-NO-METHOD");
+  return ROUTED_METHODS.filter((method) => [...routesOf(method)].some((route) => !anyMethod.has(route)));
+}
+
 /**
  * Creates the small common HTTP shell shared by every lazy route family.
  * Route modules stay outside this graph so a request initializes only the
@@ -54,6 +67,19 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     if (error instanceof RateLimitError && error.retryAfterSeconds) {
       c.header("Retry-After", String(Math.ceil(error.retryAfterSeconds)));
     }
+    if (error instanceof MethodNotAllowedError) c.header("Allow", error.allow.join(", "));
+    return c.json(body, status);
+  });
+
+  // No handler answered: 405 with Allow when the path has handlers for other
+  // methods, else 404. Every route family shares this one answer.
+  app.notFound((c) => {
+    const allow = routedMethods(app, c.req.path);
+    const error = allow.length > 0
+      ? new MethodNotAllowedError(allow)
+      : new NotFoundError("No API endpoint has this path");
+    const { body, status } = errorResponseFromError(error);
+    if (allow.length > 0) c.header("Allow", allow.join(", "));
     return c.json(body, status);
   });
 

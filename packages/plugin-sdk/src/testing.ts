@@ -1,5 +1,5 @@
 import { OBJECT_HANDLE_PATTERN, prepareObjectData, objectDataWire } from "@scalius/shared/plugins/objects";
-import { customFieldsReadFields, functionReadHop, functionReadKey, isCustomFieldsRead, isPerLineRead, type FunctionReadDeclaration, type FunctionReadRecord, type FunctionReads } from "@scalius/shared/plugins/function-reads";
+import { customFieldsReadFields, FUNCTION_READ_JOIN_SEPARATOR, functionClock, functionReadHop, functionReadJoin, functionReadKey, isCustomFieldsRead, isListRead, isPerLineRead, type FunctionReadDeclaration, type FunctionReadRecord, type FunctionReads } from "@scalius/shared/plugins/function-reads";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
 import { customFieldWireValue, isCustomFieldMoney, parseCustomFieldValidations, parseCustomFieldValue, type CustomFieldType } from "@scalius/shared/custom-fields";
 // `@scalius/plugin-sdk/testing`: run a plugin's handlers in a unit test with
@@ -53,6 +53,14 @@ import {
   type PluginJob,
   type PluginJobErrorCode,
 } from "@scalius/shared/plugins/jobs";
+import {
+  PLUGIN_UPLOAD_ID_PATTERN,
+  PLUGIN_UPLOAD_LIFETIME_SECONDS,
+  pluginUploadReadBounds,
+  pluginUploadSlice,
+  type PluginUpload,
+} from "@scalius/shared/plugins/uploads";
+import { buyerUploadFilename, sniffAdminUploadType, type AdminUploadType } from "@scalius/shared/buyer-uploads";
 import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import { STOREFRONT_CORE_ROUTES } from "@scalius/shared/storefront-routes";
 import type { EventTopic } from "@scalius/shared/events";
@@ -224,6 +232,26 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   type TestJob = { id: string; name: string; input: unknown; state: unknown; status: PluginJob["status"]; done: number; total: number; message: string | null; error: string | null; steps: number; attempts: number; key: string | null; createdAt: string; updatedAt: string; finishedAt: string | null };
   const jobs = new Map<string, TestJob>();
   let jobSerial = 0;
+  /** Files staff gave the app's admin forms (`harness.upload`), by id; `ctx.uploads` reads them as the host does. */
+  type TestUpload = { id: string; bytes: Uint8Array; filename: string; mediaType: AdminUploadType; route: string; createdAtMs: number };
+  const uploads = new Map<string, TestUpload>();
+  let uploadSerial = 0;
+  const uploadView = (upload: TestUpload): PluginUpload => ({
+    id: upload.id, filename: upload.filename, mediaType: upload.mediaType, sizeBytes: upload.bytes.byteLength, route: upload.route,
+    createdAt: new Date(upload.createdAtMs).toISOString(),
+    expiresAt: new Date(upload.createdAtMs + PLUGIN_UPLOAD_LIFETIME_SECONDS * 1000).toISOString(),
+  });
+  /** The app's live upload (an expired one reads as gone, as after the platform's sweep). */
+  const liveUpload = (id: unknown): TestUpload | null => {
+    if (typeof id !== "string" || !PLUGIN_UPLOAD_ID_PATTERN.test(id)) refuse("uploads_invalid", "An upload id is bup_ and 24 characters.");
+    const upload = uploads.get(id);
+    if (!upload) return null;
+    if (clock() >= upload.createdAtMs + PLUGIN_UPLOAD_LIFETIME_SECONDS * 1000) {
+      uploads.delete(id);
+      return null;
+    }
+    return upload;
+  };
   const jobView = (job: TestJob): PluginJob => ({
     id: job.id, name: job.name, status: job.status, progress: { done: job.done, total: job.total }, message: job.message, error: job.error,
     steps: job.steps, createdAt: job.createdAt, updatedAt: job.updatedAt, finishedAt: job.finishedAt,
@@ -671,6 +699,28 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (job.status === "running") finishJob(job, "failed", "cancelled");
       return jobView(job);
     },
+    // The host's checks (packages/core/src/modules/buyer-uploads/app-uploads.ts): the app's own live upload, bounded slices of whole lines.
+    uploadsGet: async (id) => {
+      const upload = liveUpload(id);
+      return upload ? uploadView(upload) : null;
+    },
+    uploadsRead: async (id, optionsInput) => {
+      const upload = liveUpload(id);
+      const bounds = pluginUploadReadBounds(optionsInput);
+      if (!bounds.ok) refuse("uploads_invalid", bounds.message);
+      if (!upload) refuse("uploads_not_found", "The upload was not found.");
+      const sizeBytes = upload.bytes.byteLength;
+      if (bounds.offset > sizeBytes) refuse("uploads_invalid", `offset is at most the file's ${sizeBytes} bytes.`);
+      const slice = pluginUploadSlice(upload.bytes.slice(bounds.offset, bounds.offset + bounds.length), bounds.offset, sizeBytes);
+      if (!slice) refuse("uploads_invalid", "offset falls inside a character: pass 0 or the nextOffset a read answered.");
+      return slice;
+    },
+    uploadsDelete: async (id) => {
+      const upload = liveUpload(id);
+      if (!upload) return false;
+      uploads.delete(upload.id);
+      return true;
+    },
   };
 
   const seed: PluginContextSeed = {
@@ -711,7 +761,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     const value = input as { cart?: { customer?: { id?: string } | null; lines?: Array<{ variantId: string; productId: string }>; attributes?: Record<string, string> } | null; customer?: { id?: string } | null; attributes?: Record<string, string> };
     const customerId = value.cart?.customer?.id ?? value.customer?.id ?? null;
     const lines = value.cart?.lines ?? [];
-    const attributes = value.cart?.attributes ?? value.attributes ?? {};
+    // A checkout attribute's answer: `cart.attributes` by `<app id>.<key>`, a Buyer UI input's own `attributes` by bare key.
+    const attribute = (key: string) => value.cart?.attributes?.[`${manifest.id}.${key}`] ?? value.attributes?.[key];
+    const now = (input as { now?: string }).now ?? functionClock(clock());
     const reads: FunctionReads = {};
     const targets: Record<string, CommitTarget> = {};
     const recordOf = (object: string, id: string): FunctionReadRecord | null => {
@@ -724,8 +776,31 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       const ids = key === "line.variantId" ? unique(lines.map((line) => line.variantId))
         : key === "line.productId" ? unique(lines.map((line) => line.productId))
           : key === "customer" ? (customerId ? [customerId] : [])
-            : typeof key === "string" ? [readRecordId(attributes[`${manifest.id}.${key.slice("attribute.".length)}`])].filter((id): id is string => id !== null)
+            : typeof key === "string" ? [readRecordId(attribute(key.slice("attribute.".length)))].filter((id): id is string => id !== null)
               : [];
+      // A composite key: every part answered, joined (a day and a window name one slot).
+      const join = functionReadJoin(key);
+      if (join) {
+        const parts = join.map((part) => attribute(part)?.trim() ?? "");
+        const id = parts.every((part) => part.length > 0) ? readRecordId(parts.join(FUNCTION_READ_JOIN_SEPARATOR)) : null;
+        if (id) ids.push(id);
+      }
+      if (isListRead(read)) {
+        // A list read, as the host reads it: one declared index, equality on its leading fields, from the run's clock.
+        const { where = {}, orderBy, direction = "asc", from, limit } = read.list;
+        const type = manifest.objects[read.object]?.fields.find((field) => field.key === orderBy)?.type;
+        const at = orderBy && from === "now" ? (type === "integer" ? Date.parse(now) : now) : null;
+        const sign = direction === "desc" ? -1 : 1;
+        const order = (data: Record<string, unknown>) => (orderBy && type === "date_time" && typeof data[orderBy] === "string" ? Date.parse(data[orderBy] as string) : scalar(orderBy ? data[orderBy] : null));
+        const bound = at === null ? null : typeof at === "string" ? Date.parse(at) : at;
+        reads[read.as] = [...(records.get(read.object) ?? new Map())]
+          .filter(([, data]) => Object.entries(where).every(([field, expected]) => compare(scalar(data[field]), scalar(expected)) === 0))
+          .filter(([, data]) => bound === null || sign * compare(order(data), bound) >= 0)
+          .sort(([leftId, left], [rightId, right]) => sign * ((orderBy ? compare(order(left), order(right)) : 0) || (leftId < rightId ? -1 : leftId > rightId ? 1 : 0)))
+          .slice(0, limit)
+          .map(([id, data]) => copy({ id, revision: revisions.get(revisionKey(read.object, id)) ?? 1, data }));
+        continue;
+      }
       if (isCustomFieldsRead(read)) {
         const fields = customFieldsReadFields(read);
         const pick = (ownerId: string): FunctionReadRecord | null => {
@@ -842,8 +917,9 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (!declaration) throw new Error(`The manifest declares no ${point} function.`);
       const scoped = withRoles(input);
       const given = (input as { reads?: FunctionReads }).reads;
-      const { reads, targets } = resolveReads(declaration.reads ?? [], scoped, given);
-      const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(given === undefined ? { ...scoped, reads } : scoped);
+      const timed = { now: functionClock(clock()), ...scoped };
+      const { reads, targets } = resolveReads(declaration.reads ?? [], timed, given);
+      const checked = PLUGIN_FUNCTION_SCHEMAS[point].input.safeParse(given === undefined ? { ...timed, reads } : timed);
       if (!checked.success) {
         const issue = checked.error.issues[0];
         throw new TypeError(`Invalid ${point} input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
@@ -893,8 +969,13 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
      */
     extension: async (input: PluginFunctionInputDraft<typeof PLUGIN_EXTENSION_RUN>): Promise<PluginFunctionTestResult<typeof PLUGIN_EXTENSION_RUN>> => {
       const target: StorefrontUiSlot = input.target;
-      if (!manifest.storefront.extensions.some((extension) => extension.target === target)) throw new Error(`The manifest declares no ${target} extension.`);
-      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(withRoles(input));
+      const declared = manifest.storefront.extensions.find((extension) => extension.target === target);
+      if (!declared) throw new Error(`The manifest declares no ${target} extension.`);
+      // The slot's declared reads come from the harness's records, as the host resolves them, unless the input passes its own.
+      const timed = { now: functionClock(clock()), ...withRoles(input) };
+      const given = (input as { reads?: FunctionReads }).reads;
+      const passed = given !== undefined && Object.keys(given).length > 0;
+      const checked = PLUGIN_EXTENSION_SCHEMAS.input.safeParse(passed ? timed : { ...timed, reads: resolveReads(declared.reads ?? [], timed, undefined).reads });
       if (!checked.success) {
         const issue = checked.error.issues[0];
         throw new TypeError(`Invalid ${target} extension input at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`);
@@ -981,6 +1062,41 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     roles: (customerId: string): PluginCustomerRole[] => rolesOf(customerId),
     /** The jobs the app started (`ctx.jobs.start`), oldest first. */
     jobs: (): PluginJob[] => [...jobs.values()].map(jobView),
+    /**
+     * Staff choose a file in one of the app's admin forms (`ui.fileField`):
+     * the platform's checks, then the upload id the form sends as the field's
+     * value. `route` is the admin route the form posts to (one the manifest
+     * declares for POST, PUT or PATCH). The file is typed from its bytes
+     * (`text/csv`: UTF-8 text without control characters or markup) and held
+     * to the plan's upload size; anything else throws, naming the upload
+     * route's refusal (`upload_type_not_accepted: …`, `upload_too_large: …`).
+     */
+    upload: (content: string | Uint8Array, uploadOptions: { route: string; filename?: string }): PluginUpload => {
+      const declared = manifest.routes.admin.find((entry) => entry.name === uploadOptions.route);
+      if (!declared || !declared.methods.some((method) => method === "POST" || method === "PUT" || method === "PATCH")) {
+        throw new Error(`The manifest declares no admin route ${uploadOptions.route} that takes a form.`);
+      }
+      const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content.slice();
+      const maxBytes = PLAN_LIMITS[options.plan ?? "free"].uploads.maxBytes;
+      // The upload route's refusals reach staff in the dashboard, never the app: plain errors naming the route's code.
+      if (bytes.byteLength < 1 || bytes.byteLength > maxBytes) throw new Error(`upload_too_large: files must be ${maxBytes} bytes or smaller.`);
+      const mediaType = sniffAdminUploadType(bytes);
+      if (!mediaType) throw new Error("upload_type_not_accepted: this file type is not accepted here. Choose a CSV file.");
+      uploadSerial += 1;
+      const upload: TestUpload = {
+        id: `bup_${uploadSerial.toString(36).padStart(24, "0")}`,
+        bytes, mediaType, route: uploadOptions.route,
+        filename: buyerUploadFilename(uploadOptions.filename ?? "upload.csv", mediaType),
+        createdAtMs: clock(),
+      };
+      uploads.set(upload.id, upload);
+      return uploadView(upload);
+    },
+    /** The app's live uploads (an upload the app deleted, or one past its lifetime, is gone). */
+    uploads: (): PluginUpload[] => [...uploads.keys()].flatMap((id) => {
+      const upload = liveUpload(id);
+      return upload ? [uploadView(upload)] : [];
+    }),
     /** The limit breaches the app's runs caused (a run past the plan's platform calls); the platform stops an app after five in an hour. */
     get breaches(): ReadonlyArray<{ kind: "subrequests"; at: number }> {
       return breaches.map((breach) => ({ ...breach }));

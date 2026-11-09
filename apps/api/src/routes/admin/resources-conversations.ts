@@ -28,7 +28,7 @@ import {
 } from "@scalius/core/modules/conversations";
 import { keysetCondition } from "@scalius/core/utils/keyset";
 import { conversationMessageRepresentationSchema, EVENT_REPRESENTATION_SCHEMAS } from "@scalius/shared/events";
-import { MESSAGING_CHANNELS } from "@scalius/shared/plugins/providers";
+import { MESSAGING_CHANNEL_ID_MAX, MESSAGING_CHANNELS, parseCustomChannelId } from "@scalius/shared/plugins/providers";
 import type { ListCursorShape } from "@scalius/shared/pagination";
 import { adminRouter } from "./admin-router";
 import { idempotencyKeyHeaderSchema, scopedRequestKey } from "./idempotency";
@@ -71,7 +71,10 @@ app.openapi(createRoute({
     query: z.object({
       ...resourcePageQueryWith(CONVERSATION_PAGE_MAX, 20),
       status: z.enum(["open", "pending", "closed"]).optional().openapi({ description: "Only threads in this status." }),
-      channel: z.enum(MESSAGING_CHANNELS).optional().openapi({ description: "Only this chat channel's threads." }),
+      channel: z.union([
+        z.enum(MESSAGING_CHANNELS),
+        z.string().max(MESSAGING_CHANNEL_ID_MAX).refine((channel) => parseCustomChannelId(channel) !== null, "Use a built-in channel or <app id>:<key>."),
+      ]).optional().openapi({ description: "Only this chat channel's threads: a built-in channel (whatsapp, messenger, instagram, telegram, viber) or an app's own `<app id>:<key>`." }),
     }),
   },
   responses: {

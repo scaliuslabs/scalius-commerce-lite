@@ -7,7 +7,7 @@
  * On a phone the list opens as a full-height sheet with the search box on
  * top. Choosing closes the list and fires `change` on the select.
  */
-import { placeDisplayName, rankPlaces } from "./location-search";
+import { placeDisplayName, rankPlaces } from "@scalius/shared/place-search";
 
 export interface LocationComboboxCopy {
   /** "No match for {query}". */

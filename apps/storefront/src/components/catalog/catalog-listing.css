@@ -905,7 +905,9 @@
     min-height: 0;
     flex-direction: column;
     overflow: hidden;
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+    /* The apply bar's own height (CatalogFilters: 1px border, 1rem top padding, a 3rem button,
+       max(1rem, safe-area inset) below), so the last facet never sits under it. */
+    padding-bottom: calc(1px + 4rem + max(1rem, env(safe-area-inset-bottom)));
   }
 
   #filter-section[data-mobile-facet-rail] .catalog-filter-groups {

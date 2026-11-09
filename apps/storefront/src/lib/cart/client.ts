@@ -1,6 +1,7 @@
 import { checkoutText } from "@/lib/checkout-text";
 import { buyerApiErrorText } from "../buyer-api-errors";
-import { readBuyerAttributes, renderBuyerUi } from "@/lib/buyer-ui";
+import { readBuyerAttributes } from "@/lib/buyer-ui/state";
+import { renderBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 import { buyerUiLocaleHeaders } from "@/lib/buyer-ui/locale";
 import { emitBuyerEvent } from "@/lib/buyer-events/bus";
 import { buyerCheckout, buyerMoney, cartLines, eventText } from "@/lib/buyer-events/lines";
@@ -54,7 +55,7 @@ import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { formatCount, pageLanguage, storeRegion } from "@/lib/store-time-zone";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
-import { applyCheckoutButtonState } from "./checkout-button-state";
+import { applyCheckoutButtonState, storeNotDeliveringMessage } from "./checkout-button-state";
 import { renderEmptyCartState } from "./empty-state";
 import { renderCartIssueAction } from "./issue-action";
 import {
@@ -78,6 +79,8 @@ import {
 } from "./rule-errors";
 import {
   clearCheckoutAttemptSession,
+  ensureCheckoutId,
+  readCheckoutId,
   clearHostedPaymentRecoverySession,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
@@ -223,7 +226,7 @@ let undoTimer: ReturnType<typeof setTimeout> | null = null;
 function pendingCheckoutForThisTab(): HostedPaymentRecoverySession | null {
   try {
     const recovery = readHostedPaymentRecoverySession();
-    return recovery?.checkoutId && recovery.checkoutId === sessionStorage.getItem("checkoutId") ? recovery : null;
+    return recovery?.checkoutId && recovery.checkoutId === readCheckoutId() ? recovery : null;
   } catch {
     return null;
   }
@@ -231,7 +234,7 @@ function pendingCheckoutForThisTab(): HostedPaymentRecoverySession | null {
 
 function clearExpiredCheckoutAttempt(checkoutId: string): void {
   try {
-    if (sessionStorage.getItem("checkoutId") === checkoutId) {
+    if (readCheckoutId() === checkoutId) {
       clearCheckoutAttemptSession({ preserveFormDraft: true });
     }
   } catch {
@@ -329,13 +332,9 @@ function notifyDiscountValidationState(): void {
   }
 }
 
+/** The browser's one checkout for its cart: a new tab continues it, never begins another. */
 function getCheckoutId(): string {
-  let checkoutId = sessionStorage.getItem("checkoutId");
-  if (!checkoutId) {
-    checkoutId = `chk_session_${nanoid()}`;
-    sessionStorage.setItem("checkoutId", checkoutId);
-  }
-  return checkoutId;
+  return ensureCheckoutId(() => `chk_session_${nanoid()}`);
 }
 
 function setCheckoutIdInputValue(checkoutId: string): void {
@@ -1096,7 +1095,7 @@ export async function validateCartSnapshot(
   cartValidationAbort = controller;
 
   if (payloadItems.length === 0) {
-    renderBuyerUi([]);
+    void renderBuyerUiWhenNeeded([]);
     cartValidationRetryable = false;
     cartValidationIssues = {};
     validationRuleErrors = [];
@@ -1176,7 +1175,7 @@ export async function validateCartSnapshot(
       }
       latestOnlineOnlyLines = onlineOnlyLines(json.data.items);
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
-      renderBuyerUi(json.data.buyerUi, { onChange: refreshBuyerUi });
+      void renderBuyerUiWhenNeeded(json.data.buyerUi, { onChange: refreshBuyerUi });
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     const deliveryRateRefused =
@@ -1428,7 +1427,7 @@ async function refreshTotals() {
     updateCheckoutButtonState();
     renderAuthoritativeCartQuote(quote, elements);
     setQuotedLineDiscounts(quote);
-    renderBuyerUi(quote.buyerUi, { onChange: refreshBuyerUi });
+    void renderBuyerUiWhenNeeded(quote.buyerUi, { onChange: refreshBuyerUi });
   } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
     // An item that changed is shown on its line and a refused delivery rate
@@ -1678,8 +1677,10 @@ export function updateCheckoutButtonState() {
     checkoutPendingMessage: copy.existingCheckoutTitle,
     discountValidationPending: isDiscountValidationPending(),
     discountValidationPendingMessage: copy.processingText,
-    // No delivery option takes this cart to the address (said beside the options too).
-    deliveryBlockedMessage: document.querySelector<HTMLElement>("[data-shipping-methods]")?.dataset.deliveryBlocked || "",
+    // The store delivers nowhere this cart can go, or no delivery option takes it
+    // to the address (each said beside the form too).
+    deliveryBlockedMessage: storeNotDeliveringMessage()
+      || document.querySelector<HTMLElement>("[data-shipping-methods]")?.dataset.deliveryBlocked || "",
     reasonElement: document.getElementById("submitButtonReason"),
   });
 }

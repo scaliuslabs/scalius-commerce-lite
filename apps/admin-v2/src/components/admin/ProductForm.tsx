@@ -1,4 +1,5 @@
 import React from "react";
+import { useCreateDraft } from "./shared/use-create-draft";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFormState, useWatch, type UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
@@ -29,6 +30,7 @@ import { useFormWithRefusals } from "~/lib/input-refusals";
 import { sortedUniqueStrings } from "~/lib/form-values";
 import {
   SaveBarProvider,
+  SaveConflict,
   SaveErrorBanner,
   SaveNotCompleted,
   useSaveBar,
@@ -56,7 +58,6 @@ import { ShippingCard } from "./product-form/ShippingCard";
 import { CollapsibleCard } from "./product-form/CollapsibleCard";
 import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
 import { StatusCard } from "./product-form/StatusCard";
-import { OnlinePaymentNote } from "./product-form/OnlinePaymentNote";
 import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { WarrantyCard } from "./product-form/WarrantyCard";
@@ -132,6 +133,8 @@ interface ProductFormProps {
   }) => React.ReactNode;
   /** The variant editor rendered by `optionManager`. */
   matrixRef: React.RefObject<OptionMatrixEditorHandle | null>;
+  /** A new product: the variant editor's part of its kept draft (`useCreateDraft`). */
+  createDraftVariants?: { read: () => unknown; restore: (variants: unknown) => void };
   createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
   optionMatrixDirty?: boolean;
@@ -218,6 +221,7 @@ function ProductEditor({
   customizationSchemaInvalid = false,
   brandName = null,
   presence,
+  createDraftVariants,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
@@ -341,10 +345,10 @@ function ProductEditor({
   const invalidLines = useFieldErrorLines(form);
 
   const save = async () => {
-    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
     if (revisionConflict) {
       onOpenRevisionConflict?.();
-      throw new SaveNotCompleted(t("changedElsewhere"));
+      throw new SaveConflict(t("changedElsewhere"));
     }
     // New products send their variants with the product, so their problems block the save too.
     const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
@@ -379,7 +383,7 @@ function ProductEditor({
       form.setValue("additionalInfo", [], { shouldDirty: true });
       values = { ...values, additionalInfo: [] };
     }
-    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly"));
+    if (latestReadOnly.current) throw new SaveNotCompleted(r("readOnly")).as("refused");
     await submit(values, aggregateRevision, { ...composition, ...sectionChanges });
     for (const handle of pending) handle.saved();
     if (tabsMoved.current) {
@@ -399,6 +403,15 @@ function ProductEditor({
     },
   });
   const scope = useSaveScope();
+  // A new product's fields and variants survive a reload or a closed tab.
+  useCreateDraft<{ fields: ProductFormValues; variants?: unknown }>({
+    enabled: !isEdit && !readOnly,
+    read: () => ({ fields: form.getValues(), variants: createDraftVariants?.read() }),
+    restore: ({ fields, variants }) => {
+      form.reset(fields, { keepDefaultValues: true });
+      if (variants) createDraftVariants?.restore(variants);
+    },
+  });
 
   // New products show the web address the server will make from the title until it is edited;
   // an address the merchant didn't type is never sent (see formatFormValuesForSubmission).
@@ -666,15 +679,12 @@ function ProductStatusCard({ form, isEdit, getStorefrontPath, readOnly }: {
 }) {
   const { defaultValues: saved } = useFormState({ control: form.control });
   return (
-    <>
-      <StatusCard
-        form={form}
-        readOnly={readOnly}
-        // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
-        storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
-      />
-      <OnlinePaymentNote form={form} />
-    </>
+    <StatusCard
+      form={form}
+      readOnly={readOnly}
+      // Only a saved, active product has a live page: a draft (or an unsaved handle) would open a 404.
+      storefrontUrl={isEdit && saved?.isActive && saved.slug ? getStorefrontPath(`/products/${saved.slug}`) : undefined}
+    />
   );
 }
 

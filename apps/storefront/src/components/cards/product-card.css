@@ -67,25 +67,18 @@
 
 .site-root .product-card[data-fit="contain"] .product-card-photo {
   padding: 6%;
+  object-fit: contain;
 }
 
-/* No photo: the product's initial in the heading font, scaled to the box. */
+/* No photo: the storefront's one no-photo picture on the muted surface, in the same box. */
 .site-root .product-card-placeholder {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  container-type: size;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 18%;
+  object-fit: contain;
   background: var(--muted);
-  color: color-mix(in oklab, var(--muted-foreground) 40%, var(--muted));
-  font-family: var(--theme-font-heading);
-  font-weight: var(--theme-heading-weight, 650);
-  line-height: 1;
-  user-select: none;
-}
-
-.site-root .product-card-placeholder > span {
-  font-size: 30cqmin;
 }
 
 /* The hover photo: created on intent, appended once decoded, faded in while the pointer is on the card. */

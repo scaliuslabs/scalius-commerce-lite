@@ -3,6 +3,7 @@
 // the primary (backup) market keeps the root URL; its language is the store's
 // default, changed in Languages. Only the primary market sets a price increment; a market in the shop currency uses
 // it, a market in its own currency (step 6) uses that currency's.
+import { seededName, savedSeededName } from "~/lib/seeded-names";
 import { queryOptions } from "@tanstack/react-query";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { MANUAL_FX_RATE_SOURCE_ID, fxPriceMinor, marketFxPolicyIssue, type FxConversion } from "@scalius/shared/market-pricing";
@@ -18,6 +19,8 @@ const LOCALE_PATTERN = /^[a-z]{2}$/;
 
 export interface MarketForm {
   name: string;
+  /** The name as stored: a seeded name shown in the dashboard's language saves back unchanged (`savedSeededName`). */
+  storedName?: { id: string; name: string };
   handle: string;
   status: "draft" | "active";
   countries: string[];
@@ -93,7 +96,8 @@ export function marketForm(market: Market): MarketForm & { revision: number } {
   const presence = market.presence;
   const subfolder = !market.isBackup && Boolean(presence?.value);
   return {
-    name: market.name,
+    name: seededName(market),
+    storedName: { id: market.id, name: market.name },
     handle: market.handle,
     status: market.status,
     countries: [...market.countries],
@@ -164,7 +168,7 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
   if (form.isBackup) {
     return {
       expectedRevision,
-      name: form.name.trim(),
+      name: form.storedName ? savedSeededName(form.storedName, form.name) : form.name.trim(),
       handle: form.handle.trim(),
       countries: form.countries,
       ...(form.hasRootPresence ? { presence: { value: "", locale } } : {}),
@@ -175,7 +179,7 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
   const own = sellsOwnCurrency(form);
   return {
     expectedRevision,
-    name: form.name.trim(),
+    name: form.storedName ? savedSeededName(form.storedName, form.name) : form.name.trim(),
     handle: form.handle.trim(),
     status: form.status,
     countries: form.countries,
@@ -252,7 +256,7 @@ export function countriesTakenByOthers(markets: readonly Market[] | undefined, m
   const taken = new Map<string, string>();
   for (const market of markets ?? []) {
     if (market.id === marketId) continue;
-    for (const country of market.countries) taken.set(country, market.name);
+    for (const country of market.countries) taken.set(country, seededName(market));
   }
   return taken;
 }

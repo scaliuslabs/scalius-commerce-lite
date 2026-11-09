@@ -525,9 +525,9 @@ const orderRecommendations = order && showsSuccessHero && !statusView
   // A paid download is prepared in the background: the receipt checks back
   // and shows it when it is ready (lib/receipt-download-poll.ts).
   import { pollPreparingDownloads } from "@/lib/receipt-download-poll";
-  import { enhanceBuyerUi } from "@/lib/buyer-ui";
+  import { enhanceBuyerUiWhenNeeded } from "@/lib/buyer-ui/lazy";
 
-  enhanceBuyerUi();
+  void enhanceBuyerUiWhenNeeded();
 
   const orderId = document.querySelector<HTMLElement>("[data-order-success-state][data-order-id]")?.dataset.orderId;
   const laterText = document.querySelector<HTMLElement>("[data-download-preparing]")?.dataset.laterText ?? "";

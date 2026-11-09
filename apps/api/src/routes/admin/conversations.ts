@@ -1,4 +1,4 @@
-import { presentStaffConversation } from "../../utils/conversation-view";
+import { presentStaffConversation, withChannelNames } from "../../utils/conversation-view";
 // Dashboard inbox routes, mounted at /admin/conversations (Wave A §6.2).
 // Reads need conversations.view; replies, notes, uploads, status and
 // assignment need conversations.reply (route-permissions/conversations.ts).
@@ -106,7 +106,9 @@ app.openapi(createRoute({
 }), async (c) => {
   noStore(c);
   const actor = staffActor(c);
-  return ok(c, await listStaffInbox(c.get("db"), actor.userId, c.req.valid("query")));
+  const db = c.get("db");
+  const page = await listStaffInbox(db, actor.userId, c.req.valid("query"));
+  return ok(c, { ...page, items: await withChannelNames(db, page.items) });
 });
 
 app.route("/", adminConversationSavedReplyRoutes);
@@ -125,7 +127,12 @@ app.openapi(createRoute({
     items: z.array(staffConversationSummarySchema), nextCursor: z.string().nullable(), scanExhausted: z.boolean(),
     scanned: z.number().int(),
   })) } } }, ...errorResponses },
-}), async (c) => { noStore(c); return ok(c, await queryStaffInbox(c.get("db"), staffActor(c).userId, c.req.valid("json"))); });
+}), async (c) => {
+  noStore(c);
+  const db = c.get("db");
+  const page = await queryStaffInbox(db, staffActor(c).userId, c.req.valid("json"));
+  return ok(c, { ...page, items: await withChannelNames(db, page.items) });
+});
 
 app.openapi(createRoute({
   operationId: "dashboard.conversations.assignees", method: "get", path: "/assignees", tags: ["Admin - Conversations"],

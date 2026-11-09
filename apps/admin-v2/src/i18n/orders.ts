@@ -33,6 +33,8 @@ export const orderMessages = defineMessages({
     "method.net_terms": "Invoice",
     "method.stripe": "Card (Stripe)",
     "method.gift_card": "Gift card",
+    // Paid as it was placed (marked paid, a point-of-sale sale): cash, a transfer or a card terminal.
+    "method.manual": "Recorded payment",
     "request.cancel_pre_shipment": "Cancellation requested",
     "request.return": "Return requested",
     "request.refund": "Refund requested",
@@ -84,6 +86,7 @@ export const orderMessages = defineMessages({
     "method.net_terms": "ইনভয়েস",
     "method.stripe": "কার্ড (Stripe)",
     "method.gift_card": "গিফট কার্ড",
+    "method.manual": "রেকর্ড করা পেমেন্ট",
     "request.cancel_pre_shipment": "বাতিলের অনুরোধ",
     "request.return": "ফেরতের অনুরোধ",
     "request.refund": "রিফান্ডের অনুরোধ",

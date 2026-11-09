@@ -9,6 +9,7 @@ import type { ProductVariant, ShippingMethod } from "./api/types";
 import type { StorefrontReturnPolicySettings } from "./commerce-structured-data";
 import { catalogCopy, type CatalogCopy } from "./catalog-copy";
 import { formatCount, pageLanguage } from "./store-time-zone";
+import { LOCATION_COUNTRY } from "./checkout/shipping-country";
 
 type DeliveryCopy = CatalogCopy["delivery"];
 
@@ -151,6 +152,35 @@ export function splitDeliveryRates(
 }
 
 /**
+ * Whether a physical item can reach a buyer in some country of `countries`
+ * at all: by a pickup rate (whatever the address), or by a delivery rate
+ * whose zone serves that country where the buyer can enter an address
+ * (Bangladesh's address is a city and thana, so it also needs
+ * `bangladeshAddresses`: an active thana under an active city). Without
+ * `countries`, every country a rate serves. The one rule for every surface
+ * that claims or takes delivery: the product page's delivery and cash on
+ * delivery facts and its buttons, the cart, the quick checkout and the order
+ * form. When it is false a physical item cannot be ordered, so none of them
+ * claims delivery or offers a form the buyer cannot finish.
+ */
+export function physicalDeliveryOffered(
+  shippingMethods: ShippingMethod[] | null | undefined,
+  countries: readonly string[] | undefined,
+  bangladeshAddresses: boolean,
+): boolean {
+  const rates = splitDeliveryRates(shippingMethods, countries);
+  if (rates.pickup.length > 0) return true;
+  return rates.delivery.some((method) =>
+    (method.countries ?? []).some((entry) =>
+      (!countries || countries.includes(entry.code)) && (entry.code !== LOCATION_COUNTRY || bangladeshAddresses)));
+}
+
+/** Bangladesh addresses can be entered: the public config says an active thana sits under an active city. */
+export function bangladeshAddressesOffered(config: CheckoutConfig | null | undefined): boolean {
+  return config?.checkoutReadiness?.hasActiveDeliveryHierarchy === true;
+}
+
+/**
  * States only what holds for every buyer before an address is known. With
  * delivery zones the fee depends on the address, so the line gives the
  * lowest fee and says the price depends on the area instead of one range
@@ -290,14 +320,18 @@ export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
   const freeDelivery = input.freeDelivery === true;
   const fulfilment = input.fulfilment ?? "physical";
   const physical = fulfilment === "physical";
+  // A physical item no rate can bring to this page's buyers is neither
+  // delivered nor paid on delivery: nothing about either is claimed.
+  const handedOver = !physical
+    || physicalDeliveryOffered(input.shippingMethods, input.countries, bangladeshAddressesOffered(input.checkoutConfig));
   const copy = input.copy ?? catalogCopy(pageLanguage()).delivery;
   return [
-    physical ? deliveryFact(rates, input.formatMoney, freeDelivery, copy) : null,
-    physical
+    physical && handedOver ? deliveryFact(rates, input.formatMoney, freeDelivery, copy) : null,
+    physical && handedOver
       ? pickupFact(rates, input.formatMoney, freeDelivery, copy, input.pickupAvailableText?.trim() || undefined)
       : null,
     // Nothing is handed over for a digital item, so there is no cash on delivery.
-    fulfilment === "digital"
+    fulfilment === "digital" || !handedOver
       ? null
       : codFact(
         input.checkoutConfig,

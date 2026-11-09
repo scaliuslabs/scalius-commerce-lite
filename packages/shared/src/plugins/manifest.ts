@@ -20,6 +20,7 @@ import { PLUGIN_SCOPE_NAMES, type PluginScope } from "./scopes";
 import { STOREFRONT_OBJECT_READS_MAX, storefrontComponentsManifestSchema, storefrontObjectReadSchema, type StorefrontObjectRead } from "./storefront-components";
 import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsSchemaSchema, pluginSettingsSchemaSchema, type PluginSettingsSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
+import { MESSAGING_CHANNEL_ID_MAX } from "./providers/channels";
 import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
@@ -937,6 +938,18 @@ export const pluginManifestSchema = z.object({
       if (!settingKeys.has(key)) {
         context.addIssue({ code: "custom", path: ["providers", index, "settings"], message: `Setting ${key} is not declared in settings.` });
       }
+    }
+    // An app's own chat channel is `<app id>:<key>` on the wire, within the channel id's bound.
+    if (provider.kind === "messaging") {
+      (provider.customChannels ?? []).forEach((channel, channelIndex) => {
+        if (`${manifest.id}:${channel.key}`.length > MESSAGING_CHANNEL_ID_MAX) {
+          context.addIssue({
+            code: "custom",
+            path: ["providers", index, "customChannels", channelIndex, "key"],
+            message: `${manifest.id}:${channel.key} is longer than ${MESSAGING_CHANNEL_ID_MAX} characters; use a shorter key.`,
+          });
+        }
+      });
     }
     // A pay-later method is offered only when its app allows it for the buyer.
     if (provider.kind === "payment" && provider.flow === "deferred" && !manifest.functions.some((fn) => fn.point === "checkout.payment_methods")) {

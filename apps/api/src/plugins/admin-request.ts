@@ -7,7 +7,7 @@ import type { Context } from "hono";
 import { staffPermissionSql, getFreshUserPermissionsFromD1 } from "@scalius/core/auth/rbac/helpers";
 import { user } from "@scalius/database/schema";
 import { and, eq } from "drizzle-orm";
-import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { requireRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
 import { resolveDirectAgentOperation } from "../agent-access/direct-operation";
 import { isAgentRiskAllowed, type PluginPrincipal } from "../agent-access/types";
 import { ForbiddenError, UnauthorizedError } from "../utils/api-error";
@@ -21,12 +21,12 @@ export async function authorizePluginAdminRequest(c: Context, dispatched: Plugin
   }
   const pathname = routedApiPath(c);
   const method = c.req.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  // A wrong method or path is 405/404 before any app policy question.
+  const routePermission = requireRoutePermission(pathname, method);
   const operation = resolveDirectAgentOperation(method, pathname);
   if (!operation || !isOperationAvailableToPlugin(operation, principal.firstParty) || !isAgentRiskAllowed(principal.riskCeiling, operation.risk)) {
     throw new ForbiddenError("This dashboard operation is not available to plugins");
   }
-  const routePermission = getRoutePermission(pathname, method);
-  if (!routePermission) throw new ForbiddenError("This admin endpoint is not configured for RBAC");
   const allowed = routePermission.allowAnyAdmin
     ? false
     : routePermission.permission

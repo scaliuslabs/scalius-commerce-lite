@@ -1,4 +1,5 @@
 import { orderDetailLabel } from "~/i18n/order-detail";
+import { seededName } from "~/lib/seeded-names";
 import type { OrderTimelineMessageKey } from "~/i18n/order-timeline";
 import { orderStatusLabel, type OrderMessageKey } from "~/i18n/orders";
 import type { OrderTimelineEvent } from "./api-query-options/orders";
@@ -97,7 +98,8 @@ export function describeTimelineEvent(
       };
     case "pos_sale": {
       // An in-person sale: the counter it was handed over at, and the change given back.
-      const location = text(data.locationName);
+      const named = text(data.locationName);
+      const location = named ? seededName({ name: named }) : null;
       const change = count(data.change);
       return {
         text: location ? t("timeline.posSale", { location }) : t("timeline.posSaleUnnamed"),

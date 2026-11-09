@@ -62,6 +62,17 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/**
+ * The path exists but not for this method: 405 with the methods it takes,
+ * which the API's error handler also sends as the Allow header.
+ */
+export class MethodNotAllowedError extends AppError {
+  constructor(public readonly allow: readonly string[]) {
+    super(405, "method_not_allowed", `This endpoint takes ${allow.join(", ")}.`, { allow: [...allow] });
+    this.name = "MethodNotAllowedError";
+  }
+}
+
 export class ConflictError extends AppError {
   constructor(message: string) {
     super(409, "conflict", message);

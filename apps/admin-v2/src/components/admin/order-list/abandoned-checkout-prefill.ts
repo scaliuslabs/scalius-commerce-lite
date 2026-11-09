@@ -1,37 +1,5 @@
 import type { ParsedAbandonedCheckoutDisplay } from "~/lib/abandoned-checkout-display";
-import { foreignAddress } from "~/components/admin/order-form/order-prefill";
-
-/** sessionStorage key the create-order form reads (and removes) once on mount. */
-export const ORDER_PREFILL_KEY = "admin.orderPrefill";
-
-export interface OrderPrefill {
-  customerName: string;
-  customerPhone: string;
-  customerEmail: string | null;
-  shippingAddress: string;
-  /** Another country's address (absent: Bangladesh, with City/Thana/Area). */
-  shippingCountryCode?: string;
-  shippingAddressLine2?: string;
-  shippingDependentLocality?: string;
-  shippingLocality?: string;
-  shippingAdminArea?: string;
-  shippingPostalCode?: string;
-  city: string;
-  zone: string;
-  area: string | null;
-  /** The delivery method and charge the buyer saw at checkout. */
-  shippingMethodId: string | null;
-  shippingCharge: number | null;
-  items: Array<{
-    productId: string;
-    variantId: string | null;
-    quantity: number;
-    productName?: string;
-    variantLabel?: string | null;
-  }>;
-  /** The checkout session the order completes: the order deletes its abandoned snapshot. */
-  abandonedCheckoutId?: string;
-}
+import { foreignAddress, ORDER_PREFILL_STORAGE_KEY, type OrderPrefill } from "~/components/admin/order-form/order-prefill";
 
 function text(data: Record<string, unknown>, key: string): string {
   const value = data[key];
@@ -67,16 +35,20 @@ export function buildOrderPrefill(
     city: text(data, "city"),
     zone: text(data, "zone"),
     area: text(data, "area") || null,
+    // The names the checkout showed: the pickers label the choice with them.
+    ...(text(data, "cityName") ? { cityName: text(data, "cityName") } : {}),
+    ...(text(data, "zoneName") ? { zoneName: text(data, "zoneName") } : {}),
+    ...(text(data, "areaName") ? { areaName: text(data, "areaName") } : {}),
     shippingMethodId: fee === null ? null : text(shipping, "id") || null,
     shippingCharge: fee,
+    // The SKUs, quantities, inputs and the price the buyer saw; the form prices them today.
     items: display.items.map((item) => ({
       productId: item.id,
       variantId: item.variantId ?? null,
       quantity: item.quantity,
-      productName: item.name,
-      variantLabel: item.options?.length
-        ? item.options.map((option) => `${option.name}: ${option.value}`).join(", ")
-        : null,
+      name: item.variantLabel ? `${item.name} (${item.variantLabel})` : item.name,
+      price: item.price,
+      ...(item.properties?.length ? { properties: item.properties } : {}),
     })),
     ...(checkoutId?.trim() ? { abandonedCheckoutId: checkoutId.trim() } : {}),
   };
@@ -85,7 +57,7 @@ export function buildOrderPrefill(
 /** Hands the values to the create-order form; false when storage is blocked. */
 export function writeOrderPrefill(prefill: OrderPrefill): boolean {
   try {
-    sessionStorage.setItem(ORDER_PREFILL_KEY, JSON.stringify(prefill));
+    sessionStorage.setItem(ORDER_PREFILL_STORAGE_KEY, JSON.stringify(prefill));
     return true;
   } catch {
     return false;

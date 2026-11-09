@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { seededName } from "~/lib/seeded-names";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -82,7 +83,7 @@ export function LocationIdsPicker({
         load={deliveryLocationLoader({
           type,
           toOption: (location) => {
-            names.set(location.id, location.name);
+            names.set(location.id, seededName(location));
             return { ...locationOption(location), disabled: ids.includes(location.id) };
           },
         })}

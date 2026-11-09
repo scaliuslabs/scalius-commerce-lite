@@ -11,6 +11,7 @@
 // long-lived (RFC 8058 links must keep working). It can only unsubscribe.
 // Rotating SCALIUS_SECRET voids every outstanding link.
 
+import { isMarketSubfolder } from "@scalius/shared/markets";
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { isMarketingChannel, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { ServiceUnavailableError } from "@scalius/core/errors";
@@ -108,13 +109,18 @@ function storefrontLink(storefrontUrl: string, path: string, token: string): str
     return url.toString();
 }
 
-/** The confirm page link, or null when the store URL is not an absolute http(s) origin. */
-export function marketingConfirmUrl(storefrontUrl: string | null | undefined, token: string): string | null {
-    return absoluteOrigin(storefrontUrl) ? storefrontLink(storefrontUrl!, MARKETING_CONFIRM_PATH, token) : null;
+/** The page under the buyer's presence (`/bn/...`), so it speaks the message's language. */
+function presencePath(presence: string | null | undefined, path: string): string {
+    return isMarketSubfolder(presence) ? `/${presence}${path}` : path;
 }
 
-export function marketingUnsubscribeUrl(storefrontUrl: string | null | undefined, token: string): string | null {
-    return absoluteOrigin(storefrontUrl) ? storefrontLink(storefrontUrl!, MARKETING_UNSUBSCRIBE_PATH, token) : null;
+/** The confirm page link, or null when the store URL is not an absolute http(s) origin. */
+export function marketingConfirmUrl(storefrontUrl: string | null | undefined, token: string, presence?: string | null): string | null {
+    return absoluteOrigin(storefrontUrl) ? storefrontLink(storefrontUrl!, presencePath(presence, MARKETING_CONFIRM_PATH), token) : null;
+}
+
+export function marketingUnsubscribeUrl(storefrontUrl: string | null | undefined, token: string, presence?: string | null): string | null {
+    return absoluteOrigin(storefrontUrl) ? storefrontLink(storefrontUrl!, presencePath(presence, MARKETING_UNSUBSCRIBE_PATH), token) : null;
 }
 
 function absoluteOrigin(value: string | null | undefined): boolean {

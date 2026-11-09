@@ -20,11 +20,21 @@ import { planLimits, type PlanLimits } from "./plan-limits";
 export const BUYER_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
 export type BuyerUploadType = (typeof BUYER_UPLOAD_TYPES)[number];
 
-export const BUYER_UPLOAD_EXTENSIONS: Readonly<Record<BuyerUploadType, string>> = {
+/**
+ * What an app's admin `file-field` may accept (staff uploading for one of the
+ * app's own admin forms, e.g. a CSV import): UTF-8 text, never served inline.
+ */
+export const ADMIN_UPLOAD_TYPES = ["text/csv"] as const;
+export type AdminUploadType = (typeof ADMIN_UPLOAD_TYPES)[number];
+/** Every type the upload table stores. */
+export type StoredUploadType = BuyerUploadType | AdminUploadType;
+
+export const BUYER_UPLOAD_EXTENSIONS: Readonly<Record<StoredUploadType, string>> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "application/pdf": "pdf",
+  "text/csv": "csv",
 };
 
 /** The R2 prefix; the media hostname never serves `private/`. */
@@ -167,12 +177,38 @@ export function sniffBuyerUploadType(bytes: Uint8Array): BuyerUploadType | null 
   return null;
 }
 
+const UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * An admin upload's type, read from its bytes alone: text (`text/csv`) when
+ * the bytes are valid UTF-8 without NUL or other control characters (tab,
+ * line feed, carriage return and form feed allowed) and do not open, after an
+ * optional byte-order mark and white space, with markup (`<`): an HTML or SVG
+ * page renamed `.csv`, a spreadsheet's binary or an image is null.
+ */
+export function sniffAdminUploadType(bytes: Uint8Array): AdminUploadType | null {
+  if (bytes.byteLength === 0) return null;
+  let text: string;
+  try {
+    text = UTF8.decode(bytes);
+  } catch {
+    return null;
+  }
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if ((code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0c && code !== 0x0d) || code === 0x7f) return null;
+  }
+  const opening = text.replace(/^\uFEFF/u, "").trimStart();
+  if (opening.startsWith("<")) return null;
+  return "text/csv";
+}
+
 /**
  * A safe display name for the file: its last path segment, NFC, with control
  * and path characters removed, at most 120 characters, and the extension of
  * the sniffed type (so the name never claims another type).
  */
-export function buyerUploadFilename(name: string | null | undefined, type: BuyerUploadType): string {
+export function buyerUploadFilename(name: string | null | undefined, type: StoredUploadType): string {
   const extension = BUYER_UPLOAD_EXTENSIONS[type];
   const base = (name ?? "").normalize("NFC").split(/[\\/]/u).pop() ?? "";
   let clean = "";

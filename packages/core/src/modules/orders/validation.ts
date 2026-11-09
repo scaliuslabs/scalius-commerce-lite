@@ -168,6 +168,12 @@ const orderChannelSourceInputSchema = z
  */
 /** How a staff or app order is paid: cash on delivery, or an invoice paid later by its due date. */
 export const manualOrderPaymentMethodSchema = z.enum(["cod", "net_terms"]);
+/**
+ * What a manual-order quote prices: also an order paid as it is placed
+ * (`manual`: marked paid, an in-person sale), which, like an invoice, need
+ * not be a cash amount and may hold downloads and gift cards.
+ */
+export const manualOrderQuotePaymentMethodSchema = z.enum(["cod", "net_terms", "manual"]);
 
 /**
  * An in-person sale (a point of sale): the location the goods leave from at
@@ -175,14 +181,23 @@ export const manualOrderPaymentMethodSchema = z.enum(["cod", "net_terms"]);
  * whole total is tendered; only cash may exceed it, and the excess is the
  * change given back.
  */
-export const pointOfSaleInputSchema = z.object({
+const pointOfSaleTenderSchema = z.object({
+    via: z.enum(POINT_OF_SALE_TENDER_VIAS),
+    amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT),
+    reference: z.string().trim().max(120).nullable().optional(),
+}).strict();
+const pointOfSaleFields = {
     locationId: z.string().trim().min(1).max(128),
     staffMemberId: z.string().trim().min(1).max(128).nullable().optional(),
-    tenders: z.array(z.object({
-        via: z.enum(POINT_OF_SALE_TENDER_VIAS),
-        amountMinor: z.number().int().min(1).max(MAX_MINOR_AMOUNT),
-        reference: z.string().trim().max(120).nullable().optional(),
-    }).strict()).min(1).max(POINT_OF_SALE_TENDERS_MAX),
+};
+export const pointOfSaleInputSchema = z.object({
+    ...pointOfSaleFields,
+    tenders: z.array(pointOfSaleTenderSchema).min(1).max(POINT_OF_SALE_TENDERS_MAX),
+}).strict();
+/** A sale as its quote takes it: the tenders taken so far, none yet included. */
+export const pointOfSaleQuoteInputSchema = z.object({
+    ...pointOfSaleFields,
+    tenders: z.array(pointOfSaleTenderSchema).max(POINT_OF_SALE_TENDERS_MAX).default([]),
 }).strict();
 export type PointOfSaleInput = z.infer<typeof pointOfSaleInputSchema>;
 
@@ -217,9 +232,10 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     paymentTermsDays: z.number().int().min(1).max(PAYMENT_TERMS_MAX_DAYS).optional(),
     /**
      * Mark as paid: the whole amount was already received (cash at the
-     * counter, a bank transfer, a mobile wallet). The order is placed as an
-     * invoice and the payment is recorded right after, so it is paid and its
-     * downloads and gift cards are handed over.
+     * counter, a bank transfer, a mobile wallet). The order is placed with the
+     * payment method `manual` (no invoice, no terms) and the payment of its
+     * `via` is recorded right after, so it is paid and its downloads and gift
+     * cards are handed over.
      */
     paid: z.object({
         via: z.enum(RECORDED_PAYMENT_VIAS),
@@ -245,6 +261,18 @@ export const createOrderSchema = createOrderObjectSchema.superRefine(refineDeliv
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
 /**
+ * What an order's quote prices (`quoteManualOrderPlacement`): the create's
+ * fields without a request key or contact, a sale's tenders optional.
+ */
+export const quoteManualOrderPlacementSchema = createOrderObjectSchema.omit({
+    requestKey: true,
+    customerName: true,
+    customerPhone: true,
+    customerEmail: true,
+}).extend({ pointOfSale: pointOfSaleQuoteInputSchema.optional() }).superRefine(refineDeliveryLine);
+export type ManualOrderPlacementQuoteInput = z.infer<typeof quoteManualOrderPlacementSchema>;
+
+/**
  * Read-only authoritative preview used by the manual-order form. Contact facts
  * are intentionally excluded: tax and money depend only on the sellable lines,
  * destination, shipping, and order-level discount.
@@ -267,8 +295,8 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
 }).extend({
     /** Decides pickup vs delivery (and so whether the address is taxed). */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
-    /** Cash on delivery (the default) must collect the total exactly; an invoice need not. */
-    paymentMethod: manualOrderPaymentMethodSchema.optional(),
+    /** Cash on delivery (the default) must collect the total exactly; an invoice or an order already paid need not. */
+    paymentMethod: manualOrderQuotePaymentMethodSchema.optional(),
     /** The customer the order is for: a tax-exempt customer's order pays no tax. */
     customerId: z.string().trim().min(1).max(128).nullable().optional(),
 });

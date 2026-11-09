@@ -1,4 +1,5 @@
 import React from "react";
+import { seededName } from "~/lib/seeded-names";
 import { WeightInput, useWeightUnit } from "./WeightInput";
 import { formatWeight } from "./weight-format";
 import { createPortal } from "react-dom";
@@ -28,7 +29,7 @@ import {
   inventoryLocationsQueryOptions,
   productInventoryLevelsQueryOptions,
 } from "@/lib/api-query-options/inventory-locations";
-import { SaveNotCompleted } from "../../shared/SaveBar";
+import { SaveConflict, SaveNotCompleted } from "../../shared/SaveBar";
 import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
 import { formatNumber, useMessages } from "~/i18n";
@@ -137,7 +138,18 @@ type OptionMatrixEditorProps = {
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
   /** The product's Fulfilment select: one kind for every SKU, or per variant (a column). */
   fulfilmentMode?: ProductFulfilmentMode;
+  /** A new product's kept draft (`useCreateDraft`): the editor starts from it, as unsaved changes. */
+  restoredDraft?: OptionMatrixDraftState | null;
+  /** A new product's draft as it changes, for its kept draft. */
+  onDraftStateChange?: (state: OptionMatrixDraftState) => void;
 };
+
+/** What a new product's option editor holds: kept with the product's draft so a reload restores it. */
+export interface OptionMatrixDraftState {
+  simpleSku: SimpleSkuDraft;
+  options: DraftOption[];
+  variants: DraftVariant[];
+}
 
 // One array for "none saved": a default of `[]` is a new array on every render, which made the memos below and the draft effect run on every render (and, with a parent that stores the draft, loop).
 const NO_OPTIONS: ProductOptionDefinition[] = [];
@@ -169,6 +181,8 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   onSavingChange,
   onRevisionConflict,
   fulfilmentMode = "physical",
+  restoredDraft = null,
+  onDraftStateChange,
 }, ref) {
   const t = useMessages(productVariantMessages);
   // Saved SKUs read as the merchant's pair (price customers pay, compare-at price); rows go back as base and discount.
@@ -178,19 +192,25 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
-  const [simpleSkuDraft, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku, fulfilmentMode));
+  const [simpleSkuDraft, setSimpleSku] = React.useState<SimpleSkuDraft>(() => restoredDraft?.simpleSku ?? initialSimpleSku(defaultSku, fulfilmentMode));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
   // Quantities need "Adjust stock" (products.adjust_stock); the rest of the SKU follows products.edit.
   const canAdjustStock = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_ADJUST_STOCK);
-  const [optionDraft, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
-  const [variantDraft, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants, salePrice));
+  const [optionDraft, setOptions] = React.useState<DraftOption[]>(() => restoredDraft?.options ?? initialOptions(savedOptions));
+  const [variantDraft, setVariants] = React.useState<DraftVariant[]>(() => restoredDraft?.variants ?? initialVariants(savedVariants, salePrice));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const simpleSku = React.useMemo(() => readOnly ? initialSimpleSku(defaultSku) : simpleSkuDraft, [readOnly, defaultSku, simpleSkuDraft]);
   const options = React.useMemo(() => readOnly ? initialOptions(savedOptions) : optionDraft, [readOnly, savedOptions, optionDraft]);
   const variants = React.useMemo(() => readOnly ? initialVariants(savedVariants, salePrice) : variantDraft, [readOnly, savedVariants, variantDraft]);
   // Dirty is the draft against the last saved one: an edit changed back is no change.
   const draft = React.useMemo(() => draftSignature(simpleSkuDraft, optionDraft, variantDraft), [simpleSkuDraft, optionDraft, variantDraft]);
-  const [savedDraft, setSavedDraft] = React.useState(draft);
+  // A restored draft is unsaved: dirty against the empty editor it replaced.
+  const [savedDraft, setSavedDraft] = React.useState(() => (restoredDraft
+    ? draftSignature(initialSimpleSku(defaultSku, fulfilmentMode), initialOptions(savedOptions), initialVariants(savedVariants, salePrice))
+    : draft));
+  React.useEffect(() => {
+    onDraftStateChange?.({ simpleSku: simpleSkuDraft, options: optionDraft, variants: variantDraft });
+  }, [onDraftStateChange, simpleSkuDraft, optionDraft, variantDraft]);
   const sentDraft = React.useRef(draft);
   const dirty = draft !== savedDraft;
   const [revealed, setRevealed] = React.useState(false);
@@ -199,7 +219,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
   const [combinationsPending, setCombinationsPending] = React.useState(false);
   const [topologyChanged, setTopologyChanged] = React.useState(false);
   const [excludedCombinationKeys, setExcludedCombinationKeys] = React.useState<Set<string>>(() => new Set(
-    missingOptionCombinations(initialOptions(savedOptions), initialVariants(savedVariants, salePrice)).map(combinationKey),
+    missingOptionCombinations(restoredDraft?.options ?? initialOptions(savedOptions), restoredDraft?.variants ?? initialVariants(savedVariants, salePrice)).map(combinationKey),
   ));
   const [omittedVariantsByKey, setOmittedVariantsByKey] = React.useState<Map<string, DraftVariant>>(() => new Map());
   // The product's kind (a gift card) limits what its SKUs may be: the table, the checks and
@@ -304,7 +324,7 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
     const byVariant = new Map<string, StockElsewhere>();
     if (!homeLocation || !productLevels || !locations) return byVariant;
     const order = new Map(locations.map((location, index) => [location.id, index]));
-    const locationName = new Map(locations.map((location) => [location.id, location.name]));
+    const locationName = new Map(locations.map((location) => [location.id, seededName(location)]));
     const levelsByVariant = new Map<string, typeof productLevels.levels>();
     for (const level of productLevels.levels) {
       levelsByVariant.set(level.variantId, [...(levelsByVariant.get(level.variantId) ?? []), level]);
@@ -744,11 +764,11 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
           const conflict = readProductRevisionConflict(error);
           if (conflict) {
             onRevisionConflict?.(conflict);
-            throw new SaveNotCompleted(t("changedElsewhere"));
+            throw new SaveConflict(t("changedElsewhere"));
           }
           const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
           const line = issue ? showServerIssue(issue.path, issue.message) : null;
-          throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+          throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed"))).because(error);
         }
       }
       await finishSave(dirty, sendCosts);
@@ -1010,6 +1030,9 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
 
 OptionMatrixEditor.displayName = "OptionMatrixEditor";
 
+/** The option types buyers choose by look: their values take a colour or image swatch. */
+const SWATCH_OPTION_TYPES: ReadonlySet<ProductOptionStandardMapping> = new Set(["color", "pattern", "material"]);
+
 // The swatch editor loads only when a merchant opens it (product routes stay within their budget).
 const OptionSwatchPicker = React.lazy(() => import("./OptionSwatchPicker"));
 
@@ -1139,10 +1162,11 @@ function OptionRow({ readOnly, option, index, canMoveUp, canMoveDown, onMove, on
           <div className="flex flex-wrap gap-1">
             {option.values.map((value) => (
               <Badge key={value.id} variant="secondary">
-                <ValueSwatch
+                {/* Swatches are for what buyers pick by look; a size never offers one, unless it already has one to remove. */}
+                {SWATCH_OPTION_TYPES.has(option.standardMapping) || value.swatch ? <ValueSwatch
                   value={value}
                   onChange={(swatch) => onChange({ ...option, values: option.values.map((each) => (each.id === value.id ? { ...each, swatch } : each)) })}
-                />
+                /> : null}
                 {value.value}
                 <Button
                   type="button"

@@ -3,6 +3,7 @@
 // priority and schedule on the right. The page's save bar saves the details
 // under the revision it loaded; the price grid opens in a sheet (loaded on
 // first use) and saves the prices under the same revision.
+import { seededName } from "~/lib/seeded-names";
 import { lazy, Suspense, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -210,7 +211,7 @@ function PriceListEditorPage({ initial }: { initial: PriceList }) {
                 <p className="text-body">
                   {t("market")}:{" "}
                   <Link to="/admin/settings/markets/$marketId" params={{ marketId: shown.marketId }} className="text-foreground underline">
-                    {shown.marketName}
+                    {seededName({ id: shown.marketId, name: shown.marketName })}
                   </Link>
                 </p>
                 {shown.segmentId ? (

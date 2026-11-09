@@ -2,6 +2,7 @@
 // field's type exactly as the Custom data card draws it, then its status and
 // handle. The page's save bar saves it under the revision the page loaded.
 // Publishing needs every required field.
+import { useCreateDraft } from "~/components/admin/shared/use-create-draft";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -94,6 +95,7 @@ function EntryFormPage({ definition, initial }: { definition: ObjectType; initia
   const problems = entryProblems(definition, form, context);
   const edited = changedKeys(definition, form, base);
   const dirty = canEdit && !sameEntryForm(definition, form, base);
+  useCreateDraft({ enabled: !initial && canEdit, read: () => form, restore: setForm });
   const listUrl = `/admin/objects/${definition.handle}`;
 
   const problemText = (type: CustomFieldType, problem: DraftProblem): string => {

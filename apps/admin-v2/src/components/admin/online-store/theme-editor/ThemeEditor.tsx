@@ -15,6 +15,7 @@
  *   ever changes the frame's box, and edits show in it before they are
  *   saved (use-preview-sync.ts).
  */
+import { seededName } from "~/lib/seeded-names";
 import { DynamicSourceResource, SettingBindingScope } from "../schema-form/binding-context";
 import { PresenceSlot } from "~/lib/realtime/store";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
@@ -302,7 +303,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
         value: presence.value,
         locale: presence.locale,
         short: `${country}${country ? " · " : ""}${presence.locale.toUpperCase()}`,
-        label: `${market.name} · ${languageName(presence.locale, getLocale())}`,
+        label: `${seededName(market)} · ${languageName(presence.locale, getLocale())}`,
         backup: market.isBackup,
       };
     }), [markets.data]);

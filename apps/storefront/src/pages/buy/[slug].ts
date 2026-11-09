@@ -11,13 +11,11 @@ import type { ProductVariant } from "@/lib/api/types";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
 import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
-import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
 import {
   cartLinePropertiesFromOrderLine,
   productBuyerInputSchema,
   readPostedBuyerInputs,
 } from "@/components/product/lib/buyer-inputs";
-import { moneyPlaces, unitPriceWithSurcharge } from "@/components/product/lib/line-price";
 import {
   canonicalizeLineProperties,
   resolveLineProperties,
@@ -26,7 +24,7 @@ import {
 import { normalizeCartLinePurchaseOptions } from "@/lib/cart/purchase-option";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
-import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
+import { QUICK_CHECKOUT_PATH, quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
 import { serverPagePath } from "@/lib/server-presence";
 import { isCartLineRefusal, validateNewCartLine } from "@/lib/cart/new-line";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -73,8 +71,6 @@ function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
       return issue.availableQuantity && issue.availableQuantity > 0
         ? "quantity_unavailable"
         : "out_of_stock";
-    case "price_changed":
-      return "price_changed";
     case "properties_required":
       return "customization_required";
     case "properties_invalid":
@@ -261,31 +257,7 @@ async function quickBuy({
       return productRedirect(slug, "variant_required");
     }
 
-    let finalPrice = calculateVariantPrice(
-      {
-        basePrice: product.price,
-        discountType: product.discountType,
-        discountPercentage: product.discountPercentage,
-        discountAmount: product.discountAmount,
-        currencyDecimalPlaces: layoutData?.currency?.decimalPlaces,
-        currencyCode: layoutData?.currency?.code,
-        priceIncrementMinor: layoutData?.currency?.priceIncrementMinor,
-      },
-      {
-        price: itemToAdd.price,
-        discountType: itemToAdd.discountType,
-        discountPercentage: itemToAdd.discountPercentage,
-        discountAmount: itemToAdd.discountAmount,
-      },
-    ).finalPrice;
-    // One unit with its inputs: the sale price of the SKU plus the surcharges.
-    finalPrice = unitPriceWithSurcharge(
-      finalPrice,
-      resolvedProperties.propertiesPriceMinor,
-      moneyPlaces(layoutData?.currency?.decimalPlaces, currencyCode),
-    );
-
-    // A purchase option's price is its app's (checked again at the store's price).
+    // The store prices the line (an app its purchase option): sent without a price, it answers today's.
     let failed = false;
     let refusal: unknown = null;
     const checked = await validateNewCartLine(async (items) => {
@@ -299,7 +271,6 @@ async function quickBuy({
       productId: product.id,
       variantId: itemToAdd.id,
       quantity,
-      price: finalPrice,
       productName: product.name,
       variantLabel: variantLabel(itemToAdd),
       ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
@@ -323,7 +294,7 @@ async function quickBuy({
     if (!validatedItem) {
       return productRedirect(slug, "validation_unavailable");
     }
-    finalPrice = validatedItem.unitPrice;
+    const finalPrice = validatedItem.unitPrice;
     const persistedVariantId = validatedItem.variantId;
     if (!persistedVariantId || persistedVariantId === "default") {
       return productRedirect(slug, "variant_not_found");
@@ -399,6 +370,8 @@ async function quickBuy({
     const noScriptCheckout = quickBuyNoScriptForm(
       { [`quick_buy:${cartItem.id}:${cartItem.variantId}`]: cartItem },
       words.continue,
+      // Under the page's presence: the order keeps the buyer's language.
+      serverPagePath(QUICK_CHECKOUT_PATH),
     );
 
     // The store's colours and scheme, painted before first paint as on every page (the theme's alone: no buyer variance).

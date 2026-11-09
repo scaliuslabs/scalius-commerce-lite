@@ -9,6 +9,7 @@ import { SETTINGS_ITEM, visibleNav } from "@/components/admin/layout/AdminNav";
 import { useAppNavPages } from "@/components/admin/apps/ui/surfaces";
 import { PermissionProvider } from "@/contexts/PermissionContext";
 import { DeferredToaster } from "@/components/ui/deferred-toaster";
+import { setCreateDraftAccount } from "~/lib/create-drafts";
 import { AdminSessionSync } from "@/components/auth/AdminSessionSync";
 import {
   getAdminRouteContext,
@@ -70,6 +71,8 @@ function AdminLayout() {
   const router = useRouter();
   const authContext = Route.useRouteContext();
   const { user, permissions, isSuperAdmin } = authContext;
+  // Create forms keep drafts per staff member: set before any page under the shell mounts.
+  setCreateDraftAccount(user.id);
   const t = useMessages(shellMessages);
 
   useEffect(() => {

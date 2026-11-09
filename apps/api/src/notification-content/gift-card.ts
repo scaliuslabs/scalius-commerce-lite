@@ -1,4 +1,3 @@
-import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 // Send-time content for `gift_card_issued` (Wave B §4.2, §10): the recipient
 // contact on the card (else the order contact, else the owner's contacts),
 // and the code (decrypted now with the CREDENTIAL_ENCRYPTION_KEY-derived key),
@@ -8,6 +7,9 @@ import { trimTrailingCharacter } from "@scalius/shared/text-scan";
 // delivery receipts (resolved-notifications.ts redacts it). See
 // `./digital.ts` for the resolver contract (`null` = nothing to send, terminal).
 import type { Database } from "@scalius/database/client";
+import { orders } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
+import { buyerStorefrontLink } from "@scalius/core/modules/notifications";
 import type {
   NotificationData,
   NotificationExtraTemplateData,
@@ -43,11 +45,12 @@ function formatExpiry(epochSeconds: number | null, timeZone: string): string {
   return formatDateTime(epochSeconds * 1000, dateLocale("en"), { dateStyle: "medium", timeZone });
 }
 
-function storeLink(env: Env): string {
-  const base = typeof env.STOREFRONT_URL === "string" ? env.STOREFRONT_URL.trim() : "";
-  if (!/^https?:\/\//i.test(base)) return "";
-  // The balance page, never a URL carrying the code.
-  return `${trimTrailingCharacter(base, "/")}/gift-card-balance`;
+/** The balance page (never a URL carrying the code), in the presence the card's order was placed on. */
+async function storeLink(db: Database, env: Env, orderId: string | null): Promise<string> {
+  const order = orderId
+    ? await db.select({ presence: orders.presence }).from(orders).where(eq(orders.id, orderId)).get()
+    : undefined;
+  return buyerStorefrontLink(env.STOREFRONT_URL, order?.presence, "/gift-card-balance") ?? "";
 }
 
 export async function resolveGiftCardIssuedContent(
@@ -70,7 +73,7 @@ export async function resolveGiftCardIssuedContent(
       gift_card_expires: formatExpiry(message.expiresAt, storeTimeZoneOf(env)),
       gift_card_message: message.message ?? "",
       gift_card_sender: message.senderName ?? "",
-      gift_card_link: storeLink(env),
+      gift_card_link: await storeLink(db, env, message.orderId),
     },
   };
 }

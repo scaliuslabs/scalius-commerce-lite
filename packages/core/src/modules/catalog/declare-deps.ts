@@ -24,17 +24,18 @@ export { brandScope, categoryScope, deps };
 const NO_MEDIA_ROW = "m:~";
 
 /**
- * A product statement that matched no row still names the SKU, stock and
- * option tables its pricing join reads. A product joins its answer only by
- * becoming public (`lm:all`) or by its text (`srch`), which the caller
- * declares, so it declares this `p:` key, which no row can advance, instead
- * of each table's coarse key.
+ * A card statement that matched no row (an empty list, a search that found
+ * nothing) still names the SKU, stock, option, gallery, media and sales
+ * tables its joins read. A product joins its answer only through what the
+ * caller declares (becoming public, `lm:all`; a list's order, `lo:`; its
+ * text, `srch`), so it declares these keys, which no row can advance,
+ * instead of each table's coarse key.
  */
-const NO_PRODUCT_ROW = "p:~";
+const NO_CARD_ROW_KEYS = ["p:~", NO_MEDIA_ROW, "sold:~"] as const;
 
 /** No product row matched; the caller declares what can make one match. */
 export function declareNoProductRow(): void {
-    deps.key(NO_PRODUCT_ROW);
+    deps.keys(NO_CARD_ROW_KEYS);
 }
 
 /** One card: its product and the media rows its images come from. */
@@ -45,13 +46,23 @@ export function declareProductCard(productId: string, gallery: readonly ProductM
     else deps.key(NO_MEDIA_ROW);
 }
 
-/** Cards for these products, their images from `mediaByProductId`. */
+/**
+ * Cards for these products, their images from `mediaByProductId`. No cards
+ * (a list that is empty today) declares the no-row keys: the card statements
+ * still read their tables, and what can fill the list is the caller's own
+ * membership or order key.
+ */
 export function declareProductCards(
     productIds: Iterable<string>,
     mediaByProductId: ReadonlyMap<string, readonly ProductMediaProjection[]>,
 ): void {
     if (!deps.active()) return;
-    for (const id of productIds) declareProductCard(id, mediaByProductId.get(id));
+    let cards = 0;
+    for (const id of productIds) {
+        declareProductCard(id, mediaByProductId.get(id));
+        cards += 1;
+    }
+    if (cards === 0) declareNoProductRow();
 }
 
 const PRODUCT_ID_TOKEN = /^[\x21-\x7e]{1,200}$/;

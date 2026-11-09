@@ -104,7 +104,7 @@ All paths start with `/api/v1/admin`.
 
 ## Home statistics
 
-Home's sales numbers (total sales, orders, average order value, return-to-sender rate, trend) come from the Analytics overview for staff with `dashboard.analytics`. The two reads below serve order counts and the recent-order feed. Their "revenue" is the booked-gross figure: the shop-currency totals (`total_shop_minor`, the order money chain) of orders that are not cancelled or returned. They never sum presentment totals in mixed currencies.
+Home's sales numbers (total sales, orders, average order value, return-to-sender rate, trend) come from the Analytics overview for staff with `dashboard.analytics`. The two reads below serve order counts and the recent-order feed. Their "revenue" is the overview's total sales, read through the same sealed buckets and order facts (`salesOverTimeSql`): store currency, net of refunds and returns, nothing for an unfinished, cancelled or reversed order, gift cards sold left out.
 
 - `getDashboardHomeSummary(db, recentOrderLimit, timeZone)`: one provider batch with product and customer counts, current-month and last-month orders and revenue, growth, an order-status breakdown and the newest orders. A limit of `0` skips the order feed. The route uses 11.
 - `getDailyActivityData(db, days, timeZone)`: per merchant day `date`, `orders`, `revenue`, `newCustomers`, zero-filled. `days` is 1 to 90.
@@ -132,14 +132,14 @@ Per line of a sales order:
 |---|---|
 | Gross sales | `line_subtotal_minor`, less the line's included tax when prices include tax. Gift-card lines are excluded everywhere. |
 | Discounts | The line's discount allocation. Shipping discounts reduce shipping instead. |
-| Returns | A reversed order (`returned` or `refunded`): all of gross - discounts. Otherwise the share of gross - discounts for units in accepted return cases (`approved`, `receiving`, `completed`; `approved_quantity`, capped at the line quantity), floored to the minor unit. When an order's confirmed money refund is smaller than that item-return value (a return refunded in part, a fee kept), the order's returns are capped to the refund converted to shop currency. |
+| Returns | One definition, `orderReturnsText`, for live reports and the projection. A reversed order (`returned` or `refunded`): all of gross - discounts. Money refunded while no goods came back (a goodwill or price refund): the refund converted to shop currency, at most gross - discounts. Otherwise the share of gross - discounts for units in accepted return cases (`approved`, `receiving`, `completed`; `approved_quantity`, capped at the line quantity), floored to the minor unit; when the order's confirmed refund is smaller than that item-return value (a return refunded in part, a fee kept), the refund. So net and total sales are net of the money given back. |
 | Net sales | Gross - discounts - returns |
 | Taxes | Line tax less its returned share, plus shipping tax (order tax - every line's tax). None on a reversed order. |
 | Shipping | Shipping charged - shipping discount (order discount - every line's discount) - included shipping tax. Zero on a reversed order. |
 | Total sales | Net sales + shipping + taxes |
 | Net items sold | Quantity - returned quantity |
 | Average order value | (Gross - discounts) / orders, rounded to the minor unit |
-| Refunded | Confirmed refunds (`order_payments` with `payment_type = 'refund'` and `status = 'refunded'`) on the period's sales orders. A money refund is not itemised, so it does not change returns (which count units), except the partial-refund cap in Returns above. |
+| Refunded | Confirmed refunds (`order_payments` with `payment_type = 'refund'` and `status = 'refunded'`) on the period's sales orders. Order-level figures take them out through Returns; line-level reports (by product, variant, category, brand, collection) count returned units only, since a money refund is not itemised. |
 
 Customers (identity is the customer record; an order without one is its own customer):
 

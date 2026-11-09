@@ -2,7 +2,7 @@
 
 # Stable app API reference
 
-Every operation an app may call with `ctx.api.call(name, { path, query, body, idempotencyKey })`: 202 operations in 50 areas, generated from the contract this SDK release is sealed with (`stableContract` in `@scalius/plugin-sdk/testing`, which `createContractApi` checks calls against). Each answers `{ ok, status, data, error }`; `data` is the response below. A scope listed is enough on its own: a `write_*` scope includes its `read_*`. Money is integer minor units beside a `currency`; every list takes `cursor` and `limit` and answers `nextCursor`.
+Every operation an app may call with `ctx.api.call(name, { path, query, body, idempotencyKey })`: 204 operations in 50 areas, generated from the contract this SDK release is sealed with (`stableContract` in `@scalius/plugin-sdk/testing`, which `createContractApi` checks calls against). Each answers `{ ok, status, data, error }`; `data` is the response below. A scope listed is enough on its own: a `write_*` scope includes its `read_*`. Money is integer minor units beside a `currency`; every list takes `cursor` and `limit` and answers `nextCursor`.
 
 ## Operations
 
@@ -38,11 +38,11 @@ Every operation an app may call with `ctx.api.call(name, { path, query, body, id
 | objects | [`delete`](#objects-delete), [`get`](#objects-get), [`list`](#objects-list), [`upsert`](#objects-upsert) |
 | order_timeline | [`list`](#order-timeline-list) |
 | order_uploads | [`list`](#order-uploads-list) |
-| orders | [`create`](#orders-create), [`get`](#orders-get), [`list`](#orders-list), [`mark_delivered`](#orders-mark-delivered), [`mark_pickup_ready`](#orders-mark-pickup-ready), [`release_hold`](#orders-release-hold), [`set_status`](#orders-set-status) |
+| orders | [`create`](#orders-create), [`get`](#orders-get), [`list`](#orders-list), [`mark_delivered`](#orders-mark-delivered), [`mark_pickup_ready`](#orders-mark-pickup-ready), [`quote`](#orders-quote), [`release_hold`](#orders-release-hold), [`set_status`](#orders-set-status) |
 | pages | [`create`](#pages-create), [`get`](#pages-get), [`list`](#pages-list), [`update`](#pages-update) |
 | payment_methods | [`delete`](#payment-methods-delete), [`list`](#payment-methods-list) |
 | payments | [`capture`](#payments-capture), [`charge`](#payments-charge), [`create`](#payments-create), [`list`](#payments-list), [`void`](#payments-void) |
-| payouts | [`create`](#payouts-create), [`get`](#payouts-get), [`list`](#payouts-list) |
+| payouts | [`create`](#payouts-create), [`get`](#payouts-get), [`list`](#payouts-list), [`reverse`](#payouts-reverse) |
 | price_lists | [`create`](#price-lists-create), [`delete`](#price-lists-delete), [`get`](#price-lists-get), [`list`](#price-lists-list), [`list_prices`](#price-lists-list-prices), [`set_prices`](#price-lists-set-prices), [`update`](#price-lists-update) |
 | products | [`batch_create`](#products-batch-create), [`bulk_publish`](#products-bulk-publish), [`bulk_set_status`](#products-bulk-set-status), [`create`](#products-create), [`get`](#products-get), [`list`](#products-list), [`restore`](#products-restore), [`set_publications`](#products-set-publications), [`trash`](#products-trash), [`update`](#products-update) |
 | purchase_orders | [`cancel`](#purchase-orders-cancel), [`create`](#purchase-orders-create), [`get`](#purchase-orders-get), [`list`](#purchase-orders-list), [`mark_ordered`](#purchase-orders-mark-ordered), [`receive`](#purchase-orders-receive), [`update`](#purchase-orders-update) |
@@ -817,7 +817,7 @@ Parameters:
 | `limit` | query | integer |  | At most this many records; a page may hold fewer to stay within the response budget; 1 to 50; default `20` |
 | `updatedSince` | query | string |  | Only records updated at or after this ISO 8601 time: keep the last `updatedAt` you saw to resume a sync; ISO 8601 date-time |
 | `status` | query | "open" \| "pending" \| "closed" |  | Only threads in this status |
-| `channel` | query | "whatsapp" \| "messenger" \| "instagram" \| "telegram" \| "viber" |  | Only this chat channel's threads |
+| `channel` | query | "whatsapp" \| "messenger" \| "instagram" \| "telegram" \| "viber" \| string |  | Only this chat channel's threads: a built-in channel (whatsapp, messenger, instagram, telegram, viber) or an app's own `<app id>:<key>` |
 
 Response `data`:
 
@@ -2153,6 +2153,7 @@ Parameters:
 | `cursor` | query | string |  | The `nextCursor` of the page before; leave it out for the first page; at most 1024 characters |
 | `limit` | query | integer |  | At most this many items (default and maximum 100); 1 to 100; default `100` |
 | `status` | query | "active" \| "archived" |  | Only locations in this status |
+| `salesChannelId` | query | string |  | Only the locations this sales channel sells from (an in-person sale's counter is one of them; an app's own channel is `<app id>:<channel>`). An unknown channel lists none; 1 to 160 characters |
 
 Response `data`:
 
@@ -2888,6 +2889,7 @@ Body:
 | `channelSource` | string \| null |  | Where it came in; an app's order defaults to the app's id; at most 64 characters |
 | `salesChannelId` | string \| null |  | The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest); 1 to 160 characters |
 | `pointOfSale` | { locationId: string, staffMemberId?: string \| null, tenders: { via, amountMinor, reference? }[] } |  | An in-person sale (channel `pos`): handed over at the counter of `locationId`, one of the sales channel's locations, whose stock it takes; paid by its `tenders` as it is placed (each recorded as a payment of its `via`; only cash gives change, `changeMinor` on the order's `pointOfSale`), and attributed to `staffMemberId` (staff.list). Send no delivery method or address, `shippingMinor: 0`, and no paymentMethod or paymentTerms. Refused before anything is written when the tenders do not cover the total (422 `pos_tender_short`, `pos_change_without_cash`) or the location lacks the units (409 `inventory_location_shortfall`) |
+| `expectedTotalMinor` | integer |  | The total a quote (orders.quote) showed, in minor units: an order that would total anything else now (a price, a discount or tax changed since) is refused with 409 `manual_order_total_changed` and nothing is written; 0 to 9000000000000 |
 
 Response `data`:
 
@@ -2997,6 +2999,37 @@ Response `data`:
 | `orderId` | string | yes |  |
 | `pickupReadyAt` | string | yes | ISO 8601 date-time |
 | `replayed` | boolean | yes |  |
+
+### orders.quote
+
+`POST /api/v1/admin/resources/orders/quote`. Scopes: any one of `write_orders`. Risk: read.
+
+- Idempotency: none (a read).
+
+Body:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `customerId` | string |  | The customer it would be for: a tax-exempt customer pays no tax. No contact is needed to price an order; 1 to 128 characters |
+| `items` | { productId: string, variantId: string, quantity: integer, unitPriceMinor?: integer, properties?: { key, value }[], purchaseOptions?: string[] }[] | yes | 1 to 99 items |
+| `shippingMethodId` | string \| null |  | The delivery or pickup method; a physical line needs one with an address, or a pickup method; 1 to 180 characters |
+| `shippingAddress` | { countryCode: string, company?: string \| null, line1: string, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? } } \| null |  | Where it ships; none for pickup, digital and service orders |
+| `billingAddress` | { countryCode: string, company?: string \| null, line1?: string \| null, line2?: string \| null, dependentLocality?: string \| null, locality?: string \| null, adminArea?: string \| null, postalCode?: string \| null, placeIds?: { city?, zone?, area? }, name?: string \| null } \| null |  | Omit or null when the shipping address bills |
+| `shippingMinor` | integer | yes | The delivery charge, in minor units of the store currency; 0 to 9000000000000 |
+| `discountMinor` | integer |  | An order discount set by hand, in minor units of the store currency; 0 to 9000000000000 |
+| `paymentMethod` | "cod" \| "net_terms" |  | How the buyer pays: `cod` (cash on delivery) or `net_terms` (an invoice paid later by its due date: the order is placed unpaid, its stock reserved, and its payments are recorded with dashboard.resources.payments.create); default `"cod"` |
+| `paymentTerms` | { kind: "net", days: integer } |  | An invoice's terms, `{ kind: "net", days }` (1 to 365): the order is due that many days after it is placed. Only with `net_terms`; omitted, the store's net days (Settings → Payments) |
+| `attributes` | Record<string, string> |  | Checkout attributes the store's apps declare (`<app id>.<key>`); unknown keys are dropped |
+| `notes` | string \| null |  | at most 500 characters |
+| `channelSource` | string \| null |  | Where it came in; an app's order defaults to the app's id; at most 64 characters |
+| `salesChannelId` | string \| null |  | The sales channel it sells from; omitted, the online store. An in-person sale names one: an app sells from its own channel (`<app id>:<channel>`, declared in its manifest); 1 to 160 characters |
+| `pointOfSale` | { locationId: string, staffMemberId?: string \| null, tenders?: { via, amountMinor, reference? }[] } |  | An in-person sale, as orders.create takes it; `tenders` may be empty or not cover the total yet (the quote says what is still due) |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `quote` | [OrderQuoteResource](#orderquoteresource) | yes |  |
 
 ### orders.release_hold
 
@@ -3411,6 +3444,33 @@ Response `data`:
 | --- | --- | --- | --- |
 | `payouts` | [PayoutResource](#payoutresource)[] | yes |  |
 | `nextCursor` | string \| null | yes | Pass it as `cursor` for the next page; null on the last page |
+
+### payouts.reverse
+
+`POST /api/v1/admin/resources/payouts/{id}/reverse`. Scopes: any one of `write_payouts`. Risk: financial.
+
+- Idempotency: required: pass `idempotencyKey` (8 to 200 printable characters); a repeat within 24 hours answers the first result.
+
+Parameters:
+
+| Name | In | Type | Required | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | path | string | yes | 1 to 128 characters |
+
+Body:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `amountMinor` | integer | yes | What to take back, in minor units of the payout's currency: at most what the payout has left to give back; 0 to 9000000000000 |
+| `currency` | string | yes | The payout's currency (ISO 4217); pattern `^[A-Z]{3}$` |
+| `reason` | string |  | Why (a refund of order …); the provider may show it to the payee; 1 to 200 characters |
+
+Response `data`:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `payout` | [PayoutResource](#payoutresource) | yes |  |
+| `reversalId` | string | yes | The reversal this request made: its entry in `payout.reversals`; 1 to 128 characters |
 
 ## price_lists
 
@@ -4891,7 +4951,7 @@ Body:
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `url` | string | yes | HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused; 1 to 2048 characters |
-| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated")[] | yes | 1 to 62 items |
+| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated")[] | yes | 1 to 63 items |
 | `description` | string \| null |  | at most 200 characters |
 | `customerData` | ("name" \| "email" \| "phone" \| "address")[] |  | The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default; at most 4 items |
 
@@ -4962,7 +5022,7 @@ Body:
 | --- | --- | --- | --- |
 | `expectedRevision` | integer | yes | The subscription's `revision` you read; a stale one is refused with 409; at least 0 |
 | `url` | string |  | HTTPS endpoint on one of the app's approved hosts (`allowedHosts`). Private, loopback and reserved addresses are refused; 1 to 2048 characters |
-| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated")[] |  | 1 to 62 items |
+| `topics` | ("*" \| "order.*" \| "return.*" \| "product.*" \| "variant.*" \| "purchase_order.*" \| "inventory_transfer.*" \| "customer.*" \| "fulfillment.*" \| "refund.*" \| "shipment.*" \| "payment.*" \| "checkout.*" \| "discount.*" \| "review.*" \| "gift_card.*" \| "gift_card_transaction.*" \| "object.*" \| "conversation.*" \| "payout.*" \| "order.created" \| "order.updated" \| "order.paid" \| "order.cancelled" \| "order.fulfilled" \| "order.refunded" \| "return.updated" \| "product.created" \| "product.updated" \| "product.deleted" \| "product.publication_changed" \| "variant.inventory_changed" \| "purchase_order.updated" \| "inventory_transfer.updated" \| "customer.created" \| "customer.updated" \| "customer.consent_changed" \| "fulfillment.created" \| "fulfillment.voided" \| "refund.created" \| "refund.updated" \| "shipment.updated" \| "payment.updated" \| "checkout.abandoned" \| "discount.created" \| "discount.updated" \| "discount.deleted" \| "discount.redeemed" \| "review.created" \| "review.updated" \| "gift_card.created" \| "gift_card.updated" \| "gift_card_transaction.created" \| "object.created" \| "object.updated" \| "object.deleted" \| "customer.redact_requested" \| "customer.data_requested" \| "customer.erased" \| "conversation.message_received" \| "payout.created" \| "payout.updated" \| "payout.reversal_updated")[] |  | 1 to 63 items |
 | `description` | string \| null |  | at most 200 characters |
 | `customerData` | ("name" \| "email" \| "phone" \| "address")[] |  | The buyer contact data deliveries include, within the app's protected data scopes; the rest read null. None by default; at most 4 items |
 | `status` | "active" \| "disabled" |  |  |
@@ -5582,6 +5642,22 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `urlExpiresAt` | string | yes | ISO 8601 date-time |
 | `attachedAt` | string | yes | ISO 8601 date-time |
 
+### OrderQuoteResource
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `currency` | string | yes | 3 to 3 characters |
+| `lines` | { productId: string, variantId: string, title: string, quantity: integer, unitPriceMinor: integer, totalMinor: integer }[] | yes |  |
+| `subtotalMinor` | integer | yes | at least 0 |
+| `discountMinor` | integer | yes | Every discount: the one set by hand and the store's apps'; at least 0 |
+| `shippingMinor` | integer | yes | at least 0 |
+| `taxMinor` | integer | yes | at least 0 |
+| `totalMinor` | integer | yes | at least 0 |
+| `taxLabel` | string | yes |  |
+| `pricesIncludeTax` | boolean | yes |  |
+| `appDiscounts` | { appId: string, title: string, amountMinor: integer, shippingMinor: integer }[] | yes |  |
+| `pointOfSale` | { locationId: string, tenderedMinor: integer, changeMinor: integer, dueMinor: integer } \| null | yes | An in-person sale: its counter and what its tenders pay; null otherwise |
+
 ### OrderResource
 
 | Field | Type | Required | Notes |
@@ -5703,6 +5779,8 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `providerRef` | string \| null | yes | at most 4000 characters |
 | `failureCode` | string \| null | yes | 1 to 64 characters |
 | `failureMessage` | string \| null | yes | at most 4000 characters |
+| `reversedMinor` | integer | yes |  |
+| `reversals` | { id: string, amountMinor: integer, currency: string, reason: string \| null, status: "pending" \| "processing" \| "reversed" \| "failed", providerRef: string \| null, failureCode: string \| null, failureMessage: string \| null, createdAt: string, updatedAt: string, settledAt: string \| null }[] | yes | at most 20 items |
 | `revision` | integer | yes |  |
 | `createdAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |
 | `updatedAt` | string | yes | 1 to 40 characters; ISO 8601 date-time |

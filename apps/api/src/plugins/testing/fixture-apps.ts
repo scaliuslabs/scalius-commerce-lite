@@ -62,7 +62,7 @@ import { manifest as wholesaleManifest } from "./apps/wholesale/src/index";
 import { manifest as riskGuardManifest } from "./apps/risk-guard/src/index";
 import { manifest as membersManifest } from "./apps/members/src/index";
 import { manifest as builderManifest } from "./apps/builder/src/index";
-import { manifest as marketplaceManifest } from "./apps/marketplace/src/index";
+import { manifest as marketplaceManifest } from "../../../../../packages/plugin-sdk/examples/marketplace/src/index";
 import { manifest as subscriptionsManifest } from "./apps/subscriptions/src/index";
 import { manifest as deliverySlotsManifest } from "../../../../../packages/plugin-sdk/examples/delivery-slots/src/index";
 import { manifest as fraudScreenManifest } from "./apps/fraud-screen/src/index";
@@ -87,7 +87,7 @@ export const FIXTURE_APP_SOURCES = {
   "acme.risk-guard": "./apps/api/src/plugins/testing/apps/risk-guard",
   "acme.members": "./apps/api/src/plugins/testing/apps/members",
   "acme.builder": "./apps/api/src/plugins/testing/apps/builder",
-  "acme.marketplace": "./apps/api/src/plugins/testing/apps/marketplace",
+  "acme.marketplace": "./packages/plugin-sdk/examples/marketplace",
   "acme.subscriptions": "./apps/api/src/plugins/testing/apps/subscriptions",
   "acme.delivery-slots": "./packages/plugin-sdk/examples/delivery-slots",
   "acme.fraud-screen": "./apps/api/src/plugins/testing/apps/fraud-screen",
@@ -117,7 +117,7 @@ export const FIXTURE_APPS: Readonly<Record<string, BundledPluginEntry>> = {
   "acme.risk-guard": { version: riskGuardManifest.version, sha256: "715c".repeat(16), load: () => import("./apps/risk-guard/src/index") },
   "acme.members": { version: membersManifest.version, sha256: "3e3b".repeat(16), load: () => import("./apps/members/src/index") },
   "acme.builder": { version: builderManifest.version, sha256: "b11d".repeat(16), load: () => import("./apps/builder/src/index") },
-  "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("./apps/marketplace/src/index") },
+  "acme.marketplace": { version: marketplaceManifest.version, sha256: "5e11".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/marketplace/src/index") },
   "acme.subscriptions": { version: subscriptionsManifest.version, sha256: "50b5".repeat(16), load: () => import("./apps/subscriptions/src/index") },
   "acme.delivery-slots": { version: deliverySlotsManifest.version, sha256: "d51a".repeat(16), load: () => import("../../../../../packages/plugin-sdk/examples/delivery-slots/src/index") },
   "acme.fraud-screen": { version: fraudScreenManifest.version, sha256: "f7a0".repeat(16), load: () => import("./apps/fraud-screen/src/index") },

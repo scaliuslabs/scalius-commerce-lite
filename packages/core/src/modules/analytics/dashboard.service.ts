@@ -15,7 +15,10 @@ import {
     shiftCommerceCalendarDateKey,
     zoneOffsetSchedule,
 } from "@scalius/shared/commerce-time";
+import { analyticsEpochDay } from "@scalius/shared/analytics-period";
 import { merchantDaySql } from "./reports/sales-sql";
+import { createAnalyticsContext, num } from "./reports/context";
+import { salesOverTimeSql } from "./reports/sales-over-time-sql";
 import { retryTransientD1 } from "../../utils/transient-d1";
 import { COUNT_PROBE_COLUMN, cappedCountQuery } from "../../utils/keyset";
 
@@ -72,18 +75,15 @@ async function runDashboardQuery<T>(
 }
 
 type CountRow = { count: number };
-/** Revenue is summed exactly in minor units; a store's orders share one currency. */
-/** Revenue in the shop currency (`total_shop_minor`): one currency, whatever each order was presented in. */
-type RevenueMinor = { revenueMinor: number | null; shopCurrency: string | null };
-type CurrentMonthRow = RevenueMinor & {
+type CurrentMonthRow = {
     count: number;
     delivered: number;
     processing: number;
     shipping: number;
     cancelled: number;
 };
-type MonthComparisonRow = RevenueMinor & { count: number };
-type DailyOrderRow = RevenueMinor & {
+type MonthComparisonRow = { count: number };
+type DailyOrderRow = {
     day: number;
     orderCount: number;
 };
@@ -101,15 +101,26 @@ type RecentOrderRow = {
     createdAt: Date | string;
 };
 
-// Analytics sum shop amounts (MARKETS-DESIGN D3): the store currency is locked
-// once orders exist, so every order shares one shop currency.
-const recognizedRevenueMinor = sql<number>`sum(case when ${orders.status} NOT IN ('cancelled', 'returned') then ${orders.totalShopMinor} else 0 end)`;
-const revenueShopCurrency = sql<string | null>`max(${orders.shopCurrency})`;
-
-function revenueAmount(row: RevenueMinor | undefined): number {
-    return row
-        ? fromMinor(Number(row.revenueMinor ?? 0), getDecimalPlaces(row.shopCurrency ?? DEFAULT_CURRENCY.code))
-        : 0;
+/**
+ * Revenue is the Analytics overview's total sales, read through the same
+ * primitive (sealed buckets, else the order facts): in the store currency,
+ * net of refunds and returns, nothing for an unfinished, cancelled or
+ * reversed order, and the gift cards sold left out (a liability, not a
+ * sale). `granularity` buckets the merchant days from `from` to `to`
+ * (inclusive date keys); the result maps each bucket's first day to its
+ * total in major units.
+ */
+async function readTotalSales(
+    db: Database,
+    timeZone: string,
+    range: { from: string; to: string },
+    granularity: "day" | "month",
+    now: Date,
+): Promise<Map<number, number>> {
+    const ctx = await createAnalyticsContext(db, timeZone, now);
+    const rows = await db.all<{ bucket: unknown; total_sales: unknown }>(await salesOverTimeSql(ctx, range, granularity));
+    const places = getDecimalPlaces(ctx.currency.code ?? DEFAULT_CURRENCY.code);
+    return new Map(rows.map((row) => [num(row.bucket), fromMinor(num(row.total_sales), places)]));
 }
 
 function calculateGrowth(current: number, previous: number): number | null {
@@ -118,8 +129,8 @@ function calculateGrowth(current: number, previous: number): number | null {
     return ((current - previous) / previous) * 100;
 }
 
-function getDashboardMonthBounds(timeZone: string) {
-    const bounds = commerceMonthBounds(timeZone);
+function getDashboardMonthBounds(timeZone: string, now: Date) {
+    const bounds = commerceMonthBounds(timeZone, now);
     const firstDayOfMonthTs = bounds.currentMonthStart;
     const firstDayOfLastMonthTs = bounds.previousMonthStart;
 
@@ -151,8 +162,6 @@ function getDashboardSummaryQueries(
         db
             .select({
                 count: sql<number>`count(*)`,
-                revenueMinor: recognizedRevenueMinor,
-                shopCurrency: revenueShopCurrency,
                 delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
                 processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
                 shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
@@ -165,8 +174,6 @@ function getDashboardSummaryQueries(
         db
             .select({
                 count: sql<number>`count(*)`,
-                revenueMinor: recognizedRevenueMinor,
-                shopCurrency: revenueShopCurrency,
             })
             .from(orders)
             .where(
@@ -205,7 +212,7 @@ function mapDashboardSummaryStats([
     totalCustomersArr,
     currentMonthArr,
     lastMonthArr,
-]: [CountRow[], CountRow[], CurrentMonthRow[], MonthComparisonRow[]]) {
+]: [CountRow[], CountRow[], CurrentMonthRow[], MonthComparisonRow[]], currentRevenue: number, lastRevenue: number) {
     // Exact up to the plan's count cap; above it the cap, flagged.
     const { total: totalProducts, totalIsCapped: totalProductsIsCapped } = capTotal(totalProductsArr[0]?.count ?? 0);
     const { total: totalCustomers, totalIsCapped: totalCustomersIsCapped } = capTotal(totalCustomersArr[0]?.count ?? 0);
@@ -216,8 +223,6 @@ function mapDashboardSummaryStats([
         currentMonthStats?.count ?? 0,
         lastMonthStats?.count ?? 0,
     );
-    const currentRevenue = revenueAmount(currentMonthStats);
-    const lastRevenue = revenueAmount(lastMonthStats);
     const revenueGrowth = calculateGrowth(currentRevenue, lastRevenue);
 
     return {
@@ -250,8 +255,13 @@ function mapDashboardSummaryStats([
  * the same provider-neutral batch contract is used by TursoDB and PostgreSQL.
  * `recentOrderLimit` 0 skips the order feed (and its customer names) entirely.
  */
-export async function getDashboardHomeSummary(db: Database, recentOrderLimit: number, timeZone: string) {
-    const monthBounds = getDashboardMonthBounds(timeZone);
+export async function getDashboardHomeSummary(db: Database, recentOrderLimit: number, timeZone: string, now: Date = new Date()) {
+    const monthBounds = getDashboardMonthBounds(timeZone, now);
+    const today = commerceCalendarDateKey(timeZone, now);
+    const currentMonthKey = `${today.slice(0, 7)}-01`;
+    const lastMonthKey = `${shiftCommerceCalendarDateKey(currentMonthKey, -1).slice(0, 7)}-01`;
+    const revenue = await runDashboardQuery("home_revenue", () =>
+        readTotalSales(db, timeZone, { from: lastMonthKey, to: today }, "month", now));
     const queries = getDashboardSummaryQueries(db, monthBounds);
     const [
         totalProductsArr,
@@ -277,7 +287,7 @@ export async function getDashboardHomeSummary(db: Database, recentOrderLimit: nu
             totalCustomersArr,
             currentMonthArr,
             lastMonthArr,
-        ]),
+        ], revenue.get(analyticsEpochDay(currentMonthKey)) ?? 0, revenue.get(analyticsEpochDay(lastMonthKey)) ?? 0),
         recentOrders: mapRecentOrders(recentOrders),
     };
 }
@@ -302,6 +312,8 @@ export async function getDailyActivityData(db: Database, days: number, timeZone:
     const orderDay = sql<number>`${merchantDaySql(`"orders"."created_at"`, offsets)}`;
     const customerDay = sql<number>`${merchantDaySql(`"customers"."created_at"`, offsets)}`;
 
+    const revenue = await runDashboardQuery(`daily_revenue_${days}d`, () =>
+        readTotalSales(db, timeZone, { from: startDateKey, to: endDateKey }, "day", now));
     const [dailyOrderData, dailyCustomerData] = await runDashboardQuery(
         `daily_activity_${days}d`,
         () => safeBatch(db, [
@@ -309,8 +321,6 @@ export async function getDailyActivityData(db: Database, days: number, timeZone:
                 .select({
                     day: orderDay.mapWith(Number),
                     orderCount: sql<number>`count(*)`.mapWith(Number),
-                    revenueMinor: recognizedRevenueMinor.mapWith(Number),
-                    shopCurrency: revenueShopCurrency,
                 })
                 .from(orders)
                 .where(
@@ -354,7 +364,7 @@ export async function getDailyActivityData(db: Database, days: number, timeZone:
         result.push({
             date: dateStr,
             orders: orderEntry ? orderEntry.orderCount : 0,
-            revenue: revenueAmount(orderEntry),
+            revenue: revenue.get(analyticsEpochDay(dateStr)) ?? 0,
             newCustomers: customerEntry ? customerEntry.customerCount : 0,
         });
     }

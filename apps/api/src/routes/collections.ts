@@ -86,6 +86,7 @@ const collectionProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  imageAspect: z.number().nullable(),
   cardFacts: optionalProductCardFacts,
   fields: storefrontCardFieldsSchema.optional(),
   discountedPrice: z.number(),

@@ -11,14 +11,15 @@ import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
 import { CARD_KEY_SPECS_MAX } from "@scalius/shared/card-facts";
+import { priceLineClaim } from "@scalius/shared/money";
 import { specificationText } from "@/lib/specification-text";
 import { capImageSrcSet } from "@/lib/responsive-image";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import { storefrontCopy, storefrontLanguage } from "@/lib/storefront-copy";
 import { pageLanguage } from "@/lib/store-time-zone";
-import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+import type { StorefrontImageFit, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 
-export type ProductCardProduct = Product & { secondaryImageUrl?: string | null };
+export type ProductCardProduct = Product & { secondaryImageUrl?: string | null; imageAspect?: number | null };
 
 /** Colour swatches a card draws before "+N". */
 export const SWATCHES_MAX = 5;
@@ -29,6 +30,31 @@ export const CARD_IMAGE_DIMENSIONS = {
   portrait: { width: 400, height: 533 },
   landscape: { width: 400, height: 300 },
 } as const satisfies Record<StorefrontImageRatio, { width: number; height: number }>;
+
+/**
+ * How far a photo's shape may be from the card box's before covering the box
+ * would cut it: one step of the rendition ladder (1.2x, `MEDIA_VARIANT_WIDTHS`),
+ * so a covered photo is also never drawn more than that above the rendition
+ * its `sizes` picked.
+ */
+const COVER_ASPECT_TOLERANCE = 1.2;
+
+/**
+ * How a card draws its photo. The theme's "contain" always shows the whole
+ * photo; its "cover" fills the box only with a photo near the box's shape. A
+ * panorama or a tall portrait is drawn whole on the card surface instead: a
+ * covered 1400x600 lamp in a square box showed its middle third, stretched to
+ * twice the rendition its `sizes` had picked.
+ */
+export function cardPhotoFit(
+  themeFit: StorefrontImageFit,
+  imageAspect: number | null | undefined,
+  box: { width: number; height: number },
+): StorefrontImageFit {
+  if (themeFit === "contain" || !(typeof imageAspect === "number" && imageAspect > 0)) return themeFit;
+  const boxAspect = box.width / box.height;
+  return Math.max(imageAspect / boxAspect, boxAspect / imageAspect) > COVER_ASPECT_TOLERANCE ? "contain" : "cover";
+}
 
 export interface ProductCardFactValues {
   /** The card's lines, "label: value", written from `keySpecRows`. */
@@ -51,8 +77,6 @@ export interface ProductCardModel {
   soldOut: boolean;
   /** Null when the product has no photo we may show on a card: the card shows the placeholder. */
   image: { src: string; srcset: string | undefined; alt: string } | null;
-  /** The placeholder's letter: the name's first character. */
-  monogram: string;
   /**
    * The hover photo's CDN URL and the card's `srcset` cap: the card names it
    * once and its intent script derives the same `src` (480px) and capped
@@ -61,26 +85,18 @@ export interface ProductCardModel {
   hoverImage: { url: string; maxWidth: number | undefined } | null;
   price: {
     current: string;
-    /** The struck regular price, when discounted. */
+    /** The struck regular price, when this one price is discounted (never beside a "From" price: priceLineClaim). */
     regular: string | null;
     /** The price varies by option ("From ৳2,450"). */
     from: boolean;
   };
-  /** "-20%", or null without a discount. */
+  /** The sale badge: "-20%", "Sale" beside a discounted "From" price, or null without a discount. */
   percentOff: string | null;
   /** The product can be added from the card: in stock, a simple product, no buyer inputs, a real price. */
   quickAddEligible: boolean;
   /** The product has options, so the card's action is "Choose options" on the product page. */
   needsOptions: boolean;
   facts: ProductCardFactValues;
-}
-
-function firstCharacter(name: string): string {
-  const text = name.trim();
-  if (!text) return "";
-  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
-  const first = segments[Symbol.iterator]().next().value?.segment ?? "";
-  return first.toLocaleUpperCase();
 }
 
 function nonEmpty(value: string | null | undefined): string | null {
@@ -150,7 +166,9 @@ export function productCardModel(
   },
 ): ProductCardModel {
   const money = (amount: number) => formatMoney(amount, { symbol: options.currencySymbol, code: options.currencyCode, language: options.language });
-  const hasDiscount = product.discountedPrice < product.price;
+  const from = product.priceVaries === true;
+  // One rule with the product page: no struck price or percent beside a "From" price.
+  const claim = priceLineClaim({ current: product.discountedPrice, regular: product.price, from });
   const soldOut = product.availableForSale === false;
   const photo = cardPhoto(product.imageUrl);
   const hoverPhoto = photo ? cardPhoto(product.secondaryImageUrl) : null;
@@ -172,16 +190,17 @@ export function productCardModel(
           alt: product.imageAlt || product.name,
         }
       : null,
-    monogram: firstCharacter(product.name),
     hoverImage: options.hoverImage && hoverPhoto
       ? { url: resolveProductImageUrl(hoverPhoto), maxWidth: options.imageMaxWidth }
       : null,
     price: {
       current: money(product.discountedPrice),
-      regular: hasDiscount ? money(product.price) : null,
-      from: product.priceVaries === true,
+      regular: claim.compareAt === null ? null : money(claim.compareAt),
+      from,
     },
-    percentOff: formatDiscountBadge(product.price, product.discountedPrice, options.language),
+    percentOff: claim.percentOff !== null
+      ? formatDiscountBadge(product.price, product.discountedPrice, options.language)
+      : claim.onSale ? storefrontCopy(storefrontLanguage(options.language ?? pageLanguage())).badge.sale : null,
     quickAddEligible,
     needsOptions: !soldOut && product.hasVariants,
     facts: cardFactValues(product, money, options.ratings !== false),

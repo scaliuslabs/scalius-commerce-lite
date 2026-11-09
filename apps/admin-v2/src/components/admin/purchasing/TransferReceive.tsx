@@ -1,4 +1,5 @@
 import { PresenceSlot, presenceKey } from "~/lib/realtime/store";
+import { seededName } from "~/lib/seeded-names";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -91,9 +92,9 @@ export function TransferReceive({ transfer, onReload }: { transfer: Transfer; on
       />
       <div className="space-y-4">
         <p className="text-body text-muted-foreground">
-          {t("route", { origin: transfer.origin.name, destination: transfer.destination.name })}
+          {t("route", { origin: seededName(transfer.origin), destination: seededName(transfer.destination) })}
           {" · "}
-          {t("receivingAt", { location: transfer.destination.name })}
+          {t("receivingAt", { location: seededName(transfer.destination) })}
         </p>
         <PurchasingProblemBanner
           problem={problem}

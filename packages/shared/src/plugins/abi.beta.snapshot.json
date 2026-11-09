@@ -898,13 +898,21 @@
      "type": "object",
      "properties": {
       "channel": {
-       "type": "string",
-       "enum": [
-        "whatsapp",
-        "messenger",
-        "instagram",
-        "telegram",
-        "viber"
+       "anyOf": [
+        {
+         "type": "string",
+         "enum": [
+          "whatsapp",
+          "messenger",
+          "instagram",
+          "telegram",
+          "viber"
+         ]
+        },
+        {
+         "type": "string",
+         "maxLength": 64
+        }
        ]
       },
       "to": {
@@ -1091,13 +1099,21 @@
               "const": "message"
              },
              "channel": {
-              "type": "string",
-              "enum": [
-               "whatsapp",
-               "messenger",
-               "instagram",
-               "telegram",
-               "viber"
+              "anyOf": [
+               {
+                "type": "string",
+                "enum": [
+                 "whatsapp",
+                 "messenger",
+                 "instagram",
+                 "telegram",
+                 "viber"
+                ]
+               },
+               {
+                "type": "string",
+                "maxLength": 64
+               }
               ]
              },
              "messageId": {
@@ -2268,7 +2284,7 @@
          "const": "updates"
         },
         "updates": {
-         "minItems": 1,
+         "default": [],
          "maxItems": 50,
          "type": "array",
          "items": {
@@ -2289,6 +2305,47 @@
             "enum": [
              "processing",
              "paid",
+             "failed"
+            ]
+           },
+           "failureCode": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+           },
+           "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+           }
+          },
+          "required": [
+           "providerRef",
+           "status"
+          ],
+          "additionalProperties": false
+         }
+        },
+        "reversals": {
+         "maxItems": 50,
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "reversalId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+           },
+           "providerRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+           },
+           "status": {
+            "type": "string",
+            "enum": [
+             "processing",
+             "reversed",
              "failed"
             ]
            },
@@ -2351,6 +2408,161 @@
        "required": [
         "status",
         "reason"
+       ],
+       "additionalProperties": false
+      }
+     ]
+    }
+   },
+   "reversePayout": {
+    "input": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "type": "object",
+     "properties": {
+      "reversalId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "payoutId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "providerRef": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "amountMinor": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 9007199254740991
+      },
+      "currency": {
+       "type": "string",
+       "pattern": "^[A-Z]{3}$"
+      },
+      "reason": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 200
+      }
+     },
+     "required": [
+      "reversalId",
+      "payoutId",
+      "amountMinor",
+      "currency"
+     ],
+     "additionalProperties": false
+    },
+    "output": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "type": "object",
+     "properties": {
+      "status": {
+       "type": "string",
+       "enum": [
+        "processing",
+        "reversed",
+        "failed"
+       ]
+      },
+      "providerRef": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "failureCode": {
+       "type": "string",
+       "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+      },
+      "reason": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 300
+      }
+     },
+     "required": [
+      "status",
+      "providerRef"
+     ],
+     "additionalProperties": false
+    }
+   },
+   "reversalStatus": {
+    "input": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "type": "object",
+     "properties": {
+      "reversalId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "payoutId": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      },
+      "providerRef": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 256
+      }
+     },
+     "required": [
+      "reversalId",
+      "payoutId"
+     ],
+     "additionalProperties": false
+    },
+    "output": {
+     "$schema": "https://json-schema.org/draft/2020-12/schema",
+     "anyOf": [
+      {
+       "type": "object",
+       "properties": {
+        "status": {
+         "type": "string",
+         "enum": [
+          "processing",
+          "reversed",
+          "failed"
+         ]
+        },
+        "providerRef": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 256
+        },
+        "failureCode": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+        },
+        "reason": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 300
+        }
+       },
+       "required": [
+        "status",
+        "providerRef"
+       ],
+       "additionalProperties": false
+      },
+      {
+       "type": "object",
+       "properties": {
+        "status": {
+         "type": "string",
+         "const": "unknown"
+        }
+       },
+       "required": [
+        "status"
        ],
        "additionalProperties": false
       }
