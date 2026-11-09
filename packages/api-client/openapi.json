@@ -180785,7 +180785,7 @@
                             },
                             "shipping": {
                               "type": "boolean",
-                              "description": "A live delivery rate serves a place, or local pickup is on."
+                              "description": "A buyer can be reached: local pickup is on, or a live delivery rate serves a place a buyer can enter (in Bangladesh, a City and Thana exist to choose)."
                             },
                             "domain": {
                               "type": "boolean",
@@ -180831,6 +180831,10 @@
                           "nullable": true,
                           "description": "A storefront link that puts a live product in the cart and opens checkout; null until the store has a web address and a live product."
                         },
+                        "shippingNeedsPlaces": {
+                          "type": "boolean",
+                          "description": "A live delivery rate serves Bangladesh but buyers there have no City and Thana to choose: load Bangladesh's places (the Bangladesh pack's places feature)."
+                        },
                         "bangladeshPack": {
                           "type": "object",
                           "nullable": true,
@@ -180872,6 +180876,7 @@
                         "steps",
                         "drafts",
                         "testOrderUrl",
+                        "shippingNeedsPlaces",
                         "bangladeshPack",
                         "onlinePayment"
                       ]
