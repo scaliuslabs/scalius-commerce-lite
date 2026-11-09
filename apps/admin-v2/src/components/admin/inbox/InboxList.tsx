@@ -123,10 +123,12 @@ export function InboxList({
   }
   // The thread the reading pane loaded: its status once a reply or a close changed it (no read of its own).
   const thread = useQuery({ ...threadQueryOptions(selectedId ?? ""), enabled: false }).data;
-  const kept = openRow && thread?.id === openRow.item.id
-    ? { ...openRow, item: { ...openRow.item, status: thread.status, unread: 0, assigneeName: thread.assigneeName } }
-    : openRow;
-  const items = rowsWithOpenConversation(listed, selectedId, kept);
+  // The open row says what the open thread says: a reply or a close shows on it at once,
+  // not only once the list is read again (the list's copy can be a moment older).
+  const asThread = (item: InboxItem): InboxItem => (thread?.id === item.id
+    ? { ...item, status: thread.status, unread: thread.unread, assigneeName: thread.assigneeName }
+    : item);
+  const items = rowsWithOpenConversation(listed, selectedId, openRow).map((item) => (item.id === selectedId ? asThread(item) : item));
   const lastPage = list.data?.pages.at(-1);
   const continuingSearch = lastPage?.scanExhausted === false;
   const filtered = Boolean(searchQuery) || assignee !== "all" || subject !== "all" || search.unread || search.sort;
