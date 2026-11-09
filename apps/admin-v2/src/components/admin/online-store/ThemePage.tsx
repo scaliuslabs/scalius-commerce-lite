@@ -2,24 +2,32 @@
  * Online store → Themes (Shopify's themes page): the current theme, whether
  * its draft has unpublished changes and who published last, with Customize
  * (the theme editor, where every setting lives), Preview and Publish; and
- * the template library, where choosing a template restyles the draft while
- * keeping the merchant's content. Installed apps' templates sit beside the
- * built-in ones with an App badge; choosing one applies it to the draft the
- * same way (`applyStorefrontAppTemplate`).
+ * the template library. Installed apps' templates sit beside the built-in
+ * ones with an App badge. Choosing one switches the draft on the server
+ * (`/theme/template`): the design the store last had on that template comes
+ * back, or its look takes the merchant's content by section type; the draft
+ * it replaces stays in the history and with the template it leaves. Before
+ * the merchant confirms, the dialog shows that plan (`switchStorefrontTemplate`).
  */
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
 import {
-  postApiV1AdminSettingsThemeDraft,
   postApiV1AdminSettingsThemePublish,
+  postApiV1AdminSettingsThemeTemplate,
 } from "@scalius/api-client/sdk";
-import type {
-  ResolvedStorefrontThemeLayout,
-  StoreShape,
-  StorefrontTemplateId,
-  StorefrontThemeDocument,
+import {
+  storefrontRestoredTemplatePlan,
+  storefrontThemeTemplateKey,
+  switchStorefrontTemplate,
+  type ResolvedStorefrontThemeLayout,
+  type StoreShape,
+  type StorefrontSection,
+  type StorefrontTemplateChoice,
+  type StorefrontTemplateId,
+  type StorefrontTemplateSwitchPlan,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -39,7 +47,10 @@ import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/a
 import { OnlineStorePage, SectionCard, actionErrorText } from "./shared";
 import { HeaderRows, ProductTile, Sketch, VisualChoice } from "./ThemeChoices";
 import { useOpenThemePreview } from "./theme-preview";
-import { TEMPLATE_THEMES, appTemplates, applyAppTemplate, applyTemplate, editedDarkColorsReplaced, resolveThemeForStore, selectedTemplate } from "./theme-settings";
+import { TEMPLATE_THEMES, appTemplates, applyAppTemplate, editedDarkColorsReplaced, resolveThemeForStore, selectedTemplate } from "./theme-settings";
+import { appSectionsByKey } from "./theme-editor/editor-state";
+import { useSectionName } from "./theme-editor/use-editor-tree";
+import { useTemplateName } from "./use-template-name";
 import { ThemeAppsUnavailableAlert } from "~/components/admin/apps/ThemeAppParts";
 import { themeAppsUnavailable, type ThemeAppsProblem } from "~/components/admin/apps/theme-app-parts";
 
@@ -147,12 +158,24 @@ function ThemeOverview({ workspace, refetch }: {
   const appTemplate = draft.apps?.template ? fromApps.find((each) => each.template.key === draft.apps?.template)?.template : undefined;
   const builtIn = draft.apps?.template ? null : selectedTemplate(draft);
   const selected = appTemplate?.key ?? builtIn;
-  const templateName = (id: string) => fromApps.find((each) => each.template.key === id)?.template.name ?? option(`template_${id}`);
+  const templateName = useTemplateName(workspace.apps);
+  const sectionName = useSectionName(useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]));
   const changed = workspace.draftDiffersFromLive;
   const pendingApp = fromApps.find((each) => each.template.key === pendingTemplate)?.template;
-  // The draft the pending choice makes (it may replace edited dark colours that would be unreadable with it).
-  const pendingResult = pendingTemplate === null ? null
-    : fromApps.find((each) => each.template.key === pendingTemplate)?.theme ?? applyTemplate(pendingTemplate as StorefrontTemplateId, draft);
+  const currentKey = storefrontThemeTemplateKey(draft);
+  // What the pending choice does, as the server will do it: the remembered design back, or the template with the merchant's content carried in.
+  const pendingSwitch = useMemo(() => {
+    if (pendingTemplate === null) return null;
+    const design = pendingTemplate !== currentKey ? workspace.templateDesigns.find((each) => each.template === pendingTemplate) : undefined;
+    if (design) return { theme: null, plan: storefrontRestoredTemplatePlan(draft, pendingTemplate), savedAt: design.updatedAt };
+    const app = fromApps.find((each) => each.template.key === pendingTemplate)?.template;
+    const choice: StorefrontTemplateChoice = app
+      ? { kind: "app", key: app.key, theme: app.theme }
+      : { kind: "core", key: pendingTemplate as StorefrontTemplateId };
+    // An app template's own homepage tells its untouched sections apart (a built-in one's is known).
+    const fromHome = currentKey.includes("/") ? fromApps.find((each) => each.template.key === currentKey)?.template.theme.sections ?? null : undefined;
+    return { ...switchStorefrontTemplate(draft, choice, { fromHome }), savedAt: null };
+  }, [pendingTemplate, currentKey, workspace.templateDesigns, draft, fromApps]);
   const refresh = async () => {
     await refetch();
     void queryClient.invalidateQueries({ queryKey: ["theme-versions"] });
@@ -163,17 +186,16 @@ function ThemeOverview({ workspace, refetch }: {
   };
 
   const chooseTemplate = async (id: string) => {
-    const fromApp = fromApps.find((each) => each.template.key === id);
     setBusy("template");
     try {
-      await apiData(postApiV1AdminSettingsThemeDraft({
+      const switched = await apiData(postApiV1AdminSettingsThemeTemplate({
         body: {
           expectedDraftRevision: workspace.draft.revision,
           basePublishedRevision: workspace.draft.basePublishedRevision,
-          theme: fromApp ? fromApp.theme : applyTemplate(id as StorefrontTemplateId, draft),
+          template: id,
         },
       }));
-      toast.success(editor("templateApplied"));
+      toast.success(switched.plan.restored ? editor("templateRestored", { name: templateName(id) }) : editor("templateApplied"));
       await refresh();
     } catch (error) {
       await fail(error);
@@ -281,23 +303,37 @@ function ThemeOverview({ workspace, refetch }: {
       <ConfirmDialog
         open={pendingTemplate !== null}
         onOpenChange={(open) => { if (!open) setPendingTemplate(null); }}
-        title={t("templateReplaceTitle", { name: pendingTemplate ? templateName(pendingTemplate) : "" })}
+        title={t("templateSwitchTitle", { name: pendingTemplate ? templateName(pendingTemplate) : "" })}
         description={[
-          ...(pendingApp
-            ? [editor("appTemplateReplaceBody"), ...(pendingApp.omittedCardFields.length > 0
-              ? [editor("appTemplateCardFieldsOmitted", { fields: formatList(pendingApp.omittedCardFields, getLocale()), count: pendingApp.omittedCardFields.length })]
-              : [])]
-            : [editor("templateReplaceBody")]),
-          ...(pendingResult && editedDarkColorsReplaced(draft, pendingResult) ? [t("templateRemakesDarkColors")] : []),
+          pendingSwitch?.savedAt
+            ? editor("templateSwitchRestored", {
+              name: templateName(pendingTemplate ?? ""),
+              time: formatDateTime(new Date(pendingSwitch.savedAt), { dateStyle: "medium", timeStyle: "short" }),
+            })
+            : editor("templateSwitchFresh", { name: pendingTemplate ? templateName(pendingTemplate) : "" }),
+          ...(pendingApp && !pendingSwitch?.savedAt && pendingApp.omittedCardFields.length > 0
+            ? [editor("appTemplateCardFieldsOmitted", { fields: formatList(pendingApp.omittedCardFields, getLocale()), count: pendingApp.omittedCardFields.length })]
+            : []),
+          ...(pendingSwitch?.theme && editedDarkColorsReplaced(draft, pendingSwitch.theme) ? [t("templateRemakesDarkColors")] : []),
         ].join(" ")}
-        confirmLabel={t("templateReplaceConfirm")}
+        confirmLabel={t("templateSwitchConfirm")}
         variant="default"
         onConfirm={() => {
           const id = pendingTemplate;
           setPendingTemplate(null);
           if (id) void chooseTemplate(id);
         }}
-      />
+      >
+        {pendingSwitch ? (
+          <TemplateSwitchDetails
+            plan={pendingSwitch.plan}
+            current={draft.pages.home}
+            next={pendingSwitch.theme?.pages.home ?? []}
+            templateName={templateName}
+            sectionName={sectionName}
+          />
+        ) : null}
+      </ConfirmDialog>
       <ConfirmDialog
         open={confirmPublish}
         onOpenChange={setConfirmPublish}
@@ -308,6 +344,43 @@ function ThemeOverview({ workspace, refetch }: {
         onConfirm={() => { setConfirmPublish(false); void publish(); }}
       />
     </>
+  );
+}
+
+/**
+ * What a template switch does, before the merchant confirms it: the
+ * sections whose content moves, the ones kept hidden, the ones leaving the
+ * homepage (or that none do), what stays and how to undo it.
+ */
+function TemplateSwitchDetails({ plan, current, next, templateName, sectionName }: {
+  plan: StorefrontTemplateSwitchPlan;
+  current: readonly StorefrontSection[];
+  next: readonly StorefrontSection[];
+  templateName: (key: string) => string;
+  sectionName: (section: StorefrontSection) => string;
+}) {
+  const editor = useMessages(themeEditorFull);
+  const locale = getLocale();
+  const names = (sections: readonly StorefrontSection[]) => formatList([...new Set(sections.map(sectionName))], locale);
+  const byId = (list: readonly StorefrontSection[], ids: readonly string[]) =>
+    ids.flatMap((id) => list.filter((section) => section.id === id));
+  const moved = byId(current, plan.moved.map((each) => each.from));
+  // Sections the switch hides; a restyle of the same template keeps them as they were.
+  const hidden = byId(next, plan.kept).filter((section) => section.hidden === true && section.keptFrom !== undefined);
+  const leaving = byId(current, plan.left).filter((section) => section.hidden !== true);
+  const items: ReactNode[] = [
+    moved.length > 0 ? editor("templateSwitchMoved", { sections: names(moved) }) : null,
+    hidden.length > 0 ? editor("templateSwitchHidden", { count: hidden.length, name: templateName(plan.to), sections: names(hidden) }) : null,
+    leaving.length > 0
+      ? editor("templateSwitchLeaving", { count: leaving.length, from: templateName(plan.from), sections: names(leaving) })
+      : hidden.length === 0 ? editor("templateSwitchNoneLeaving") : null,
+    editor("templateSwitchKept"),
+    editor("templateSwitchUndo", { from: templateName(plan.from) }),
+  ];
+  return (
+    <ul data-template-switch-plan className="list-disc space-y-1 ps-5 text-body text-muted-foreground">
+      {items.filter((item) => item !== null).map((item, index) => <li key={index}>{item}</li>)}
+    </ul>
   );
 }
 

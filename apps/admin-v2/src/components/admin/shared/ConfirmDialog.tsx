@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { typedConfirmMatches } from "./typed-confirm";
 
@@ -24,6 +24,8 @@ interface ConfirmDialogProps {
   title: string;
   /** Leads with the consequence. */
   description: string;
+  /** What else the decision changes, under the description (a short list). */
+  children?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   /** Destructive by default: most confirmations guard something that can't be undone. */
@@ -50,6 +52,7 @@ export function ConfirmDialog({
   onConfirm,
   className,
   confirmPhrase,
+  children,
 }: ConfirmDialogProps) {
   const t = useMessages(resourceMessages);
   const confirm = confirmLabel ?? t("confirm");
@@ -62,6 +65,7 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
+        {children}
         {confirmPhrase !== undefined ? (
           <Suspense fallback={null}>
             <TypedConfirmField phrase={confirmPhrase} value={typed} onChange={setTyped} disabled={isLoading} />

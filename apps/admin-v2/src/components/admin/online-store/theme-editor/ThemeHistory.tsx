@@ -148,11 +148,19 @@ function VersionItem({ version, live, draft, previewing, busy, sectionName, onPr
   );
 }
 
-function RestorePointItem({ point, draft, busy, sectionName, onRestore }: {
+/** What replaced the draft a point keeps, in the merchant's words: a switch names the template it went to. */
+function restorePointTitle(point: RestorePoint, templateName: (key: string) => string, t: (key: "restorePointDiscard" | "restorePointRestore" | "restorePointApp" | "restorePointTemplate" | "restorePointAppTemplate", values?: { name: string }) => string): string {
+  if (point.reason === "template" && point.template) return t("restorePointTemplate", { name: templateName(point.template) });
+  if (point.reason === "app") return point.template ? t("restorePointAppTemplate", { name: templateName(point.template) }) : t("restorePointApp");
+  return t(point.reason === "discard" ? "restorePointDiscard" : "restorePointRestore");
+}
+
+function RestorePointItem({ point, draft, busy, sectionName, templateName, onRestore }: {
   point: RestorePoint;
   draft: StorefrontThemeDocument;
   busy: boolean;
   sectionName: (section: StorefrontSection) => string;
+  templateName: (key: string) => string;
   onRestore: () => void;
 }) {
   const t = useMessages(themeEditorFull);
@@ -162,7 +170,7 @@ function RestorePointItem({ point, draft, busy, sectionName, onRestore }: {
   const actorText = useActorText(author);
   return (
     <li className="space-y-2 border-b border-border px-4 py-4 last:border-b-0" data-restore-point={point.id}>
-      <h3 className="text-heading-sm">{t(point.reason === "discard" ? "restorePointDiscard" : point.reason === "app" ? "restorePointApp" : "restorePointRestore")}</h3>
+      <h3 className="text-heading-sm">{restorePointTitle(point, templateName, t)}</h3>
       <p className="text-body text-muted-foreground">
         {t("restorePointAuthor", {
           name: actorText(author),
@@ -178,7 +186,7 @@ function RestorePointItem({ point, draft, busy, sectionName, onRestore }: {
   );
 }
 
-export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewRevision, busy, sectionName, onPreview, onRestore, onRestorePoint }: {
+export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewRevision, busy, sectionName, templateName, onPreview, onRestore, onRestorePoint }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   draft: StorefrontThemeDocument;
@@ -186,6 +194,8 @@ export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewR
   previewRevision: number | null;
   busy: boolean;
   sectionName: (section: StorefrontSection) => string;
+  /** A template's name from its key (a switch's restore point names it). */
+  templateName: (key: string) => string;
   onPreview: (revision: number | null) => void;
   onRestore: (revision: number) => void;
   onRestorePoint: (id: string) => void;
@@ -225,7 +235,7 @@ export function ThemeHistory({ open, onOpenChange, draft, liveRevision, previewR
               <p className="px-4 text-body text-muted-foreground">{t("restorePointsHelp")}</p>
               <ol>
                 {restorePoints.map((point) => (
-                  <RestorePointItem key={point.id} point={point} draft={draft} busy={busy} sectionName={sectionName} onRestore={() => onRestorePoint(point.id)} />
+                  <RestorePointItem key={point.id} point={point} draft={draft} busy={busy} sectionName={sectionName} templateName={templateName} onRestore={() => onRestorePoint(point.id)} />
                 ))}
               </ol>
             </section>

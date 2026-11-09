@@ -65,6 +65,7 @@ import { useMediaPreviews, type MediaPreviews } from "../schema-form/media-previ
 import { settingErrors } from "../schema-form/errors";
 import { useFitReason } from "../use-fit-reason";
 import { appBlocksByKey, appSkinsByKey, resolveThemeForStore, toggleProductModule, withSectionSkin } from "../theme-settings";
+import { useTemplateName } from "../use-template-name";
 import { PreviewColorSetContext, themeProblemTarget, type ThemeRevealRequest } from "../theme-reveal";
 import { useOpenThemePreview } from "../theme-preview";
 import type { AiPage } from "./AiDraftDialog";
@@ -245,6 +246,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
   const canConnectAgent = useHasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
   const media = useMediaPreviews(workspace.media);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
+  const templateName = useTemplateName(workspace.apps);
   const presets = useMemo(() => landingPresets(workspace.apps), [workspace.apps]);
   const draftApps = useMemo(() => ({
     sections: appSections,
@@ -492,7 +494,8 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
       select(result.id);
     } else toast.error(t("cannotDuplicate"));
   };
-  const toggle = (id: string) => editSection(id, (section) => ({ ...section, hidden: !section.hidden }));
+  // Showing a section a theme switch kept hidden makes it the merchant's own here: its note goes.
+  const toggle = (id: string) => editSection(id, ({ keptFrom: _kept, ...section }) => ({ ...section, hidden: !section.hidden }) as Section);
   const moveSelected = (delta: -1 | 1) => {
     const id = selectionMark(selected);
     const from = items.findIndex((item) => (item.kind === "section" ? item.section.id : pageFixedPart(page)) === id);
@@ -720,7 +723,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
   // ── The tree, the selection's settings and the canvas' chrome ───────────
   const pageName = pageNameOf(page, theme);
   const heldSections = useHeldSections(draft.held);
-  const groups = useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, readOnly: !editable, handlers });
+  const groups = useEditorTree({ theme, page, pageName, resolved, appSections, heldSections, templateName, readOnly: !editable, handlers });
   const expandTo = block ? [block.sectionId] : selectedModule(selected) ? [EDITOR_PARTS.productMain] : selected === EDITOR_PARTS.listingToolbar || selected === EDITOR_PARTS.listingFilters ? [EDITOR_PARTS.listing] : [];
 
   const names = useMemo(() => {
@@ -782,6 +785,9 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
   const notices: ReactNode = (
     <>
       {sharedSelected ? <Alert variant="info"><AlertDescription>{t("sharedNotice")}</AlertDescription></Alert> : null}
+      {selectedSection && !block && selectedSection.hidden === true && selectedSection.keptFrom ? (
+        <Alert variant="info" data-kept-section-notice><AlertDescription>{t("sectionKeptNotice", { theme: templateName(selectedSection.keptFrom) })}</AlertDescription></Alert>
+      ) : null}
       {translatable ? (
         <Alert variant="info">
           <AlertDescription>
@@ -1239,6 +1245,7 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
             previewRevision={previewRevision}
             busy={draft.busy || !canEdit}
             sectionName={sectionName}
+            templateName={templateName}
             onPreview={(revision) => afterText(() => {
               setPreviewRevision(revision);
               setHistoryOpen(false);
