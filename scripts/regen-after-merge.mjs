@@ -15,7 +15,7 @@
 // commits keep the upstream side of every generated file.
 
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -50,6 +50,8 @@ export const GENERATORS = [
   { name: "Dashboard route tree", run: generateRouteTree },
   {
     name: "Plugin SDK ABI declarations",
+    // The public export ships no tests, so its checkout has no seal to run; the private CI seals it.
+    requires: "packages/shared/src/plugins/abi.snapshot.test.ts",
     pnpm: ["exec", "vitest", "run", "packages/shared/src/plugins/abi.snapshot.test.ts", "--project", "pure", "-u", "-t", "seals the SDK export map"],
   },
 ];
@@ -90,6 +92,10 @@ async function generateRouteTree() {
 }
 
 async function runGenerator(generator) {
+  if (generator.requires && !existsSync(join(root, generator.requires))) {
+    console.log(`\n> ${generator.name}: ${generator.requires} is not in this checkout, skipped`);
+    return;
+  }
   if (generator.when && !generator.when()) {
     console.log(`\n> ${generator.name}: inputs unchanged, skipped`);
     return;
