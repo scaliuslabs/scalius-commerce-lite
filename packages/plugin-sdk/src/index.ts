@@ -166,9 +166,15 @@ export function readOne<T extends Record<string, unknown> = Record<string, unkno
 /** A per-line read (`line.variantId`, `line.productId`) from `input.reads`: the records that exist, by key. */
 export function readMany<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Record<string, { revision: number; data: T }> {
   const value = reads?.[as];
-  return value && typeof value === "object" && !("data" in value && "revision" in value && typeof value.revision === "number")
+  return value && typeof value === "object" && !Array.isArray(value) && !("data" in value && "revision" in value && typeof value.revision === "number")
     ? value as Record<string, { revision: number; data: T }>
     : {};
+}
+
+/** A list read (`list: { orderBy, from, limit }`) from `input.reads`: its records in index order, each with its id. */
+export function readList<T extends Record<string, unknown> = Record<string, unknown>>(reads: FunctionReads | undefined, as: string): Array<{ id: string; revision: number; data: T }> {
+  const value = reads?.[as];
+  return Array.isArray(value) ? value as Array<{ id: string; revision: number; data: T }> : [];
 }
 
 export type PluginRouteHandler<Ctx = PluginContext> = (request: PluginRouteRequest, ctx: Ctx) => Promise<PluginRouteResponse> | PluginRouteResponse;

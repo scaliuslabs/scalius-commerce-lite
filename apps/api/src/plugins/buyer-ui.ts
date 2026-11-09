@@ -15,9 +15,11 @@ export async function prepareBuyerUiBlocks(db: Database, blocks: BuyerUiBlock[],
     const installation = installations.get(block.appId);
     if (!installation) return false;
     const fields = new Set(block.attributes.map((field) => field.key));
+    // Computed choices draw over free text only: a declared choice keeps its own list, which the host checks.
+    const textFields = new Set(block.attributes.filter((field) => field.type === "text").map((field) => field.key));
     const { proxy } = installation.manifest.storefront;
     for (const node of pluginUiNodes(block.ui)) {
-      if (node.type === "field" && !fields.has(node.attribute)) return false;
+      if (node.type === "field" && (!fields.has(node.attribute) || (node.choices && !textFields.has(node.attribute)))) return false;
       if (node.type === "button") {
         const action = node.action;
         if (action.kind === "cart" && action.op === "set_attribute" && !fields.has(action.key)) return false;

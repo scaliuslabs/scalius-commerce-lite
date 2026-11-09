@@ -484,9 +484,11 @@ function readRow(read: FunctionReadDeclaration) {
   };
 }
 
-/** A read's key as one label: `from:<read>.<field>` for a hop. */
-function readKeyLabel(key: FunctionReadKey): string {
-  return typeof key === "object" ? `from:${key.from}` : key;
+/** A read's key as one label: `from:<read>.<field>` for a hop, the joined attributes, or `list` for a list read. */
+function readKeyLabel(key: FunctionReadKey | null): string {
+  if (key === null) return "list";
+  if (typeof key !== "object") return key;
+  return "from" in key ? `from:${key.from}` : key.join.join("+");
 }
 
 const settingField = appSettingField;

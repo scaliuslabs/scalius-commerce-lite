@@ -9,7 +9,10 @@
 // - one statement per object type read by key (customer, attribute, line):
 //   `type_id = ? AND id IN (json_each(?))`, the primary key;
 // - one statement per hop, the source record's field read in a subquery;
-// - one statement per (app, owner type) of custom-field reads.
+// - one statement per (app, owner type) of custom-field reads;
+// - one statement per list read: the app's own records through one declared
+//   index (`planObjectRecordQuery`, as ctx.objects.query reads), at most
+//   its `limit`, from the run's clock when it says `from: "now"`.
 //
 // Every list rides one bound JSON parameter (D1's 100-parameter limit), and
 // each function is bounded before anything is read: each read at most its
@@ -23,29 +26,35 @@
 
 import type { Database } from "@scalius/database/client";
 import { customFieldDefinitions, customFieldValues, objectRecords } from "@scalius/database/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { customFieldWireValue, isCustomFieldType, type CustomFieldCodecContext } from "@scalius/shared/custom-fields";
 import { objectDataWire, objectTypeId, type ObjectTypeDeclaration } from "@scalius/shared/plugins/objects";
 import {
   FUNCTION_READ_BYTES_MAX,
+  FUNCTION_READ_JOIN_SEPARATOR,
   FUNCTION_READ_KEYS_PER_READ_MAX,
   customFieldsReadFields,
+  functionClock,
   functionReadHop,
+  functionReadJoin,
   functionReadKey,
   isCustomFieldsRead,
+  isListRead,
+  type FunctionObjectListRead,
   type FunctionReadDeclaration,
   type FunctionReadRecord,
   type FunctionReads,
 } from "@scalius/shared/plugins/function-reads";
 import type { PluginRunPoint } from "@scalius/shared/plugins";
 import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
+import { encodeIndexTuple, indexScalar, planObjectRecordQuery } from "../objects";
 
 /** One app's reads at one point, with the declarations they name. */
 export interface AppFunctionReadRequest {
   pluginId: string;
   point: PluginRunPoint;
   reads: readonly FunctionReadDeclaration[];
-  objects: Readonly<Record<string, Pick<ObjectTypeDeclaration, "fields">>>;
+  objects: Readonly<Record<string, ObjectTypeDeclaration>>;
 }
 
 /** What the reads are keyed by: the checkout's buyer, lines and attributes. */
@@ -55,6 +64,12 @@ export interface AppFunctionReadContext {
   productIds: readonly string[];
   /** Validated checkout attributes by `<app id>.<key>`. */
   attributes: Readonly<Record<string, string>>;
+  /**
+   * The run's clock (`functionClock`) a list read `from: "now"` starts at;
+   * absent, the current minute. Not part of the context key: a request
+   * reads once, at the minute its first read was planned.
+   */
+  now?: string;
 }
 
 /** A single-key object read a `checkout.discounts` answer may commit: the record it names and the revision seen. */
@@ -118,7 +133,10 @@ const recordId = (value: unknown): string | null =>
 type PlannedRead =
   | { as: string; kind: "object"; typeId: string; object: string; ids: string[]; perLine: boolean; single: string | null }
   | { as: string; kind: "hop"; spec: Hop; hop: number; object: string }
-  | { as: string; kind: "fields"; group: string; ownerIds: string[]; perLine: boolean; keys: string[] };
+  | { as: string; kind: "fields"; group: string; ownerIds: string[]; perLine: boolean; keys: string[] }
+  | { as: string; kind: "list"; list: number; object: string; spec: PlannedList | null };
+
+interface PlannedList { typeId: string; declaration: ObjectTypeDeclaration; read: FunctionObjectListRead }
 
 interface PlannedFunction {
   key: string;
@@ -143,6 +161,8 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
   const productIds = unique(context.productIds);
   const objectIds = new Map<string, Set<string>>();
   const hops: Hop[] = [];
+  const lists: PlannedList[] = [];
+  const now = context.now ?? functionClock();
   const groups = new Map<string, FieldGroup>();
   const planned: PlannedFunction[] = live.map((request) => {
     const single = new Map<string, { typeId: string; id: string | null }>();
@@ -158,9 +178,22 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
         const id = recordId(context.attributes[`${request.pluginId}.${key.slice("attribute.".length)}`]);
         return { ids: id ? [id] : [], perLine: false };
       }
+      // A composite key: every part answered, joined (a day and a window name one slot).
+      const join = functionReadJoin(key);
+      if (join) {
+        const parts = join.map((attribute) => context.attributes[`${request.pluginId}.${attribute}`]?.trim() ?? "");
+        const id = parts.every((part) => part.length > 0) ? recordId(parts.join(FUNCTION_READ_JOIN_SEPARATOR)) : null;
+        return { ids: id ? [id] : [], perLine: false };
+      }
       return { ids: [], perLine: false };
     };
     for (const read of request.reads) {
+      if (isListRead(read)) {
+        const declaration = request.objects[read.object];
+        asked += read.list.limit;
+        reads.push({ as: read.as, kind: "list", list: -1, object: read.object, spec: declaration ? { typeId: objectTypeId(request.pluginId, read.object), declaration, read } : null });
+        continue;
+      }
       const { ids, perLine } = keyIds(read);
       const max = read.max ?? FUNCTION_READ_KEYS_PER_READ_MAX;
       if (perLine && ids.length > max) exceeded ??= `Read ${read.as} needs ${ids.length} records, more than its max of ${max}.`;
@@ -189,7 +222,9 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
     // Over a bound: nothing of this function is read.
     if (!exceeded) {
       for (const read of reads) {
-        if (read.kind === "object") {
+        if (read.kind === "list") {
+          if (read.spec) read.list = lists.push(read.spec) - 1;
+        } else if (read.kind === "object") {
           const set = objectIds.get(read.typeId) ?? new Set<string>();
           for (const id of read.ids) set.add(id);
           if (read.ids.length > 0) objectIds.set(read.typeId, set);
@@ -211,6 +246,7 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
   });
   const objectTypes = [...objectIds.keys()].sort();
   const fieldGroups = [...groups.keys()].sort();
+  const listQueries = lists.map((list) => listQuery(list, now));
   const contextKey = appReadContextKey(context);
 
   return {
@@ -233,6 +269,12 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
           return db.select({ hopId, revision: objectRecords.revision, dataJson: objectRecords.dataJson, currencyCode: currency })
             .from(sql`(SELECT 1) AS hop_scope`)
             .leftJoin(objectRecords, and(eq(objectRecords.typeId, hop.typeId), eq(objectRecords.id, hopId)));
+        }),
+        ...listQueries.map((query) => {
+          const columns = { id: objectRecords.id, revision: objectRecords.revision, dataJson: objectRecords.dataJson, currencyCode: currency };
+          return query
+            ? db.select(columns).from(objectRecords).where(query.where).orderBy(...query.orderBy).limit(query.limit)
+            : db.select(columns).from(objectRecords).where(sql`0`).limit(0);
         }),
         ...fieldGroups.map((name) => {
           const group = groups.get(name)!;
@@ -264,6 +306,7 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
         }
       }
       const hopRows = hops.map(() => ((rows[cursor++] ?? []) as Array<{ hopId: string | null; revision: number | null; dataJson: string | null; currencyCode: unknown }>)[0] ?? null);
+      const listRows = listQueries.map(() => (rows[cursor++] ?? []) as Array<{ id: string; revision: number; dataJson: string; currencyCode: unknown }>);
       const fieldRows = new Map<string, Map<string, Record<string, unknown>>>();
       for (const name of fieldGroups) {
         const byOwner = new Map<string, Record<string, unknown>>();
@@ -311,6 +354,13 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
             }
             continue;
           }
+          if (read.kind === "list") {
+            reads[read.as] = (listRows[read.list] ?? []).map((row) => ({
+              id: row.id,
+              ...decode(read.object, { revision: Number(row.revision), dataJson: row.dataJson, context: codecOf(row.currencyCode) }),
+            }));
+            continue;
+          }
           if (read.kind === "hop") {
             const row = hopRows[read.hop];
             const hopId = recordId(row?.hopId);
@@ -338,6 +388,46 @@ export function planAppFunctionReads(requests: readonly AppFunctionReadRequest[]
       }
       return { contextKey, results };
     },
+  };
+}
+
+const INDEX_SLOTS = ["k1", "k2", "k3", "k4"] as const;
+
+/**
+ * One list read as a query: the app's records of one type through the
+ * declared index `ctx.objects.query` would use (equality on its leading
+ * fields, ordered by its next), from the run's clock when it says so, at
+ * most `limit` rows. Null when the declaration no longer plans it (the read
+ * then answers no records).
+ */
+function listQuery(list: PlannedList, now: string) {
+  const { where = {}, orderBy, direction = "asc", from, limit } = list.read.list;
+  let plan: ReturnType<typeof planObjectRecordQuery>;
+  try {
+    plan = planObjectRecordQuery(list.declaration, { where, ...(orderBy ? { orderBy: { field: orderBy, direction } } : {}) });
+  } catch {
+    return null;
+  }
+  const column = plan.orderByIndex && plan.column ? objectRecords[plan.column] : null;
+  let bound: ReturnType<typeof gte> | undefined;
+  if (from === "now" && column && plan.column && orderBy) {
+    const entry = list.declaration.indexes[INDEX_SLOTS.indexOf(plan.column)];
+    const fields = entry === undefined ? [] : typeof entry === "string" ? [entry] : [...entry];
+    const prefix = fields.slice(0, Object.keys(where).length);
+    const type = list.declaration.fields.find((field) => field.key === orderBy)?.type;
+    const clock = type === "integer" ? Date.parse(now) : now;
+    try {
+      const at = encodeIndexTuple([...prefix.map((field) => indexScalar(where[field], field)), clock], [...prefix, orderBy]);
+      bound = direction === "desc" ? lte(column, at) : gte(column, at);
+    } catch {
+      return null;
+    }
+  }
+  const order = direction === "desc" ? desc : asc;
+  return {
+    where: and(eq(objectRecords.typeId, list.typeId), plan.condition, bound),
+    orderBy: column ? [order(column), order(objectRecords.id)] : [order(objectRecords.id)],
+    limit,
   };
 }
 

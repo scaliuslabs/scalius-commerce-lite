@@ -285,7 +285,7 @@ export type PluginUiNode =
   | { type: "form"; action: PluginUiRouteAction; submitLabel: string; confirm?: z.infer<typeof pluginUiConfirmSchema>; children: PluginUiNode[] }
   | PluginUiInput
   /** A checkout attribute the app declares (`checkout.attributes`), drawn as the store's own input (buyer). */
-  | { type: "field"; attribute: string }
+  | { type: "field"; attribute: string; choices?: Array<{ value: string; label: string }> }
   /**
    * Progress of a long action, e.g. a background job (`ctx.jobs.get`): a bar
    * at `value` of `max` (`0 <= value <= max`, `max > 0`) with its percentage
@@ -447,7 +447,16 @@ const nodeUnion = z.discriminatedUnion("type", [
     children,
   }).strict(),
   ...inputSchemas,
-  z.object({ type: z.literal("field"), attribute: attributeKey }).strict(),
+  z.object({
+    type: z.literal("field"),
+    attribute: attributeKey,
+    /**
+     * Choices the extension computed for this render (open delivery slots
+     * from its records and `input.now`), drawn as a select over a `text`
+     * attribute; the answer is still text the app's `cart.validate` checks.
+     */
+    choices: z.array(z.object({ value: z.string().min(1).max(500), label: z.string().trim().min(1).max(120) }).strict()).min(1).max(50).optional(),
+  }).strict(),
   z.object({
     type: z.literal("progress"),
     label,
@@ -582,6 +591,9 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (!allowed(node, path)) return;
     if (attachedButtons(node).some((button, index) => !allowed(button, [...path, "actions", index]))) return;
     if (node.type === "page" && depth !== 1) return report(path, "A page is only ever the root.");
+    if (node.type === "field" && node.choices && new Set(node.choices.map((choice) => choice.value)).size !== node.choices.length) {
+      return report([...path, "choices"], "Choice values must be unique.");
+    }
     if (inputTypes.has(node.type)) {
       if (!inForm) return report(path, "Inputs belong inside a form.");
       const name = (node as PluginUiInput).name;

@@ -222,6 +222,12 @@ export type FunctionContact = z.infer<typeof functionContactSchema>;
  * Empty when the function declares none.
  */
 const reads = functionReadsSchema.default({});
+/**
+ * The run's clock (`functionClock`): the minute it started, ISO 8601 UTC.
+ * The host always sends it; a function reads the time only from here, so
+ * the same input gives the same answer.
+ */
+const now = z.iso.datetime().optional();
 
 // ── checkout.discounts ────────────────────────────────────────────────────
 
@@ -492,33 +498,33 @@ export const buyerUiInputSchema = z.object({
   target: z.enum(STOREFRONT_UI_SLOTS), language: z.string().min(1).max(35), locale: z.string().min(1).max(35), currency: z.string().length(3),
   cart: functionCartSchema.nullable(), attributes: checkoutAttributesSchema,
   order: z.object({ orderId: id, status: z.string().max(64), paymentStatus: z.string().max(64), lines: z.array(z.object({ productId: id, variantId: id, quantity: z.number().int().min(1) }).strict()).max(250) }).strict().nullable(),
-  customer: z.object({ id }).strict().nullable(), reads,
+  customer: z.object({ id }).strict().nullable(), reads, now,
 }).strict();
 export type BuyerUiInput = z.infer<typeof buyerUiInputSchema>;
 
 export const PLUGIN_FUNCTION_SCHEMAS = {
   "cart.transform": {
-    input: z.object({ cart: functionCartSchema, reads }).strict(),
+    input: z.object({ cart: functionCartSchema, reads, now }).strict(),
     output: cartTransformOutputSchema,
   },
   "cart.line_prices": {
     input: z.object({
       cart: functionCartSchema,
       lines: z.array(functionLinePriceFactsSchema).max(250),
-      reads,
+      reads, now,
     }).strict(),
     output: cartLinePricesOutputSchema,
   },
   "cart.validate": {
-    input: z.object({ cart: functionCartSchema, contact: functionContactSchema.nullable().default(null), reads }).strict(),
+    input: z.object({ cart: functionCartSchema, contact: functionContactSchema.nullable().default(null), reads, now }).strict(),
     output: cartValidateOutputSchema,
   },
   "checkout.discounts": {
-    input: z.object({ cart: functionCartSchema, reads }).strict(),
+    input: z.object({ cart: functionCartSchema, reads, now }).strict(),
     output: checkoutDiscountsOutputSchema,
   },
   "checkout.shipping_rates": {
-    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50), reads }).strict(),
+    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50), reads, now }).strict(),
     output: checkoutShippingRatesOutputSchema,
   },
   "checkout.payment_methods": {
@@ -530,7 +536,7 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
         /** Offered only if an app answers `{ op: "allow" }` (the invoice, when the merchant lets apps decide). */
         gated: z.literal(true).optional(),
       }).strict()).max(20),
-      reads,
+      reads, now,
     }).strict(),
     output: checkoutPaymentMethodsOutputSchema,
   },

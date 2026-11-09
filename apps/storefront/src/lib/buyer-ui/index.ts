@@ -62,13 +62,13 @@ function uploadFieldNode(attribute: CheckoutAttribute, name: string, value: stri
   return wrapper;
 }
 
-function fieldNode(attribute: CheckoutAttribute, block: BuyerUiBlock, options: BuyerUiOptions): HTMLElement {
+function fieldNode(attribute: CheckoutAttribute, block: BuyerUiBlock, options: BuyerUiOptions, computed?: ReadonlyArray<{ value: string; label: string }>): HTMLElement {
   const name = `${block.appId}.${attribute.key}`;
   const checkout = isCheckoutSlot(block.target);
   // A cart surface shows the buyer's current answer; an order page the one it kept.
   const value = (isCartSlot(block.target) ? readBuyerAttributes()[name] : undefined) ?? block.values[attribute.key] ?? "";
   if (attribute.type === "file") return uploadFieldNode(attribute, name, value, `buyer-${block.target}-${name}`, !checkout, options);
-  const model = buyerFieldModel(attribute, name, value);
+  const model = buyerFieldModel(attribute, name, value, computed);
   const wrapper = element("div", "space-y-1");
   const label = element("label", "block text-sm font-medium text-foreground", attribute.label);
   const control = element(model.tag, model.tag === "input" && attribute.type === "boolean" ? "h-4 w-4 accent-primary" : controlClass);
@@ -200,7 +200,7 @@ function renderNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOpt
     }
     case "field": {
       const attribute = block.attributes.find((attribute) => attribute.key === node.attribute);
-      return attribute ? fieldNode(attribute, block, options) : null;
+      return attribute ? fieldNode(attribute, block, options, node.choices) : null;
     }
     case "button": return buttonNode(node, block, options);
     // Admin-only nodes never pass the buyer surface's check.
