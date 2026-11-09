@@ -6,7 +6,7 @@
 // (assets.gen.ts), the catalog of first-party plugins not bundled
 // (catalog.gen.ts) and the sandbox wrapper in step.
 //
-//   pnpm plugin create <vendor.name> [--theme] [--dir <folder>]   scaffold an app, or with --theme a theme starter (outside this repo: on a packed SDK build)
+//   pnpm plugin create <vendor.name> [--storefront | --theme] [--dir <folder>]   scaffold an app (with a storefront section), or a theme starter (outside this repo: on a packed SDK build)
 //   pnpm plugin validate [path]                                check a plugin the way a store loads it
 //   pnpm plugin preview <path> [--store sample|empty|other] [--out <html>] [--fixture <json>]   render storefront parts on three fixture stores (or one) to a static HTML file
 //   pnpm plugin dev <path> [--store sample|empty|other] [--fixture <json>]   rebuild and preview fixtures as sources change
@@ -266,7 +266,7 @@ export function packFailure(result, command) {
 }
 
 function create(id, args) {
-  if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> [--theme] [--dir <folder>] (lowercase, e.g. acme.loyalty)");
+  if (!id || !PLUGIN_ID.test(id)) throw new Error("Usage: pnpm plugin create <vendor.name> [--storefront | --theme] [--dir <folder>] (lowercase, e.g. acme.loyalty)");
   const flags = parseCommandArgs(args).flags;
   const name = id.split(".")[1];
   const dir = flags.get("--dir");
@@ -284,9 +284,10 @@ function create(id, args) {
     }
   }
   const theme = flags.has("--theme");
+  const storefront = flags.has("--storefront");
   const options = standalone
-    ? { standalone, theme, sdkVersion: version, sdkDependency: vendoredSdkDependency(version), repo: shellPath(root), app: shellPath(directory) }
-    : { standalone, theme, app: relative(root, directory) };
+    ? { standalone, theme, storefront, sdkVersion: version, sdkDependency: vendoredSdkDependency(version), repo: shellPath(root), app: shellPath(directory) }
+    : { standalone, theme, storefront, app: relative(root, directory) };
   for (const [file, contents] of Object.entries(scaffoldFiles(id, basename(directory), options))) {
     const path = join(directory, file);
     mkdirSync(resolve(path, ".."), { recursive: true });

@@ -1,7 +1,9 @@
-// The files `pnpm plugin create` writes: a small plugin that touches the
-// surfaces most apps need (an event, a checkout function, a storefront
-// section, an admin page and an object migration), with a test for each. Copy the
-// patterns in packages/plugin-sdk/README.md for the rest (settings, storage, cron, webhooks).
+// The files `pnpm plugin create` writes: a small app that touches the
+// surfaces most apps need (an event, an object, an admin page and a data
+// update), with a test for each, and nothing that costs a store when it does
+// nothing (no checkout function runs on every checkout). `--storefront` adds
+// a storefront section and its test. Copy the patterns in
+// packages/plugin-sdk/README.md for the rest (settings, checkout functions, cron, webhooks).
 // `--theme` writes the theme starter instead (scripts/plugin-scaffold/theme).
 
 import { readFileSync } from "node:fs";
@@ -63,7 +65,7 @@ export function sdkRefreshCommand({ repo, app }) {
  * `repo` and `app` are the checkout and the app folder as the user types
  * them, for its commands.
  */
-export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0", sdkDependency = `^${sdkVersion}`, theme = false, repo, app } = {}) {
+export function scaffoldFiles(id, name, { standalone = false, sdkVersion = "0.1.0", sdkDependency = `^${sdkVersion}`, theme = false, storefront = false, repo, app } = {}) {
   // The app's own name comes from its id, never the folder it was made in
   // (`--dir ./acme-engrave` for acme.engrave is still "acme-engrave", not "acme-acme-engrave").
   const [vendor, appName] = id.split(".");
@@ -151,7 +153,6 @@ export const manifest = defineManifest({
   categories: ["marketing"],
   scopes: ["read_orders"],
   events: ["order.created"],
-  functions: [{ point: "checkout.discounts", priority: 100 }],
   objects: {
     notes: {
       name: "App notes",
@@ -169,7 +170,7 @@ export const manifest = defineManifest({
   admin: {
     pages: [{ id: "overview", title: ${JSON.stringify(title)}, route: "overview" }],
   },
-  storefront: {
+${storefront ? `  storefront: {
     sections: [{
       type: "banner",
       name: "Banner",
@@ -180,7 +181,7 @@ export const manifest = defineManifest({
       ],
     }],
   },
-});
+` : ""}});
 
 export default definePlugin({
   manifest,
@@ -191,11 +192,6 @@ export default definePlugin({
       await ctx.objects.notes.put("last_order", { value: event.resource.id });
       ctx.log.info("Order created", { orderId: event.resource.id });
     },
-  },
-
-  functions: {
-    // Pure: it gets the cart and the app's settings, and returns what to apply.
-    "checkout.discounts": () => ({ discounts: [] }),
   },
 
   routes: {
@@ -223,6 +219,7 @@ export default definePlugin({
   },
 });
 `,
+    ...(storefront ? {
     "src/storefront.tsx": `// The app's storefront section. An app that draws nothing on the storefront
 // deletes this file, src/storefront.test.ts and \`storefront\` in the manifest.
 import type { StorefrontSettingsOf } from "@scalius/plugin-sdk";
@@ -258,8 +255,9 @@ describe("the banner section", () => {
   });
 });
 `,
+    } : {}),
     "src/index.test.ts": `// Unit tests with the SDK's test harness: the platform's own runtime over an
-// in-memory bridge. Run them with \`pnpm test\`.
+// in-memory bridge. Run them with \`${standalone ? "npm" : "pnpm"} test\`.
 import { describe, expect, it } from "vitest";
 import { createPluginTestHarness, fixtures, parsePluginUiDocument } from "@scalius/plugin-sdk/testing";
 import plugin from "./index";
@@ -270,12 +268,6 @@ describe(${JSON.stringify(id)}, () => {
     const result = await harness.deliver(fixtures.event("order.created", { resource: { type: "order", id: "o1" } }));
     expect(result.ok).toBe(true);
     expect(harness.records.get("notes")?.get("last_order")).toEqual({ value: "o1" });
-  });
-
-  it("offers no discounts at checkout", async () => {
-    const harness = createPluginTestHarness(plugin);
-    const result = await harness.fn("checkout.discounts", fixtures.checkoutDiscountsInput());
-    expect(result.value).toEqual({ discounts: [] });
   });
 
   it("writes its install note once, however often the migration runs", async () => {
