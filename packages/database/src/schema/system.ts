@@ -212,18 +212,24 @@ export const themeSettingsVersions = sqliteTable("theme_settings_versions", {
 ]);
 
 /**
- * The shared theme draft as it was just before a restore or a discard
- * replaced it (a restore point), so either can be undone from the history.
- * Publishing keeps its own immutable versions; the newest restore points
- * are kept (pruned in the same batch that writes one).
+ * The shared theme draft as it was just before a restore, a discard or a
+ * template switch replaced it (a restore point), so each can be undone from
+ * the history. Publishing keeps its own immutable versions; the newest
+ * restore points are kept (pruned in the same batch that writes one).
  */
 export const themeRestorePoints = sqliteTable("theme_restore_points", {
     id: text("id").primaryKey(),
     theme: text("theme").notNull(),
     /** The draft revision the point captured. */
     draftRevision: integer("draft_revision").notNull(),
-    /** What replaced the draft: a version or point restored (`restore`), a discard, or an app's template (`app`, migration 0170). */
-    reason: text("reason", { enum: ["restore", "discard", "app"] }).notNull(),
+    /**
+     * What replaced the draft: a version or point restored (`restore`), a
+     * discard, an app applying its template (`app`, migration 0170) or the
+     * merchant switching templates (`template`, migration 0214).
+     */
+    reason: text("reason", { enum: ["restore", "discard", "app", "template"] }).notNull(),
+    /** The template a switch went to (`template` and `app`): a built-in id or `<app id>/<template id>`. */
+    template: text("template"),
     createdBy: text("created_by"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
@@ -231,8 +237,28 @@ export const themeRestorePoints = sqliteTable("theme_restore_points", {
 }, (table) => [
     index("theme_restore_points_created_at_idx").on(table.createdAt),
     check("theme_restore_points_id_shape", sql`substr(${table.id}, 1, 8) = 'themerp_' AND length(${table.id}) BETWEEN 12 AND 40`),
-    check("theme_restore_points_reason_check", sql`${table.reason} IN ('restore', 'discard', 'app')`),
+    check("theme_restore_points_reason_check", sql`${table.reason} IN ('restore', 'discard', 'app', 'template')`),
     check("theme_restore_points_draft_revision_positive", sql`${table.draftRevision} >= 1`),
+    check("theme_restore_points_template_shape", sql`${table.template} IS NULL OR length(${table.template}) BETWEEN 1 AND 200`),
+]);
+
+/**
+ * Each template's last design in this store: the whole draft as it was when
+ * the store switched away from that template (a built-in id or `<app
+ * id>/<template id>`), so switching back brings it back. One row per
+ * template; the newest are kept (pruned in the batch that writes one). Never
+ * live: only publishing changes the store.
+ */
+export const themeTemplateDesigns = sqliteTable("theme_template_designs", {
+    template: text("template").primaryKey(),
+    theme: text("theme").notNull(),
+    updatedBy: text("updated_by"),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    index("theme_template_designs_updated_at_idx").on(table.updatedAt),
+    check("theme_template_designs_template_shape", sql`length(${table.template}) BETWEEN 1 AND 200`),
 ]);
 
 /**
