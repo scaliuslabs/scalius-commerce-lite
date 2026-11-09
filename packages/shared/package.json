@@ -7,6 +7,8 @@
     "./*": "./src/*.ts"
   },
   "imports": {
+    "#checkout-language-presets": "./src/checkout-language-presets.ts",
+    "#address-metadata-data": "./src/address-metadata.data.ts",
     "#libphonenumber": {
       "workerd": "libphonenumber-js/max",
       "worker": "libphonenumber-js/max",

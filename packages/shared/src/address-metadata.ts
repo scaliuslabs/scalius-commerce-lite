@@ -23,7 +23,7 @@ import {
   ADDRESS_METADATA_DEFAULTS,
   ADDRESS_METADATA_SOURCE,
   type CountryAddressMetadata,
-} from "./address-metadata.data";
+} from "#address-metadata-data";
 
 export { ADDRESS_METADATA_SOURCE };
 
