@@ -138,6 +138,8 @@ export const ADDRESS_SUGGESTION_TEXT_FIELDS = [
 ] as const;
 /** The platform's words on a cart or order line (line-entry-words.ts), in the receipt, emails and invoices too. */
 export const LINE_ENTRY_TEXT_FIELDS = LINE_ENTRY_WORD_KEYS;
+/** The help under a gift card's recipient inputs on the product page (their labels are line words). */
+export const RECIPIENT_TEXT_FIELDS = ["recipientHelpText", "recipientEmailHelpText", "recipientPhoneHelpText"] as const;
 /** The sentence groups after the apps group: each key has a label and a help line. */
 const TEXT_GROUPS = [
   { id: "card", title: "cardTextTitle", help: "cardTextHelp", keys: CARD_TEXT_FIELDS },
@@ -146,6 +148,7 @@ const TEXT_GROUPS = [
   { id: "delivery-limits", title: "deliveryLimitTextTitle", help: "deliveryLimitTextHelp", keys: DELIVERY_LIMIT_TEXT_FIELDS },
   { id: "address-suggestions", title: "addressSuggestionGroupTitle", help: "addressSuggestionGroupHelp", keys: ADDRESS_SUGGESTION_TEXT_FIELDS },
   { id: "line-entries", title: "lineEntryTextTitle", help: "lineEntryTextHelp", keys: LINE_ENTRY_TEXT_FIELDS },
+  { id: "gift-card-recipient", title: "recipientTextTitle", help: "recipientTextHelp", keys: RECIPIENT_TEXT_FIELDS },
 ] as const;
 /** Every checkout-language key this editor lists. */
 export const EDITABLE_CHECKOUT_TEXT_KEYS: ReadonlySet<string> = new Set<string>([
@@ -161,6 +164,7 @@ export const EDITABLE_CHECKOUT_TEXT_KEYS: ReadonlySet<string> = new Set<string>(
   ...DELIVERY_LIMIT_TEXT_FIELDS,
   ...ADDRESS_SUGGESTION_TEXT_FIELDS,
   ...LINE_ENTRY_TEXT_FIELDS,
+  ...RECIPIENT_TEXT_FIELDS,
 ]);
 /** The agreement line's link placeholders; the storefront links each to its policy page. */
 const TERMS_TOKENS = ["{terms}", "{privacy}"] as const;

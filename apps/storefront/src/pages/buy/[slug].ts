@@ -14,6 +14,7 @@ import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import {
   cartLinePropertiesFromOrderLine,
   productBuyerInputSchema,
+  resolveProductPageCopy,
   readPostedBuyerInputs,
 } from "@/components/product/lib/buyer-inputs";
 import {
@@ -216,7 +217,7 @@ async function quickBuy({
     }
     const layoutData = await getLayoutData();
     // The product's own inputs, then the active apps' line inputs, as the form drew them.
-    const schema = productBuyerInputSchema(product, layoutData?.lineInputs);
+    const schema = productBuyerInputSchema(product, layoutData?.lineInputs, resolveProductPageCopy(layoutData?.storefrontCopy));
     if (postedProperties === null && product.requiresCustomization) {
       return productRedirect(slug, "customization_required");
     }

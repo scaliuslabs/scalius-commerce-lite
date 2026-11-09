@@ -65,3 +65,28 @@ export function withGiftCardRecipientFields(schema: CustomizationSchema | null):
     fields: [...own.slice(0, room), ...GIFT_CARD_RECIPIENT_FIELDS],
   } as CustomizationSchema;
 }
+
+/** The checkout-language words of each recipient input: its label and its help (the product page's catalogue). */
+const RECIPIENT_WORDS = {
+  _gc_recipient_name: { label: "lineGiftCardRecipientNameText", help: "recipientHelpText" },
+  _gc_recipient_email: { label: "lineGiftCardRecipientEmailText", help: "recipientEmailHelpText" },
+  _gc_recipient_phone: { label: "lineGiftCardRecipientPhoneText", help: "recipientPhoneHelpText" },
+  _gc_message: { label: "lineGiftCardMessageText", help: null },
+} as const;
+type RecipientWordKey = (typeof RECIPIENT_WORDS)[keyof typeof RECIPIENT_WORDS]["label" | "help"] & string;
+
+/**
+ * A buy form's fields with a gift card's recipient inputs in the page's
+ * language (`copy`: the product page's checkout copy). The product's own
+ * inputs keep the merchant's words.
+ */
+export function localizedGiftCardRecipientFields<T extends { key: string; label: string; help: string | null }>(
+  fields: readonly T[],
+  copy: Readonly<Record<RecipientWordKey, string>>,
+): T[] {
+  return fields.map((field) => {
+    const words = (RECIPIENT_WORDS as Record<string, { label: RecipientWordKey; help: RecipientWordKey | null }>)[field.key];
+    if (!words) return field;
+    return { ...field, label: copy[words.label] || field.label, help: words.help ? copy[words.help] || field.help : field.help };
+  });
+}
